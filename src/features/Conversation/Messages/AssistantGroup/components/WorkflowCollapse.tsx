@@ -512,6 +512,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     return (
       <Accordion
+        indicatorPlacement="inline"
         styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
         value={expandedKeys}
         variant="borderless"

@@ -45,6 +45,7 @@ const Body = memo(() => {
   return (
     <Flexbox paddingInline={4}>
       <AccordionRoot
+        indicatorPlacement="inline"
         style={{ gap: 8 }}
         value={expandedKeys}
         onValueChange={(next) => handleExpandedChange(next as string[])}

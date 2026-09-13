@@ -46,6 +46,7 @@ const InstructionAccordion = memo<{ childrenCount: number; instruction: string }
     return (
       <Accordion
         gap={8}
+        indicatorPlacement="inline"
         styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
         value={expandedKeys}
         items={[
@@ -280,6 +281,7 @@ const CompletedView = memo<{
         <Accordion
           defaultValue={[]}
           gap={8}
+          indicatorPlacement="inline"
           styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
           items={[
             {

@@ -125,6 +125,7 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
         </Form.Item>
       )}
       <Accordion
+        indicatorPlacement="inline"
         styles={{ header: { paddingBlock: 8, paddingInline: 4 } }}
         items={[
           {

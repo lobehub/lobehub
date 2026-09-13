@@ -144,11 +144,12 @@ const SkillSection = memo<SkillSectionProps>(
     return (
       <Accordion
         gap={4}
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 2, paddingInline: 4 } }}
+        value={expanded ? [ITEM_KEY] : []}
         items={[
           { key: ITEM_KEY, title: <HeaderRow count={count} title={title} />, children: body },
         ]}
-        styles={{ trigger: { paddingBlock: 2, paddingInline: 4 } }}
-        value={expanded ? [ITEM_KEY] : []}
         onValueChange={(keys) => setExpanded(keys.length > 0)}
       />
     );

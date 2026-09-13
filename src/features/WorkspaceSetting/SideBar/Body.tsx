@@ -35,6 +35,7 @@ const Body = memo(() => {
     <Flexbox paddingInline={4}>
       <Accordion
         gap={8}
+        indicatorPlacement="inline"
         styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
         defaultValue={[
           WorkspaceSettingsGroupKey.Account,

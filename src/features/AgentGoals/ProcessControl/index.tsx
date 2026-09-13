@@ -158,6 +158,7 @@ const ProcessControl = memo<ProcessControlProps>(
         <Accordion
           defaultValue={['deliverables', 'findings', 'activity']}
           gap={0}
+          indicatorPlacement="inline"
           styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
           items={
             [

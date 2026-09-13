@@ -213,6 +213,7 @@ const Body = memo(() => {
 
         elements.push(
           <AccordionRoot
+            indicatorPlacement="inline"
             key={`acc-${elements.length}`}
             style={{ gap: 8 }}
             value={sidebarExpandedKeys}

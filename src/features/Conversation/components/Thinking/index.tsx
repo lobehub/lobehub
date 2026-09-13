@@ -53,6 +53,7 @@ const Thinking = memo<ThinkingProps>((props) => {
   return (
     <Accordion
       gap={8}
+      indicatorPlacement="inline"
       styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
       value={showDetail ? ['thinking'] : []}
       items={[

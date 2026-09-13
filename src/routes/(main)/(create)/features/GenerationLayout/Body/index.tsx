@@ -67,6 +67,7 @@ const Body = memo<GenerationLayoutCommonProps>((props) => {
         <Accordion
           defaultValue={[GroupKey.PrivateTopics, GroupKey.WorkspaceTopics]}
           gap={2}
+          indicatorPlacement="inline"
           styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
           items={[
             {
@@ -115,6 +116,7 @@ const Body = memo<GenerationLayoutCommonProps>((props) => {
       <Accordion
         defaultValue={[GroupKey.Topics]}
         gap={2}
+        indicatorPlacement="inline"
         styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
         items={[
           {

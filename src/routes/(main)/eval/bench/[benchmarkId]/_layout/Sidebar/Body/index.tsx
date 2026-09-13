@@ -37,7 +37,11 @@ const Body = memo(() => {
           />
         </WorkspaceLink>
       </Flexbox>
-      <AccordionRoot defaultValue={['datasets', 'runs']} style={{ gap: 8 }}>
+      <AccordionRoot
+        defaultValue={['datasets', 'runs']}
+        indicatorPlacement="inline"
+        style={{ gap: 8 }}
+      >
         <DatasetList activeKey={activeKey} benchmarkId={benchmarkId || ''} itemKey="datasets" />
         <RunList activeKey={activeKey} benchmarkId={benchmarkId || ''} itemKey="runs" />
       </AccordionRoot>

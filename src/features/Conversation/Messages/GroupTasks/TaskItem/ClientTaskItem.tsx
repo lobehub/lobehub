@@ -134,6 +134,7 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
   return (
     <Accordion
       keepMounted
+      indicatorPlacement="inline"
       styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
       value={expanded ? [id] : []}
       items={[

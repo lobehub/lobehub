@@ -91,6 +91,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
   return (
     <Flexbox gap={2} ref={listRef}>
       <AccordionRoot
+        indicatorPlacement="inline"
         style={{ gap: 2 }}
         value={expandedKeys}
         onValueChange={(next) => setExpandedKeys(next as string[])}

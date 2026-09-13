@@ -308,6 +308,7 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
       <Accordion
         defaultValue={[]}
         gap={0}
+        indicatorPlacement="inline"
         styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
         items={[
           {

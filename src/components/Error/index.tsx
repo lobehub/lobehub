@@ -62,7 +62,7 @@ const ErrorCapture = ({ error, resetPath = '/' }: ErrorCaptureProps) => {
           }}
         >
           <Accordion
-            indicatorPlacement={'start'}
+            indicatorPlacement={'inline'}
             value={expandedKeys}
             variant={'borderless'}
             items={[

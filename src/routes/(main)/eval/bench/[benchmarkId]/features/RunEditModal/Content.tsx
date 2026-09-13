@@ -230,6 +230,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
 
       <Accordion
         defaultValue={[]}
+        indicatorPlacement="inline"
         styles={{ header: { paddingBlock: 8, paddingInline: 4 } }}
         items={[
           {

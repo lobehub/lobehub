@@ -21,6 +21,7 @@ const Group = memo<GroupProps>(({ dataSource }) => {
 
   return (
     <AccordionRoot
+      indicatorPlacement="inline"
       value={sessionGroupKeys}
       onValueChange={(keys) => updateSystemStatus({ expandSessionGroupKeys: keys as any })}
     >

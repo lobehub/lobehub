@@ -18,7 +18,11 @@ const ResourceSidebarContent = memo(() => (
     header={<Header />}
     body={
       <Flexbox paddingBlock={8} paddingInline={4}>
-        <AccordionRoot defaultValue={[GroupKey.Library]} style={{ gap: 8 }}>
+        <AccordionRoot
+          defaultValue={[GroupKey.Library]}
+          indicatorPlacement="inline"
+          style={{ gap: 8 }}
+        >
           <SidebarBody itemKey={GroupKey.Library} />
         </AccordionRoot>
       </Flexbox>

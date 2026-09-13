@@ -34,6 +34,7 @@ const Body = memo(() => {
       <SearchSection>
         <Accordion
           gap={8}
+          indicatorPlacement="inline"
           styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
           defaultValue={[
             SettingsGroupKey.Account,

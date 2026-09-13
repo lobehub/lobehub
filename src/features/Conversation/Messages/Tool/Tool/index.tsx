@@ -76,6 +76,7 @@ const Tool = memo<InspectorProps>(
     return (
       <Accordion
         gap={8}
+        indicatorPlacement="inline"
         styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
         value={expand ? ['tool'] : []}
         items={[

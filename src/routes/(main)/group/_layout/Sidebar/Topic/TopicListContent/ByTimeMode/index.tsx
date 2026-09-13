@@ -52,6 +52,7 @@ const ByTimeMode = memo(() => {
     <Flexbox gap={2}>
       {/* Grouped topics */}
       <AccordionRoot
+        indicatorPlacement="inline"
         style={{ gap: 2 }}
         value={expandedKeys}
         onValueChange={(next) => setExpandedKeys(next as string[])}

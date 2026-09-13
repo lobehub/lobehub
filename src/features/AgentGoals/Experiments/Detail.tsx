@@ -112,6 +112,7 @@ export const ExperimentDetail = ({
         </Flexbox>
         <Accordion
           defaultValue={['instruction']}
+          indicatorPlacement="inline"
           style={{ flexShrink: 0 }}
           items={[
             {

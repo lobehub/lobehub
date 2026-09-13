@@ -14,6 +14,7 @@ const Body = () => {
     <Flexbox paddingInline={4}>
       <AccordionRoot
         defaultValue={[ChatSidebarKey.Members, ChatSidebarKey.Topic]}
+        indicatorPlacement="inline"
         style={{ gap: 8 }}
       >
         <Members itemKey={ChatSidebarKey.Members} />

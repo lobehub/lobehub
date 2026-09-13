@@ -38,6 +38,7 @@ const SignalCallbacks = memo<{ block: UISignalCallbacksBlock }>(({ block }) => {
   return (
     <Accordion
       gap={4}
+      indicatorPlacement="inline"
       styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
       value={expandedKeys}
       items={[

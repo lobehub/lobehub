@@ -498,6 +498,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
     <Accordion
       defaultValue={['activities']}
       gap={0}
+      indicatorPlacement="inline"
       styles={{ header: { paddingBlock: 4, paddingInline: 8 } }}
       items={[
         {
