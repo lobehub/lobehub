@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} miejsc · podgląd rozliczenia {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "Dodatkowe opłacone miejsca",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Opłacone miejsca (maks. {{max}} miejsc)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Ten obszar roboczy ma {{members}} członków objętych opłatą i {{pending}} oczekujących zaproszeń, wykorzystując {{used}} miejsc. Cofnij oczekujące zaproszenie przed dalszym zmniejszeniem liczby miejsc.",
   "workspace.billingPage.billing.change.seatReductionHint": "Zmniejszenie liczby miejsc zacznie obowiązywać w następnym cyklu rozliczeniowym. Obecny cykl nie podlega zwrotowi.",
   "workspace.billingPage.billing.change.title": "Dostosuj plan",
   "workspace.billingPage.billing.changeFailed": "Nie udało się zaktualizować subskrypcji.",

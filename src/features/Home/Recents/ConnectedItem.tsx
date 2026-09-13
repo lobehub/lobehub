@@ -18,9 +18,14 @@ const ConnectedItem = memo<ConnectedItemProps>(({ itemRef, queryKey, scope }) =>
   const item = useHomeStore(homeRecentSelectors.item(scope, queryKey, itemRef));
   if (!item) return null;
 
+  // `slugTitle`, not `title`: the displayed title falls back to the task's
+  // instruction, and feeding that into the path would publish a prompt body to
+  // browser history, analytics and every copied link. `slugTitle` is the task's
+  // own name, which is also what the detail page canonicalises to — so the slug
+  // this link carries survives arrival instead of being rewritten.
   const route =
     item.type === 'task'
-      ? taskDetailPath(item.id, item.agentId ?? undefined, item.title)
+      ? taskDetailPath(item.id, item.agentId ?? undefined, item.slugTitle)
       : item.routePath;
 
   return (

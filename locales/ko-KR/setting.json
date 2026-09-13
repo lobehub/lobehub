@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}}석 · {{interval}} 청구 미리보기",
   "workspace.billingPage.billing.change.purchasedSeats": "추가로 선결제한 좌석",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "선결제 좌석 (최대 {{max}}석)",
+  "workspace.billingPage.billing.change.seatFloorPending": "이 작업 공간에는 {{members}}명의 청구 가능한 멤버와 {{pending}}개의 보류 중인 초대가 있으며, {{used}}개의 좌석을 사용 중입니다. 좌석을 더 줄이기 전에 보류 중인 초대를 취소하세요.",
   "workspace.billingPage.billing.change.seatReductionHint": "좌석 수 감소는 다음 청구 주기에 적용됩니다. 현재 주기는 환불되지 않습니다.",
   "workspace.billingPage.billing.change.title": "플랜 조정",
   "workspace.billingPage.billing.changeFailed": "구독 업데이트에 실패했습니다.",

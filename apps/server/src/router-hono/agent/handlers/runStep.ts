@@ -6,7 +6,6 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { agentOperations } from '@/database/schemas/agentOperations';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import type { AgentExecutionResult, AgentStepContinuation } from '@/server/services/agentRuntime';
-import { isInlineAgentStepsEnabledForUser } from '@/server/services/agentRuntime/inlineStepsGate';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:agent:run-step');
@@ -20,12 +19,20 @@ const log = debug('lobe-server:agent:run-step');
  * steps inside one invocation removes that cost; this deadline is what keeps
  * the invocation inside the platform's function timeout.
  *
- * It must stay comfortably below the route's `maxDuration`, because a step that
- * starts just under the deadline still runs to completion — production LLM
- * steps are ~42s at p90 and ~125s at p99. The 450s default leaves ~150s of
- * headroom under a 600s `maxDuration`, which covers p99. Raise it only
- * alongside `maxDuration`. Once past the deadline the pending step goes back to
- * the queue and a fresh invocation picks it up.
+ * The deadline only decides whether a step may START; a step that starts just
+ * under it still runs to completion, so what protects the invocation is the
+ * headroom between this deadline and the route's `maxDuration`. That headroom
+ * has to cover a long LLM step, and step length varies a lot by model: most
+ * models finish LLM steps within ~40s at p99, but some run into several
+ * minutes (one model family measured ~317s at p99, ~439s max). With 450s under
+ * a 600s `maxDuration`, steps started before the deadline were observed ending
+ * within seconds of the kill.
+ *
+ * 300s leaves 300s of headroom under 600s. A killed step is not lost — it
+ * resumes from the parked envelope — but it is paid for twice, so keep this
+ * conservative and raise it only alongside `maxDuration`. Once past the
+ * deadline the pending step goes back to the queue and a fresh invocation
+ * picks it up.
  */
 const INLINE_STEP_START_DEADLINE_MS = Number(process.env.AGENT_INLINE_STEP_DEADLINE_MS ?? 450_000);
 
@@ -166,10 +173,6 @@ export async function runStep(c: Context): Promise<Response> {
     // round-trip per step. One lock owner spans the whole loop: the operation
     // lock is re-entrant for its owner, so a redelivery from the queue still
     // loses the race the same way it does for a single step.
-    // Rollout switch, resolved once per invocation from RuntimeConfig (Redis,
-    // cached ~5s per instance). Off means exactly one step per delivery, which
-    // is what the worker has always done.
-    const inlineEnabled = await isInlineAgentStepsEnabledForUser(metadata.userId);
 
     const stepLockOwner = aiAgentService.createOperationLockOwner(operationId);
     let pendingContinuation: AgentStepContinuation | undefined;
@@ -198,9 +201,6 @@ export async function runStep(c: Context): Promise<Response> {
       !verifyAsyncToolBarrier &&
       !groupMemberTimeout;
 
-    // Deliberately not gated on `inlineEnabled`: switching the flag off while
-    // operations are mid-loop must not strand the ones that already have an
-    // envelope parked and nothing queued behind them.
     // A previous invocation may have died part-way through its own inline loop.
     // It parks the envelope for each step before running it, so an envelope
     // ahead of the delivered index means exactly that: resume from there. Going
@@ -234,7 +234,7 @@ export async function runStep(c: Context): Promise<Response> {
         ? await aiAgentService.executeStep({
             context: resumeFrom.context,
             externalRetryCount,
-            inlineContinuation: inlineEnabled,
+            inlineContinuation: true,
             operationId,
             retainStepLock: true,
             stepIndex: resumeFrom.stepIndex,
@@ -248,7 +248,7 @@ export async function runStep(c: Context): Promise<Response> {
             finishAfterAsyncTool,
             groupMemberTimeout,
             humanInput,
-            inlineContinuation: inlineEnabled,
+            inlineContinuation: true,
             lockRetryAttempt,
             operationId,
             rejectAndContinue,
@@ -278,7 +278,7 @@ export async function runStep(c: Context): Promise<Response> {
 
         result = await aiAgentService.executeStep({
           context: next.context,
-          inlineContinuation: inlineEnabled,
+          inlineContinuation: true,
           operationId,
           retainStepLock: true,
           stepIndex: next.stepIndex,

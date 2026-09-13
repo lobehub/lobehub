@@ -13,7 +13,6 @@
   "workingDirectory.branchesLoadFailed": "分支加载失败",
   "workingDirectory.branchesLoading": "加载分支中…",
   "workingDirectory.branchesNoMatch": "没有匹配的分支",
-  "workingDirectory.branchesTruncated": "还有 {{count}} 个，输入关键字筛选",
   "workingDirectory.browseDescription": "选择已连接设备上的文件夹。",
   "workingDirectory.browseFolders": "浏览文件夹",
   "workingDirectory.cancel": "取消",

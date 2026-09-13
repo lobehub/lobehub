@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} chỗ ngồi · Xem trước thanh toán {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "Chỗ ngồi trả trước bổ sung",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Chỗ ngồi đã trả trước (tối đa {{max}} chỗ ngồi)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Không gian làm việc này có {{members}} thành viên tính phí và {{pending}} lời mời đang chờ, sử dụng {{used}} chỗ ngồi. Hủy một lời mời đang chờ trước khi giảm thêm chỗ ngồi.",
   "workspace.billingPage.billing.change.seatReductionHint": "Việc giảm số lượng chỗ ngồi sẽ có hiệu lực trong chu kỳ thanh toán tiếp theo. Chu kỳ hiện tại sẽ không được hoàn tiền.",
   "workspace.billingPage.billing.change.title": "Điều chỉnh gói",
   "workspace.billingPage.billing.changeFailed": "Cập nhật đăng ký thất bại.",

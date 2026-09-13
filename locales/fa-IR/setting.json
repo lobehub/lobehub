@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} نفر · پیش‌نمایش صورتحساب {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "صندلی‌های اضافی پیش‌پرداخت شده",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "صندلی‌های پیش‌پرداخت شده (حداکثر {{max}} صندلی)",
+  "workspace.billingPage.billing.change.seatFloorPending": "این فضای کاری دارای {{members}} عضو قابل پرداخت و {{pending}} دعوت‌نامه در انتظار است که از {{used}} صندلی استفاده می‌کنند. قبل از کاهش بیشتر صندلی‌ها، یک دعوت‌نامه در انتظار را لغو کنید.",
   "workspace.billingPage.billing.change.seatReductionHint": "کاهش تعداد صندلی‌ها در چرخه صورتحساب بعدی اعمال می‌شود. چرخه فعلی بازپرداخت نمی‌شود.",
   "workspace.billingPage.billing.change.title": "تنظیم طرح",
   "workspace.billingPage.billing.changeFailed": "به‌روزرسانی اشتراک ناموفق بود.",

@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} plaatsen · {{interval}} factureringsvoorbeeld",
   "workspace.billingPage.billing.change.purchasedSeats": "Vooraf betaalde extra plaatsen",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Vooraf betaalde plaatsen (maximaal {{max}} plaatsen)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Deze werkruimte heeft {{members}} factureerbare leden en {{pending}} openstaande uitnodigingen, met {{used}} gebruikte stoelen. Trek een openstaande uitnodiging in voordat u het aantal stoelen verder verlaagt.",
   "workspace.billingPage.billing.change.seatReductionHint": "Het verminderen van plaatsen wordt van kracht in de volgende factureringscyclus. De huidige cyclus wordt niet terugbetaald.",
   "workspace.billingPage.billing.change.title": "Plan aanpassen",
   "workspace.billingPage.billing.changeFailed": "Abonnement bijwerken mislukt.",

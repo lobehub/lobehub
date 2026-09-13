@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} seats · {{interval}} billing preview",
   "workspace.billingPage.billing.change.purchasedSeats": "Prepaid extra seats",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Prepaid seats (max {{max}} seats)",
+  "workspace.billingPage.billing.change.seatFloorPending": "This workspace has {{members}} billable members and {{pending}} pending invites, using {{used}} seats. Revoke a pending invite before reducing seats further.",
   "workspace.billingPage.billing.change.seatReductionHint": "Reducing seats takes effect on the next billing cycle. The current cycle is not refunded.",
   "workspace.billingPage.billing.change.title": "Adjust plan",
   "workspace.billingPage.billing.changeFailed": "Failed to update subscription.",

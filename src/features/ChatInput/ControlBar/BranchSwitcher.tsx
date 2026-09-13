@@ -2,11 +2,14 @@ import type { DeviceGitWorktreeListItem } from '@lobechat/types';
 import { copyToClipboard, Icon, Input, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
+  DropdownMenuFooter,
+  DropdownMenuHeader,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
+  DropdownMenuScrollViewport,
   DropdownMenuTrigger,
   toast,
 } from '@lobehub/ui/base-ui';
@@ -45,9 +48,6 @@ import { openRenameBranchModal } from './RenameBranchModal';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { findWorktreeForBranch, getPathName } from './worktreeHelpers';
 
-// ponytail: each row mounts three Tooltips, so 800+ branches take seconds to open; cap and let search reach the rest
-const BRANCH_RENDER_CAP = 100;
-
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
     overflow: hidden;
@@ -68,22 +68,11 @@ const styles = createStaticStyles(({ css }) => ({
       flex: 1;
     }
   `,
-  container: css`
-    display: flex;
-    flex-direction: column;
-
-    width: 300px;
-    height: 360px;
-
-    /* Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge */
-    margin: -4px;
-  `,
-  createItemWrapper: css`
-    padding: 4px;
+  footer: css`
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
-  createItem: css`
-    border-radius: calc(${cssVar.borderRadius} - 4px);
+  header: css`
+    padding: 0;
   `,
   emptyState: css`
     padding-block: 12px;
@@ -166,10 +155,12 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   list: css`
-    overflow-y: auto;
     flex: 1;
-    padding-block: 2px;
-    padding-inline: 4px;
+    min-height: 0;
+  `,
+  popup: css`
+    width: 300px;
+    height: 360px;
   `,
   searchBar: css`
     padding-block: 4px;
@@ -343,8 +334,6 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       if (!query) return branches;
       return branches.filter((b) => b.name.toLowerCase().includes(query));
     }, [branches, search]);
-    const visibleBranches = filtered.slice(0, BRANCH_RENDER_CAP);
-    const hiddenCount = filtered.length - visibleBranches.length;
 
     const handleCheckout = useCallback(
       async (branch: string, create = false) => {
@@ -497,8 +486,8 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>
-            <DropdownMenuPopup>
-              <div className={styles.container}>
+            <DropdownMenuPopup className={styles.popup}>
+              <DropdownMenuHeader className={styles.header}>
                 <div className={styles.searchBar}>
                   <Input
                     autoFocus
@@ -511,38 +500,36 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     onKeyDown={(e) => e.stopPropagation()}
                   />
                 </div>
-
-                <div className={styles.list}>
-                  <div className={styles.sectionRow}>
-                    <div className={styles.section}>{t('workingDirectory.branchesHeading')}</div>
-                    <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
-                      <Icon
-                        className={cx(isRefreshing && styles.spinning)}
-                        icon={RefreshCwIcon}
-                        size={12}
-                      />
-                    </div>
+                <div className={styles.sectionRow}>
+                  <div className={styles.section}>{t('workingDirectory.branchesHeading')}</div>
+                  <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
+                    <Icon
+                      className={cx(isRefreshing && styles.spinning)}
+                      icon={RefreshCwIcon}
+                      size={12}
+                    />
                   </div>
+                </div>
+              </DropdownMenuHeader>
 
-                  {isLoading && branches.length === 0 && (
-                    <div className={styles.emptyState}>{t('workingDirectory.branchesLoading')}</div>
-                  )}
-
-                  {!isLoading && branchesError && (
-                    <div className={styles.emptyState}>
-                      {t('workingDirectory.branchesLoadFailed')}
-                    </div>
-                  )}
-
-                  {!isLoading && !branchesError && filtered.length === 0 && (
-                    <div className={styles.emptyState}>
-                      {search.trim()
-                        ? t('workingDirectory.branchesNoMatch')
-                        : t('workingDirectory.branchesEmpty')}
-                    </div>
-                  )}
-
-                  {visibleBranches.map((branch) => {
+              {isLoading && branches.length === 0 ? (
+                <div className={styles.emptyState}>{t('workingDirectory.branchesLoading')}</div>
+              ) : !isLoading && branchesError ? (
+                <div className={styles.emptyState}>{t('workingDirectory.branchesLoadFailed')}</div>
+              ) : filtered.length === 0 ? (
+                <div className={styles.emptyState}>
+                  {search.trim()
+                    ? t('workingDirectory.branchesNoMatch')
+                    : t('workingDirectory.branchesEmpty')}
+                </div>
+              ) : (
+                <DropdownMenuScrollViewport
+                  virtual
+                  className={styles.list}
+                  getItemLabel={(_, index) => filtered[index]?.name}
+                  listItemHeight={32}
+                >
+                  {filtered.map((branch) => {
                     const isCurrent = branch.name === currentBranch;
                     const isBusy = busyBranch === branch.name;
                     // A branch another worktree holds can't be checked out here
@@ -620,25 +607,15 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                       </DropdownMenuItem>
                     );
                   })}
-                  {hiddenCount > 0 && (
-                    <div className={styles.emptyState}>
-                      {t('workingDirectory.branchesTruncated', { count: hiddenCount })}
-                    </div>
-                  )}
-                </div>
+                </DropdownMenuScrollViewport>
+              )}
 
-                <div className={styles.createItemWrapper}>
-                  <DropdownMenuItem
-                    className={cx(styles.item, styles.createItem)}
-                    onClick={openCreateBranch}
-                  >
-                    <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
-                    <div className={styles.itemMain}>
-                      {t('workingDirectory.createBranchAction')}
-                    </div>
-                  </DropdownMenuItem>
-                </div>
-              </div>
+              <DropdownMenuFooter className={styles.footer}>
+                <DropdownMenuItem className={styles.item} onClick={openCreateBranch}>
+                  <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
+                  <div className={styles.itemMain}>{t('workingDirectory.createBranchAction')}</div>
+                </DropdownMenuItem>
+              </DropdownMenuFooter>
             </DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>

@@ -834,6 +834,7 @@ export class AiAgentService {
         instructions,
         modelOverride,
         providerOverride,
+        shareVisitorUserId: shareGate?.visitorUserId,
         throwIfExecutionAborted,
         toolModeOverride,
       },

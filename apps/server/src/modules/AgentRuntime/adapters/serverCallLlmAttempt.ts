@@ -299,14 +299,12 @@ export class ServerCallLlmAttempt {
           this.toolCalls = raw;
 
           await this.streamSink.flushTextBuffer();
-          await this.ctx.streamManager.publishStreamChunk(
-            this.ctx.operationId,
-            this.ctx.stepIndex,
-            {
-              chunkType: 'tools_calling',
-              toolsCalling: payload,
-            },
-          );
+          // Throttled, not published per delta: providers stream tool arguments
+          // token by token and each callback carries the full accumulated call
+          // list, so publishing every one floods Redis and the Gateway with
+          // ever-growing duplicate payloads. The sink coalesces them and always
+          // ships the final snapshot.
+          this.streamSink.queueToolsCalling(payload);
         },
       },
       diagnostics: this.runtimeDiagnostics,
@@ -320,6 +318,10 @@ export class ServerCallLlmAttempt {
 
     await this.streamSink.flushTextBuffer();
     await this.streamSink.flushReasoningBuffer();
+    // Ships the final tool-call snapshot before the step's tool lifecycle events
+    // go out, so the client has the complete `tools` array by the time the first
+    // `tool_start` addresses it.
+    await this.streamSink.flushToolsCallingBuffer();
     this.streamSink.clearBuffers();
     await this.streamSink.waitForImageUploads();
 

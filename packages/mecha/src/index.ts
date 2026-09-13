@@ -1,3 +1,4 @@
+export * from './contextEngineering';
 export type {
   AgentConfigResolverContext,
   AgentConfigSnapshot,

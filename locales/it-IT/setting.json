@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} posti · anteprima fatturazione {{interval}}",
   "workspace.billingPage.billing.change.purchasedSeats": "Posti extra prepagati",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Posti prepagati (massimo {{max}} posti)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Questo spazio di lavoro ha {{members}} membri fatturabili e {{pending}} inviti in sospeso, utilizzando {{used}} posti. Revoca un invito in sospeso prima di ridurre ulteriormente i posti.",
   "workspace.billingPage.billing.change.seatReductionHint": "La riduzione dei posti avrà effetto nel prossimo ciclo di fatturazione. Il ciclo corrente non è rimborsabile.",
   "workspace.billingPage.billing.change.title": "Modifica piano",
   "workspace.billingPage.billing.changeFailed": "Aggiornamento dell'abbonamento non riuscito.",

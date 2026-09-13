@@ -23,6 +23,13 @@ export interface RecentDbItem {
   metadata?: any;
   routeGroupId: string | null;
   routeId: string | null;
+  /**
+   * Slug source for a task link — the deliberate `tasks.name`, never the
+   * instruction. `title` coalesces the two for display, but a prompt body must
+   * not reach a URL, where it would land in history, analytics page views,
+   * access logs and anything pasted from the clipboard.
+   */
+  slugTitle?: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
   status: TaskStatus | null;
   title: string;
@@ -114,6 +121,7 @@ export class RecentModel {
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
+        slugTitle: sql<string | null>`NULL`.as('slug_title'),
         status: sql<TaskStatus | null>`NULL`.as('status'),
         title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
         type: sql<RecentDbItem['type']>`'topic'`.as('type'),
@@ -160,6 +168,7 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
+        slugTitle: sql<string | null>`NULL`.as('slug_title'),
         status: sql<TaskStatus | null>`NULL`.as('status'),
         title:
           sql<string>`COALESCE(${documents.title}, ${documents.filename}, 'Untitled Document')`.as(
@@ -189,6 +198,10 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
+        // Display title falls back to the instruction so a nameless task still
+        // reads as something; `slugTitle` deliberately does not, so the link
+        // this row builds carries only what the task was actually named.
+        slugTitle: sql<string | null>`${tasks.name}`.as('slug_title'),
         status: sql<TaskStatus | null>`${tasks.status}`.as('status'),
         title: sql<string>`COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task')`.as(
           'title',
@@ -229,6 +242,7 @@ export class RecentModel {
         metadata: row.metadata ?? undefined,
         routeGroupId: row.routeGroupId,
         routeId: row.routeId,
+        slugTitle: row.slugTitle,
         status: row.status,
         title: row.title,
         type: row.type,

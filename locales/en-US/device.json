@@ -13,7 +13,6 @@
   "workingDirectory.branchesLoadFailed": "Failed to load branches",
   "workingDirectory.branchesLoading": "Loading branches…",
   "workingDirectory.branchesNoMatch": "No matching branches",
-  "workingDirectory.branchesTruncated": "{{count}} more — type to filter",
   "workingDirectory.browseDescription": "Choose a folder on the connected device.",
   "workingDirectory.browseFolders": "Browse folders",
   "workingDirectory.cancel": "Cancel",

@@ -80,6 +80,7 @@ export const recentRouter = router({
           lastAssistantMessage: item.lastAssistantMessage,
           metadata: item.metadata as ChatTopicMetadata | undefined,
           routePath,
+          slugTitle: item.slugTitle,
           status: item.status,
           title: item.title,
           type: item.type,

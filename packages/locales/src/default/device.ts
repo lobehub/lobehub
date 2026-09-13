@@ -27,7 +27,6 @@ export default {
   'workingDirectory.branchesLoadFailed': 'Failed to load branches',
   'workingDirectory.branchesLoading': 'Loading branches…',
   'workingDirectory.branchesNoMatch': 'No matching branches',
-  'workingDirectory.branchesTruncated': '{{count}} more — type to filter',
   'workingDirectory.cancel': 'Cancel',
   'workingDirectory.checkoutAction': 'Checkout',
   'workingDirectory.checkoutFailed': 'Checkout failed',

@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} 個席位 · {{interval}} 計費預覽",
   "workspace.billingPage.billing.change.purchasedSeats": "預付額外席位",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "預付座位（最多 {{max}} 個座位）",
+  "workspace.billingPage.billing.change.seatFloorPending": "此工作區有 {{members}} 位需付費的成員和 {{pending}} 個待處理的邀請，使用了 {{used}} 個席位。在進一步減少席位之前，請撤銷一個待處理的邀請。",
   "workspace.billingPage.billing.change.seatReductionHint": "減少座位數將在下一個計費週期生效。當前週期不予退款。",
   "workspace.billingPage.billing.change.title": "調整方案",
   "workspace.billingPage.billing.changeFailed": "更新訂閱失敗。",

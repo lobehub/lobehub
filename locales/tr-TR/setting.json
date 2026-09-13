@@ -2026,6 +2026,7 @@
   "workspace.billingPage.billing.change.preview": "{{seats}} koltuk · {{interval}} faturalama önizlemesi",
   "workspace.billingPage.billing.change.purchasedSeats": "Ön ödemeli ek koltuklar",
   "workspace.billingPage.billing.change.purchasedSeatsWithMax": "Ön ödemeli koltuklar (maksimum {{max}} koltuk)",
+  "workspace.billingPage.billing.change.seatFloorPending": "Bu çalışma alanında {{members}} faturalandırılabilir üye ve {{pending}} bekleyen davet var, {{used}} koltuk kullanılıyor. Daha fazla koltuk azaltmadan önce bekleyen bir daveti iptal edin.",
   "workspace.billingPage.billing.change.seatReductionHint": "Koltuk azaltma, bir sonraki fatura döneminde geçerli olur. Mevcut dönem için geri ödeme yapılmaz.",
   "workspace.billingPage.billing.change.title": "Planı ayarla",
   "workspace.billingPage.billing.changeFailed": "Abonelik güncellenemedi.",

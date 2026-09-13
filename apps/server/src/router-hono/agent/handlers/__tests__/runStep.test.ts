@@ -38,11 +38,6 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
 }));
 
-const mockInlineStepsEnabled = vi.fn();
-vi.mock('@/server/services/agentRuntime/inlineStepsGate', () => ({
-  isInlineAgentStepsEnabledForUser: (userId: string) => mockInlineStepsEnabled(userId),
-}));
-
 function buildOperationDiagnosticDB(row?: any) {
   return {
     select: vi.fn(function () {
@@ -95,8 +90,6 @@ const validBody = {
 describe('runStep handler', () => {
   beforeEach(() => {
     mockGetOperationMetadata.mockReset();
-    mockInlineStepsEnabled.mockReset();
-    mockInlineStepsEnabled.mockResolvedValue(true);
     mockLoadInlineResume.mockReset();
     mockLoadInlineResume.mockResolvedValue(null);
     mockClearInlineResume.mockReset();
@@ -435,8 +428,6 @@ describe('runStep inline step loop', () => {
     mockClearInlineResume.mockReset();
     mockLoadInlineResume.mockReset();
     mockLoadInlineResume.mockResolvedValue(null);
-    mockInlineStepsEnabled.mockReset();
-    mockInlineStepsEnabled.mockResolvedValue(true);
     mockGetServerDB.mockResolvedValue({} as any);
     mockGetOperationMetadata.mockResolvedValue(metadata);
   });
@@ -722,48 +713,7 @@ describe('runStep inline step loop', () => {
     nowSpy.mockRestore();
   });
 
-  it('runs one step per delivery when the rollout flag is off', async () => {
-    mockInlineStepsEnabled.mockResolvedValue(false);
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: true,
-      state: { status: 'running', stepCount: 3 },
-      success: true,
-    });
-
-    const { ctx, getCaptures } = buildContext({ body: validBody });
-    await runStep(ctx);
-
-    expect(mockInlineStepsEnabled).toHaveBeenCalledWith('user-1');
-    expect(mockExecuteStep).toHaveBeenCalledTimes(1);
-    expect(mockExecuteStep.mock.calls[0][0]).toMatchObject({ inlineContinuation: false });
-    expect(getCaptures()[0].body).toMatchObject({ inlinedSteps: 0, nextStepScheduled: true });
-  });
-
-  it('still honours a parked envelope after the flag is switched off', async () => {
-    // Operations that were mid-loop when the flag flipped have an envelope and
-    // nothing queued behind them. Ignoring it would strand exactly the runs the
-    // rollback was meant to protect.
-    mockInlineStepsEnabled.mockResolvedValue(false);
-    mockLoadInlineResume.mockResolvedValue(continuationFor(7));
-    mockExecuteStep.mockResolvedValue({
-      nextStepScheduled: true,
-      state: { status: 'running', stepCount: 8 },
-      success: true,
-    });
-
-    const { ctx } = buildContext({ body: validBody });
-    await runStep(ctx);
-
-    expect(mockExecuteStep.mock.calls[0][0]).toMatchObject({
-      inlineContinuation: false,
-      stepIndex: 7,
-    });
-    // The queue owns the next step again, so the envelope must not linger.
-    expect(mockClearInlineResume).toHaveBeenCalledWith('op-1', 'op-1:owner');
-  });
-
   it('leaves Redis alone when nothing was ever parked', async () => {
-    mockInlineStepsEnabled.mockResolvedValue(false);
     mockExecuteStep.mockResolvedValue({
       nextStepScheduled: true,
       state: { status: 'running', stepCount: 3 },
