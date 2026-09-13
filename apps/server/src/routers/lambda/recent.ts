@@ -24,6 +24,12 @@ export const recentRouter = router({
           limit: z.number().optional(),
           /** Restrict a workspace feed to the viewer's own items (mine/team toggle). */
           mineOnly: z.boolean().optional(),
+          /**
+           * Restrict a workspace feed to conversations the whole team can see —
+           * topics owned by a private agent/group are dropped even for their
+           * own creator. Set by the home "team" tab.
+           */
+          sharedOnly: z.boolean().optional(),
           types: z.array(z.enum(['topic', 'document', 'task'])).optional(),
           withTopicPreview: z.boolean().optional(),
         })
@@ -37,6 +43,7 @@ export const recentRouter = router({
         input?.types,
         input?.withTopicPreview,
         input?.mineOnly,
+        input?.sharedOnly,
       );
 
       return items.map((item) => {

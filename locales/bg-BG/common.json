@@ -579,6 +579,7 @@
   "viewExecutionDetails": "Преглед на подробности за изпълнението",
   "visibilityConfirm.irreversible": " (необратимо)",
   "visibilityConfirm.makePrivate.itemAccess": "Другите членове на работното пространство губят достъп незабавно",
+  "visibilityConfirm.makePrivate.itemLibrary": "Остава в библиотеката, в която сте го подредили — другите членове просто спират да го виждат там",
   "visibilityConfirm.makePrivate.itemLoaded": "Съдържанието, което другите вече са заредили, не може да бъде върнато",
   "visibilityConfirm.makePrivate.itemReferences": "Съществуващите прикачени файлове и препратки в съобщенията ще се показват като недостъпни",
   "visibilityConfirm.publish.itemLoaded": "След превключване обратно, съдържанието, което другите вече са заредили, не може да бъде върнато",

@@ -579,6 +579,7 @@
   "viewExecutionDetails": "Xem chi tiết thực thi",
   "visibilityConfirm.irreversible": " (không thể đảo ngược)",
   "visibilityConfirm.makePrivate.itemAccess": "Các thành viên khác trong không gian làm việc sẽ mất quyền truy cập ngay lập tức",
+  "visibilityConfirm.makePrivate.itemLibrary": "Nó vẫn ở trong thư viện mà bạn đã lưu trữ — các thành viên khác chỉ không còn nhìn thấy nó ở đó",
   "visibilityConfirm.makePrivate.itemLoaded": "Nội dung mà người khác đã tải xuống không thể thu hồi lại",
   "visibilityConfirm.makePrivate.itemReferences": "Các tệp đính kèm và tham chiếu trong tin nhắn hiện có sẽ hiển thị là không khả dụng",
   "visibilityConfirm.publish.itemLoaded": "Sau khi chuyển đổi lại, nội dung mà người khác đã tải xuống không thể thu hồi lại",

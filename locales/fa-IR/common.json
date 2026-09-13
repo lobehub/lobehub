@@ -579,6 +579,7 @@
   "viewExecutionDetails": "مشاهده جزئیات اجرا",
   "visibilityConfirm.irreversible": " (غیرقابل بازگشت)",
   "visibilityConfirm.makePrivate.itemAccess": "دیگر اعضای فضای کاری فوراً دسترسی خود را از دست می‌دهند",
+  "visibilityConfirm.makePrivate.itemLibrary": "در کتابخانه‌ای که آن را بایگانی کرده‌اید باقی می‌ماند — فقط دیگر اعضا آن را در آنجا نمی‌بینند",
   "visibilityConfirm.makePrivate.itemLoaded": "محتوایی که دیگران قبلاً بارگذاری کرده‌اند، قابل بازگرداندن نیست",
   "visibilityConfirm.makePrivate.itemReferences": "پیوست‌ها و ارجاعات پیام‌های موجود به‌عنوان غیرقابل دسترس نمایش داده می‌شوند",
   "visibilityConfirm.publish.itemLoaded": "پس از تغییر وضعیت، محتوایی که دیگران قبلاً بارگذاری کرده‌اند، قابل بازگرداندن نیست",

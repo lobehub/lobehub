@@ -344,7 +344,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Task Detail',
             ),
             handle: { meta: taskRouteMeta },
-            path: 'task/:taskId',
+            // `:slug?` is the readable title tail (Linear-style). It is never
+            // resolved against — `:taskId` alone identifies the task — so the
+            // optional segment keeps every pre-slug link working.
+            path: 'task/:taskId/:slug?',
           },
         ],
         element: dynamicLayout(
@@ -1061,7 +1064,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Task Detail',
             ),
             handle: { meta: taskRouteMeta },
-            path: ':taskId',
+            // Optional readable title tail — see the agent-scoped route above.
+            path: ':taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,

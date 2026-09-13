@@ -13,7 +13,6 @@ import { AGENT_PLAN_FILE_TYPE, COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type {
   AgentBuilderContext,
   AgentContextDocument,
-  AgentGroupConfig,
   GroupAgentBuilderContext,
   GroupOfficialToolItem,
   OfficialToolItem,
@@ -81,7 +80,7 @@ export const buildServerCallLlmContext = async ({
   state,
   tooling,
 }: BuildServerCallLlmContextInput): Promise<ServerCallLlmContextBuildResult> => {
-  const agentConfig = ctx.agentConfig;
+  const agentConfig = state.world?.agent;
   if (!agentConfig) {
     return {
       processedMessages: llmPayload.messages as ChatStreamPayload['messages'],
@@ -97,6 +96,7 @@ export const buildServerCallLlmContext = async ({
     llmPayload,
     model,
     provider,
+    world: state.world,
   });
   const {
     capabilities,
@@ -177,13 +177,13 @@ export const buildServerCallLlmContext = async ({
   // no setting that could grant file access.
   const agentDocumentsAllowedForShare = !ctx.agentShareVisitor;
   let agentDocuments: AgentContextDocument[] | undefined;
-  const agentId = state.metadata?.agentId;
+  const agentId = state.origin?.agentId;
   if (agentId && ctx.serverDB && ctx.userId && agentDocumentsAllowedForShare) {
     try {
       const agentDocService = new AgentDocumentsService(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const docs = await agentDocService.getAgentContextDocuments(agentId);
       if (docs.length > 0) {
@@ -233,7 +233,7 @@ export const buildServerCallLlmContext = async ({
       const docService = new AgentDocumentsService(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
@@ -276,9 +276,9 @@ export const buildServerCallLlmContext = async ({
   // (`packages/builtin-skills/src/lobehub/content.ts`) so it can render
   // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
   // model's prompt without needing a separate context injector.
-  const lobehubSkillAgentId = state.metadata?.agentId;
-  const lobehubSkillTopicId = ctx.topicId ?? state.metadata?.topicId;
-  const lobehubSkillAgentMeta = state.metadata?.agentConfig as
+  const lobehubSkillAgentId = state.origin?.agentId;
+  const lobehubSkillTopicId = ctx.topicId ?? state.origin?.topicId;
+  const lobehubSkillAgentMeta = state.world?.agent as
     { description?: string | null; title?: string | null } | undefined;
 
   let lobehubSkillTopicTitle = '';
@@ -358,14 +358,12 @@ export const buildServerCallLlmContext = async ({
   const sessionDate = new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
     month: 'long',
-    timeZone: ctx.userTimezone || 'UTC',
+    timeZone: state.world?.userTimezone || 'UTC',
     weekday: 'long',
     year: 'numeric',
   }).format(new Date());
 
-  const memoryEffort = String(
-    (state.metadata?.agentConfig as any)?.chatConfig?.memory?.effort ?? '',
-  );
+  const memoryEffort = String(agentConfig.chatConfig?.memory?.effort ?? '');
 
   const messageTodos = extractTodosFromMessages(messagesForContext);
   let planTodo: PlanTodoConfig | undefined =
@@ -382,7 +380,7 @@ export const buildServerCallLlmContext = async ({
       const topicDocumentModel = new TopicDocumentModel(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const [planDocument] = await topicDocumentModel.findByTopicId(lobehubSkillTopicId, {
         type: AGENT_PLAN_FILE_TYPE,
@@ -671,14 +669,14 @@ export const buildServerCallLlmContext = async ({
     // the model introduces itself by the user-given name.
     agentIdentity: { name: agentConfig.name ?? undefined, title: agentConfig.title ?? undefined },
     ...(agentBuilderContext && { agentBuilderContext }),
-    agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,
+    agentGroup: state.world?.group,
     agentManagementContext: (state as any).initialContext?.initialContext?.mentionedAgents?.length
       ? {
           mentionedAgents: (state as any).initialContext.initialContext.mentionedAgents,
         }
       : undefined,
     additionalVariables: {
-      ...state.metadata?.deviceSystemInfo,
+      ...state.binding?.device?.systemInfo,
       ...lobehubSkillVariables,
       COMPOSIO_SERVICES_LIST: composioServicesListStr,
       CREDS_LIST: credsListStr,
@@ -693,14 +691,14 @@ export const buildServerCallLlmContext = async ({
       session_date: sessionDate,
       username: serverUsername,
     },
-    userTimezone: ctx.userTimezone,
+    userTimezone: state.world?.userTimezone,
     capabilities,
-    botPlatformContext: ctx.botPlatformContext,
+    botPlatformContext: state.world?.channel?.botPlatform,
     ...(workspaceContext && { workspaceContext }),
-    discordContext: ctx.discordContext,
+    discordContext: state.world?.channel?.discord,
     enableExpertise: state.enableExpertise,
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
-    evalContext: ctx.evalContext,
+    evalContext: state.world?.eval,
     expertise: state.expertise,
     forceFinish: state.forceFinish,
     ...(groupAgentBuilderContext && { groupAgentBuilderContext }),
@@ -727,15 +725,15 @@ export const buildServerCallLlmContext = async ({
     modelKnowledgeCutoff,
     provider,
     ...(planTodo && { planTodo }),
-    connectorOwnershipNote: ctx.connectorOwnershipNote,
-    projectInstructions: ctx.projectInstructions,
+    connectorOwnershipNote: state.world?.connectorOwnershipNote,
+    projectInstructions: state.world?.projectInstructions,
     systemRole: agentConfig.systemRole ?? undefined,
     toolDiscoveryConfig,
     toolsConfig: {
       manifests: Object.values(resolved.promptManifestMap),
       tools: resolved.enabledToolIds,
     },
-    userMemory: state.metadata?.userMemory,
+    userMemory: state.world?.userMemory,
     ...(resolvedSkills?.enabledSkills?.length && {
       skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
     }),
@@ -828,7 +826,7 @@ const resolveWorkspaceContext = async (
   if (ctx.agentShareVisitor) return undefined;
 
   const appUrl = getAppUrl();
-  const workspaceId = state.metadata?.workspaceId ?? ctx.workspaceId;
+  const workspaceId = state.origin?.workspaceId ?? ctx.workspaceId;
 
   // Personal space: the origin alone is enough to anchor links.
   if (!workspaceId) return appUrl ? { appUrl } : undefined;

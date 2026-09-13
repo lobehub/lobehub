@@ -56,7 +56,6 @@ const assertKnowledgeItemsAccessible = async (
     workspaceId?: string | null;
   },
   ids: string[],
-  targetVisibility?: 'private' | 'public' | null,
 ): Promise<void> => {
   const uniqueIds = [...new Set(ids)];
   const documentIds = uniqueIds.filter((id) => id.startsWith('docs_'));
@@ -70,17 +69,6 @@ const assertKnowledgeItemsAccessible = async (
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'One or more resources were not found or are not accessible',
-    });
-  }
-
-  if (
-    ctx.workspaceId &&
-    targetVisibility &&
-    [...documents, ...files].some((item) => item.visibility !== targetVisibility)
-  ) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Resource visibility must match knowledge base visibility',
     });
   }
 
@@ -112,7 +100,14 @@ export const knowledgeBaseRouter = router({
         visibility: kb.visibility ?? null,
         workspaceId: kb.workspaceId ?? null,
       });
-      await assertKnowledgeItemsAccessible(ctx, input.ids, kb.visibility);
+      // A library is a directory of references, not a container that makes its
+      // contents uniform: who can see a row is decided by the row's own
+      // `visibility`, which is what every listing already filters on. This
+      // entry used to additionally demand `item.visibility === kb.visibility`,
+      // which blocked the ordinary "file the draft now, share it when it's
+      // ready" move while doing nothing to stop the same state being reached by
+      // adding first and flipping visibility afterwards.
+      await assertKnowledgeItemsAccessible(ctx, input.ids);
 
       try {
         return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(

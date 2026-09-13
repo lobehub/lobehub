@@ -1883,6 +1883,8 @@ When I am ___, I need ___
   'workspace.billingPage.billing.change.currentPlanWithInterval': 'Current plan',
   'workspace.billingPage.billing.change.immediateChangeSeatReductionHint':
     'Reduce seats separately after this immediate plan change.',
+  'workspace.billingPage.billing.change.minPurchasedSeatsHintWithPending':
+    'This workspace has {{members}} billable members and {{pending}} pending invites, using {{used}} seats — at least {{count}} extra seats are required. Revoke a pending invite to go lower.',
   'workspace.billingPage.billing.change.minPurchasedSeatsHint':
     'This workspace currently has {{members}} billable members and requires at least {{count}} extra seats.',
   'workspace.billingPage.billing.change.preview': '{{seats}} seats · {{interval}} billing preview',
@@ -1914,6 +1916,8 @@ When I am ___, I need ___
   'workspace.billingPage.billing.upgradePlanModal.increaseSeats': 'Increase seats',
   'workspace.billingPage.billing.upgradePlanModal.purchasedSeatFloorSummary':
     'You already have {{count}} purchased extra seats — this change cannot go below that.',
+  'workspace.billingPage.billing.upgradePlanModal.memberSeatSummaryWithPending':
+    'This workspace has {{members}} billable members and {{pending}} pending invites, using {{used}} seats. At least {{count}} extra seats are required.',
   'workspace.billingPage.billing.upgradePlanModal.memberSeatSummary':
     'This workspace has {{members}} billable members. At least {{count}} extra seats are required.',
   'workspace.billingPage.billing.upgradePlanModal.noChargeToday': 'No charge today',
@@ -2976,6 +2980,12 @@ When I am ___, I need ___
   'workspace.members.invite.freePlanAskOwnerToUpgrade':
     'This Free workspace can’t invite more members. Ask the workspace owner to upgrade to Pro, or invite viewers instead (they don’t take a seat).',
   'workspace.members.invite.upgradePlanCta': 'Upgrade plan',
+  'workspace.members.invite.seatLimitReached':
+    'All seats are in use. Buy more seats to keep inviting, or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.seatLimitReachedFreePlan':
+    'All seats on your Free workspace are in use. Upgrade to Pro for more seats, or invite viewers instead (they don’t take a seat).',
+  'workspace.members.invite.seatLimitReachedNoBuy':
+    'All seats are in use. Ask the workspace owner to buy more seats, or invite viewers instead (they don’t take a seat).',
   'workspace.members.invite.roleLabel': 'Role',
   'workspace.members.invite.submit': 'Invite',
   'workspace.members.invite.addAnother': 'Add another',
@@ -3006,6 +3016,12 @@ When I am ___, I need ___
   'workspace.members.pending.revokeFailed': 'Failed to revoke invitation',
   'workspace.members.seatChange.memberJoinBlocked':
     'Current members have reached the scheduled seat limit, so new paid members may not be able to join this workspace',
+  'workspace.members.seatBreakdown':
+    '{{members}} billable members + {{pending}} pending invites = {{used}} of {{capacity}} seats used. Viewers don’t take a seat.',
+  'workspace.members.seatBreakdownNoPending':
+    '{{members}} billable members use {{used}} of {{capacity}} seats. Viewers don’t take a seat.',
+  'workspace.members.seatPending_one': '{{count}} invite pending',
+  'workspace.members.seatPending_other': '{{count}} invites pending',
   'workspace.members.seatUsage_one': '{{used}} / {{capacity}} seat',
   'workspace.members.seatUsage_other': '{{used}} / {{capacity}} seats',
   'workspace.members.subtitle': 'Manage workspace members and invitations',

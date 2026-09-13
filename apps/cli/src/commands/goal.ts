@@ -205,7 +205,10 @@ export function registerGoalCommand(program: Command) {
 
   goal
     .command('create <title>')
-    .option('--max-manager-turns <n>', 'Enable CLI manager planning with this turn limit')
+    .option(
+      '--max-manager-turns <n>',
+      'Add a main Agent with this turn limit; it takes over problems the system planner cannot route',
+    )
     .description('Create a standalone goal and seed its graph')
     .option('-r, --requirement <text>', 'Acceptance requirement')
     .option(

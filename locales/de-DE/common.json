@@ -579,6 +579,7 @@
   "viewExecutionDetails": "Ausführungsdetails anzeigen",
   "visibilityConfirm.irreversible": " (unumkehrbar)",
   "visibilityConfirm.makePrivate.itemAccess": "Andere Mitglieder des Arbeitsbereichs verlieren sofort den Zugriff",
+  "visibilityConfirm.makePrivate.itemLibrary": "Es bleibt in der Bibliothek, in der Sie es abgelegt haben – andere Mitglieder sehen es dort einfach nicht mehr.",
   "visibilityConfirm.makePrivate.itemLoaded": "Inhalte, die andere bereits geladen haben, können nicht zurückgezogen werden",
   "visibilityConfirm.makePrivate.itemReferences": "Vorhandene Nachrichtenanhänge und Verweise werden als nicht verfügbar angezeigt",
   "visibilityConfirm.publish.itemLoaded": "Nach dem Wechsel können Inhalte, die andere bereits geladen haben, nicht zurückgezogen werden",

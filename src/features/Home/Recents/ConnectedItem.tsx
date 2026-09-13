@@ -19,7 +19,9 @@ const ConnectedItem = memo<ConnectedItemProps>(({ itemRef, queryKey, scope }) =>
   if (!item) return null;
 
   const route =
-    item.type === 'task' ? taskDetailPath(item.id, item.agentId ?? undefined) : item.routePath;
+    item.type === 'task'
+      ? taskDetailPath(item.id, item.agentId ?? undefined, item.title)
+      : item.routePath;
 
   return (
     <WorkspaceLink style={{ color: 'inherit', textDecoration: 'none' }} to={route}>

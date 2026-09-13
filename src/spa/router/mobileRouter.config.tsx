@@ -261,7 +261,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/task/[taskId]'),
               'Mobile > Task Detail',
             ),
-            path: ':taskId',
+            // Optional readable title tail; `:taskId` alone resolves the task.
+            path: ':taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,
@@ -274,7 +275,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/agent/task/[taskId]'),
               'Mobile > Agent Task Detail',
             ),
-            path: ':aid/task/:taskId',
+            path: ':aid/task/:taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,

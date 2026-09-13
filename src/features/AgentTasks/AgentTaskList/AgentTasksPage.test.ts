@@ -8,8 +8,10 @@ import {
   getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
   getTaskPageHeaderVisibility,
+  PAGINATED_COLLECTION_PINNED_OPTIONS,
   resolveMyTaskScope,
   resolveTaskCollection,
+  resolveTaskCollectionView,
 } from './AgentTasksPage';
 import {
   collapseSubTasks,
@@ -99,6 +101,46 @@ describe('AgentTasksPage', () => {
       const newer = taskUpdatedAt('a', '2026-02-01');
       const older = taskUpdatedAt('b', '2026-01-01');
       expect(compareTaskItems(newer, older, options)).toBeLessThan(0);
+    });
+  });
+
+  describe('resolveTaskCollectionView', () => {
+    it('renders the board in every collection that offers the switch', () => {
+      // The reported bug: "My tasks" showed the list/board switch but rendered
+      // its list unconditionally, so picking Board changed nothing.
+      expect(resolveTaskCollectionView('mine', 'kanban')).toBe('board');
+      expect(resolveTaskCollectionView('tasks', 'kanban')).toBe('board');
+    });
+
+    it('renders the list whenever the list mode is selected', () => {
+      expect(resolveTaskCollectionView('mine', 'list')).toBe('list');
+      expect(resolveTaskCollectionView('tasks', 'list')).toBe('list');
+    });
+
+    it('keeps the scheduled roll-up a list — it is offered no switch', () => {
+      expect(resolveTaskCollectionView('scheduled', 'kanban')).toBe('list');
+      expect(resolveTaskCollectionView('scheduled', 'list')).toBe('list');
+    });
+  });
+
+  describe('PAGINATED_COLLECTION_PINNED_OPTIONS', () => {
+    it('names exactly the controls a paginated collection overrides', () => {
+      // Each pinned name must be a control the view options actually fix, or
+      // the panel would hide a switch that still works.
+      const pinned = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        orderBy: 'title',
+        orderDirection: 'desc',
+        showSubTasks: false,
+      });
+      expect(PAGINATED_COLLECTION_PINNED_OPTIONS).toEqual(['ordering', 'showSubTasks']);
+      expect(pinned.orderBy).toBe('updatedAt');
+      expect(pinned.orderDirection).toBe('asc');
+      expect(pinned.showSubTasks).toBe(true);
+      // Not pinned: the panel keeps offering these, and they still take effect.
+      expect(pinned.groupBy).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy);
+      expect(pinned.hideCompleted).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.hideCompleted);
+      expect(pinned.nestedSubTasks).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.nestedSubTasks);
     });
   });
 

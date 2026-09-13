@@ -87,7 +87,7 @@ interface AgentTasksPageProps {
   projectId?: string;
 }
 
-type TaskCollection = 'mine' | 'scheduled' | 'tasks';
+export type TaskCollection = 'mine' | 'scheduled' | 'tasks';
 /** "My tasks" sub-view: assigned to me as a member, or created by me. */
 export type MyTaskScope = 'assigned' | 'created';
 const COLLECTION_PAGE_SIZE = 50;
@@ -146,6 +146,25 @@ export const getMyTaskViewOptions = (viewOptions: TaskListViewOptions): TaskList
   ...PAGINATED_COLLECTION_VIEW,
 });
 
+/**
+ * The display controls `PAGINATED_COLLECTION_VIEW` overrides, so the config
+ * panel can leave them out instead of offering a switch that changes nothing:
+ * ordering follows the server page, and every fetched row renders.
+ */
+export const PAGINATED_COLLECTION_PINNED_OPTIONS = ['ordering', 'showSubTasks'] as const;
+
+/**
+ * Which surface a collection renders in the active view mode. Single-sourced
+ * because every collection that is offered the list/board switch has to answer
+ * it: "My tasks" rendered its list unconditionally while still showing the
+ * switch, so picking Board did nothing at all. The scheduled tab is the one
+ * collection with no switch (its config entry is hidden), so it stays a list.
+ */
+export const resolveTaskCollectionView = (
+  collection: TaskCollection,
+  viewMode: TaskViewMode,
+): 'board' | 'list' => (collection !== 'scheduled' && viewMode === 'kanban' ? 'board' : 'list');
+
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
@@ -165,6 +184,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const isMineCollection = collection === 'mine';
   const isOrdinaryCollection = collection === 'tasks';
   const myTaskScope = resolveMyTaskScope(searchParams);
+  // "My tasks" honours the list/board switch like the ordinary tab does; the
+  // board fetches its own server groups, so the paginated list fetch below is
+  // gated off while it is up.
+  const isBoardView = resolveTaskCollectionView(collection, viewMode) === 'board';
+  const isMineBoard = isMineCollection && isBoardView;
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   // Every scope splits automated work out of the ordinary tab — it is the
@@ -175,7 +199,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   // "My tasks" tabs render their own paginated collections, so the fetch is
   // gated to the ordinary tab; and the kanban view fetches its own server
   // groups, so there only the single page behind the empty-hero decision runs.
-  const isListView = viewMode !== 'kanban';
+  const isListView = !isBoardView;
   const { error, isLoading, mutate } = useFetchTaskList(
     projectId
       ? {
@@ -217,7 +241,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
   const useFetchMyTaskList = useTaskStore((s) => s.useFetchMyTaskList);
   const mineSWR = useFetchMyTaskList({
-    enabled: isMineCollection,
+    enabled: isMineCollection && !isMineBoard,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
     scope: myTaskScope,
@@ -281,7 +305,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
       lockAssignee: !!agentId,
       projectId,
       onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined));
+        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name));
       },
     });
   }, [agentId, canCreateTask, createActionBehavior.mode, navigate, projectId, updateSystemStatus]);
@@ -367,7 +391,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
               />
             )}
             {!isScheduledCollection && headerVisibility.showViewOptions && (
-              <TasksGroupConfig options={viewOptions} setOptions={setViewOptions} />
+              <TasksGroupConfig
+                options={viewOptions}
+                pinnedOptions={isMineCollection ? PAGINATED_COLLECTION_PINNED_OPTIONS : undefined}
+                setOptions={setViewOptions}
+              />
             )}
             {headerVisibility.showTaskAgentPanelToggle && (
               <ToggleRightPanelButton
@@ -385,7 +413,20 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
           },
         }}
       />
-      {!isOrdinaryCollection ? (
+      {isMineBoard ? (
+        <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+          <KanbanBoard
+            myTaskScope={myTaskScope}
+            options={viewOptions}
+            routeScope={routeScope}
+            emptyDescription={t(
+              myTaskScope === 'created'
+                ? 'taskList.mine.emptyCreated'
+                : 'taskList.mine.emptyAssigned',
+            )}
+          />
+        </Flexbox>
+      ) : !isOrdinaryCollection ? (
         <WideScreenContainer
           fullWidth
           gap={16}
@@ -425,7 +466,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         </WideScreenContainer>
       ) : isEmptyHero ? (
         <EmptyState agentId={agentId} projectId={projectId} />
-      ) : viewMode === 'kanban' ? (
+      ) : isBoardView ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
           <KanbanBoard
             agentId={agentId}

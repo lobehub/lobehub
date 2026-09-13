@@ -936,17 +936,17 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       appContext: { sourceMessageId: messageId },
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: operationId,
-          sourceToolMessageIds: [messageId],
-        },
         agentInterventionDispatch: {
           deduplicationId: deriveAgentInterventionQueueDeduplicationId(continuationOperationId, 0),
           messageId: 'qstash-message-published-retry',
           resolutionRequestId,
           scheduledAt: new Date().toISOString(),
           state: 'scheduled',
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: operationId,
+          sourceToolMessageIds: [messageId],
         },
       },
       status: 'running',
@@ -1040,16 +1040,16 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       appContext: { sourceMessageId: messageId },
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: operationId,
-          sourceToolMessageIds: [messageId],
-        },
         agentInterventionPreparation: {
           deduplicationId,
           resolutionRequestId,
           state: 'ready',
           stepIndex: 0,
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: operationId,
+          sourceToolMessageIds: [messageId],
         },
       },
       status: 'running',
@@ -1058,17 +1058,19 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     });
     aiAgentService.loadInterventionContinuationState.mockResolvedValue({
       metadata: {
-        agentId: 'agent-ack-backfill',
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: operationId,
-          sourceToolMessageIds: [messageId],
-        },
         agentInterventionPreparation: {
           deduplicationId,
           resolutionRequestId,
           state: 'ready',
           stepIndex: 0,
+        },
+      },
+      origin: {
+        agentId: 'agent-ack-backfill',
+        continuation: {
+          resolutionRequestId,
+          sourceOperationId: operationId,
+          sourceToolMessageIds: [messageId],
         },
         sourceMessageId: messageId,
         topicId: 'topic-ack-backfill',
@@ -1157,16 +1159,16 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       appContext: { sourceMessageId: messageId },
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: operationId,
-          sourceToolMessageIds: [messageId],
-        },
         agentInterventionPreparation: {
           deduplicationId,
           resolutionRequestId,
           state: 'ready',
           stepIndex: 0,
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: operationId,
+          sourceToolMessageIds: [messageId],
         },
       },
       status: 'running',
@@ -1176,17 +1178,19 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
     aiAgentService.loadInterventionContinuationState
       .mockResolvedValueOnce({
         metadata: {
-          agentId: 'agent-ready-disappears',
-          agentInterventionContinuation: {
-            resolutionRequestId,
-            sourceOperationId: operationId,
-            sourceToolMessageIds: [messageId],
-          },
           agentInterventionPreparation: {
             deduplicationId,
             resolutionRequestId,
             state: 'ready',
             stepIndex: 0,
+          },
+        },
+        origin: {
+          agentId: 'agent-ready-disappears',
+          continuation: {
+            resolutionRequestId,
+            sourceOperationId: operationId,
+            sourceToolMessageIds: [messageId],
           },
           sourceMessageId: messageId,
           topicId: 'topic-ready-disappears',
@@ -1276,16 +1280,16 @@ describe('aiAgentRouter — remote Human-in-the-loop', () => {
       },
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: operationId,
-          sourceToolMessageIds: [messageId],
-        },
         agentInterventionPreparation: {
           deduplicationId: deriveAgentInterventionQueueDeduplicationId(continuationOperationId, 0),
           resolutionRequestId,
           state: 'ready',
           stepIndex: 0,
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: operationId,
+          sourceToolMessageIds: [messageId],
         },
       },
       status: 'running',

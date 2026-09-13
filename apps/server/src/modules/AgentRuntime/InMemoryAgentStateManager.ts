@@ -1,4 +1,4 @@
-import { type AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -46,7 +46,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
 
     log('[%s] Loaded state (step %d)', operationId, state.stepCount);
     // Return deep clone to prevent external modifications from affecting internal state
-    return structuredClone(state);
+    return normalizeAgentState(structuredClone(state));
   }
 
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {

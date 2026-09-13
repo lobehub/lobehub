@@ -1,7 +1,7 @@
 import type { UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Button as BaseButton, createModal, useModalContext } from '@lobehub/ui/base-ui';
+import { Button as BaseButton, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { X } from 'lucide-react';
@@ -158,18 +158,26 @@ export const UpdateNotification: React.FC = () => {
   if (updateInfo?.kind === 'renderer') {
     return (
       <div className={styles.installLaterToast}>
-        <span>
-          {tElectron('updater.updateReady')}
-          {isDevMode && updateInfo.version ? ` · ${updateInfo.version}` : ''}
-        </span>
+        <span>{tElectron('updater.rendererReady', { version: updateInfo.version })}</span>
         <BaseButton size={'small'} type={'text'} onClick={() => setUpdateInfo(null)}>
           {tElectron('updater.ignore')}
         </BaseButton>
         <BaseButton
+          loading={isInstalling}
           size={'small'}
           type={'primary'}
-          onClick={() => {
-            rendererOtaService.applyNow().catch(() => {});
+          onClick={async () => {
+            setIsInstalling(true);
+            try {
+              if (!(await rendererOtaService.applyNow())) {
+                toast.error(tElectron('updater.rendererUpdateError'));
+              }
+            } catch (error) {
+              console.error('Failed to apply renderer update:', error);
+              toast.error(tElectron('updater.rendererUpdateError'));
+            } finally {
+              setIsInstalling(false);
+            }
           }}
         >
           {tElectron('updater.upgradeNow')}

@@ -830,7 +830,7 @@ export const prepareOperation = async (
   // the local-system tool's {{workingDirectory}} placeholder — the channel
   // the model uses to know where it is and reach for absolute paths — and,
   // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
-  // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
+  // state.binding.device.systemInfo.workingDirectory). Resume-safe via the
   // existing deviceSystemInfo plumbing (computeDeviceContext).
   if (workspaceInit.boundCwd) {
     deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;

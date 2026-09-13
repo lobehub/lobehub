@@ -3,12 +3,14 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
 } from '@lobechat/const';
-import { stopPropagation } from '@lobehub/ui';
+import { Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import { Checkbox } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
   getTransparentDragImage,
   useDragActive,
@@ -123,6 +125,28 @@ const styles = createStaticStyles(({ css }) => ({
   content: css`
     position: relative;
   `,
+  /**
+   * Always visible, unlike the hover-only checkbox and dropdown above it: the
+   * point of the badge is that a private card is recognisable at a glance while
+   * scanning a library that mixes both scopes.
+   */
+  privateBadge: css`
+    position: absolute;
+    z-index: 2;
+    inset-block-end: 8px;
+    inset-inline-start: 8px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 4px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorBgMask};
+  `,
   contentWithPadding: css`
     padding: 12px;
   `,
@@ -194,7 +218,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     userId,
     visibility,
   }) => {
-    const { t } = useTranslation('components');
+    const { t } = useTranslation(['components', 'chat']);
     const chunkTargetId = getChunkTargetId({ fileId, id });
     const isDragActive = useDragActive();
     const setCurrentDrag = useSetCurrentDrag();
@@ -326,6 +350,11 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       visibility,
     });
 
+    // Personal mode has no second audience, so `visibility` carries no meaning
+    // there and every card would wear a lock for nothing.
+    const activeWorkspaceId = useActiveWorkspaceId();
+    const isPrivate = Boolean(activeWorkspaceId) && visibility === 'private';
+
     return (
       <div
         data-drop-target-id={id}
@@ -368,6 +397,14 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         >
           <DropdownMenu items={menuItems} />
         </div>
+
+        {isPrivate && (
+          <Tooltip title={t('resources.visibility.privateTooltip', { ns: 'chat' })}>
+            <div className={styles.privateBadge}>
+              <Icon icon={LockIcon} size={14} />
+            </div>
+          </Tooltip>
+        )}
 
         <div
           className={cx(

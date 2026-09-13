@@ -252,7 +252,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
 
     void this.pushEvent(operationId, {
       // Share-visitor runs must not receive the creator's raw AgentState
-      // (metadata.userMemory / metadata.agentConfig, systemRole,
+      // (world.userMemory / world.agent, systemRole,
       // userInterventionConfig, ...) over their WS channel — see
       // `buildPublicEndEventData`.
       data: endRedaction ? buildPublicEndEventData(endEventData) : endEventData,

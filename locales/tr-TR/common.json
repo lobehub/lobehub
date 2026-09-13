@@ -579,6 +579,7 @@
   "viewExecutionDetails": "Yürütme ayrıntılarını görüntüle",
   "visibilityConfirm.irreversible": " (geri alınamaz)",
   "visibilityConfirm.makePrivate.itemAccess": "Diğer çalışma alanı üyeleri erişimi hemen kaybeder",
+  "visibilityConfirm.makePrivate.itemLibrary": "Dosyaladığınız kütüphanede kalır — diğer üyeler sadece orada görmeyi bırakır",
   "visibilityConfirm.makePrivate.itemLoaded": "Diğerlerinin zaten yüklediği içerik geri alınamaz",
   "visibilityConfirm.makePrivate.itemReferences": "Mevcut mesaj ekleri ve referanslar kullanılamaz olarak görünecek",
   "visibilityConfirm.publish.itemLoaded": "Geri döndüğünüzde, diğerlerinin zaten yüklediği içerik geri alınamaz",

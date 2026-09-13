@@ -90,8 +90,10 @@ describe('Hooks integration — afterStep event carries step presentation data',
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [{ content: 'Hello', role: 'user' }],
-      metadata: {
-        _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+      host: {
+        hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+      },
+      origin: {
         agentId: 'agent-1',
         userId: 'user-1',
       },
@@ -112,8 +114,10 @@ describe('Hooks integration — afterStep event carries step presentation data',
           { content: 'Hello', role: 'user' },
           { content: 'Let me search for that.', role: 'assistant' },
         ],
-        metadata: {
-          _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+        host: {
+          hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+        },
+        origin: {
           agentId: 'agent-1',
           topicId: 'topic-1',
           userId: 'user-1',
@@ -192,8 +196,12 @@ describe('Hooks integration — afterStep event carries step presentation data',
       lastModified: new Date().toISOString(),
       messages: [],
       metadata: {
-        _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
         _stepTracking: { lastLLMContent: 'previous content', totalToolCalls: 1 },
+      },
+      host: {
+        hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+      },
+      origin: {
         agentId: 'agent-1',
         userId: 'user-1',
       },
@@ -209,8 +217,12 @@ describe('Hooks integration — afterStep event carries step presentation data',
         createdAt: new Date().toISOString(),
         messages: [],
         metadata: {
-          _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
           _stepTracking: { lastLLMContent: 'previous content', totalToolCalls: 1 },
+        },
+        host: {
+          hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+        },
+        origin: {
           agentId: 'agent-1',
           userId: 'user-1',
         },
@@ -282,7 +294,7 @@ describe('Hooks integration — onComplete event for early-terminal states', () 
         { content: 'Hello', role: 'user' },
         { content: 'I was working on it...', role: 'assistant' },
       ],
-      metadata: { agentId: 'agent-1', userId: 'user-1' },
+      origin: { agentId: 'agent-1', userId: 'user-1' },
       status: 'interrupted',
       stepCount: 3,
       usage: { llm: { apiCalls: 2, tokens: { total: 500 } }, tools: { totalCalls: 1 } },
@@ -324,8 +336,10 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [],
-      metadata: {
-        _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+      host: {
+        hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+      },
+      origin: {
         agentId: 'agent-1',
         userId: 'user-1',
       },
@@ -339,8 +353,10 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
       newState: {
         createdAt: new Date().toISOString(),
         messages: [{ content: 'Result', role: 'assistant' }],
-        metadata: {
-          _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+        host: {
+          hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+        },
+        origin: {
           agentId: 'agent-1',
           userId: 'user-1',
         },

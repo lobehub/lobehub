@@ -484,13 +484,13 @@ export const tryReuseInterventionContinuation = async (
       expectedProvenance,
     ) &&
     existingState.operationId === continuationOperationId &&
-    existingState.metadata?.userId === deps.userId &&
-    (existingState.metadata?.workspaceId ?? null) === (deps.workspaceId ?? null) &&
-    existingState.metadata?.agentId === resolvedAgentId &&
-    existingState.metadata?.topicId === topicId &&
-    existingState.metadata?.sourceMessageId === parentMessageId &&
+    existingState.origin?.userId === deps.userId &&
+    (existingState.origin?.workspaceId ?? null) === (deps.workspaceId ?? null) &&
+    existingState.origin?.agentId === resolvedAgentId &&
+    existingState.origin?.topicId === topicId &&
+    existingState.origin?.sourceMessageId === parentMessageId &&
     matchesAgentInterventionContinuationProvenance(
-      existingState.metadata?.agentInterventionContinuation,
+      existingState.origin?.continuation,
       expectedProvenance,
     ) &&
     existingAssistant?.role === 'assistant' &&

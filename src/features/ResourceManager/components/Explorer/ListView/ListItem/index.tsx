@@ -6,6 +6,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
@@ -159,7 +160,7 @@ const FileListItem = ({
   userId,
   visibility,
 }: FileListItemProps) => {
-  const { t } = useTranslation(['components', 'file']);
+  const { t } = useTranslation(['components', 'file', 'chat']);
   const uploaderName =
     uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
   const chunkTargetId = getChunkTargetId({ fileId, id });
@@ -194,6 +195,11 @@ const FileListItem = ({
     name,
     sourceType,
   });
+
+  // Personal mode has no second audience, so `visibility` carries no meaning
+  // there and every row would wear a lock for nothing.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const isPrivate = Boolean(activeWorkspaceId) && visibility === 'private';
   const {
     handleDragEnd,
     handleDragLeave,
@@ -326,8 +332,10 @@ const FileListItem = ({
             inputRef={inputRef}
             isFolder={isFolder}
             isPage={isPage}
+            isPrivate={isPrivate}
             isRenaming={isRenaming}
             name={name}
+            privateTooltip={t('resources.visibility.privateTooltip', { ns: 'chat' })}
             renamingValue={renamingValue}
             onRenameCancel={handleRenameCancel}
             onRenameConfirm={handleRenameConfirm}

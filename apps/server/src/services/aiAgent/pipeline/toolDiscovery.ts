@@ -662,7 +662,7 @@ export const discoverTools = async (
     // never route to a device, offline bindings stay unrouted, unbound runs
     // auto-activate only with exactly one device online). Without the
     // `canUseDevice` gate an external bot sender's turn would still populate
-    // `state.metadata.activeDeviceId`, and `buildStepToolDelta` re-injects
+    // `state.binding.device.id`, and `buildStepToolDelta` re-injects
     // `LocalSystemManifest` whenever activeDeviceId is set, bypassing the
     // engine's enabledToolIds exclusion — resolving the plan here closes
     // that bypass at the source.

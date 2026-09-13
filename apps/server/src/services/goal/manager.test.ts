@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -553,16 +554,493 @@ describe('CLI main Agent planning', () => {
     expect((await model().findById(id))!.config!.managerState!.readyForAcceptance).not.toBe(true);
   });
 
-  it('does not mix planning owners', async () => {
+  it('accepts a main Agent alongside the system planner', async () => {
+    // Previously rejected outright. The two are layers now: the system planner
+    // leads and the main Agent is handed what it cannot route, so configuring
+    // both is the supported shape rather than a conflict.
+    const graph = await service().create({
+      config: {
+        exploration: { instruction: 'Other planner', maxExperiments: 2 },
+        manager: {},
+      },
+      createdByAgentId: agentId,
+      title: 'Mixed',
+    });
+    expect(graph.goal.config).toMatchObject({
+      exploration: { maxExperiments: 2 },
+      manager: { agentId },
+    });
+  });
+});
+
+/**
+ * The two planners are ordered, not exclusive: the system's exploration planner
+ * owns the ordinary path and a main Agent is the fallback for problems that
+ * planner cannot express. Before this, `tick` asked the main Agent first and
+ * returned early, so exploration never got a turn on a Goal that had both — and
+ * the main Agent was never asked about a problem outside the transport
+ * whitelist, which is why a Goal could park on a person for hours with a main
+ * Agent configured and idle.
+ */
+describe('planner precedence', () => {
+  const explored = (maxTurns = 4) =>
+    service().create({
+      config: {
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        manager: { maxTurns },
+      },
+      createdByAgentId: agentId,
+      title: 'Explored research',
+    });
+
+  it('leaves the ordinary path to the system planner', async () => {
+    const graph = await explored();
+    await service().tick(graph.goal.id);
+    expect((await model().findById(graph.goal.id))!.config!.managerState).toBeUndefined();
+  });
+
+  it('still settles a main Agent turn already in flight', async () => {
+    const { id, state, op } = await start();
+    const caller = operationCaller(op.id);
+    await caller.submitOperationPlan({
+      id,
+      operationId: op.id,
+      token: state.token,
+      plan: taskPlan,
+    });
+    await db.update(agentOperations).set({ status: 'done' }).where(eq(agentOperations.id, op.id));
+    const current = (await model().findById(id))!.config!;
+    await model().update(id, {
+      config: {
+        ...current,
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+      },
+    });
+    // The turn was already paid for; declining to settle it would lose its plan.
+    expect(
+      await manager().advance((await service().graph(id))!, { mayStartTurn: false }),
+    ).toMatchObject({ outcome: 'advanced' });
+    expect((await model().findById(id))!.config!.managerState!.consumed).toBe(true);
+  });
+
+  it('hands the problem over instead of opening the gate', async () => {
+    const graph = await service().create({
+      config: {
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        manager: { maxTurns: 4 },
+        recovery: { maxAttemptsPerTask: 1 },
+      },
+      createdByAgentId: agentId,
+      tasks: ['Measure ranking ability on the frozen holdout'],
+      title: 'Explored research',
+    });
+    const created = await service().tick(graph.goal.id);
+    const taskModel = new TaskModel(db, userId);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+
+    await service().tick(graph.goal.id);
+
+    expect((await model().findById(graph.goal.id))!.config!.managerState).toMatchObject({
+      turns: 1,
+    });
+    expect((await service().graph(graph.goal.id)).decisions).toHaveLength(0);
+  });
+
+  it('opens the gate once the main Agent has had its turn and the block remains', async () => {
+    const graph = await service().create({
+      config: {
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        manager: { maxTurns: 1 },
+        recovery: { maxAttemptsPerTask: 1 },
+      },
+      createdByAgentId: agentId,
+      tasks: ['Measure ranking ability on the frozen holdout'],
+      title: 'Explored research',
+    });
+    const created = await service().tick(graph.goal.id);
+    const taskModel = new TaskModel(db, userId);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+
+    // Its one turn is handed over, then exits without changing anything.
+    await service().tick(graph.goal.id);
+    const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    await db
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, turn!.id));
+    await service().tick(graph.goal.id);
+
+    // Out of turns, so the block goes back to its owner carrying the original
+    // reason rather than "the main Agent is out of turns".
+    expect(await service().tick(graph.goal.id)).toMatchObject({ outcome: 'waiting_human' });
+    const gated = await service().graph(graph.goal.id);
+    expect(gated.decisions).toHaveLength(1);
+    expect(gated.decisions[0].question).toContain('Task attempt budget was exhausted');
+    expect(gated.goal.status).not.toBe('paused');
+  });
+});
+
+/**
+ * Codex review on #19477 caught both of these: the newly allowed combinations
+ * each broke an ordering the PR itself documented.
+ */
+describe('takeover ordering', () => {
+  /**
+   * Supervision is cheaper than a planning turn and stricter about who authored a
+   * status. Allowing `manager` + `supervision` without `exploration` made `tick`
+   * start an uninvited turn on a recognised transport failure before
+   * `reviewFailure` could ever run, reversing the documented ladder.
+   */
+  it('consults supervision before starting a main Agent turn', async () => {
+    const graph = await service().create({
+      config: { manager: { maxTurns: 4 }, supervision: { enabled: true } },
+      createdByAgentId: agentId,
+      tasks: ['Collect the baseline'],
+      title: 'Supervised research',
+    });
+    const created = await service().tick(graph.goal.id);
+    const taskModel = new TaskModel(db, userId);
+    await taskModel.updateStatus(created.taskId!, 'failed', { error: 'fetch failed' });
+
+    await service().tick(graph.goal.id);
+
+    // Before this, `tick` claimed the recognised transport failure with an
+    // UNINVITED turn and returned early, so `decideNextMove` never reached the
+    // `failure_decision` branch and the supervisor never saw it. The turn that
+    // runs now is an invited one, which is only reachable through that branch —
+    // `problem` is the receipt that it came down the documented ladder.
+    expect((await model().findById(graph.goal.id))!.config!.managerState).toMatchObject({
+      problem: `${created.taskId}::fetch failed`,
+    });
+  });
+
+  /**
+   * The takeover contract says `escalate` puts the Gate back one turn later. The
+   * escalate branch only paused the Goal, so no answerable question existed and
+   * later ticks sat on `goal_paused` forever.
+   */
+  it('turns a takeover escalation into the Gate it was holding', async () => {
+    const graph = await service().create({
+      config: {
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        manager: { maxTurns: 4 },
+        recovery: { maxAttemptsPerTask: 1 },
+      },
+      createdByAgentId: agentId,
+      tasks: ['Measure ranking ability on the frozen holdout'],
+      title: 'Explored research',
+    });
+    const created = await service().tick(graph.goal.id);
+    const taskModel = new TaskModel(db, userId);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    await service().tick(graph.goal.id);
+
+    const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+    expect(state.problem).toBe(`${created.taskId}::Task attempt budget was exhausted`);
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    await operationCaller(turn!.id).submitOperationPlan({
+      id: graph.goal.id,
+      operationId: turn!.id,
+      plan: { action: 'escalate', reason: 'The reproducibility criterion needs a human judge' },
+      token: state.token,
+    });
+    // A takeover escalation must not park the Goal: the gate is opened by the tick
+    // that follows, and a paused Goal never reaches it.
+    expect((await model().findById(graph.goal.id))!.status).not.toBe('paused');
+    await db
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, turn!.id));
+    await service().tick(graph.goal.id);
+
+    expect(await service().tick(graph.goal.id)).toMatchObject({ outcome: 'waiting_human' });
+    const gated = await service().graph(graph.goal.id);
+    expect(gated.decisions).toHaveLength(1);
+    expect(gated.decisions[0].question).toContain('needs a human judge');
+  });
+});
+
+/**
+ * Codex review round 2 on #19477. Both findings were about the takeover contract
+ * promising more than the code would accept.
+ */
+describe('takeover submissions', () => {
+  const stuckGoal = async (title = 'Explored research') => {
+    const graph = await service().create({
+      config: {
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        manager: { maxTurns: 4 },
+        recovery: { maxAttemptsPerTask: 1 },
+      },
+      createdByAgentId: agentId,
+      tasks: ['Measure ranking ability on the frozen holdout'],
+      title,
+    });
+    const created = await service().tick(graph.goal.id);
+    const taskModel = new TaskModel(db, userId);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    await service().tick(graph.goal.id);
+    const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    return { goalId: graph.goal.id, state, taskId: created.taskId!, turn: turn! };
+  };
+
+  /**
+   * The prompt advertises a corrective task, verification, a retry and escalation.
+   * `submit` refused `tasks` and `verify` whenever any task node was unfinished —
+   * which a takeover's inherited task always is — so only `escalate` could ever
+   * commit and the other three were a contract the code broke.
+   */
+  it('accepts the corrective task a takeover was invited to plan', async () => {
+    const { goalId, state, turn } = await stuckGoal();
     await expect(
-      service().create({
-        title: 'Mixed',
-        createdByAgentId: agentId,
-        config: {
-          manager: {},
-          exploration: { instruction: 'Other planner', maxExperiments: 2 },
+      operationCaller(turn.id).submitOperationPlan({
+        id: goalId,
+        operationId: turn.id,
+        plan: {
+          action: 'tasks',
+          reason: 'The previous run captured no evidence at all',
+          tasks: [{ description: 'Rerun the scoring and register the report', title: 'Redo it' }],
         },
+        token: state.token,
       }),
-    ).rejects.toThrow('do not combine');
+    ).resolves.toMatchObject({ success: true });
+    expect((await service().graph(goalId)).nodes.some((node) => node.title === 'Redo it')).toBe(
+      true,
+    );
+  });
+
+  /**
+   * Accepting the plan is not the same as the Goal moving. The inherited node
+   * stayed nonterminal, so the next tick's frontier reached it before the new
+   * corrective node and routed straight back to the Gate — the advertised action
+   * committed and changed nothing.
+   */
+  it('retires the replaced work so the corrective task actually runs', async () => {
+    const { goalId, state, taskId, turn } = await stuckGoal();
+    await operationCaller(turn.id).submitOperationPlan({
+      id: goalId,
+      operationId: turn.id,
+      plan: {
+        action: 'tasks',
+        reason: 'The previous run captured no evidence at all',
+        tasks: [{ description: 'Rerun the scoring and register the report', title: 'Redo it' }],
+      },
+      token: state.token,
+    });
+    await db.update(agentOperations).set({ status: 'done' }).where(eq(agentOperations.id, turn.id));
+    await service().tick(goalId);
+
+    const graph = await service().graph(goalId);
+    expect(graph.nodes.find((node) => node.taskId === taskId)!.status).toBe('retired');
+    const moved = await service().tick(goalId);
+    expect(moved.outcome).not.toBe('waiting_human');
+    expect((await service().graph(goalId)).decisions).toHaveLength(0);
+  });
+
+  /**
+   * "Task attempt budget was exhausted" is the same sentence for every task that
+   * reaches it. Keying the already-answered check on the reason alone made a second
+   * task skip its own takeover and inherit the first task's diagnosis in its gate.
+   */
+  it('gives a second task its own takeover despite an identical reason', async () => {
+    const first = await stuckGoal('First research');
+    await operationCaller(first.turn.id).submitOperationPlan({
+      id: first.goalId,
+      operationId: first.turn.id,
+      plan: { action: 'escalate', reason: 'Needs a human judge' },
+      token: first.state.token,
+    });
+    await db
+      .update(agentOperations)
+      .set({ status: 'done' })
+      .where(eq(agentOperations.id, first.turn.id));
+    await service().tick(first.goalId);
+
+    // A different Goal and task reaching the same wording must not be read as the
+    // problem that was already answered.
+    const second = await stuckGoal('Second research');
+    expect(second.state.problem).toBe(`${second.taskId}::Task attempt budget was exhausted`);
+    expect(second.state.problem).not.toBe(first.state.problem);
+  });
+
+  it('stops handing the same problem over once its turn has answered', async () => {
+    const { goalId, state, turn } = await stuckGoal();
+    await operationCaller(turn.id).submitOperationPlan({
+      id: goalId,
+      operationId: turn.id,
+      plan: { action: 'escalate', reason: 'Needs a human judge' },
+      token: state.token,
+    });
+    await db.update(agentOperations).set({ status: 'done' }).where(eq(agentOperations.id, turn.id));
+    await service().tick(goalId);
+
+    expect(await service().tick(goalId)).toMatchObject({ outcome: 'waiting_human' });
+    const gated = await service().graph(goalId);
+    expect(gated.decisions).toHaveLength(1);
+    expect(gated.decisions[0].question).toContain('Needs a human judge');
+  });
+});
+
+/**
+ * Codex review round 4. The acceptance guard was written for uninvited turns
+ * ("verification exists, stop planning more work") but sat above the invited
+ * branch, so a takeover invited BECAUSE the terminal acceptance failed could never
+ * start and the Goal still reached a bare Gate with a main Agent idle.
+ */
+describe('takeover on a failed terminal acceptance', () => {
+  const failedAcceptance = async () => {
+    const graph = await service().create({
+      config: {
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        manager: { maxTurns: 4 },
+        recovery: { maxAttemptsPerTask: 1 },
+      },
+      createdByAgentId: agentId,
+      requirement: 'Return a defensible training recommendation.',
+      tasks: [GOAL_ACCEPTANCE_TASK_TITLE],
+      title: 'Explored research',
+    });
+    const created = await service().tick(graph.goal.id);
+    const taskModel = new TaskModel(db, userId);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    await service().tick(graph.goal.id);
+    return { goalId: graph.goal.id, taskId: created.taskId! };
+  };
+
+  it('hands a failed terminal acceptance to the main Agent', async () => {
+    const { goalId, taskId } = await failedAcceptance();
+    expect((await model().findById(goalId))!.config!.managerState).toMatchObject({
+      problemTaskId: taskId,
+    });
+    expect((await service().graph(goalId)).decisions).toHaveLength(0);
+  });
+
+  /**
+   * A failed acceptance cannot be superseded: the acceptance task is matched by TITLE
+   * regardless of status, so a corrective task returns to that same failed node and
+   * `verify` sets `readyForAcceptance` without producing a fresh run. Refusing keeps
+   * the prompt's offer and the server's answer identical instead of accepting a plan
+   * that strands.
+   */
+  it('accepts only an escalation for a failed acceptance', async () => {
+    const { goalId, taskId } = await failedAcceptance();
+    const state = (await model().findById(goalId))!.config!.managerState!;
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    const caller = operationCaller(turn!.id);
+    await expect(
+      caller.submitOperationPlan({
+        id: goalId,
+        operationId: turn!.id,
+        plan: {
+          action: 'tasks',
+          reason: 'The judge read evidence it was never shown',
+          tasks: [{ description: 'Recapture the evidence and redeliver', title: 'Recapture' }],
+        },
+        token: state.token,
+      }),
+    ).rejects.toThrow('can only be escalated');
+    await expect(
+      caller.submitOperationPlan({
+        id: goalId,
+        operationId: turn!.id,
+        plan: { action: 'escalate', reason: 'The judge read evidence it was never shown' },
+        token: state.token,
+      }),
+    ).resolves.toMatchObject({ success: true });
+    expect(
+      (await service().graph(goalId)).nodes.find((node) => node.taskId === taskId)!.status,
+    ).not.toBe('retired');
+  });
+});
+
+/**
+ * Codex review round 5, dependency half. A prerequisite only counts as met when it is
+ * `resolved`, so retiring a node something depends on leaves the dependent blocked and
+ * the Goal lands on `no_frontier` — and the graph has no edge removal, so the
+ * dependents cannot be rewired onto the replacement.
+ */
+describe('takeover and dependent work', () => {
+  it('leaves stuck work that something depends on for the Gate', async () => {
+    const graph = await service().create({
+      config: {
+        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        manager: { maxTurns: 4 },
+        recovery: { maxAttemptsPerTask: 1 },
+      },
+      createdByAgentId: agentId,
+      tasks: ['Measure ranking ability'],
+      title: 'Explored research',
+    });
+    const created = await service().tick(graph.goal.id);
+    const blockedNode = (await service().graph(graph.goal.id)).nodes.find(
+      (node) => node.taskId === created.taskId,
+    )!;
+    const problem = (await service().graph(graph.goal.id)).nodes.find(
+      (node) => node.kind === 'problem',
+    )!;
+    const dependent = await service().addNode(graph.goal.id, {
+      kind: 'task',
+      title: 'Train the head',
+    });
+    await service().addEdge(graph.goal.id, problem.id, dependent!.id, 'decomposes');
+    await service().addEdge(graph.goal.id, dependent!.id, blockedNode.id, 'depends_on');
+    const taskModel = new TaskModel(db, userId);
+    await taskModel.update(created.taskId!, { totalTopics: 1 });
+    await taskModel.updateStatus(created.taskId!, 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    await service().tick(graph.goal.id);
+
+    const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    await operationCaller(turn!.id).submitOperationPlan({
+      id: graph.goal.id,
+      operationId: turn!.id,
+      plan: {
+        action: 'tasks',
+        reason: 'Replace the stuck measurement',
+        tasks: [{ description: 'Measure again from the frozen inputs', title: 'Measure again' }],
+      },
+      token: state.token,
+    });
+
+    // Retiring it would strand "Train the head" behind a prerequisite that can never
+    // resolve, so the node keeps its status and the block stays visible to a person.
+    expect(
+      (await service().graph(graph.goal.id)).nodes.find((node) => node.id === blockedNode.id)!
+        .status,
+    ).not.toBe('retired');
   });
 });

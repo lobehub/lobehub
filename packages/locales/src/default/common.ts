@@ -539,6 +539,8 @@ export default {
   'visibilityConfirm.makePrivate.itemAccess': 'Other workspace members lose access immediately',
   'visibilityConfirm.makePrivate.itemReferences':
     'Existing message attachments and references will show as unavailable',
+  'visibilityConfirm.makePrivate.itemLibrary':
+    'It stays in the library you filed it in — other members just stop seeing it there',
   'visibilityConfirm.makePrivate.itemLoaded':
     'Content others have already loaded can’t be pulled back',
   'visibilityConfirm.publish.itemVisible': 'All workspace members will see this immediately',

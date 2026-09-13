@@ -46,6 +46,8 @@ class TaskService {
     }>;
     parentTaskId?: string | null;
     projectId?: string;
+    /** "My tasks" narrowing: assigned to the caller, or created by them. */
+    scope?: 'assigned' | 'created';
     visibility?: 'private' | 'public';
   }) =>
     lambdaClient.task.groupList.query({

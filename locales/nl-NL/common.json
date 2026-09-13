@@ -579,6 +579,7 @@
   "viewExecutionDetails": "Bekijk uitvoeringsdetails",
   "visibilityConfirm.irreversible": " (onomkeerbaar)",
   "visibilityConfirm.makePrivate.itemAccess": "Andere werkruimteleden verliezen onmiddellijk toegang",
+  "visibilityConfirm.makePrivate.itemLibrary": "Het blijft in de bibliotheek waarin je het hebt opgeslagen — andere leden zien het daar gewoon niet meer",
   "visibilityConfirm.makePrivate.itemLoaded": "Inhoud die anderen al hebben geladen, kan niet worden teruggehaald",
   "visibilityConfirm.makePrivate.itemReferences": "Bestaande berichtbijlagen en verwijzingen worden als niet beschikbaar weergegeven",
   "visibilityConfirm.publish.itemLoaded": "Na het terugschakelen kan inhoud die anderen al hebben geladen niet worden teruggehaald",

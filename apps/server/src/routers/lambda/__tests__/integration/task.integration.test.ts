@@ -1651,6 +1651,53 @@ describe('Task Router Integration', () => {
       const all = await wsCaller.list({});
       expect(all.total).toBe(3);
     });
+
+    it('should narrow the grouped board to the same slice as the list', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-group-scope-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Group Scope Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const wsOtherCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId),
+        workspaceId,
+      });
+
+      const mineForOther = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Mine for other',
+        name: 'Mine for other',
+      });
+      const othersForMe = await wsOtherCaller.create({
+        assigneeUserId: userId,
+        instruction: 'Others for me',
+        name: 'Others for me',
+      });
+      await wsOtherCaller.create({ instruction: 'Others unassigned', name: 'Others unassigned' });
+
+      const groups = () => ({ groups: [{ key: 'backlog', statuses: ['backlog'] }] });
+      const idsIn = (result: { data: Array<{ tasks: Array<{ id: string }> }> }) =>
+        result.data.flatMap((group) => group.tasks.map((task) => task.id));
+
+      // The board is the same rows as the list, only grouped — a scope the
+      // board ignored would quietly widen "My tasks" on the view switch.
+      expect(idsIn(await wsCaller.groupList({ ...groups(), scope: 'assigned' }))).toEqual([
+        othersForMe.data.id,
+      ]);
+      expect(idsIn(await wsCaller.groupList({ ...groups(), scope: 'created' }))).toEqual([
+        mineForOther.data.id,
+      ]);
+      expect(idsIn(await wsCaller.groupList(groups()))).toHaveLength(3);
+    });
   });
 
   describe('human assignee (assigneeUserId)', () => {

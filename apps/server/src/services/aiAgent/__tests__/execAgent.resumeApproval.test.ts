@@ -539,9 +539,9 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       intervention: { operationId: 'op-parked', status: 'pending' },
     });
     mockLoadInterventionContinuationState.mockImplementation(async (operationId: string) => ({
-      metadata: {
+      origin: {
         agentId: 'agent-1',
-        agentInterventionContinuation: {
+        continuation: {
           resolutionRequestId: approvalResolutionRequestId,
           sourceOperationId: 'op-parked',
           sourceToolMessageIds: ['tool-msg-1'],
@@ -592,12 +592,14 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     });
     mockLoadInterventionContinuationState.mockResolvedValue({
       metadata: {
-        agentId: 'agent-1',
-        agentInterventionContinuation: provenance,
         agentInterventionPreparation: {
           resolutionRequestId: approvalResolutionRequestId,
           state: 'ready',
         },
+      },
+      origin: {
+        agentId: 'agent-1',
+        continuation: provenance,
         sourceMessageId: 'tool-msg-1',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -681,15 +683,15 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     mockFindOperationById.mockResolvedValue({
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: 'op-parked',
-          sourceToolMessageIds: ['tool-msg-1'],
-        },
         agentInterventionDispatch: {
           deduplicationId: deriveAgentInterventionQueueDeduplicationId(continuationOperationId, 0),
           resolutionRequestId,
           state: 'scheduled',
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: 'op-parked',
+          sourceToolMessageIds: ['tool-msg-1'],
         },
       },
       startedAt: new Date('2026-08-26T00:00:00.000Z'),
@@ -730,15 +732,15 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     mockFindOperationById.mockResolvedValue({
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: 'op-parked',
-          sourceToolMessageIds: ['tool-msg-1'],
-        },
         agentInterventionDispatch: {
           deduplicationId: deriveAgentInterventionQueueDeduplicationId(continuationOperationId, 0),
           resolutionRequestId,
           state: 'scheduled',
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: 'op-parked',
+          sourceToolMessageIds: ['tool-msg-1'],
         },
       },
       status: 'running',

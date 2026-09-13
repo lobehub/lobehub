@@ -93,8 +93,10 @@ describe('AgentRuntimeService intervention continuation dispatch recovery', () =
   const readyState = (status: 'done' | 'idle' | 'running' = 'idle') => ({
     initialContext: { phase: 'user_input' },
     metadata: {
-      agentInterventionContinuation: provenance,
       agentInterventionPreparation: preparation,
+    },
+    origin: {
+      continuation: provenance,
     },
     operationId,
     status,
@@ -150,13 +152,13 @@ describe('AgentRuntimeService intervention continuation dispatch recovery', () =
     const operationModel = (service as any).agentOperationModel;
     operationModel.findById = vi.fn().mockResolvedValue({
       metadata: {
-        agentInterventionContinuation: provenance,
         agentInterventionDispatch: {
           deduplicationId,
           messageId: 'queue-message',
           resolutionRequestId: provenance.resolutionRequestId,
           state: 'scheduled',
         },
+        agentInterventionContinuation: provenance,
         agentInterventionPreparation: preparation,
       },
     });
@@ -320,10 +322,14 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     });
 
     await (service as any).createAgentRuntime({
-      metadata: {
-        agentConfig: {},
+      agentState: {
+        metadata: {
+          agentConfig: {},
+        },
         modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
-        userId: 'user-1',
+        origin: {
+          userId: 'user-1',
+        },
       },
       operationId: 'op-workspace',
       stepIndex: 0,
@@ -344,7 +350,11 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     };
 
     await (service as any).createAgentRuntime({
-      metadata: { agentConfig: {}, modelRuntimeConfig, userId: 'user-1' },
+      agentState: {
+        metadata: { agentConfig: {} },
+        modelRuntimeConfig,
+        origin: { userId: 'user-1' },
+      },
       operationId: 'op-model-runtime-snapshot',
       stepIndex: 0,
     });
@@ -362,10 +372,14 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     });
 
     await (service as any).createAgentRuntime({
-      metadata: {
-        agentConfig: {},
+      agentState: {
+        metadata: {
+          agentConfig: {},
+        },
         modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
-        userId: 'user-1',
+        origin: {
+          userId: 'user-1',
+        },
       },
       operationId: 'op-custom-agent',
       stepIndex: 0,
@@ -391,10 +405,14 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     });
 
     await (service as any).createAgentRuntime({
-      metadata: {
-        agentConfig: {},
+      agentState: {
+        metadata: {
+          agentConfig: {},
+        },
         modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
-        userId: 'user-1',
+        origin: {
+          userId: 'user-1',
+        },
       },
       operationId: 'op-graph-agent',
       stepIndex: 0,
@@ -413,10 +431,14 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     });
 
     await (service as any).createAgentRuntime({
-      metadata: {
-        agentConfig: {},
+      agentState: {
+        metadata: {
+          agentConfig: {},
+        },
         modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
-        userId: 'user-1',
+        origin: {
+          userId: 'user-1',
+        },
       },
       operationId: 'op-general-agent',
       stepIndex: 0,
@@ -453,11 +475,15 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
 
     await (service as any).createAgentRuntime({
-      agentState: sandboxToolCallState('/work/deck.pptx'),
-      metadata: {
-        agentConfig: {},
+      agentState: {
+        ...sandboxToolCallState('/work/deck.pptx'),
+        metadata: {
+          agentConfig: {},
+        },
         modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
-        userId: 'user-1',
+        origin: {
+          userId: 'user-1',
+        },
       },
       operationId: 'op-entity-edit',
       stepIndex: 3,
@@ -473,11 +499,15 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
     const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
 
     await (service as any).createAgentRuntime({
-      agentState: sandboxToolCallState('/work/notes.md'),
-      metadata: {
-        agentConfig: {},
+      agentState: {
+        ...sandboxToolCallState('/work/notes.md'),
+        metadata: {
+          agentConfig: {},
+        },
         modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
-        userId: 'user-1',
+        origin: {
+          userId: 'user-1',
+        },
       },
       operationId: 'op-plain-edit',
       stepIndex: 3,
@@ -524,7 +554,7 @@ describe('AgentRuntimeService.executeStep - durable Review lifecycle retry', () 
       cost: { currency: 'USD', total: 0 },
       lastModified: new Date().toISOString(),
       messages: [],
-      metadata: { _hooks: [] },
+      host: { hooks: [] },
       operationId: 'op-review-retry',
       status: 'running',
       stepCount: 0,
@@ -702,7 +732,7 @@ describe('AgentRuntimeService.executeStep - step idempotency (distributed lock)'
     coordinator.loadAgentState = vi.fn().mockResolvedValue({
       status: 'running',
       stepCount: 5,
-      metadata: { queueRetries: 5, queueRetryDelay: '10000' },
+      host: { queue: { retries: 5, retryDelay: '10000' } },
     });
 
     const result = await service.executeStep({ operationId: 'op-requeue', stepIndex: 5 });
@@ -1251,8 +1281,8 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
       status: 'running',
       stepCount: 5,
       lastModified: new Date().toISOString(),
-      metadata: {
-        _hooks: [
+      host: {
+        hooks: [
           {
             id: 'test-hook',
             type: 'onComplete',
@@ -1286,7 +1316,7 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
       }),
     ).rejects.toThrow();
 
-    // onComplete hooks must be dispatched with the full state including metadata
+    // onComplete hooks must be dispatched with the full state including the host envelope
     expect(dispatchSpy).toHaveBeenCalledWith(
       'op-save-fail',
       'onComplete',
@@ -1294,8 +1324,8 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
         operationId: 'op-save-fail',
         reason: 'error',
         finalState: expect.objectContaining({
-          metadata: expect.objectContaining({
-            _hooks: expect.arrayContaining([
+          host: expect.objectContaining({
+            hooks: expect.arrayContaining([
               expect.objectContaining({
                 id: 'test-hook',
                 webhook: { url: 'https://example.com/webhook' },
@@ -1356,7 +1386,7 @@ describe('AgentRuntimeService.executeStep - error-path snapshot finalize ()', ()
     // metadata.
     coordinator.loadAgentState = vi.fn().mockResolvedValue({
       lastModified: new Date().toISOString(),
-      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
       status: 'running',
       stepCount: 1,
     });
@@ -1496,7 +1526,7 @@ describe('AgentRuntimeService.executeStep - error-path snapshot finalize ()', ()
     streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
     coordinator.loadAgentState = vi.fn().mockResolvedValue({
       lastModified: new Date().toISOString(),
-      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
       status: 'running',
       stepCount: 1,
     });
@@ -1577,7 +1607,7 @@ describe('AgentRuntimeService.executeStep - error-path snapshot finalize ()', ()
     // not skip this attempt — we want the catch path to run.
     coordinator.loadAgentState = vi.fn().mockResolvedValue({
       lastModified: new Date().toISOString(),
-      metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
+      origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'user-1' },
       status: 'running',
       stepCount: 1,
     });
@@ -1634,7 +1664,7 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
       status: 'done',
       stepCount: 3,
       lastModified: new Date().toISOString(),
-      metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+      origin: { agentId: 'agt_1', topicId: 'tpc_1' },
     });
     streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
 
@@ -1775,7 +1805,7 @@ describe('AgentRuntimeService.executeStep - Agent Share authorization revoked mi
 
     const agentState = {
       lastModified: new Date().toISOString(),
-      metadata: { agentShareVisitor: { agentId: 'agent-1', shareId: 'share-1' } },
+      principal: { actor: { shareVisitor: { agentId: 'agent-1', shareId: 'share-1' } } },
       status: 'running',
       stepCount: 3,
     };

@@ -55,7 +55,7 @@ describe('TaskSubtaskProgressTag', () => {
     mocks.toastError.mockClear();
   });
 
-  it("passes the clicked subtask's assignee to the navigation callback", () => {
+  it("passes the clicked subtask's assignee and name to the navigation callback", () => {
     const onSubtaskClick = vi.fn();
 
     render(
@@ -74,7 +74,7 @@ describe('TaskSubtaskProgressTag', () => {
 
     fireEvent.click(screen.getByTestId('subtask-T-2'));
 
-    expect(onSubtaskClick).toHaveBeenCalledWith('T-2', 'agt_child');
+    expect(onSubtaskClick).toHaveBeenCalledWith('T-2', 'agt_child', 'Child task');
   });
 
   it('renders a lightweight progress summary without a subtask tree', () => {

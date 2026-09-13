@@ -723,6 +723,79 @@ describe('RecentModel', () => {
         expect(result[0].userId).toBe(userId);
       });
 
+      describe('sharedOnly (team tab)', () => {
+        // The parent lives in the SAME workspace — only its visibility marks it
+        // as a personal conversation. `buildWorkspaceWhere` keeps a member's own
+        // private rows visible, so the owner's own private agent is the one case
+        // the workspace predicate cannot catch on its own.
+        beforeEach(async () => {
+          await serverDB.insert(agents).values([
+            { id: 'agent-ws-private-mine', userId, visibility: 'private', workspaceId },
+            {
+              id: 'agent-ws-private-other',
+              userId: otherUserId,
+              visibility: 'private',
+              workspaceId,
+            },
+          ]);
+          await serverDB
+            .insert(chatGroups)
+            .values([{ id: 'group-ws-private-mine', userId, visibility: 'private', workspaceId }]);
+          await serverDB.insert(topics).values([
+            {
+              agentId: 'agent-ws-private-mine',
+              description: 'Private agent conversation summary',
+              id: 'topic-private-agent-mine',
+              title: 'Private agent conversation',
+              updatedAt: minutesAgo(3),
+              userId,
+              workspaceId,
+            },
+            {
+              agentId: 'agent-ws-private-other',
+              id: 'topic-private-agent-other',
+              title: 'Teammate private agent conversation',
+              updatedAt: minutesAgo(4),
+              userId: otherUserId,
+              workspaceId,
+            },
+            {
+              groupId: 'group-ws-private-mine',
+              id: 'topic-private-group-mine',
+              title: 'Private group conversation',
+              updatedAt: minutesAgo(5),
+              userId,
+              workspaceId,
+            },
+          ]);
+        });
+
+        it('keeps the viewer own private-agent topics without sharedOnly', async () => {
+          const result = await workspaceModel.queryRecent(10, ['topic']);
+
+          expect(result.map((r) => r.id)).toContain('topic-private-agent-mine');
+          expect(result.map((r) => r.id)).toContain('topic-private-group-mine');
+        });
+
+        it('drops topics owned by a private agent or group, including the viewer own', async () => {
+          const result = await workspaceModel.queryRecent(10, ['topic'], true, false, true);
+
+          expect(result.map((r) => r.id)).toEqual(['topic-ws-mine', 'topic-ws-other']);
+          expect(result.map((r) => r.title)).not.toContain('Private agent conversation');
+          expect(result.map((r) => r.description)).not.toContain(
+            'Private agent conversation summary',
+          );
+        });
+
+        it('never exposes a teammate private-agent topic in either mode', async () => {
+          const teamFeed = await workspaceModel.queryRecent(10, ['topic'], false, false, true);
+          const sidebarFeed = await workspaceModel.queryRecent(10, ['topic']);
+
+          expect(teamFeed.map((r) => r.id)).not.toContain('topic-private-agent-other');
+          expect(sidebarFeed.map((r) => r.id)).not.toContain('topic-private-agent-other');
+        });
+      });
+
       it.each(['agent', 'group'] as const)(
         'never exposes personal or foreign-workspace %s conversations in the team feed',
         async (kind) => {

@@ -1,4 +1,4 @@
-import type { AgentState, CallLLMPayload } from '@lobechat/agent-runtime';
+import type { AgentState, AgentWorldSnapshot, CallLLMPayload } from '@lobechat/agent-runtime';
 import type { ResolvedToolSet } from '@lobechat/context-engine';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,7 +53,6 @@ vi.mock('@/server/modules/Mecha/ContextEngineering', () => ({
 
 const createCtx = (overrides: Partial<RuntimeExecutorContext> = {}): RuntimeExecutorContext =>
   ({
-    agentConfig: { chatConfig: {}, files: [], knowledgeBases: [] } as any,
     messageModel: {} as RuntimeExecutorContext['messageModel'],
     operationId: 'operation-1',
     serverDB: {} as RuntimeExecutorContext['serverDB'],
@@ -65,7 +64,14 @@ const createCtx = (overrides: Partial<RuntimeExecutorContext> = {}): RuntimeExec
   }) satisfies RuntimeExecutorContext;
 
 const llmPayload = { messages: [] } as unknown as CallLLMPayload;
-const state = { metadata: {} } as unknown as AgentState;
+const agent = {
+  chatConfig: {},
+  files: [],
+  knowledgeBases: [],
+} as unknown as AgentWorldSnapshot['agent'];
+const createState = (overrides: Partial<AgentState> = {}): AgentState =>
+  ({ metadata: {}, world: { agent }, ...overrides }) as unknown as AgentState;
+const state = createState();
 const tooling = {
   resolved: {
     enabledToolIds: [],
@@ -106,15 +112,15 @@ beforeEach(() => {
  * received anything. So each link gets an assertion of its own.
  */
 describe('buildServerCallLlmContext - system-message context reaches the engine', () => {
-  it('forwards the project instructions off the operation context', async () => {
+  it('forwards the project instructions off the world snapshot', async () => {
     const projectInstructions = [{ content: 'Use bun.', source: 'AGENTS.md' }];
 
     await buildServerCallLlmContext({
-      ctx: createCtx({ projectInstructions }),
+      ctx: createCtx(),
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
-      state,
+      state: createState({ world: { agent, projectInstructions } }),
       tooling,
     });
 
@@ -123,13 +129,15 @@ describe('buildServerCallLlmContext - system-message context reaches the engine'
     );
   });
 
-  it('forwards the connector ownership note off the operation context', async () => {
+  it('forwards the connector ownership note off the world snapshot', async () => {
     await buildServerCallLlmContext({
-      ctx: createCtx({ connectorOwnershipNote: 'Gmail runs on Alice’s account.' }),
+      ctx: createCtx(),
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
-      state,
+      state: createState({
+        world: { agent, connectorOwnershipNote: 'Gmail runs on Alice’s account.' },
+      }),
       tooling,
     });
 
@@ -210,7 +218,7 @@ describe('buildServerCallLlmContext - workspace context', () => {
       llmPayload,
       model: 'gpt-4',
       provider: 'openai',
-      state: { metadata: { workspaceId: 'workspace-2' } } as unknown as AgentState,
+      state: createState({ origin: { workspaceId: 'workspace-2' } }),
       tooling,
     });
 

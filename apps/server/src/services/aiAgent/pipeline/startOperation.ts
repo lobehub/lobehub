@@ -182,7 +182,7 @@ export const startOperation = async (
         // inherit the builtin agent's tools / systemRole / model), but their
         // resource tools and receipts must attribute to the *reviewed* user
         // agent, which rides on the marker. Prefer it so the tool-execution
-        // context (state.metadata.agentId) targets the reviewed agent; ordinary
+        // context (state.origin.agentId) targets the reviewed agent; ordinary
         // runs (no marker) fall back to the resolved executing agent.
         agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
         // Propagate the originating request's client IP / user agent into
@@ -206,7 +206,7 @@ export const startOperation = async (
           ? { editingGroupId: appContext.editingGroupId }
           : {}),
         // Run-scoped Agent Signal marker for background self-iteration / memory
-        // runs — lands in state.metadata.agentSignal so the completion path can
+        // runs — lands in state.origin.signal so the completion path can
         // project receipts/briefs. Undefined for ordinary chat runs.
         ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,

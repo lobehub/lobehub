@@ -46,7 +46,7 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
   lastModified: new Date().toISOString(),
   maxSteps: 100,
   messages: [],
-  metadata: {
+  origin: {
     agentId: 'agent-123',
     threadId: 'thread-123',
     topicId: 'topic-123',
@@ -283,7 +283,7 @@ describe('compressContext executor', () => {
 
   it('skips without compression side effects when topic context is missing', async () => {
     const state = createState({
-      metadata: { agentId: 'agent-123' },
+      origin: { agentId: 'agent-123' },
       messages: [{ content: 'history', role: 'user' }],
     });
     const missingContextHost: AgentRuntimeHost = {

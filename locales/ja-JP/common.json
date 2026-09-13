@@ -579,6 +579,7 @@
   "viewExecutionDetails": "実行詳細を表示",
   "visibilityConfirm.irreversible": "（元に戻せません）",
   "visibilityConfirm.makePrivate.itemAccess": "他のワークスペースメンバーはすぐにアクセス権を失います",
+  "visibilityConfirm.makePrivate.itemLibrary": "それはあなたがそれをファイルしたライブラリに残りますが、他のメンバーはそこにそれを見ることができなくなります",
   "visibilityConfirm.makePrivate.itemLoaded": "他の人がすでに読み込んだコンテンツは取り戻せません",
   "visibilityConfirm.makePrivate.itemReferences": "既存のメッセージ添付ファイルや参照は利用不可として表示されます",
   "visibilityConfirm.publish.itemLoaded": "切り替え後、他の人がすでに読み込んだコンテンツは取り戻せません",

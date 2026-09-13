@@ -399,10 +399,18 @@ export class KnowledgeRepo {
       );
     }
 
-    return query
-      .leftJoin(d, eq(d.fileId, f.id))
-      .leftJoin(users, eq(users.id, f.userId))
-      .where(and(this.fileScope(sourceFilter), ...where));
+    return (
+      query
+        // Scope the joined document exactly as a direct read would. The file row
+        // itself is legitimately listed under `fileScope`, but its derived page
+        // can be scoped tighter (a creator-private document behind a
+        // workspace-public file); handing out that page's id makes the library
+        // list an entry that 404s the moment a member clicks it. Left join, so
+        // the file keeps its row and simply carries no page to open.
+        .leftJoin(d, and(eq(d.fileId, f.id), this.documentScope()))
+        .leftJoin(users, eq(users.id, f.userId))
+        .where(and(this.fileScope(sourceFilter), ...where))
+    );
   };
 
   /**

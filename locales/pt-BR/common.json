@@ -579,6 +579,7 @@
   "viewExecutionDetails": "Ver detalhes da execução",
   "visibilityConfirm.irreversible": " (irreversível)",
   "visibilityConfirm.makePrivate.itemAccess": "Outros membros do espaço de trabalho perdem acesso imediatamente",
+  "visibilityConfirm.makePrivate.itemLibrary": "Ele permanece na biblioteca em que você o arquivou — outros membros apenas param de vê-lo lá",
   "visibilityConfirm.makePrivate.itemLoaded": "O conteúdo que outros já carregaram não pode ser recuperado",
   "visibilityConfirm.makePrivate.itemReferences": "Anexos de mensagens e referências existentes aparecerão como indisponíveis",
   "visibilityConfirm.publish.itemLoaded": "Após mudar de volta, o conteúdo que outros já carregaram não pode ser recuperado",

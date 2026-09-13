@@ -2,6 +2,7 @@ import {
   type AgentEvent,
   type AgentRuntimeContext,
   type AgentState,
+  normalizeAgentState,
 } from '@lobechat/agent-runtime';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
@@ -181,7 +182,9 @@ export class AgentStateManager {
         return null;
       }
 
-      const state = JSON.parse(serializedState) as AgentState;
+      // Blobs written before the typed `world` / `binding` slots existed carry
+      // that context in `metadata`; lift it once here so readers see one shape.
+      const state = normalizeAgentState(JSON.parse(serializedState) as AgentState);
       log('[%s] Loaded state (step %d)', operationId, state.stepCount);
 
       return state;

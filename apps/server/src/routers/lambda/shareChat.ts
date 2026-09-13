@@ -321,7 +321,7 @@ export const shareChatRouter = router({
           // Not `RequestTrigger.Chat`: a share run is billed to the CREATOR,
           // so its spend rows must be separable from the creator's own chat
           // spend (they land on the same account). The trigger rides
-          // `state.metadata.trigger` all the way into the spend-log metadata.
+          // `state.origin.trigger` all the way into the spend-log metadata.
           trigger: RequestTrigger.AgentShare,
           userAgent: ctx.userAgent ?? undefined,
         });

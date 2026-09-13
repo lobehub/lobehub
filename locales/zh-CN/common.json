@@ -579,6 +579,7 @@
   "viewExecutionDetails": "查看执行详情",
   "visibilityConfirm.irreversible": "（不可逆）",
   "visibilityConfirm.makePrivate.itemAccess": "工作区其他成员会立即失去访问权",
+  "visibilityConfirm.makePrivate.itemLibrary": "它仍会留在你放入的资料库中，只是其他成员不再看得到",
   "visibilityConfirm.makePrivate.itemLoaded": "对方已加载过的内容无法收回",
   "visibilityConfirm.makePrivate.itemReferences": "已存在的消息附件、引用位置会显示为「已失效」",
   "visibilityConfirm.publish.itemLoaded": "改回私人后对方已加载的内容无法收回",
