@@ -164,8 +164,14 @@ export interface AgentConfigResolverContext {
    */
   isSubAgent?: boolean;
 
-  /** Current model being used (for template variables) */
+  /** Current model being used (for template variables); defaults to the resolved model. */
   model?: string;
+  /**
+   * Per-call model / provider pinned by the caller (task or sub-agent spawn,
+   * an explicit request override). Outranks the member's personal choice and
+   * the shared default.
+   */
+  modelOverride?: Partial<AgentModelOverride> | null;
   /** Plugins enabled for the agent */
   plugins?: string[];
 
@@ -225,8 +231,15 @@ export const resolveAgentConfig = (
   ctx: AgentConfigResolverContext,
   snapshot: AgentConfigSnapshot,
 ): ResolvedAgentConfig => {
-  const { agentId, model, documentContent, plugins, targetAgentConfig, isSubAgent, disableTools } =
-    ctx;
+  const {
+    agentId,
+    documentContent,
+    plugins,
+    targetAgentConfig,
+    isSubAgent,
+    disableTools,
+    modelOverride,
+  } = ctx;
 
   log(
     'resolveAgentConfig called with agentId: %s, scope: %s, isSubAgent: %s, disableTools: %s',
@@ -294,8 +307,11 @@ export const resolveAgentConfig = (
         workspaceId: agent?.workspaceId,
       },
       memberModelOverride,
+      modelOverride,
     ),
   };
+  // Runtime templates render `{{model}}` for the model the run will actually use.
+  const model = ctx.model ?? agentConfig.model;
   const sharedChatConfig = snapshot.chatConfig;
   const chatConfig =
     memberModeOverride === undefined
@@ -509,11 +525,13 @@ export const resolveAgentConfig = (
     isDev: snapshot.isDev ?? false,
     model,
     plugins: plugins || basePlugins,
+    storedSystemRole: agentConfig.systemRole || undefined,
     targetAgentConfig,
     userLocale: snapshot.userLocale,
   });
 
-  // Merge runtime systemRole into agent config
+  // The runtime prompt is the authority for a builtin; a builtin that treats
+  // it as a user-editable default reads `storedSystemRole` itself (inbox).
   let resolvedSystemRole = runtimeConfig?.systemRole ?? agentConfig.systemRole;
 
   // Merge plugins: runtime plugins take priority, fallback to base plugins

@@ -140,4 +140,42 @@ describe('resolveAgentConfig without a host', () => {
     // A manager reads the shared row, so their own member pick stays dormant.
     expect(resolved.chatConfig.enableAgentMode).toBeUndefined();
   });
+
+  it('lets a per-call model override outrank the member pick and the shared default', () => {
+    const resolved = resolveAgentConfig(
+      { agentId: 'agt_1', modelOverride: { model: 'pinned-model' } },
+      snapshot({
+        agent: { visibility: 'public', workspaceId: 'ws_1' },
+        canManage: false,
+        memberModelOverride: { model: 'member-model', provider: 'anthropic' },
+      }),
+    );
+
+    // Model is pinned by the call; provider still comes from the member pick.
+    expect(resolved.agentConfig.model).toBe('pinned-model');
+    expect(resolved.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('keeps a user-customized system role on a builtin row over the runtime one', () => {
+    const customized = resolveAgentConfig(
+      { agentId: 'agt_inbox' },
+      snapshot({
+        agentConfig: { model: 'gpt-5', provider: 'openai', systemRole: 'Mine.' } as never,
+        slug: 'inbox',
+      }),
+    );
+    expect(customized.isBuiltinAgent).toBe(true);
+    expect(customized.agentConfig.systemRole).toBe('Mine.');
+
+    const empty = resolveAgentConfig(
+      { agentId: 'agt_inbox' },
+      snapshot({
+        agentConfig: { model: 'gpt-5', provider: 'openai', systemRole: '' } as never,
+        slug: 'inbox',
+      }),
+    );
+    // The row has no system role, so the runtime one fills it in.
+    expect(empty.agentConfig.systemRole).toBeTruthy();
+    expect(empty.agentConfig.systemRole).not.toBe('');
+  });
 });
