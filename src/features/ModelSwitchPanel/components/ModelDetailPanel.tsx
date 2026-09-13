@@ -196,6 +196,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
         {/* Sections */}
         {(hasRating || hasPricing || contextWindowLabel || hasAbilities) && (
           <AccordionRoot
+            indicatorPlacement="inline"
             style={{ gap: 8 }}
             value={expandedKeys}
             onValueChange={handleExpandedChange}

@@ -131,6 +131,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   return (
     <Accordion
       hideIndicator={isAlwaysExpand}
+      indicatorPlacement="inline"
       styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
       value={isToolDetailExpand ? [id] : []}
       items={[

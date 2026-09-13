@@ -130,7 +130,11 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
             {t('taskList.kanban.emptyColumn')}
           </Text>
         ) : (
-          <AccordionRoot defaultValue={orderedGroups.map((g) => g.key)} style={{ gap: 2 }}>
+          <AccordionRoot
+            defaultValue={orderedGroups.map((g) => g.key)}
+            indicatorPlacement="inline"
+            style={{ gap: 2 }}
+          >
             {orderedGroups.map((group) => (
               <StatusGroup group={group} key={group.key} />
             ))}

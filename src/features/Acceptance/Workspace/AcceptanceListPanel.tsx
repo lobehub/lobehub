@@ -806,6 +806,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               {showGroups ? (
                 <Accordion
                   gap={4}
+                  indicatorPlacement="inline"
                   styles={{ trigger: { paddingBlock: 4, paddingInline: 8 } }}
                   value={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
                   items={groups.map((group) => ({

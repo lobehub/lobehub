@@ -639,6 +639,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
         {canGenerate ? (
           <>
             <AccordionRoot
+              indicatorPlacement="inline"
               style={{ gap: 4 }}
               value={generateExpanded ? [GENERATE_SECTION_KEY] : []}
               onValueChange={(keys) => setGenerateExpanded(keys.length > 0)}

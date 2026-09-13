@@ -311,6 +311,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
 
       <Accordion
         defaultValue={[]}
+        indicatorPlacement="inline"
         styles={{ header: { paddingBlock: 8, paddingInline: 4 } }}
         items={[
           {
