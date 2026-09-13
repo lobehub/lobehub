@@ -1,7 +1,7 @@
 'use client';
 
-import { DraggablePanel, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, DraggablePanel } from '@lobehub/ui/base-ui';
 import { cssVar, useTheme } from 'antd-style';
 import { t as i18nT } from 'i18next';
 import { PanelRightCloseIcon } from 'lucide-react';
@@ -9,9 +9,9 @@ import { memo } from 'react';
 
 import FileDetail from '@/features/ResourceManager/FileDetail';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
-import { fileManagerSelectors, useFileStore } from '@/store/file';
 
 import FilePreview from './FilePreview';
+import { useDetailPanelFile } from './useDetailPanelFile';
 
 /**
  * In-context right dock for the explorer list: single click on a file row
@@ -23,11 +23,7 @@ const FileDetailPanel = memo(() => {
   const theme = useTheme();
   const detailPanelId = useResourceManagerStore((s) => s.detailPanelId);
   const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
-
-  const fromStore = useFileStore(fileManagerSelectors.getFileById(detailPanelId));
-  const useFetchKnowledgeItem = useFileStore((s) => s.useFetchKnowledgeItem);
-  const { fromQuery } = useFetchKnowledgeItem(!fromStore ? detailPanelId : undefined);
-  const fileDetail = fromStore ?? fromQuery;
+  const fileDetail = useDetailPanelFile(detailPanelId);
 
   return (
     <DraggablePanel
@@ -94,8 +90,13 @@ const FileDetailPanel = memo(() => {
               <FilePreview file={fileDetail} />
             </Flexbox>
             <Flexbox
-              flexShrink={0}
-              style={{ width: 220, overflow: 'auto', paddingBlock: 12, paddingInline: 16 }}
+              style={{
+                flexShrink: 0,
+                overflow: 'auto',
+                paddingBlock: 12,
+                paddingInline: 16,
+                width: 220,
+              }}
             >
               <FileDetail {...fileDetail} showDownloadButton showTitle={false} />
             </Flexbox>
