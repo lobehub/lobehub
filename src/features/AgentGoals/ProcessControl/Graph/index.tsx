@@ -845,7 +845,10 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
               view={scopeId ? 'all' : view}
               navigation={
                 <Flexbox gap={8}>
-                  {titleAndViews}
+                  {/* Title and view switch share one row, as in the inline header. */}
+                  <Flexbox horizontal align={'center'} gap={12}>
+                    {titleAndViews}
+                  </Flexbox>
                   {overview}
                   {breadcrumbs}
                 </Flexbox>
