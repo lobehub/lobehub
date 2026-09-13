@@ -8,6 +8,7 @@ const now = new Date('2026-09-13T12:00:00Z');
 describe('archiveDaysLeft', () => {
   it('counts down from 30 in whole days', () => {
     expect(archiveDaysLeft(now, now)).toBe(30);
+    expect(archiveDaysLeft(new Date(now.getTime() + 5 * DAY), now)).toBe(30);
     expect(archiveDaysLeft(new Date(now.getTime() - 3 * DAY), now)).toBe(27);
     expect(archiveDaysLeft(new Date(now.getTime() - 3.9 * DAY), now)).toBe(27);
   });

@@ -14,6 +14,7 @@ const ArchivedRowMeta = memo<{ acceptanceId: string; archivedAt: Date | string }
     const { t } = useTranslation('verify');
     const { data: preview } = useAcceptancePurgePreview(acceptanceId);
     const days = archiveDaysLeft(archivedAt);
+    if (!preview) return null;
 
     return (
       <span
@@ -23,8 +24,7 @@ const ArchivedRowMeta = memo<{ acceptanceId: string; archivedAt: Date | string }
           fontVariantNumeric: 'tabular-nums',
         }}
       >
-        {preview &&
-          `${t('acceptance.workspace.archive.rounds', { count: preview.rounds })} · ${formatSize(preview.bytes)} · `}
+        {`${t('acceptance.workspace.archive.rounds', { count: preview.rounds })} · ${formatSize(preview.bytes)} · `}
         <span
           style={
             days <= ACCEPTANCE_ARCHIVE_WARNING_DAYS ? { color: cssVar.colorWarning } : undefined

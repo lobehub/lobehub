@@ -409,7 +409,7 @@ export class AcceptanceModel {
     const [row] = await this.db
       .update(acceptances)
       .set({ archivedAt: new Date() })
-      .where(and(eq(acceptances.id, id), this.ownership()))
+      .where(and(eq(acceptances.id, id), isNull(acceptances.archivedAt), this.ownership()))
       .returning();
     return row;
   };

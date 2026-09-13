@@ -503,7 +503,7 @@ export default {
   'acceptance.workspace.batch.selected': '{{count}} selected',
   'acceptance.workspace.batch.statusSuccess': '{{count}} acceptance(s) updated',
   'acceptance.workspace.checkCount': '{{count}} checks',
-  'acceptance.workspace.deleteConfirm.archiveHint': 'Not ready to delete for good?',
+  'acceptance.workspace.deleteConfirm.archiveHint': 'Not ready to delete for good? ',
   'acceptance.workspace.deleteConfirm.archiveHintSuffix': ' — restorable for 30 days.',
   'acceptance.workspace.deleteConfirm.archiveInstead': 'Archive instead',
   'acceptance.workspace.deleteConfirm.files': 'Evidence files',

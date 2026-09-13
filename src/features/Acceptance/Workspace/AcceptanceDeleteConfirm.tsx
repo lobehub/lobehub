@@ -6,6 +6,7 @@ import {
   createModal,
   type ModalInstance,
   Text,
+  toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -66,6 +67,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface DeleteConfirmProps {
+  archived?: boolean;
   ids: string[];
   onArchive: () => Promise<unknown>;
   onDelete: () => Promise<unknown>;
@@ -83,20 +85,26 @@ const usePurgePreview = (ids: string[]) =>
     ),
   );
 
-const DeleteConfirmContent = memo<DeleteConfirmProps>(({ ids, onArchive, onDelete }) => {
+const DeleteConfirmContent = memo<DeleteConfirmProps>(({ archived, ids, onArchive, onDelete }) => {
   const { t: translate } = useTranslation('verify');
   const { close } = useModalContext();
   const [pending, setPending] = useState(false);
   const { data: preview } = usePurgePreview(ids);
   const batch = ids.length > 1;
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async (
+    action: () => Promise<unknown>,
+    errorKey: 'acceptance.workspace.archive.error' | 'acceptance.workspace.deleteError',
+  ) => {
     setPending(true);
     try {
       await action();
+      close();
+    } catch (error) {
+      console.error('[acceptance:deleteConfirm]', error);
+      toast.error(translate(errorKey));
     } finally {
       setPending(false);
-      close();
     }
   };
 
@@ -135,23 +143,30 @@ const DeleteConfirmContent = memo<DeleteConfirmProps>(({ ids, onArchive, onDelet
           <dd>{formatSize(preview.bytes)}</dd>
         </dl>
       )}
-      <Text fontSize={12} type={'secondary'}>
-        {translate('acceptance.workspace.deleteConfirm.archiveHint')}
-        <button
-          className={styles.link}
-          disabled={pending}
-          type={'button'}
-          onClick={() => void run(onArchive)}
-        >
-          {translate('acceptance.workspace.deleteConfirm.archiveInstead')}
-        </button>
-        {translate('acceptance.workspace.deleteConfirm.archiveHintSuffix')}
-      </Text>
+      {!archived && (
+        <Text fontSize={12} type={'secondary'}>
+          {translate('acceptance.workspace.deleteConfirm.archiveHint')}
+          <button
+            className={styles.link}
+            disabled={pending}
+            type={'button'}
+            onClick={() => void run(onArchive, 'acceptance.workspace.archive.error')}
+          >
+            {translate('acceptance.workspace.deleteConfirm.archiveInstead')}
+          </button>
+          {translate('acceptance.workspace.deleteConfirm.archiveHintSuffix')}
+        </Text>
+      )}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={pending} onClick={close}>
           {translate('actions.cancel')}
         </Button>
-        <Button danger loading={pending} type={'primary'} onClick={() => void run(onDelete)}>
+        <Button
+          danger
+          loading={pending}
+          type={'primary'}
+          onClick={() => void run(onDelete, 'acceptance.workspace.deleteError')}
+        >
           {okLabel}
         </Button>
       </Flexbox>

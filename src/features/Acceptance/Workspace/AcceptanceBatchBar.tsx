@@ -24,6 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceBatchBarProps {
   /** Selected rows the accept sweep can actually move. */
   acceptCount: number;
+  canArchive: boolean;
   /** Whether any selected row is filed under a project, so "remove" has work. */
   canRemoveProject: boolean;
   /** Selected rows the close sweep can actually move. */
@@ -51,6 +52,7 @@ interface AcceptanceBatchBarProps {
 const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
   ({
     acceptCount,
+    canArchive,
     canRemoveProject,
     closeCount,
     onAccept,
@@ -100,13 +102,15 @@ const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
           />
         </DropdownMenu>
         <Flexbox flex={1} />
-        <ActionIcon
-          disabled={pending}
-          icon={Archive}
-          size={'small'}
-          title={t('acceptance.workspace.batch.archive')}
-          onClick={onArchive}
-        />
+        {canArchive && (
+          <ActionIcon
+            disabled={pending}
+            icon={Archive}
+            size={'small'}
+            title={t('acceptance.workspace.batch.archive')}
+            onClick={onArchive}
+          />
+        )}
         <ActionIcon
           danger
           disabled={pending}

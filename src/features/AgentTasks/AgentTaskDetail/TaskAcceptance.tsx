@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -32,6 +32,7 @@ import {
 } from '@/features/Acceptance/Viewer/AcceptanceScope';
 import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
 import AcceptanceDecision from '@/features/Acceptance/Viewer/Review/AcceptanceDecision';
+import { archiveDaysLeft } from '@/features/Acceptance/Workspace/acceptanceArchive';
 import { openAcceptanceDeleteConfirm } from '@/features/Acceptance/Workspace/AcceptanceDeleteConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
@@ -200,11 +201,13 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const handleRemoveAcceptance = () => {
     if (!acceptanceSubject || !taskId) return;
     openAcceptanceDeleteConfirm({
+      archived: Boolean(acceptanceSubject.archivedAt),
       ids: [acceptanceSubject.id],
-      title: taskName ?? '',
+      title: taskName || requirement || t('taskDetail.acceptance.untitled'),
       onArchive: async () => {
         await verifyService.archiveAcceptance(acceptanceSubject.id);
         await mutateSubject();
+        toast.success(t('acceptance.workspace.archive.success', { ns: 'verify' }));
       },
       onDelete: async () => {
         await useTaskStore.getState().updateVerifyConfig(taskId, {
@@ -221,8 +224,26 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // `acceptance.remove` only authorizes the acceptance creator (or a workspace
   // owner, cloud-side), not everyone who can edit the task — so the affordance
   // follows the bundle's isOwner rather than dead-ending in FORBIDDEN.
+  const unarchive = async () => {
+    if (!acceptanceSubject) return;
+    await verifyService.unarchiveAcceptance(acceptanceSubject.id);
+    await mutateSubject();
+  };
+
   const reportButton = acceptanceSubject && (
     <Flexbox horizontal align={'center'} gap={4}>
+      {acceptanceSubject.archivedAt && (
+        <>
+          <Text fontSize={12} type={'warning'}>
+            {t('taskDetail.acceptance.archived', {
+              count: archiveDaysLeft(acceptanceSubject.archivedAt),
+            })}
+          </Text>
+          <Button size={'small'} type={'text'} onClick={() => void unarchive()}>
+            {t('taskDetail.acceptance.unarchive')}
+          </Button>
+        </>
+      )}
       <Button
         icon={<Icon icon={ExternalLink} />}
         size={'small'}

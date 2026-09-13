@@ -424,6 +424,9 @@ describe('AcceptanceModel', () => {
     const archived = await model.archive(row.id);
     expect(archived?.archivedAt).toBeInstanceOf(Date);
 
+    await expect(model.archive(row.id)).resolves.toBeUndefined();
+    expect((await model.findById(row.id))?.archivedAt).toEqual(archived?.archivedAt);
+
     const unarchived = await model.unarchive(row.id);
     expect(unarchived?.archivedAt).toBeNull();
 

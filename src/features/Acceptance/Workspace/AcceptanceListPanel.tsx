@@ -719,6 +719,11 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 )}
                 <Text ellipsis strong style={{ fontSize: 15, minWidth: 0 }}>
                   {t('acceptance.workspace.title')}
+                  {filter === 'archived' && (
+                    <Text as={'span'} type={'secondary'} weight={400}>
+                      {` · ${t('acceptance.workspace.filters.archived')}`}
+                    </Text>
+                  )}
                 </Text>
               </Flexbox>
               <button
@@ -927,6 +932,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
         {selecting && (
           <AcceptanceBatchBar
             acceptCount={acceptanceBatchTargets(items, selectedVisible, 'accept').length}
+            canArchive={filter !== 'archived'}
             canRemoveProject={acceptanceProjectTargets(items, selectedVisible, null).length > 0}
             closeCount={acceptanceBatchTargets(items, selectedVisible, 'close').length}
             pending={batchPending || selectedVisible.length === 0}
