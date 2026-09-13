@@ -37,7 +37,7 @@ const BUFFER_INTERVAL = 300;
  * wholesale on every chunk. Only the newest snapshot matters, and the trailing
  * flush always ships the final one.
  */
-const TOOLS_CALLING_THROTTLE_INTERVAL = 150;
+const TOOLS_CALLING_THROTTLE_INTERVAL = BUFFER_INTERVAL;
 
 const appendTextPart = (parts: ServerCallLlmContentPart[], text: string) => {
   const last = parts.at(-1);

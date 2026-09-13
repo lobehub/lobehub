@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeExecutorContext } from '../../context';
 import { ServerCallLlmStreamSink } from '../serverCallLlmStreamSink';
 
-const THROTTLE_INTERVAL = 150;
+const THROTTLE_INTERVAL = 300;
 
 const toolCall = (args: string): ChatToolPayload[] =>
   [{ apiName: 'write', arguments: args, id: 'call_1', identifier: 'fs', type: 'default' }] as any;
@@ -56,14 +56,14 @@ describe('ServerCallLlmStreamSink tools_calling throttle', () => {
   it('publishes at most once per window across a long stream', async () => {
     const { publishStreamChunk, sink } = createSink();
 
-    // 10 windows' worth of deltas, 10ms apart.
+    // 5 windows' worth of deltas, 10ms apart.
     for (let i = 1; i <= 150; i += 1) {
       sink.queueToolsCalling(toolCall('x'.repeat(i)));
       await vi.advanceTimersByTimeAsync(10);
     }
 
     // Unthrottled this would be 150 publishes.
-    expect(publishStreamChunk.mock.calls.length).toBeLessThanOrEqual(11);
+    expect(publishStreamChunk.mock.calls.length).toBeLessThanOrEqual(6);
     expect(publishStreamChunk.mock.calls.length).toBeGreaterThan(0);
   });
 
