@@ -263,6 +263,15 @@ class AiAgentService {
     return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
   }
 
+  /**
+   * Mint the per-user JWT for the multiplexed Gateway WebSocket (v2, one
+   * socket per user). Not bound to any operation — the mux client calls this
+   * before every connect attempt.
+   */
+  async issueGatewayUserToken(): Promise<{ token: string }> {
+    return await lambdaClient.aiAgent.issueGatewayUserToken.query();
+  }
+
   async execSubAgentTask(params: ExecSubAgentTaskParams) {
     return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }

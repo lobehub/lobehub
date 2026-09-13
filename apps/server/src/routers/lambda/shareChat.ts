@@ -481,6 +481,26 @@ export const shareChatRouter = router({
     }),
 
   /**
+   * Mint the per-VISITOR Gateway JWT for the multiplexed v2 WebSocket — the
+   * visitor counterpart of `aiAgent.issueGatewayUserToken`. Same subject rule
+   * as `refreshGatewayToken` (sign for the visitor: share ops register their
+   * stream under `streamOwnerUserId = visitor`, and the hub keys on the JWT
+   * `sub`), but without a running-operation check: the token authenticates the
+   * user hub socket, and each `subscribe` is authorized per op by the gateway.
+   * The share must still resolve as link-visible for this caller so a revoked
+   * or private share cannot be used to open a hub socket from its page.
+   */
+  issueGatewayUserToken: shareChatProcedure
+    .input(z.object({ shareId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
+
+      const token = await signUserJWT(ctx.userId);
+
+      return { token };
+    }),
+
+  /**
    * Refresh the Gateway WS JWT for a running share operation — the visitor
    * counterpart of `aiAgent.refreshGatewayToken` (which cannot serve visitors:
    * its TopicModel is scoped to the caller, and share topics belong to the

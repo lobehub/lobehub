@@ -3701,6 +3701,20 @@ export const aiAgentRouter = router({
     }),
 
   /**
+   * Mint the per-USER Gateway JWT for the multiplexed v2 WebSocket (one
+   * socket per user, `GET /v2/ws`). Unlike `refreshGatewayToken` it is not
+   * bound to a running operation: the user hub authorizes every `subscribe`
+   * against the op's registered owner, so the token only has to carry the
+   * caller's identity. Short-lived (5m) like the v1 token; the client re-mints
+   * before every connect attempt.
+   */
+  issueGatewayUserToken: aiAgentProcedure.query(async ({ ctx }) => {
+    const token = await signUserJWT(ctx.userId);
+
+    return { token };
+  }),
+
+  /**
    * Refresh Gateway JWT token for an existing operation.
    * Used when reconnecting after page reload (original token expired).
    */

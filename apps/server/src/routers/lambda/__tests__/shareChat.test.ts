@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type * as BusinessConst from '@lobechat/business-const';
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as MessageModelModule from '@/database/models/message';
@@ -534,6 +535,56 @@ describe('shareChatRouter', () => {
     });
   });
 
+  describe('issueGatewayUserToken', () => {
+    it('signs the per-user hub token for the VISITOR, never the creator', async () => {
+      const caller = await createCaller();
+
+      await expect(caller.issueGatewayUserToken({ shareId: 'share-1' })).resolves.toEqual({
+        token: 'visitor-jwt',
+      });
+      expect(mockSignUserJWT).toHaveBeenCalledWith(VISITOR);
+      expect(mockAccessCheck).toHaveBeenCalledWith(expect.anything(), 'share-1', VISITOR);
+    });
+
+    // The v2 hub socket is per user, not per operation: the hub authorizes
+    // each `subscribe` against the op's registered owner, so minting must not
+    // depend on a topic marker or a live run (a visitor opens the socket
+    // before their first send).
+    it('does not require a topic or a running operation', async () => {
+      mockFindById.mockResolvedValue(undefined);
+      mockIsRunningOperationAlive.mockResolvedValue(false);
+      const caller = await createCaller();
+
+      await expect(caller.issueGatewayUserToken({ shareId: 'share-1' })).resolves.toEqual({
+        token: 'visitor-jwt',
+      });
+      expect(mockFindById).not.toHaveBeenCalled();
+      expect(mockIsRunningOperationAlive).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown share without signing anything', async () => {
+      mockAccessCheck.mockRejectedValue(
+        new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' }),
+      );
+      const caller = await createCaller();
+
+      await expect(caller.issueGatewayUserToken({ shareId: 'missing' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      expect(mockSignUserJWT).not.toHaveBeenCalled();
+    });
+
+    it('rejects a share that is not link-visible', async () => {
+      mockAccessCheck.mockResolvedValue({ ...share, visibility: 'private' });
+      const caller = await createCaller();
+
+      await expect(caller.issueGatewayUserToken({ shareId: 'share-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockSignUserJWT).not.toHaveBeenCalled();
+    });
+  });
+
   describe('refreshGatewayToken', () => {
     it('signs the token for the VISITOR, never the creator', async () => {
       const caller = await createCaller();
@@ -613,6 +664,9 @@ describe('shareChatRouter', () => {
         await expect(
           caller.refreshGatewayToken({ shareId: 'share-1', topicId: 'tpc_visitor' }),
         ).resolves.toEqual({ token: 'visitor-jwt' });
+        await expect(caller.issueGatewayUserToken({ shareId: 'share-1' })).resolves.toEqual({
+          token: 'visitor-jwt',
+        });
         expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
       },
     );
