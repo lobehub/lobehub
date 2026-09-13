@@ -89,7 +89,7 @@ export class ServerToolTransport implements ToolTransport {
             stepIndex,
             userId,
           },
-          context.state.metadata?._hooks,
+          context.state.host?.hooks,
         )
         .catch(() => {});
     }
@@ -120,11 +120,11 @@ export class ServerToolTransport implements ToolTransport {
       let toolCallMocked = false;
 
       if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
-        const policy = context.state.metadata?.deviceAccessPolicy as
+        const policy = context.state.principal?.policy?.deviceAccess as
           { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
         logDeviceToolAudit({
           apiName: chatToolPayload.apiName,
-          botContext: context.state.metadata?.botContext,
+          botContext: context.state.principal?.actor?.bot,
           canUseDevice: policy?.canUseDevice ?? true,
           messageId: context.state.origin?.sourceMessageId,
           operationId,
@@ -198,7 +198,7 @@ export class ServerToolTransport implements ToolTransport {
             toolExecutionService.executeTool(chatToolPayload, {
               activatedSkills: context.activatedSkills as any,
               activeDeviceId: resolveRunActiveDeviceId(context.state),
-              activeDeviceScope: context.state.metadata?.activeDeviceScope,
+              activeDeviceScope: context.state.principal?.actor?.deviceScope,
               agentId: context.state.origin?.agentId,
               agentMember: buildServerAgentMemberRunner(
                 this.ctx,
@@ -212,10 +212,10 @@ export class ServerToolTransport implements ToolTransport {
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
-              clientIp: context.state.metadata?.clientIp,
+              clientIp: context.state.principal?.audit?.clientIp,
               currentTodos: context.currentTodos,
-              deviceCapable: context.state.metadata?.executionPlan
-                ? isDeviceCapablePlan(context.state.metadata.executionPlan)
+              deviceCapable: context.state.plan?.execution
+                ? isDeviceCapablePlan(context.state.plan?.execution)
                 : undefined,
               documentId: context.state.origin?.documentId,
               editingAgentId: context.state.metadata?.editingAgentId,
@@ -228,10 +228,10 @@ export class ServerToolTransport implements ToolTransport {
               // resolved target rather than the stored flag: a config that says
               // `localSandbox` but landed on `sandbox`/`device` was never fenced,
               // and telling the device otherwise would fence the wrong run.
-              localSandbox: context.state.metadata?.executionPlan
+              localSandbox: context.state.plan?.execution
                 ? isLocalSandboxEnabled(
                     context.state.world?.agent?.agencyConfig,
-                    context.state.metadata.executionPlan.target,
+                    context.state.plan?.execution.target,
                   )
                 : undefined,
               localSandboxNetwork:
@@ -239,7 +239,7 @@ export class ServerToolTransport implements ToolTransport {
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.origin?.sourceMessageId,
               operationId,
-              projectSkills: resolveRunProjectSkills(context.state.metadata),
+              projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
               scope: context.state.origin?.scope,
               serverDB,
@@ -358,7 +358,7 @@ export class ServerToolTransport implements ToolTransport {
           stepIndex,
           userId,
         },
-        context.state.metadata?._hooks,
+        context.state.host?.hooks,
       )
       .catch(() => {});
 
@@ -405,7 +405,7 @@ export class ServerToolTransport implements ToolTransport {
           success: result.success,
           userId,
         },
-        context.state.metadata?._hooks,
+        context.state.host?.hooks,
       )
       .catch(() => {});
   }

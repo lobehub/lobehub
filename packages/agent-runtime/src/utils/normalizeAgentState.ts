@@ -27,6 +27,24 @@ const LEGACY_KEY_PATHS: Record<string, readonly string[]> = {
   isSubAgent: ['origin', 'lineage', 'isSubAgent'],
   orchestrationRole: ['origin', 'lineage', 'orchestrationRole'],
   subAgentProgress: ['origin', 'lineage', 'progressAnchor'],
+  // --- principal ---
+  activeDeviceScope: ['principal', 'actor', 'deviceScope'],
+  agentShareVisitor: ['principal', 'actor', 'shareVisitor'],
+  botContext: ['principal', 'actor', 'bot'],
+  clientIp: ['principal', 'audit', 'clientIp'],
+  deviceAccessPolicy: ['principal', 'policy', 'deviceAccess'],
+  userAgent: ['principal', 'audit', 'userAgent'],
+  // --- plan (the model config folds into the top-level slot it duplicated) ---
+  evalRuntime: ['plan', 'eval'],
+  executionPlan: ['plan', 'execution'],
+  modelRuntimeConfig: ['modelRuntimeConfig'],
+  operationSkillSet: ['plan', 'skills'],
+  stream: ['plan', 'stream'],
+  workingDirectory: ['plan', 'workingDirectory'],
+  // --- host ---
+  _hooks: ['host', 'hooks'],
+  queueRetries: ['host', 'queue', 'retries'],
+  queueRetryDelay: ['host', 'queue', 'retryDelay'],
   // --- world ---
   agentConfig: ['world', 'agent'],
   agentGroup: ['world', 'group'],
@@ -68,8 +86,9 @@ const setIfAbsent = (root: Record<string, unknown>, path: readonly string[], val
 };
 
 /**
- * Lift legacy `metadata.*` run context into the typed `origin` / `world` /
- * `binding` slots so every reader can rely on the slots alone.
+ * Lift legacy `metadata.*` run context into the typed slots (`origin`,
+ * `principal`, `plan`, `world`, `binding`, `host`) so every reader can rely on
+ * the slots alone.
  *
  * Runs at the persistence boundary (state load) for blobs written before the
  * slots existed. Slot values already present win over legacy keys, and the

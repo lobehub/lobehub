@@ -1,7 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 
-import { type ExecutionPlan, isDeviceCapablePlan } from '@/helpers/executionTarget';
-import { type DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAudit';
+import { isDeviceCapablePlan } from '@/helpers/executionTarget';
 
 /**
  * Single-track device gate shared by the run executors: the execution plan
@@ -22,11 +21,10 @@ import { type DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAud
  * `kind === 'device'` would swallow exactly that flow.
  */
 export const resolveRunActiveDeviceId = (
-  state: Pick<AgentState, 'binding' | 'metadata'>,
+  state: Pick<AgentState, 'binding' | 'plan' | 'principal'>,
 ): string | undefined => {
-  const devicePolicy = state.metadata?.deviceAccessPolicy as
-    { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
-  const executionPlan = state.metadata?.executionPlan as ExecutionPlan | undefined;
+  const devicePolicy = state.principal?.policy?.deviceAccess;
+  const executionPlan = state.plan?.execution;
   const planAllowsDevice = !executionPlan || isDeviceCapablePlan(executionPlan);
 
   if (devicePolicy?.canUseDevice === false || !planAllowsDevice) return undefined;

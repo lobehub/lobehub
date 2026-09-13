@@ -50,7 +50,7 @@ export const requestHumanApprove =
           stepIndex,
           userId,
         } as AnyHookEvent,
-        serializedHooks: state.metadata?._hooks,
+        serializedHooks: state.host?.hooks,
         type: 'beforeHumanIntervention',
       })
       .catch(() => {});

@@ -5,6 +5,7 @@ import type {
   BotPlatformContext,
   DiscordContext,
   EvalContext,
+  OperationSkillSet,
   OperationToolSet,
   ProjectInstructionFile,
   ToolExecutor,
@@ -12,12 +13,17 @@ import type {
   UserMemoryConfig,
 } from '@lobechat/context-engine';
 import type {
+  AgentShareVisitorContext,
   AgentSignalOperationMarker,
   ChatToolPayload,
+  ChatTopicBotContext,
+  EvalToolForwardingConfig,
+  ExecutionPlan,
   ExpertiseContextSnapshot,
   LobeAgentChatConfig,
   LobeAgentConfig,
   SecurityBlacklistConfig,
+  SerializedAgentHook,
   UserInterventionConfig,
 } from '@lobechat/types';
 
@@ -94,6 +100,67 @@ export interface AgentRunOrigin {
   userId?: string;
 
   workspaceId?: string;
+}
+
+/**
+ * Under whose authority the run acts and what it is allowed to do.
+ *
+ * Decided by the host when the operation is created and frozen from then on;
+ * each dispatch boundary only re-presents these facts (share-visitor grants,
+ * device access) instead of re-deriving them.
+ */
+export interface AgentRunPrincipal {
+  /** Who the run acts as. */
+  actor?: {
+    /** Sender / owner identity for bot-originated runs. */
+    bot?: ChatTopicBotContext;
+    /**
+     * Principal pool the routed device lives in: `personal` when a workspace
+     * run was routed to the caller's own device via a per-user `local` override.
+     */
+    deviceScope?: 'personal' | 'workspace';
+    /** Shared-agent visitor marker. Present only for a share-visitor run. */
+    shareVisitor?: AgentShareVisitorContext;
+  };
+  /** Request provenance kept for auditing and spend attribution. */
+  audit?: {
+    clientIp?: string;
+    userAgent?: string;
+  };
+  /** Decisions about what the run may do, made once per turn. */
+  policy?: {
+    /** Device-access decision; `reason` names the branch that granted or denied it. */
+    deviceAccess?: { canUseDevice: boolean; reason: string };
+  };
+}
+
+/**
+ * How the run executes: the resolved execution plan plus the controls the
+ * caller fixed for it. Frozen at creation. The model itself lives on
+ * `AgentState.modelRuntimeConfig`; the tool set on `operationToolSet`.
+ */
+export interface AgentRunPlan {
+  /** Evaluation execution controls (tool forwarding) for eval runs. */
+  eval?: { caseId?: string; toolForwarding?: EvalToolForwardingConfig };
+  /** Where (and whether) the run executes, resolved once at the entry point. */
+  execution?: ExecutionPlan;
+  /** Operation-level skill set for the skill resolver. */
+  skills?: OperationSkillSet;
+  /** Whether LLM calls stream. Defaults to true. */
+  stream?: boolean;
+  /** Working directory the run executes in. */
+  workingDirectory?: string;
+}
+
+/**
+ * What the host needs to deliver and retry the run. Written by the host,
+ * carried by the runtime without interpretation.
+ */
+export interface AgentRunHostEnvelope {
+  /** Serialized lifecycle hook configs (webhook mode), so a queue worker can rebuild the dispatcher. */
+  hooks?: SerializedAgentHook[];
+  /** Queue retry policy for step scheduling. */
+  queue?: { retries?: number; retryDelay?: string };
 }
 
 /**
@@ -223,6 +290,9 @@ export interface AgentState {
    * and a summary prompt injected to produce a final text response.
    */
   forceFinish?: boolean;
+  // --- Host envelope ---
+  /** What the host needs to deliver and retry the run. Opaque to the runtime. */
+  host?: AgentRunHostEnvelope;
   // --- Interruption Handling ---
   /**
    * When status is 'interrupted', this stores the interruption context
@@ -250,10 +320,11 @@ export interface AgentState {
   messages: any[];
 
   /**
-   * Un-converged run context. Keys that have a business home live in the
-   * typed slots (`origin`, `world`, `binding`, …); anything left here is either host
-   * plumbing the runtime does not interpret or context that has not been
-   * placed yet. `normalizeAgentState` lifts legacy keys out on load.
+   * Run ledger the runtime and host write while the operation executes
+   * (step tracking, work anchors, intervention preparation …). Facts that are
+   * fixed at creation live in the typed slots (`origin`, `principal`, `plan`,
+   * `world`, `binding`, `host`); `normalizeAgentState` lifts legacy keys out
+   * of here on load.
    */
   metadata?: Record<string, any>;
 
@@ -286,13 +357,13 @@ export interface AgentState {
   operationId: string;
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
-
   // --- Origin ---
   /**
    * Where this run came from and where it sits in the run tree. Frozen when
    * the operation is created.
    */
   origin?: AgentRunOrigin;
+
   pendingApprovalBatch?: {
     assistantMessageId: string;
     id: string;
@@ -320,8 +391,8 @@ export interface AgentState {
    * Cleared once consumed.
    */
   pendingAssistantMessageId?: string;
-
   pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
+
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
@@ -335,6 +406,12 @@ export interface AgentState {
    * for human-in-the-loop operations.
    */
   pendingToolsCalling?: ChatToolPayload[];
+  // --- Plan ---
+  /** How the run executes. Frozen at creation. */
+  plan?: AgentRunPlan;
+  // --- Principal ---
+  /** Under whose authority the run acts and what it may do. Frozen at creation. */
+  principal?: AgentRunPrincipal;
   /**
    * Security blacklist configuration
    * These rules will ALWAYS block execution and require human intervention,

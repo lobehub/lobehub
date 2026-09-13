@@ -228,9 +228,8 @@ export const buildServerVirtualSubAgentRunner = (
   // The model the parent run ACTUALLY uses. `world.agent` alone is not
   // enough: when a run continues a topic whose model was switched, execAgent
   // keeps the topic-pinned model only in `modelRuntimeConfig` while the
-  // metadata config retains the agent default.
-  const parentEffectiveModel =
-    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
+  // world config retains the agent default.
+  const parentEffectiveModel = state.modelRuntimeConfig ?? parentAgentConfig;
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {

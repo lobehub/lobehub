@@ -565,7 +565,8 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
           errorType: ChatErrorType.FreePlanLimit,
           provider: 'lobehub',
         },
-        metadata: { _hooks: [], assistantMessageId: 'msg-1' },
+        metadata: { assistantMessageId: 'msg-1' },
+        host: { hooks: [] },
         status: 'error',
       },
       'error',
@@ -599,7 +600,7 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [] }, status: 'interrupted' },
+        { host: { hooks: [] }, status: 'interrupted' },
         'interrupted',
       ),
     ).rejects.toThrow('Critical webhook delivery failed: task-on-complete');
@@ -613,11 +614,7 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
-    await lifecycle.dispatchHooks(
-      'op-reclaimed',
-      { metadata: { _hooks: [] }, status: 'done' },
-      'done',
-    );
+    await lifecycle.dispatchHooks('op-reclaimed', { host: { hooks: [] }, status: 'done' }, 'done');
 
     expect(dispatch).not.toHaveBeenCalled();
   });
@@ -652,7 +649,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
     expect(instantiateSpy).toHaveBeenCalledTimes(1);
 
     // Completion fires while the plan instantiation is still in flight.
-    const doneState = { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'done' };
+    const doneState = { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'done' };
     const dispatch = lifecycle.dispatchHooks('op-1', doneState, 'done');
 
     // The gate must stay blocked on the pending instantiation, not race past it.
@@ -687,7 +684,7 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
   });
 
   const parkedState = {
-    metadata: { _hooks: [] },
+    host: { hooks: [] },
     origin: { agentId: 'a' },
     status: 'waiting_for_async_tool',
   };
@@ -711,7 +708,7 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
     const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
-    const doneState = { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'done' };
+    const doneState = { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'done' };
     await lifecycle.dispatchHooks('op-1', doneState, 'done');
 
     expect(dispatchSpy).toHaveBeenCalledWith('op-1', 'onComplete', expect.anything(), []);
@@ -738,7 +735,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
   const buildDoneState = (origin: Record<string, unknown> = {}) => ({
     createdAt: new Date(Date.now() - 90_000).toISOString(),
     messages: [{ content: 'final reply', role: 'assistant' }],
-    metadata: { _hooks: [] },
+    host: { hooks: [] },
     origin: { agentId: 'agt_1', topicId: 'tpc_1', ...origin },
     status: 'done',
   });
@@ -893,7 +890,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [] }, origin: { agentId: 'agt_1' }, status: 'error' },
+      { host: { hooks: [] }, origin: { agentId: 'agt_1' }, status: 'error' },
       'error',
     );
 
@@ -908,7 +905,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     // and leak into later dispatchHooks('done') tests in this file.
     mockNotifyAgentRunCompleted.mockRejectedValueOnce(new Error('push provider down'));
 
-    const doneState = { metadata: { _hooks: [] }, origin: { agentId: 'agt_1' }, status: 'done' };
+    const doneState = { host: { hooks: [] }, origin: { agentId: 'agt_1' }, status: 'done' };
     await expect(lifecycle.dispatchHooks('op-1', doneState, 'done')).resolves.toBeUndefined();
     await flushMicrotasks();
 
@@ -1026,7 +1023,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
+      { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
       'waiting_for_human',
     );
 
@@ -1063,7 +1060,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
+        { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
         'waiting_for_human',
       ),
     ).rejects.toBeInstanceOf(CriticalAgentInterventionPersistenceError);
@@ -1083,7 +1080,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
+        { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
         'waiting_for_human',
       ),
     ).rejects.toMatchObject({
@@ -1112,7 +1109,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     await expect(
       lifecycle.dispatchHooks(
         'op-1',
-        { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
+        { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
         'waiting_for_human',
       ),
     ).resolves.toBeUndefined();
@@ -1127,7 +1124,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
+      { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'waiting_for_human' },
       'waiting_for_human',
     );
 
@@ -1148,7 +1145,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
 
     const parkedState = {
-      metadata: { _hooks: [] },
+      host: { hooks: [] },
       origin: { agentId: 'a' },
       status: 'waiting_for_human',
     };
@@ -1165,7 +1162,7 @@ describe('CompletionLifecycle.dispatchHooks — parks do not register file works
     vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
 
     const parkedState = {
-      metadata: { _hooks: [] },
+      host: { hooks: [] },
       origin: { agentId: 'a' },
       status: 'waiting_for_async_tool',
     };
@@ -1185,7 +1182,7 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
       { content: 'user prompt', id: 'msg-user', role: 'user' },
       { content: assistantContent, id: 'msg-assistant', role: 'assistant' },
     ],
-    metadata: { _hooks: [] },
+    host: { hooks: [] },
     origin: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
     status: 'done',
   });
@@ -1240,7 +1237,7 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
             role: 'assistantGroup',
           },
         ],
-        metadata: { _hooks: [] },
+        host: { hooks: [] },
         origin: { agentId: 'agent-1', topicId: 'tpc-1', userId: 'user-1' },
         status: 'done',
       },

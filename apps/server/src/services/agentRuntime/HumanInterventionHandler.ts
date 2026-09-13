@@ -98,7 +98,7 @@ export class HumanInterventionHandler {
           toolCallId: approvedToolCall.id,
           userId: state.origin?.userId,
         },
-        state.metadata?._hooks,
+        state.host?.hooks,
       )
       .catch(() => {});
 
@@ -182,7 +182,7 @@ export class HumanInterventionHandler {
           toolCallId: rejectedToolCallId,
           userId: state.origin?.userId,
         },
-        state.metadata?._hooks,
+        state.host?.hooks,
       )
       .catch(() => {});
 
@@ -215,7 +215,7 @@ export class HumanInterventionHandler {
           toolCallId: rejectedToolCallId,
           userId: state.origin?.userId,
         },
-        state.metadata?._hooks,
+        state.host?.hooks,
       )
       .catch(() => {});
 

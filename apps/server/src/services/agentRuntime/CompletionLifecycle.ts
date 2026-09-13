@@ -76,7 +76,7 @@ type SignalEvent = { [key: string]: unknown; type: string };
 
 /**
  * Whether a lifecycle event's `metadata` belongs to an Agent Share visitor
- * run. `metadata.agentShareVisitor.visitorUserId` is stamped once at operation
+ * run. `principal.actor.shareVisitor.visitorUserId` is stamped once at operation
  * creation (`AgentRuntimeService.createOperation`'s `initialState.metadata`)
  * and rides the state through to the terminal event — mirrors
  * `GatewayStreamNotifier`'s share-visitor check, the sibling chokepoint that
@@ -88,8 +88,10 @@ type SignalEvent = { [key: string]: unknown; type: string };
  * `AgentRuntimeService`) can reuse the exact same check instead of
  * hand-rolling their own.
  */
-export const isAgentShareRun = (metadata: Record<string, unknown> | undefined | null): boolean =>
-  Boolean((metadata?.agentShareVisitor as { visitorUserId?: string } | undefined)?.visitorUserId);
+export const isAgentShareRun = (
+  state:
+    { principal?: { actor?: { shareVisitor?: { visitorUserId?: string } } } } | undefined | null,
+): boolean => Boolean(state?.principal?.actor?.shareVisitor?.visitorUserId);
 
 /**
  * Normalized terminal-completion input for {@link CompletionLifecycle.completeOperation}.
@@ -503,7 +505,7 @@ export class CompletionLifecycle {
       // telemetry for a run an anonymous link visitor triggered. Suppress the
       // whole emission rather than merely re-scoping it: a share visitor has no
       // Agent Signal identity of its own to attribute this to.
-      if (isAgentShareRun(metadata)) {
+      if (isAgentShareRun(state)) {
         log(
           '[completion-lifecycle] skip agent signal emission for share visitor run op=%s reason=%s',
           operationId,
@@ -667,7 +669,7 @@ export class CompletionLifecycle {
    * shape `dispatchHooks` consumes. The SINGLE place that mirrors the runtime
    * state for non-in-process paths — goal/deliverable become the user/assistant
    * turns the gate reads, model/provider backfill the op row, hooks ride on
-   * `metadata._hooks`. Replaces the per-caller hand-rolled synthetic state that
+   * `host.hooks`. Replaces the per-caller hand-rolled synthetic state that
    * previously drifted (e.g. a verify field added here was missed by heteroFinish).
    */
   private buildStateFromInput(input: OperationCompletionInput) {
@@ -678,10 +680,8 @@ export class CompletionLifecycle {
         { content: input.goal ?? '', role: 'user' },
         { content: input.deliverable ?? '', role: 'assistant' },
       ],
-      metadata: {
-        _hooks: input.serializedHooks,
-        assistantMessageId: input.assistantMessageId,
-      },
+      host: { hooks: input.serializedHooks },
+      metadata: { assistantMessageId: input.assistantMessageId },
       origin: {
         agentId: input.agentId,
         lineage: { orchestrationRole: input.orchestrationRole },
@@ -884,7 +884,7 @@ export class CompletionLifecycle {
     // so hook consumers can surface the approval request. A winning decision
     // schedules a fresh continuation operation and then retires this parked
     // segment; the continuation receives the serialized hooks through
-    // `metadata._hooks`.
+    // `host.hooks`.
     const isAsyncToolPark = reason === 'waiting_for_async_tool';
     let shouldRetainHooksForRetry = false;
 
@@ -934,7 +934,7 @@ export class CompletionLifecycle {
         if (recovered) event.lastAssistantContent = recovered;
       }
 
-      await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+      await hookDispatcher.dispatch(operationId, 'onComplete', event, state?.host?.hooks);
 
       // Recall the user when a run finishes with a deliverable while they may be
       // away (push / inbox). Fires on every success-like terminal — `done` plus
@@ -958,7 +958,7 @@ export class CompletionLifecycle {
         isSuccessLikeCompletionReason(reason) &&
         runOrigin.lineage?.isSubAgent !== true &&
         runOrigin.lineage?.orchestrationRole !== 'member' &&
-        !isAgentShareRun(metadata)
+        !isAgentShareRun(state)
       ) {
         void this.recallUserOnCompletion(operationId, event, runOrigin).catch((error) =>
           log('[%s] Completion notification failed (non-fatal): %O', operationId, error),
@@ -1029,7 +1029,7 @@ export class CompletionLifecycle {
       }
 
       if (reason === 'error') {
-        await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);
+        await hookDispatcher.dispatch(operationId, 'onError', event, state?.host?.hooks);
 
         const assistantMessageId = metadata?.assistantMessageId;
         if (assistantMessageId && state?.error && !options?.skipErrorMessageWrite) {
@@ -1065,7 +1065,7 @@ export class CompletionLifecycle {
       ) {
         // A queue retry may run in this same process (local callback / warm
         // worker). Keep the in-memory registration until that lifecycle really
-        // settles; queue mode can additionally reconstruct from metadata._hooks.
+        // settles; queue mode can additionally reconstruct from host.hooks.
         shouldRetainHooksForRetry = true;
         throw error;
       }

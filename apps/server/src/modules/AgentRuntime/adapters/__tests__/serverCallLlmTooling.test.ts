@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveServerCallLlmTooling } from '../serverCallLlmTooling';
 
-const buildState = (state: Pick<AgentState, 'binding' | 'metadata'> = {}): AgentState =>
+const buildState = (state: Pick<AgentState, 'binding' | 'plan' | 'principal'> = {}): AgentState =>
   state as AgentState;
 
 describe('resolveServerCallLlmTooling', () => {
@@ -18,7 +18,7 @@ describe('resolveServerCallLlmTooling', () => {
       { operationId: 'op-1', stepIndex: 0 },
       buildState({
         binding: { device: { id: 'device-1' } },
-        metadata: { executionPlan: { deviceId: 'device-1', kind: 'device' } },
+        plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
       }),
     );
 
@@ -28,7 +28,7 @@ describe('resolveServerCallLlmTooling', () => {
   it('leaves the active device id undefined when no device is routed', () => {
     const result = resolveServerCallLlmTooling(
       { operationId: 'op-1', stepIndex: 0 },
-      buildState({ metadata: { executionPlan: { kind: 'sandbox' } } }),
+      buildState({ plan: { execution: { kind: 'sandbox', target: 'sandbox' } } }),
     );
 
     expect(result.activeDeviceId).toBeUndefined();

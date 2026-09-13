@@ -2883,8 +2883,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             },
             group: agentGroup,
           },
-          metadata: {
-            botContext: ctxWithConfig.botContext,
+          principal: {
+            actor: {
+              bot: ctxWithConfig.botContext as any,
+            },
           },
           origin: {
             agentId: 'agent-support',
@@ -4967,8 +4969,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     it('should pass clientIp from runtime metadata to executeTool', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({
-        metadata: {
-          clientIp: '203.0.113.7',
+        principal: {
+          audit: {
+            clientIp: '203.0.113.7',
+          },
         },
         origin: {
           agentId: 'agent-123',

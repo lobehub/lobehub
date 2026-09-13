@@ -109,7 +109,7 @@ export const compressContext =
         tokenCount: currentTokenCount,
         userId,
       } as AnyHookEvent,
-      state.metadata?._hooks,
+      state.host?.hooks,
     );
 
     let createdGroupId: string | undefined;
@@ -276,7 +276,7 @@ export const compressContext =
           summary: summaryResult.content.slice(0, 500),
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       return {
@@ -322,7 +322,7 @@ export const compressContext =
           tokenCount: currentTokenCount,
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       events.push({ error, type: 'compression_error' });

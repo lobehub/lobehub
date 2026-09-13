@@ -404,7 +404,7 @@ export interface OperationCreationParams {
   agentGroup?: AgentGroupConfig;
   /**
    * Shared-agent visitor marker. Persisted to
-   * `state.metadata.agentShareVisitor` so every later step can re-derive the
+   * `state.principal.actor.shareVisitor` so every later step can re-derive the
    * share's restrictions without re-reading the share, and so
    * `AgentRuntimeService.executeStep` can re-prove the run's authorization at
    * each step boundary.
@@ -419,7 +419,7 @@ export interface OperationCreationParams {
      */
     agentSignal?: AgentSignalOperationMarker;
     /**
-     * Client IP of the originating request. Spread onto `state.metadata.clientIp`
+     * Client IP of the originating request. Spread onto `state.principal.audit.clientIp`
      * so downstream LLM-call metadata can carry it for auditing and spend
      * attribution.
      */
@@ -459,7 +459,7 @@ export interface OperationCreationParams {
     trigger?: string;
     /**
      * User agent of the originating request. Spread onto
-     * `state.metadata.userAgent` so downstream LLM-call metadata can carry it for
+     * `state.principal.audit.userAgent` so downstream LLM-call metadata can carry it for
      * auditing and spend attribution.
      */
     userAgent?: string;
@@ -467,7 +467,7 @@ export interface OperationCreationParams {
   autoStart?: boolean;
   /**
    * Sender/owner identity for bot-originated runs. Forwarded into
-   * `state.metadata.botContext` so device-tool dispatch can audit who
+   * `state.principal.actor.bot` so device-tool dispatch can audit who
    * triggered the call. `undefined` for first-party (web/desktop) callers.
    */
   botContext?: ChatTopicBotContext;
@@ -480,7 +480,7 @@ export interface OperationCreationParams {
   connectorOwnershipNote?: string;
   /**
    * Device-access policy decision computed once per turn by
-   * `resolveDeviceAccessPolicy`. Forwarded into `state.metadata.deviceAccessPolicy`
+   * `resolveDeviceAccessPolicy`. Forwarded into `state.principal.policy.deviceAccess`
    * so the dispatch site can include `reason` in the audit entry without
    * re-deriving it.
    */
@@ -497,7 +497,7 @@ export interface OperationCreationParams {
   evalRuntime?: EvalRuntimeContext;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).
-   * Forwarded into `state.metadata.executionPlan` so step-level layers (the
+   * Forwarded into `state.plan.execution` so step-level layers (the
    * `call_llm` device-tool injection) consume the plan instead of re-deriving
    * device capability from raw config.
    */

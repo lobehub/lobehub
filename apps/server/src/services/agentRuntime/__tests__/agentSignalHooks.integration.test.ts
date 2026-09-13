@@ -326,8 +326,8 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [{ content: 'hello', role: 'user' }],
-      metadata: {
-        _hooks: ['serialized-hook'],
+      host: {
+        hooks: ['serialized-hook'],
       },
       origin: {
         agentId: 'agent-1',
@@ -346,8 +346,8 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
           events: [{ result: { content: 'done' }, type: 'llm_result' }],
           newState: {
             createdAt: new Date().toISOString(),
-            metadata: {
-              _hooks: ['serialized-hook'],
+            host: {
+              hooks: ['serialized-hook'],
             },
             origin: {
               agentId: 'agent-1',

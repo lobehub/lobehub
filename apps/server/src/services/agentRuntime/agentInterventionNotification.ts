@@ -258,9 +258,7 @@ export const buildRuntimeInterventionNotification = async ({
       canonicalToolKey: `${tool.identifier}/${tool.apiName}`,
       interactionKind,
       provider:
-        boundedString(state?.modelRuntimeConfig?.provider) ??
-        boundedString(metadata?.modelRuntimeConfig?.provider) ??
-        boundedString(metadata?.provider),
+        boundedString(state?.modelRuntimeConfig?.provider) ?? boundedString(metadata?.provider),
       requestRevision: revisionFor(tool),
       ...(security.blocked && {
         risk: {

@@ -450,9 +450,7 @@ describe('AgentRuntimeService', () => {
           status: 'idle',
           stepCount: 0,
           messages: [],
-          metadata: {
-            modelRuntimeConfig: mockParams.modelRuntimeConfig,
-          },
+          modelRuntimeConfig: mockParams.modelRuntimeConfig,
           origin: expect.objectContaining({ userId: mockParams.userId }),
           toolManifestMap: {},
           world: expect.objectContaining({ agent: mockParams.agentConfig }),
@@ -755,8 +753,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        world: { agent: { chatConfig: { enableContextCompression: true } } as any },
-        metadata: {
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -790,8 +788,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        world: { agent: { chatConfig: { enableContextCompression: true } } as any },
-        metadata: {
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'unknown-model', provider: 'openai' },
         },
         operationId: 'test-operation-1',

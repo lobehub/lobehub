@@ -207,7 +207,7 @@ export interface ToolExecutionContext {
   currentTodos?: StepContextTodoItem[];
   /**
    * Whether the run's execution plan is device-capable (`device` or
-   * `device-unrouted`) — derived from `state.metadata.executionPlan` by the
+   * `device-unrouted`) — derived from `state.plan.execution` by the
    * runtime executors. Device-only skills gate listing/activation/loading on
    * this consistently, so a `device-unrouted` run can activate them before the
    * model routes a device; actual command execution stays gated at the device

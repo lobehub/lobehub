@@ -90,8 +90,8 @@ describe('Hooks integration — afterStep event carries step presentation data',
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [{ content: 'Hello', role: 'user' }],
-      metadata: {
-        _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+      host: {
+        hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
       },
       origin: {
         agentId: 'agent-1',
@@ -114,8 +114,8 @@ describe('Hooks integration — afterStep event carries step presentation data',
           { content: 'Hello', role: 'user' },
           { content: 'Let me search for that.', role: 'assistant' },
         ],
-        metadata: {
-          _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+        host: {
+          hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
         },
         origin: {
           agentId: 'agent-1',
@@ -196,8 +196,10 @@ describe('Hooks integration — afterStep event carries step presentation data',
       lastModified: new Date().toISOString(),
       messages: [],
       metadata: {
-        _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
         _stepTracking: { lastLLMContent: 'previous content', totalToolCalls: 1 },
+      },
+      host: {
+        hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
       },
       origin: {
         agentId: 'agent-1',
@@ -215,8 +217,10 @@ describe('Hooks integration — afterStep event carries step presentation data',
         createdAt: new Date().toISOString(),
         messages: [],
         metadata: {
-          _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
           _stepTracking: { lastLLMContent: 'previous content', totalToolCalls: 1 },
+        },
+        host: {
+          hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
         },
         origin: {
           agentId: 'agent-1',
@@ -332,8 +336,8 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       messages: [],
-      metadata: {
-        _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+      host: {
+        hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
       },
       origin: {
         agentId: 'agent-1',
@@ -349,8 +353,8 @@ describe('Hooks integration — afterStep event is compatible with renderStepPro
       newState: {
         createdAt: new Date().toISOString(),
         messages: [{ content: 'Result', role: 'assistant' }],
-        metadata: {
-          _hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
+        host: {
+          hooks: [{ id: 'bot-step', type: 'afterStep', webhook: { url: '/test' } }],
         },
         origin: {
           agentId: 'agent-1',

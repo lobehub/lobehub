@@ -2541,7 +2541,7 @@ describe('GeneralChatAgent', () => {
       };
 
       const state = createMockState({
-        metadata: { workingDirectory: '/workspace' },
+        plan: { workingDirectory: '/workspace' },
         toolManifestMap: {
           'local-system': {
             identifier: 'local-system',
@@ -2603,7 +2603,7 @@ describe('GeneralChatAgent', () => {
       };
 
       const state = createMockState({
-        metadata: { workingDirectory: '/workspace' },
+        plan: { workingDirectory: '/workspace' },
         toolManifestMap: {
           'local-system': {
             identifier: 'local-system',
@@ -2670,7 +2670,7 @@ describe('GeneralChatAgent', () => {
       };
 
       const state = createMockState({
-        metadata: { workingDirectory: '/workspace' },
+        plan: { workingDirectory: '/workspace' },
         toolManifestMap: {
           'local-system': {
             identifier: 'local-system',
@@ -2734,7 +2734,7 @@ describe('GeneralChatAgent', () => {
       };
 
       const state = createMockState({
-        metadata: { workingDirectory: '/workspace' },
+        plan: { workingDirectory: '/workspace' },
         toolManifestMap: {
           'local-system': {
             identifier: 'local-system',
@@ -3597,7 +3597,7 @@ describe('GeneralChatAgent', () => {
       };
 
       const state = createMockState({
-        metadata: { workingDirectory: '/workspace' },
+        plan: { workingDirectory: '/workspace' },
         toolManifestMap: {
           'my-tool': { identifier: 'my-tool', humanIntervention: 'never' },
         },

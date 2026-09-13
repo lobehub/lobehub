@@ -18,7 +18,7 @@ const baseState = (): AgentState =>
 
 describe('normalizeAgentState', () => {
   it('returns the same object when metadata carries no legacy keys', () => {
-    const state = { ...baseState(), metadata: { _hooks: [], queueRetries: 2 } };
+    const state = { ...baseState(), metadata: { _stepLabel: 'step', work: { id: 'work_1' } } };
     expect(normalizeAgentState(state)).toBe(state);
   });
 
@@ -87,7 +87,7 @@ describe('normalizeAgentState', () => {
     const state = {
       ...baseState(),
       metadata: {
-        _hooks: [],
+        _stepLabel: 'step',
         agentId: 'agent-1',
         agentInterventionContinuation: {
           resolutionRequestId: 'r1',
@@ -132,7 +132,68 @@ describe('normalizeAgentState', () => {
     // `null` / `undefined` legacy values are absent, not carried as null.
     expect('groupId' in normalized.origin!).toBe(false);
     expect('threadId' in normalized.origin!).toBe(false);
-    expect(normalized.metadata).toEqual({ _hooks: [] });
+    expect(normalized.metadata).toEqual({ _stepLabel: 'step' });
+  });
+
+  it('lifts principal, plan and host keys and folds the model config into its top-level slot', () => {
+    const state = {
+      ...baseState(),
+      metadata: {
+        _hooks: [{ id: 'h1', type: 'webhook', webhook: { url: 'https://x' } }],
+        activeDeviceScope: 'workspace',
+        agentShareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' },
+        botContext: { applicationId: 'app-1', isOwner: true, platform: 'discord' },
+        clientIp: '10.0.0.1',
+        deviceAccessPolicy: { canUseDevice: false, reason: 'external-bot' },
+        evalRuntime: { caseId: 'case-1' },
+        executionPlan: { kind: 'sandbox', target: 'sandbox' },
+        modelRuntimeConfig: { model: 'gpt-4', provider: 'openai' },
+        operationSkillSet: { enabledSkillIds: [], skills: [] },
+        queueRetries: 3,
+        queueRetryDelay: '10s',
+        stream: false,
+        userAgent: 'lh-cli',
+        workingDirectory: '/repo',
+      },
+    };
+
+    const normalized = normalizeAgentState(state);
+
+    expect(normalized.principal).toEqual({
+      actor: {
+        bot: { applicationId: 'app-1', isOwner: true, platform: 'discord' },
+        deviceScope: 'workspace',
+        shareVisitor: { shareId: 'share-1', visitorUserId: 'visitor-1' },
+      },
+      audit: { clientIp: '10.0.0.1', userAgent: 'lh-cli' },
+      policy: { deviceAccess: { canUseDevice: false, reason: 'external-bot' } },
+    });
+    expect(normalized.plan).toEqual({
+      eval: { caseId: 'case-1' },
+      execution: { kind: 'sandbox', target: 'sandbox' },
+      skills: { enabledSkillIds: [], skills: [] },
+      stream: false,
+      workingDirectory: '/repo',
+    });
+    expect(normalized.host).toEqual({
+      hooks: [{ id: 'h1', type: 'webhook', webhook: { url: 'https://x' } }],
+      queue: { retries: 3, retryDelay: '10s' },
+    });
+    expect(normalized.modelRuntimeConfig).toEqual({ model: 'gpt-4', provider: 'openai' });
+    expect(normalized.metadata).toEqual({});
+  });
+
+  it('keeps the top-level model config over the legacy metadata copy', () => {
+    const state = {
+      ...baseState(),
+      metadata: { modelRuntimeConfig: { model: 'legacy', provider: 'openai' } },
+      modelRuntimeConfig: { model: 'pinned', provider: 'openai' },
+    };
+
+    expect(normalizeAgentState(state).modelRuntimeConfig).toEqual({
+      model: 'pinned',
+      provider: 'openai',
+    });
   });
 
   it('merges lifted origin keys into an existing origin without overriding it', () => {

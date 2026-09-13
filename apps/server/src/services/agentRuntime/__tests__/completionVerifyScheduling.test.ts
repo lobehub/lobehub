@@ -39,7 +39,7 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
 
     await lifecycle.dispatchHooks(
       'op-1',
-      { metadata: { _hooks: [] }, origin: { agentId: 'a' }, status: 'done' },
+      { host: { hooks: [] }, origin: { agentId: 'a' }, status: 'done' },
       'done',
     );
 

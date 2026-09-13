@@ -746,11 +746,11 @@ export class AgentRuntimeService {
       operationId,
       priority: 'high',
       retryDelay:
-        typeof state.metadata?.queueRetryDelay === 'string'
-          ? state.metadata.queueRetryDelay
+        typeof state.host?.queue?.retryDelay === 'string'
+          ? state.host?.queue?.retryDelay
           : undefined,
       retries:
-        typeof state.metadata?.queueRetries === 'number' ? state.metadata.queueRetries : undefined,
+        typeof state.host?.queue?.retries === 'number' ? state.host?.queue?.retries : undefined,
       stepIndex,
     });
     await this.persistInterventionDispatchAck({
@@ -1005,23 +1005,11 @@ export class AgentRuntimeService {
             },
           },
         }),
-        metadata: {
-          activeDeviceScope,
-          agentShareVisitor,
-          botContext,
-          clientIp: appContext?.clientIp,
-          deviceAccessPolicy,
-          evalRuntime,
-          executionPlan,
-          // need be removed
-          modelRuntimeConfig,
-          queueRetries,
-          queueRetryDelay,
-          stream,
-          operationSkillSet,
-          userAgent: appContext?.userAgent,
-          workingDirectory: agentConfig?.chatConfig?.runtimeEnv?.workingDirectory,
-        },
+        // What the host needs to deliver and retry the run. Hooks are stamped
+        // right after creation once the dispatcher has serialized them.
+        host: { queue: { retries: queueRetries, retryDelay: queueRetryDelay } },
+        // Run ledger — everything fixed at creation lives in the typed slots.
+        metadata: {},
         // Where the run came from — frozen from here on. Mirrors the
         // agent_operations row so the runtime can hang its output on the right
         // conversation node without a lookup.
@@ -1059,6 +1047,25 @@ export class AgentRuntimeService {
         toolExecutorMap: operationToolSet.executorMap,
         toolManifestMap: operationToolSet.manifestMap,
         toolSourceMap: operationToolSet.sourceMap,
+        // How the run executes — frozen from here on.
+        plan: {
+          eval: evalRuntime,
+          execution: executionPlan,
+          skills: operationSkillSet,
+          stream,
+          workingDirectory: agentConfig?.chatConfig?.runtimeEnv?.workingDirectory,
+        },
+        // Under whose authority the run acts and what it may do — decided here,
+        // re-presented (never re-derived) at each dispatch boundary.
+        principal: {
+          actor: {
+            bot: botContext,
+            deviceScope: activeDeviceScope,
+            shareVisitor: agentShareVisitor,
+          },
+          audit: { clientIp: appContext?.clientIp, userAgent: appContext?.userAgent },
+          policy: { deviceAccess: deviceAccessPolicy },
+        },
         // What the model is told about the run's world — frozen from here on;
         // the context engine reads it on every step.
         world: {
@@ -1122,10 +1129,7 @@ export class AgentRuntimeService {
           if (currentState) {
             await this.coordinator.saveAgentState(operationId, {
               ...currentState,
-              metadata: {
-                ...currentState.metadata,
-                _hooks: serializedHooks,
-              },
+              host: { ...currentState.host, hooks: serializedHooks },
             });
           }
         }
@@ -1486,12 +1490,12 @@ export class AgentRuntimeService {
             },
             priority: 'high',
             retryDelay:
-              typeof currentState?.metadata?.queueRetryDelay === 'string'
-                ? currentState.metadata.queueRetryDelay
+              typeof currentState?.host?.queue?.retryDelay === 'string'
+                ? currentState.host?.queue?.retryDelay
                 : undefined,
             retries:
-              typeof currentState?.metadata?.queueRetries === 'number'
-                ? currentState.metadata.queueRetries
+              typeof currentState?.host?.queue?.retries === 'number'
+                ? currentState.host?.queue?.retries
                 : undefined,
             stepIndex,
           });
@@ -1640,11 +1644,8 @@ export class AgentRuntimeService {
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.world?.agent as
           { description?: string | null; title?: string | null } | undefined;
-        const stateModel =
-          agentState.modelRuntimeConfig?.model ?? agentState.metadata?.modelRuntimeConfig?.model;
-        const stateProvider =
-          agentState.modelRuntimeConfig?.provider ??
-          agentState.metadata?.modelRuntimeConfig?.provider;
+        const stateModel = agentState.modelRuntimeConfig?.model;
+        const stateProvider = agentState.modelRuntimeConfig?.provider;
         invokeAgentSpan.updateName(invokeAgentSpanName(stateAgentConfig?.title ?? undefined));
         invokeAgentSpan.setAttributes(
           buildInvokeAgentAttributes({
@@ -1715,7 +1716,7 @@ export class AgentRuntimeService {
         // why one query covers every revocation path (visibility flip — which
         // is what turning sharing off does — share delete, agent delete).
         if (this.delegate.verifyShareRunStillAuthorized) {
-          const shareMarker = agentState.metadata?.agentShareVisitor as
+          const shareMarker = agentState.principal?.actor?.shareVisitor as
             { agentId?: string; shareId?: string } | undefined;
           if (shareMarker?.agentId && shareMarker.shareId) {
             let stillAuthorized = false;
@@ -1745,14 +1746,13 @@ export class AgentRuntimeService {
 
         // Dispatch beforeStep hooks
         try {
-          const beforeStepMetadata = agentState?.metadata || {};
           const beforeStepOrigin = agentState?.origin ?? {};
           // Agent Share visitor runs execute AS the creator, so this
           // `userId`-scoped source event would record creator-owned Agent
           // Signal state for a turn an anonymous link visitor triggered — same
           // reasoning (and same predicate) as the completion-signal guard in
           // `CompletionLifecycle.emitSignalEvents`.
-          const beforeStepSignalEmission = isAgentShareRun(beforeStepMetadata)
+          const beforeStepSignalEmission = isAgentShareRun(agentState)
             ? undefined
             : await emitAgentSignalSourceEvent(
                 {
@@ -1787,7 +1787,7 @@ export class AgentRuntimeService {
               steps: agentState?.stepCount || 0,
               userId: beforeStepOrigin.userId || this.userId,
             },
-            beforeStepMetadata._hooks,
+            agentState?.host?.hooks,
           );
         } catch (hookError) {
           log('[%s] beforeStep hook dispatch error: %O', operationId, hookError);
@@ -1859,7 +1859,6 @@ export class AgentRuntimeService {
         const { runtime } = await this.createAgentRuntime({
           abortSignal: stepAbortController.signal,
           agentState,
-          metadata: agentState?.metadata,
           operationId,
           stepIndex,
           tracingContextEngine: (input, output) => {
@@ -2131,7 +2130,7 @@ export class AgentRuntimeService {
           // See the `runtime.before_step` guard above — same share-visitor
           // suppression at the sibling per-step emission.
           afterStepSignalEvents = toAgentSignalSnapshotEvents(
-            isAgentShareRun(metadata)
+            isAgentShareRun(stepResult.newState)
               ? undefined
               : await emitAgentSignalSourceEvent(
                   {
@@ -2188,7 +2187,7 @@ export class AgentRuntimeService {
               totalToolCalls: (tracking.totalToolCalls ?? 0) + (toolsCalling?.length ?? 0),
               userId: origin.userId || this.userId,
             },
-            metadata._hooks,
+            stepResult.newState?.host?.hooks,
           );
         } catch (hookError) {
           log('[%s] afterStep hook dispatch error: %O', operationId, hookError);
@@ -2208,7 +2207,7 @@ export class AgentRuntimeService {
         });
 
         // Update step tracking in state metadata for afterStep hooks (cross-step accumulator)
-        const hasAfterStepHooks = stepResult.newState.metadata?._hooks?.some(
+        const hasAfterStepHooks = stepResult.newState.host?.hooks?.some(
           (h: { type: string }) => h.type === 'afterStep',
         );
         logToolCallPc(operationId, stepIndex, 'post.trace_appended', () => ({}));
@@ -2250,12 +2249,12 @@ export class AgentRuntimeService {
             operationId,
             priority: this.calculatePriority(stepResult),
             retries:
-              typeof stepResult.newState.metadata?.queueRetries === 'number'
-                ? stepResult.newState.metadata.queueRetries
+              typeof stepResult.newState.host?.queue?.retries === 'number'
+                ? stepResult.newState.host?.queue?.retries
                 : undefined,
             retryDelay:
-              typeof stepResult.newState.metadata?.queueRetryDelay === 'string'
-                ? stepResult.newState.metadata.queueRetryDelay
+              typeof stepResult.newState.host?.queue?.retryDelay === 'string'
+                ? stepResult.newState.host?.queue?.retryDelay
                 : undefined,
             stepIndex: nextStepIndex,
           };
@@ -3809,7 +3808,6 @@ export class AgentRuntimeService {
   private async createAgentRuntime({
     abortSignal,
     agentState,
-    metadata,
     operationId,
     stepIndex,
     tracingContextEngine,
@@ -3823,22 +3821,25 @@ export class AgentRuntimeService {
      * Works, so loading should cover that window).
      */
     agentState?: any;
-    metadata?: any;
     operationId: string;
     stepIndex: number;
     tracingContextEngine?: (input: unknown, output: unknown) => void;
   }) {
+    const state = agentState as AgentState | undefined;
+    const modelRuntimeConfig = state?.modelRuntimeConfig;
     const contextWindowTokens =
-      metadata?.modelRuntimeConfig?.model && metadata?.modelRuntimeConfig?.provider
+      modelRuntimeConfig?.model && modelRuntimeConfig?.provider
         ? await getModelPropertyWithFallback<number | undefined>(
-            metadata.modelRuntimeConfig.model,
+            modelRuntimeConfig.model,
             'contextWindowTokens',
-            metadata.modelRuntimeConfig.provider,
+            modelRuntimeConfig.provider,
           )
         : undefined;
 
-    const world = (agentState as AgentState | undefined)?.world;
-    const origin = (agentState as AgentState | undefined)?.origin;
+    const world = state?.world;
+    const origin = state?.origin;
+    const plan = state?.plan;
+    const principal = state?.principal;
 
     // Create Agent instance — use custom factory if provided, otherwise default to GeneralChatAgent
     const generalConfig = {
@@ -3848,21 +3849,18 @@ export class AgentRuntimeService {
         maxWindowToken: contextWindowTokens ?? undefined,
       },
       dynamicInterventionAudits,
-      modelRuntimeConfig: metadata?.modelRuntimeConfig,
+      modelRuntimeConfig,
       operationId,
       userId: origin?.userId,
     };
 
     if (
       origin?.trigger === RequestTrigger.Eval &&
-      metadata.evalRuntime?.toolForwarding &&
+      plan?.eval?.toolForwarding &&
       !hookDispatcher.hasHook(operationId, EVAL_TOOL_FORWARDING_HOOK_ID)
     ) {
       hookDispatcher.register(operationId, [
-        createEvalToolForwardingHook(
-          metadata.evalRuntime.toolForwarding,
-          metadata.evalRuntime.caseId,
-        ),
+        createEvalToolForwardingHook(plan.eval.toolForwarding, plan.eval.caseId),
       ]);
     }
 
@@ -3883,21 +3881,21 @@ export class AgentRuntimeService {
       // an early hint would end the visible loading seconds before that card
       // can exist. Deferring to the terminal `visible_output_end` lets loading
       // cover the export and the card land with `agent_runtime_end`.
-      agentShareVisitor: metadata?.agentShareVisitor,
+      agentShareVisitor: principal?.actor?.shareVisitor,
       allowEarlyFinalAnswerVisibleOutputEnd:
         agent instanceof GeneralChatAgent && !stateHasEntityFileEdits(agentState),
-      botContext: metadata?.botContext,
+      botContext: principal?.actor?.bot,
       execSubAgent: this.delegate.execSubAgent,
       execVirtualSubAgent: this.delegate.execVirtualSubAgent,
       execGroupMember: this.delegate.execGroupMember,
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
-      modelRuntimeConfig: metadata?.modelRuntimeConfig,
+      modelRuntimeConfig,
       operationId,
       serverDB: this.serverDB,
       stepIndex,
-      stream: metadata?.stream,
+      stream: plan?.stream,
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,
       topicId: origin?.topicId,

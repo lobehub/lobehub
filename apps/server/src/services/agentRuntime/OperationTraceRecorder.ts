@@ -174,8 +174,7 @@ export class OperationTraceRecorder {
         model: partial.model,
         operationId,
         provider: partial.provider,
-        retryDelayExpression:
-          typeof metadata?.queueRetryDelay === 'string' ? metadata.queueRetryDelay : undefined,
+        retryDelayExpression: params.state?.host?.queue?.retryDelay,
         startedAt: partial.startedAt ?? Date.now(),
         steps: finalizedSteps,
         topicId: origin.topicId,
