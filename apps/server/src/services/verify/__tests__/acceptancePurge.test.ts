@@ -160,6 +160,19 @@ describe('acceptancePurge', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('removes storage objects before the rounds go away', async () => {
+    let runsAtStorageDelete: unknown[] = [];
+    vi.mocked(fileService.deleteFiles).mockImplementation(async () => {
+      runsAtStorageDelete = await serverDB.query.verifyRuns.findMany({
+        where: inArray(verifyRuns.id, runIds),
+      });
+    });
+
+    await purgeAcceptance(serverDB, fileService, userId, undefined, acceptanceId);
+
+    expect(runsAtStorageDelete).toHaveLength(2);
+  });
+
   it('purges a single round and leaves the acceptance in place', async () => {
     await expect(
       purgeVerifyRun(serverDB, fileService, userId, undefined, runIds[1]),

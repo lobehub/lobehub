@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { FileModel } from '@/database/models/file';
@@ -46,18 +46,24 @@ const listEvidenceFileIds = async (db: LobeChatDatabase, runIds: string[]) => {
 
 const purgeFiles = async (
   db: LobeChatDatabase,
+  fileService: FileService,
   userId: string,
   workspaceId: string | undefined,
   fileIds: string[],
 ) => {
-  if (fileIds.length === 0) return { deletedFiles: 0, urls: [] as string[] };
-  const fileModel = new FileModel(db, userId, workspaceId);
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
+  if (fileIds.length === 0) return 0;
+  const owned = await db
+    .select({ id: files.id })
     .from(files)
     .where(and(inArray(files.id, fileIds), buildWorkspaceWhere({ userId, workspaceId }, files)));
-  const unreferenced = await fileModel.deleteMany(fileIds, true);
-  return { deletedFiles: Number(count), urls: unreferenced.map((file) => file.url) };
+  if (owned.length === 0) return 0;
+  const unreferenced = await new FileModel(db, userId, workspaceId).deleteMany(
+    owned.map((file) => file.id),
+    true,
+  );
+  const urls = [...new Set(unreferenced.map((file) => file.url))];
+  if (urls.length > 0) await fileService.deleteFiles(urls);
+  return owned.length;
 };
 
 export const previewAcceptancePurge = async (
@@ -108,7 +114,7 @@ export const purgeAcceptance = async (
 ): Promise<{ deletedFiles: number; deletedRuns: number }> => {
   const runIds = await listRunIds(db, userId, workspaceId, acceptanceId);
   const fileIds = await listEvidenceFileIds(db, runIds);
-  const { deletedFiles, urls } = await purgeFiles(db, userId, workspaceId, fileIds);
+  const deletedFiles = await purgeFiles(db, fileService, userId, workspaceId, fileIds);
 
   await db.transaction(async (tx) => {
     if (runIds.length > 0) {
@@ -124,7 +130,6 @@ export const purgeAcceptance = async (
     await new AcceptanceModel(tx, userId, workspaceId).delete(acceptanceId);
   });
 
-  if (urls.length > 0) await fileService.deleteFiles(urls);
   return { deletedFiles, deletedRuns: runIds.length };
 };
 
@@ -140,9 +145,8 @@ export const purgeVerifyRun = async (
   if (!run) return { deletedFiles: 0 };
 
   const fileIds = await listEvidenceFileIds(db, [run.id]);
-  const { deletedFiles, urls } = await purgeFiles(db, userId, workspaceId, fileIds);
+  const deletedFiles = await purgeFiles(db, fileService, userId, workspaceId, fileIds);
   await runModel.delete(run.id);
 
-  if (urls.length > 0) await fileService.deleteFiles(urls);
   return { deletedFiles };
 };
