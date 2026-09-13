@@ -97,7 +97,7 @@ export const useAcceptanceBySubject = (
 export const useAcceptanceList = (
   enabled: boolean,
   options?: {
-    filter?: 'active' | 'all' | 'completed';
+    filter?: AcceptanceListFilter;
     limit?: number;
     projectId?: string;
     q?: string;

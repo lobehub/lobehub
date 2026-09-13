@@ -16,6 +16,7 @@ export {
   type AcceptanceCheckReviewOverlay,
   type AcceptanceCheckRow,
   type AcceptanceCheckUserReview,
+  type AcceptanceListFilter,
   AcceptanceService,
   type AcceptanceSubjectSummary,
   buildAcceptanceCheckUnion,

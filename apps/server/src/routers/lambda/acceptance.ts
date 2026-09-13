@@ -93,6 +93,8 @@ const flowDefinitionSchema = z.object({
 
 const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
 
+const acceptanceListFilterSchema = z.enum(['active', 'all', 'archived', 'completed']);
+
 /** Reads addressed purely by acceptance id — visibility is checked in the handler. */
 const publicAcceptanceProcedure = publicProcedure.use(serverDatabase);
 
@@ -836,7 +838,7 @@ export const acceptanceRouter = router({
     .input(
       z
         .object({
-          filter: z.enum(['active', 'all', 'completed']).optional(),
+          filter: acceptanceListFilterSchema.optional(),
           limit: z.number().int().min(1).max(200).optional(),
           projectId: z.string().optional(),
           q: z.string().max(200).optional(),
@@ -858,7 +860,7 @@ export const acceptanceRouter = router({
       z
         .object({
           cursor: z.string().optional(),
-          filter: z.enum(['active', 'all', 'completed']).optional(),
+          filter: acceptanceListFilterSchema.optional(),
           limit: z.number().int().min(1).max(100).optional(),
           projectId: z.string().optional(),
         })
@@ -1383,6 +1385,40 @@ export const acceptanceRouter = router({
       }
 
       return { failedIds, updated };
+    }),
+
+  archive: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      return (await service.acceptanceModel.archive(acceptance.id)) ?? acceptance;
+    }),
+
+  unarchive: acceptanceWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      return (await service.acceptanceModel.unarchive(acceptance.id)) ?? acceptance;
+    }),
+
+  archiveBatch: acceptanceWriteProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT) }))
+    .mutation(async ({ ctx, input }) => {
+      const failedIds: string[] = [];
+      let archived = 0;
+
+      for (const id of new Set(input.ids)) {
+        try {
+          const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
+          await service.acceptanceModel.archive(acceptance.id);
+          archived += 1;
+        } catch (error) {
+          console.error('[acceptance] batch archive failed for %s', id, error);
+          failedIds.push(id);
+        }
+      }
+
+      return { archived, failedIds };
     }),
 
   purgePreview: acceptanceProcedure

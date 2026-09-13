@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { AcceptanceStatus } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -415,6 +416,55 @@ describe('AcceptanceModel', () => {
     expect((await creatorModel.findById(acceptance.id))?.status).toBe('accepted');
   });
 
+  it('archive/unarchive round-trip and scope to ownership', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const row = await model.ensureForSubject('topic', topicId);
+    expect(row.archivedAt).toBeNull();
+
+    const archived = await model.archive(row.id);
+    expect(archived?.archivedAt).toBeInstanceOf(Date);
+
+    await expect(model.archive(row.id)).resolves.toBeUndefined();
+    expect((await model.findById(row.id))?.archivedAt).toEqual(archived?.archivedAt);
+
+    const unarchived = await model.unarchive(row.id);
+    expect(unarchived?.archivedAt).toBeNull();
+
+    await expect(
+      new AcceptanceModel(serverDB, otherUserId).archive(row.id),
+    ).resolves.toBeUndefined();
+  });
+
+  it('ensureForSubject un-archives an existing archived aggregate', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const row = await model.ensureForSubject('topic', topicId);
+    await model.archive(row.id);
+
+    const reused = await model.ensureForSubject('topic', topicId);
+    expect(reused.id).toBe(row.id);
+    expect(reused.archivedAt).toBeNull();
+    expect((await model.findById(row.id))?.archivedAt).toBeNull();
+  });
+
+  it('query and queryPage exclude archived rows by default and include them when asked', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const live = await model.create({ subjectId: 'archive-live', subjectType: 'standalone' });
+    const archived = await model.create({ subjectId: 'archive-hidden', subjectType: 'standalone' });
+    await model.archive(archived.id);
+
+    const defaultRows = await model.query();
+    expect(defaultRows.map((r) => r.id).sort()).toEqual([live.id].sort());
+
+    const archivedRows = await model.query({ archived: true });
+    expect(archivedRows.map((r) => r.id)).toEqual([archived.id]);
+
+    const defaultPage = await model.queryPage({ limit: 10 });
+    expect(defaultPage.items.map((r) => r.id)).toEqual([live.id]);
+
+    const archivedPage = await model.queryPage({ archived: true, limit: 10 });
+    expect(archivedPage.items.map((r) => r.id)).toEqual([archived.id]);
+  });
+
   it('findById reads a malformed uuid as not-found instead of aborting in Postgres', async () => {
     // Chat autolinkers glue trailing CJK punctuation onto shared links, so the
     // route param can arrive as `<uuid>（本轮` — 22P02 (→ 500) before the guard.
@@ -505,5 +555,51 @@ describe('VerifyRunModel acceptance chain', () => {
     await expect(
       new VerifyRunModel(serverDB, userId).attachToAcceptance(otherRun.id, acceptance.id),
     ).rejects.toThrow('not found');
+  });
+});
+
+describe('AcceptanceModel.queryExpiredArchived', () => {
+  it('returns only rows archived before the cutoff, ignoring ownership, and pages by (archivedAt, id)', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const otherModel = new AcceptanceModel(serverDB, otherUserId);
+
+    const base = Date.UTC(2026, 7, 1, 0, 0, 0);
+    const rows = await Promise.all([
+      model.create({ subjectId: 'expired-1', subjectType: 'standalone' }),
+      model.create({ subjectId: 'expired-2', subjectType: 'standalone' }),
+      otherModel.create({ subjectId: 'expired-3', subjectType: 'standalone' }),
+      model.create({ subjectId: 'not-expired', subjectType: 'standalone' }),
+    ]);
+    const [r1, r2, r3, r4] = rows;
+
+    await serverDB
+      .update(acceptances)
+      .set({ archivedAt: new Date(base) })
+      .where(eq(acceptances.id, r1.id));
+    await serverDB
+      .update(acceptances)
+      .set({ archivedAt: new Date(base + 1000) })
+      .where(eq(acceptances.id, r2.id));
+    await serverDB
+      .update(acceptances)
+      .set({ archivedAt: new Date(base + 2000) })
+      .where(eq(acceptances.id, r3.id));
+    // Archived AFTER the cutoff — must never appear.
+    await serverDB
+      .update(acceptances)
+      .set({ archivedAt: new Date(base + 999_999) })
+      .where(eq(acceptances.id, r4.id));
+
+    const before = new Date(base + 3000);
+    const page1 = await AcceptanceModel.queryExpiredArchived(serverDB, { before, limit: 2 });
+    expect(page1.map((r) => r.id)).toEqual([r1.id, r2.id]);
+
+    const page2 = await AcceptanceModel.queryExpiredArchived(serverDB, {
+      before,
+      cursor: { archivedAt: page1[1].archivedAt!, id: page1[1].id },
+      limit: 2,
+    });
+    // r3 belongs to otherUserId — no ownership filter applies.
+    expect(page2.map((r) => r.id)).toEqual([r3.id]);
   });
 });

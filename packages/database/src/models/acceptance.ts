@@ -3,7 +3,7 @@ import type {
   AcceptanceStatus,
   AcceptanceSubjectType,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
 import { acceptances } from '../schemas/verify';
@@ -218,22 +218,16 @@ export class AcceptanceModel {
         !existing.metadata?.title && typeof defaults?.metadata?.title === 'string'
           ? defaults.metadata.title
           : undefined;
-      if (nextProjectId || nextRequirement || nextTitle) {
+      if (nextProjectId || nextRequirement || nextTitle || existing.archivedAt) {
         const metadata = nextTitle ? { ...existing.metadata, title: nextTitle } : existing.metadata;
-        await this.db
-          .update(acceptances)
-          .set({
-            metadata,
-            projectId: nextProjectId ?? existing.projectId,
-            requirement: nextRequirement ?? existing.requirement,
-          })
-          .where(eq(acceptances.id, existing.id));
-        return {
-          ...existing,
+        const patch = {
+          archivedAt: null,
           metadata,
           projectId: nextProjectId ?? existing.projectId,
           requirement: nextRequirement ?? existing.requirement,
         };
+        await this.db.update(acceptances).set(patch).where(eq(acceptances.id, existing.id));
+        return { ...existing, ...patch };
       }
       return existing;
     }
@@ -256,15 +250,19 @@ export class AcceptanceModel {
   /** Acceptances for the current user/workspace, newest first. */
   query = async (
     options: {
+      archived?: boolean;
       limit?: number;
       projectId?: string;
       statuses?: AcceptanceStatus[];
       unbounded?: boolean;
     } = {},
   ) => {
-    const { projectId, statuses, unbounded } = options;
+    const { archived = false, projectId, statuses, unbounded } = options;
     const limit = unbounded ? undefined : (options.limit ?? 50);
-    const conditions = [this.ownership()];
+    const conditions = [
+      this.ownership(),
+      archived ? isNotNull(acceptances.archivedAt) : isNull(acceptances.archivedAt),
+    ];
     if (projectId) conditions.push(eq(acceptances.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
 
@@ -283,11 +281,13 @@ export class AcceptanceModel {
    * thirty rows of which some happen to be in progress.
    */
   queryPage = async ({
+    archived = false,
     cursor,
     limit = 30,
     projectId,
     statuses,
   }: {
+    archived?: boolean;
     cursor?: string;
     limit?: number;
     projectId?: string;
@@ -296,7 +296,10 @@ export class AcceptanceModel {
     items: AcceptanceItem[];
     nextCursor: string | null;
   }> => {
-    const conditions = [this.ownership()];
+    const conditions = [
+      this.ownership(),
+      archived ? isNotNull(acceptances.archivedAt) : isNull(acceptances.archivedAt),
+    ];
     if (projectId) conditions.push(eq(acceptances.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
 
@@ -396,7 +399,68 @@ export class AcceptanceModel {
       .where(and(eq(acceptances.id, id), this.ownership()));
   };
 
+  archive = async (id: string): Promise<AcceptanceItem | undefined> => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({ archivedAt: new Date() })
+      .where(and(eq(acceptances.id, id), isNull(acceptances.archivedAt), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  unarchive = async (id: string): Promise<AcceptanceItem | undefined> => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({ archivedAt: null })
+      .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /** Internal lifecycle counterpart to `unarchive`: a new round re-activates the aggregate. */
+  unarchivePolicy = async (id: string): Promise<void> => {
+    const policyScope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    await this.db
+      .update(acceptances)
+      .set({ archivedAt: null })
+      .where(and(eq(acceptances.id, id), isNotNull(acceptances.archivedAt), policyScope));
+  };
+
   delete = async (id: string) => {
     return this.db.delete(acceptances).where(and(eq(acceptances.id, id), this.ownership()));
+  };
+
+  static queryExpiredArchived = async (
+    db: LobeChatDatabase,
+    {
+      before,
+      limit,
+      cursor,
+    }: { before: Date; limit: number; cursor?: { archivedAt: Date; id: string } },
+  ): Promise<Pick<AcceptanceItem, 'id' | 'userId' | 'workspaceId' | 'archivedAt'>[]> => {
+    const conditions = [isNotNull(acceptances.archivedAt), lt(acceptances.archivedAt, before)];
+    if (cursor) {
+      conditions.push(
+        or(
+          gt(acceptances.archivedAt, cursor.archivedAt),
+          and(eq(acceptances.archivedAt, cursor.archivedAt), gt(acceptances.id, cursor.id)),
+        )!,
+      );
+    }
+
+    return db
+      .select({
+        archivedAt: acceptances.archivedAt,
+        id: acceptances.id,
+        userId: acceptances.userId,
+        workspaceId: acceptances.workspaceId,
+      })
+      .from(acceptances)
+      .where(and(...conditions))
+      .orderBy(asc(acceptances.archivedAt), asc(acceptances.id))
+      .limit(limit);
   };
 }

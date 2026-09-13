@@ -43,7 +43,7 @@ export type AcceptancePurgePreview = Awaited<
 >;
 
 /** The list's status split, shared by the flat and paged reads. */
-export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+export type AcceptanceListFilter = 'active' | 'all' | 'archived' | 'completed';
 
 /** The lifecycle states a reviewer may set by hand from the acceptance list. */
 export type AcceptanceStatusOverride = 'accepted' | 'closed' | 'delivered' | 'rejected';
@@ -196,7 +196,7 @@ export class VerifyService {
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
 
   listAcceptances = (options?: {
-    filter?: 'active' | 'all' | 'completed';
+    filter?: AcceptanceListFilter;
     /** Widen the recency window (server-capped) — the merge picker asks for more. */
     limit?: number;
     projectId?: string;
@@ -346,6 +346,12 @@ export class VerifyService {
    */
   mergeAcceptance = (sourceId: string, targetId: string) =>
     lambdaClient.acceptance.merge.mutate({ sourceId, targetId });
+
+  archiveAcceptance = (id: string) => lambdaClient.acceptance.archive.mutate({ id });
+
+  unarchiveAcceptance = (id: string) => lambdaClient.acceptance.unarchive.mutate({ id });
+
+  archiveAcceptanceBatch = (ids: string[]) => lambdaClient.acceptance.archiveBatch.mutate({ ids });
 
   getAcceptancePurgePreview = (ids: string[]) =>
     lambdaClient.acceptance.purgePreview.query({ ids });

@@ -57,6 +57,7 @@ describe('AcceptanceService.listWithSubjects', () => {
     const result = await service.listWithSubjects({ filter: 'active', limit: 1, q: 'needle' });
 
     expect(query).toHaveBeenCalledWith({
+      archived: false,
       limit: undefined,
       statuses: [
         'pending',
@@ -87,9 +88,9 @@ describe('AcceptanceService.listWithSubjects', () => {
     await service.listWithSubjects({ filter: 'all', projectId: 'project-1' });
 
     expect(query).toHaveBeenCalledWith({
+      archived: false,
       limit: 50,
       projectId: 'project-1',
-      statuses: undefined,
       unbounded: false,
     });
   });

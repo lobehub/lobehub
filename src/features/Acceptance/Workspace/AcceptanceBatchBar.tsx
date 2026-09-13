@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
+import { Archive, CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,11 +24,13 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceBatchBarProps {
   /** Selected rows the accept sweep can actually move. */
   acceptCount: number;
+  canArchive: boolean;
   /** Whether any selected row is filed under a project, so "remove" has work. */
   canRemoveProject: boolean;
   /** Selected rows the close sweep can actually move. */
   closeCount: number;
   onAccept: () => void;
+  onArchive: () => void;
   onClose: () => void;
   onDelete: () => void;
   /** `null` takes the selection out of its projects. */
@@ -50,9 +52,11 @@ interface AcceptanceBatchBarProps {
 const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
   ({
     acceptCount,
+    canArchive,
     canRemoveProject,
     closeCount,
     onAccept,
+    onArchive,
     onClose,
     onDelete,
     onMoveToProject,
@@ -98,6 +102,15 @@ const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
           />
         </DropdownMenu>
         <Flexbox flex={1} />
+        {canArchive && (
+          <ActionIcon
+            disabled={pending}
+            icon={Archive}
+            size={'small'}
+            title={t('acceptance.workspace.batch.archive')}
+            onClick={onArchive}
+          />
+        )}
         <ActionIcon
           danger
           disabled={pending}

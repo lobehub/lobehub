@@ -50,11 +50,28 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  link: css`
+    cursor: pointer;
+
+    padding: 0;
+    border: none;
+
+    font: inherit;
+    color: ${cssVar.colorPrimary};
+
+    background: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  `,
 }));
 
 interface DeleteConfirmProps {
+  archived?: boolean;
   description?: string;
   ids: string[];
+  onArchive: () => Promise<unknown>;
   onDelete: (purge: boolean) => Promise<unknown>;
   title?: string;
 }
@@ -65,7 +82,8 @@ const usePurgePreview = (ids: string[]) =>
     () => verifyService.getAcceptancePurgePreview(ids),
   );
 
-const DeleteConfirmContent = memo<DeleteConfirmProps>(({ description, ids, onDelete, title }) => {
+const DeleteConfirmContent = memo<DeleteConfirmProps>((props) => {
+  const { archived, description, ids, onArchive, onDelete, title } = props;
   const { t: translate } = useTranslation('verify');
   const { close } = useModalContext();
   const [pending, setPending] = useState(false);
@@ -74,14 +92,17 @@ const DeleteConfirmContent = memo<DeleteConfirmProps>(({ description, ids, onDel
   const batch = ids.length > 1;
   const size = preview ? formatSize(preview.bytes) : undefined;
 
-  const run = async () => {
+  const run = async (
+    action: () => Promise<unknown>,
+    errorKey: 'acceptance.workspace.archive.error' | 'acceptance.workspace.deleteError',
+  ) => {
     setPending(true);
     try {
-      await onDelete(purge);
+      await action();
       close();
     } catch (error) {
       console.error('[acceptance:deleteConfirm]', error);
-      toast.error(translate('acceptance.workspace.deleteError'));
+      toast.error(translate(errorKey));
     } finally {
       setPending(false);
     }
@@ -134,11 +155,30 @@ const DeleteConfirmContent = memo<DeleteConfirmProps>(({ description, ids, onDel
           <dd>{formatSize(preview.bytes)}</dd>
         </dl>
       )}
+      {!archived && (
+        <Text fontSize={12} type={'secondary'}>
+          {translate('acceptance.workspace.deleteConfirm.archiveHint')}
+          <button
+            className={styles.link}
+            disabled={pending}
+            type={'button'}
+            onClick={() => void run(onArchive, 'acceptance.workspace.archive.error')}
+          >
+            {translate('acceptance.workspace.deleteConfirm.archiveInstead')}
+          </button>
+          {translate('acceptance.workspace.deleteConfirm.archiveHintSuffix')}
+        </Text>
+      )}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
         <Button disabled={pending} onClick={close}>
           {translate('actions.cancel')}
         </Button>
-        <Button danger loading={pending} type={'primary'} onClick={() => void run()}>
+        <Button
+          danger
+          loading={pending}
+          type={'primary'}
+          onClick={() => void run(() => onDelete(purge), 'acceptance.workspace.deleteError')}
+        >
           {okLabel}
         </Button>
       </Flexbox>
