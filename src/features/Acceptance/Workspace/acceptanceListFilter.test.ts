@@ -7,6 +7,10 @@ describe('normalizeAcceptanceListFilter', () => {
     expect(normalizeAcceptanceListFilter('unknown')).toBe('active');
     expect(normalizeAcceptanceListFilter(null)).toBe('active');
   });
+
+  it('keeps the archived filter', () => {
+    expect(normalizeAcceptanceListFilter('archived')).toBe('archived');
+  });
 });
 
 describe('acceptanceListEmptyVariant', () => {

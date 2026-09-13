@@ -6,7 +6,6 @@ import {
   ActionIcon,
   Button,
   Checkbox,
-  confirmModal,
   DraggablePanel,
   DraggablePanelContainer,
   DropdownMenu,
@@ -17,6 +16,7 @@ import { useDebounce } from 'ahooks';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
+  Archive,
   ArrowLeft,
   Check,
   CircleDashed,
@@ -47,6 +47,7 @@ import { useAcceptanceList, useAcceptanceListInfinite } from '../hooks';
 import { acceptanceHomePath } from '../Viewer/routes';
 import type { AcceptanceStatusAction } from '../Viewer/statusActions';
 import AcceptanceBatchBar from './AcceptanceBatchBar';
+import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
 import {
   acceptanceListEmptyVariant,
   type AcceptanceListFilter,
@@ -54,6 +55,7 @@ import {
   normalizeAcceptanceListFilter,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
+import ArchivedBanner from './ArchivedBanner';
 import {
   acceptanceBatchTargets,
   acceptanceProjectTargets,
@@ -81,12 +83,14 @@ const ACCEPTANCE_GROUP_MODE_STORAGE_KEY = 'lobehub-acceptance-group-mode';
 /** Pull the next page before the sentinel is actually on screen. */
 const LOAD_MORE_ROOT_MARGIN = '240px';
 type BatchSuccessKey =
+  | 'acceptance.workspace.batch.archiveSuccess'
   | 'acceptance.workspace.batch.deleteSuccess'
   | 'acceptance.workspace.batch.projectRemoveSuccess'
   | 'acceptance.workspace.batch.projectSuccess'
   | 'acceptance.workspace.batch.statusSuccess';
 const EMPTY_FILTER_KEYS = {
   active: 'acceptance.workspace.filters.empty.active',
+  archived: 'acceptance.workspace.filters.empty.archived',
   completed: 'acceptance.workspace.filters.empty.completed',
 } as const satisfies Record<Exclude<AcceptanceListFilter, 'all'>, string>;
 
@@ -531,19 +535,47 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       }
     };
 
+    const archiveSelected = async () => {
+      const targets = selectedVisible;
+      if (targets.length === 0) return;
+
+      setBatchPending(true);
+      try {
+        const chunks = chunkAcceptanceBatch(targets);
+        const settled = await Promise.allSettled(
+          chunks.map((chunk) => verifyService.archiveAcceptanceBatch(chunk)),
+        );
+
+        let archived = 0;
+        const failedIds: string[] = [];
+        settled.forEach((part, index) => {
+          if (part.status === 'fulfilled') {
+            archived += part.value.archived;
+            failedIds.push(...part.value.failedIds);
+            return;
+          }
+          console.error('[acceptance:batchArchive]', part.reason);
+          failedIds.push(...chunks[index]);
+        });
+
+        await settleBatch(targets, [], failedIds);
+        reportBatch(archived, targets.length, 'acceptance.workspace.batch.archiveSuccess');
+      } catch (cause) {
+        console.error('[acceptance:batchArchive]', cause);
+        toast.error(t('acceptance.workspace.batch.error'));
+      } finally {
+        setBatchPending(false);
+      }
+    };
+
     const deleteSelected = () => {
       const targets = selectedVisible;
       if (targets.length === 0) return;
 
-      confirmModal({
-        cancelText: t('actions.cancel'),
-        content: t('acceptance.workspace.batch.deleteConfirmDescription', {
-          count: targets.length,
-        }),
-        okButtonProps: { danger: true },
-        okText: t('actions.delete'),
-        title: t('acceptance.workspace.batch.deleteConfirmTitle', { count: targets.length }),
-        onOk: async () => {
+      openAcceptanceDeleteConfirm({
+        ids: targets,
+        onArchive: archiveSelected,
+        onDelete: async () => {
           setBatchPending(true);
           try {
             // `allSettled`, never `all`: a rejected chunk must not hide the ones
@@ -606,6 +638,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
           ['active', t('acceptance.workspace.filters.active')],
           ['all', t('acceptance.workspace.filters.all')],
           ['completed', t('acceptance.workspace.filters.completed')],
+          ['archived', t('acceptance.workspace.filters.archived')],
         ] as const
       ).map(([key, label]) => ({
         icon: <Icon icon={Check} style={{ opacity: filter === key ? 1 : 0 }} />,
@@ -750,6 +783,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
         </div>
 
         <Flexbox flex={1} style={{ minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
+          {filter === 'archived' && !error && !isLoading && items.length > 0 && <ArchivedBanner />}
           {error ? (
             // A failed fetch must read as an error with a retry — never as an
             // empty "no acceptances" page.
@@ -766,7 +800,15 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
           ) : isLoading ? (
             <SkeletonList rows={6} style={{ paddingBlock: 6, paddingInline: 8 }} />
           ) : items.length === 0 ? (
-            emptyVariant === 'filtered' ? (
+            filter === 'archived' && !trimmedQuery ? (
+              <Center className={styles.emptyState}>
+                <Empty
+                  description={t('acceptance.workspace.filters.empty.archived')}
+                  icon={Archive}
+                  title={t('acceptance.workspace.filters.empty.archivedTitle')}
+                />
+              </Center>
+            ) : emptyVariant === 'filtered' ? (
               // A zero-result FILTER must read as "no match for this query",
               // never as the first-run empty state.
               <div className={styles.searchEmpty}>
@@ -889,6 +931,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             closeCount={acceptanceBatchTargets(items, selectedVisible, 'close').length}
             pending={batchPending || selectedVisible.length === 0}
             onAccept={() => void sweepStatus('accept', 'accepted')}
+            onArchive={() => void archiveSelected()}
             onClose={() => void sweepStatus('close', 'closed')}
             onDelete={deleteSelected}
             onMoveToProject={(projectId) => void sweepProject(projectId)}

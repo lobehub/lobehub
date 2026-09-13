@@ -97,7 +97,7 @@ export const useAcceptanceBySubject = (
 export const useAcceptanceList = (
   enabled: boolean,
   options?: {
-    filter?: 'active' | 'all' | 'completed';
+    filter?: AcceptanceListFilter;
     limit?: number;
     projectId?: string;
     q?: string;
@@ -119,6 +119,14 @@ export const useAcceptanceList = (
       ...VERIFY_REPORT_SWR_CONFIG,
       ...(options?.revalidateOnMount ? { revalidateOnMount: true } : {}),
     },
+  );
+
+/** Rounds, evidence files and bytes a delete would purge. Pass null to skip. */
+export const useAcceptancePurgePreview = (acceptanceId: string | null) =>
+  useClientDataSWR(
+    acceptanceId ? verifyKeys.acceptancePurgePreview(acceptanceId) : null,
+    () => verifyService.getAcceptancePurgePreview(acceptanceId!),
+    VERIFY_REPORT_SWR_CONFIG,
   );
 
 /**

@@ -1,9 +1,13 @@
-export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+import type { AcceptanceListFilter } from '@/services/verify';
+
+export type { AcceptanceListFilter };
 
 export const DEFAULT_ACCEPTANCE_LIST_FILTER: AcceptanceListFilter = 'active';
 
 export const normalizeAcceptanceListFilter = (value: unknown): AcceptanceListFilter =>
-  value === 'all' || value === 'completed' ? value : DEFAULT_ACCEPTANCE_LIST_FILTER;
+  value === 'all' || value === 'completed' || value === 'archived'
+    ? value
+    : DEFAULT_ACCEPTANCE_LIST_FILTER;
 
 /**
  * Which empty state a zero-result list should render.

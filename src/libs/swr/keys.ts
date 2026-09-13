@@ -1094,6 +1094,10 @@ export const verifyKeys = {
    * One scroll page of the list panel. Keyed by workspace + the status split +
    * the cursor, mirroring `reportSummaries` — the sibling paged feed.
    */
+  acceptancePurgePreview: def('verify:acceptancePurgePreview', (acceptanceId: string) => [
+    'verify:acceptancePurgePreview',
+    acceptanceId,
+  ]),
   acceptancePage: def(
     'verify:acceptancePage',
     (workspaceId: string | undefined, filter: string, projectId?: string, cursor?: string) => [

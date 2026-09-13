@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, DropdownMenu } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
+import { Archive, CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,6 +29,7 @@ interface AcceptanceBatchBarProps {
   /** Selected rows the close sweep can actually move. */
   closeCount: number;
   onAccept: () => void;
+  onArchive: () => void;
   onClose: () => void;
   onDelete: () => void;
   /** `null` takes the selection out of its projects. */
@@ -53,6 +54,7 @@ const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
     canRemoveProject,
     closeCount,
     onAccept,
+    onArchive,
     onClose,
     onDelete,
     onMoveToProject,
@@ -98,6 +100,13 @@ const AcceptanceBatchBar = memo<AcceptanceBatchBarProps>(
           />
         </DropdownMenu>
         <Flexbox flex={1} />
+        <ActionIcon
+          disabled={pending}
+          icon={Archive}
+          size={'small'}
+          title={t('acceptance.workspace.batch.archive')}
+          onClick={onArchive}
+        />
         <ActionIcon
           danger
           disabled={pending}

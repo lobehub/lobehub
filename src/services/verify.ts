@@ -38,6 +38,10 @@ export type AcceptanceListItem = Awaited<
 
 export type AcceptanceListPage = Awaited<ReturnType<typeof lambdaClient.acceptance.listPage.query>>;
 
+export type AcceptancePurgePreview = Awaited<
+  ReturnType<typeof lambdaClient.acceptance.purgePreview.query>
+>;
+
 /** The list's status split, shared by the flat and paged reads. */
 export type AcceptanceListFilter = 'active' | 'all' | 'archived' | 'completed';
 

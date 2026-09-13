@@ -3,10 +3,12 @@
 import type { AcceptanceStatus } from '@lobechat/types';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { ActionIcon, Checkbox, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Checkbox, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
+  Archive,
+  ArchiveRestore,
   BadgeCheck,
   CircleCheck,
   CircleDashed,
@@ -33,6 +35,8 @@ import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
 import { getAcceptanceStatusActions } from '../Viewer/statusActions';
+import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
+import ArchivedRowMeta from './ArchivedRowMeta';
 import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
 import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 
@@ -122,6 +126,8 @@ const AcceptanceRow = memo<{
   const glyph = glyphOf(item.status as AcceptanceStatus);
   const meta = glyphMeta[glyph];
   const title = item.subject.title || item.subjectId;
+  const archived = Boolean(item.archivedAt);
+  const twoLine = archived || Boolean(showProject && item.project);
 
   const refresh = () =>
     Promise.all([onChanged(), globalMutate(verifyKeys.acceptanceBundle(item.id))]);
@@ -224,13 +230,39 @@ const AcceptanceRow = memo<{
     });
   };
 
+  const setArchived = async (next: boolean) => {
+    setMutating(true);
+    try {
+      if (next) await verifyService.archiveAcceptance(item.id);
+      else await verifyService.unarchiveAcceptance(item.id);
+      await onChanged();
+      toast.success(
+        t(
+          next
+            ? 'acceptance.workspace.archive.success'
+            : 'acceptance.workspace.archive.unarchiveSuccess',
+        ),
+      );
+    } catch (error) {
+      console.error('[acceptance:archive]', error);
+      toast.error(
+        t(
+          next
+            ? 'acceptance.workspace.archive.error'
+            : 'acceptance.workspace.archive.unarchiveError',
+        ),
+      );
+    } finally {
+      setMutating(false);
+    }
+  };
+
   const removeAcceptance = () => {
-    confirmModal({
-      cancelText: t('actions.cancel'),
-      content: t('acceptance.workspace.deleteConfirmDescription', { title }),
-      okButtonProps: { danger: true },
-      okText: t('actions.delete'),
-      onOk: async () => {
+    openAcceptanceDeleteConfirm({
+      ids: [item.id],
+      title,
+      onArchive: () => setArchived(true),
+      onDelete: async () => {
         setMutating(true);
         try {
           await verifyService.deleteAcceptance(item.id);
@@ -244,7 +276,6 @@ const AcceptanceRow = memo<{
           setMutating(false);
         }
       },
-      title: t('acceptance.workspace.deleteConfirmTitle'),
     });
   };
 
@@ -276,40 +307,62 @@ const AcceptanceRow = memo<{
   // Deciding the delivery is what this menu is FOR — status leads, then the
   // filing actions, then the destructive one behind its own divider. Buried
   // under rename/move/merge it read as an afterthought of housekeeping.
-  const menuItems: DropdownItem[] = [
-    ...(statusItems.length > 0
-      ? [
-          {
-            children: statusItems,
-            icon: <Icon icon={CircleDashed} />,
-            key: 'status',
-            label: t('acceptance.workspace.actions.status'),
-          },
-          { type: 'divider' as const },
-        ]
-      : []),
-    {
-      icon: <Icon icon={Pencil} />,
-      key: 'rename',
-      label: t('acceptance.workspace.actions.rename'),
-      onClick: startRename,
-    },
-    projectItem,
-    {
-      icon: <Icon icon={GitMerge} />,
-      key: 'merge',
-      label: t('acceptance.workspace.actions.merge'),
-      onClick: mergeIntoAcceptance,
-    },
-    { type: 'divider' as const },
-    {
-      danger: true,
-      icon: <Icon icon={Trash2} />,
-      key: 'delete',
-      label: t('acceptance.workspace.actions.delete'),
-      onClick: removeAcceptance,
-    },
-  ];
+  const deleteItem = {
+    danger: true,
+    icon: <Icon icon={Trash2} />,
+    key: 'delete',
+    label: t(
+      archived ? 'acceptance.workspace.actions.deleteNow' : 'acceptance.workspace.actions.delete',
+    ),
+    onClick: removeAcceptance,
+  };
+
+  const menuItems: DropdownItem[] = archived
+    ? [
+        {
+          icon: <Icon icon={ArchiveRestore} />,
+          key: 'unarchive',
+          label: t('acceptance.workspace.actions.unarchive'),
+          onClick: () => void setArchived(false),
+        },
+        projectItem,
+        { type: 'divider' as const },
+        deleteItem,
+      ]
+    : [
+        ...(statusItems.length > 0
+          ? [
+              {
+                children: statusItems,
+                icon: <Icon icon={CircleDashed} />,
+                key: 'status',
+                label: t('acceptance.workspace.actions.status'),
+              },
+              { type: 'divider' as const },
+            ]
+          : []),
+        {
+          icon: <Icon icon={Pencil} />,
+          key: 'rename',
+          label: t('acceptance.workspace.actions.rename'),
+          onClick: startRename,
+        },
+        projectItem,
+        {
+          icon: <Icon icon={GitMerge} />,
+          key: 'merge',
+          label: t('acceptance.workspace.actions.merge'),
+          onClick: mergeIntoAcceptance,
+        },
+        { type: 'divider' as const },
+        {
+          icon: <Icon icon={Archive} />,
+          key: 'archive',
+          label: t('acceptance.workspace.actions.archive'),
+          onClick: () => void setArchived(true),
+        },
+        deleteItem,
+      ];
 
   const statusGlyph = (
     <Icon
@@ -335,7 +388,7 @@ const AcceptanceRow = memo<{
       key={item.id}
       style={mutating ? { opacity: 0.62, pointerEvents: 'none' } : undefined}
       title={title}
-      titleColor={cssVar.colorText}
+      titleColor={archived ? cssVar.colorTextTertiary : cssVar.colorText}
       // Only where the grouping does not already say it, and only when the row
       // actually has one — stamping "ungrouped" on every other row would cost a
       // line of height to say nothing.
@@ -356,14 +409,20 @@ const AcceptanceRow = memo<{
         )
       }
       description={
-        showProject && item.project ? (
+        item.archivedAt ? (
+          <ArchivedRowMeta acceptanceId={item.id} archivedAt={item.archivedAt} />
+        ) : showProject && item.project ? (
           <span className={styles.itemProject}>{item.project.name}</span>
         ) : undefined
       }
       extra={
         <Flexbox horizontal align={'center'} gap={6}>
           {selectable && statusGlyph}
-          <span className={styles.itemTime}>{relativeTime(item.updatedAt ?? item.createdAt)}</span>
+          {!archived && (
+            <span className={styles.itemTime}>
+              {relativeTime(item.updatedAt ?? item.createdAt)}
+            </span>
+          )}
         </Flexbox>
       }
       slots={
@@ -372,8 +431,8 @@ const AcceptanceRow = memo<{
               iconPostfix: (
                 <Center
                   flex={'none'}
-                  height={showProject && item.project ? 22 : undefined}
-                  style={showProject && item.project ? { alignSelf: 'flex-start' } : undefined}
+                  height={twoLine ? 22 : undefined}
+                  style={twoLine ? { alignSelf: 'flex-start' } : undefined}
                   width={28}
                 >
                   {/* Read-only on purpose: the whole row is the hit target, so
