@@ -837,3 +837,21 @@ describe('MarketService.searchSkill', () => {
     );
   });
 });
+
+describe('MarketService.getSkillCategories', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([{ locale: 'zh-CN', q: 'meeting' }, undefined])(
+    'should forward category filters to Market: %j',
+    async (params) => {
+      const service = new MarketService();
+      const categories = [{ category: 'productivity-tasks', count: 2 }];
+      vi.mocked(service.market.marketSkills.getCategories).mockResolvedValue(categories);
+
+      expect(await service.getSkillCategories(params)).toEqual(categories);
+      if (params) expect(service.market.marketSkills.getCategories).toHaveBeenCalledWith(params);
+    },
+  );
+});
