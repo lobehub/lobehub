@@ -173,6 +173,16 @@ export const resolveRunAgentConfig = async (
     loadUserLocale(deps),
   ]);
 
+  // The caller's device preference layers onto the shared row BEFORE the
+  // shared rules run, so a builtin runtime that pins its own execution target
+  // (the onboarding agents set `executionTarget: 'none'`) still wins over a
+  // saved member override when its `agencyConfig` is merged on top.
+  row.agencyConfig = resolveAgentAgencyConfig(row.agencyConfig, overrides.device, {
+    canManage: canManageAgent,
+    visibility: row.visibility,
+    workspaceId: agentWorkspaceId,
+  });
+
   const snapshot: AgentConfigSnapshot = {
     agent: {
       name: row.name ?? null,
@@ -220,12 +230,6 @@ export const resolveRunAgentConfig = async (
   });
 
   // --- per-call intents the shared rules do not know ---
-  agentConfig.agencyConfig = resolveAgentAgencyConfig(agentConfig.agencyConfig, overrides.device, {
-    canManage: canManageAgent,
-    visibility: agentConfig.visibility,
-    workspaceId: agentWorkspaceId,
-  });
-
   // callSubAgent thinking / reasoning-effort overrides. A virtual sub-agent
   // executes the same agent row, so `agentConfig.chatConfig` here IS the
   // parent's chatConfig — merging the `agencyConfig.subagent.chatConfig`
