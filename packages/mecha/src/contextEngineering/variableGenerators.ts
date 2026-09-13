@@ -1,13 +1,15 @@
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import type { VariableGenerators } from '@lobechat/context-engine';
 
+import type { ContextVariables } from './types';
+
 export interface CreateVariableGeneratorsParams {
   model?: string;
   provider?: string;
   /** IANA timezone the temporal placeholders render in. Defaults to UTC. */
   timezone?: string;
   /** Host-resolved values; each wins over the core default for the same key. */
-  variables?: Record<string, string>;
+  variables?: ContextVariables;
 }
 
 /**
@@ -86,7 +88,10 @@ export const createVariableGenerators = ({
   return {
     ...defaults,
     ...Object.fromEntries(
-      Object.entries(variables ?? {}).map(([key, value]) => [key, () => value]),
+      Object.entries(variables ?? {}).map(([key, value]) => [
+        key,
+        typeof value === 'function' ? value : () => value,
+      ]),
     ),
   };
 };

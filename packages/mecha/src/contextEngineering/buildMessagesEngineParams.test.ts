@@ -77,7 +77,12 @@ describe('buildMessagesEngineParams', () => {
   it('renders placeholders from the run timezone and lets host variables win', () => {
     const generators = buildMessagesEngineParams({
       ...baseSnapshot(),
-      variables: { locale: 'zh-CN', username: 'arvin', workingDirectory: '/repo' },
+      variables: {
+        locale: 'zh-CN',
+        topic_title: () => 'lazy',
+        username: 'arvin',
+        workingDirectory: '/repo',
+      },
       world: { userTimezone: 'Asia/Tokyo' },
     }).variableGenerators!;
 
@@ -86,6 +91,7 @@ describe('buildMessagesEngineParams', () => {
     expect(generators.locale()).toBe('zh-CN');
     expect(generators.username()).toBe('arvin');
     expect(generators.workingDirectory()).toBe('/repo');
+    expect(generators.topic_title()).toBe('lazy');
     // Unresolved device placeholders never leak their literal token.
     expect(generators.hostname()).toBe('unknown');
     expect(generators.defaultShell()).not.toContain('{{');

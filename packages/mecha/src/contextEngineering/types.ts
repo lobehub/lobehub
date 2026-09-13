@@ -31,6 +31,9 @@ import type {
   UIChatMessage,
 } from '@lobechat/types';
 
+/** Placeholder values, eager or lazy. */
+export type ContextVariables = Record<string, string | (() => string)>;
+
 /**
  * The agent definition as it shapes the prompt: who the agent is and how it
  * wants its history and knowledge presented. Resolved once per run by the
@@ -151,8 +154,10 @@ export interface ContextSnapshot {
   tools?: ContextToolsSnapshot;
   /**
    * Host-resolved placeholder values (`{{username}}`, `{{CREDS_LIST}}`,
-   * device paths …). They override the core's defaults and leak guards.
+   * device paths …). They override the core's defaults and leak guards. A
+   * value may be a thunk so hosts only pay for expensive lookups when the
+   * placeholder actually renders.
    */
-  variables?: Record<string, string>;
+  variables?: ContextVariables;
   world?: ContextWorldSnapshot;
 }
