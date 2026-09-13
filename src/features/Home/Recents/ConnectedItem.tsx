@@ -18,6 +18,9 @@ const ConnectedItem = memo<ConnectedItemProps>(({ itemRef, queryKey, scope }) =>
   const item = useHomeStore(homeRecentSelectors.item(scope, queryKey, itemRef));
   if (!item) return null;
 
+  // `item.title` is already the server's `COALESCE(name, instruction)` — the
+  // same fallback `taskSlugTitle` applies on the detail page, so the slug in
+  // this link survives canonicalisation instead of being stripped on arrival.
   const route =
     item.type === 'task'
       ? taskDetailPath(item.id, item.agentId ?? undefined, item.title)

@@ -1896,6 +1896,8 @@ When I am ___, I need ___
     'One-time upgrades require a higher tier or a longer duration.',
   'workspace.billingPage.billing.change.memberLimitReached':
     'This workspace currently has {{count}} billable members. Remove members or change them to {{viewerRole}} before reducing seats further.',
+  'workspace.billingPage.billing.change.seatFloorPending':
+    'This workspace has {{members}} billable members and {{pending}} pending invites, using {{used}} seats. Revoke a pending invite before reducing seats further.',
   'workspace.billingPage.billing.change.seatReductionHint':
     'Reducing seats takes effect on the next billing cycle. The current cycle is not refunded.',
   'workspace.billingPage.billing.change.title': 'Adjust plan',

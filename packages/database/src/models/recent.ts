@@ -190,6 +190,12 @@ export class RecentModel {
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
         status: sql<TaskStatus | null>`${tasks.status}`.as('status'),
+        // `name → instruction` is also the URL-slug fallback: `ConnectedItem`
+        // feeds this title straight into `taskDetailPath`, and `taskSlugTitle`
+        // (`packages/utils/src/taskSlug.ts`) mirrors this COALESCE on the
+        // client so the link and the canonical URL agree. Keep the two in
+        // step. `'Untitled Task'` is display-only — unreachable here since
+        // `instruction` is NOT NULL, and it must never reach a URL.
         title: sql<string>`COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task')`.as(
           'title',
         ),

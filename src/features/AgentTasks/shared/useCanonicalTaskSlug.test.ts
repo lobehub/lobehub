@@ -25,11 +25,13 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => null,
 }));
 
-const setTaskName = (name?: string) => {
+const setTaskDetail = (detail?: { instruction?: string; name?: string | null }) => {
   useTaskStore.setState({
-    taskDetailMap: name === undefined ? {} : ({ 'T-1': { name } } as never),
+    taskDetailMap: detail === undefined ? {} : ({ 'T-1': detail } as never),
   });
 };
+
+const setTaskName = (name?: string) => setTaskDetail(name === undefined ? undefined : { name });
 
 describe('useCanonicalTaskSlug', () => {
   beforeEach(() => {
@@ -96,6 +98,41 @@ describe('useCanonicalTaskSlug', () => {
     // URL to the slug of the title that had just been deleted.
     mocks.params = { slug: 'ship-the-thing' };
     setTaskName('');
+
+    renderHook(() => useCanonicalTaskSlug('T-1'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1', { replace: true });
+  });
+
+  it('keeps the instruction slug of a task that has no name', () => {
+    // Regression: Recent links a nameless task by its instruction (the query
+    // coalesces `name → instruction`), but this hook read `name` alone and
+    // flattened the incoming URL to `/task/T-1` the moment the detail landed —
+    // and the link copied from there came out bare too.
+    mocks.params = { slug: 'fallback-to-instruction' };
+    setTaskDetail({ instruction: 'Fallback to instruction', name: null });
+
+    renderHook(() => useCanonicalTaskSlug('T-1'));
+
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it('upgrades a bare link of a nameless task to its instruction slug', () => {
+    setTaskDetail({ instruction: 'Fallback to instruction', name: null });
+
+    renderHook(() => useCanonicalTaskSlug('T-1'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1/fallback-to-instruction', {
+      replace: true,
+    });
+  });
+
+  it('does not fall through to the instruction once the name is cleared', () => {
+    // `name: ''` is a resolved "no title", matching the server's COALESCE —
+    // re-slugging from the instruction would resurrect a title the user just
+    // deleted.
+    mocks.params = { slug: 'ship-the-thing' };
+    setTaskDetail({ instruction: 'Fallback to instruction', name: '' });
 
     renderHook(() => useCanonicalTaskSlug('T-1'));
 

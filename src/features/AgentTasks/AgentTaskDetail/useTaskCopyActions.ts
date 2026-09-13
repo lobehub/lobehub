@@ -22,7 +22,10 @@ export const useTaskCopyActions = () => {
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-  const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
+  // Slug title, not `name`: a task with only an instruction still has a title
+  // on screen, so the copied link has to carry the same slug the address bar
+  // shows rather than degrading to a bare `/task/:id`.
+  const taskTitle = useTaskStore(taskDetailSelectors.activeTaskSlugTitle);
 
   const copyId = useCallback(async () => {
     if (!taskId) return;
@@ -36,13 +39,13 @@ export const useTaskCopyActions = () => {
 
     // Carry the title into the copied link so a pasted URL says what the task is.
     const taskUrl = `${appOrigin}${buildWorkspaceAwarePath(
-      taskDetailPath(taskId, taskAgentId ?? undefined, taskName),
+      taskDetailPath(taskId, taskAgentId ?? undefined, taskTitle),
       activeWorkspaceSlug,
     )}`;
 
     await copyToClipboard(taskUrl);
     toast.success(t('taskList.contextMenu.copyLinkSuccess'));
-  }, [taskId, taskAgentId, taskName, appOrigin, activeWorkspaceSlug, t]);
+  }, [taskId, taskAgentId, taskTitle, appOrigin, activeWorkspaceSlug, t]);
 
   return { copyId, copyLink, taskId };
 };

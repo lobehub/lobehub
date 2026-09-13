@@ -7,6 +7,7 @@ import { useLocation } from 'react-router';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useTaskStore } from '@/store/task';
+import { taskDetailSelectors } from '@/store/task/selectors';
 
 import { taskDetailPath } from './taskDetailPath';
 
@@ -36,7 +37,12 @@ export const useCanonicalTaskSlug = (taskId?: string) => {
   // resolved state (clearing the input persists `name: ''`), and folding it in
   // with "not loaded yet" would pin the URL to the slug of the old title.
   const isLoaded = useTaskStore((s) => (taskId ? Boolean(s.taskDetailMap[taskId]) : false));
-  const name = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
+  // `name` falling back to `instruction`, via the same helper the link builders
+  // use. Reading `name` alone is what made this hook strip the slug off a
+  // nameless task opened from Recent, which links it by its instruction.
+  const title = useTaskStore((s) =>
+    taskId ? taskDetailSelectors.taskSlugTitleById(taskId)(s) : '',
+  );
 
   useEffect(() => {
     // Before the detail resolves the title is unknown — leaving the URL alone
@@ -44,16 +50,16 @@ export const useCanonicalTaskSlug = (taskId?: string) => {
     // resolved an empty title is honoured, collapsing the URL to `/task/:id`.
     if (!taskId || !isLoaded) return;
 
-    const expected = taskTitleSlug(name);
+    const expected = taskTitleSlug(title);
     if ((slug ?? '') === expected) return;
 
     // Rebuild from the route params rather than the raw pathname so the
     // workspace prefix and agent scope of the current URL survive untouched;
     // `escape` then stops the workspace-aware navigate re-prefixing them.
     const prefix = workspaceSlug ? `/${workspaceSlug}` : '';
-    navigate(`${prefix}${taskDetailPath(taskId, aid, name)}${search}${hash}`, {
+    navigate(`${prefix}${taskDetailPath(taskId, aid, title)}${search}${hash}`, {
       escape: true,
       replace: true,
     });
-  }, [aid, hash, isLoaded, name, navigate, search, slug, taskId, workspaceSlug]);
+  }, [aid, hash, isLoaded, navigate, search, slug, taskId, title, workspaceSlug]);
 };
