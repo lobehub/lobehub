@@ -3895,6 +3895,7 @@ table acceptances {
   visual_render jsonb
   metadata jsonb
   completed_at "timestamp with time zone"
+  archived_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -3906,6 +3907,7 @@ table acceptances {
     (subject_type, subject_id) [name: 'acceptances_subject_idx']
     status [name: 'acceptances_status_idx']
     (workspace_id, visibility, user_id) [name: 'acceptances_workspace_visibility_idx']
+    archived_at [name: 'acceptances_archived_at_idx']
     (user_id, subject_type, subject_id) [name: 'acceptances_personal_subject_unique', unique]
     (workspace_id, subject_type, subject_id) [name: 'acceptances_workspace_subject_unique', unique]
   }

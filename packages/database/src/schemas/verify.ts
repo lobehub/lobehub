@@ -433,6 +433,7 @@ export const acceptances = pgTable(
     metadata: jsonb('metadata').$type<AcceptanceMetadata>(),
 
     completedAt: timestamptz('completed_at'),
+    archivedAt: timestamptz('archived_at'),
     ...timestamps,
   },
   (t) => [
@@ -442,6 +443,7 @@ export const acceptances = pgTable(
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
     index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
+    index('acceptances_archived_at_idx').on(t.archivedAt),
     // One acceptance per subject in personal scope.
     uniqueIndex('acceptances_personal_subject_unique')
       .on(t.userId, t.subjectType, t.subjectId)
