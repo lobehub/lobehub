@@ -28,6 +28,10 @@ export const gptImage1Schema: ModelParamsSchema = {
 export const gptImage2Schema: ModelParamsSchema = {
   imageUrls: { default: [], maxCount: 1, maxFileSize: 5 * 1024 * 1024 },
   prompt: { default: '' },
+  quality: {
+    default: 'auto',
+    enum: ['auto', 'low', 'medium', 'high'],
+  },
   size: {
     default: 'auto',
     enum: [
