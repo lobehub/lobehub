@@ -29,6 +29,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { FileService } from '@/server/services/file';
 import {
   AcceptanceService,
   buildAcceptanceCheckUnion,
@@ -36,6 +37,8 @@ import {
   createEvidenceFileResolver,
   isCurrentReviewPrediction,
   mapWithConcurrency,
+  previewAcceptancePurge,
+  purgeAcceptance,
   REVIEW_PREDICT_CONCURRENCY,
   REVIEW_PREDICT_MODEL_CONFIG,
   shouldSurfaceProposal,
@@ -150,8 +153,26 @@ const resolveAcceptanceForWrite = async (
   };
 };
 
+const canReadAcceptance = async (
+  ctx: { serverDB: LobeChatDatabase; userId?: string | null },
+  acceptance: AcceptanceItem,
+) => {
+  if (ctx.userId && ctx.userId === acceptance.userId) return true;
+  if (acceptance.visibility === 'public') return true;
+  if (!ctx.userId || !acceptance.workspaceId) return false;
+  // Membership in the acceptance's OWN workspace — not the viewer's currently
+  // active one, which may be a different workspace entirely.
+  const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
+    acceptance.workspaceId,
+    ctx.userId,
+  );
+  return Boolean(member);
+};
+
 /** Max rows one multi-select sweep may touch — the list itself is capped at 200. */
 const ACCEPTANCE_BATCH_LIMIT = 200;
+const PURGE_BATCH_CONCURRENCY = 4;
+const PURGE_PREVIEW_LIMIT = 20;
 
 const acceptanceStatusOverrideSchema = z.enum(['delivered', 'accepted', 'closed', 'rejected']);
 
@@ -525,18 +546,7 @@ export const acceptanceRouter = router({
       }
 
       const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
-      // The viewer's membership in the acceptance's OWN workspace — not their
-      // currently-active one, which may be a different workspace entirely.
-      const member =
-        !isOwner && ctx.userId && acceptance.workspaceId
-          ? await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
-              acceptance.workspaceId,
-              ctx.userId,
-            )
-          : undefined;
-
-      const canRead = isOwner || acceptance.visibility === 'public' || Boolean(member);
-      if (!canRead) {
+      if (!isOwner && !(await canReadAcceptance(ctx, acceptance))) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
@@ -1375,17 +1385,68 @@ export const acceptanceRouter = router({
       return { failedIds, updated };
     }),
 
+  purgePreview: acceptanceProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(PURGE_PREVIEW_LIMIT) }))
+    .query(async ({ ctx, input }) => {
+      const ids = [...new Set(input.ids)];
+      const rows = ids.every(isUuid)
+        ? await ctx.serverDB.query.acceptances.findMany({ where: inArray(acceptances.id, ids) })
+        : [];
+      const readable = await Promise.all(rows.map((row) => canReadAcceptance(ctx, row)));
+      if (rows.length !== ids.length || readable.includes(false)) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+      }
+
+      const scopes = new Map<string, { ids: string[]; userId: string; workspaceId?: string }>();
+      for (const row of rows) {
+        const workspaceId = row.workspaceId ?? undefined;
+        const key = workspaceId ?? `user:${row.userId}`;
+        const scope = scopes.get(key) ?? { ids: [], userId: row.userId, workspaceId };
+        scope.ids.push(row.id);
+        scopes.set(key, scope);
+      }
+      const previews = await Promise.all(
+        [...scopes.values()].map((scope) =>
+          previewAcceptancePurge(ctx.serverDB, scope.userId, scope.workspaceId, scope.ids),
+        ),
+      );
+      return previews.reduce(
+        (total, preview) => ({
+          bytes: total.bytes + preview.bytes,
+          fileCount: total.fileCount + preview.fileCount,
+          files: {
+            images: total.files.images + preview.files.images,
+            other: total.files.other + preview.files.other,
+            videos: total.files.videos + preview.files.videos,
+          },
+          rounds: total.rounds + preview.rounds,
+        }),
+        { bytes: 0, fileCount: 0, files: { images: 0, other: 0, videos: 0 }, rounds: 0 },
+      );
+    }),
+
   /**
-   * Delete the acceptance aggregate. Its chained verify runs detach
-   * (acceptance_id → null via the FK's `set null`) rather than cascade-delete,
-   * so the individual round reports stay reachable; only the grouping goes.
+   * Delete the acceptance aggregate. By default its chained verify runs detach
+   * (acceptance_id → null via the FK's `set null`) so the individual round
+   * reports stay reachable; `purge` also removes the rounds and the evidence
+   * files only they referenced.
    */
   remove: acceptanceWriteProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), purge: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      await service.acceptanceModel.delete(acceptance.id);
+      if (input.purge) {
+        await purgeAcceptance(
+          ctx.serverDB,
+          new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+          acceptance.userId,
+          acceptance.workspaceId ?? undefined,
+          acceptance.id,
+        );
+      } else {
+        await service.acceptanceModel.delete(acceptance.id);
+      }
       return { success: true };
     }),
 
@@ -1395,21 +1456,37 @@ export const acceptanceRouter = router({
    * selection still goes.
    */
   removeBatch: acceptanceWriteProcedure
-    .input(z.object({ ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT) }))
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT),
+        purge: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const failedIds: string[] = [];
       let deleted = 0;
+      const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
 
-      for (const id of new Set(input.ids)) {
+      await mapWithConcurrency([...new Set(input.ids)], PURGE_BATCH_CONCURRENCY, async (id) => {
         try {
           const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
-          await service.acceptanceModel.delete(acceptance.id);
+          if (input.purge) {
+            await purgeAcceptance(
+              ctx.serverDB,
+              fileService,
+              acceptance.userId,
+              acceptance.workspaceId ?? undefined,
+              acceptance.id,
+            );
+          } else {
+            await service.acceptanceModel.delete(acceptance.id);
+          }
           deleted += 1;
         } catch (error) {
           console.error('[acceptance] batch delete failed for %s', id, error);
           failedIds.push(id);
         }
-      }
+      });
 
       return { deleted, failedIds };
     }),

@@ -476,7 +476,7 @@ export default {
   'acceptance.workspace.batch.close': 'Close',
   'acceptance.workspace.batch.deleteConfirmDescription':
     'Delete the {{count}} selected acceptance(s)? Their verification rounds are kept — they detach into standalone reports.',
-  'acceptance.workspace.batch.deleteConfirmTitle': 'Delete {{count}} acceptance(s)',
+  'acceptance.workspace.batch.deleteConfirmTitle': 'Delete {{count}} acceptance(s)?',
   'acceptance.workspace.batch.deleteSuccess': '{{count}} acceptance(s) deleted',
   'acceptance.workspace.batch.enter': 'Select multiple',
   'acceptance.workspace.batch.error': 'The batch action failed. Try again.',
@@ -490,9 +490,24 @@ export default {
   'acceptance.workspace.batch.selected': '{{count}} selected',
   'acceptance.workspace.batch.statusSuccess': '{{count}} acceptance(s) updated',
   'acceptance.workspace.checkCount': '{{count}} checks',
+  'acceptance.workspace.deleteConfirm.files': 'Evidence files',
+  'acceptance.workspace.deleteConfirm.filesValue':
+    '{{count}} (screenshots {{images}} · recordings {{videos}} · other {{other}})',
+  'acceptance.workspace.deleteConfirm.ok': 'Delete and free {{size}}',
+  'acceptance.workspace.deleteConfirm.okBatch': 'Delete {{count}} and free {{size}}',
+  'acceptance.workspace.deleteConfirm.okBatchPlain': 'Delete {{count}}',
+  'acceptance.workspace.deleteConfirm.purgeOption':
+    'Also permanently delete every round, report and evidence file ({{size}})',
+  'acceptance.workspace.deleteConfirm.purgeOptionPlain':
+    'Also permanently delete every round, report and evidence file',
+  'acceptance.workspace.deleteConfirm.purgeWarning':
+    'This permanently deletes every round, report and evidence file of this acceptance. It cannot be undone.',
+  'acceptance.workspace.deleteConfirm.rounds': 'Rounds',
+  'acceptance.workspace.deleteConfirm.roundsValue': '{{count}} rounds',
+  'acceptance.workspace.deleteConfirm.space': 'Space freed',
   'acceptance.workspace.deleteConfirmDescription':
     'Delete the acceptance “{{title}}”? Its verification rounds are kept — they detach into standalone reports.',
-  'acceptance.workspace.deleteConfirmTitle': 'Delete acceptance',
+  'acceptance.workspace.deleteConfirmTitle': 'Delete “{{title}}”?',
   'acceptance.workspace.deleteError': 'Failed to delete acceptance',
   'acceptance.workspace.deleteSuccess': 'Acceptance deleted',
   'acceptance.workspace.emptyDetail.description':

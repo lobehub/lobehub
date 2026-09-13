@@ -30,6 +30,8 @@ export type FileType = z.infer<typeof fileSchema>;
 
 const DEFAULT_S3_REGION = 'us-east-1';
 const PUBLIC_READ_ACL_HEADER = 'public-read';
+// S3 DeleteObjects rejects more than 1000 keys per request.
+const DELETE_OBJECTS_MAX_KEYS = 1000;
 
 const encodeContentDispositionFilename = (fileName: string) =>
   encodeURIComponent(fileName || 'download').replaceAll(
@@ -91,12 +93,22 @@ export class S3 {
   }
 
   public async deleteFiles(keys: string[]) {
-    const command = new DeleteObjectsCommand({
-      Bucket: this.bucket,
-      Delete: { Objects: keys.map((key) => ({ Key: key })) },
-    });
+    const batches = [];
+    for (let i = 0; i < keys.length; i += DELETE_OBJECTS_MAX_KEYS) {
+      batches.push(keys.slice(i, i + DELETE_OBJECTS_MAX_KEYS));
+    }
+    if (batches.length === 0) batches.push([]);
 
-    return this.client.send(command);
+    const results = [];
+    for (const batch of batches) {
+      const command = new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Objects: batch.map((key) => ({ Key: key })) },
+      });
+      results.push(await this.client.send(command));
+    }
+
+    return results.at(-1)!;
   }
 
   public async getFileContent(key: string, byteLength?: number): Promise<string> {

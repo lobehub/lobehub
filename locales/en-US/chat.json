@@ -1639,6 +1639,7 @@
   "taskDetail.acceptance.retry": "Retry",
   "taskDetail.acceptance.reviewError": "Could not save this review.",
   "taskDetail.acceptance.title": "Acceptance",
+  "taskDetail.acceptance.untitled": "this acceptance",
   "taskDetail.acceptance.verifier": "Verification method",
   "taskDetail.acceptanceState.accepted": "Accepted",
   "taskDetail.acceptanceState.awaitingDecision": "Not passed — your call",

@@ -23,6 +23,7 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
 
 describe('artifact publish', () => {
   let workingDirectory: string;
@@ -156,6 +157,27 @@ describe('artifact publish', () => {
       expect(call.target).toEqual({ kind: 'create' });
       expect(call.idempotencyKey).toEqual(expect.any(String));
       expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+    });
+
+    it('prints the product share URL rather than the raw hosting URL', async () => {
+      await publish();
+
+      const output = consoleSpy.mock.calls.flat().join('\n');
+      expect(output).toContain('https://app.lobehub.com/share/artifact/dep-1');
+      expect(output).not.toContain('https://example.com/p');
+    });
+
+    it('emits the product share URL as publicUrl in JSON output', async () => {
+      await publish('--json');
+
+      const payload = JSON.parse(
+        consoleSpy.mock.calls
+          .flat()
+          .filter((value): value is string => typeof value === 'string')
+          .join('\n'),
+      );
+      expect(payload.publicUrl).toBe('https://app.lobehub.com/share/artifact/dep-1');
+      expect(payload.id).toBe('dep-1');
     });
 
     it('republishes to the bound deployment instead of creating another', async () => {

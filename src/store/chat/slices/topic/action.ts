@@ -1922,6 +1922,42 @@ export class ChatTopicActionImpl {
   };
 
   /**
+   * Mirror an optimistic topic patch into the PERSISTED topic-list cache.
+   *
+   * `topic:` keys are persisted to IndexedDB by the tiered SWR provider (see
+   * `CACHE_TIERS`), and that cached page is what the sidebar paints on a cold
+   * boot, before any revalidation lands. Optimistic dispatches only touched the
+   * Zustand maps, so the terminal status a run writes when it ends ('unread' /
+   * 'active') never reached the cache: the last FETCHED snapshot — taken while
+   * the run was still `running` — stayed there, and a reload repainted a
+   * finished topic with the running spinner until the revalidation corrected it
+   * a moment later (LOBE-14032). Same write-through idea as
+   * `#writeThroughMessageCache` in the message slice.
+   *
+   * Only `updateTopic` is mirrored. It patches a row a fetch already produced,
+   * so it cannot leak a client-only row into a cache that outlives the session
+   * — unlike an optimistic `addTopic` / `replaceTopicId`, whose placeholder is
+   * reconciled per session by `#reconcileFetchedTopics`. Deletions already go
+   * through `refreshTopic`, which revalidates the same keys.
+   */
+  #writeThroughTopicListCache = (containerKey: string, payload: ChatTopicDispatch): void => {
+    if (payload.type !== 'updateTopic') return;
+
+    void mutate(
+      (key) => Array.isArray(key) && key[0] === topicKeys.list.root && key[1] === containerKey,
+      (cached?: { items: ChatTopic[]; total: number }) => {
+        if (!cached?.items) return cached;
+
+        const items = topicReducer(cached.items, payload);
+        // `topicReducer` returns the same reference when the patch is a no-op
+        // (e.g. the row isn't on this cached page), so the entry stays untouched.
+        return items === cached.items ? cached : { ...cached, items };
+      },
+      { revalidate: false },
+    );
+  };
+
+  /**
    * Apply a topic reducer to a bucket in `topicDataMap`. Scope on the payload
    * (`agentId`/`groupId`) wins; otherwise falls back to the currently active
    * agent/group bucket. Pass scope on the payload when the write originates
@@ -1997,6 +2033,13 @@ export class ChatTopicActionImpl {
         [payload.nextId]: { ...detailTopic, ...payload.value, id: payload.nextId },
       };
     }
+
+    // Mirror the patch into the persisted topic-list cache too — see
+    // `#writeThroughTopicListCache`. Runs before the unchanged early-return
+    // below: the cache can hold rows this bucket never loaded (a cold boot
+    // paints from it before any bucket exists), so "nothing changed in the
+    // store" says nothing about the cached page.
+    this.#writeThroughTopicListCache(key, payload);
 
     // no need to update if all maps are unchanged
     const mainChanged = !isEqual(nextItems, currentData?.items);

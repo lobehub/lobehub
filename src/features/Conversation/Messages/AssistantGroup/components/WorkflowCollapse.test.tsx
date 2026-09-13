@@ -13,58 +13,6 @@ let mockIsGenerating = true;
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  Accordion: ({
-    children,
-    expandedKeys,
-    onExpandedChange,
-  }: {
-    children?: ReactNode;
-    expandedKeys?: string[];
-    onExpandedChange?: (keys: string[]) => void;
-  }) => {
-    const isExpanded = (expandedKeys ?? []).includes('workflow');
-    return (
-      <div data-expanded-keys={JSON.stringify(expandedKeys ?? [])} data-testid="workflow-accordion">
-        <button
-          aria-label="toggle-accordion-header"
-          type="button"
-          onClick={() => onExpandedChange?.(isExpanded ? [] : ['workflow'])}
-        />
-        {children}
-      </div>
-    );
-  },
-  AccordionItem: ({
-    action,
-    children,
-    title,
-  }: {
-    action?: ReactNode;
-    children?: ReactNode;
-    title?: ReactNode;
-  }) => (
-    <div>
-      <div>{title}</div>
-      <div>{action}</div>
-      <div>{children}</div>
-    </div>
-  ),
-  // Needs to resolve to a `button` with an accessible name that matches the
-  // `title` prop so the tests' `getByRole('button', { name: 'Expand fully' })`
-  // assertions can find the expand toggle.
-  ActionIcon: ({
-    icon: IconComponent,
-    onClick,
-    title,
-  }: {
-    icon?: ComponentType;
-    onClick?: (e: unknown) => void;
-    title?: string;
-  }) => (
-    <button aria-label={title} type="button" onClick={onClick}>
-      {IconComponent ? <IconComponent /> : null}
-    </button>
-  ),
   Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
     IconComponent ? (
       <div
@@ -81,6 +29,33 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
+  Accordion: ({
+    items,
+    onValueChange,
+    value,
+  }: {
+    items?: { action?: ReactNode; children?: ReactNode; key: string; title?: ReactNode }[];
+    onValueChange?: (keys: string[]) => void;
+    value?: string[];
+  }) => {
+    const isExpanded = (value ?? []).includes('workflow');
+    return (
+      <div data-expanded-keys={JSON.stringify(value ?? [])} data-testid="workflow-accordion">
+        <button
+          aria-label="toggle-accordion-header"
+          type="button"
+          onClick={() => onValueChange?.(isExpanded ? [] : ['workflow'])}
+        />
+        {items?.map((item) => (
+          <div key={item.key}>
+            <div>{item.title}</div>
+            <div>{item.action}</div>
+            <div>{item.children}</div>
+          </div>
+        ))}
+      </div>
+    );
+  },
 }));
 
 vi.mock('motion/react', () => ({

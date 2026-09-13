@@ -38,6 +38,10 @@ export type AcceptanceListItem = Awaited<
 
 export type AcceptanceListPage = Awaited<ReturnType<typeof lambdaClient.acceptance.listPage.query>>;
 
+export type AcceptancePurgePreview = Awaited<
+  ReturnType<typeof lambdaClient.acceptance.purgePreview.query>
+>;
+
 /** The list's status split, shared by the flat and paged reads. */
 export type AcceptanceListFilter = 'active' | 'all' | 'completed';
 
@@ -343,11 +347,16 @@ export class VerifyService {
   mergeAcceptance = (sourceId: string, targetId: string) =>
     lambdaClient.acceptance.merge.mutate({ sourceId, targetId });
 
-  /** Delete the acceptance aggregate (its round reports detach, not delete). */
-  deleteAcceptance = (id: string) => lambdaClient.acceptance.remove.mutate({ id });
+  getAcceptancePurgePreview = (ids: string[]) =>
+    lambdaClient.acceptance.purgePreview.query({ ids });
+
+  /** Delete the acceptance aggregate; its round reports detach unless `purge` removes them too. */
+  deleteAcceptance = (id: string, purge?: boolean) =>
+    lambdaClient.acceptance.remove.mutate({ id, purge });
 
   /** Batch twin of `deleteAcceptance` for the list's multi-selection. */
-  deleteAcceptanceBatch = (ids: string[]) => lambdaClient.acceptance.removeBatch.mutate({ ids });
+  deleteAcceptanceBatch = (ids: string[], purge?: boolean) =>
+    lambdaClient.acceptance.removeBatch.mutate({ ids, purge });
 
   // ---- per-run plan ----
   getVerifyState = (operationId: string): Promise<VerifyStateResponse | null> =>

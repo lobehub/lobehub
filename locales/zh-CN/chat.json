@@ -1639,6 +1639,7 @@
   "taskDetail.acceptance.retry": "重试",
   "taskDetail.acceptance.reviewError": "复核结果保存失败。",
   "taskDetail.acceptance.title": "交付验收",
+  "taskDetail.acceptance.untitled": "该验收",
   "taskDetail.acceptance.verifier": "验证方式",
   "taskDetail.acceptanceState.accepted": "已验收",
   "taskDetail.acceptanceState.awaitingDecision": "未通过 · 待你定夺",

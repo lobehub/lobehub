@@ -238,6 +238,20 @@ describe('FileS3', () => {
       expect(mockS3ClientSend).toHaveBeenCalled();
     });
 
+    it('should split more than 1000 keys into multiple requests', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({});
+
+      const keys = Array.from({ length: 2001 }, (_, i) => `file${i}.txt`);
+      await s3.deleteFiles(keys);
+
+      expect(mockS3ClientSend).toHaveBeenCalledTimes(3);
+      const sizes = vi
+        .mocked(DeleteObjectsCommand)
+        .mock.calls.map(([input]) => input.Delete!.Objects!.length);
+      expect(sizes).toEqual([1000, 1000, 1]);
+    });
+
     it('should handle empty array', async () => {
       const s3 = new FileS3();
       mockS3ClientSend.mockResolvedValue({});

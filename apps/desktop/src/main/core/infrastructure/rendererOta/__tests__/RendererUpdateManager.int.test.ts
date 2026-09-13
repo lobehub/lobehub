@@ -230,7 +230,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
       expect(manager.getStatus().staged).toBe('r1');
       expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
         kind: 'renderer',
-        version: `${APP_VERSION}_r1`,
+        version: `${APP_VERSION}.r1`,
       });
     },
   );
@@ -306,7 +306,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     );
     expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
       kind: 'renderer',
-      version: `${APP_VERSION}_r1`,
+      version: `${APP_VERSION}.r1`,
     });
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
     expect(fetchedUrls).toEqual([

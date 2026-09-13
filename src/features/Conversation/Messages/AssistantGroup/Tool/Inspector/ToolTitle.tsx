@@ -18,6 +18,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   keyword: css`
     overflow: hidden;
+    flex: 0 1 auto;
+
+    min-width: 0;
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
@@ -36,8 +39,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextDescription};
     white-space: nowrap;
   `,
+  label: css`
+    flex: none;
+  `,
   standalone: css`
     overflow: hidden;
+    flex: 0 1 auto;
     min-width: 0;
     text-overflow: ellipsis;
   `,
@@ -97,7 +104,7 @@ const ToolTitle = memo<ToolTitleProps>(
           </span>
         ) : (
           <>
-            <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+            <span className={cx(styles.label, isLoading && shinyTextStyles.shinyText)}>
               {actionLabel || (
                 <>
                   {pluginTitle && (

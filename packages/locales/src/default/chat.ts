@@ -1553,6 +1553,7 @@ export default {
   'taskDetail.acceptance.multimodalLlm': 'Multimodal LLM',
   'taskDetail.acceptance.openReport': 'Acceptance report',
   'taskDetail.acceptance.remove': 'Remove acceptance',
+  'taskDetail.acceptance.untitled': 'this acceptance',
   'taskDetail.acceptance.removeConfirm.content':
     "This removes the task's acceptance goal, checklist, and recorded acceptance results. Task artifacts are unaffected.",
   'taskDetail.acceptance.removeConfirm.ok': 'Remove',

@@ -336,7 +336,7 @@ export class RendererUpdateManager {
       reason = 'notification-failed';
       this.app.browserManager.broadcastToAllWindows('updateReady', {
         kind: 'renderer',
-        version: `${manifest.appVersion}_${manifest.version}`,
+        version: `${manifest.appVersion}.${manifest.version}`,
       });
       outcome = 'staged';
       reason = 'staged';

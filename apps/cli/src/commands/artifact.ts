@@ -5,10 +5,12 @@ import {
   hostedPath,
   packWorkspaceHtmlDocument,
 } from '@lobechat/html-artifact';
+import { artifactShareUrl } from '@lobechat/utils/artifactShare';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient, type TrpcClient } from '../api/client';
+import { resolveServerUrl } from '../settings';
 import {
   createIdempotencyKey,
   readBinding,
@@ -240,14 +242,19 @@ export function registerArtifactCommand(program: Command) {
           writeBinding(manifest, { deploymentId: result.data.id });
         }
 
+        const publicUrl = result.data.id
+          ? artifactShareUrl(resolveServerUrl(), result.data.id)
+          : result.data.publicUrl;
+        const payload = { ...result.data, publicUrl };
+
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result.data, fields);
+          outputJson(payload, fields);
           return;
         }
 
         console.log(`${pc.green('✓')} Published ${pc.bold(title)} (${entries.length} file(s))`);
-        if (result.data.publicUrl) console.log(`  URL: ${pc.dim(result.data.publicUrl)}`);
+        if (publicUrl) console.log(`  URL: ${pc.dim(publicUrl)}`);
         console.log(`  Deployment: ${pc.dim(result.data.id ?? '')}`);
       },
     );

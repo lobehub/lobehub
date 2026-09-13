@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
         isOwner: boolean;
       },
   currentPortalView: null as null | string,
-  confirmModal: vi.fn(),
+  openDeleteConfirm: vi.fn(),
   deleteAcceptance: vi.fn(),
   mutateBundle: vi.fn(),
   mutateSubject: vi.fn(),
@@ -49,7 +49,10 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
       {title}
     </button>
   ),
-  confirmModal: (opts: unknown) => mocks.confirmModal(opts),
+}));
+
+vi.mock('@/features/Acceptance/Workspace/AcceptanceDeleteConfirm', () => ({
+  openAcceptanceDeleteConfirm: (opts: unknown) => mocks.openDeleteConfirm(opts),
 }));
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
@@ -130,7 +133,7 @@ vi.mock('@/features/Acceptance/Viewer/Review/AcceptanceDecision', () => ({
 
 vi.mock('@/services/verify', () => ({
   verifyService: {
-    deleteAcceptance: (id: string) => mocks.deleteAcceptance(id),
+    deleteAcceptance: (id: string, purge?: boolean) => mocks.deleteAcceptance(id, purge),
     reviewChecks: vi.fn(),
   },
 }));
@@ -355,13 +358,21 @@ describe('TaskAcceptance', () => {
     render(<TaskAcceptance />);
 
     fireEvent.click(screen.getByText('taskDetail.acceptance.remove'));
-    expect(mocks.confirmModal).toHaveBeenCalledTimes(1);
+    expect(mocks.openDeleteConfirm).toHaveBeenCalledTimes(1);
+    expect(mocks.openDeleteConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'taskDetail.acceptance.removeConfirm.content',
+        ids: ['acceptance-1'],
+      }),
+    );
     expect(mocks.deleteAcceptance).not.toHaveBeenCalled();
 
-    const opts = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
-    await opts.onOk();
+    const opts = mocks.openDeleteConfirm.mock.calls[0][0] as {
+      onDelete: (purge: boolean) => Promise<void>;
+    };
+    await opts.onDelete(true);
 
-    expect(mocks.deleteAcceptance).toHaveBeenCalledWith('acceptance-1');
+    expect(mocks.deleteAcceptance).toHaveBeenCalledWith('acceptance-1', true);
     expect(mocks.updateVerifyConfig).toHaveBeenCalledWith('T-231', {
       enabled: false,
       requirement: null,
@@ -387,8 +398,10 @@ describe('TaskAcceptance', () => {
     render(<TaskAcceptance />);
 
     fireEvent.click(screen.getByText('taskDetail.acceptance.remove'));
-    const opts = mocks.confirmModal.mock.calls[0][0] as { onOk: () => Promise<void> };
-    await expect(opts.onOk()).rejects.toThrow('config write failed');
+    const opts = mocks.openDeleteConfirm.mock.calls[0][0] as {
+      onDelete: (purge: boolean) => Promise<void>;
+    };
+    await expect(opts.onDelete(false)).rejects.toThrow('config write failed');
 
     expect(mocks.deleteAcceptance).not.toHaveBeenCalled();
     expect(mocks.mutateSubject).not.toHaveBeenCalled();
