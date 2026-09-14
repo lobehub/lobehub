@@ -1,4 +1,10 @@
-import { ChatErrorType, type UIChatMessage } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  ChatErrorType,
+  type ChatMessageError,
+  ThreadStatus,
+  type UIChatMessage,
+} from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { projectSharedTopicMessages } from './projectSharedTopicMessages';
@@ -10,14 +16,15 @@ const rawError = {
     traceId: 'trace-123',
   },
   message: '400 sensitive upstream diagnostic',
-  type: 'UpstreamGatewayError',
-};
+  type: AgentRuntimeErrorType.UpstreamGatewayError,
+} satisfies ChatMessageError;
 
 const message = (id: string, extra: Partial<UIChatMessage> = {}): UIChatMessage => ({
   content: 'Shared answer',
   createdAt: 1,
   id,
   role: 'assistant',
+  updatedAt: 1,
   ...extra,
 });
 
@@ -31,7 +38,7 @@ describe('projectSharedTopicMessages', () => {
             council: [message('council', { error: rawError })],
             error: rawError,
             id: 'step',
-            tasks: [{ error: 'internal task failure', id: 'task-1' }],
+            tasks: [{ error: 'internal task failure', id: 'task-1', threadId: 'thread-1' }],
             tools: [
               {
                 apiName: 'search',
@@ -55,7 +62,7 @@ describe('projectSharedTopicMessages', () => {
         taskCompletions: [{ content: 'Done', error: rawError, id: 'completion' }],
         taskDetail: {
           error: { message: 'internal task detail' },
-          status: 'failed',
+          status: ThreadStatus.Failed,
           threadId: 't1',
         },
         tasks: [message('nested-task', { error: rawError })],
@@ -90,7 +97,11 @@ describe('projectSharedTopicMessages', () => {
     const input = [
       message('answer', {
         content: 'The model answer',
-        error: { body: { traceId: { value: 'invalid' } }, message: 'secret', type: 'Other' },
+        error: {
+          body: { traceId: { value: 'invalid' } },
+          message: 'secret',
+          type: AgentRuntimeErrorType.UpstreamGatewayError,
+        },
       }),
     ];
 
