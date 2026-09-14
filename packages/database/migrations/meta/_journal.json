@@ -1138,8 +1138,15 @@
     {
       "idx": 162,
       "version": "7",
+      "when": 1789308031904,
+      "tag": "0162_fts_capture_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 163,
+      "version": "7",
       "when": 1789356957683,
-      "tag": "0162_pr18624_document_rewrite_collaboration",
+      "tag": "0163_pr18624_document_rewrite_collaboration",
       "breakpoints": true
     }
   ],

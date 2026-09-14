@@ -28,6 +28,7 @@ import {
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { searchableMessage } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
@@ -377,7 +378,7 @@ export const hydrateMessages = async (
           hits.map(({ id }) => id),
         ),
         buildWorkspaceWhere(scope, messages),
-        ne(messages.role, 'tool'),
+        searchableMessage(),
         // Twin of the topics guard in `hydrateTopics`.
         notShareVisitorMessage(),
         agentId ? eq(messages.agentId, agentId) : undefined,

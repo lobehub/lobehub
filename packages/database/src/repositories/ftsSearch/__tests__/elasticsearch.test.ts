@@ -160,6 +160,35 @@ describe('ElasticsearchFtsSearchBackend', () => {
     );
   });
 
+  it('excludes tool documents from message candidate searches', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    await backend.search({
+      entity: 'messages',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 5 },
+      query: { fields: ['content'], text: 'search phrase' },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must_not: expect.arrayContaining([
+                { term: { fts_search_sync_deleted: true } },
+                { term: { role: 'tool' } },
+              ]),
+            }),
+          },
+        }),
+      }),
+    );
+  });
+
   it('scales the query-character budget with the selected field count', async () => {
     const client = createClient([]);
     const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
@@ -584,7 +613,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
                   },
                 },
               ],
-              must_not: [{ term: { fts_search_sync_deleted: true } }],
+              must_not: [{ term: { fts_search_sync_deleted: true } }, { term: { role: 'tool' } }],
             }),
           },
         }),

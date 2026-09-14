@@ -302,6 +302,36 @@ describe('FtsSearchDocumentBuilder', () => {
     ).resolves.toEqual([]);
   });
 
+  it('skips tool and blank messages before applying the source batch limit', async () => {
+    await db.insert(messages).values([
+      { content: 'tool output', id: 'message-2-tool', role: 'tool', userId },
+      { content: '  ', id: 'message-3-blank', role: 'assistant', summary: null, userId },
+      { content: '\u00A0', id: 'message-3-nbsp', role: 'assistant', userId },
+      { content: '\t\n　', id: 'message-3-whitespace', role: 'assistant', userId },
+      { content: null, id: 'message-4-summary', role: 'task', summary: 'Task summary', userId },
+      { content: 'Visible answer', id: 'message-5-assistant', role: 'assistant', userId },
+    ]);
+
+    await expect(
+      builder.buildByIds('messages', [
+        'message-2-tool',
+        'message-3-blank',
+        'message-3-nbsp',
+        'message-3-whitespace',
+      ]),
+    ).resolves.toEqual([]);
+    await expect(
+      builder.buildBatch('messages', { afterId: 'message-1', limit: 1 }),
+    ).resolves.toMatchObject([{ id: 'message-4-summary' }]);
+    await expect(
+      builder.buildRangeBatch('messages', {
+        afterId: 'message-1',
+        beforeId: 'message-5-assistant',
+        limit: 1,
+      }),
+    ).resolves.toMatchObject([{ id: 'message-4-summary' }]);
+  });
+
   it('normalizes duplicate IDs and omits missing source records', async () => {
     const result = await builder.buildByIds('agents', ['missing', 'agent-1', 'agent-1']);
 

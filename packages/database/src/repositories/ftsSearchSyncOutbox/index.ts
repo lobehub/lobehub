@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { LobeChatDatabase } from '../../type';
 import type { FtsSearchDocumentEntity } from '../ftsSearchDocument';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from '../ftsSearchDocument';
+import captureHistory from './captureHistory.json';
 import {
   FTS_SEARCH_SYNC_CAPTURE_FINGERPRINT,
   FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS,
@@ -74,8 +75,19 @@ const rowsOf = <Row>(result: unknown): Row[] => {
 interface CaptureInfrastructureState {
   absent: boolean;
   mismatches: string[];
-  upgradeable: boolean;
+  persisted: boolean;
+  version: number | null;
 }
+
+const CURRENT_CAPTURE_VERSION = 2;
+const CAPTURE_VERSIONS = [
+  ...captureHistory,
+  {
+    functions: FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS,
+    triggers: FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS,
+    version: CURRENT_CAPTURE_VERSION,
+  },
+];
 
 const assertCaptureGinIndex = async (db: FtsSearchSyncExecutor): Promise<void> => {
   const indexResult = await db.execute(sql`
@@ -170,67 +182,94 @@ const readCaptureInfrastructureState = async (
     table_name: string;
   }>(triggerResult);
 
-  const mismatches: string[] = [];
-  let functionsMatch = functions.length === FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length;
-  if (!functionsMatch) {
-    mismatches.push(
-      `functions ${functions.length}/${FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS.length}`,
-    );
-  }
-  for (const expected of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_TARGETS) {
-    const actual = functions.find(
-      ({ identity_arguments: identityArguments, name }) =>
-        name === expected.name && identityArguments === expected.identityArguments,
-    );
-    if (
-      !actual ||
-      actual.function_body.trim() !== expected.body ||
-      actual.function_result !== expected.result ||
-      actual.language !== 'plpgsql'
-    ) {
-      functionsMatch = false;
-      mismatches.push(`function ${expected.name}`);
+  const versionResult = await db.execute(sql`
+    SELECT id, version FROM fts_search_sync_capture_version ORDER BY id
+  `);
+  const versionRows = rowsOf<{ id: string; version: number }>(versionResult);
+  const persisted = versionRows.length === 1 && versionRows[0].id === 'capture';
+  const markedVersion = persisted ? versionRows[0].version : null;
+  const absent = functions.length === 0 && triggers.length === 0 && versionRows.length === 0;
+
+  const compare = (version: (typeof CAPTURE_VERSIONS)[number]) => {
+    const mismatches: string[] = [];
+    if (functions.length !== version.functions.length) {
+      mismatches.push(`functions ${functions.length}/${version.functions.length}`);
     }
+    for (const expected of version.functions) {
+      const actual = functions.find(
+        ({ identity_arguments: identityArguments, name }) =>
+          name === expected.name && identityArguments === expected.identityArguments,
+      );
+      if (
+        !actual ||
+        actual.function_body.trim() !== expected.body ||
+        actual.function_result !== expected.result ||
+        actual.language !== 'plpgsql'
+      ) {
+        mismatches.push(`function ${expected.name}`);
+      }
+    }
+
+    if (triggers.length !== version.triggers.length) {
+      mismatches.push(`triggers ${triggers.length}/${version.triggers.length}`);
+    }
+    for (const expected of version.triggers) {
+      const actual = triggers.find(
+        ({ name, table_name: table }) => name === expected.name && table === expected.table,
+      );
+      if (
+        !actual ||
+        !['A', 'O'].includes(actual.enabled) ||
+        normalizeFtsSearchSyncCaptureDefinition(actual.definition) !== expected.definition
+      ) {
+        mismatches.push(`trigger ${expected.name}`);
+      }
+    }
+    return mismatches;
+  };
+
+  if (absent) return { absent: true, mismatches: [], persisted: false, version: null };
+  if (versionRows.length > 0 && !persisted) {
+    return {
+      absent: false,
+      mismatches: ['capture version marker'],
+      persisted: false,
+      version: null,
+    };
+  }
+  if (persisted) {
+    const expected = CAPTURE_VERSIONS.find(({ version }) => version === markedVersion);
+    return {
+      absent: false,
+      mismatches: expected ? compare(expected) : [`unknown capture version ${markedVersion}`],
+      persisted: true,
+      version: markedVersion,
+    };
   }
 
-  let triggersMatchKnownVersion =
-    triggers.length === FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length;
-  if (!triggersMatchKnownVersion) {
-    mismatches.push(
-      `triggers ${triggers.length}/${FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS.length}`,
-    );
-  }
-  for (const expected of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
-    const actual = triggers.find(
-      ({ name, table_name: table }) => name === expected.name && table === expected.table,
-    );
-    const actualDefinition = actual
-      ? normalizeFtsSearchSyncCaptureDefinition(actual.definition)
-      : undefined;
-    const enabled = actual ? ['A', 'O'].includes(actual.enabled) : false;
-    const current = enabled && actualDefinition === expected.definition;
-    const previous =
-      enabled &&
-      actualDefinition !== undefined &&
-      expected.previousDefinitions.includes(actualDefinition);
-    if (!current) {
-      mismatches.push(`trigger ${expected.name}`);
+  // Unversioned installations are recognized only when every live definition is an exact snapshot.
+  for (const historical of [...captureHistory].reverse()) {
+    if (compare(historical).length === 0) {
+      return { absent: false, mismatches: [], persisted: false, version: historical.version };
     }
-    if (!current && !previous) triggersMatchKnownVersion = false;
   }
-
   return {
-    absent: functions.length === 0 && triggers.length === 0,
-    mismatches,
-    upgradeable: functionsMatch && triggersMatchKnownVersion && mismatches.length > 0,
+    absent: false,
+    mismatches: [...compare(CAPTURE_VERSIONS.at(-1)!), 'capture version marker'],
+    persisted: false,
+    version: null,
   };
 };
 
 const assertCaptureDefinitions = async (db: FtsSearchSyncExecutor): Promise<void> => {
   const state = await readCaptureInfrastructureState(db);
-  if (state.mismatches.length > 0) {
+  if (
+    !state.persisted ||
+    state.version !== CURRENT_CAPTURE_VERSION ||
+    state.mismatches.length > 0
+  ) {
     throw new Error(
-      `FTS search sync capture infrastructure does not match the expected definition: ${state.mismatches.join(', ')}`,
+      `FTS search sync capture infrastructure does not match the expected definition: ${[...state.mismatches, !state.persisted || state.version !== CURRENT_CAPTURE_VERSION ? 'capture version' : ''].filter(Boolean).join(', ')}`,
     );
   }
 };
@@ -299,29 +338,66 @@ export class FtsSearchSyncOutboxRepository {
       await assertCaptureGinIndex(transaction);
 
       const state = await readCaptureInfrastructureState(transaction);
-      if (state.mismatches.length === 0) return;
-      if (state.upgradeable) {
-        /** The transaction keeps writers from observing a capture gap during the known upgrade. */
-        for (const { name, table } of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
-          await transaction.execute(sql.raw(`DROP TRIGGER "${name}" ON public."${table}"`));
-        }
-        for (const statement of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
-          await transaction.execute(statement);
-        }
-        await assertCaptureDefinitions(transaction);
-        return;
-      }
-      if (!state.absent) {
+      if (state.mismatches.length > 0 || (!state.absent && state.version === null)) {
         throw new Error(
           `Refusing to replace partial or unknown FTS search sync capture infrastructure: ${state.mismatches.join(', ')}`,
         );
       }
-
-      for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
-        await transaction.execute(statement);
+      if (state.persisted && state.version === CURRENT_CAPTURE_VERSION) return;
+      if (state.absent) {
+        for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
+          await transaction.execute(statement);
+        }
+        for (const statement of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
+          await transaction.execute(statement);
+        }
+        await transaction.execute(sql`
+          INSERT INTO fts_search_sync_capture_version (id, version)
+          VALUES ('capture', ${CURRENT_CAPTURE_VERSION})
+        `);
+        await assertCaptureDefinitions(transaction);
+        return;
       }
-      for (const statement of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_STATEMENTS) {
-        await transaction.execute(statement);
+
+      // A source-table lock closes the window between replacing the function and its triggers.
+      await lockCaptureSourceWrites(transaction);
+      if (!state.persisted) {
+        await transaction.execute(sql`
+          INSERT INTO fts_search_sync_capture_version (id, version)
+          VALUES ('capture', ${state.version})
+        `);
+      }
+      for (
+        let nextVersion = state.version! + 1;
+        nextVersion <= CURRENT_CAPTURE_VERSION;
+        nextVersion++
+      ) {
+        const next = CAPTURE_VERSIONS.find(({ version }) => version === nextVersion)!;
+        if (nextVersion === CURRENT_CAPTURE_VERSION) {
+          for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
+            await transaction.execute(statement);
+          }
+        }
+        for (const { name, table } of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
+          await transaction.execute(sql.raw(`DROP TRIGGER "${name}" ON public."${table}"`));
+        }
+        for (const trigger of next.triggers) {
+          await transaction.execute(sql.raw(`${trigger.definition};`));
+        }
+        await transaction.execute(sql`
+          UPDATE fts_search_sync_capture_version SET version = ${nextVersion}
+          WHERE id = 'capture'
+        `);
+        const upgraded = await readCaptureInfrastructureState(transaction);
+        if (
+          !upgraded.persisted ||
+          upgraded.version !== nextVersion ||
+          upgraded.mismatches.length > 0
+        ) {
+          throw new Error(
+            `FTS search sync capture upgrade to version ${nextVersion} failed validation`,
+          );
+        }
       }
 
       await assertCaptureDefinitions(transaction);

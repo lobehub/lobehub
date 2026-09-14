@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FileModel } from '@/database/models/file';
 import { TempFileManager } from '@/server/utils/tempFileManager';
+import { FileSource } from '@/types/files';
 
 import { FileService } from '../index';
 
@@ -411,6 +412,26 @@ describe('FileService', () => {
             path: 'files/test-user/abc/test.txt',
           }),
         }),
+        expect.any(Boolean),
+        expect.anything(),
+      );
+    });
+
+    it('preserves private visibility and page-editor source for rehosted images', async () => {
+      const beforeRecord = vi.fn();
+      await service.uploadFromBuffer(
+        Buffer.from('image'),
+        'image/png',
+        'images/test.png',
+        beforeRecord,
+        {
+          source: FileSource.PageEditor,
+          visibility: 'private',
+        },
+      );
+      expect(beforeRecord).toHaveBeenCalled();
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'page-editor', visibility: 'private' }),
         expect.any(Boolean),
         expect.anything(),
       );

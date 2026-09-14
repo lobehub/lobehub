@@ -249,7 +249,32 @@ describe('PR18624 legacy migration bridge', () => {
     await runFiles(client, migrationFiles);
     await assertPr18624SchemaShape(dbFor(client));
     const migrationRows = await records(client);
+    expect(migrationRows).toHaveLength(164);
     expect(Number(migrationRows.at(-1)?.created_at)).toBe(migrationFiles.at(-1)?.folderMillis);
+  });
+
+  it('keeps the upstream 0162 migration before the unpublished PR18624 0163 tail', () => {
+    expect(journal.entries.slice(-2).map(({ idx, tag }) => ({ idx, tag }))).toEqual([
+      {
+        idx: 162,
+        tag: '0162_fts_capture_version',
+      },
+      {
+        idx: 163,
+        tag: '0163_pr18624_document_rewrite_collaboration',
+      },
+    ]);
+
+    const upstream = migrationByTag.get('0162_fts_capture_version');
+    const collaboration = migrationByTag.get('0163_pr18624_document_rewrite_collaboration');
+    expect(upstream).toMatchObject({
+      folderMillis: 1789308031904,
+      hash: '3f50b93831233585bc59de911d5a21cac062d365f43a5b7374748ca081bd5a4d',
+    });
+    expect(collaboration).toMatchObject({
+      folderMillis: 1789356957683,
+      hash: '1d82067ef304d1e6bf33a4c50cdc5496e91a1e4f87aea03f60c8e3ec56b44d18',
+    });
   });
 
   it.each(legacy154Variants)(
@@ -265,12 +290,14 @@ describe('PR18624 legacy migration bridge', () => {
       const database = dbFor(client);
       await runPr18624LegacyBridge(database, bridgeFiles, knownLaterMigrations);
       const afterBridge = await records(client);
+      expect(afterBridge).toHaveLength(168);
       expect(Number(afterBridge.at(-1)?.created_at)).toBe(PR18624_LEGACY_MIGRATIONS.at(-1)?.when);
       await runPr18624LegacyBridge(database, bridgeFiles, knownLaterMigrations);
       expect(await records(client)).toHaveLength(afterBridge.length);
 
       await runRunnerFromLatest(client);
       const afterRunner = await records(client);
+      expect(afterRunner).toHaveLength(173);
       await runPr18624LegacyBridge(database, bridgeFiles, knownLaterMigrations);
       expect(await records(client)).toHaveLength(afterRunner.length);
       await assertPr18624SchemaShape(database);

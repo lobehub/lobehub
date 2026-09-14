@@ -27,9 +27,10 @@ After either path, call `assertPr18624SchemaShape` so `IF NOT EXISTS` cannot
 silently accept a same-name table, column, index, or foreign-key definition
 with the wrong shape.
 
-The wrapper should pass the canonical `readMigrationFiles` entries (including
-the append-only 0162 entry) as `Pr18624MigrationFile` values and pass later
-exact hash/`when` pairs to `checkPr18624LegacyHistory` and
+The wrapper should pass the canonical `readMigrationFiles` entries, including
+the upstream 0162 entry and the append-only PR18624 0163 entry, as
+`Pr18624MigrationFile` values and pass later exact hash/`when` pairs to
+`checkPr18624LegacyHistory` and
 `runPr18624LegacyBridge`. This keeps the bridge outside the normal application
 database export and makes the legacy path an explicit deployment operation.
 
@@ -37,3 +38,7 @@ The package test uses PGlite and skips production-only `pg_search`/BM25 SQL;
 the release gate must repeat the same clean and legacy sequences with the real
 node-postgres/Neon driver against an isolated disposable database before any
 shared or production database is considered.
+
+The clean canonical sequence contains 164 migration records through 0163.
+The legacy 0149–0157 replay contains 168 records after the bridge and 173
+records after the ordinary runner applies the canonical tail through 0163.

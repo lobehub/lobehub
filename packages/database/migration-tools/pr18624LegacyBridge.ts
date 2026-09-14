@@ -164,6 +164,12 @@ export const PR18624_CANARY_TAIL_MIGRATIONS = [
     when: 1789038060245,
     sha256: '2bc76dfd05a525a53706390ad97f6c8868ab459a5b16fc68f215e5e479714aec',
   },
+  {
+    idx: 162,
+    tag: '0162_fts_capture_version',
+    when: 1789308031904,
+    sha256: '3f50b93831233585bc59de911d5a21cac062d365f43a5b7374748ca081bd5a4d',
+  },
 ] as const;
 
 const NON_TRANSACTIONAL_SQL =

@@ -126,6 +126,29 @@ The official Compose configuration shares the progress volume between the applic
 
 If migration fails, the application will not start. Check the application container logs and follow the recovery instructions below. Keep the continuous sync container running; a startup migration does not replace it.
 
+The optional search capture installer records its schema version in PostgreSQL. Database migrations must run before capture installation. An older application version must not install over newer capture definitions; if the installer reports an unknown or partial definition, keep the current version running and resolve the mismatch before retrying. The capture upgrade holds source-table writes while replacing definitions, so it does not create a missed-change window or require a full reindex by itself. Existing indexed tool messages require a separate, version-aware cleanup after all sync workers use the new eligibility rule.
+
+For an existing Elasticsearch installation, first upgrade every application and continuous-sync worker to the version that excludes tool and blank messages. Then preview the ineligible PostgreSQL source count and separately record the Elasticsearch `messages` alias's live `role=tool` count:
+
+```bash
+docker run --rm --env-file .env \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-ineligible-message-cleanup.cjs --status
+```
+
+Schedule the separate cleanup only after every sync worker is upgraded. Run bounded batches with the same volume mounted for the private checkpoint:
+
+```bash
+docker run --rm --env-file .env \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-ineligible-message-cleanup.cjs \
+  --apply --yes --all-workers-upgraded \
+  --state-file=/app/.elasticsearch-reindex/ineligible-messages.json \
+  --batch-size=250 --max-batches=10 --delay-ms=1000
+```
+
+Keep the checkpoint volume for resume and do not delete it between runs. A repeated batch is safe: it allocates a newer Outbox revision, and the normal sync worker writes a fenced soft tombstone or the message's current eligible projection. Wait for the Outbox to drain without dead letters, then confirm the Elasticsearch count has decreased toward zero. The command does not change PostgreSQL messages or run Elasticsearch writes itself.
+
 ## If the migration is interrupted
 
 Keep the `lobehub-search-state` volume. For an interrupted initial manual import, resolve the error and run the import command again without `--fresh-run`. If automatic migration fails during application startup, resolve the error and any retained lock, then restart the application container. It will continue the backfill, catch-up, and switch.

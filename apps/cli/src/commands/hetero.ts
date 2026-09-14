@@ -35,6 +35,7 @@ import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
 import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
+import { createOperationTokenRenewal } from '../utils/OperationTokenRenewal';
 import { createLocalTraceStore } from '../utils/traceStore';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
@@ -482,6 +483,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
       ? createOperationHeartbeat({
           operationId,
           push: (event) => serverIngester.push(event),
+        })
+      : undefined;
+
+  // The heartbeat only renews the lease while the token under it is valid. The
+  // server signs that token for four hours; a longer run renews it in place, or
+  // every ingest after that point is rejected and the operation is reclaimed.
+  const operationTokenRenewal =
+    serverIngester && operationId
+      ? createOperationTokenRenewal({
+          operationId,
+          renew: async (id) =>
+            (await getTrpcClient()).aiAgent.refreshHeteroOperationToken.mutate({ operationId: id }),
         })
       : undefined;
 
@@ -1033,6 +1046,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
       log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }
   }
+  // Only now: the drain and the finish receipt above both authenticate with the
+  // operation token, and either can sit in retries long enough for it to expire.
+  operationTokenRenewal?.stop();
 
   // Tear down the AskUserQuestion MCP: stop polling, cancel any in-flight
   // pending (→ CC's tool returns cleanly), close the server, drop the temp

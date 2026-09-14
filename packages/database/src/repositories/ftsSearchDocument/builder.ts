@@ -18,6 +18,7 @@ import {
   userPersonaDocuments,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { searchableMessage } from '../../utils/searchableMessage';
 import type {
   FtsSearchBuiltDocument,
   FtsSearchDocumentEntity,
@@ -1005,16 +1006,19 @@ export class FtsSearchDocumentBuilder {
       })
       .from(messages)
       .where(
-        selection.ids
-          ? inArray(messages.id, selection.ids)
-          : and(
-              selection.afterId
-                ? gt(messages.id, selection.afterId)
-                : selection.fromId
-                  ? gte(messages.id, selection.fromId)
-                  : undefined,
-              selection.beforeId ? lt(messages.id, selection.beforeId) : undefined,
-            ),
+        and(
+          searchableMessage(),
+          selection.ids
+            ? inArray(messages.id, selection.ids)
+            : and(
+                selection.afterId
+                  ? gt(messages.id, selection.afterId)
+                  : selection.fromId
+                    ? gte(messages.id, selection.fromId)
+                    : undefined,
+                selection.beforeId ? lt(messages.id, selection.beforeId) : undefined,
+              ),
+        ),
       )
       .orderBy(asc(messages.id))
       .limit(selection.limit);
