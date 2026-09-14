@@ -100,6 +100,7 @@ export const activationModeControlledToolIds = [LobeActivatorManifest.identifier
  */
 export const manualModeExcludeToolIds = [
   LobeActivatorManifest.identifier,
+  SkillsManifest.identifier,
   SkillStoreManifest.identifier,
 ];
 
