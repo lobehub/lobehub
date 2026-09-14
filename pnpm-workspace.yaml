@@ -57,7 +57,7 @@ overrides:
   '@types/react': 19.2.13
   '@vitest/coverage-v8': 5.0.0
   antd: 6.3.5
-  baseline-browser-mapping: 2.10.31
+  baseline-browser-mapping: 2.11.0
   drizzle-orm: ^0.45.2
   fast-xml-parser: 5.4.2
   lexical: 0.42.0
