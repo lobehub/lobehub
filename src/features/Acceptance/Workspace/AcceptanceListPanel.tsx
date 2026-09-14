@@ -61,6 +61,7 @@ import {
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
+  rangeAcceptanceSelection,
   toggleAcceptanceSelection,
   visibleAcceptanceSelection,
 } from './batchSelection';
@@ -375,6 +376,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
     const [selecting, setSelecting] = useState(false);
     const [selected, setSelected] = useState<string[]>([]);
+    const [anchorId, setAnchorId] = useState<string | null>(null);
     const [batchPending, setBatchPending] = useState(false);
     const selectedVisible = visibleAcceptanceSelection(selected, items);
     const selectAllState = acceptanceSelectAllState(items.length, selectedVisible.length);
@@ -382,6 +384,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     const leaveSelecting = () => {
       setSelecting(false);
       setSelected([]);
+      setAnchorId(null);
     };
 
     /**
@@ -582,15 +585,34 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     // to carry it on the row or the affiliation is simply not on screen.
     const showRowProject = groupMode !== 'project';
 
-    const rowSelectionProps = (id: string) =>
-      selecting
-        ? {
-            selectable: true,
-            selected: selectedVisible.includes(id),
-            onToggleSelect: () =>
-              setSelected((previous) => toggleAcceptanceSelection(previous, id)),
-          }
-        : undefined;
+    const orderedIds = (showGroups ? groups.flatMap((group) => group.items) : items).map(
+      (item) => item.id,
+    );
+
+    // Shift/⌘-click on a row while browsing enters selection on the spot: a
+    // shift range starts from the open record, a ⌘ pick from nothing.
+    const pickRow = (id: string, shift: boolean) => {
+      if (!selecting) {
+        setSelecting(true);
+        setSelected(
+          shift ? rangeAcceptanceSelection(orderedIds, acceptanceId ?? null, id, []) : [id],
+        );
+        setAnchorId(id);
+        return;
+      }
+      if (shift) {
+        setSelected((previous) => rangeAcceptanceSelection(orderedIds, anchorId, id, previous));
+        return;
+      }
+      setSelected((previous) => toggleAcceptanceSelection(previous, id));
+      setAnchorId(id);
+    };
+
+    const rowSelectionProps = (id: string) => ({
+      selectable: selecting,
+      selected: selecting && selectedVisible.includes(id),
+      onToggleSelect: (shift: boolean) => pickRow(id, shift),
+    });
 
     // Grouping shares the filter's popover rather than taking a fourth icon in a
     // 260px header: both answer "what does this list show me", and one of them
@@ -796,7 +818,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               </Center>
             )
           ) : (
-            <div className={styles.list}>
+            <div className={styles.list} style={selecting ? { userSelect: 'none' } : undefined}>
               {showGroups ? (
                 <Accordion
                   gap={4}
