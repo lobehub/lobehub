@@ -99,15 +99,23 @@ export const runWithScheduledWorkScope = async <T>(fn: () => Promise<T>): Promis
  *
  * With `timeoutMs`, stops waiting after that long and lets the remaining work
  * keep running, so one stuck telemetry call cannot stall the caller.
+ *
+ * Resolves `true` when nothing is left pending, and `false` when it gave up at
+ * the timeout. Callers that need the work done before they continue must treat
+ * `false` as "not settled": the captured set does not tell telemetry apart from
+ * work that has to finish, such as releasing a budget hold.
  */
 export const flushScheduledWork = async ({
   timeoutMs,
-}: { timeoutMs?: number } = {}): Promise<void> => {
+}: { timeoutMs?: number } = {}): Promise<boolean> => {
   const scope = scopeStorage.getStore();
-  if (!scope || scope.pending.size === 0) return;
+  if (!scope || scope.pending.size === 0) return true;
 
   const drained = drain(scope);
-  if (timeoutMs === undefined) return drained;
+  if (timeoutMs === undefined) {
+    await drained;
+    return true;
+  }
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<'timeout'>((resolve) => {
@@ -119,5 +127,8 @@ export const flushScheduledWork = async ({
 
   if (outcome === 'timeout') {
     log('Stopped waiting for %d scheduled task(s) after %dms', scope.pending.size, timeoutMs);
+    return false;
   }
+
+  return true;
 };

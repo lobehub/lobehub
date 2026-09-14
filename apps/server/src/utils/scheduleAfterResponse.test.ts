@@ -53,7 +53,7 @@ describe('scheduled work scope', () => {
       });
 
       const startedAt = Date.now();
-      await flushScheduledWork({ timeoutMs: 10 });
+      await expect(flushScheduledWork({ timeoutMs: 10 })).resolves.toBe(false);
       expect(Date.now() - startedAt).toBeLessThan(60);
       expect(finished).toBe(false);
     });
@@ -68,7 +68,17 @@ describe('scheduled work scope', () => {
         throw new Error('boom');
       });
 
-      await expect(flushScheduledWork()).resolves.toBeUndefined();
+      await expect(flushScheduledWork()).resolves.toBe(true);
+    });
+  });
+
+  it('reports a drained flush within the timeout as settled', async () => {
+    await runWithScheduledWorkScope(async () => {
+      after(async () => {
+        await sleep(5);
+      });
+
+      await expect(flushScheduledWork({ timeoutMs: 1000 })).resolves.toBe(true);
     });
   });
 
@@ -124,6 +134,6 @@ describe('scheduled work scope', () => {
   });
 
   it('is a no-op outside a scope', async () => {
-    await expect(flushScheduledWork()).resolves.toBeUndefined();
+    await expect(flushScheduledWork()).resolves.toBe(true);
   });
 });

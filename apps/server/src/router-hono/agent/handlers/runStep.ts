@@ -288,7 +288,18 @@ export async function runStep(c: Context): Promise<Response> {
         while (pendingContinuation) {
           // Let the previous step's deferred work finish first. Its budget
           // hold is released there, and the next step reserves again.
-          await flushScheduledWork({ timeoutMs: STEP_BOUNDARY_FLUSH_TIMEOUT_MS });
+          const settled = await flushScheduledWork({ timeoutMs: STEP_BOUNDARY_FLUSH_TIMEOUT_MS });
+          if (!settled) {
+            // The deferred work cannot be told apart, so a slow telemetry call
+            // and a slow budget settlement look the same. Reserving again on
+            // top of an unreleased hold is exactly the false "over budget"
+            // this wait exists to prevent, so stop inlining and hand the step
+            // to the queue, the way it ran before steps were inlined.
+            log(
+              `[${operationId}] Deferred work still running after ${STEP_BOUNDARY_FLUSH_TIMEOUT_MS}ms, handing step ${pendingContinuation.stepIndex} back to the queue`,
+            );
+            break;
+          }
 
           const elapsed = Date.now() - startTime;
           if (elapsed >= INLINE_STEP_START_DEADLINE_MS) {

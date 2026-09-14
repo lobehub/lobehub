@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '@/server/services/aiAgent';
+import type * as ScheduleAfterResponseModule from '@/server/utils/scheduleAfterResponse';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { runStep, runStepHealth } from '../runStep';
@@ -13,6 +14,20 @@ const mockExecuteStep = vi.fn();
 const mockScheduleContinuation = vi.fn();
 const mockReleaseOperationLock = vi.fn();
 const mockGetServerDB = vi.hoisted(() => vi.fn());
+// Lets a test force the step-boundary flush to report a timeout; undefined
+// means use the real implementation.
+const flushOverride = vi.hoisted(() => ({ settled: undefined as boolean | undefined }));
+
+vi.mock('@/server/utils/scheduleAfterResponse', async (importOriginal) => {
+  const actual = await importOriginal<typeof ScheduleAfterResponseModule>();
+  return {
+    ...actual,
+    flushScheduledWork: (options?: { timeoutMs?: number }) =>
+      flushOverride.settled === undefined
+        ? actual.flushScheduledWork(options)
+        : Promise.resolve(flushOverride.settled),
+  };
+});
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
   AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
@@ -670,6 +685,37 @@ describe('runStep inline step loop', () => {
     await runStep(ctx);
 
     expect(mockClearInlineResume).toHaveBeenCalledWith('op-1', 'op-1:owner');
+  });
+
+  it('hands the next step to the queue when deferred work does not settle in time', async () => {
+    // A timed-out flush may be a budget settlement that has not released its
+    // hold yet. Starting the next step anyway would reserve on top of it and
+    // bring back the false "over budget" rejection.
+    flushOverride.settled = false;
+    const pending = continuationFor(3);
+    mockExecuteStep.mockResolvedValueOnce({
+      continuation: pending,
+      nextStepScheduled: false,
+      state: { status: 'running', stepCount: 3 },
+      success: true,
+    });
+
+    try {
+      const { ctx, getCaptures } = buildContext({ body: validBody });
+      const res = await runStep(ctx);
+
+      expect(res.status).toBe(200);
+      expect(mockExecuteStep).toHaveBeenCalledTimes(1);
+      expect(mockScheduleContinuation).toHaveBeenCalledWith(pending);
+      expect(getCaptures()[0].body).toMatchObject({
+        inlinedSteps: 0,
+        nextStepIndex: 3,
+        nextStepScheduled: true,
+      });
+      expect(mockReleaseOperationLock).toHaveBeenCalledWith('op-1', 'op-1:owner');
+    } finally {
+      flushOverride.settled = undefined;
+    }
   });
 
   it('settles work a step deferred before the next inline step starts', async () => {
