@@ -52,31 +52,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover [data-lobehub-file-download] {
       opacity: 1;
     }
-
-    [data-block-file].selected & {
-      position: relative;
-      border-color: ${cssVar.colorPrimary};
-      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
-    }
-
-    [data-block-file].selected &::after {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      inset: 0;
-
-      border-radius: inherit;
-
-      opacity: 0.35;
-      background: ${cssVar.colorPrimaryBg};
-    }
-
-    [data-block-file].selected &::selection,
-    [data-block-file].selected & *::selection {
-      color: currentcolor;
-      background: transparent;
-    }
   `,
   download: css`
     flex-shrink: 0;

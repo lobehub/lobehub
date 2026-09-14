@@ -11,7 +11,8 @@ const styles = createStaticStyles(({ css }) => ({
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 12px;
 
-    width: min(100%, 520px);
+    box-sizing: border-box;
+    width: 100%;
     padding: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 12px;
@@ -20,11 +21,6 @@ const styles = createStaticStyles(({ css }) => ({
     text-decoration: none;
 
     background: ${cssVar.colorBgContainer};
-
-    &[data-selected='true'] {
-      border-color: ${cssVar.colorPrimary};
-      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
-    }
   `,
   description: css`
     overflow: hidden;
