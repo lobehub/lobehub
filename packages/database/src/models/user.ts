@@ -480,6 +480,7 @@ export class UserModel {
    * Remove high-volume rows in committed batches before the final user cascade.
    * An interrupted call can safely resume from the remaining rows. The final
    * transaction still checks for pending transfers and handles concurrent writes.
+   * Call only after account deletion has become irreversible, because each batch commits.
    */
   static deleteUserInBatches = async (
     db: LobeChatDatabase,
