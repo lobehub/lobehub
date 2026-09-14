@@ -7,6 +7,7 @@ export * from './knowledge';
 export * from './llm';
 export * from './memory';
 export * from './notification';
+export * from './quickNote';
 export * from './systemAgent';
 export * from './tool';
 export * from './tts';

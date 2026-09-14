@@ -13,6 +13,8 @@ export interface IngestSink {
       message: string;
       type: string;
     };
+    /** True only when the native resume token was proven unusable. */
+    resumeSessionInvalidated?: boolean;
     result: 'cancelled' | 'error' | 'success';
     sessionId?: string;
   }) => Promise<void>;

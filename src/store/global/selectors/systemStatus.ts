@@ -187,6 +187,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'image',
   'community',
   'pages',
+  'note',
   'memory',
 ];
 

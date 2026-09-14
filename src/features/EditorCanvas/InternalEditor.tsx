@@ -12,13 +12,13 @@ import {
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { createStaticStyles } from 'antd-style';
-import isEqual from 'fast-deep-equal';
 import type { CSSProperties, RefObject } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { writeTopicCommentMentionMarkdown } from '@/features/Portal/TopicComments/editorUtils';
+import { useEditorDocumentChange } from '@/hooks/useEditorDocumentChange';
 
 import { type EditorCanvasProps } from './EditorCanvas';
 import InlineToolbar from './InlineToolbar';
@@ -285,44 +285,12 @@ const InternalEditor = memo<InternalEditorProps>(
       };
     }, [editor, onInit]);
 
-    // Use refs for stable references across re-renders
-    const previousDocumentSnapshotRef = useRef<unknown>(undefined);
-    const onContentChangeRef = useRef(onContentChange);
-    onContentChangeRef.current = onContentChange;
-
-    // Listen to Lexical updates directly to trigger content change
-    // This bypasses @lobehub/editor's onTextChange which has issues with previousContent reset
-    useEffect(() => {
-      if (!editor) return;
-
-      const lexicalEditor = editor.getLexicalEditor?.();
-      if (!lexicalEditor) return;
-
-      // Initialize snapshot before registering listener
-      previousDocumentSnapshotRef.current = editor.getDocument('json');
-
-      const unregister = lexicalEditor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
-        // Skip selection-only / caret-movement updates — no content was mutated.
-        if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
-
-        const currentDocumentSnapshot = editor.getDocument('json');
-
-        if (!isEqual(currentDocumentSnapshot, previousDocumentSnapshotRef.current)) {
-          previousDocumentSnapshotRef.current = currentDocumentSnapshot;
-
-          // During document hydration (e.g. route switch), we only advance snapshot
-          // and skip external change callback to avoid false dirty checks.
-          if (contentChangeLockRef?.current) return;
-          if (disabled) return;
-
-          onContentChangeRef.current?.();
-        }
-      });
-
-      return () => {
-        unregister();
-      };
-    }, [contentChangeLockRef, disabled, editor]); // Only depend on stable refs and editor
+    useEditorDocumentChange({
+      contentChangeLockRef,
+      disabled,
+      editor,
+      onContentChange: () => onContentChange?.(),
+    });
 
     return (
       <div

@@ -11,6 +11,7 @@ import type { AgentSignalSourceType } from '@lobechat/agent-signal/source';
 import { createSourceEvent } from '@lobechat/agent-signal/source';
 
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
+import { QuickNoteProcessingService } from '@/server/services/quickNote';
 
 import type {
   AgentSignalEmitOptions,
@@ -131,6 +132,14 @@ const createPolicyOptions = (
     classifierDiagnostics: policyOptions?.classifierDiagnostics,
     nightlyReview: policyOptions?.nightlyReview,
     procedure: procedurePolicyOptions,
+    quickNoteAnalyze: {
+      dispatch: (runId) =>
+        new QuickNoteProcessingService(
+          context.db,
+          context.userId,
+          context.workspaceId,
+        ).dispatchAnalyzeRun(runId),
+    },
     selfFeedbackIntent: policyOptions?.selfFeedbackIntent,
     selfReflection: policyOptions?.selfReflection,
     userMemory: {

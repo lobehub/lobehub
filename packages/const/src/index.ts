@@ -9,6 +9,7 @@ export * from './currency';
 export * from './desktop';
 export * from './desktopGlobalShortcuts';
 export * from './discover';
+export * from './documentHistory';
 export * from './editor';
 export * from './empty';
 export * from './fetch';

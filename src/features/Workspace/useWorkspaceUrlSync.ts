@@ -23,6 +23,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'group',
   'community',
   'memory',
+  'note',
   'page',
   'projects',
   'resource',

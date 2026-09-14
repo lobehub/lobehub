@@ -102,7 +102,7 @@ export const documents = pgTable(
 
     // Source type
     sourceType: text('source_type', {
-      enum: ['file', 'web', 'api', 'topic', 'agent', 'agent-signal'],
+      enum: ['file', 'web', 'api', 'topic', 'agent', 'agent-signal', 'quick-note'],
     }).notNull(),
     source: text('source').notNull(), // File path or web URL
 

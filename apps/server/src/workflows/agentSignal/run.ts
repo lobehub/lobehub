@@ -136,12 +136,35 @@ const resolveSnapshotOperationId = (result: GeneratedAgentSignalEmissionResult) 
 };
 
 const toWorkflowStepSnapshot = (result: GeneratedAgentSignalEmissionResult): StepSnapshot => {
-  const events = toAgentSignalTraceEvents({
+  const runtimeResult =
+    'runtimeResult' in result.orchestration ? result.orchestration.runtimeResult : undefined;
+  const terminalPayload =
+    runtimeResult?.status === 'conclude'
+      ? runtimeResult.concluded
+      : runtimeResult?.status === 'wait'
+        ? runtimeResult.pending
+        : runtimeResult?.status === 'schedule'
+          ? runtimeResult.nextHop
+          : undefined;
+  const traceEvents = toAgentSignalTraceEvents({
     actions: result.orchestration.actions,
     results: result.orchestration.results,
     signals: result.orchestration.emittedSignals,
     source: result.source,
   });
+  // Terminal handler results sit outside the source/signal/action trace. Preserve their compact
+  // references so queued dispatches can link the Signal snapshot to the Agent operation they start.
+  const terminalEvents =
+    runtimeResult && runtimeResult.status !== 'completed'
+      ? [
+          {
+            data: { ...terminalPayload, runtimeStatus: runtimeResult.status },
+            timestamp: Date.now(),
+            type: 'agent_signal.terminal',
+          },
+        ]
+      : [];
+  const events = [...traceEvents, ...terminalEvents];
   const startedAt = result.source.timestamp;
   const completedAt =
     Math.max(

@@ -188,7 +188,7 @@ describe('DocumentModel', () => {
       expect(result.total).toBe(2);
     });
 
-    it('should exclude agent-owned documents unless sourceTypes explicitly requests them', async () => {
+    it('should exclude internal agent and Quick Note documents unless explicitly requested', async () => {
       await createTestDocument(documentModel, fileModel, 'Visible document');
       await documentModel.create({
         content: 'Agent document',
@@ -197,6 +197,15 @@ describe('DocumentModel', () => {
         source: 'agent-document://agent-1/agent-document',
         sourceType: 'agent',
         totalCharCount: 14,
+        totalLineCount: 1,
+      });
+      await documentModel.create({
+        content: 'Quick Note source',
+        fileType: 'text/markdown',
+        filename: 'quick-note',
+        source: 'quick-note:qn_1',
+        sourceType: 'quick-note',
+        totalCharCount: 17,
         totalLineCount: 1,
       });
 
@@ -209,6 +218,11 @@ describe('DocumentModel', () => {
 
       expect(agentResult.items).toHaveLength(1);
       expect(agentResult.items[0].sourceType).toBe('agent');
+
+      const quickNoteResult = await documentModel.query({ sourceTypes: ['quick-note'] });
+
+      expect(quickNoteResult.items).toHaveLength(1);
+      expect(quickNoteResult.items[0].sourceType).toBe('quick-note');
     });
 
     it('should only return documents for the current user', async () => {

@@ -41,6 +41,7 @@ export * from './metric';
 export * from './notification';
 export * from './plugins';
 export * from './project';
+export * from './quickNote';
 export * from './rag';
 export * from './recent';
 export * from './redis';

@@ -172,7 +172,9 @@ export class DocumentModel {
       conditions.push(
         inArray(
           documents.sourceType,
-          sourceTypes as ('file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal')[],
+          sourceTypes as (
+            'file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal' | 'quick-note'
+          )[],
         ),
       );
     } else {

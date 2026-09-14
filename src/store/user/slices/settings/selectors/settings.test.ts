@@ -59,6 +59,29 @@ describe('settingsSelectors', () => {
     });
   });
 
+  describe('currentQuickNoteSettings', () => {
+    /** @example A partial persisted preference keeps the default delay and execution bound. */
+    it('merges partial Quick Note settings with defaults', () => {
+      const state = {
+        defaultSettings: {
+          quickNote: {
+            analyzeAgentId: null,
+            autoAnalyze: { enabled: true, idleDelayMs: 6000 },
+            maxAnalyzeSteps: 4,
+          },
+        },
+        settings: { quickNote: { autoAnalyze: { enabled: false } } },
+      } as unknown as UserStore;
+
+      /** @example Only the explicit toggle changes. */
+      expect(settingsSelectors.currentQuickNoteSettings(state)).toEqual({
+        analyzeAgentId: null,
+        autoAnalyze: { enabled: false, idleDelayMs: 6000 },
+        maxAnalyzeSteps: 4,
+      });
+    });
+  });
+
   describe('defaultAgent', () => {
     it('should merge DEFAULT_AGENT and s.settings.defaultAgent correctly', () => {
       const s = {
