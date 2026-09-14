@@ -254,7 +254,7 @@ jobs:
       # 基线:被测 merge SHA 祖先中最近一次成功的 release-desktop-canary run
       - name: Find latest canary baseline run
         id: baseline_run
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           # github-script JSON-encodes return values by default; we need the raw run id string
           result-encoding: string
@@ -295,7 +295,7 @@ jobs:
 
       - name: Comment ASAR size report on PR
         if: always() && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -388,7 +388,7 @@ jobs:
       # 生成PR发布描述
       - name: Generate PR Release Body
         id: pr_release_body
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           result-encoding: string
           script: |
@@ -427,7 +427,7 @@ jobs:
 
       # Post comment on PR with build info, release download link, and Actions artifacts link
       - name: Comment on PR
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
