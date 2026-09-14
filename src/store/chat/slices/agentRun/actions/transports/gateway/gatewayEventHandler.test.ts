@@ -9,6 +9,15 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
+const executorMocks = vi.hoisted(() => ({
+  onAfterCall: vi.fn(),
+}));
+
+vi.mock('@/store/tool/slices/builtin/executors', () => ({
+  getExecutor: vi.fn(() => ({ onAfterCall: executorMocks.onAfterCall })),
+  registerBuiltinToolExecutors: vi.fn(),
+}));
+
 const context = {
   agentId: 'agent-1',
   topicId: 'topic-1',
@@ -52,7 +61,56 @@ const flush = async () => {
 describe('createGatewayEventHandler', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    executorMocks.onAfterCall.mockReset();
     vi.spyOn(agentSignalBridge, 'emitClientAgentSignalSourceEvent').mockResolvedValue(undefined);
+  });
+
+  it('normalizes tool_end isSuccess for Codex worktree side-effect hooks', async () => {
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([] as unknown as UIChatMessage[]);
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+
+    handler(
+      makeEvent('tool_end', {
+        isSuccess: true,
+        payload: {
+          toolCalling: {
+            apiName: 'command_execution',
+            arguments: JSON.stringify({
+              command:
+                'git worktree add -b feat/device-reconnect-button /repo-wt-device-reconnect abc123',
+            }),
+            id: 'command-1',
+            identifier: 'codex',
+            type: 'default',
+          },
+        },
+        result: { content: 'Preparing worktree (new branch feat/device-reconnect-button)' },
+        skipMessageFetch: true,
+        toolCallId: 'command-1',
+      } as any),
+    );
+    await flush();
+
+    expect(executorMocks.onAfterCall).toHaveBeenCalledWith({
+      apiName: 'command_execution',
+      identifier: 'codex',
+      params: {
+        command:
+          'git worktree add -b feat/device-reconnect-button /repo-wt-device-reconnect abc123',
+      },
+      result: {
+        content: 'Preparing worktree (new branch feat/device-reconnect-button)',
+        success: true,
+      },
+      toolCallId: 'command-1',
+      topicId: 'topic-1',
+    });
   });
 
   it('inserts the assistant shell locally when stream_start carries the message seed (new server)', async () => {
@@ -958,6 +1016,99 @@ describe('createGatewayEventHandler', () => {
       context,
     });
     expect(lifecycle.completeRun).toHaveBeenCalled();
+  });
+
+  // tool_end queues a full-topic getMessages. step_start is not queued and
+  // immediately replaceMessages's the pushed snapshot. If the earlier fetch is
+  // still in flight, last-write-wins lets its older list wipe the next step
+  // (and any stream_chunks already applied to it).
+  it('does not let a slower tool_end refetch overwrite a later step_start snapshot', async () => {
+    const staleSnapshot = [
+      { id: 'user-1', role: 'user' },
+      { id: 'asst-1', role: 'assistant' },
+      { id: 'tool-1', role: 'tool' },
+    ] as unknown as UIChatMessage[];
+    const nextStepSnapshot = [
+      ...staleSnapshot,
+      { content: 'next step', id: 'asst-2', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+
+    let resolveFetch: ((messages: UIChatMessage[]) => void) | undefined;
+    vi.spyOn(messageService, 'getMessages').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'asst-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('tool_end', { isSuccess: true }));
+    await flush();
+    expect(messageService.getMessages).toHaveBeenCalled();
+
+    handler(makeEvent('step_start', { uiMessages: nextStepSnapshot }));
+    expect(store.replaceMessages).toHaveBeenCalledWith(
+      nextStepSnapshot,
+      expect.objectContaining({ action: 'gateway/step_start' }),
+    );
+
+    resolveFetch?.(staleSnapshot);
+    await flush();
+
+    const lastCall = vi.mocked(store.replaceMessages).mock.calls.at(-1);
+    expect(lastCall?.[0]).toEqual(nextStepSnapshot);
+    expect(lastCall?.[0]).not.toEqual(staleSnapshot);
+  });
+
+  // Hetero / old-server stream_start has no assistantMessage.id, so it
+  // resolves the next bubble from the fetch return value. If that fetch
+  // started before step_start and we still returned the stale list, chunks
+  // would target an id the store no longer has.
+  it('does not resolve the next assistant id from a dropped stale refetch', async () => {
+    const staleSnapshot = [
+      { id: 'user-1', role: 'user' },
+      { id: 'asst-1', role: 'assistant' },
+      { id: 'asst-stale', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+    const nextStepSnapshot = [
+      { id: 'user-1', role: 'user' },
+      { id: 'asst-1', role: 'assistant' },
+      { id: 'tool-1', role: 'tool' },
+      { content: 'next step', id: 'asst-2', role: 'assistant' },
+    ] as unknown as UIChatMessage[];
+
+    let resolveFetch: ((messages: UIChatMessage[]) => void) | undefined;
+    vi.spyOn(messageService, 'getMessages').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'asst-1',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('stream_start', { newStep: true }));
+    await flush();
+    expect(messageService.getMessages).toHaveBeenCalled();
+
+    handler(makeEvent('step_start', { uiMessages: nextStepSnapshot }));
+    resolveFetch?.(staleSnapshot);
+    await flush();
+
+    expect(store.associateMessageWithOperation).not.toHaveBeenCalledWith('asst-stale', 'op-1');
+    const lastCall = vi.mocked(store.replaceMessages).mock.calls.at(-1);
+    expect(lastCall?.[0]).toEqual(nextStepSnapshot);
   });
 
   it('falls back to the streamed accumulator when the terminal snapshot carries no assistant text', async () => {

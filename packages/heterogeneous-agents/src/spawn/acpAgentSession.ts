@@ -50,6 +50,8 @@ export interface AcpAgentSessionOptions {
   clientVersion: string;
   commandPath: string;
   cwd: string;
+  /** Create a dedicated Unix process group. Disable beneath a detached wrapper. */
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   onEvents: (events: AgentStreamEvent[]) => Promise<void> | void;
   onRawMessage: (line: string) => Promise<void> | void;
@@ -115,6 +117,7 @@ export abstract class AcpAgentSession<
       args: config.args,
       commandPath: options.commandPath,
       cwd: options.cwd,
+      detached: options.detached,
       env: options.env,
       onMessage: (message) => this.handleAgentMessage(message),
       onRawMessage: options.onRawMessage,

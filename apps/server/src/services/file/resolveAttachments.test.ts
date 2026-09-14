@@ -10,13 +10,17 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn().mockImplementation(() => ({ findByIds: mocks.findByIds })),
+  FileModel: vi.fn().mockImplementation(function () {
+    return { findByIds: mocks.findByIds };
+  }),
 }));
 
 vi.mock('@/server/services/document', () => ({ DocumentService: vi.fn() }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({ getFullFileUrl: mocks.getFullFileUrl })),
+  FileService: vi.fn().mockImplementation(function () {
+    return { getFullFileUrl: mocks.getFullFileUrl };
+  }),
   getFileProxyUrl: (fileId: string) => `https://app.lobehub.com/f/${fileId}`,
 }));
 

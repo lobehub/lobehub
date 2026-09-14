@@ -1,4 +1,3 @@
-import { ModelIcon } from '@lobehub/icons';
 import {
   DropdownMenuItem,
   DropdownMenuItemContent,
@@ -19,6 +18,7 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import { ModelSwitchSubmenuPopup } from '@/features/ModelSwitchPanel';
 
 import type { SelectorSubmenuItem } from '../../components/buildSelectorSubmenu';

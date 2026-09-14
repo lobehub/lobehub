@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Skeleton as LobeSkeleton } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { RefreshCw } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -66,24 +66,8 @@ const ChipItem = memo<ChipItemProps>(({ title, prompt, index, tracingId, disable
 const ChipSkeleton = memo(() => (
   <Block style={{ borderRadius: cssVar.borderRadiusLG }} variant={'outlined'}>
     <Flexbox gap={8} paddingBlock={12} paddingInline={14}>
-      <LobeSkeleton.Button
-        active
-        size={'small'}
-        style={{ borderRadius: 4, height: 14, minWidth: 96, width: 96 }}
-      />
-      <Flexbox gap={6}>
-        <LobeSkeleton.Button
-          active
-          block
-          size={'small'}
-          style={{ borderRadius: 4, height: 10, minWidth: '100%' }}
-        />
-        <LobeSkeleton.Button
-          active
-          size={'small'}
-          style={{ borderRadius: 4, height: 10, minWidth: '60%', width: '60%' }}
-        />
-      </Flexbox>
+      <Skeleton.Text fontSize={14} width={96} />
+      <Skeleton.Text rows={2} width={['100%', '60%']} />
     </Flexbox>
   </Block>
 ));

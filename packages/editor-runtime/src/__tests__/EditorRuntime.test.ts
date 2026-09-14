@@ -1,6 +1,7 @@
 import type { IEditor } from '@lobehub/editor';
 import { CommonPlugin, Kernel, LitexmlPlugin, MarkdownPlugin, moment } from '@lobehub/editor';
 import { resetRandomKey } from 'lexical';
+import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorRuntime } from '../EditorRuntime';
@@ -8,8 +9,8 @@ import { EditorRuntime } from '../EditorRuntime';
 describe('EditorRuntime', () => {
   let runtime: EditorRuntime;
   let editor: IEditor;
-  let mockTitleSetter: ReturnType<typeof vi.fn>;
-  let mockTitleGetter: ReturnType<typeof vi.fn>;
+  let mockTitleSetter: Mock<(title: string) => void>;
+  let mockTitleGetter: Mock<() => string>;
 
   beforeEach(() => {
     resetRandomKey();

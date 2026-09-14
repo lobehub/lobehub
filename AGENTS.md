@@ -15,62 +15,21 @@ Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 `AGENTS.md` owns repository-wide architecture and workflow. Keep detailed implementation rules in skills so they have one source of truth.
 
-- **React and TSX**: Before editing components, component state, render boundaries, or memoization, read [`.agents/skills/react/SKILL.md`](.agents/skills/react/SKILL.md). It owns component selection, styling, state locality, and render-performance rules.
-- **Heavy domain features**: When splitting a fat Viewer/Page into reusable pieces (page vs portal vs share vs micro-app), read [`.agents/skills/compose-atoms/SKILL.md`](.agents/skills/compose-atoms/SKILL.md). Split on mountable capabilities, not visual sections, and do not hide unused work behind `readOnly` / `mode` flags.
+- **React and TSX**: Before editing components, component state, render boundaries, or memoization, read the `react` skill. It owns component selection, styling, state locality, and render-performance rules.
+- **Heavy domain features**: When splitting a fat Viewer/Page into reusable pieces (page vs portal vs share vs micro-app), read the `compose-atoms` skill. Split on mountable capabilities, not visual sections, and do not hide unused work behind `readOnly` / `mode` flags.
 
-## Project Structure
+## Code Ownership
 
-```plaintext
-lobehub/
-├── apps/
-│   ├── desktop/            # Electron desktop app
-│   ├── cli/                # LobeHub CLI
-│   └── server/             # Backend service (Hono app + server routers/services)
-├── packages/               # Shared packages (@lobechat/*)
-│   ├── database/           # Database schemas, models, repositories
-│   ├── agent-runtime/      # Agent runtime
-│   ├── locales/            # i18n source: packages/locales/src/default/
-│   ├── env/                # env schemas (@/envs/* → packages/env/src/*)
-│   └── ...
-├── src/
-│   ├── app/                # Next.js App Router (route shell + auth)
-│   │   ├── (backend)/      # Backend route shells
-│   │   ├── spa/            # SPA HTML template service
-│   │   └── spa-auth/       # Auth HTML shell (SSR)
-│   ├── routes/             # SPA page segments (thin — delegate to features/)
-│   │   ├── (main)/ (mobile)/ (desktop)/ (popup)/
-│   │   ├── auth/           # Auth page segments (signin, signup, …)
-│   │   ├── onboarding/ share/
-│   ├── spa/                # SPA entry points and router config
-│   │   ├── entry.{web,mobile,desktop,popup}.tsx
-│   │   └── router/         # React Router configuration
-│   ├── store/              # Zustand stores
-│   ├── services/           # Client services
-│   ├── libs/               # Shared client/server helpers for the app shell
-│   └── ...
-└── e2e/                    # E2E tests (Cucumber + Playwright)
-```
+For the full repository map or help locating a code layer, read the `project-overview` skill.
 
-## SPA Routes and Features
+- `apps/server/src`: backend runtime, routers, and services, imported through `@/server/*`. `src/app/(backend)` contains Next.js route shells only; do not put backend business logic there.
+- `src/app`: Next.js HTML/auth shells. Web shell helpers belong under `src/libs` or the relevant app segment, not `src/server`.
+- `src/spa`: SPA entry points and React Router configuration. `src/routes` holds thin page segments that compose `src/features`; business UI and logic belong in features by domain.
+- `src/services` and `src/store`: client API services and Zustand state. Keep fetch/cache guidance in `data-fetching-architecture` and store conventions in `zustand`.
+- `apps/desktop`, `apps/cli`: Electron and CLI applications. `packages` holds shared code, including `database`, `agent-runtime`, `env`, and `locales`.
+- `e2e`: end-to-end tests using Cucumber and Playwright.
 
-SPA-related code is grouped under `src/spa/` (entries + router) and `src/routes/` (page segments). We use a **roots vs features** split: route trees only hold page segments; business logic and UI live in features.
-
-- **`src/spa/`** – SPA entry points (`entry.web.tsx`, `entry.mobile.tsx`, `entry.desktop.tsx`, `entry.popup.tsx`) and React Router config (`router/`, with `desktopRouter.config.*`, `mobileRouter.config.tsx`, `popupRouter.config.tsx`). Keeps router config next to entries to avoid confusion with `src/routes/`.
-
-- **`src/routes/` (roots)**\
-  Only page-segment files: `_layout/index.tsx`, `index.tsx` (or `page.tsx`), and dynamic segments like `[id]/index.tsx`. Keep these **thin**: they should only import from `@/features/*` and compose layout/page, with no business logic or heavy UI.
-
-- **`src/features/`**\
-  Business components by **domain** (e.g. `Pages`, `PageEditor`, `Home`). Put layout chunks (sidebar, header, body), hooks, and domain-specific UI here. Each feature exposes an `index.ts` (or `index.tsx`) with clear exports.
-
-When adding or changing SPA routes:
-
-1. In `src/routes/`, add only the route segment files (layout + page) that delegate to features.
-2. Implement layout and page content under `src/features/<Domain>/` and export from there.
-3. In route files, use `import { X } from '@/features/<Domain>'` (or `import Y from '@/features/<Domain>/...'`). Do not add new `features/` folders inside `src/routes/`.
-4. **Register shared desktop content routes once:** add common Web/Electron paths, nesting, metadata, lazy loaders, and `preloadId` values in `src/spa/router/desktopRouter.shared.tsx`. The thin `desktopRouter.config.tsx` and `desktopRouter.config.desktop.tsx` files contain only runtime differences: Web mounts the content tree directly, while Electron keeps slim root stubs and mounts the same tree in per-tab memory routers through `src/spa/router/tabRouter.tsx`. Add code to a platform adapter only when the route is genuinely platform-specific. `desktopRouter.sync.test.tsx` guards the shared behavior and explicit differences — keep it passing.
-
-See the **spa-routes** skill for the full convention and file-division rules.
+Before changing SPA routes, read the `spa-routes` skill. Register common Web/Electron paths, metadata, lazy loaders and `preloadId` values once in `src/spa/router/desktopRouter.shared.tsx`; keep `desktopRouter.config*.tsx` limited to platform differences and `desktopRouter.sync.test.tsx` passing. Do not create `features` directories inside `src/routes`.
 
 ## Development
 
@@ -86,12 +45,6 @@ bun run dev
 # Standalone Hono backend service
 pnpm --filter @lobechat/server dev
 ```
-
-### Backend Architecture
-
-- Backend runtime code lives under `apps/server/src` and is imported through `@/server/*`.
-- `src/app/(backend)` contains Next.js route shells. Do not add backend business logic there.
-- Web shell helpers belong under `src/libs/*` or the relevant `src/app` segment, not under `src/server`.
 
 After `dev:spa` starts, the terminal prints a **Debug Proxy** URL:
 
@@ -117,16 +70,22 @@ Open this URL to develop locally against the production backend (app.lobehub.com
 
 ### Quality Check
 
-```bash
-bun run check [changed-files...]
-```
+Use `bun run check [changed-files...]`.
 
-- Every bug fix must include a corresponding regression test that fails before the fix and passes after it. **Skip** when the fix is pure style/CSS (selector, hover, mask, spacing, color) and the only practical assertion would be source-string matching on the stylesheet — that is not a regression test worth shipping.
-- No selector = **lint + test in a single pass** — run it once; don't fire a separate pass per selector. `--lint` / `--test` / `--type` narrow scope and are composable within one run. Default files = all working-tree changes (staged + unstaged + untracked); explicit paths override.
-- `--lint` auto-fixes the given files and prints the applied fixes as a diff, so you can review what changed.
-- `--test` auto-discovers the related tests for the given source files and runs them under the nearest owning vitest config (e.g. `packages/database`) — no need to `cd` into packages.
-- `--type` runs the full type-check. NEVER run `bun run test` — the full suite takes \~10 minutes.
-- To run tests manually (e.g. a single file or unusual flags), `cd` into the owning package first: `cd packages/database && bunx vitest run --silent='passed-only' '[file-path]'`.
+- Every bug fix needs a regression test that fails before the fix and passes after it. Skip pure style/CSS fixes when the only practical assertion would match stylesheet source strings.
+- Run once with the selectors needed: no selector means lint + related tests; `--lint`, `--test`, and `--type` compose. Default scope is all staged, unstaged and untracked changes; explicit paths override it.
+- Lint autofixes files: review the emitted diff. Tests use the nearest owning Vitest config. `--type` checks the full repo. Never run `bun run test`, which runs the full suite.
+- For a manual package test, run from the owning package: `cd packages/database && bunx vitest run --silent='passed-only' '[file-path]'`.
+
+### Acceptance
+
+Use the `acceptance` skill to decide whether the delivery needs product verification and whether existing evidence already covers it. Opening or marking a PR ready is a checkpoint for that decision, not a trigger to rerun verification.
+
+- Documentation/instruction-only changes, pure refactors or tooling changes with no product behavior change, and gitlink-only syncs do not require a new acceptance run. State the reason in the PR; for a gitlink sync, link the upstream change and its existing acceptance when available.
+- Reuse a completed acceptance that covers the delivered behavior. If its report and evidence exist only locally, inspect and upload them with `lh acceptance run ingest`; if already published, reuse the link. Do not rerun the product merely to open a PR or obtain a report URL.
+- For new or changed product behavior not covered by valid evidence, verify the affected outcomes on the real product, capture the required evidence, and publish the result. The skill owns reuse criteria and the execution workflow.
+
+When acceptance is required, put its published `https://app.lobehub.com/acceptance/<id>` link in the PR body. Tests, lint, and type-check remain separate quality gates; they do not replace product acceptance.
 
 ### i18n
 

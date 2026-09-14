@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Runtime du serveur d'application Codex",
   "features.desktopSplitView.desc": "Affichez deux onglets de bureau côte à côte, avec une navigation indépendante et un séparateur redimensionnable.",
   "features.desktopSplitView.title": "Vue en onglets divisés",
+  "features.evalCapture.desc": "Ajoute une action de message qui capture un échange de conversation — son contexte précédent, l'entrée et la réponse produite — en tant que cas de test d'évaluation.",
+  "features.evalCapture.title": "Enregistrer un échange comme cas d'évaluation",
   "features.groupChat.desc": "Activez la coordination de discussions de groupe multi-agents.",
   "features.groupChat.title": "Discussion de groupe (multi-agents)",
   "features.heteroSessionImport.desc": "Ajoutez une entrée \"Importer les sessions d'agent local\" au menu de la liste des sujets : analysez les transcriptions locales de Claude Code / Codex CLI et importez-les comme sujets, avec une synchronisation incrémentielle lors de la réimportation.",

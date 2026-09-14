@@ -57,6 +57,8 @@ export default {
   'home.viewAll': 'View all',
   'library.hierarchy.empty.desc': 'Add files or create a folder to get started',
   'library.hierarchy.empty.title': 'Nothing here yet',
+  'library.hierarchy.search.noResults': 'No matching files or pages',
+  'library.hierarchy.search.placeholder': 'Search',
   'library.import.action': 'Import to workspace…',
   'library.import.failed': 'Failed to import library.',
   'library.import.success': 'Library imported to {{name}}.',
@@ -64,7 +66,7 @@ export default {
     'Fork this library into a workspace. Files are shared by reference; the original stays in your personal space.',
   'library.privateEmpty': 'Create a private library',
   'library.list.confirmRemoveLibrary':
-    'You are about to delete this library. The files within it will not be deleted but moved to All Files. This action cannot be undone, so please proceed with caution.',
+    'Deleting this library permanently deletes files used only by it. Files that also belong to other libraries remain there. This action cannot be undone.',
   'library.list.copyDescription':
     'You can copy to personal or workspaces that have permission to create a knowledge base.',
   'library.list.copyFailed': 'Failed to copy library',
@@ -110,6 +112,8 @@ export default {
   'pageEditor.comments.attachments.chooseLibrary': 'Choose from Library',
   'pageEditor.comments.cancel': 'Cancel',
   'pageEditor.comments.createFailed': 'Failed to publish comment. Your draft is still here.',
+  'pageEditor.comments.deepLinkLoadFailed': 'Failed to load the linked comment. Try again.',
+  'pageEditor.comments.deepLinkMissing': 'This comment is no longer available.',
   'pageEditor.comments.delete': 'Delete',
   'pageEditor.comments.deleteConfirm.content':
     'Delete this comment? Replies will remain visible if this comment has a thread.',
@@ -118,7 +122,6 @@ export default {
   'pageEditor.comments.deleted': 'This comment was deleted.',
   'pageEditor.comments.edit': 'Edit',
   'pageEditor.comments.edited': '(edited)',
-  'pageEditor.comments.empty': 'No comments yet. Start the conversation below.',
   'pageEditor.comments.hideReplies': 'Hide replies',
   'pageEditor.comments.loadMore': 'Load more comments',
   'pageEditor.comments.loadMoreReplies': 'Load more replies',
@@ -132,6 +135,13 @@ export default {
   'pageEditor.comments.save': 'Save',
   'pageEditor.comments.title': 'Comments',
   'pageEditor.comments.updateFailed': 'Failed to update comment. Try again.',
+  'pageEditor.likes.failed': 'Failed to update your like. Try again.',
+  'pageEditor.likes.like': 'Find this page helpful? Give it a like',
+  'pageEditor.likes.liked': 'Liked',
+  'pageEditor.likes.count': '{{count}} likes',
+  'pageEditor.likes.count_one': '{{count}} like',
+  'pageEditor.likes.count_other': '{{count}} likes',
+  'pageEditor.likes.more': '+{{count}} more',
   'pageEditor.deleteConfirm.content':
     'This page will be deleted and cannot be recovered. Please proceed with caution.',
   'pageEditor.deleteConfirm.title': 'Delete Page',

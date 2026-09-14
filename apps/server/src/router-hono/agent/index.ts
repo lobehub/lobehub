@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 
 import { botCallback } from './handlers/botCallback';
+import { botReplay } from './handlers/botReplay';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
@@ -75,6 +76,9 @@ app.post('/gateway/desired-connections', gatewayDesiredConnections);
 
 // POST /api/agent/webhooks/bot-callback — agent step/completion webhooks (QStash)
 app.post('/webhooks/bot-callback', qstashAuth(), botCallback);
+
+// Replay retries carry no completion response and require the queue signature.
+app.post('/webhooks/bot-replay', qstashAuth(), botReplay);
 
 // POST /api/agent/webhooks/subagent-callback — sub-agent completion bridge (QStash)
 app.post('/webhooks/subagent-callback', qstashAuth(), subAgentCallback);

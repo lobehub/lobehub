@@ -1,13 +1,27 @@
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import type * as ConstModule from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './index';
+
+const desktopEnv = vi.hoisted(() => ({ enabled: false }));
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof ConstModule>()),
+  get isDesktop() {
+    return desktopEnv.enabled;
+  },
+}));
+afterEach(() => {
+  desktopEnv.enabled = false;
+});
 
 // Mock the store and helper dependencies
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
     connectors: [],
     builtinTools: [
+      { identifier: AuvManifest.identifier, manifest: AuvManifest, type: 'builtin' as const },
       {
         identifier: 'search',
         manifest: {
@@ -168,7 +182,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentChatConfigSelectors: {
     currentChatConfig: () => mockCurrentChatConfig,
     isCloudSandboxEnabled: () => false,
-    isLocalSystemEnabled: () => false,
+    isLocalSystemEnabled: () => desktopEnv.enabled,
     isMemoryToolEnabled: () => false,
   },
 }));
@@ -718,5 +732,37 @@ describe('toolEngineering', () => {
         expect(result).toEqual([]);
       });
     });
+  });
+});
+
+// https://github.com/lobehub/lobehub/pull/19051
+describe('Computer Use activation', () => {
+  it('loads the native API only after activation in standalone Electron', () => {
+    desktopEnv.enabled = true;
+    const engine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+    expect(
+      engine.generateToolsDetailed({ model: 'gpt-4', provider: 'openai', toolIds: [] })
+        .enabledToolIds,
+    ).not.toContain(AuvManifest.identifier);
+    expect(
+      engine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [AuvManifest.identifier],
+        context: { isExplicitActivation: true },
+      }).enabledToolIds,
+    ).toContain(AuvManifest.identifier);
+  });
+  it('does not let explicit activation bypass the Web platform restriction', () => {
+    desktopEnv.enabled = false;
+    const engine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+    expect(
+      engine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [AuvManifest.identifier],
+        context: { isExplicitActivation: true },
+      }).enabledToolIds,
+    ).not.toContain(AuvManifest.identifier);
   });
 });

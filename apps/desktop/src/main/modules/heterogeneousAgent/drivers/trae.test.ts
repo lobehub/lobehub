@@ -64,26 +64,37 @@ describe('traeDriver', () => {
     ).resolves.toEqual({ args: ['acp', 'serve', '--yolo', '--feature=test'] });
   });
 
-  it('writes a secret-free Responses provider profile and isolates TRAE_HOME', async () => {
+  it('applies a secret-free Responses provider override and preserves TRAE identity auth', async () => {
     const plan = await traeDriver.prepareProviderBinding!(bindingContext());
-    const profile = plan.profileFiles?.[0];
 
-    expect(plan.args).toEqual(['-c', 'model_reasoning_effort="high"', '--profile', 'lobehub']);
+    expect(plan.args).toEqual([
+      '-c',
+      'model_reasoning_effort="high"',
+      '-c',
+      'model="bound-model"',
+      '-c',
+      'model_provider="lobehub"',
+      '-c',
+      'model_providers.lobehub.name="LobeHub Provider"',
+      '-c',
+      'model_providers.lobehub.base_url="https://responses.example.com/v1"',
+      '-c',
+      'model_providers.lobehub.env_key="LOBEHUB_TRAE_API_KEY"',
+      '-c',
+      'model_providers.lobehub.wire_api="responses"',
+      '-c',
+      'model_providers.lobehub.requires_openai_auth=false',
+    ]);
     expect(plan.env).toEqual({
       KEEP_ME: 'yes',
       LOBEHUB_TRAE_API_KEY: 'bound-key',
-      TRAE_HOME: '/managed/trae',
+      TRAE_HOME: '/user/trae',
     });
-    expect(profile?.path).toBe('lobehub.traecli.toml');
-    expect(profile?.content).toContain('model = "bound-model"');
-    expect(profile?.content).toContain('model_provider = "lobehub"');
-    expect(profile?.content).toContain('base_url = "https://responses.example.com/v1"');
-    expect(profile?.content).toContain('env_key = "LOBEHUB_TRAE_API_KEY"');
-    expect(profile?.content).toContain('wire_api = "responses"');
-    expect(profile?.content).not.toContain('bound-key');
+    expect(plan.args.join(' ')).not.toContain('bound-key');
+    expect(plan.profileFiles).toBeUndefined();
   });
 
-  it('writes a server-default Responses profile without persisting the operation token', async () => {
+  it('overrides the server-default provider without persisting the operation token', async () => {
     const plan = await traeDriver.prepareServerDefaultBinding!({
       args: ['--profile', 'stale', '--permission-mode', 'auto'],
       endpoint: 'https://app.example.com/',
@@ -91,15 +102,28 @@ describe('traeDriver', () => {
       model: 'gpt-5.4',
       profileDir: '/managed/trae',
     });
-    const profile = plan.profileFiles?.[0];
-
-    expect(plan.args).toEqual(['--permission-mode', 'auto', '--profile', 'lobehub']);
-    expect(plan.env).toEqual({ TRAE_HOME: '/managed/trae' });
+    expect(plan.args).toEqual([
+      '--permission-mode',
+      'auto',
+      '-c',
+      'model="lobehub/gpt-5.4"',
+      '-c',
+      'model_provider="lobehub"',
+      '-c',
+      'model_providers.lobehub.name="LobeHub Provider"',
+      '-c',
+      'model_providers.lobehub.base_url="https://app.example.com/api/v1/openai/v1"',
+      '-c',
+      'model_providers.lobehub.env_key="LOBEHUB_TRAE_API_KEY"',
+      '-c',
+      'model_providers.lobehub.wire_api="responses"',
+      '-c',
+      'model_providers.lobehub.requires_openai_auth=false',
+    ]);
+    expect(plan.env).toEqual({ TRAE_HOME: '/user/trae' });
     expect(plan.operationTokenEnvKey).toBe('LOBEHUB_TRAE_API_KEY');
-    expect(profile?.path).toBe('lobehub.traecli.toml');
-    expect(profile?.content).toContain('model = "lobehub/gpt-5.4"');
-    expect(profile?.content).toContain('base_url = "https://app.example.com/api/v1/openai/v1"');
-    expect(profile?.content).not.toContain('stale-token');
+    expect(plan.args.join(' ')).not.toContain('stale-token');
+    expect(plan.profileFiles).toBeUndefined();
   });
 
   it('removes only host-authoritative provider/model arguments', () => {

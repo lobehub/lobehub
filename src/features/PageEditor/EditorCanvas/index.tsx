@@ -23,6 +23,7 @@ import { type CSSProperties, useMemo, useState } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import type { ComposerTarget } from '@/features/Conversation/types';
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 import { useUserStore } from '@/store/user';
@@ -35,6 +36,7 @@ import { resolveYjsWebSocketUrl } from './collaborationUrl';
 import { resolveCollaborationUser } from './collaborationUser';
 import PageRichLinkCard from './PageRichLinkCard';
 import { useAskCopilotItem } from './useAskCopilotItem';
+import { useDocumentMentionOption } from './useDocumentMentionOption';
 import { useSlashItems } from './useSlashItems';
 
 const PAGE_EDITOR_WRAPPER_STYLE: CSSProperties = { overflow: 'visible' };
@@ -186,6 +188,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
 
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
+  const mentionOption = useDocumentMentionOption();
 
   const extraPlugins = useMemo(() => {
     const plugins: EditorPlugins = [
@@ -258,12 +261,14 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
   return (
     <SharedEditorCanvas
       collaborationEnabled={collaborationEnabled}
+      className={mentionFilledClassName}
       documentId={documentId}
       editable={editable}
       editor={editor}
       extraPlugins={extraPlugins}
       linkPlugin={linkPlugin}
       placeholder={placeholder || t('pageEditor.editorPlaceholder', { ns: 'file' })}
+      mentionOption={mentionOption}
       slashItems={slashItems}
       style={style}
       toolbarExtraItems={editable ? toolbarItems : undefined}

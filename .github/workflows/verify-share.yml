@@ -106,7 +106,7 @@ jobs:
           # own workers.dev origin, the way production serves them from the CDN — never
           # same-origin, because the gateway routes /assets to the landing target.
           NODE_ENV: production
-          VITE_CDN_BASE: https://pr${{ github.event.pull_request.number }}-lobehub-share.lobeobjects-tg.workers.dev/
+          VITE_CDN_BASE: https://pr${{ github.event.pull_request.number }}-lobehub-share-preview.lobeobjects-tg.workers.dev/
         # `build:share` is the overlay repo's own build entry (tsconfig project,
         # SSR stub list) — invoking it keeps that knowledge over there.
         run: |
@@ -137,14 +137,21 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR: ${{ github.event.pull_request.number }}
         run: |
           if [ "$SAME_REPO" = 'true' ]; then
-            set -- --preview-alias "pr${PR}" --message "PR-${PR}"
+            set -- --preview-alias "pr${PR}" --tag "${HEAD_SHA::7}" \
+              --message "PR-${PR} ${GITHUB_ACTOR} ${GITHUB_REPOSITORY}@${HEAD_SHA::7} run ${GITHUB_RUN_ID}"
           else
             set -- --dry-run
           fi
+          # Previews go to a sibling `-preview` Worker, never to the production script:
+          # Cloudflare only rolls back to the 100 most recently uploaded versions, and PR
+          # uploads onto the real script would push its deployed versions out of that
+          # window within a day.
           node_modules/.bin/wrangler versions upload \
+            --name lobehub-share-preview \
             --config build/server/wrangler.json "$@" | tee /tmp/upload.log
           gzip_kib=$(grep -Eo 'gzip: [0-9.]+ KiB' /tmp/upload.log | grep -Eo '[0-9.]+' | head -1)
           echo "worker gzip size: ${gzip_kib} KiB"
@@ -153,7 +160,7 @@ jobs:
             exit 1
           fi
           if [ "$SAME_REPO" = 'true' ]; then
-            echo "Preview: https://pr${PR}-lobehub-share.lobeobjects-tg.workers.dev" >> "$GITHUB_STEP_SUMMARY"
+            echo "Preview: https://pr${PR}-lobehub-share-preview.lobeobjects-tg.workers.dev" >> "$GITHUB_STEP_SUMMARY"
           fi
         working-directory: apps/share
 
@@ -177,7 +184,7 @@ jobs:
           body="${marker}
           ### Share preview
 
-          <https://pr${PR}-lobehub-share.lobeobjects-tg.workers.dev>
+          <https://pr${PR}-lobehub-share-preview.lobeobjects-tg.workers.dev>
 
           A version, not a deployment: it takes no production traffic. ${build_note}"
           id=$(gh api "repos/${REPO}/issues/${PR}/comments" --paginate \

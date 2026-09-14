@@ -38,6 +38,8 @@ export interface DeviceSystemInfo {
   homePath: string;
   musicPath: string;
   picturesPath: string;
+  /** Opt-in tool identifiers supported by this client; absent on older clients. */
+  supportedTools?: string[];
   userDataPath: string;
   videosPath: string;
   workingDirectory: string;

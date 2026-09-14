@@ -37,8 +37,8 @@ import {
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { localFileService } from '@/services/electron/localFileService';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
@@ -125,9 +125,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   deviceList: css`
     overflow-y: auto;
-
-    /* Cap the device section so a long list (servers/CLI fleets) stays scrollable
-       inside the popover instead of growing past the viewport. */
     max-height: 240px;
 
     /* Room for the scrollbar so rows don't sit flush against it. */
@@ -249,7 +246,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 6px 4px;
+    padding-block: 4px;
     padding-inline: 8px;
   `,
   headerInfo: css`
@@ -391,7 +388,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     canSelectExecutionTarget,
     isPreferenceLoading: isWorkspacePreferenceLoading,
     workspaceScoped,
-  } = useEffectiveAgencyConfig(agentId);
+  } = useTopicAgencyConfig(agentId);
   const canShowExecutionTarget = canUseResource && canDisplayExecutionTarget;
   const canShowExecutionTargetSelector = canShowExecutionTarget && canSelectExecutionTarget;
 
@@ -696,7 +693,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     <ExecutionTargetDeviceStatus
       offlineLabel={t('heteroAgent.executionTarget.offline')}
       online={d.online}
-      onlineLabel={t('heteroAgent.executionTarget.online')}
+      onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
+        count: d.channels.length,
+      })}
     />
   );
 
@@ -718,7 +717,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             {d.online ? null : (
               <Button
                 className={styles.reconnectButton}
-                icon={RefreshCwIcon}
+                icon={<Icon icon={RefreshCwIcon} size={10} />}
                 loading={reconnectingDeviceId === d.deviceId}
                 size={'small'}
                 type={'text'}
@@ -738,7 +737,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   };
 
   const content = (
-    <Flexbox gap={6} style={{ maxWidth: 320, minWidth: 280 }}>
+    <Flexbox style={{ maxWidth: 320, minWidth: 280 }}>
       <div className={styles.header}>
         <Flexbox horizontal align={'center'} gap={4}>
           <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
@@ -870,30 +869,34 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         onClick={() => void handleSelect('sandbox')}
       />
       {deviceRows.length > 0 ? (
-        <div className={styles.deviceList}>
-          {showDeviceGroups ? (
-            <>
-              {privateDevices.length > 0 ? (
-                <>
-                  <div className={styles.groupLabel}>
-                    {t('heteroAgent.executionTarget.personalGroup')}
-                  </div>
+        showDeviceGroups ? (
+          <>
+            {privateDevices.length > 0 ? (
+              <>
+                <div className={styles.groupLabel}>
+                  {t('heteroAgent.executionTarget.personalGroup')}
+                </div>
+                <div className={styles.deviceList}>
                   {privateDevices.map((d) => renderDeviceRow(d))}
-                </>
-              ) : null}
-              {workspaceDevices.length > 0 ? (
-                <>
-                  <div className={styles.groupLabel}>
-                    {t('heteroAgent.executionTarget.workspaceGroup')}
-                  </div>
+                </div>
+              </>
+            ) : null}
+            {workspaceDevices.length > 0 ? (
+              <>
+                <div className={styles.groupLabel}>
+                  {t('heteroAgent.executionTarget.workspaceGroup')}
+                </div>
+                <div className={styles.deviceList}>
                   {workspaceDevices.map((d) => renderDeviceRow(d))}
-                </>
-              ) : null}
-            </>
-          ) : (
-            personalOnlyDevices.map((d) => renderDeviceRow(d))
-          )}
-        </div>
+                </div>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <div className={styles.deviceList}>
+            {personalOnlyDevices.map((d) => renderDeviceRow(d))}
+          </div>
+        )
       ) : null}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>

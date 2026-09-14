@@ -154,7 +154,7 @@ afterAll(async () => {
   }
 }, CAPTURE_INSTALL_TEST_TIMEOUT);
 
-describe.sequential('FtsSearchSyncOutboxRepository', () => {
+describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
   it('keeps optional capture infrastructure out of the deployment migration', () => {
     const migration = readMigrationFiles({
       migrationsFolder: path.join(__dirname, '../../../../migrations'),

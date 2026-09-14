@@ -1,3 +1,4 @@
+import type { ChatTopicMetadata } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,7 @@ const {
   mockGetAgentConfig,
   mockGetPreference,
   mockMessageCreate,
+  mockTopicCreate,
   mockTopicFindById,
 } = vi.hoisted(() => ({
   mockIsResourceAuthorOrAdmin: vi.fn(),
@@ -16,6 +18,7 @@ const {
   mockGetAgentConfig: vi.fn(),
   mockGetPreference: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockTopicCreate: vi.fn().mockResolvedValue({ id: 'topic-1' }),
   mockTopicFindById: vi.fn(),
 }));
 
@@ -29,97 +32,132 @@ vi.mock('@/libs/trusted-client', () => ({
   isTrustedClientEnabled: vi.fn().mockReturnValue(false),
 }));
 
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: class {
+    findById = vi.fn().mockResolvedValue(undefined);
+    getGroupAgentsWithMeta = vi.fn().mockResolvedValue([]);
+  },
+}));
+
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/workspaceUserSettings', () => ({
-  WorkspaceUserSettingsModel: vi.fn().mockImplementation(() => ({
-    getPreference: mockGetPreference,
-  })),
+  WorkspaceUserSettingsModel: vi.fn().mockImplementation(function () {
+    return {
+      getPreference: mockGetPreference,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn(),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn(),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: mockGetAgentConfig,
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: mockGetAgentConfig,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Builtin agents inject their own tools, so a run under a builtin slug reaches
 // connector resolution that the plain-agent cases never do.
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    queryByIdentifiers: vi.fn().mockResolvedValue([]),
-    resolveByIdentifiers: vi.fn().mockResolvedValue([]),
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      queryByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({
-    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
-    queryByConnector: vi.fn().mockResolvedValue([]),
-    queryByConnectorIds: vi.fn().mockResolvedValue([]),
-  })),
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+      queryByConnector: vi.fn().mockResolvedValue([]),
+      queryByConnectorIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: mockTopicFindById,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: mockTopicCreate,
+      armScheduledRun: vi.fn().mockResolvedValue(undefined),
+      findById: mockTopicFindById,
+      updateMetadata: vi.fn(async (_id: string, metadata: ChatTopicMetadata) => [{ metadata }]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -200,6 +238,40 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.provider).toBe('openai');
   });
 
+  it.each(['group', 'scheduled'])(
+    'pins the member-selected model when precreating a %s topic',
+    async (kind) => {
+      mockGetAgentConfig.mockResolvedValue({
+        ...defaultAgentConfig,
+        agencyConfig: { modelSelectionPolicy: 'member' },
+        userId: 'agent-author',
+        visibility: 'public',
+        workspaceId: 'workspace-1',
+      });
+      mockGetPreference.mockResolvedValue({
+        agentModelOverrides: { 'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' } },
+      });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      const runSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+      if (kind === 'group') {
+        await service.execGroupAgent({ agentId: 'agent-1', groupId: 'group-1', message: 'Group' });
+      } else {
+        await service.scheduleAgentRun({
+          agentId: 'agent-1',
+          prompt: 'Scheduled',
+          runAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+      }
+      expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      runSpy.mockRestore();
+    },
+  );
+
   it('should override model when model param is provided', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
 
@@ -246,6 +318,33 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.provider).toBe('anthropic');
   });
 
+  it('keeps group members on their own model instead of the supervisor topic pin', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'supervisor',
+      groupId: 'group-1',
+      model: 'supervisor-model',
+      provider: 'anthropic',
+      metadata: { heteroEffort: 'high' },
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: {
+        topicId: 'topic-1',
+        groupId: 'group-1',
+        orchestrationRole: 'member',
+        scope: 'group',
+      },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].agentConfig).toMatchObject({
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+  });
+
   it('keeps an explicit model override over the topic model', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
     mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'openai' });
@@ -261,7 +360,11 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('step-3.7-flash');
     expect(callArgs.agentConfig.provider).toBe('stepfun');
-    expect(callArgs.modelRuntimeConfig).toEqual({ model: 'step-3.7-flash', provider: 'stepfun' });
+    expect(callArgs.modelRuntimeConfig).toEqual({
+      mediaCapabilities: { video: true, vision: true },
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
   });
 
   it('keeps the topic provider when only the model is overridden', async () => {
@@ -276,7 +379,11 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     });
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
-    expect(callArgs.modelRuntimeConfig).toEqual({ model: 'step-3.7-flash', provider: 'stepfun' });
+    expect(callArgs.modelRuntimeConfig).toEqual({
+      mediaCapabilities: { video: true, vision: true },
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
   });
 
   it('uses the caller model preference when the workspace Agent allows member selection', async () => {

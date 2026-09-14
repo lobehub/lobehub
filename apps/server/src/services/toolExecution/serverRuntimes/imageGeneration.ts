@@ -1,6 +1,7 @@
 import type { ImageGenerationModelSummary } from '@lobechat/builtin-tool-image-generation';
 import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import { ImageGenerationExecutionRuntime } from '@lobechat/builtin-tool-image-generation/executionRuntime';
+import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
 import type { AiProviderModelListItem } from 'model-bank';
 
 import { aiModelRouter } from '@/server/routers/lambda/aiModel';
@@ -29,6 +30,19 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
 
     const callerContext = {
       clientIp: context.clientIp,
+      /**
+       * A share-visitor run executes under the shared agent's CREATOR, so the
+       * image spend it triggers is indistinguishable from the creator's own
+       * usage unless the origin is stamped on the charge. Projected fields
+       * only — never spread `context.agentShareVisitor`, which also carries the
+       * run's tool/memory permissions.
+       */
+      spendOrigin: context.agentShareVisitor
+        ? {
+            agentShare: toAgentShareVisitorIds(context.agentShareVisitor),
+            trigger: RequestTrigger.AgentShare,
+          }
+        : undefined,
       userId: context.userId,
       workspaceId: context.workspaceId,
     };

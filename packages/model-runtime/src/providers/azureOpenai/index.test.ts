@@ -156,6 +156,31 @@ describe('LobeAzureOpenAI', () => {
         });
       });
 
+      it('should prune the sampling params GPT-6 Astra rejects on the Responses API', async () => {
+        const mockStream = new ReadableStream() as any;
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(mockStream);
+        vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
+        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
+
+        await instance.chat({
+          messages: [{ content: 'Review this migration.', role: 'system' }],
+          model: 'gpt-6-astra',
+          reasoning_effort: 'xhigh',
+          stream: true,
+          temperature: 0.7,
+          top_p: 0.9,
+        } as any);
+
+        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+        expect(createCall.model).toBe('gpt-6-astra');
+        expect(createCall.reasoning).toEqual({ effort: 'xhigh', summary: 'auto' });
+        expect(createCall.input[0].role).toBe('developer');
+        expect(createCall.temperature).toBeUndefined();
+        expect(createCall.top_logprobs).toBeUndefined();
+        expect(createCall.top_p).toBeUndefined();
+      });
+
       it('should use deploymentName for Azure Responses API requests while keeping logical model for pricing', async () => {
         const mockStream = new ReadableStream() as any;
         const mockPricing = { units: [] };

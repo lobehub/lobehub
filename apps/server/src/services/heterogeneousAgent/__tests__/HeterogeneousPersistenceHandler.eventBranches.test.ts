@@ -1059,33 +1059,39 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
       ]);
 
       expect(notifyAgentInterventionRequired).toHaveBeenCalledTimes(1);
-      expect(notifyAgentInterventionRequired.mock.calls[0][0].items[0]).toMatchObject({
-        detail: {
-          questions: [
-            {
-              header: 'Producer ACK E2E',
-              id: 'question_1',
-              multiple: false,
-              options: [
+      expect(notifyAgentInterventionRequired.mock.calls[0][0]).toMatchObject({
+        items: [
+          {
+            detail: {
+              questions: [
                 {
-                  description: 'Proceed with validation.',
-                  id: 'Continue',
-                  label: 'Continue',
-                },
-                {
-                  description: 'Halt validation.',
-                  id: 'Stop',
-                  label: 'Stop',
+                  header: 'Producer ACK E2E',
+                  id: 'question_1',
+                  multiple: false,
+                  options: [
+                    {
+                      description: 'Proceed with validation.',
+                      id: 'Continue',
+                      label: 'Continue',
+                    },
+                    {
+                      description: 'Halt validation.',
+                      id: 'Stop',
+                      label: 'Stop',
+                    },
+                  ],
+                  question: 'Continue read only validation?',
                 },
               ],
-              question: 'Continue read only validation?',
+              title: 'Producer ACK E2E',
+              type: 'question',
             },
-          ],
-          title: 'Producer ACK E2E',
-          type: 'question',
-        },
-        interactionKind: 'question',
-        provider: 'claude-code',
+            interactionKind: 'question',
+            provider: 'claude-code',
+            summary: 'Continue read only validation?',
+          },
+        ],
+        summary: 'Continue read only validation?',
       });
       expect(h.messageModel.updatePluginState).toHaveBeenCalledWith(
         expect.any(String),
@@ -1096,6 +1102,106 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
           }),
         }),
       );
+    });
+
+    it('uses only the sanitized first question for a multi-question summary', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+
+      await ingest(h, [
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            privateRawArgument: 'must not appear in the summary',
+            questions: [
+              {
+                header: 'Validation',
+                multiSelect: false,
+                options: [
+                  {
+                    description: 'Sensitive option detail',
+                    label: 'Continue',
+                  },
+                ],
+                question: 'Which validation path should I use?',
+              },
+              {
+                header: 'Follow-up',
+                multiSelect: false,
+                options: [{ label: 'Production' }],
+                question: 'Which environment should I target?',
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'claude-code',
+          interactionKind: 'question',
+          provider: 'claude-code',
+          toolCallId: 'claude-question-summary',
+        }),
+      ]);
+
+      const notification = notifyAgentInterventionRequired.mock.calls[0][0];
+      expect(notification.summary).toBe('Which validation path should I use?');
+      expect(notification.items[0].summary).toBe('Which validation path should I use?');
+    });
+
+    it('normalizes and safely truncates a long question summary', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      const longQuestion = `  Confirm\n\t${'😀'.repeat(170)}  now?  `;
+
+      await ingest(h, [
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Long question',
+                multiSelect: false,
+                options: [{ label: 'Continue' }],
+                question: longQuestion,
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'claude-code',
+          interactionKind: 'question',
+          provider: 'claude-code',
+          toolCallId: 'claude-long-question-summary',
+        }),
+      ]);
+
+      const summary = notifyAgentInterventionRequired.mock.calls[0][0].summary;
+      expect(summary).toBe(`Confirm ${'😀'.repeat(151)}…`);
+      expect([...summary]).toHaveLength(160);
+    });
+
+    it('keeps the technical fallback when the sanitized question has no visible text', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+
+      await ingest(h, [
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'askUserQuestion',
+          arguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Blank question',
+                multiSelect: false,
+                options: [{ label: 'Continue' }],
+                question: ' \n\t ',
+              },
+            ],
+          }),
+          deadline: 1_900_000_000_000,
+          identifier: 'claude-code',
+          interactionKind: 'question',
+          provider: 'claude-code',
+          toolCallId: 'claude-blank-question-summary',
+        }),
+      ]);
+
+      const notification = notifyAgentInterventionRequired.mock.calls[0][0];
+      expect(notification.summary).toBe('claude-code question: askUserQuestion');
+      expect(notification.items[0].summary).toBe('claude-code question: askUserQuestion');
     });
 
     it('notifies pending once, ignores the publish leg, and notifies terminal only on ACK', async () => {
@@ -1118,9 +1224,9 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
           ],
         }),
         deadline: 1_900_000_000_000,
-        identifier: 'claude-code',
+        identifier: 'devin',
         interactionKind: 'permission',
-        provider: 'cursor',
+        provider: 'devin',
         toolCallId: 'permission-1',
       });
 
@@ -1157,7 +1263,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
               type: 'permission',
             },
             interactionKind: 'permission',
-            provider: 'cursor',
+            provider: 'devin',
             sourceRef: {
               operationId: 'op-test',
               toolCallId: 'permission-1',

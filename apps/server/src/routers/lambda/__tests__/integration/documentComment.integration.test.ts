@@ -4,6 +4,8 @@ import {
   documentCommentMentions,
   documentComments,
   documents,
+  knowledgeBases,
+  resourcePermissions,
   workspaceMembers,
   workspaces,
 } from '@lobechat/database/schemas';
@@ -18,7 +20,11 @@ import { cleanupTestUser, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
 const notifyDocumentCommentActivity = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
+}));
 vi.mock('@/business/server/document-comment/notifyActivity', () => ({
   notifyDocumentCommentActivity,
 }));
@@ -144,6 +150,37 @@ describe('documentCommentRouter integration', () => {
       content: 'hello',
     });
     expect((await admin.delete({ id: created.comment.id })).mode).toBe('hard');
+  });
+
+  it('serves one comment by id with a live reply count for roots', async () => {
+    const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
+    const viewer = documentCommentRouter.createCaller(context(viewerId, workspaceId));
+    const root = (await member.create({ clientId: 'get-root', content: 'root', documentId }))
+      .comment;
+    const reply = (
+      await member.create({
+        clientId: 'get-reply',
+        content: 'reply',
+        documentId,
+        parentCommentId: root.id,
+      })
+    ).comment;
+    await flushAfterResponse();
+
+    expect(await viewer.get({ id: root.id })).toMatchObject({
+      canEdit: false,
+      content: 'root',
+      replyCount: 1,
+    });
+    expect(await member.get({ id: reply.id })).toMatchObject({
+      canEdit: true,
+      parentCommentId: root.id,
+      replyCount: 0,
+    });
+
+    expect((await member.delete({ id: reply.id })).mode).toBe('hard');
+    await expect(member.get({ id: reply.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(await member.get({ id: root.id })).toMatchObject({ replyCount: 0 });
   });
 
   it('preserves a root tombstone while replies remain and keeps counts consistent', async () => {
@@ -316,6 +353,122 @@ describe('documentCommentRouter integration', () => {
     await flushAfterResponse();
     expect(privateReply.comment.replyTo?.author.id).toBe(memberId);
     expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies only recipients who can browse the document knowledge base', async () => {
+    const [knowledgeBase] = await db
+      .insert(knowledgeBases)
+      .values({ name: 'Restricted content', userId: ownerId, visibility: 'public', workspaceId })
+      .returning();
+    await db.insert(resourcePermissions).values({
+      accessLevel: 'use',
+      resourceId: knowledgeBase.id,
+      resourceType: 'knowledgeBase',
+      workspaceId,
+    });
+    await db
+      .update(documents)
+      .set({ knowledgeBaseId: knowledgeBase.id })
+      .where(eq(documents.id, documentId));
+    const owner = documentCommentRouter.createCaller(context(ownerId, workspaceId));
+
+    await owner.create({
+      clientId: 'restricted-mentions',
+      content: 'Member and admin',
+      documentId,
+      editorData: mentionEditorData(memberId, adminId),
+    });
+    await flushAfterResponse();
+
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(1);
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'mentioned', recipientUserId: adminId }),
+    );
+
+    await db.insert(resourcePermissions).values({
+      accessLevel: 'edit',
+      resourceId: knowledgeBase.id,
+      resourceType: 'knowledgeBase',
+      userId: memberId,
+      workspaceId,
+    });
+    await owner.create({
+      clientId: 'collaborator-mention',
+      content: 'Now a collaborator',
+      documentId,
+      editorData: mentionEditorData(memberId),
+    });
+    await flushAfterResponse();
+
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(2);
+    expect(notifyDocumentCommentActivity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'mentioned', recipientUserId: memberId }),
+    );
+  });
+
+  it('fans a reply out to the direct target and the other thread participants', async () => {
+    const owner = documentCommentRouter.createCaller(context(ownerId, workspaceId));
+    const member = documentCommentRouter.createCaller(context(memberId, workspaceId));
+    const admin = documentCommentRouter.createCaller(context(adminId, workspaceId));
+
+    const root = await owner.create({ clientId: 'owner-root', content: 'root', documentId });
+    const memberReply = await member.create({
+      clientId: 'member-reply',
+      content: 'reply',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    await flushAfterResponse();
+    notifyDocumentCommentActivity.mockClear();
+
+    // Admin replies to the member's reply: member is the direct target, the
+    // root author only gets the thread ping.
+    const adminReply = await admin.create({
+      clientId: 'admin-reply',
+      content: 'nested',
+      documentId,
+      parentCommentId: memberReply.comment.id,
+    });
+    await flushAfterResponse();
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(2);
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commentId: adminReply.comment.id,
+        kind: 'replied',
+        recipientUserId: memberId,
+        rootCommentId: root.comment.id,
+      }),
+    );
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commentId: adminReply.comment.id,
+        kind: 'thread',
+        recipientUserId: ownerId,
+        rootCommentId: root.comment.id,
+      }),
+    );
+
+    // Root author replies to their own root: never self-notified, every other
+    // participant hears about the new activity.
+    notifyDocumentCommentActivity.mockClear();
+    await owner.create({
+      clientId: 'owner-reply',
+      content: 'thanks both',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    await flushAfterResponse();
+    expect(notifyDocumentCommentActivity).toHaveBeenCalledTimes(2);
+    expect(
+      notifyDocumentCommentActivity.mock.calls
+        .map(([params]) => [params.recipientUserId, params.kind])
+        .sort(),
+    ).toEqual(
+      [
+        [adminId, 'thread'],
+        [memberId, 'thread'],
+      ].sort(),
+    );
   });
 
   it('notifies valid mentions once, prefers mention copy, and only sends newly added mentions', async () => {

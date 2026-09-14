@@ -23,8 +23,8 @@ import type {
   FtsSearchDocumentEntity,
   FtsSearchDocumentKey,
   FtsSearchDocumentSourceMap,
-} from './schema';
-import { FTS_SEARCH_DOCUMENT_ENTITIES, parseFtsSearchDocumentSource } from './schema';
+} from './zodSchema';
+import { FTS_SEARCH_DOCUMENT_ENTITIES, parseFtsSearchDocumentSource } from './zodSchema';
 
 interface FtsSearchDocumentSelection {
   afterId?: string;

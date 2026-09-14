@@ -66,7 +66,7 @@ describe('Node observability resource attributes', () => {
       sampler,
       spanProcessors: [sentrySpanProcessor],
       textMapPropagator,
-    } as Parameters<typeof register>[0]);
+    } as unknown as Parameters<typeof register>[0]);
 
     expect(mocks.nodeSdkOptions).toMatchObject({
       contextManager,

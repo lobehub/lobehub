@@ -114,6 +114,8 @@ export class VerifyExecutorService {
    * body lives in its linked document (the single source of truth).
    */
   private async resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
+    if (item.definition || item.resourceSnapshot)
+      return JSON.stringify({ definition: item.definition, resources: item.resourceSnapshot });
     if (!item.documentId) return undefined;
     const doc = await this.documentModel.findById(item.documentId);
     return doc?.content ?? undefined;

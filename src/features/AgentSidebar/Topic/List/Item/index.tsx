@@ -5,8 +5,8 @@ import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
@@ -41,7 +41,12 @@ import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
-import { getPullRequestState, getTopicMetaCard, PR_STATE_VISUAL } from './metaCardData';
+import {
+  getCiVisual,
+  getPullRequestState,
+  getTopicMetaCard,
+  PR_STATE_VISUAL,
+} from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
@@ -58,6 +63,37 @@ const META_HOVER_CARD_STYLES = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
+  ciBadge: css`
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+
+    line-height: 0;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  ciPending: css`
+    animation: ci-spin 1s linear infinite;
+
+    @keyframes ci-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  `,
+  prIcon: css`
+    position: relative;
+    display: inline-flex;
+    flex: none;
+  `,
   runningElapsedTime: css`
     flex: none;
 
@@ -416,9 +452,27 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // as the leading icon.
       if (metaCard?.pullRequest) {
         const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
+        const ciStatus = metaCard.pullRequest.ciStatus;
+        const ciVisual = getCiVisual(ciStatus);
+        const showCiBadge = ciStatus !== undefined && ciStatus !== 'unknown';
+        const tooltip = showCiBadge
+          ? `${t(prVisual.labelKey)} · ${t(ciVisual.labelKey)}`
+          : t(prVisual.labelKey);
         return (
-          <Tooltip title={t(prVisual.labelKey)}>
-            <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
+          <Tooltip title={tooltip}>
+            <span className={styles.prIcon}>
+              <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
+              {showCiBadge && (
+                <span className={styles.ciBadge}>
+                  <Icon
+                    className={ciStatus === 'pending' ? styles.ciPending : undefined}
+                    icon={ciVisual.icon}
+                    size={9}
+                    style={{ color: ciVisual.color }}
+                  />
+                </span>
+              )}
+            </span>
           </Tooltip>
         );
       }
@@ -471,7 +525,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     );
 
     return (
-      <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
+      <Flexbox data-testid="topic-item" data-topic-id={id} style={{ position: 'relative' }}>
         {metaCard ? (
           <Popover
             arrow={false}
@@ -490,8 +544,8 @@ const TopicItemRow = memo<TopicItemRowProps>(
           <Suspense
             fallback={
               <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
+                <Skeleton height={18} width={'100%'} />
+                <Skeleton height={18} width={'100%'} />
               </Flexbox>
             }
           >

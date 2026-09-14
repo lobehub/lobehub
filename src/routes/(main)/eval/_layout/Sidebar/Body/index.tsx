@@ -1,6 +1,7 @@
 'use client';
 
-import { Accordion, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { AccordionRoot } from '@lobehub/ui/base-ui';
 import { LayoutDashboardIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,11 +58,15 @@ const Body = memo(() => {
           />
         </WorkspaceLink>
       </Flexbox>
-      <Accordion defaultExpandedKeys={['benchmarks', 'datasets', 'experiments']} gap={8}>
+      <AccordionRoot
+        defaultValue={['benchmarks', 'datasets', 'experiments']}
+        indicatorPlacement="inline"
+        style={{ gap: 8 }}
+      >
         <ExperimentList activeKey={activeKey} itemKey="experiments" />
         <BenchmarkList activeKey={activeKey} itemKey="benchmarks" />
         <DatasetList activeKey={activeKey} itemKey="datasets" />
-      </Accordion>
+      </AccordionRoot>
     </Flexbox>
   );
 });

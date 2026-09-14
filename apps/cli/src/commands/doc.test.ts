@@ -59,6 +59,7 @@ describe('doc command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -554,6 +555,28 @@ describe('doc command', () => {
         }),
       );
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Linked'));
+    });
+
+    it('carries the dispatched operation only for its own topic', async () => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-current');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'topic_123');
+      mockTrpcClient.document.getDocumentById.query.mockResolvedValue({ title: 'Report' });
+      mockTrpcClient.notebook.createDocument.mutate.mockResolvedValue({ id: 'linked' });
+      await createProgram().parseAsync(['node', 'test', 'doc', 'link-topic', 'doc1', 'topic_123']);
+      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenLastCalledWith(
+        expect.objectContaining({ operationId: 'op-current' }),
+      );
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'doc',
+        'link-topic',
+        'doc1',
+        'other-topic',
+      ]);
+      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ operationId: expect.any(String) }),
+      );
     });
 
     it('should error when document not found', async () => {

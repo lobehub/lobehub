@@ -155,7 +155,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
     }, [optionIndexByKey, query, selectedKey]);
 
     const handleMemberChange = useCallback(
-      (userId: string | null) => {
+      (userId: string | null, member?: WorkspaceMemberRow) => {
         if (!canEditTask || userId === (currentUserId ?? null)) return;
         setKey((value) => value + 1);
         setSearch('');
@@ -163,14 +163,32 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
           onChange(userId);
           return;
         }
-        if (taskIdentifier) void updateTask(taskIdentifier, { assigneeUserId: userId });
+        if (taskIdentifier)
+          void updateTask(
+            taskIdentifier,
+            { assigneeUserId: userId },
+            // Member metadata lives in a business-layer hook the store must not
+            // reach for, so the picker hands over what it already has.
+            {
+              optimisticAssignee: member
+                ? {
+                    avatar: member.user?.avatar ?? null,
+                    id: member.userId,
+                    name: member.user?.fullName ?? null,
+                    type: 'user',
+                  }
+                : undefined,
+            },
+          );
       },
       [canEditTask, currentUserId, onChange, taskIdentifier, updateTask],
     );
 
     const handleSelect = useCallback(
       (option: MemberOption) =>
-        handleMemberChange(option.kind === 'member' ? option.member.userId : null),
+        option.kind === 'member'
+          ? handleMemberChange(option.member.userId, option.member)
+          : handleMemberChange(null),
       [handleMemberChange],
     );
 

@@ -168,6 +168,27 @@ describe('createDevOrchestrator', () => {
     expect(electron.kill).toHaveBeenCalledTimes(1);
   });
 
+  it('names every changed bundle in the restart log, once', async () => {
+    const h = createHarness();
+    h.orchestrator.start();
+    await h.becomeReady();
+
+    h.watchers[0]('change', 'index.js');
+    h.watchers[1]('change', 'index.js');
+    await vi.advanceTimersByTimeAsync(500);
+
+    const message = h.options.log.mock.calls.at(-1)[0];
+    expect(message).toContain('[desktop-dev] main/preload bundle changed');
+    expect(message).toContain('dist/main/index.js: change');
+    expect(message).toContain('dist/preload/index.js: change');
+
+    h.electronSpawns()[0].child.emit('exit', null);
+    h.watchers[0]('change', 'index.js');
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(h.options.log.mock.calls.at(-1)[0]).not.toContain('dist/preload/index.js');
+  });
+
   it('stops the watchers when electron is quit by hand', async () => {
     const h = createHarness();
     h.orchestrator.start();

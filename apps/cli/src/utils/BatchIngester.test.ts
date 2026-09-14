@@ -58,12 +58,11 @@ describe('BatchIngester', () => {
     expect(batches).toEqual([[1], [2, 3]]);
   });
 
-  it('never sends later batches once an earlier batch has exhausted its retries', async () => {
+  it('does not send later batches while the head batch remains unacknowledged', async () => {
     // Regression: queued follow-up batches used to keep sending after the
-    // first batch was permanently lost — if the server recovered mid-window,
+    // first batch was unacknowledged — if the server recovered mid-window,
     // it received a gapped stream (e.g. a tool_end whose tool_start never
-    // arrived). After a fatal error the worker must stop and drop everything
-    // still buffered.
+    // arrived). Exhausted retries stop this pump without skipping its head.
     const batches: number[][] = [];
     const sink: IngestSink = {
       finish: vi.fn(async () => {}),
@@ -108,5 +107,30 @@ describe('BatchIngester', () => {
 
     expect(batches.map((batch) => batch.length)).toEqual([50, 50, 20]);
     expect(batches.flat()).toEqual(all);
+  });
+  it('allows a later drain to retry the retained head without a new event', async () => {
+    const ingest = vi.fn<IngestSink['ingest']>().mockRejectedValue(new Error('offline'));
+    const ingester = new BatchIngester({ ingest, finish: vi.fn() });
+    ingester.push(makeEvent(1));
+    const failedDrain = expect(ingester.drain()).rejects.toThrow('offline');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await failedDrain;
+    ingest.mockResolvedValue(undefined);
+    await ingester.drain();
+    expect(numbers(ingest.mock.calls.at(-1)![0])).toEqual([1]);
+    await ingester.drain();
+    expect(ingest).toHaveBeenCalledTimes(7);
+  });
+
+  it('fails closed on overflow instead of dropping a prefix then uploading a gapped stream', async () => {
+    const sink: IngestSink = { ingest: vi.fn(), finish: vi.fn() };
+    const maxBytes = Buffer.byteLength(JSON.stringify(makeEvent(1)));
+    const ingester = new BatchIngester(sink, maxBytes);
+    ingester.push(makeEvent(1));
+    ingester.push(makeEvent(2));
+    expect(ingester.failed).toBe(true);
+    ingester.push(makeEvent(3));
+    await expect(ingester.drain()).rejects.toThrow('buffer limit exceeded');
+    expect(sink.ingest).not.toHaveBeenCalled();
   });
 });

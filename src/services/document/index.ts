@@ -1,4 +1,4 @@
-import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import { PAGE_DOCUMENT_FILE_TYPES, PAGE_DOCUMENT_SOURCE_TYPES } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -185,16 +185,16 @@ export class DocumentService {
   async getPageDocuments(pageSize: number = 20): Promise<DocumentItem[]> {
     const result = await this.queryDocuments({
       current: 0,
-      fileTypes: [CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf'],
+      fileTypes: PAGE_DOCUMENT_FILE_TYPES,
       pageSize,
-      sourceTypes: ['editor', 'file', 'api'],
+      sourceTypes: PAGE_DOCUMENT_SOURCE_TYPES,
     });
 
     return result.items
       .filter(
         (doc) =>
-          ['editor', 'file', 'api'].includes(doc.sourceType) &&
-          [CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf'].includes(doc.fileType),
+          PAGE_DOCUMENT_SOURCE_TYPES.includes(doc.sourceType) &&
+          PAGE_DOCUMENT_FILE_TYPES.includes(doc.fileType),
       )
       .map((doc) => ({ ...doc, filename: doc.filename ?? doc.title ?? 'Untitled' }));
   }

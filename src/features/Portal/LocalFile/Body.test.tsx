@@ -74,6 +74,8 @@ vi.mock('@/components/Loading/CircleLoading', () => ({
 const mockUseClientDataSWR = vi.hoisted(() => vi.fn());
 const mockProjectFileService = vi.hoisted(() => ({
   getLocalFilePreview: vi.fn(),
+  // The toolbar breadcrumb reads the project index to offer sibling files.
+  getProjectFileIndex: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/libs/swr', () => ({
@@ -269,8 +271,12 @@ describe('LocalFile Body', () => {
       { revalidateOnFocus: false },
     );
 
-    const fetcher = mockUseClientDataSWR.mock.calls.at(-1)?.[1] as () => Promise<unknown>;
-    void fetcher();
+    // The toolbar breadcrumb registers its own SWR call, so pick the preview
+    // fetcher by its key rather than by position.
+    const previewCall = mockUseClientDataSWR.mock.calls.findLast((call) =>
+      String(call[0]).includes('/tmp/worktree-switcher-demo.html'),
+    );
+    void (previewCall?.[1] as () => Promise<unknown>)();
     expect(mockProjectFileService.getLocalFilePreview).toHaveBeenCalledWith({
       allowExternalFile: true,
       deviceId: undefined,
@@ -311,8 +317,12 @@ describe('LocalFile Body', () => {
 
     render(<Body />);
 
-    const fetcher = mockUseClientDataSWR.mock.calls.at(-1)?.[1] as () => Promise<unknown>;
-    void fetcher();
+    // The toolbar breadcrumb registers its own SWR call, so pick the preview
+    // fetcher by its key rather than by position.
+    const previewCall = mockUseClientDataSWR.mock.calls.findLast((call) =>
+      String(call[0]).includes('/project-a/pages/index.html'),
+    );
+    void (previewCall?.[1] as () => Promise<unknown>)();
     expect(mockProjectFileService.getLocalFilePreview).toHaveBeenCalledWith({
       allowExternalFile: undefined,
       deviceId: undefined,

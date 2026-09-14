@@ -57,6 +57,7 @@ const AcceptanceHeader = memo(() => {
 
   return (
     <Header
+      paddingInline={24}
       rightExtra={
         <ActionIcon
           disabled={!externalUrl}

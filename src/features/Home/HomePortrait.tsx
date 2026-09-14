@@ -7,29 +7,23 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
 import { useResolvedHomeAgentId } from './AgentSelect/useResolvedHomeAgentId';
+import { HOME_PORTRAIT_INSET } from './portraitFraming';
 
 const styles = createStaticStyles(({ css }) => ({
   /**
-   * One frame for every character. Generated artwork arrives cropped to the
-   * subject, and the built-in catalog draws its character across the frame with
-   * a few percent of margin, so sizing by height lands both at the same stature.
-   * Anchored deep enough that the lower body passes behind the first card — the
-   * character leans on the surface instead of standing on it. The offset is what
-   * sets how much shows: 94px leaves `HOME_PORTRAIT_VISIBLE_RATIO` of the
-   * character above the card (see ./portraitFraming), which clears the catalog
-   * mascot's head — it is half its own height — and reaches the hem on a
-   * standing figure, where 57% cut both at the collar and the waist. Change one
-   * and the studio's preview frame stops matching what home shows.
+   * The speech layout owns image dimensions and overlap. Both sizes reveal
+   * the same fraction used by the artwork studio preview, with the lower
+   * body passing behind the supporting card.
    */
   image: css`
     pointer-events: none;
 
     position: absolute;
-    inset-block-end: -94px;
-    inset-inline-end: 12px;
+    inset-block-end: var(--home-portrait-overlap);
+    inset-inline-end: ${HOME_PORTRAIT_INSET}px;
 
-    width: 176px;
-    height: 200px;
+    width: var(--home-portrait-width);
+    height: var(--home-portrait-height);
 
     object-fit: contain;
     object-position: bottom;

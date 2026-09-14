@@ -1410,7 +1410,7 @@ export class MemoryExtractionExecutor {
     tokenLimit?: number,
   ): Promise<UserMemoryHybridSearchAggregatedResult> {
     const db = await this.db;
-    const ftsSearchRepo = await createFtsSearchRepo({ db, userId });
+    const ftsSearchRepo = await createFtsSearchRepo({ db, userId, usage: 'memory_extraction' });
     const userMemoryModel = new UserMemoryModel(db, userId, ftsSearchRepo);
     // TODO: make topK configurable
     const topK = 10;
@@ -1830,6 +1830,7 @@ export class MemoryExtractionExecutor {
             sessionDate: topic.updatedAt.toISOString(),
             // TODO: make topK configurable
             topK: 10,
+            topicId: topic.id,
             username:
               userState.fullName || `${userState.firstName} ${userState.lastName}`.trim() || 'User',
           });

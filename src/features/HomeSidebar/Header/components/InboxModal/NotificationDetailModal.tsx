@@ -1,10 +1,12 @@
 'use client';
 
-import { Flexbox, Markdown } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, createModal, Text, useModalContext } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
-import { memo } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
+
+const Markdown = lazy(() => import('@lobehub/ui/es/Markdown/index'));
 
 interface NotificationDetailParams {
   content: string;
@@ -29,9 +31,11 @@ const NotificationDetailContent = memo<Omit<NotificationDetailParams, 'title'>>(
             {context}
           </Text>
         )}
-        <Markdown fontSize={14} variant={'chat'}>
-          {content}
-        </Markdown>
+        <Suspense fallback={null}>
+          <Markdown fontSize={14} variant={'chat'}>
+            {content}
+          </Markdown>
+        </Suspense>
         {onAction && (
           <Flexbox horizontal justify="flex-end">
             <Button

@@ -20,6 +20,8 @@ import { agentSkillsSelectors } from '@/store/tool/selectors';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
+const EMPTY_ITEMS: SkillListItem[] = [];
+
 const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
   startSkillDrag(event, {
     category: 'skill',
@@ -51,21 +53,23 @@ const openSkillDetailModal = (skillId: string) =>
  * data even when the Tools popover hasn't been opened in this session. The key
  * is deduplicated, so co-mounting with `useControls` doesn't double-fetch.
  */
-export const useUserSkills = (): SkillListItem[] => {
-  useToolStore((s) => s.useFetchAgentSkills)(true);
+export const useUserSkills = (enabled = true): SkillListItem[] => {
+  useToolStore((s) => s.useFetchAgentSkills)(enabled);
   const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
 
   return useMemo(
     () =>
-      agentSkills.map((skill) => ({
-        description: skill.description ?? undefined,
-        // `identifier` is what the runtime resolves through the skill registry,
-        // and is unique per skill — reuse it as both the React key and the
-        // drag payload's `type`.
-        id: skill.identifier,
-        name: skill.name,
-      })),
-    [agentSkills],
+      !enabled
+        ? EMPTY_ITEMS
+        : agentSkills.map((skill) => ({
+            description: skill.description ?? undefined,
+            // `identifier` is what the runtime resolves through the skill registry,
+            // and is unique per skill — reuse it as both the React key and the
+            // drag payload's `type`.
+            id: skill.identifier,
+            name: skill.name,
+          })),
+    [agentSkills, enabled],
   );
 };
 

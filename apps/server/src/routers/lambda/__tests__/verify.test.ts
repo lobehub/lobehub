@@ -8,6 +8,7 @@ import type * as VerifyServiceModule from '@/server/services/verify';
 
 const modelMocks = vi.hoisted(() => ({
   createEvidence: vi.fn(),
+  purgeVerifyRun: vi.fn(),
   createRun: vi.fn(),
   deleteResult: vi.fn(),
   deleteRun: vi.fn(),
@@ -28,27 +29,33 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({
-    delete: modelMocks.deleteResult,
-    findById: modelMocks.findResultById,
-    upsertByCheckItem: modelMocks.upsertByCheckItem,
-  })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return {
+      delete: modelMocks.deleteResult,
+      findById: modelMocks.findResultById,
+      upsertByCheckItem: modelMocks.upsertByCheckItem,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    create: modelMocks.createRun,
-    delete: modelMocks.deleteRun,
-    findByOperation: modelMocks.findRunByOperation,
-    findById: modelMocks.findRunById,
-    update: modelMocks.updateRun,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      create: modelMocks.createRun,
+      delete: modelMocks.deleteRun,
+      findByOperation: modelMocks.findRunByOperation,
+      findById: modelMocks.findRunById,
+      update: modelMocks.updateRun,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/verifyEvidence', () => ({
-  VerifyEvidenceModel: vi.fn(() => ({
-    create: modelMocks.createEvidence,
-  })),
+  VerifyEvidenceModel: vi.fn(function () {
+    return {
+      create: modelMocks.createEvidence,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/verify', async (importOriginal) => ({
@@ -61,6 +68,10 @@ vi.mock('@/server/services/verify', async (importOriginal) => ({
   VerifyReporterService: class VerifyReporterService {},
 }));
 
+vi.mock('@/server/services/verify/acceptancePurge', () => ({
+  purgeVerifyRun: modelMocks.purgeVerifyRun,
+}));
+
 vi.mock('@/server/services/goal/criteriaGenerator', () => ({
   GoalCriteriaGeneratorService: class GoalCriteriaGeneratorService {
     generate = modelMocks.generateGoalCriteria;
@@ -69,32 +80,37 @@ vi.mock('@/server/services/goal/criteriaGenerator', () => ({
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({
-    getFullFileUrl: modelMocks.getFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFullFileUrl: modelMocks.getFullFileUrl,
+    };
+  }),
 }));
 
 const createCaller = () => verifyRouter.createCaller({ userId: 'verify-router-test-user' } as any);
 const createPublicCaller = () => verifyRouter.createCaller({} as any);
 
 const selectRows = <T>(rows: T[]) => ({
-  from: vi.fn(() => ({
-    where: vi.fn(() => ({
-      orderBy: vi.fn(async () => rows),
-    })),
-  })),
+  from: vi.fn(function () {
+    return {
+      where: vi.fn(function () {
+        return {
+          orderBy: vi.fn(async () => rows),
+        };
+      }),
+    };
+  }),
 });
 
 describe('verifyRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     modelMocks.getServerDB.mockResolvedValue({});
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          getFullFileUrl: modelMocks.getFullFileUrl,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        getFullFileUrl: modelMocks.getFullFileUrl,
+      } as any;
+    });
   });
 
   describe('generateCriteria', () => {
@@ -114,8 +130,8 @@ describe('verifyRouter', () => {
       });
       expect(getHTTPStatusCodeFromError(error)).toBe(412);
 
-      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const infoSpy = vi.spyOn(console, 'info').mockImplementation(function () {});
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
       createTRPCErrorLogger('/api/trpc')({
         error,
         path: 'verify.generateCriteria',
@@ -237,15 +253,26 @@ describe('verifyRouter', () => {
       );
 
       expect(modelMocks.findRunById).toHaveBeenCalledWith('other-user-run');
-      expect(modelMocks.deleteRun).not.toHaveBeenCalled();
+      expect(modelMocks.purgeVerifyRun).not.toHaveBeenCalled();
     });
 
-    it('deletes a run the caller owns and returns its id', async () => {
-      modelMocks.findRunById.mockResolvedValueOnce({ id: 'run-1' });
+    it('purges a run the caller owns in its own scope and returns its id', async () => {
+      modelMocks.findRunById.mockResolvedValueOnce({
+        id: 'run-1',
+        userId: 'verify-router-test-user',
+        workspaceId: 'ws-1',
+      });
 
       const res = await createCaller().deleteRun({ verifyRunId: 'run-1' });
 
-      expect(modelMocks.deleteRun).toHaveBeenCalledWith('run-1');
+      expect(modelMocks.purgeVerifyRun).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'verify-router-test-user',
+        'ws-1',
+        'run-1',
+      );
+      expect(modelMocks.deleteRun).not.toHaveBeenCalled();
       expect(res).toEqual({ id: 'run-1', success: true });
     });
   });
@@ -686,8 +713,8 @@ describe('verifyRouter', () => {
     });
 
     it('keeps returning the bundle when file URL resolution is unavailable', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      vi.mocked(FileService).mockImplementation(() => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
+      vi.mocked(FileService).mockImplementation(function () {
         throw new Error('S3 env missing');
       });
 

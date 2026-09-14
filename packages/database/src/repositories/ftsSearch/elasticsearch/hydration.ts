@@ -28,6 +28,7 @@ import {
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchAgentResult,
@@ -270,6 +271,10 @@ export const hydrateTopics = async (
           hits.map(({ id }) => id),
         ),
         buildWorkspaceWhere(scope, topics),
+        // The ES index carries no `senderId`, but hydration is the only path
+        // from a candidate id to real content, so filtering agent-share visitor
+        // topics here is enough to keep them out of the creator's results.
+        notShareVisitorTopic(),
         agentId ? eq(topics.agentId, agentId) : undefined,
         visibleParent(topics.agentId, agents.id),
         visibleParent(topics.groupId, chatGroups.id),
@@ -373,6 +378,8 @@ export const hydrateMessages = async (
         ),
         buildWorkspaceWhere(scope, messages),
         ne(messages.role, 'tool'),
+        // Twin of the topics guard in `hydrateTopics`.
+        notShareVisitorMessage(),
         agentId ? eq(messages.agentId, agentId) : undefined,
         visibleParent(messages.agentId, agents.id),
         visibleParent(messages.groupId, chatGroups.id),

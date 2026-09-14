@@ -1,9 +1,9 @@
 'use client';
 
-import { Skeleton } from '@lobehub/ui';
-import { type SkeletonProps } from 'antd';
 import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo } from 'react';
+
+import { ArticleSkeleton } from '@/components/Skeleton';
 
 const styles = createStaticStyles(
   ({ css }) => css`
@@ -13,19 +13,8 @@ const styles = createStaticStyles(
   `,
 );
 
-const SkeletonLoading = memo<SkeletonProps>(
-  ({ className, classNames, styles: customStyles, ...rest }) => {
-    return (
-      <Skeleton
-        active
-        className={cx(styles, className)}
-        classNames={classNames as any}
-        paragraph={{ rows: 8 }}
-        styles={customStyles as any}
-        {...rest}
-      />
-    );
-  },
-);
+const SkeletonLoading = memo<{ className?: string }>(({ className }) => (
+  <ArticleSkeleton className={cx(styles, className)} rows={8} />
+));
 
 export default SkeletonLoading;

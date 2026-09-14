@@ -2,6 +2,7 @@ import {
   buildGoalRequirement,
   GoalIdentifier,
   resolveGoalAttemptBudget,
+  resolveGoalScheduleConfig,
 } from '@lobechat/builtin-tool-goal';
 
 import { GoalService } from '@/server/services/goal';
@@ -27,6 +28,7 @@ export const goalRuntime: ServerRuntimeRegistration = {
     return {
       createGoal: async (args: {
         criteria: Array<{ description?: string; instruction?: string; title: string }>;
+        deadline?: string | null;
         instruction: string;
         maxIterations?: number | null;
         maxTotalCost?: number | null;
@@ -41,15 +43,20 @@ export const goalRuntime: ServerRuntimeRegistration = {
 
         try {
           const goalService = new GoalService(serverDB, userId, workspaceId ?? undefined);
+          const scheduleConfig = resolveGoalScheduleConfig(args.deadline);
           const graph = await goalService.create({
             agentId,
             createdByAgentId: agentId,
             config: {
               recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(args.maxIterations) },
+              ...(scheduleConfig ? { schedule: scheduleConfig } : {}),
             },
             // `maxIterations` caps attempts on one Work; it is deliberately not
             // passed as `maxRounds`, which counts runs across every Work in the
             // graph and would strand later tasks that have not run at all.
+            // Structured criteria persist alongside the prose requirement so the
+            // goal page can edit them and the terminal acceptance runs exactly them.
+            criteria: drafts,
             maxTotalCost: args.maxTotalCost ?? undefined,
             // No seed work: the coordinator plans the decomposition on first
             // advance, so a complex ask becomes several explorable directions

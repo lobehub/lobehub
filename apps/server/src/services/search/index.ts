@@ -127,6 +127,12 @@ export class SearchService {
         if (!this.isFailedCrawlResult(result)) {
           return result;
         }
+
+        // Dead link / invalid URL / resource file / rejected request: a retry is the
+        // same billed request with the same authoritative answer.
+        if (!this.isRetryableCrawlResult(result)) {
+          return result;
+        }
       } catch (error) {
         lastError = error as Error;
       }
@@ -153,6 +159,10 @@ export class SearchService {
    */
   private isFailedCrawlResult(result: CrawlUniformResult): boolean {
     return !('contentType' in result.data);
+  }
+
+  private isRetryableCrawlResult(result: CrawlUniformResult): boolean {
+    return !('retryable' in result.data) || result.data.retryable !== false;
   }
 
   private get searchImpls() {

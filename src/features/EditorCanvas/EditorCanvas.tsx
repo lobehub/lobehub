@@ -50,6 +50,18 @@ export interface EditorCanvasProps {
   collaborationEnabled?: boolean;
 
   /**
+   * Keep the caret out of Lexical's root node around block images by pushing
+   * an empty paragraph next to the image (otherwise a horizontal root-level
+   * caret shows above / below it). Off by default; comment editors opt in.
+   */
+  blockImageCaretGuard?: boolean;
+
+  /**
+   * Class name applied to the editor wrapper, e.g. to restyle inline chips.
+   */
+  className?: string;
+
+  /**
    * Reload an already-mounted editor when an authoritative external content
    * revision changes. Keep this stable for local autosave echoes and unchanged
    * refetches so unsaved input is never replaced by prop identity churn.

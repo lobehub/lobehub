@@ -15,17 +15,21 @@ const serverDB: LobeChatDatabase = await getTestDB();
 // Mock FileService
 const mockGetFullFileUrl = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: mockGetFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFullFileUrl: mockGetFullFileUrl,
+    };
+  }),
 }));
 
 // Mock GenerationModel
 const mockTransformGeneration = vi.fn();
 vi.mock('../generation', () => ({
-  GenerationModel: vi.fn().mockImplementation(() => ({
-    transformGeneration: mockTransformGeneration,
-  })),
+  GenerationModel: vi.fn(function () {
+    return {
+      transformGeneration: mockTransformGeneration,
+    };
+  }),
 }));
 
 const userId = 'generation-batch-test-user-id';

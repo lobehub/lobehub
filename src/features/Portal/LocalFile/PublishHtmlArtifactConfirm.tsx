@@ -31,6 +31,7 @@ interface PublishHtmlArtifactConfirmContentProps {
   missing: string[];
   oversized: string[];
   remotes: string[];
+  unsupported: string[];
   uploadedPaths: string[];
 }
 
@@ -40,10 +41,11 @@ const PublishHtmlArtifactConfirmContent = ({
   missing,
   oversized,
   remotes,
+  unsupported,
   uploadedPaths,
 }: PublishHtmlArtifactConfirmContentProps) => {
   const { t } = useTranslation('chat');
-  const showDetails = [inlinedPaths, uploadedPaths, missing, oversized, remotes].some(
+  const showDetails = [inlinedPaths, uploadedPaths, missing, oversized, remotes, unsupported].some(
     (list) => list.length > 0,
   );
 
@@ -94,6 +96,13 @@ const PublishHtmlArtifactConfirmContent = ({
                       <Text type={'secondary'}>
                         {t('workingPanel.localFile.publish.oversized', {
                           list: oversized.join(', '),
+                        })}
+                      </Text>
+                    )}
+                    {unsupported.length > 0 && (
+                      <Text type={'secondary'}>
+                        {t('workingPanel.localFile.publish.unsupported', {
+                          list: unsupported.join(', '),
                         })}
                       </Text>
                     )}
@@ -183,6 +192,7 @@ export const openWorkspaceHtmlPublishConfirm = ({
         missing={plan.gathered.missing}
         oversized={plan.gathered.oversized}
         remotes={plan.gathered.remotes}
+        unsupported={plan.gathered.unsupported}
         uploadedPaths={plan.packed.sidecars.map((file) => file.path)}
       />
     ),

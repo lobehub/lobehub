@@ -7,8 +7,8 @@ import {
   canExecutionTargetReadLocalPaths,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -31,7 +31,7 @@ export const useLocalPathReference = (agentId: string, topicId?: string | null) 
     chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
   );
   const workingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,

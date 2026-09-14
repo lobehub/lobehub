@@ -6,6 +6,7 @@ import {
   TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
+import debug from 'debug';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { topicSummaryEligibleMessage, TopicSummaryModel } from '@/database/models/topicSummary';
@@ -14,6 +15,8 @@ import { messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
+
+const log = debug('lobe-server:service:topic-auto-summary');
 
 const MAX_MESSAGES = 80;
 const MAX_MESSAGE_CHARS = 12_000;
@@ -51,10 +54,21 @@ export class TopicAutoSummaryService {
       ? eq(topics.workspaceId, this.workspaceId)
       : eq(topics.userId, this.userId);
     const [topic] = await this.db
-      .select({ historySummary: topics.historySummary })
+      .select({ historySummary: topics.historySummary, senderId: topics.senderId })
       .from(topics)
       .where(and(eq(topics.id, topicId), topicOwnership))
       .limit(1);
+    // Share-visitor topics are creator-billed only through the share spend
+    // gate. Reject them defensively before any LLM call — the dispatch query
+    // and TopicSummaryModel.updateSummaryIfCurrent both filter them out, this
+    // guard covers replays / direct callers that skip the dispatch path.
+    if (topic?.senderId) {
+      log(
+        'skipping share-visitor topic %s: visitor turns are outside the auto-summary scope',
+        topicId,
+      );
+      return { reason: 'disabled', summarized: false };
+    }
     const recent = await this.db
       .select({
         content: messages.content,

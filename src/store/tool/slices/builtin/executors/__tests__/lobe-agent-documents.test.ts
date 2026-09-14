@@ -77,6 +77,7 @@ describe('agentDocumentsExecutor', () => {
       'createDocument',
       {
         content: 'Body',
+        parentId: 'folder-document-1',
         title: 'Test Document',
       },
       createContext(),
@@ -87,6 +88,7 @@ describe('agentDocumentsExecutor', () => {
       expect.objectContaining({
         agentId: 'agent-1',
         content: 'Body',
+        parentId: 'folder-document-1',
         title: 'Test Document',
         toolContext: expect.objectContaining({
           messageId: 'user-message-1',

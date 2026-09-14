@@ -58,7 +58,7 @@ export interface FileServiceImpl {
   /**
    * Get file content
    */
-  getFileContent: (key: string) => Promise<string>;
+  getFileContent: (key: string, byteLength?: number) => Promise<string>;
 
   /**
    * Get file metadata from storage

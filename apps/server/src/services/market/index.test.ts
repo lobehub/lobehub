@@ -9,57 +9,59 @@ import { extractAccessToken, LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS, MarketService }
 
 // Mock dependencies before importing the module under test
 vi.mock('@lobehub/market-sdk', () => {
-  const MarketSDK = vi.fn().mockImplementation(() => ({
-    agentGroups: {
-      getAgentGroupDetail: vi.fn(),
-      getAgentGroupList: vi.fn(),
-    },
-    agents: {
-      createEvent: vi.fn(),
-      getAgentDetail: vi.fn(),
-      getAgentList: vi.fn(),
-      increaseInstallCount: vi.fn(),
-    },
-    auth: {
-      exchangeOAuthToken: vi.fn(),
-      getOAuthHandoff: vi.fn(),
-      getUserInfo: vi.fn(),
-    },
-    connect: {
-      listConnections: vi.fn(),
-    },
-    feedback: {
-      submitFeedback: vi.fn(),
-    },
-    fetchM2MToken: vi.fn(),
-    headers: {},
-    marketSkills: {
-      downloadSkill: vi.fn(),
-      getCategories: vi.fn(),
-      getComments: vi.fn(),
-      getDownloadUrl: vi.fn(),
-      getRatingDistribution: vi.fn(),
-      getSkillDetail: vi.fn(),
-      getSkillList: vi.fn(),
-    },
-    plugins: {
-      callCloudGateway: vi.fn(),
-      createEvent: vi.fn(),
-      getPluginManifest: vi.fn(),
-      reportCall: vi.fn(),
-      reportInstallation: vi.fn(),
-      runBuildInTool: vi.fn(),
-    },
-    skills: {
-      callTool: vi.fn(),
-      listLiveTools: vi.fn(),
-      listTools: vi.fn(),
-    },
-    user: {
-      getUserInfo: vi.fn(),
-      register: vi.fn(),
-    },
-  }));
+  const MarketSDK = vi.fn(function () {
+    return {
+      agentGroups: {
+        getAgentGroupDetail: vi.fn(),
+        getAgentGroupList: vi.fn(),
+      },
+      agents: {
+        createEvent: vi.fn(),
+        getAgentDetail: vi.fn(),
+        getAgentList: vi.fn(),
+        increaseInstallCount: vi.fn(),
+      },
+      auth: {
+        exchangeOAuthToken: vi.fn(),
+        getOAuthHandoff: vi.fn(),
+        getUserInfo: vi.fn(),
+      },
+      connect: {
+        listConnections: vi.fn(),
+      },
+      feedback: {
+        submitFeedback: vi.fn(),
+      },
+      fetchM2MToken: vi.fn(),
+      headers: {},
+      marketSkills: {
+        downloadSkill: vi.fn(),
+        getCategories: vi.fn(),
+        getComments: vi.fn(),
+        getDownloadUrl: vi.fn(),
+        getRatingDistribution: vi.fn(),
+        getSkillDetail: vi.fn(),
+        getSkillList: vi.fn(),
+      },
+      plugins: {
+        callCloudGateway: vi.fn(),
+        createEvent: vi.fn(),
+        getPluginManifest: vi.fn(),
+        reportCall: vi.fn(),
+        reportInstallation: vi.fn(),
+        runBuildInTool: vi.fn(),
+      },
+      skills: {
+        callTool: vi.fn(),
+        listLiveTools: vi.fn(),
+        listTools: vi.fn(),
+      },
+      user: {
+        getUserInfo: vi.fn(),
+        register: vi.fn(),
+      },
+    };
+  });
   return { MarketSDK };
 });
 

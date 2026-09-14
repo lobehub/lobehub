@@ -3,13 +3,13 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type RuntimeExecutorContext } from '../context';
-import { buildServerVirtualSubAgentRunner } from '../executorHelpers';
+import { buildServerAgentMemberRunner, buildServerVirtualSubAgentRunner } from '../executorHelpers';
 
 /**
  * The parent model a spawned `callSubAgent` follows must be the model the
- * parent run ACTUALLY uses. `metadata.agentConfig` alone is not enough: when a
+ * parent run ACTUALLY uses. `world.agent` alone is not enough: when a
  * run continues a topic whose model was switched, execAgent keeps the
- * topic-pinned model only in `modelRuntimeConfig` while the metadata config
+ * topic-pinned model only in `modelRuntimeConfig` while the world config
  * retains the agent default.
  */
 describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
@@ -25,7 +25,7 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     const runner = buildServerVirtualSubAgentRunner(
       ctx,
       {
-        metadata: { agentId: 'agent-1', topicId: 'topic-1' },
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
         operationId: 'parent-op',
         ...state,
       } as AgentState,
@@ -36,12 +36,11 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     return { execVirtualSubAgent, runner };
   };
 
-  it('follows the topic-pinned runtime model over the metadata agent default', async () => {
+  it('follows the topic-pinned runtime model over the world agent default', async () => {
     const { execVirtualSubAgent, runner } = buildRunner({
-      metadata: {
-        agentConfig: { model: 'agent-default-model', provider: 'agent-default-provider' },
-        agentId: 'agent-1',
-        topicId: 'topic-1',
+      origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      world: {
+        agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
       },
       modelRuntimeConfig: { model: 'topic-pinned-model', provider: 'topic-pinned-provider' },
     });
@@ -53,12 +52,11 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     );
   });
 
-  it('falls back to the metadata agent config when no runtime model exists', async () => {
+  it('falls back to the world agent config when no runtime model exists', async () => {
     const { execVirtualSubAgent, runner } = buildRunner({
-      metadata: {
-        agentConfig: { model: 'agent-default-model', provider: 'agent-default-provider' },
-        agentId: 'agent-1',
-        topicId: 'topic-1',
+      origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      world: {
+        agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
       },
     });
 
@@ -79,5 +77,50 @@ describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
     expect(execVirtualSubAgent).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: 'target-agent', model: undefined, provider: undefined }),
     );
+  });
+});
+
+// Fail-close regression for share-visitor runs: the child run spawned by
+// either runner does not inherit the parent's shareGate, so for a run with
+// `ctx.agentShareVisitor` set, no runner may be built at all.
+describe('runner builders fail closed for share-visitor runs', () => {
+  const shareCtx = {
+    agentShareVisitor: {
+      agentId: 'agent-1',
+      shareId: 'share-1',
+      visitorUserId: 'visitor-1',
+    },
+    execGroupMember: vi.fn(),
+    execVirtualSubAgent: vi.fn(),
+    messageModel: { create: vi.fn() },
+    operationId: 'parent-op',
+    topicId: 'topic-1',
+  } as unknown as RuntimeExecutorContext;
+
+  const state = {
+    origin: { agentId: 'agent-1', groupId: 'group-1', topicId: 'topic-1' },
+    operationId: 'parent-op',
+  } as unknown as AgentState;
+
+  it('buildServerVirtualSubAgentRunner returns undefined when agentShareVisitor is set', () => {
+    expect(
+      buildServerVirtualSubAgentRunner(
+        shareCtx,
+        state,
+        { id: 'tool-call-1' } as ChatToolPayload,
+        'parent-message-1',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('buildServerAgentMemberRunner returns undefined when agentShareVisitor is set', () => {
+    expect(
+      buildServerAgentMemberRunner(
+        shareCtx,
+        state,
+        { id: 'tool-call-1' } as ChatToolPayload,
+        'parent-message-1',
+      ),
+    ).toBeUndefined();
   });
 });

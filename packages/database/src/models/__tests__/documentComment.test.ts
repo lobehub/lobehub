@@ -147,6 +147,73 @@ describe('DocumentCommentModel', () => {
     });
   });
 
+  it('collects thread participants for replies and skips tombstoned reply targets', async () => {
+    const outsiderInWorkspaceModel = new DocumentCommentModel(serverDB, outsiderId, workspaceId);
+    const root = await authorModel.create({ clientId: 'root', content: 'root', documentId });
+    expect(root.threadParticipantUserIds).toEqual([]);
+
+    const memberReply = await memberModel.create({
+      clientId: 'member-reply',
+      content: 'member',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    // First reply: only the root author is in the thread, and they are the
+    // direct target, so nobody else needs the weaker thread ping.
+    expect(memberReply.parentAuthorUserId).toBe(authorId);
+    expect(memberReply.threadParticipantUserIds).toEqual([]);
+
+    const outsiderReply = await outsiderInWorkspaceModel.create({
+      clientId: 'outsider-reply',
+      content: 'outsider',
+      documentId,
+      parentCommentId: memberReply.comment.id,
+    });
+    // Replying to the member's reply: member gets `replied`, root author is a
+    // thread participant, the actor is excluded.
+    expect(outsiderReply.parentAuthorUserId).toBe(memberId);
+    expect(outsiderReply.threadParticipantUserIds).toEqual([authorId]);
+
+    const authorReply = await authorModel.create({
+      clientId: 'author-reply',
+      content: 'author again',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    // Root author replying to their own root: no direct target ping, the two
+    // other repliers are participants.
+    expect(authorReply.parentAuthorUserId).toBe(authorId);
+    expect(new Set(authorReply.threadParticipantUserIds)).toEqual(new Set([memberId, outsiderId]));
+
+    // Only roots leave tombstones (replies to replies are flattened). Tombstone
+    // the root and reply to it: the deleted comment's author must not be a
+    // target, and the live repliers are still participants.
+    expect(await authorModel.delete(root.comment.id)).toBe('soft');
+    const replyToTombstone = await memberModel.create({
+      clientId: 'reply-to-tombstone',
+      content: 'still here?',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    expect(replyToTombstone.parentAuthorUserId).toBeNull();
+    // The root author stays a participant through their live reply.
+    expect(new Set(replyToTombstone.threadParticipantUserIds)).toEqual(
+      new Set([authorId, outsiderId]),
+    );
+    expect(replyToTombstone.comment).toMatchObject({
+      parentCommentId: root.comment.id,
+      replyToCommentId: null,
+    });
+
+    const duplicate = await memberModel.create({
+      clientId: 'reply-to-tombstone',
+      content: 'still here?',
+      documentId,
+      parentCommentId: root.comment.id,
+    });
+    expect(duplicate).toMatchObject({ isDuplicate: true, threadParticipantUserIds: [] });
+  });
+
   it('scopes updates and deletes to the author unless explicitly overridden', async () => {
     const created = await authorModel.create({
       clientId: 'owned',
@@ -349,5 +416,14 @@ describe('DocumentCommentModel', () => {
       .where(eq(documentComments.id, oldRoot.id));
     expect(await authorModel.summary(documentId)).toEqual({ total: 3 });
     expect(await outsiderModel.summary(foreignDocumentId)).toEqual({ total: 0 });
+
+    // Single-thread lookup for deep links: live replies only, scoped to the workspace.
+    expect(await authorModel.countLiveReplies(oldRoot.id)).toBe(2);
+    expect(await outsiderModel.countLiveReplies(oldRoot.id)).toBe(0);
+    await serverDB
+      .update(documentComments)
+      .set({ deletedAt: new Date() })
+      .where(eq(documentComments.clientId, 'reply-2'));
+    expect(await authorModel.countLiveReplies(oldRoot.id)).toBe(1);
   });
 });

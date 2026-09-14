@@ -5,7 +5,11 @@ import { z } from 'zod';
 
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AGENT_OWNERSHIP_STALE, AgentOwnedByGroupError } from '@/database/models/agent';
+import {
+  AGENT_OWNERSHIP_STALE,
+  AGENT_SHARED_TRANSFER_BLOCKED,
+  AgentOwnedByGroupError,
+} from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS } from '@/database/models/agentTransferJob';
 import {
@@ -281,6 +285,16 @@ export const resourceTransferRequestRouter = router({
             cause: { data: { code: TransferErrorCode.CopyInProgress } },
             code: 'CONFLICT',
             message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        if (error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          // Not permanently stale: once the share row is removed (no product
+          // entry point yet — see the `transferAgents` guard) the recipient
+          // can retry, so the request stays pending.
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message: 'This agent has a share link, so its owner cannot be changed.',
           });
         }
       }

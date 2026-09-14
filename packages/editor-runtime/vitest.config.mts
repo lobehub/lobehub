@@ -10,8 +10,10 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
-        // Inline @emoji-mart packages to avoid ESM JSON import issues
-        inline: [/@emoji-mart/, /@lobehub\/ui/],
+        // Inline @lobehub packages (and their @emoji-mart JSON imports) so Vite
+        // transforms them instead of letting Node load raw JSON without an
+        // import attribute.
+        inline: [/@emoji-mart/, /@lobehub\//],
       },
     },
   },

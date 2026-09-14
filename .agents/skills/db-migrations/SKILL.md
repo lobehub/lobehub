@@ -1,6 +1,6 @@
 ---
 name: db-migrations
-description: 'Use for database rollout strategy, Drizzle migrations, online index creation, data backfills, migration regeneration, sequence conflicts after rebase, idempotent SQL review, or migration renames.'
+description: 'Use for Drizzle migration rollout, online indexes, backfills, idempotent SQL and migration regeneration or rebase conflicts.'
 user-invocable: false
 ---
 
@@ -24,6 +24,21 @@ Apply these before generating any migration — they change what the schema file
   ```
 
 - **Keep domain constants out of schema files.** In new or modified schema files under `packages/database/src/schemas/`, shared domain literal arrays, union types, and option interfaces belong in `@lobechat/types` (one module per domain, re-exported from its `index.ts`); both the schema (`.$type<>()`) and consumers (routers via `z.enum(...)`, services, UI) import from there. This rule targets domain constants only — table objects, inferred row types, Drizzle relation objects, and zod insert/select schemas (`insertAgentSchema`, …) are the schema file's job and stay put. Existing schema files that already export such constants (e.g. `resourcePermission.ts`) are grandfathered; migrate them opportunistically when the file is next touched, not in bulk.
+
+- **Prefixed ids only for rows that are addressed one at a time.** An `idGenerator` prefix (`task_`, `cmt_`, `brf_`) earns its keep when the id turns up somewhere a person reads it — a URL segment, an API argument, a tool-call payload, a support ticket. A child table whose rows are only ever fetched in bulk for their parent takes a plain uuid instead, like `task_dependencies` / `task_documents` / `task_topics`; there the prefix costs a registry entry in `idGenerator.ts` and buys nothing back.
+
+  ```ts
+  // ✅ Addressed individually — deleteComment(commentId), /task/:id
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => idGenerator('taskComments'))
+    .notNull(),
+
+  // ✅ Only ever read in bulk for one parent
+  id: uuid('id').defaultRandom().primaryKey().notNull(),
+  ```
+
+- **Column order: identity → scope → the table's own columns → `visibility` → timestamps.** Put `id` and the parent FK first, then the ownership columns (`user_id`, `workspace_id`), then whatever this table is actually for, then `visibility`, then the `...timestamps` / `createdAt()` spread. A reader scanning an unfamiliar table then finds the same field in the same place. `visibility` sitting at the end is the deliberate slot, not an accident of history: of the 22 tables that carry the column today, 17 place it in the last three columns and **none** place it directly after `id`. A new table that hoists it to the front becomes the one outlier — if the placement is ever worth changing, change it repo-wide and update this rule, not one table at a time.
 
 ## Choose the rollout strategy
 

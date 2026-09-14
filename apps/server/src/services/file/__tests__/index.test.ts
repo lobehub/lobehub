@@ -52,7 +52,7 @@ vi.mock('@lobechat/utils', async (importOriginal) => {
 
 describe('FileService', () => {
   let service: FileService;
-  const mockDb = {} as any;
+  const mockDb = { transaction: (run: (tx: unknown) => unknown) => run({}) } as any;
   const mockUserId = 'test-user';
   let mockFileModel: any;
   let mockTempManager: any;
@@ -68,11 +68,15 @@ describe('FileService', () => {
       writeTempFile: vi.fn(),
       cleanup: vi.fn(),
     };
-    vi.mocked(FileModel).mockImplementation(() => mockFileModel);
-    vi.mocked(TempFileManager).mockImplementation(() => mockTempManager);
+    vi.mocked(FileModel).mockImplementation(function () {
+      return mockFileModel;
+    });
+    vi.mocked(TempFileManager).mockImplementation(function () {
+      return mockTempManager;
+    });
 
     // Mock console.error to test error logging
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
     service = new FileService(mockDb, mockUserId);
   });
@@ -192,6 +196,14 @@ describe('FileService', () => {
 
     expect(service['impl'].getFileContent).toHaveBeenCalledWith(testKey);
     expect(result).toBe(expectedContent);
+  });
+
+  it('should pass the preview byte bound to getFileContent', async () => {
+    vi.mocked(service['impl'].getFileContent).mockResolvedValue('# Preview');
+
+    await service.getFileContent('preview.md', 8192);
+
+    expect(service['impl'].getFileContent).toHaveBeenCalledWith('preview.md', 8192);
   });
 
   it('should delegate getFileByteArray to implementation', async () => {
@@ -325,6 +337,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
+        undefined,
       );
     });
 
@@ -352,6 +365,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
+        undefined,
       );
     });
   });
@@ -398,6 +412,7 @@ describe('FileService', () => {
           }),
         }),
         expect.any(Boolean),
+        expect.anything(),
       );
     });
 
@@ -472,6 +487,7 @@ describe('FileService', () => {
           fileHash: 'new-hash',
         }),
         true, // insertToGlobalFiles = true when hash doesn't exist
+        undefined,
       );
     });
 
@@ -492,6 +508,7 @@ describe('FileService', () => {
           fileHash: 'existing-hash',
         }),
         false, // insertToGlobalFiles = false when hash exists
+        undefined,
       );
       expect(mockFileModel.updateGlobalFile).not.toHaveBeenCalled();
     });
@@ -500,7 +517,7 @@ describe('FileService', () => {
       mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'old/path.txt' });
       mockFileModel.create.mockResolvedValue({ id: 'file-id' });
       vi.mocked(service['impl'].getFileMetadata).mockRejectedValue(new Error('NoSuchKey'));
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       await service.createFileRecord({
         fileHash: 'existing-hash',
@@ -521,6 +538,7 @@ describe('FileService', () => {
           url: 'new/path.txt',
         }),
         false,
+        undefined,
       );
       consoleSpy.mockRestore();
     });
@@ -549,6 +567,7 @@ describe('FileService', () => {
           url: 'new/path.txt',
         }),
         false,
+        undefined,
       );
     });
   });

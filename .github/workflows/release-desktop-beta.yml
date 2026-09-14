@@ -112,6 +112,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Setup build environment
+        id: setup
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-ref: ${{ needs.check-beta.outputs.cloud_ref }}
@@ -120,6 +121,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set package version
+        id: app_version
         run: npm run workflow:set-desktop-version ${{ needs.check-beta.outputs.version }} beta
 
       - name: Prepare macOS provisioning profile
@@ -134,6 +136,7 @@ jobs:
 
       # macOS 构建
       - name: Build artifact on macOS
+        id: build_macos
         if: runner.os == 'macOS'
         run: npm run desktop:package:app
         env:
@@ -154,6 +157,7 @@ jobs:
 
       # Windows 构建
       - name: Build artifact on Windows
+        id: build_windows
         if: runner.os == 'Windows'
         run: npm run desktop:package:app
         env:
@@ -170,6 +174,7 @@ jobs:
 
       # Linux 构建
       - name: Build artifact on Linux
+        id: build_linux
         if: runner.os == 'Linux'
         run: npm run desktop:package:app
         env:
@@ -183,12 +188,22 @@ jobs:
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
 
       - name: Upload artifacts
+        id: upload
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
           renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           update-channel: beta
+
+      - name: Preserve desktop build diagnostics
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          kind: build
+          channel: beta
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}
 
   # 汇总门禁: test/build 完成后决定是否继续
   gate:
@@ -223,6 +238,9 @@ jobs:
           path: release
           pattern: release-*
           merge-multiple: true
+
+      - name: Validate platform renderer hashes
+        run: node apps/desktop/scripts/validateMainHash.mjs release release-macos-latest release-macos-15-intel release-windows-2025 release-ubuntu-latest
 
       # 列出下载的构建产物
       - name: List downloaded artifacts

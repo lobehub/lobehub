@@ -95,6 +95,8 @@ vi.mock('@/store/agent/selectors', () => ({
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
     getTopicById: () => () => mockTopic,
+    getTopicHeteroPinById: () => () =>
+      mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
     getTopicModelById: () => () =>
       mockTopic?.model ? { model: mockTopic.model, provider: mockTopic.provider || '' } : undefined,
   },
@@ -112,16 +114,14 @@ vi.mock('@/store/user', () => ({
   }),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { info: vi.fn() },
-}));
-
 const mockChatDeleteMessage = vi.fn(async () => {});
 const mockExecuteGatewayAgent = vi.fn(async () => {});
 const noop = vi.fn();
 vi.mock('@/store/chat', () => ({
   useChatStore: {
     getState: vi.fn(() => ({
+      topicDataMap: {},
+      topicDetailMap: mockTopic ? { [mockTopic.id]: mockTopic } : {},
       operations: {},
       operationsByMessage: {},
 

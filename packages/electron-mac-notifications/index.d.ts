@@ -9,6 +9,8 @@ export interface ShowMacNotificationOptions {
   id?: string;
   sender?: MacNotificationSender;
   silent?: boolean;
+  /** File name registered under the bundle's `Library/Sounds`; system default when absent. */
+  soundName?: string;
   title: string;
 }
 
@@ -32,5 +34,8 @@ export function showNotification(
   options: ShowMacNotificationOptions,
 ): Promise<ShowMacNotificationResult>;
 export function onNotificationEvent(listener: (event: MacNotificationEvent) => void): () => void;
+export type MacNotificationSoundSetting = 'disabled' | 'enabled' | 'unsupported';
+
 export function getAuthorizationStatus(): Promise<MacNotificationAuthorizationStatus>;
+export function getSoundSetting(): Promise<MacNotificationSoundSetting>;
 export function requestAuthorization(): Promise<boolean>;

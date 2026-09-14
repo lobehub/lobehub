@@ -31,55 +31,47 @@ const MAX_RETRIES = 5;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
- * Buffers `AgentStreamEvent`s and flushes them in batches to an `IngestSink`.
- *
- * A single send worker pumps the buffer: it splices at most MAX_BATCH (50)
- * events **at send time** — not when a flush is scheduled — so everything
- * that arrives while a slow request is in flight coalesces into the next
- * batch instead of fragmenting into per-interval micro-batches queued behind
- * it. Consumption per round-trip therefore scales with the backlog, which is
- * what lets ingest catch up to a producer that briefly outpaces the server.
- *
- * Pump triggers:
- *   - Buffer reaches MAX_BATCH (50) → start the worker immediately
- *   - FLUSH_INTERVAL_MS (250ms) timer fires → start the worker
- *   - drain() → start the worker and await it
- *
- * Each batch is retried up to MAX_RETRIES (5) times with exponential back-off
- * starting at 500ms, doubling up to 8s. After the final retry the error is
- * stored, the worker stops, and every event still buffered (or pushed later)
- * is dropped — later batches must never be sent once an earlier one is
- * permanently lost, or the server would see a gapped stream (a `tool_end`
- * whose `tool_start` never arrived). `drain()` rethrows the stored error,
- * allowing the caller to call `sink.finish({ result: 'error' })` and exit(1).
- *
- * Call order: push() repeatedly → drain() once (before finish()).
+ * Sends ordered event batches with bounded retries. A temporary outage leaves
+ * the failed batch at the front of the queue; a later push or drain retries it
+ * before any newer event. The buffer is byte-limited, so an extended outage
+ * fails closed instead of retaining an unbounded native-agent transcript.
  */
 export class BatchIngester {
-  private buffer: AgentStreamEvent[] = [];
+  private buffer: { event: AgentStreamEvent; size: number }[] = [];
+  private bufferedBytes = 0;
   private fatalError: Error | null = null;
+  private lastSendError: Error | null = null;
   private pumping = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private worker: Promise<void> = Promise.resolve();
 
-  constructor(private readonly sink: IngestSink) {}
+  constructor(
+    private readonly sink: IngestSink,
+    private readonly maxBufferedBytes = 16 * 1024 * 1024,
+  ) {}
 
-  /** True once a batch has exhausted its retries — every later push is a no-op
-   *  and `drain()` rethrows the stored error. Lets wrappers stop buffering
-   *  work (e.g. text coalescing) that can never be delivered. */
+  /** Only a lost/overflowed stream is permanent; a transport outage can recover. */
   get failed(): boolean {
     return this.fatalError !== null;
   }
 
   push(event: AgentStreamEvent): void {
     if (this.fatalError) return;
-    this.buffer.push(event);
-    if (this.pumping) return; // the worker picks the event up after its current send
+    const size = Buffer.byteLength(JSON.stringify(event));
+    if (this.bufferedBytes + size > this.maxBufferedBytes) {
+      this.fatalError = new Error('Agent event buffer limit exceeded while waiting for upload');
+      this.buffer = [];
+      this.bufferedBytes = 0;
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = null;
+      return;
+    }
+    this.buffer.push({ event, size });
+    this.bufferedBytes += size;
+    if (this.pumping) return;
     if (this.buffer.length >= MAX_BATCH) {
-      if (this.timer) {
-        clearTimeout(this.timer);
-        this.timer = null;
-      }
+      if (this.timer) clearTimeout(this.timer);
+      this.timer = null;
       this.startPump();
     } else if (!this.timer) {
       this.timer = setTimeout(() => {
@@ -89,37 +81,36 @@ export class BatchIngester {
     }
   }
 
-  /** Flush remaining buffer and wait for the worker to settle. */
+  /** A failed final drain still prevents the caller from reporting success. */
   async drain(): Promise<void> {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
     this.startPump();
     await this.worker;
     if (this.fatalError) throw this.fatalError;
+    if (this.lastSendError) throw this.lastSendError;
   }
 
   private startPump(): void {
     if (this.pumping || this.fatalError || this.buffer.length === 0) return;
+    this.lastSendError = null;
     this.pumping = true;
     this.worker = this.pump();
   }
 
-  /**
-   * Single-worker send loop. The batch is spliced right before each send, so
-   * the buffer keeps growing while a request is in flight and the backlog
-   * ships as few large batches. A fatal error (retries exhausted) breaks the
-   * loop with the remaining buffer unsent — dropped, never gapped.
-   */
   private async pump(): Promise<void> {
     try {
       while (!this.fatalError && this.buffer.length > 0) {
-        const batch = this.buffer.splice(0, MAX_BATCH);
-        await this.sendWithRetry(batch);
+        // Remove only acknowledged events. A failed or partially acknowledged
+        // batch must be redelivered before the events queued behind it.
+        const batch = this.buffer.slice(0, MAX_BATCH);
+        await this.sendWithRetry(batch.map(({ event }) => event));
+        if (this.fatalError) break;
+        this.buffer.splice(0, batch.length);
+        this.bufferedBytes -= batch.reduce((total, item) => total + item.size, 0);
       }
-    } catch {
-      // fatalError is already set; drain() re-throws it.
+    } catch (error) {
+      this.lastSendError = error instanceof Error ? error : new Error(String(error));
     } finally {
       this.pumping = false;
     }
@@ -128,14 +119,12 @@ export class BatchIngester {
   private async sendWithRetry(batch: AgentStreamEvent[]): Promise<void> {
     let delay = 500;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (this.fatalError) throw this.fatalError;
       try {
         await this.sink.ingest(batch);
         return;
-      } catch (err) {
-        if (attempt === MAX_RETRIES) {
-          this.fatalError = err instanceof Error ? err : new Error(String(err));
-          throw this.fatalError;
-        }
+      } catch (error) {
+        if (attempt === MAX_RETRIES) throw error;
         await sleep(delay);
         delay = Math.min(delay * 2, 8_000);
       }

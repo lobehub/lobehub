@@ -24,7 +24,7 @@ import {
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
 import { UserMessageExtra } from './Extra';
-import { resolveSenderIdentity } from './resolveSenderIdentity';
+import { getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
@@ -35,7 +35,8 @@ interface UserMessageProps {
 
 const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
-  const { content, createdAt, error, role, extra, targetId, sender } = item;
+  const { content, createdAt, error, role, extra, targetId, sender, metadata } = item;
+  const botSender = getBotSender(item);
 
   const { t } = useTranslation('chat');
   const selfAvatar = useUserAvatar();
@@ -47,9 +48,12 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // visible even during single-user testing; personal mode keeps the legacy
   // hidden-avatar behavior. Self identity applies only to the viewer's own
   // rows — see resolveSenderIdentity.
-  const showSender = Boolean(activeWorkspaceId);
+  // A bot-channel row is authored by someone else even in personal mode, so
+  // its sender is always shown.
+  const showSender = Boolean(activeWorkspaceId) || !!botSender;
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { avatar, title } = resolveSenderIdentity({
+    botSender,
     currentUserId,
     selfAvatar,
     selfTitle,
@@ -104,6 +108,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       avatar={{ avatar, title }}
       belowMessage={<ScheduledRunFooter id={id} />}
       editing={editing}
+      headerAddon={metadata?.steer ? <Tag>{t('steer.tag')}</Tag> : undefined}
       id={id}
       message={content}
       messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}

@@ -21,7 +21,7 @@ import { useUserAvatar } from '@/hooks/useUserAvatar';
 
 import DocumentCommentEditor, { type DocumentCommentEditorRef } from './DocumentCommentEditor';
 import type { DocumentCommentSubmitInput } from './optimistic';
-import { styles } from './styles';
+import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
 
 interface Draft {
   clientId: string;
@@ -115,7 +115,7 @@ const Composer = memo<ComposerProps>(({ documentId, onSubmit, onSuccess, parentC
         className={styles.composer}
         flex={1}
         header={showTypoBar ? <TypoBar editor={editor} /> : undefined}
-        maxHeight={240}
+        maxHeight={COMMENT_INPUT_MAX_HEIGHT}
         minHeight={72}
         resize={false}
         slashMenuRef={inputRef}

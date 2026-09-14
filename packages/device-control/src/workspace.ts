@@ -1,4 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { access, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 
@@ -6,6 +7,8 @@ import { detectRepoType } from '@lobechat/local-file-shell/git';
 import matter from 'gray-matter';
 
 import type {
+  BrowseDirectoryParams,
+  BrowseDirectoryResult,
   InitWorkspaceParams,
   InitWorkspaceResult,
   ListProjectSkillsParams,
@@ -20,6 +23,8 @@ import type {
 
 // Cap recursion to guard against pathological directory trees.
 const MAX_SKILL_FILE_COUNT = 1000;
+const DEFAULT_DIRECTORY_PAGE_SIZE = 200;
+const MAX_DIRECTORY_PAGE_SIZE = 1000;
 
 const SKILL_SOURCES = [
   '.agents/skills',
@@ -266,4 +271,98 @@ export const statPath = async (params: { path: string }): Promise<StatPathResult
   } catch {
     return { exists: false, isDirectory: false };
   }
+};
+
+const parseDirectoryCursor = (cursor?: string): number => {
+  if (!cursor || !/^\d+$/.test(cursor)) return 0;
+  const offset = Number(cursor);
+  return Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
+};
+
+const listFilesystemRoots = async (): Promise<string[]> => {
+  if (os.platform() !== 'win32') return ['/'];
+
+  const roots = await Promise.all(
+    Array.from({ length: 26 }, async (_, index) => {
+      const root = `${String.fromCharCode(65 + index)}:\\`;
+      try {
+        await access(root, constants.R_OK);
+        return root;
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+
+  return roots.filter((root): root is string => !!root);
+};
+
+/**
+ * List one level of folders on the execution device for remote directory pickers.
+ * Files are intentionally excluded so browsing does not expose project contents or
+ * pay the cost of the recursive project-file index.
+ */
+export const browseDirectory = async (
+  params: BrowseDirectoryParams = {},
+): Promise<BrowseDirectoryResult> => {
+  const homeDir = await realpath(os.homedir());
+  const requestedPath = params.path?.trim() || homeDir;
+  const directoryPath = await realpath(requestedPath);
+  const directoryStat = await stat(directoryPath);
+  if (!directoryStat.isDirectory()) throw new Error('Browse path is not a directory');
+
+  const requestedLimit = params.limit ?? DEFAULT_DIRECTORY_PAGE_SIZE;
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(MAX_DIRECTORY_PAGE_SIZE, Math.max(1, Math.trunc(requestedLimit)))
+    : DEFAULT_DIRECTORY_PAGE_SIZE;
+  const offset = parseDirectoryCursor(params.cursor);
+  const dirents = await readdir(directoryPath, { withFileTypes: true });
+  const candidateResults = await Promise.all(
+    dirents.map(async (dirent) => {
+      if (!dirent.name || dirent.name === '.' || dirent.name === '..') return undefined;
+      if (dirent.name.startsWith('.')) return undefined;
+
+      const entryPath = path.join(directoryPath, dirent.name);
+      if (dirent.isDirectory()) {
+        return { isSymlink: false, name: dirent.name, path: entryPath };
+      }
+      if (!dirent.isSymbolicLink()) return undefined;
+
+      try {
+        const canonicalPath = await realpath(entryPath);
+        if (!(await stat(canonicalPath)).isDirectory()) return undefined;
+        return { isSymlink: true, name: dirent.name, path: canonicalPath };
+      } catch {
+        // Broken links and entries that disappear during enumeration are omitted.
+        return undefined;
+      }
+    }),
+  );
+  const candidates = candidateResults
+    .filter((entry): entry is NonNullable<typeof entry> => !!entry)
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const page = candidates.slice(offset, offset + limit);
+  const entries = await Promise.all(
+    page.map(async (entry) => {
+      try {
+        await access(entry.path, constants.R_OK | constants.X_OK);
+        return { ...entry, readable: true };
+      } catch {
+        return { ...entry, readable: false };
+      }
+    }),
+  );
+  const nextOffset = offset + page.length;
+  const parent = path.dirname(directoryPath);
+  const truncated = nextOffset < candidates.length;
+
+  return {
+    entries,
+    ...(truncated ? { nextCursor: String(nextOffset) } : {}),
+    parentPath: parent === directoryPath ? null : parent,
+    path: directoryPath,
+    pathSeparator: path.sep === '\\' ? '\\' : '/',
+    roots: await listFilesystemRoots(),
+    truncated,
+  };
 };

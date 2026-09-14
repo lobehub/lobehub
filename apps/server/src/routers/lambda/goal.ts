@@ -1,15 +1,21 @@
 import { goalStatuses } from '@lobechat/const/goal';
+import { MAX_GOAL_METRIC_CRITERIA, summarizeGoalSupervision } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { GoalModel } from '@/database/models/goal';
-import { router } from '@/libs/trpc/lambda';
+import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { GoalService } from '@/server/services/goal';
 import { advanceGoal } from '@/server/services/goal/advanceGoal';
+import { GoalManagerService, goalPlanSchema } from '@/server/services/goal/manager';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+import {
+  HeteroOperationPrincipalError,
+  resolveActiveHeteroOperationPrincipal,
+} from '@/server/services/heterogeneousAgent/operationPrincipal';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
@@ -43,12 +49,82 @@ function mapGoalError(error: unknown, operation: string): never {
 }
 
 export const goalRouter = router({
+  // A plan is an operation result; the turn token further restricts ingestion to its Goal.
+  submitOperationPlan: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(
+      idInput.extend({
+        token: z.string().min(1),
+        operationId: z.string().min(1),
+        plan: goalPlanSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
+        });
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'hetero:ingest',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      const data = await new GoalManagerService(
+        ctx.serverDB,
+        principal.userId,
+        principal.workspaceId,
+      ).submit(input.id, input.token, input.operationId, input.plan);
+      await scheduleGoalAdvance({
+        goalId: input.id,
+        userId: principal.userId,
+        workspaceId: principal.workspaceId,
+      });
+      return { data, success: true };
+    }),
+  submitPlan: goalWriteProcedure
+    .input(
+      idInput.extend({
+        token: z.string().min(1),
+        operationId: z.string().min(1),
+        plan: goalPlanSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const data = await new GoalManagerService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).submit(input.id, input.token, input.operationId, input.plan);
+      await scheduleGoalAdvance({
+        goalId: input.id,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return { data, success: true };
+    }),
   addEdge: goalWriteProcedure
     .input(
       idInput.extend({
         kind: z.enum([
+          'contains',
+          'answers',
           'decomposes',
           'depends_on',
+          'derived_from',
           'investigates',
           'produces',
           'supports',
@@ -79,7 +155,9 @@ export const goalRouter = router({
     .input(
       idInput.extend({
         description: z.string().optional(),
-        kind: z.enum(['problem', 'task', 'finding', 'decision']),
+        kind: z.enum(['problem', 'experiment', 'task', 'finding', 'decision']),
+        scopeId: z.string().uuid().optional(),
+        questionId: z.string().uuid().optional(),
         priority: z.number().int().optional(),
         status: z
           .enum(['proposed', 'active', 'waiting', 'resolved', 'rejected', 'retired'])
@@ -103,9 +181,43 @@ export const goalRouter = router({
         createdByAgentId: z.string().optional(),
         config: z
           .object({
+            acceptance: z
+              .object({
+                /** Numeric clauses gating acceptance; keyed by a series on this goal. */
+                metrics: z
+                  .array(
+                    z.object({
+                      key: z.string().min(1).max(255),
+                      op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+                      target: z.number(),
+                      title: z.string().max(255).optional(),
+                    }),
+                  )
+                  .max(MAX_GOAL_METRIC_CRITERIA)
+                  .optional(),
+              })
+              .optional(),
             // Bounds mirror `resolveMaxConcurrentTasks`, so a rejected value and
             // a clamped one cannot disagree about what the cap may be.
+            exploration: z
+              .object({
+                instruction: z.string().min(1).max(8000),
+                maxExperiments: z.number().int().min(1).max(200),
+              })
+              .optional(),
+            manager: z
+              .object({
+                instruction: z.string().max(8000).optional(),
+                maxTurns: z.number().int().min(1).max(100).optional(),
+              })
+              .optional(),
             maxConcurrentTasks: z.number().int().min(1).max(10).nullable().optional(),
+            supervision: z
+              .object({
+                enabled: z.boolean(),
+                maxIncidents: z.number().int().min(1).max(100).optional(),
+              })
+              .optional(),
             recovery: z
               .object({
                 maxAttemptsPerTask: z.number().int().positive().optional(),
@@ -113,15 +225,32 @@ export const goalRouter = router({
                 operationLeaseTimeoutMs: z.number().int().min(60_000).optional(),
               })
               .optional(),
+            schedule: z
+              .object({
+                /** ISO-8601 instant; past it the coordinator stops dispatching. */
+                deadline: z.string().datetime().nullable().optional(),
+              })
+              .optional(),
           })
           .optional(),
         maxRounds: z.number().int().positive().optional(),
         maxTotalCost: z.number().positive().optional(),
+        /** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
+        criteria: z
+          .array(
+            z.object({
+              description: z.string().optional(),
+              instruction: z.string().optional(),
+              title: z.string().min(1),
+            }),
+          )
+          .optional(),
         problemDescription: z.string().optional(),
         projectId: z.string().optional(),
         requirement: z.string().optional(),
         title: z.string().min(1),
-        work: z
+        /** Seed task nodes, in dependency-free order. */
+        tasks: z
           .array(
             z.union([
               z.string().min(1),
@@ -164,7 +293,7 @@ export const goalRouter = router({
           input.optionId,
           input.resolution,
         );
-        // Answering the gate is what unblocks the Work; carry on from here.
+        // Answering the gate is what unblocks the Task; carry on from here.
         await scheduleGoalAdvance({
           goalId: input.id,
           trigger: 'decide',
@@ -174,6 +303,85 @@ export const goalRouter = router({
         return { data, message: 'Decision resolved', success: true };
       } catch (error) {
         mapGoalError(error, 'decide');
+      }
+    }),
+
+  /** Declare or clear the numeric clauses gating this goal's acceptance. */
+  setMetricCriteria: goalWriteProcedure
+    .input(
+      idInput.extend({
+        metrics: z
+          .array(
+            z.object({
+              key: z.string().min(1).max(255),
+              op: z.enum(['gte', 'lte', 'gt', 'lt', 'eq']).optional(),
+              target: z.number(),
+              title: z.string().max(255).optional(),
+            }),
+          )
+          .max(MAX_GOAL_METRIC_CRITERIA),
+        /** `merge` upserts by key server-side; `replace` (default) swaps the list. */
+        mode: z.enum(['merge', 'replace']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const goal = await ctx.goalModel.findById(input.id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        const data = await ctx.goalService.setMetricCriteria(input.id, input.metrics, input.mode);
+        // Relaxing a clause can free a goal parked short of acceptance.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'observe',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: 'Metric criteria updated', success: true };
+      } catch (error) {
+        mapGoalError(error, 'setMetricCriteria');
+      }
+    }),
+
+  /**
+   * Record a measurement against this goal and let the coordinator react.
+   *
+   * The graph otherwise only moves when a Task settles, but a long-horizon
+   * goal advances when the *world* changes — a follower count, a conversion
+   * rate. This is that entry point: it writes to the generic metrics layer
+   * (subject = this goal) and schedules an advance, so a goal whose numeric
+   * acceptance was the last thing outstanding closes on the observation
+   * instead of waiting up to a sweep window.
+   */
+  recordObservation: goalWriteProcedure
+    .input(
+      idInput.extend({
+        key: z.string().min(1).max(255),
+        kind: z.enum(['gauge', 'counter']).optional(),
+        observedAt: z.coerce.date().optional(),
+        title: z.string().optional(),
+        unit: z.string().optional(),
+        value: z.number(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { id, ...observation } = input;
+        const { shouldAdvance, ...data } = await ctx.goalService.recordObservation(id, observation);
+        // A goal parked short of its measured acceptance is only worth waking
+        // when the measurement actually cleared the gate; otherwise the advance
+        // would tick straight back out as `goal_paused`.
+        if (shouldAdvance) {
+          await scheduleGoalAdvance({
+            goalId: id,
+            trigger: 'observe',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          });
+        }
+        return { data, message: 'Observation recorded', success: true };
+      } catch (error) {
+        mapGoalError(error, 'recordObservation');
       }
     }),
 
@@ -200,7 +408,7 @@ export const goalRouter = router({
 
   /**
    * Delete a goal and, by FK cascade, its whole graph. Anything still running
-   * is stopped first; the Work Tasks themselves are deliberately left in place
+   * is stopped first; the graph Tasks themselves are deliberately left in place
    * — they are ordinary tasks with their own history and acceptance.
    */
   delete: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
@@ -228,7 +436,7 @@ export const goalRouter = router({
   }),
 
   /**
-   * List goals with their graph roll-up: how much Work is done, how many
+   * List goals with their graph roll-up: how many Tasks are done, how many
    * decision gates wait on a human, and what the exploration has cost.
    */
   list: goalProcedure
@@ -266,9 +474,85 @@ export const goalRouter = router({
     }
   }),
 
+  /**
+   * Start every unfinished Task node over (cancel stale runs, back to
+   * `backlog`), optionally under a different agent, and kick the coordinator
+   * so the goal begins moving without a second gesture.
+   */
+  restart: goalWriteProcedure
+    .input(idInput.extend({ agentId: z.string().min(1).optional() }))
+    .mutation(async ({ ctx, input: { id, agentId } }) => {
+      try {
+        // `agent:update` says the member may change goals; it does not say
+        // whose. Without this any member could restart a colleague's visible
+        // goal — cancel its live runs and reset its tasks.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const data = await ctx.goalService.restart(id, { agentId });
+        await scheduleGoalAdvance({
+          goalId: id,
+          trigger: 'restart',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return {
+          data,
+          message: `Restarted ${data.restartedTaskIds.length} task(s)`,
+          success: true,
+        };
+      } catch (error) {
+        mapGoalError(error, 'restart');
+      }
+    }),
+
+  /** Rebind which persisted verify criteria gate this goal's terminal acceptance. */
+  setAcceptanceCriteria: goalWriteProcedure
+    .input(idInput.extend({ criteriaIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.goalService.setAcceptanceCriteria(input.id, input.criteriaIds);
+        return { success: true };
+      } catch (error) {
+        mapGoalError(error, 'setAcceptanceCriteria');
+      }
+    }),
+
+  /**
+   * Hand the goal to a different responsible agent. Unfinished Tasks follow by
+   * default (`goalOnly` keeps them); Tasks mid-run switch on their next attempt.
+   */
+  setAgent: goalWriteProcedure
+    .input(idInput.extend({ agentId: z.string().min(1), goalOnly: z.boolean().optional() }))
+    .mutation(async ({ ctx, input: { id, agentId, goalOnly } }) => {
+      try {
+        // Same ownership rule as restart/delete: visibility is not
+        // manageability, so only the goal's owner may hand it to a new agent.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const data = await ctx.goalService.setAgent(id, agentId, { goalOnly });
+        const reassigned = data.reassignedTaskIds.length;
+        return {
+          data,
+          message: reassigned
+            ? `Goal agent updated; ${reassigned} task(s) reassigned`
+            : 'Goal agent updated',
+          success: true,
+        };
+      } catch (error) {
+        mapGoalError(error, 'setAgent');
+      }
+    }),
+
   setBudget: goalWriteProcedure
     .input(
       idInput.extend({
+        /** ISO-8601 calendar-time budget; null clears the deadline. */
+        deadline: z.string().datetime().nullable().optional(),
+        maxExperiments: z.number().int().min(1).max(200).optional(),
         maxRounds: z.number().int().positive().nullable().optional(),
         maxTotalCost: z.number().positive().nullable().optional(),
       }),
@@ -290,6 +574,19 @@ export const goalRouter = router({
       }
     }),
 
+  supervision: goalProcedure.input(idInput).query(async ({ ctx, input }) => {
+    const graph = await ctx.goalService.graph(input.id);
+    const state = graph.goal.config?.supervisorState;
+    return {
+      data: {
+        enabled: graph.goal.config?.supervision?.enabled ?? false,
+        state,
+        summary: summarizeGoalSupervision(state),
+      },
+      success: true,
+    };
+  }),
+
   tick: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return { data: await ctx.goalService.tick(input.id), success: true };
@@ -297,4 +594,14 @@ export const goalRouter = router({
       mapGoalError(error, 'tick');
     }
   }),
+
+  updateRequirement: goalWriteProcedure
+    .input(idInput.extend({ requirement: z.string().min(1) }))
+    .mutation(async ({ ctx, input: { id, requirement } }) => {
+      try {
+        return { data: await ctx.goalService.updateRequirement(id, requirement), success: true };
+      } catch (error) {
+        mapGoalError(error, 'updateRequirement');
+      }
+    }),
 });

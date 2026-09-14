@@ -3,6 +3,7 @@ import { Text } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { graphNodeKind } from '@/features/AgentGoals/Experiments/model';
 import { buildGoalGraphView } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KindIcon } from '@/features/AgentGoals/ProcessControl/shared';
 import { useChatStore } from '@/store/chat';
@@ -16,7 +17,9 @@ const Title = memo(() => {
   const snapshot = useGoalStore(goalSelectors.goalGraph(view?.goalId ?? ''));
   const node = useMemo(() => {
     if (!snapshot || !view) return undefined;
-    return buildGoalGraphView(snapshot).byId[view.nodeId]?.node;
+    const graph = buildGoalGraphView(snapshot);
+    const nodeView = graph.byId[view.nodeId];
+    return nodeView ? { ...nodeView.node, kind: graphNodeKind(graph, nodeView) } : undefined;
   }, [snapshot, view]);
 
   return (

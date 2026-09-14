@@ -8,6 +8,8 @@ import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
+import AgentStatusTag from './AgentStatusTag';
+
 interface AgentVersion {
   isLatest: boolean;
   isValidated: boolean;
@@ -21,7 +23,7 @@ interface AgentVersion {
  * Agent Version Review Tag Component
  * Displays "Under Review" tag when the latest version is not validated
  */
-const AgentVersionReviewTag = memo(() => {
+const AgentVersionReviewTag = memo(({ submitted = false }: { submitted?: boolean }) => {
   const { t } = useTranslation('setting');
   const [versions, setVersions] = useState<AgentVersion[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,9 @@ const AgentVersionReviewTag = memo(() => {
     return versions[0].isValidated === false;
   }, [versions]);
 
-  if (loading || !showReviewTag) return null;
+  // A successful submission is authoritative even when the detail endpoint
+  // omits pending versions. Do not infer review status from "unpublished" alone.
+  if (!submitted && (loading || !showReviewTag)) return <AgentStatusTag />;
 
   return (
     <Tag color="orange" style={{ marginRight: 8 }}>

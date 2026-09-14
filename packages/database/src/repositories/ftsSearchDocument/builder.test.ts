@@ -23,7 +23,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { FTS_SEARCH_DOCUMENT_FIXTURES } from './__tests__/fixtures';
 import { FtsSearchDocumentBuilder } from './builder';
-import { FTS_SEARCH_DOCUMENT_ENTITIES } from './schema';
+import { FTS_SEARCH_DOCUMENT_ENTITIES } from './zodSchema';
 
 const userId = 'search-document-user';
 const createdAt = new Date('2026-01-01T00:00:00.000Z');

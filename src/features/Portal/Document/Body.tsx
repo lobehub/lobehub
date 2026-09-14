@@ -213,11 +213,11 @@ const SkillFrontmatterBlock = memo<SkillFrontmatterBlockProps>(({ documentId, fr
 interface HighlightEditorProps {
   content: string;
   documentId: string;
-  language: string;
+  filename: string;
   onSaved: (newContent: string) => void;
 }
 
-const HighlightEditor = memo<HighlightEditorProps>(({ content, documentId, language, onSaved }) => {
+const HighlightEditor = memo<HighlightEditorProps>(({ content, documentId, filename, onSaved }) => {
   const [buffer, setBuffer] = useState<string | undefined>(undefined);
   const editingValue = buffer ?? content;
 
@@ -307,8 +307,8 @@ const HighlightEditor = memo<HighlightEditorProps>(({ content, documentId, langu
 
   return (
     <CodeEditorPane
-      language={language}
-      style={{ minHeight: '100%' }}
+      showStatusBar
+      filePath={filename}
       value={editingValue}
       onChange={handleChange}
       onSave={handleSave}
@@ -365,8 +365,8 @@ const DocumentBody = memo(() => {
         <HighlightEditor
           content={documentMeta?.content ?? ''}
           documentId={documentId}
+          filename={documentMeta?.filename ?? ''}
           key={documentId}
-          language={renderMode.language}
           onSaved={handleHighlightSaved}
         />
       ) : (

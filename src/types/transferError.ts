@@ -17,6 +17,13 @@ export const TransferErrorCode = {
   OwnerOnly: 'OWNER_ONLY',
   ResourceNotFound: 'RESOURCE_NOT_FOUND',
   SameWorkspace: 'SAME_WORKSPACE',
+  /**
+   * The agent still carries an `agent_shares` row, and changing its owner
+   * would republish the previous owner's grants / spend cap and orphan the
+   * visitor threads. Disabling sharing keeps the row, so the block lifts only
+   * once the share row itself is removed.
+   */
+  SharedTransferBlocked: 'AGENT_SHARED_TRANSFER_BLOCKED',
   /** Member transfer: the picked recipient already owns the resource (or is the initiator). */
   TargetIsCurrentOwner: 'TARGET_IS_CURRENT_OWNER',
   TargetNoWriteAccess: 'TARGET_NO_WRITE_ACCESS',

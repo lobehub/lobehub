@@ -5,14 +5,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
+import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import type { ChatTopic } from '@/types/topic';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
+    execAgentTask: vi.fn(),
+    interruptTask: vi.fn(),
+    refreshGatewayToken: vi.fn(),
+  },
+}));
+
+vi.mock('@/services/shareChat', () => ({
+  shareChatService: {
     execAgentTask: vi.fn(),
     interruptTask: vi.fn(),
     refreshGatewayToken: vi.fn(),
@@ -113,6 +123,16 @@ vi.mock('@/store/agent/selectors', () => ({
   },
 }));
 
+// The action is constructed with a test store; Topic routing must not initialize
+// the real singleton (which would recursively construct GatewayActionImpl).
+const mockChatState = vi.hoisted(() => ({
+  topicDataMap: {},
+  topicDetailMap: {} as Record<string, ChatTopic>,
+}));
+vi.mock('@/store/chat', () => ({
+  useChatStore: { getState: () => mockChatState },
+}));
+
 // ─── Mock Client Factory ───
 
 function createMockClient(): GatewayConnection['client'] & {
@@ -167,6 +187,7 @@ function createTestAction() {
 
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
+    mockChatState.topicDetailMap = {};
     moveChatContextSelections.mockClear();
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
@@ -1906,6 +1927,40 @@ describe('GatewayActionImpl', () => {
         );
       });
 
+      it('uses the Topic device after the Agent default switches to sandbox', async () => {
+        mockEnv.isDesktop = true;
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'this-desktop' });
+        mockChatState.topicDetailMap['topic-1'] = {
+          id: 'topic-1',
+          metadata: {
+            executionConfig: { executionTarget: 'local', boundDeviceId: 'topic-device' },
+          },
+        } as ChatTopic;
+
+        await send();
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: 'topic-device', localDeviceId: 'this-desktop' }),
+          expect.anything(),
+        );
+      });
+
+      it('does not activate this desktop when the Topic selects sandbox', async () => {
+        mockEnv.isDesktop = true;
+        mockRuntime.isLocal = true;
+        mockChatState.topicDetailMap['topic-1'] = {
+          id: 'topic-1',
+          metadata: { executionConfig: { executionTarget: 'sandbox' } },
+        } as ChatTopic;
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
+          'deviceId',
+        );
+      });
+
       // Regression guard: an explicit sandbox/none/device target must not
       // preset this machine's deviceId — only a `local` target does.
       it('does not resolve a deviceId when a non-local runtime mode is selected', async () => {
@@ -2156,6 +2211,120 @@ describe('GatewayActionImpl', () => {
       expect(startOperation).toHaveBeenCalledWith(
         expect.objectContaining({ context: expect.objectContaining({ agentId: 'agent-1' }) }),
       );
+    });
+
+    // Agent-share visitor surface: a visitor has no owner-scoped access to the
+    // creator's topic/operation rows, so the reconnect must route through the
+    // share-authorized `shareChat` mirror instead — mirrors the split
+    // `executeGatewayAgent` already makes for share runs.
+    describe('agent share visitor (agentShareId)', () => {
+      function createShareReconnectTestAction(assistantMessage: any) {
+        const startOperation = vi.fn(() => ({ operationId: 'gw-op-reconnect' }));
+        const connectToGateway = vi.fn();
+        let cancelHandler: (() => Promise<void>) | undefined;
+        const onOperationCancel = vi.fn((_opId: string, handler: () => Promise<void>) => {
+          cancelHandler = handler;
+        });
+        const state: Record<string, any> = {
+          activeAgentId: 'agent-1',
+          gatewayConnections: {},
+          messagesMap: { 'agent-1_topic-1': assistantMessage ? [assistantMessage] : [] },
+          topicDataMap: {},
+        };
+        const set = vi.fn((updater: any) => {
+          if (typeof updater === 'function') Object.assign(state, updater(state));
+          else Object.assign(state, updater);
+        });
+        const get = vi.fn(() => ({
+          ...state,
+          associateMessageWithOperation: vi.fn(),
+          connectToGateway,
+          onOperationCancel,
+          startOperation,
+        })) as any;
+
+        (globalThis as any).window = {
+          global_serverConfigStore: {
+            getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+          },
+        };
+
+        vi.mocked(shareChatService.refreshGatewayToken).mockResolvedValue({
+          token: 'share-fresh-token',
+        } as any);
+
+        const action = new GatewayActionImpl(set as any, get, undefined);
+        action.createClient = vi.fn(() => createMockClient());
+
+        return { action, connectToGateway, getCancelHandler: () => cancelHandler, startOperation };
+      }
+
+      afterEach(() => {
+        delete (globalThis as any).window;
+      });
+
+      it('refreshes the token through shareChatService, not the owner-scoped aiAgentService', async () => {
+        const { action } = createShareReconnectTestAction({ createdAt: 1, id: 'ast-1' });
+        vi.mocked(aiAgentService.refreshGatewayToken).mockClear();
+
+        await action.reconnectToGatewayOperation({
+          agentShareId: 'share-1',
+          assistantMessageId: 'ast-1',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        expect(shareChatService.refreshGatewayToken).toHaveBeenCalledWith('share-1', 'topic-1');
+        expect(aiAgentService.refreshGatewayToken).not.toHaveBeenCalled();
+      });
+
+      it('passes agentShareId into connectToGateway and the local operation context', async () => {
+        const { action, connectToGateway, startOperation } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+
+        await action.reconnectToGatewayOperation({
+          agentShareId: 'share-1',
+          assistantMessageId: 'ast-1',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        expect(connectToGateway).toHaveBeenCalledWith(
+          expect.objectContaining({ agentShareId: 'share-1', operationId: 'server-op-1' }),
+        );
+        expect(startOperation).toHaveBeenCalledWith(
+          expect.objectContaining({
+            context: expect.objectContaining({ agentShareId: 'share-1', topicId: 'topic-1' }),
+          }),
+        );
+      });
+
+      it('forwards cancellation through shareChatService.interruptTask, not the owner-scoped interrupt', async () => {
+        const { action, getCancelHandler } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        vi.mocked(aiAgentService.interruptTask).mockClear();
+        vi.mocked(shareChatService.interruptTask).mockResolvedValue({} as any);
+
+        await action.reconnectToGatewayOperation({
+          agentShareId: 'share-1',
+          assistantMessageId: 'ast-1',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await getCancelHandler()?.();
+
+        expect(shareChatService.interruptTask).toHaveBeenCalledWith(
+          'share-1',
+          'topic-1',
+          'server-op-1',
+        );
+        expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+      });
     });
 
     // Captures the onSessionComplete handed to connectToGateway so we can drive

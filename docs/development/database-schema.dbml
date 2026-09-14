@@ -1,3 +1,84 @@
+table acceptance_comments {
+  id text [pk, not null]
+  acceptance_id uuid [not null]
+  author_user_id text
+  author_agent_id text
+  workspace_id text
+  parent_comment_id text
+  kind text [not null, default: 'comment']
+  anchor_type text [not null, default: 'acceptance']
+  context_run_id uuid
+  check_item_id text
+  evidence_id uuid
+  anchor_rect jsonb
+  content text [not null]
+  editor_data jsonb
+  attachments jsonb
+  client_id text [not null]
+  resolved_at "timestamp with time zone"
+  resolved_by_user_id text
+  deleted_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (acceptance_id, author_user_id, client_id) [name: 'acceptance_comments_acceptance_id_author_user_id_client_id_unique', unique]
+    (acceptance_id, created_at, id) [name: 'acceptance_comments_acceptance_id_created_at_id_idx']
+    parent_comment_id [name: 'acceptance_comments_parent_comment_id_idx']
+    evidence_id [name: 'acceptance_comments_evidence_id_idx']
+    author_user_id [name: 'acceptance_comments_author_user_id_idx']
+    author_agent_id [name: 'acceptance_comments_author_agent_id_idx']
+    workspace_id [name: 'acceptance_comments_workspace_id_idx']
+  }
+}
+
+table acceptance_flow_edges {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  flow_id uuid [not null]
+  source_node_id uuid [not null]
+  target_node_id uuid [not null]
+  trigger text [not null]
+  condition text
+  required boolean [not null, default: true]
+
+  indexes {
+    
+    
+    (flow_id, source_node_id) [name: 'acceptance_flow_edges_source_idx']
+    (flow_id, target_node_id) [name: 'acceptance_flow_edges_target_idx']
+  }
+}
+
+table acceptance_flow_nodes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  flow_id uuid [not null]
+  criterion_id uuid
+  sub_flow_id uuid
+  is_entry boolean [not null, default: false]
+  overrides jsonb
+
+  indexes {
+    
+    sub_flow_id [name: 'acceptance_flow_nodes_sub_flow_idx']
+    (flow_id, id) [name: 'acceptance_flow_nodes_flow_id_unique', unique]
+    flow_id [name: 'acceptance_flow_nodes_entry_unique', unique]
+    criterion_id [name: 'acceptance_flow_nodes_criterion_idx']
+  }
+}
+
+table acceptance_flows {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  acceptance_id uuid [not null]
+  title text [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    acceptance_id [name: 'acceptance_flows_acceptance_idx']
+  }
+}
+
 table agents {
   id text [pk, not null]
   slug varchar(100)
@@ -1225,6 +1306,21 @@ table document_histories {
   }
 }
 
+table document_likes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  document_id text [not null]
+  user_id text [not null]
+  workspace_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (document_id, user_id) [name: 'document_likes_document_id_user_id_unique', unique]
+    (document_id, created_at) [name: 'document_likes_document_id_created_at_idx']
+    user_id [name: 'document_likes_user_id_idx']
+    workspace_id [name: 'document_likes_workspace_id_idx']
+  }
+}
+
 table document_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   document_id varchar(255) [not null]
@@ -1529,6 +1625,30 @@ table documents {
     workspace_id [name: 'documents_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'documents_workspace_visibility_idx']
     (workspace_id, slug) [name: 'documents_slug_workspace_id_unique', unique]
+  }
+}
+
+table file_uploads {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  pathname text [not null]
+  size integer [not null]
+  status text [not null, default: 'active']
+  multipart_upload_id text
+  multipart_part_size integer
+  completed_at "timestamp with time zone"
+  file_id text
+  expires_at "timestamp with time zone" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, workspace_id, status) [name: 'file_uploads_user_scope_status_idx']
+    (workspace_id, status) [name: 'file_uploads_workspace_status_idx']
+    (status, expires_at) [name: 'file_uploads_status_expires_at_idx']
+    (status, updated_at, id) [name: 'file_uploads_status_updated_at_id_idx']
+    pathname [name: 'file_uploads_live_pathname_unique', unique]
   }
 }
 
@@ -2179,6 +2299,51 @@ table messenger_installations {
   }
 }
 
+table metric_points {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  metric_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  value "numeric(20, 6)" [not null]
+  observed_at "timestamp with time zone" [not null]
+  actor_type text [not null]
+  actor_id text
+  operation_id text
+  source_type text [not null]
+  metadata jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (metric_id, observed_at) [name: 'metric_points_series_time_idx']
+    user_id [name: 'metric_points_user_id_idx']
+    workspace_id [name: 'metric_points_workspace_id_idx']
+  }
+}
+
+table metrics {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  subject_type text [not null]
+  subject_id text [not null]
+  key text [not null]
+  title text
+  kind text [not null, default: 'gauge']
+  unit text
+  config jsonb
+  metadata jsonb
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (subject_type, subject_id, key) [name: 'metrics_subject_key_unique', unique]
+    user_id [name: 'metrics_user_id_idx']
+    workspace_id [name: 'metrics_workspace_id_idx']
+  }
+}
+
 table nextauth_accounts {
   access_token text
   expires_at integer
@@ -2524,22 +2689,29 @@ table project_knowledge_bases {
   }
 }
 
-table project_works {
+table project_working_directories {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   project_id text [not null]
-  work_id text [not null]
-  added_by_user_id text
+  device_id uuid
   workspace_id text
+  added_by_user_id text
+  path text [not null]
+  name varchar(255) [not null]
+  permission text [not null, default: 'readWrite']
+  is_primary boolean [not null, default: false]
   sort_order integer [not null, default: 0]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (project_id, work_id) [name: 'project_works_project_id_work_id_unique', unique]
-    (project_id, sort_order) [name: 'project_works_project_id_sort_order_idx']
-    work_id [name: 'project_works_work_id_idx']
-    workspace_id [name: 'project_works_workspace_id_idx']
+    (project_id, device_id, path) [name: 'project_working_directories_project_device_path_unique', unique]
+    project_id [name: 'project_working_directories_project_primary_unique', unique]
+    (project_id, sort_order) [name: 'project_working_directories_project_sort_order_idx']
+    device_id [name: 'project_working_directories_device_id_idx']
+    workspace_id [name: 'project_working_directories_workspace_id_idx']
+    
+    
   }
 }
 
@@ -2576,6 +2748,25 @@ table projects {
     (status, updated_at) [name: 'projects_status_updated_at_idx']
     coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
     
+  }
+}
+
+table project_works {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  work_id text [not null]
+  added_by_user_id text
+  workspace_id text
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, work_id) [name: 'project_works_project_id_work_id_unique', unique]
+    (project_id, sort_order) [name: 'project_works_project_id_sort_order_idx']
+    work_id [name: 'project_works_work_id_idx']
+    workspace_id [name: 'project_works_workspace_id_idx']
   }
 }
 
@@ -3038,6 +3229,26 @@ table briefs {
   }
 }
 
+table task_activities {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  task_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  actor_user_id text
+  actor_agent_id text
+  type text [not null]
+  payload jsonb
+  visibility text [not null, default: 'public']
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    task_id [name: 'task_activities_task_id_idx']
+    user_id [name: 'task_activities_user_id_idx']
+    workspace_id [name: 'task_activities_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'task_activities_workspace_visibility_idx']
+  }
+}
+
 table task_comments {
   id text [pk, not null]
   task_id text [not null]
@@ -3275,6 +3486,8 @@ table topics {
   editor_data jsonb
   agent_id text
   group_id text
+  project_id text
+  project_working_directory_id uuid
   user_id text [not null]
   client_id text
   description text
@@ -3308,6 +3521,8 @@ table topics {
     session_id [name: 'topics_session_id_idx']
     group_id [name: 'topics_group_id_idx']
     agent_id [name: 'topics_agent_id_idx']
+    project_id [name: 'topics_project_id_idx']
+    project_working_directory_id [name: 'topics_project_working_directory_id_idx']
     trigger [name: 'topics_trigger_idx']
     status [name: 'topics_status_idx']
     model [name: 'topics_model_idx']
@@ -3703,6 +3918,7 @@ table verify_check_results {
   user_id text [not null]
   workspace_id text
   check_item_id text [not null]
+  source_criterion_id uuid
   check_item_title text
   required boolean [not null, default: true]
   check_item_index integer
@@ -3726,6 +3942,7 @@ table verify_check_results {
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    (source_criterion_id, created_at) [name: 'verify_check_results_criterion_created_idx']
     verify_run_id [name: 'verify_check_results_verify_run_id_idx']
     operation_id [name: 'verify_check_results_operation_id_idx']
     user_id [name: 'verify_check_results_user_id_idx']
@@ -3745,6 +3962,9 @@ table verify_criteria {
   user_id text [not null]
   title text [not null]
   description text
+  definition jsonb
+  tags text[] [not null, default: `[]`]
+  archived_at "timestamp with time zone"
   required boolean [not null, default: true]
   verifier_type text [not null]
   verifier_config jsonb [default: `{}`]
@@ -3895,6 +4115,7 @@ table verify_runs {
   context jsonb
   metadata jsonb
   plan jsonb
+  flow_snapshots jsonb
   plan_confirmed_at "timestamp with time zone"
   status text
   user_decision text
@@ -4146,6 +4367,12 @@ ref: document_comments.workspace_id - workspaces.id
 ref: document_histories.document_id > documents.id
 
 ref: document_histories.user_id - users.id
+
+ref: document_likes.document_id > documents.id
+
+ref: document_likes.user_id - users.id
+
+ref: document_likes.workspace_id - workspaces.id
 
 ref: documents.file_id > files.id
 

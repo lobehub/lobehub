@@ -13,6 +13,7 @@ import {
 } from '../../../schemas';
 import { sanitizeBm25Query } from '../../../utils/bm25';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchAgentResult,
@@ -134,6 +135,10 @@ export async function searchTopics(
     .where(
       and(
         context.scanScopeWhere(topics),
+        // Agent-share visitor topics are stored under the creator's userId, so
+        // the scope predicate alone would surface a visitor's conversation in
+        // the creator's command-menu search.
+        notShareVisitorTopic(),
         agentId && !context.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
         sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
       ),
@@ -242,6 +247,9 @@ export async function searchMessages(
       and(
         context.scanScopeWhere(messages),
         ne(messages.role, 'tool'),
+        // Twin of the topics guard: visitor messages inherit the creator's
+        // userId and are only identifiable through their parent topic.
+        notShareVisitorMessage(),
         agentId && !context.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
         sql`${messages.content} @@@ ${bm25Query}`,
       ),

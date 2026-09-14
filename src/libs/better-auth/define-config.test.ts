@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => {
     authHandler,
     betterAuth: vi.fn((options) => ({ ...options, handler: authHandler })),
     clearMismatchedOIDCSession: vi.fn(),
-    EnvHttpProxyAgent: vi.fn((options) => ({ options })),
+    EnvHttpProxyAgent: vi.fn(function (options) {
+      return { options };
+    }),
     serverDB: {},
     setGlobalDispatcher: vi.fn(),
   };

@@ -1,11 +1,15 @@
-import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { x, xSync } from 'tinyexec';
+
 import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
 
 const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
+const STARTUP_TIMEOUT_MS = 30_000;
+
+type DaemonStartupMessage = { message: string; type: 'startup-error' } | { type: 'startup-ready' };
 
 function getLobehubDir() {
   return path.join(os.homedir(), CLI_CONFIG_DIR_NAME);
@@ -90,10 +94,11 @@ export function isDaemonProcess(pid: number): boolean {
   try {
     // `-ww` disables column truncation so the trailing `--daemon-child` flag is
     // never cut off; stderr is silenced so a dead PID just yields an empty match.
-    const command = execFileSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    const { stdout } = xSync('ps', ['-ww', '-p', String(pid), '-o', 'command='], {
+      nodeOptions: { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      nodePath: false,
+    });
+    const command = stdout.trim();
     return command.includes('--daemon-child') && command.includes('connect');
   } catch {
     return false;
@@ -181,28 +186,121 @@ export function appendLog(line: string): void {
 // --- Daemon spawn ---
 
 /**
- * Spawn the current script as a detached daemon process.
- * The parent writes the PID file and returns immediately.
+ * Spawn the current script as a detached daemon process and wait until the
+ * child completes its startup preflight.
  */
-export function spawnDaemon(args: string[]): number {
+export function spawnDaemon(args: string[]): Promise<number> {
   ensureDir();
 
   const logFd = fs.openSync(getLogFilePath(), 'a');
+  const logStartOffset = fs.fstatSync(logFd).size;
 
   // Re-run the same entry with --daemon-child (internal flag)
-  const child = spawn(process.execPath, [...process.execArgv, ...args, '--daemon-child'], {
-    detached: true,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', LOBEHUB_DAEMON: '1' },
-    stdio: ['ignore', logFd, logFd],
+  const daemon = x(process.execPath, [...process.execArgv, ...args, '--daemon-child'], {
+    nodeOptions: {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', LOBEHUB_DAEMON: '1' },
+      stdio: ['ignore', logFd, logFd, 'ipc'],
+    },
+    nodePath: false,
+    persist: true,
   });
+  const child = daemon.process;
 
-  child.unref();
-  const pid = child.pid!;
+  if (!child || !daemon.pid) {
+    fs.closeSync(logFd);
+    throw new Error('Daemon process could not start.');
+  }
+
+  const pid = daemon.pid;
 
   writePid(pid);
   fs.closeSync(logFd);
 
-  return pid;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.off('error', onError);
+      child.off('exit', onExit);
+      child.off('message', onMessage);
+      if (child.connected) child.disconnect();
+      child.unref();
+
+      if (error) {
+        removePid();
+        removeStatus();
+        reject(error);
+        return;
+      }
+
+      resolve(pid);
+    };
+
+    const timeout = setTimeout(() => {
+      daemon.kill('SIGTERM');
+      finish(new Error('Daemon startup timed out. See the daemon log for details.'));
+    }, STARTUP_TIMEOUT_MS);
+
+    const onError = (error: Error) => finish(error);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      const startupError = readStartupError(logStartOffset);
+      finish(
+        new Error(
+          startupError ||
+            `Daemon exited before startup completed (${signal ? `signal ${signal}` : `code ${code ?? 1}`}).`,
+        ),
+      );
+    };
+    const onMessage = (message: DaemonStartupMessage) => {
+      if (message?.type === 'startup-ready') {
+        finish();
+      } else if (message?.type === 'startup-error') {
+        finish(new Error(message.message));
+      }
+    };
+
+    child.once('error', onError);
+    child.once('exit', onExit);
+    child.on('message', onMessage);
+  });
+}
+
+function readStartupError(startOffset: number): string | undefined {
+  try {
+    const content = fs.readFileSync(getLogFilePath()).subarray(startOffset).toString('utf8').trim();
+    const lastError = content
+      .split('\n')
+      .toReversed()
+      .find((line) => line.includes('[ERROR]'))
+      ?.trim();
+    return lastError?.replace(/^(?:\[[^\]]+\]|\d{2}:\d{2}:\d{2})\s+\[ERROR\]\s+/, '');
+  } catch {
+    return undefined;
+  }
+}
+
+function sendStartupMessage(message: DaemonStartupMessage): Promise<void> {
+  if (process.env.LOBEHUB_DAEMON !== '1' || !process.send || !process.connected) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    process.send!(message, () => {
+      if (process.connected) process.disconnect();
+      resolve();
+    });
+  });
+}
+
+export function reportDaemonStartupError(message: string): Promise<void> {
+  return sendStartupMessage({ message, type: 'startup-error' });
+}
+
+export function reportDaemonStartupReady(): Promise<void> {
+  return sendStartupMessage({ type: 'startup-ready' });
 }
 
 /**

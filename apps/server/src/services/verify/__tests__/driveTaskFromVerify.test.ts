@@ -1,16 +1,25 @@
 // @vitest-environment node
+import { VERIFICATION_UNJUDGEABLE_ERROR } from '@lobechat/const/goal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+
+import { reviewGoalDelivery } from '../goalReview';
 import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
+
+vi.mock('../goalReview', () => ({ reviewGoalDelivery: vi.fn() }));
 
 vi.mock('../repairService', () => ({
   maybeAutoRepair: vi.fn(),
 }));
 vi.mock('../reporter', () => ({
-  VerifyReporterService: vi.fn(() => ({ generateReport: vi.fn() })),
+  VerifyReporterService: vi.fn(function () {
+    return { generateReport: vi.fn() };
+  }),
 }));
 
 const {
+  goalFindByTask,
   runFindByOperation,
   runClaimTaskDrive,
   runSetMetadata,
@@ -23,6 +32,7 @@ const {
   statusRecompute,
   deliverMock,
 } = vi.hoisted(() => ({
+  goalFindByTask: vi.fn(),
   briefCreate: vi.fn(),
   briefModelConstruct: vi.fn(),
   deliverMock: vi.fn(),
@@ -37,41 +47,119 @@ const {
 }));
 
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn(() => ({ recompute: statusRecompute })),
+  VerifyStatusService: vi.fn(function () {
+    return { recompute: statusRecompute };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    claimTaskDrive: runClaimTaskDrive,
-    findByOperation: runFindByOperation,
-    setMetadata: runSetMetadata,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      claimTaskDrive: runClaimTaskDrive,
+      findByOperation: runFindByOperation,
+      setMetadata: runSetMetadata,
+    };
+  }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: opFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: opFindById };
+  }),
 }));
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({
-    findById: taskFindById,
-    updateStatus: taskUpdateStatus,
-  })),
+  TaskModel: vi.fn(function () {
+    return {
+      findById: taskFindById,
+      updateStatus: taskUpdateStatus,
+    };
+  }),
 }));
 vi.mock('@/database/models/brief', () => ({
   BriefModel: briefModelConstruct,
 }));
 // Resolved via dynamic import inside driveTaskFromVerify (cycle break).
 vi.mock('@/server/services/task', () => ({
-  TaskService: vi.fn(() => ({ updateStatus: serviceUpdateStatus })),
+  TaskService: vi.fn(function () {
+    return { updateStatus: serviceUpdateStatus };
+  }),
 }));
 // The deferred creator callback, also resolved via dynamic import.
 vi.mock('@/server/services/taskResultBridge', () => ({
-  TaskResultBridgeService: vi.fn(() => ({ deliver: deliverMock })),
+  TaskResultBridgeService: vi.fn(function () {
+    return { deliver: deliverMock };
+  }),
 }));
 
 const db = {} as any;
 
 describe('driveTaskFromVerify', () => {
+  it('automatically sends a Goal delivery back when Acceptance review rejects a Verify pass', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      status: 'rejected',
+      feedback: 'Fix the table',
+      predictionIds: ['p1'],
+    });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    expect(deliverMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'error' }));
+    expect(scheduleGoalAdvance).toHaveBeenCalledWith(
+      expect.objectContaining({ goalId: 'goal-1', trigger: 'settle' }),
+    );
+  });
+
+  /**
+   * Regression: an undecidable criterion paused the Task with the "did not pass"
+   * contract string, which the coordinator routes to another attempt. The
+   * builder re-delivered the same artifacts against the same criterion twice and
+   * the attempt budget ran out. This string has no recovery branch, so the Goal
+   * stops on a person instead.
+   */
+  it('parks an undecidable Goal delivery on a person instead of another attempt', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      status: 'unjudgeable',
+      feedback: 'The check asks the reviewer to rerun the scripts.',
+      predictionIds: ['p1'],
+    });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_UNJUDGEABLE_ERROR,
+    });
+    expect(taskUpdateStatus).not.toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
+  it('does not launch a duplicate review when task drive is already claimed', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    runClaimTaskDrive.mockResolvedValue(false);
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(reviewGoalDelivery).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
+    vi.mocked(reviewGoalDelivery).mockReset();
+    vi.mocked(scheduleGoalAdvance).mockClear();
+    goalFindByTask.mockReset();
     [
       runClaimTaskDrive,
       runFindByOperation,
@@ -88,7 +176,9 @@ describe('driveTaskFromVerify', () => {
     // The drive is claimed before any side effect; unclaimed means "someone
     // else is driving this run", which every test here is not.
     runClaimTaskDrive.mockResolvedValue(true);
-    briefModelConstruct.mockImplementation(() => ({ create: briefCreate }));
+    briefModelConstruct.mockImplementation(function () {
+      return { create: briefCreate };
+    });
     opFindById.mockResolvedValue({ taskId: 'task-1', topicId: 'topic-done' });
     taskFindById.mockResolvedValue({
       assigneeAgentId: 'a1',
@@ -169,6 +259,42 @@ describe('driveTaskFromVerify', () => {
     expect(statusRecompute.mock.calls).toEqual([['repair-op-1'], ['root-op']]);
   });
 
+  it('failed → keeps a recurring task scheduled instead of pausing (disarming) it', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
+    taskFindById.mockResolvedValue({
+      assigneeAgentId: 'a1',
+      automationMode: 'schedule',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'scheduled',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    // Pausing would permanently disarm the cron — the schedule query never
+    // picks `paused` tasks up again. The verdict stays on the run.
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    // The tick's rejection still reaches the creator callback.
+    expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
+  });
+
+  it('errored → keeps a recurring task scheduled', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    taskFindById.mockResolvedValue({
+      assigneeAgentId: 'a1',
+      automationMode: 'heartbeat',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'scheduled',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+  });
+
   it('failed → pauses with the reason on the task row without creating an inbox brief', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
@@ -243,3 +369,10 @@ describe('driveTaskFromVerify', () => {
     expect(briefCreate).not.toHaveBeenCalled();
   });
 });
+
+vi.mock('@/server/services/goal/scheduler', () => ({ scheduleGoalAdvance: vi.fn() }));
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(function () {
+    return { findByGraphTask: goalFindByTask };
+  }),
+}));

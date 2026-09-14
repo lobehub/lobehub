@@ -2,7 +2,7 @@ import type { ModelProviderCard } from '../types';
 
 const SambaNova: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'Meta-Llama-3.2-1B-Instruct',
+  checkModel: 'MiniMax-M2.7',
   description:
     'SambaNova Cloud lets developers use top open-source models with extremely fast inference.',
   disableBrowserRequest: true,

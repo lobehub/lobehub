@@ -1,4 +1,8 @@
-import type { AcceptanceStatus, AcceptanceSubjectType } from '@lobechat/types';
+import type {
+  AcceptanceCheckGroup,
+  AcceptanceStatus,
+  AcceptanceSubjectType,
+} from '@lobechat/types';
 import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
@@ -52,6 +56,27 @@ export class AcceptanceModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
 
+  /** Presentation-only write: never starts a round or rewrites evidence-bearing snapshots. */
+  setCheckGroups = async (id: string, groups: AcceptanceCheckGroup[], expectedVersion: number) => {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), this.ownership()))
+        .for('update');
+      if (!row) throw new Error('Acceptance not found');
+      const version = row.metadata?.checkGrouping?.version ?? 0;
+      if (version !== expectedVersion)
+        throw new Error('Check grouping changed; reload before editing');
+      const checkGrouping = { groups, version: version + 1 };
+      await tx
+        .update(acceptances)
+        .set({ metadata: { ...row.metadata, checkGrouping } })
+        .where(eq(acceptances.id, id));
+      return checkGrouping;
+    });
+  };
+
   /**
    * Scope-dependent visibility default: personal aggregates are link-shareable
    * (`public`), workspace aggregates stay member-gated (`private`). An explicit
@@ -92,6 +117,25 @@ export class AcceptanceModel {
         this.ownership(),
       ),
     });
+  };
+
+  /**
+   * The acceptances for many subjects of one type, for surfaces that show a
+   * verification state per row. Batched because the caller (the Goal graph
+   * read) polls every few seconds and would otherwise issue one query per task.
+   */
+  findBySubjects = async (subjectType: AcceptanceSubjectType, subjectIds: string[]) => {
+    if (subjectIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(acceptances)
+      .where(
+        and(
+          eq(acceptances.subjectType, subjectType),
+          inArray(acceptances.subjectId, subjectIds),
+          this.ownership(),
+        ),
+      );
   };
 
   /**
@@ -211,17 +255,23 @@ export class AcceptanceModel {
 
   /** Acceptances for the current user/workspace, newest first. */
   query = async (
-    options: { limit?: number; statuses?: AcceptanceStatus[]; unbounded?: boolean } = {},
+    options: {
+      limit?: number;
+      projectId?: string;
+      statuses?: AcceptanceStatus[];
+      unbounded?: boolean;
+    } = {},
   ) => {
-    const { statuses, unbounded } = options;
+    const { projectId, statuses, unbounded } = options;
     const limit = unbounded ? undefined : (options.limit ?? 50);
+    const conditions = [this.ownership()];
+    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
+    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+
     return this.db.query.acceptances.findMany({
       limit,
       orderBy: [desc(acceptances.createdAt)],
-      where:
-        statuses && statuses.length > 0
-          ? and(this.ownership(), inArray(acceptances.status, statuses))
-          : this.ownership(),
+      where: and(...conditions),
     });
   };
 
@@ -235,12 +285,19 @@ export class AcceptanceModel {
   queryPage = async ({
     cursor,
     limit = 30,
+    projectId,
     statuses,
-  }: { cursor?: string; limit?: number; statuses?: AcceptanceStatus[] } = {}): Promise<{
+  }: {
+    cursor?: string;
+    limit?: number;
+    projectId?: string;
+    statuses?: AcceptanceStatus[];
+  } = {}): Promise<{
     items: AcceptanceItem[];
     nextCursor: string | null;
   }> => {
     const conditions = [this.ownership()];
+    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
 
     // Millisecond-truncated createdAt — the precision the cursor round-trips

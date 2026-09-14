@@ -1,10 +1,12 @@
 import type * as ChildProcessModule from 'node:child_process';
 import type * as CryptoModule from 'node:crypto';
+import { EventEmitter } from 'node:events';
 
 import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import AuvService from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
@@ -60,13 +62,18 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
       this.emit('status_changed', status);
     }
 
-    simulateToolCallRequest(apiName: string, args: object, requestId = 'req-1') {
+    simulateToolCallRequest(
+      apiName: string,
+      args: object,
+      requestId = 'req-1',
+      identifier = 'test-tool',
+    ) {
       this.emit('tool_call_request', {
         requestId,
         toolCall: {
           apiName,
           arguments: JSON.stringify(args),
-          identifier: 'test-tool',
+          identifier,
         },
         type: 'tool_call_request',
       });
@@ -260,6 +267,14 @@ const mockImessageBridgeSrv = {
   handleGatewayMessageApi: vi.fn().mockResolvedValue({ ok: true }),
 } as unknown as ImessageBridgeService;
 
+const mockAuvSrv = {
+  runCommand: vi.fn().mockResolvedValue({
+    argv: ['invoke', 'display.capture'],
+    exitCode: 0,
+    output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
+  }),
+} as unknown as AuvService;
+
 const mockMcpCtr = {
   runStdioMcpTool: vi.fn().mockResolvedValue({ content: 'mcp result', state: {}, success: true }),
 } as unknown as McpCtr;
@@ -286,6 +301,7 @@ const mockApp = {
     return null;
   }),
   getService: vi.fn((Cls) => {
+    if (Cls === AuvService) return mockAuvSrv;
     if (Cls === GatewayConnectionService) return mockGatewayConnectionSrv;
     if (Cls === ImessageBridgeService) return mockImessageBridgeSrv;
     return null;
@@ -648,6 +664,59 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect((controller as any)[methodName]).toHaveBeenCalled();
+    });
+
+    it('should route AUV CLI commands to the app-owned runtime', async () => {
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest(
+        'runCommand',
+        { argv: ['invoke', 'display.capture'] },
+        'auv-command',
+        'lobe-computer-use',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAuvSrv.runCommand).toHaveBeenCalledWith({
+        argv: ['invoke', 'display.capture'],
+      });
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'auv-command',
+        result: expect.objectContaining({
+          content: JSON.stringify({
+            argv: ['invoke', 'display.capture'],
+            exitCode: 0,
+            output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
+          }),
+          success: true,
+        }),
+      });
+    });
+
+    it('preserves AUV failure details in the gateway response', async () => {
+      const client = await connectAndOpen();
+      const result = {
+        argv: ['invoke', 'input.typeText'],
+        exitCode: 1,
+        output: { command_id: 'input.typeText', failure: { kind: 'target_resolution' } },
+        stderr: 'target not found',
+      };
+      vi.mocked(mockAuvSrv.runCommand).mockResolvedValueOnce(result);
+      client.simulateToolCallRequest(
+        'runCommand',
+        { argv: result.argv },
+        'auv-failure',
+        'lobe-computer-use',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'auv-failure',
+        result: expect.objectContaining({
+          content: JSON.stringify(result),
+          state: result,
+          success: false,
+        }),
+      });
     });
 
     it('should send tool_call_response with content + state envelope on success', async () => {
@@ -1121,6 +1190,102 @@ describe('GatewayConnectionCtr', () => {
         operationId: 'op-spawn-fail',
         reason: 'spawn EACCES',
         status: 'rejected',
+      });
+    });
+
+    // Regression: spawnLhHeteroExec must register its child process into
+    // platformTasks so cancelHeteroTask (sent by the server's interruptTask
+    // when the user clicks Stop) can find and kill it by operationId.
+    // Without this the CLI keeps running after the user cancels.
+    describe('agent run process registration', () => {
+      it('registers the spawned child in platformTasks via onChildSpawned', async () => {
+        let capturedOnChildSpawned: ((child: any) => void) | undefined;
+        vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockImplementationOnce(
+          (params: any) => {
+            capturedOnChildSpawned = params.onChildSpawned;
+            return Promise.resolve({ status: 'accepted' });
+          },
+        );
+
+        const client = await connectAndOpen();
+        client.simulateAgentRunRequest('devin', 'op-register');
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Simulate the child process spawning — onChildSpawned is called by
+        // HeterogeneousAgentImpl once the real child emits 'spawn'.
+        const mockChild = new EventEmitter() as any;
+        mockChild.pid = 12345;
+        capturedOnChildSpawned?.(mockChild);
+
+        // The process should now be registered under its operationId.
+        const cancelResult = await ctr['cancelHeteroTask']({
+          signal: 'SIGINT',
+          taskId: 'op-register',
+        });
+
+        const parsed = JSON.parse(cancelResult);
+        expect(parsed.pid).toBe(12345);
+        expect(parsed.signal).toBe('SIGINT');
+        expect(parsed.taskId).toBe('op-register');
+      });
+
+      it('cleans up platformTasks when the child exits', async () => {
+        let capturedOnChildSpawned: ((child: any) => void) | undefined;
+        vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockImplementationOnce(
+          (params: any) => {
+            capturedOnChildSpawned = params.onChildSpawned;
+            return Promise.resolve({ status: 'accepted' });
+          },
+        );
+
+        const client = await connectAndOpen();
+        client.simulateAgentRunRequest('claude-code', 'op-cleanup');
+        await vi.advanceTimersByTimeAsync(0);
+
+        const mockChild = new EventEmitter() as any;
+        mockChild.pid = 67890;
+        capturedOnChildSpawned?.(mockChild);
+
+        // Simulate the child exiting normally.
+        mockChild.emit('exit', 0, null);
+
+        // After exit, cancelHeteroTask should report no task found.
+        const cancelResult = await ctr['cancelHeteroTask']({
+          signal: 'SIGINT',
+          taskId: 'op-cleanup',
+        });
+        const parsed = JSON.parse(cancelResult);
+        expect(parsed.success).toBe(false);
+        expect(parsed.message).toContain('No task found');
+      });
+
+      it('keeps the process-group escalation after the wrapper exits', async () => {
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+        let capturedOnChildSpawned: ((child: any) => void) | undefined;
+        vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockImplementationOnce(
+          (params: any) => {
+            capturedOnChildSpawned = params.onChildSpawned;
+            return Promise.resolve({ status: 'accepted' });
+          },
+        );
+
+        const client = await connectAndOpen();
+        client.simulateAgentRunRequest('devin', 'op-orphan');
+        await vi.advanceTimersByTimeAsync(0);
+
+        const mockChild = new EventEmitter() as any;
+        mockChild.pid = 67900;
+        capturedOnChildSpawned?.(mockChild);
+        await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-orphan' });
+
+        // The wrapper honors SIGINT, while process.kill(-pid, 0) still reports
+        // that a detached descendant remains in the process group.
+        mockChild.emit('exit', null, 'SIGINT');
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(killSpy).toHaveBeenCalledWith(-67900, 'SIGINT');
+        expect(killSpy).toHaveBeenCalledWith(-67900, 'SIGKILL');
+        killSpy.mockRestore();
       });
     });
   });

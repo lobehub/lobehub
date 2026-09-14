@@ -1,3 +1,8 @@
+import {
+  VERIFICATION_ERRORED_ERROR,
+  VERIFICATION_FAILED_ERROR,
+  VERIFICATION_UNJUDGEABLE_ERROR,
+} from '@lobechat/const/goal';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -9,6 +14,7 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
+import { reviewGoalDelivery } from './goalReview';
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
@@ -98,9 +104,23 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
-    if (run.status === 'passed') {
-      // Verify passing completes the task and cascades (checkpoint / sibling
-      // rollup / downstream unlock). A Goal Graph Work Task is an ordinary task
+    const goalReview =
+      run.status === 'passed'
+        ? await reviewGoalDelivery(db, userId, taskOperation.taskId, operationId, workspaceId)
+        : undefined;
+    const outcome =
+      goalReview?.status === 'rejected'
+        ? 'failed'
+        : goalReview?.status === 'errored'
+          ? 'errored'
+          : goalReview?.status === 'unjudgeable'
+            ? 'unjudgeable'
+            : run.status;
+
+    if (outcome === 'passed') {
+      // Verify and, for Goal tasks, Acceptance review must pass before completing
+      // the task and cascading (checkpoint / sibling
+      // rollup / downstream unlock). A Goal Graph Task is an ordinary task
       // here — the coordinator reads its completed status on the next tick and
       // synthesizes the finding from it.
       if (task.automationMode) {
@@ -117,26 +137,47 @@ export const driveTaskFromVerify = async (
         log('verify passed → task %s completed', taskOperation.taskId);
       }
     } else {
-      // Two non-pass outcomes, kept distinct so an infra error never reads as a
+      // Three non-pass outcomes, kept distinct so an infra error never reads as a
       // rejected delivery:
-      // - failed:  the verifier ran and judged the delivery short of the criteria.
-      // - errored: the verifier could not run (infra) — the delivery was NOT
-      //   evaluated, so we must not claim it "did not pass".
-      const isErrored = run.status === 'errored';
+      // - failed:      the verifier ran and judged the delivery short of the criteria.
+      // - errored:     the verifier could not run (infra) — the delivery was NOT
+      //                evaluated, so we must not claim it "did not pass".
+      // - unjudgeable: the review read the evidence and the criterion turned out
+      //                undecidable from it. Another attempt would re-deliver the
+      //                same artifacts against the same unprovable criterion, so
+      //                this one routes to a person instead of a retry.
+      const isErrored = outcome === 'errored';
 
-      // `Delivery did not pass verification.` is a contract string, not just
-      // copy: the Goal coordinator matches on it to decide whether a paused
-      // Work Task should start another attempt or open a decision gate.
-      const pauseSummary = isErrored
-        ? 'Verification could not run (internal error); the delivery was not evaluated.'
-        : 'Delivery did not pass verification.';
-      // Verification outcomes belong to the task itself. Do not create an inbox
-      // brief here: a verifier rejection/error is not a separate user todo.
-      await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: pauseSummary });
-      log(
-        isErrored ? 'verify errored → task %s paused' : 'verify failed → task %s paused',
-        taskOperation.taskId,
-      );
+      // All three summaries are contract strings, not copy: the Goal coordinator
+      // matches on them to decide whether a paused Goal Task starts another
+      // attempt or opens a decision gate. They live in `@lobechat/const/goal`
+      // so the writer and the reader cannot drift apart.
+      const pauseSummary =
+        outcome === 'unjudgeable'
+          ? VERIFICATION_UNJUDGEABLE_ERROR
+          : isErrored
+            ? VERIFICATION_ERRORED_ERROR
+            : VERIFICATION_FAILED_ERROR;
+      if (task.automationMode) {
+        // Mirror of the pass branch: verify judges THIS tick, not the lifetime
+        // schedule. Pausing here would permanently disarm the cron (the
+        // schedule query never picks `paused` tasks up again), so a recurring
+        // task keeps its schedule and the verdict stays on the run.
+        log(
+          isErrored
+            ? 'verify errored → recurring task %s remains scheduled'
+            : 'verify failed → recurring task %s remains scheduled',
+          taskOperation.taskId,
+        );
+      } else {
+        // Verification outcomes belong to the task itself. Do not create an inbox
+        // brief here: a verifier rejection/error is not a separate user todo.
+        await taskModel.updateStatus(taskOperation.taskId, 'paused', { error: pauseSummary });
+        log(
+          isErrored ? 'verify errored → task %s paused' : 'verify failed → task %s paused',
+          taskOperation.taskId,
+        );
+      }
     }
 
     // Deferred creator callback: verify-bound runs defer
@@ -146,14 +187,16 @@ export const driveTaskFromVerify = async (
     // Best-effort; must not block the idempotency marker below.
     try {
       const errorMessage =
-        run.status === 'failed'
+        outcome === 'failed'
           ? 'Delivery did not pass verification.'
-          : run.status === 'errored'
+          : outcome === 'errored'
             ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
-            : undefined;
+            : outcome === 'unjudgeable'
+              ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'
+              : undefined;
       await new TaskResultBridgeService(db, userId, workspaceId).deliver({
         operationId,
-        reason: run.status === 'passed' ? 'done' : 'error',
+        reason: outcome === 'passed' ? 'done' : 'error',
         taskId: taskOperation.taskId,
         taskIdentifier: task.identifier,
         topicId: op.topicId ?? undefined,
@@ -167,13 +210,13 @@ export const driveTaskFromVerify = async (
       );
     }
 
-    // A Goal Work Task settling is the event the coordinator waits on: it
+    // A Goal Task settling is the event the coordinator waits on: it
     // decides whether to synthesize a finding, start another attempt, or open a
     // decision gate. Queue the advance so the goal keeps moving on its own —
     // this is the server-side driver for long-horizon goals, and without it a
     // goal only progresses while some client keeps ticking it.
     try {
-      const goal = await new GoalModel(db, userId, workspaceId).findByWorkTask(
+      const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(
         taskOperation.taskId,
       );
       if (goal) {

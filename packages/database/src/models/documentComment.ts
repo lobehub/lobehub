@@ -46,8 +46,17 @@ export interface CreateDocumentCommentResult {
   documentAuthorUserId: string;
   /** true when the idempotency key already existed and no new activity should be emitted */
   isDuplicate: boolean;
-  /** Author of the directly targeted comment when creating a reply. */
+  /**
+   * Author of the directly targeted comment when creating a reply. Null when
+   * the target is a tombstone so nobody is pinged about a deleted comment.
+   */
   parentAuthorUserId?: string | null;
+  /**
+   * Everyone else already talking in the thread when creating a reply: the
+   * root author plus authors of live replies, minus the actor and the direct
+   * reply target (who receives the stronger `replied` ping instead).
+   */
+  threadParticipantUserIds: string[];
 }
 
 export interface UpdateDocumentCommentParams {
@@ -112,10 +121,12 @@ export class DocumentCommentModel {
       let parentCommentId: string | null = null;
       let parentAuthorUserId: string | null | undefined;
       let replyToCommentId: string | null = null;
+      let threadParticipantUserIds: string[] = [];
       if (params.parentCommentId) {
         const [parent] = await tx
           .select({
             authorUserId: documentComments.authorUserId,
+            deletedAt: documentComments.deletedAt,
             documentId: documentComments.documentId,
             id: documentComments.id,
             parentCommentId: documentComments.parentCommentId,
@@ -133,9 +144,30 @@ export class DocumentCommentModel {
         ) {
           throw new Error(DOCUMENT_COMMENT_PARENT_NOT_FOUND);
         }
-        parentAuthorUserId = parent.authorUserId;
+        parentAuthorUserId = parent.deletedAt ? null : parent.authorUserId;
         parentCommentId = parent.parentCommentId ?? parent.id;
         replyToCommentId = parent.parentCommentId ? parent.id : null;
+
+        const threadMembers = await tx
+          .select({ authorUserId: documentComments.authorUserId })
+          .from(documentComments)
+          .where(
+            and(
+              or(
+                eq(documentComments.id, parentCommentId),
+                eq(documentComments.parentCommentId, parentCommentId),
+              ),
+              eq(documentComments.workspaceId, workspaceId),
+              isNull(documentComments.deletedAt),
+            ),
+          )
+          .groupBy(documentComments.authorUserId);
+        threadParticipantUserIds = threadMembers
+          .map(({ authorUserId }) => authorUserId)
+          .filter(
+            (userId): userId is string =>
+              Boolean(userId) && userId !== this.userId && userId !== parentAuthorUserId,
+          );
       }
 
       const [inserted] = await tx
@@ -180,6 +212,7 @@ export class DocumentCommentModel {
           documentAuthorUserId: document.userId,
           isDuplicate: false,
           parentAuthorUserId,
+          threadParticipantUserIds,
         };
       }
 
@@ -202,6 +235,7 @@ export class DocumentCommentModel {
         documentAuthorUserId: document.userId,
         isDuplicate: true,
         parentAuthorUserId,
+        threadParticipantUserIds: [],
       };
     });
   }
@@ -359,6 +393,22 @@ export class DocumentCommentModel {
       .where(and(eq(documentComments.id, id), eq(documentComments.workspaceId, workspaceId)))
       .limit(1);
     return comment;
+  }
+
+  /** Live (non-tombstoned) replies under one root, for a single-thread lookup. */
+  async countLiveReplies(rootCommentId: string) {
+    const workspaceId = this.requireWorkspaceId();
+    const [row] = await this.db
+      .select({ total: count() })
+      .from(documentComments)
+      .where(
+        and(
+          eq(documentComments.workspaceId, workspaceId),
+          eq(documentComments.parentCommentId, rootCommentId),
+          isNull(documentComments.deletedAt),
+        ),
+      );
+    return row?.total ?? 0;
   }
 
   async listThreads(params: ListDocumentCommentThreadsParams) {

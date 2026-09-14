@@ -1,4 +1,4 @@
-import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
+import type { TaskDetailActivityAuthor, TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -8,12 +8,20 @@ import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import type { StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { runMutation } from '@/store/utils/runMutation';
 import { saveToast } from '@/store/utils/saveToast';
 import type { SaveStatus } from '@/types/saveState';
 
 import type { TaskStore } from '../../store';
 import { useTaskStore } from '../../store';
+import {
+  appendOptimisticPropertyActivity,
+  buildOptimisticAssignmentActivities,
+  buildOptimisticCommentActivity,
+  buildOptimisticPropertyActivity,
+} from './optimisticActivity';
 import type { TaskDetailDispatch } from './reducer';
 import { findSubtaskParentId, taskDetailReducer } from './reducer';
 
@@ -37,6 +45,20 @@ export interface TaskUpdatePayload {
 }
 
 export interface TaskUpdateOptions {
+  /**
+   * The agent making the change when the task tool runs in the browser
+   * (client-first runtime), so the server attributes the activity to it. No
+   * row is synthesized in that case — the store cannot name the agent — the
+   * refetch shows it.
+   */
+  actorAgentId?: string;
+  /**
+   * Display metadata for the assignee being set, so the activity feed can show
+   * the row immediately instead of after the detail refetch. Supplied by the
+   * picker, which already holds the chosen item — the store deliberately does
+   * not resolve members itself (that source is a business-layer hook).
+   */
+  optimisticAssignee?: TaskDetailActivityAuthor;
   /**
    * The mounted editor marks its own autosaves so they do not request an
    * external-content reload. Tool calls and refetches are authoritative by default.
@@ -105,7 +127,59 @@ export class TaskDetailSliceActionImpl {
       topicId?: string;
     },
   ): Promise<Awaited<ReturnType<typeof taskService.addComment>>> => {
-    const result = await taskService.addComment(taskId, content, opts);
+    // Same treatment as the assignee chip: the row appears on send, not after
+    // the mutation *and* the detail refetch. A comment posted on an agent's
+    // behalf (client-first runtime) is left to the refetch — the store has no
+    // agent identity to attribute it to.
+    const current = this.#get().taskDetailMap[taskId];
+    const userState = useUserStore.getState();
+    const actorId = userProfileSelectors.userId(userState);
+    const optimistic =
+      current && !opts?.authorAgentId
+        ? buildOptimisticCommentActivity({
+            actor: actorId
+              ? {
+                  avatar: userProfileSelectors.userAvatar(userState) || null,
+                  id: actorId,
+                  name: userProfileSelectors.displayUserName(userState) || null,
+                  type: 'user',
+                }
+              : undefined,
+            content,
+            editorData: opts?.editorData,
+            now: new Date().toISOString(),
+            topicId: opts?.topicId,
+          })
+        : undefined;
+    if (optimistic) {
+      this.internal_dispatchTaskDetail({
+        id: taskId,
+        type: 'updateTaskDetail',
+        value: { activities: [...(current?.activities ?? []), optimistic] },
+      });
+    }
+
+    let result: Awaited<ReturnType<typeof taskService.addComment>>;
+    try {
+      result = await taskService.addComment(taskId, content, opts);
+    } catch (error) {
+      // The send failed, so the row must go even if the network is down and
+      // the server-truth refetch below cannot run — otherwise an unsaved
+      // comment keeps looking posted until something else refreshes.
+      if (optimistic) {
+        const latest = this.#get().taskDetailMap[taskId];
+        this.internal_dispatchTaskDetail({
+          id: taskId,
+          type: 'updateTaskDetail',
+          value: {
+            activities: (latest?.activities ?? []).filter((a) => a.id !== optimistic.id),
+          },
+        });
+        await this.internal_refreshTaskDetail(taskId).catch(() => {});
+      }
+      throw error;
+    }
+    // Post-success refresh failing is not the comment failing: it is saved.
     await this.internal_refreshTaskDetail(taskId);
     return result;
   };
@@ -360,11 +434,55 @@ export class TaskDetailSliceActionImpl {
     if (optimisticRest.instruction !== undefined && optimisticRest.editorData === undefined) {
       optimisticRest.editorData = null;
     }
+    // The assignee chip flips on this dispatch; the feed row it explains must
+    // land in the same beat, not after the mutation *and* the detail refetch.
+    const current = this.#get().taskDetailMap[id];
+    const userState = useUserStore.getState();
+    const actorId = options?.actorAgentId ? undefined : userProfileSelectors.userId(userState);
+    const optimisticActivities = current
+      ? buildOptimisticAssignmentActivities({
+          actor: actorId
+            ? {
+                avatar: userProfileSelectors.userAvatar(userState) || null,
+                id: actorId,
+                name: userProfileSelectors.displayUserName(userState) || null,
+                type: 'user',
+              }
+            : undefined,
+          assigneeAgentId,
+          assigneeUserId,
+          current: { agentId: current.agentId, userId: current.userId },
+          now: new Date().toISOString(),
+          target: options?.optimisticAssignee,
+        })
+      : [];
+    // Priority rides the same dispatch as the assignee rows.
+    const priorityRow =
+      current && rest.priority !== undefined && rest.priority !== (current.priority ?? null)
+        ? buildOptimisticPropertyActivity({
+            actor: actorId
+              ? {
+                  avatar: userProfileSelectors.userAvatar(userState) || null,
+                  id: actorId,
+                  name: userProfileSelectors.displayUserName(userState) || null,
+                  type: 'user',
+                }
+              : undefined,
+            change: { field: 'priority', from: current.priority ?? null, to: rest.priority },
+            now: new Date().toISOString(),
+          })
+        : undefined;
+    const activities = appendOptimisticPropertyActivity(
+      [...(current?.activities ?? []), ...optimisticActivities],
+      priorityRow,
+    );
     const optimistic: Partial<TaskDetailData> = {
       ...optimisticRest,
       ...(assigneeAgentId !== undefined ? { agentId: assigneeAgentId } : {}),
       ...(assigneeUserId !== undefined ? { userId: assigneeUserId } : {}),
+      ...(optimisticActivities.length > 0 || priorityRow ? { activities } : {}),
     };
+    const payload = options?.actorAgentId ? { ...data, actorAgentId: options.actorAgentId } : data;
 
     // Snapshot every map entry the optimistic patch will touch BEFORE dispatch.
     // activeTaskId can change mid-flight, and the patch can mutate a parent's
@@ -387,7 +505,7 @@ export class TaskDetailSliceActionImpl {
     );
 
     await runMutation(this.#set, this.#get, {
-      mutate: () => taskService.update(id, data),
+      mutate: () => taskService.update(id, payload),
       name: 'updateTask',
       // Rollback is a server-truth refetch (not a local snapshot), so the
       // optimistic dispatch above is reconciled from the source of record.

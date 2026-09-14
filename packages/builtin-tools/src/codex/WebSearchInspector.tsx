@@ -24,13 +24,10 @@ const WebSearchInspector = memo<BuiltinInspectorProps<CodexWebSearchArgs, CodexW
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {label}
+        </span>
         {query && (
           <>
             <span>: </span>

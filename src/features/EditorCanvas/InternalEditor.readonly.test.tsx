@@ -35,6 +35,7 @@ vi.mock('@lobehub/editor', () => ({
   ReactImagePlugin: vi.fn(),
   ReactLinkPlugin: vi.fn(),
   ReactLiteXmlPlugin: vi.fn(),
+  ReactMentionPlugin: vi.fn(),
   ReactTablePlugin: vi.fn(),
   ReactToolbarPlugin: vi.fn(),
 }));

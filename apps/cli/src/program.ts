@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { registerAgentCommand } from './commands/agent';
 import { registerAgentGroupCommand } from './commands/agent-group';
 import { registerAgentSignalCommand } from './commands/agent-signal';
+import { registerArtifactCommand } from './commands/artifact';
 import { registerBotCommand } from './commands/bot';
 import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
@@ -38,6 +39,7 @@ import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
 import { registerAcceptanceCommands } from './commands/verifyAcceptance';
+import { registerWorkspaceCommand } from './commands/workspace';
 import { CLI_DISPLAY_NAME, CLI_PRIMARY_BIN, CLI_PRODUCT_NAME } from './constants/identity';
 import { cliVersion } from './pkg';
 import { executeToolCall } from './tools';
@@ -89,6 +91,7 @@ export function createProgram() {
   registerGenerateCommand(program);
   registerGoalCommand(program);
   registerFileCommand(program);
+  registerArtifactCommand(program);
   registerHeteroCommand(program);
   registerSkillCommand(program);
   registerSessionGroupCommand(program);
@@ -102,6 +105,7 @@ export function createProgram() {
   registerProviderCommand(program);
   registerProjectCommand(program);
   registerPluginCommand(program);
+  registerWorkspaceCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);
   // First-class review-loop entry: `lh acceptance list|view|feedback|accept|reject`.

@@ -26,7 +26,7 @@ const createState = (): AgentState => ({
   createdAt: new Date().toISOString(),
   lastModified: new Date().toISOString(),
   messages: [],
-  metadata: {
+  origin: {
     agentId: 'agent-1',
     threadId: 'thread-1',
     topicId: 'topic-1',
@@ -137,7 +137,7 @@ const createCallTransport = ({
   trace = createTrace(),
 }: {
   policy?: LLMRetryPolicy;
-  runAttempt?: ReturnType<typeof vi.fn>;
+  runAttempt?: LLMTransport['runAttempt'];
   trace?: LLMTrace;
 } = {}) => {
   const createTraceScope = vi.fn().mockReturnValue(trace);

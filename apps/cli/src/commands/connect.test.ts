@@ -56,6 +56,7 @@ vi.mock('../daemon/manager', () => ({
   readStatus: vi.fn().mockImplementation(() => mockStatus),
   removePid: vi.fn(),
   removeStatus: vi.fn(),
+  reportDaemonStartupReady: vi.fn().mockResolvedValue(undefined),
   spawnDaemon: vi.fn().mockImplementation(() => {
     mockSpawnedPid = 99999;
     return mockSpawnedPid;

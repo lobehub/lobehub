@@ -73,7 +73,9 @@ describe('internalJwt', () => {
     vi.clearAllMocks();
     importJWKMock.mockResolvedValue('mock-crypto-key');
     signMock.mockResolvedValue('signed.jwt.token');
-    SignJWTMock.mockImplementation(() => buildSignJWTChain());
+    SignJWTMock.mockImplementation(function () {
+      return buildSignJWTChain();
+    });
   });
 
   describe('signUserJWT', () => {

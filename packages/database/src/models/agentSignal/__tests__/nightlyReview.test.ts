@@ -586,5 +586,75 @@ describe('AgentSignalNightlyReviewModel', () => {
         },
       ]);
     });
+
+    it('excludes messages inside an agent-share visitor topic from the nightly digest', async () => {
+      // Agent-share visitor topics keep the creator's userId on both the topic
+      // and its messages, but a non-null topics.senderId marks the topic as
+      // visitor traffic that must not feed the creator's own nightly review.
+      await serverDB.insert(users).values({ id: enabledUserId });
+      await serverDB.insert(agents).values({
+        chatConfig: { selfIteration: { enabled: true } },
+        id: 'nightly-share-agent',
+        title: 'Share agent',
+        userId: enabledUserId,
+      });
+      await serverDB.insert(topics).values([
+        {
+          agentId: 'nightly-share-agent',
+          id: 'nightly-visitor-topic',
+          senderId: 'visitor-user-x',
+          title: 'Visitor topic',
+          userId: enabledUserId,
+        },
+        {
+          agentId: 'nightly-share-agent',
+          id: 'nightly-creator-topic',
+          title: 'Creator topic',
+          userId: enabledUserId,
+        },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          agentId: 'nightly-share-agent',
+          content: 'visitor message',
+          createdAt: new Date('2026-05-03T12:00:00.000Z'),
+          id: 'nightly-visitor-message',
+          role: 'user',
+          topicId: 'nightly-visitor-topic',
+          userId: enabledUserId,
+        },
+        {
+          agentId: 'nightly-share-agent',
+          content: 'creator message',
+          createdAt: new Date('2026-05-03T13:00:00.000Z'),
+          id: 'nightly-creator-message',
+          role: 'user',
+          topicId: 'nightly-creator-topic',
+          userId: enabledUserId,
+        },
+      ]);
+
+      const model = new AgentSignalNightlyReviewModel(serverDB);
+
+      const result = await model.listActiveAgentTargets(enabledUserId, {
+        windowEnd: new Date('2026-05-03T23:59:59.999Z'),
+        windowStart: new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      // Only the creator's own message counts; the visitor's message is excluded
+      expect(result).toEqual([
+        {
+          agentId: 'nightly-share-agent',
+          failedToolCallCount: 0,
+          firstActivityAt: new Date('2026-05-03T13:00:00.000Z'),
+          lastActivityAt: new Date('2026-05-03T13:00:00.000Z'),
+          messageCount: 1,
+          name: null,
+          timezone: 'UTC',
+          title: 'Share agent',
+          topicCount: 1,
+        },
+      ]);
+    });
   });
 });

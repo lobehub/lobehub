@@ -1,4 +1,9 @@
-import type { ProjectCompletionDecision, ProjectStatus, ProjectVisibility } from '@lobechat/types';
+import type {
+  ProjectCompletionDecision,
+  ProjectStatus,
+  ProjectVisibility,
+  ProjectWorkingDirectoryPermission,
+} from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -16,9 +21,9 @@ import { idGenerator, randomSlug } from '../utils/idGenerator';
 import { softDeleteColumns, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
+import { devices } from './device';
 import { knowledgeBases } from './file';
 import { users } from './user';
-import { works } from './work';
 import { workspaces } from './workspace';
 
 /**
@@ -92,6 +97,57 @@ export const projects = pgTable(
     ),
   ],
 );
+
+/**
+ * A device-backed directory made available to a project as an execution context.
+ * The directory remains device-owned; removing this binding never deletes local files.
+ */
+export const projectWorkingDirectories = pgTable(
+  'project_working_directories',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    projectId: text('project_id')
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Nullable so a removed device leaves a repairable binding with its last-known path. */
+    deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    addedByUserId: text('added_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+
+    /** Absolute path on the bound device, for example /Users/name/Code/lobehub. */
+    path: text('path').notNull(),
+    /** User-facing label; defaults to the final path segment at the application boundary. */
+    name: varchar('name', { length: 255 }).notNull(),
+    permission: text('permission')
+      .$type<ProjectWorkingDirectoryPermission>()
+      .notNull()
+      .default('readWrite'),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    sortOrder: integer('sort_order').notNull().default(0),
+
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('project_working_directories_project_device_path_unique').on(
+      t.projectId,
+      t.deviceId,
+      t.path,
+    ),
+    uniqueIndex('project_working_directories_project_primary_unique')
+      .on(t.projectId)
+      .where(sql`${t.isPrimary} = true`),
+    index('project_working_directories_project_sort_order_idx').on(t.projectId, t.sortOrder),
+    index('project_working_directories_device_id_idx').on(t.deviceId),
+    index('project_working_directories_workspace_id_idx').on(t.workspaceId),
+    check('project_working_directories_path_not_empty', sql`length(btrim(${t.path})) > 0`),
+    check('project_working_directories_name_not_empty', sql`length(btrim(${t.name})) > 0`),
+  ],
+);
+
+export type NewProjectWorkingDirectory = typeof projectWorkingDirectories.$inferInsert;
+export type ProjectWorkingDirectoryItem = typeof projectWorkingDirectories.$inferSelect;
 
 /** Direct agent participation in a project; chat-group members are not duplicated here. */
 export const projectAgents = pgTable(
@@ -184,30 +240,6 @@ export const projectKnowledgeBases = pgTable(
     index('project_knowledge_bases_project_id_sort_order_idx').on(t.projectId, t.sortOrder),
     index('project_knowledge_bases_knowledge_base_id_idx').on(t.knowledgeBaseId),
     index('project_knowledge_bases_workspace_id_idx').on(t.workspaceId),
-  ],
-);
-
-/** Durable outputs associated with a project; one Work may participate in multiple projects. */
-export const projectWorks = pgTable(
-  'project_works',
-  {
-    id: uuid('id').defaultRandom().notNull().primaryKey(),
-    projectId: text('project_id')
-      .references(() => projects.id, { onDelete: 'cascade' })
-      .notNull(),
-    workId: text('work_id')
-      .references(() => works.id, { onDelete: 'cascade' })
-      .notNull(),
-    addedByUserId: text('added_by_user_id').references(() => users.id, { onDelete: 'set null' }),
-    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
-    sortOrder: integer('sort_order').notNull().default(0),
-    ...timestamps,
-  },
-  (t) => [
-    uniqueIndex('project_works_project_id_work_id_unique').on(t.projectId, t.workId),
-    index('project_works_project_id_sort_order_idx').on(t.projectId, t.sortOrder),
-    index('project_works_work_id_idx').on(t.workId),
-    index('project_works_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

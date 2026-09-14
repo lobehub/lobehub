@@ -6,7 +6,8 @@ import {
   type HeterogeneousAgentRuntimeStatus,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ActivityIcon, CircleAlertIcon, RadioTowerIcon, TimerResetIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -18,11 +19,9 @@ import WorkspaceControls from '@/features/ChatInput/ControlBar/WorkspaceControls
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import { ClaudeCodeQuotaMenu, CodexQuotaMenu } from './QuotaMenu';
 
@@ -141,10 +140,9 @@ const HeteroControlBar = memo(() => {
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  const enableAgentProviderBinding = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   // Effective config = shared row + this member's device override,
   // so the quota badges gate on where THIS member's run actually executes.
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId);
 
   const heteroProvider = agencyConfig?.heterogeneousProvider;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
@@ -157,7 +155,7 @@ const HeteroControlBar = memo(() => {
   // a Claude / Codex account. API mode bills the bound provider key instead,
   // so the remaining-quota chip in the corner would be stale or empty.
   const isSubscriptionAuth = (heteroProvider?.authMode ?? 'subscription') === 'subscription';
-  const shouldShowApiCredits = enableAgentProviderBinding && heteroProvider?.authMode === 'api';
+  const shouldShowApiCredits = heteroProvider?.authMode === 'api';
   // An explicit bound device (including web's device-upgraded "local" pick)
   // samples quota through the gateway; `auto` has no concrete device to ask
   // and the cloud sandbox has no sampler, so both stay quota-less.
@@ -208,8 +206,8 @@ const HeteroControlBar = memo(() => {
   if (!agentId || isLoading) {
     return (
       <Flexbox horizontal align={'center'} className={styles.bar} gap={4} justify={'space-between'}>
-        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 100, width: 100 }} />
-        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 80, width: 80 }} />
+        <Skeleton style={{ height: 22, minWidth: 100, width: 100 }} />
+        <Skeleton style={{ height: 22, minWidth: 80, width: 80 }} />
       </Flexbox>
     );
   }

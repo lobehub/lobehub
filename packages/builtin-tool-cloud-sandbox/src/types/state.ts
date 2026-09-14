@@ -42,6 +42,8 @@ export interface ExecuteCodeState {
   language: 'javascript' | 'python' | 'typescript';
   /** Standard output from execution */
   output?: string;
+  /** The sandbox workspace was recreated before this code executed. */
+  sessionExpiredAndRecreated?: boolean;
   /** Standard error from execution */
   stderr?: string;
   /** Whether the execution was successful */

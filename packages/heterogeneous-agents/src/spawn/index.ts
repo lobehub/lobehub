@@ -98,6 +98,16 @@ export {
   parseDroidAcpModelCatalog,
 } from './droidAcpSession';
 export {
+  buildDevinAcpArgs,
+  buildDevinAcpPrompt,
+  type DevinAcpImagePromptBlock,
+  type DevinAcpPromptBlock,
+  DevinAcpSession,
+  type DevinAcpSessionOptions,
+  type DevinAcpTextPromptBlock,
+  isDevinAcpSessionNotFoundError,
+} from './devinAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,

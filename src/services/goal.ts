@@ -1,5 +1,11 @@
 import type { GoalStatus } from '@lobechat/const/goal';
-import type { GoalConfig, GoalGraphSnapshot, GoalNodeKind, GoalTickResult } from '@lobechat/types';
+import type {
+  GoalCreateConfig,
+  GoalGraphSnapshot,
+  GoalMetricCriterion,
+  GoalNodeKind,
+  GoalTickResult,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -22,9 +28,11 @@ class GoalService {
   /** Create a goal and seed its graph with a problem node and the given Work. */
   create = async (params: {
     agentId?: string;
-    config?: GoalConfig;
+    config?: GoalCreateConfig;
     /** Set by the `/goal` tool so the seeded graph is authored by the agent. */
     createdByAgentId?: string;
+    /** Structured acceptance criteria — persisted rows that gate the terminal acceptance. */
+    criteria?: Array<{ description?: string; instruction?: string; title: string }>;
     maxRounds?: number;
     maxTotalCost?: number;
     /** The user's ask in their own words — shown on the seeded problem node. */
@@ -37,6 +45,21 @@ class GoalService {
     const { data } = await lambdaClient.goal.create.mutate(params);
     return data;
   };
+
+  /** Rebind which persisted verify criteria gate this goal's terminal acceptance. */
+  setAcceptanceCriteria = async (id: string, criteriaIds: string[]) =>
+    lambdaClient.goal.setAcceptanceCriteria.mutate({ criteriaIds, id });
+
+  setMetricCriteria = async (
+    id: string,
+    metrics: GoalMetricCriterion[],
+    mode?: 'merge' | 'replace',
+  ) => lambdaClient.goal.setMetricCriteria.mutate({ id, metrics, mode });
+
+  recordObservation = async (
+    id: string,
+    observation: { key: string; observedAt?: Date; title?: string; unit?: string; value: number },
+  ) => lambdaClient.goal.recordObservation.mutate({ id, ...observation });
 
   /** Delete a goal and its graph. The dispatched Work Tasks are left in place. */
   delete = async (id: string) => lambdaClient.goal.delete.mutate({ id });
@@ -77,6 +100,7 @@ class GoalService {
   }) => lambdaClient.goal.decide.mutate(params);
 
   setBudget = async (params: {
+    deadline?: string | null;
     id: string;
     maxRounds?: number | null;
     maxTotalCost?: number | null;
@@ -89,6 +113,9 @@ class GoalService {
     priority?: number;
     title: string;
   }) => lambdaClient.goal.addNode.mutate(params);
+
+  updateRequirement = async (id: string, requirement: string) =>
+    lambdaClient.goal.updateRequirement.mutate({ id, requirement });
 }
 
 export const goalService = new GoalService();

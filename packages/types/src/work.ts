@@ -93,6 +93,18 @@ export type WorkListBaseItem = WorkItem & {
    * origin topic was deleted (originTopicId is set-null) or never stamped.
    */
   originTopicTitle?: string | null;
+  /**
+   * The live resource row backing this Work (the task / the document) no longer
+   * exists. It was deleted outside the tool-dispatch path, which deliberately
+   * orphans the Work rather than removing it (see `models/work/context.ts`), so
+   * the card renders from its version snapshot and opening it would 404 — the
+   * UI shows a "resource deleted" badge and offers removal instead.
+   *
+   * Derived per query from a LEFT JOIN miss on the backing table, never
+   * persisted. Always `false` for `external` and `file` Works: they have no
+   * local backing row that could go missing.
+   */
+  resourceDeleted: boolean;
 };
 
 export interface WorkVersionItem {
@@ -160,14 +172,6 @@ export interface TaskWorkListItem extends WorkListBaseItem {
     priority: number | null;
     status: TaskStatus | string | null;
   };
-  /**
-   * The live task row backing this Work no longer exists (deleted outside the
-   * tool-dispatch path, which deliberately orphans the Work). When true, the
-   * `task` fields fall back to the version snapshot and the UI renders the card
-   * as "task deleted". Derived from a `tasks` LEFT JOIN missing its row, not a
-   * persisted flag.
-   */
-  taskDeleted: boolean;
   type: 'task';
 }
 
@@ -316,6 +320,17 @@ export interface DeleteDocumentWorkParams {
 export interface DeleteTaskWorkParams {
   /** Internal task id (`works.resourceId` for `resourceType: 'task'`). */
   taskId: string;
+}
+
+/**
+ * User-initiated removal of one Work card, addressed by the Work's own id
+ * rather than a backing resource — the resource is typically already gone (see
+ * {@link WorkListBaseItem.resourceDeleted}), which is exactly why the user has
+ * no other way to clear the card.
+ */
+export interface DeleteWorkParams {
+  /** `works.id` of the card to remove. */
+  id: string;
 }
 
 export interface RegisterExternalWorkParams {

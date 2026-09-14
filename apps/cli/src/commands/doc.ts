@@ -341,6 +341,9 @@ export function registerDocCommand(program: Command) {
       const result = await client.notebook.createDocument.mutate({
         content: document.content || '',
         description: document.description || '',
+        ...(process.env.LOBEHUB_TOPIC_ID === topicId && process.env.LOBEHUB_OPERATION_ID
+          ? { operationId: process.env.LOBEHUB_OPERATION_ID }
+          : {}),
         title: document.title || 'Untitled',
         topicId,
       });

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
 
@@ -31,11 +32,6 @@ vi.mock('@/services/work', () => ({
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
   useClientDataSWR: vi.fn(),
-}));
-
-vi.mock('@/components/AntdStaticMethods', () => ({
-  modal: { confirm: vi.fn() },
-  notification: { error: vi.fn() },
 }));
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
@@ -116,6 +112,78 @@ describe('TaskDetailSliceAction', () => {
     });
   });
 
+  describe('addComment', () => {
+    const seed = () => {
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { avatar: null, fullName: 'Me', id: 'user_me' } as any,
+      });
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { activities: [], identifier: 'T-1', instruction: 'x', status: 'backlog' },
+        },
+      });
+    };
+
+    it('shows the comment on send, before the mutation resolves', async () => {
+      seed();
+      let release!: () => void;
+      vi.mocked(taskService.addComment).mockReturnValue(
+        new Promise((resolve) => {
+          release = () => resolve({ data: { id: 'cmt_1' } } as any);
+        }),
+      );
+
+      const pending = useTaskStore.getState().addComment('T-1', 'hello', { topicId: 'tpc_1' });
+
+      const activities = useTaskStore.getState().taskDetailMap['T-1'].activities ?? [];
+      expect(activities).toHaveLength(1);
+      expect(activities[0]).toMatchObject({
+        author: { id: 'user_me', name: 'Me', type: 'user' },
+        content: 'hello',
+        topicId: 'tpc_1',
+        type: 'comment',
+      });
+
+      release();
+      await pending;
+    });
+
+    it('rolls the synthesized row back through a refetch when the send fails', async () => {
+      seed();
+      vi.mocked(taskService.addComment).mockRejectedValue(new Error('boom'));
+      const { mutate } = await import('@/libs/swr');
+
+      await expect(useTaskStore.getState().addComment('T-1', 'hello')).rejects.toThrow('boom');
+
+      // The refetch is the rollback; the caller still sees the failure.
+      expect(mutate).toHaveBeenCalled();
+    });
+
+    it('removes the synthesized row locally when the send AND the rollback refetch fail', async () => {
+      seed();
+      vi.mocked(taskService.addComment).mockRejectedValue(new Error('offline'));
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(mutate).mockRejectedValue(new Error('still offline'));
+
+      await expect(useTaskStore.getState().addComment('T-1', 'hello')).rejects.toThrow('offline');
+
+      // Nothing was saved, so nothing may keep looking saved.
+      expect(useTaskStore.getState().taskDetailMap['T-1'].activities).toEqual([]);
+    });
+
+    it('leaves an agent-authored comment to the refetch', async () => {
+      seed();
+      vi.mocked(taskService.addComment).mockResolvedValue({ data: { id: 'cmt_1' } } as any);
+
+      await useTaskStore.getState().addComment('T-1', 'hi', { authorAgentId: 'agt_1' });
+
+      // Nothing synthesized: the store cannot name the agent.
+      expect(taskService.addComment).toHaveBeenCalledWith('T-1', 'hi', { authorAgentId: 'agt_1' });
+    });
+  });
+
   describe('updateTask', () => {
     it('should optimistically update taskDetailMap', async () => {
       useTaskStore.setState({
@@ -132,6 +200,51 @@ describe('TaskDetailSliceAction', () => {
       expect(useTaskStore.getState().taskDetailMap['T-1'].name).toBe('New Name');
       expect(taskService.update).toHaveBeenCalledWith('T-1', { name: 'New Name' });
       expect(useTaskStore.getState().taskSaveStatusMap['T-1']).toBe('saved');
+    });
+
+    it('surfaces the assignment activity in the same dispatch as the assignee chip', async () => {
+      useUserStore.setState({
+        isSignedIn: true,
+        user: { avatar: 'me.png', fullName: 'Me', id: 'user_me' } as any,
+      });
+      useTaskStore.setState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': {
+            activities: [],
+            agentId: null,
+            identifier: 'T-1',
+            instruction: 'x',
+            status: 'backlog',
+          },
+        },
+      });
+      // Hold the mutation open so we can observe the optimistic state alone.
+      let release!: () => void;
+      vi.mocked(taskService.update).mockReturnValue(
+        new Promise((resolve) => {
+          release = () => resolve({ success: true } as any);
+        }),
+      );
+
+      const pending = useTaskStore
+        .getState()
+        .updateTask(
+          'T-1',
+          { assigneeAgentId: 'agt_1' },
+          { optimisticAssignee: { avatar: null, id: 'agt_1', name: 'Rika', type: 'agent' } },
+        );
+
+      const activities = useTaskStore.getState().taskDetailMap['T-1'].activities ?? [];
+      expect(activities).toHaveLength(1);
+      expect(activities[0]).toMatchObject({
+        assignment: { kind: 'agent', to: { id: 'agt_1', name: 'Rika' } },
+        author: { id: 'user_me', name: 'Me', type: 'user' },
+        type: 'assignment',
+      });
+
+      release();
+      await pending;
     });
 
     it('should clear stale editorData for instruction-only optimistic updates', async () => {

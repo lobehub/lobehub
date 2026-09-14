@@ -30,7 +30,9 @@ export const oidcArtifactTTL = {
   BackchannelAuthenticationRequest: 10 * MINUTE_SECONDS,
   ClientCredentials: 10 * MINUTE_SECONDS,
   DeviceCode: 10 * MINUTE_SECONDS,
-  Grant: 14 * DAY_SECONDS,
+  // oidc-provider never extends Grant.exp on refresh, so this is the absolute cap on a
+  // signed-in session no matter how often the refresh token rotates.
+  Grant: 365 * DAY_SECONDS,
   IdToken: HOUR_SECONDS,
   Interaction: HOUR_SECONDS,
   RefreshToken: 30 * DAY_SECONDS,

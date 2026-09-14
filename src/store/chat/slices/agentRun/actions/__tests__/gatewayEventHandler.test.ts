@@ -56,6 +56,7 @@ function createMockStore() {
     internal_toggleToolCallingStreaming: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {} as Record<string, any>,
+    topicDataMap: {},
     operations: {
       'op-1': {
         context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },

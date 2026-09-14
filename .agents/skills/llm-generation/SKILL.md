@@ -1,6 +1,6 @@
 ---
 name: llm-generation
-description: 'LobeHub application-level LLM generation conventions. Use when adding or changing prompts, generateObject/generateText calls, structured output schemas, generation model selection, prompt versions, llm_generation_tracing scenarios, or tests for AI-generated business content. Do not use for provider adapter internals or agent execution snapshots.'
+description: 'Use for application prompts, generateObject/generateText, model selection and generation tracing. Excludes provider adapters and agent snapshots.'
 ---
 
 # LLM Generation

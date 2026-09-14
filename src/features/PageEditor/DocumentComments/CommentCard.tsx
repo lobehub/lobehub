@@ -3,7 +3,7 @@ import { ChatInput, ChatInputActionBar, useEditor } from '@lobehub/editor/react'
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { ActionIcon, Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { ChevronRight, MessageCircle, Pencil, Trash } from 'lucide-react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentMenu } from '@/features/AttachmentInput';
@@ -15,6 +15,7 @@ import {
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { documentCommentService } from '@/services/documentComment';
 
@@ -24,10 +25,12 @@ import DocumentCommentEditor, {
 } from './DocumentCommentEditor';
 import type { DocumentCommentUpdateHandler } from './optimistic';
 import { isOptimisticDocumentComment } from './optimistic';
-import { styles } from './styles';
+import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
 
 interface CommentCardProps {
   comment: DocumentCommentItem;
+  /** Set when a deep link targets this comment; each new token scrolls + highlights again. */
+  focusToken?: number;
   onMutated: () => void | Promise<void>;
   onReply?: () => void;
   onUpdate: DocumentCommentUpdateHandler;
@@ -44,22 +47,27 @@ const hasDocumentCommentEditorData = (editorData: DocumentCommentItem['editorDat
   );
 
 const CommentContent = memo<Pick<DocumentCommentItem, 'content' | 'editorData'>>(
-  ({ content, editorData }) =>
-    hasDocumentCommentEditorData(editorData) ? (
-      <RichTextMessage editorState={editorData} variant={'default'} />
-    ) : (
-      <Markdown fontSize={16} variant={'chat'}>
-        {content}
-      </Markdown>
-    ),
+  ({ content, editorData }) => (
+    <div className={styles.commentContent}>
+      {hasDocumentCommentEditorData(editorData) ? (
+        <RichTextMessage editorState={editorData} variant={'default'} />
+      ) : (
+        <Markdown fontSize={16} variant={'chat'}>
+          {content}
+        </Markdown>
+      )}
+    </div>
+  ),
 );
 
 CommentContent.displayName = 'DocumentCommentContent';
 
 const CommentCard = memo<CommentCardProps>(
-  ({ comment, onMutated, onReply, onUpdate, replying, variant = 'root' }) => {
+  ({ comment, focusToken, onMutated, onReply, onUpdate, replying, variant = 'root' }) => {
     const { t } = useTranslation('file');
+    const cardRef = useRef<HTMLDivElement>(null);
     const { text: time, title: timeTitle } = useActivityTime(comment.createdAt);
+    const shouldSendOnEnter = useEnterToSend();
     const [editing, setEditing] = useState(false);
     const [content, setContent] = useState(comment.content);
     const [editorData, setEditorData] = useState(comment.editorData);
@@ -82,6 +90,20 @@ const CommentCard = memo<CommentCardProps>(
       comment.replyTo?.author.username ||
       (comment.replyTo ? t('pageEditor.comments.author.deactivated') : null);
     const edited = new Date(comment.updatedAt).getTime() > new Date(comment.createdAt).getTime();
+
+    useEffect(() => {
+      const node = cardRef.current;
+      if (focusToken === undefined || !node) return;
+      // Honor reduced motion: jump instead of gliding; the steady highlight itself stays.
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+      node.classList.add(styles.highlighted);
+      const timer = setTimeout(() => node.classList.remove(styles.highlighted), 2400);
+      return () => {
+        clearTimeout(timer);
+        node.classList.remove(styles.highlighted);
+      };
+    }, [focusToken]);
 
     const handleUpdate = useCallback(async () => {
       const editorValue: DocumentCommentEditorValue = editorRef.current?.getValue() ?? {
@@ -149,6 +171,7 @@ const CommentCard = memo<CommentCardProps>(
       <Flexbox
         className={`${styles.card} ${variant === 'reply' ? styles.replyCard : ''}`}
         data-document-comment-id={comment.id}
+        ref={cardRef}
       >
         <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
           <Avatar
@@ -190,6 +213,7 @@ const CommentCard = memo<CommentCardProps>(
             <ChatInput
               className={styles.editComposer}
               header={showTypoBar ? <TypoBar editor={editEditor} /> : undefined}
+              maxHeight={COMMENT_INPUT_MAX_HEIGHT}
               minHeight={64}
               resize={false}
               slashMenuRef={editInputRef}
@@ -244,6 +268,13 @@ const CommentCard = memo<CommentCardProps>(
                 onChange={({ content: nextContent, editorData: nextEditorData }) => {
                   setContent(nextContent);
                   setEditorData(nextEditorData);
+                }}
+                onPressEnter={(event) => {
+                  // Same interaction as the composer: Enter saves (per the
+                  // global send preference), Shift+Enter inserts a newline.
+                  if (!shouldSendOnEnter(event)) return;
+                  void handleUpdate();
+                  return true;
                 }}
               />
             </ChatInput>

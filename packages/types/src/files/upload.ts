@@ -17,6 +17,8 @@ export interface FileUploadState {
 export type FileUploadStatus =
   'pending' | 'uploading' | 'processing' | 'success' | 'error' | 'cancelled';
 
+export type FileUploadSessionStatus = 'active' | 'cleaning' | 'settled' | 'released' | 'expired';
+
 export type FileProcessStatus = 'pending' | 'chunking' | 'embedding' | 'success' | 'error';
 
 export const UPLOAD_STATUS_SET = new Set(['uploading', 'pending', 'processing']);

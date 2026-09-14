@@ -13,6 +13,7 @@ import { After, Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { llmMockManager, presetResponses } from '../../mocks/llm';
+import { classifyScrollTrace, startScrollTrace, stopScrollTrace } from '../../probes/scrollTrace';
 import type { CustomWorld } from '../../support/world';
 
 // How close to the scroll container's bottom is considered "at bottom".
@@ -335,6 +336,10 @@ When('用户在流式响应进行中向上滚动 {int} 像素', async function (
   await this.page.waitForTimeout(400);
 });
 
+When('开始记录聊天列表滚动轨迹', async function (this: CustomWorld) {
+  await startScrollTrace(this.page);
+});
+
 When('等待流式响应结束', { timeout: 60_000 }, async function (this: CustomWorld) {
   await waitForAssistantMessageToSettle(this, 200);
 });
@@ -421,6 +426,22 @@ Then('用户消息应固定在聊天列表顶部', async function (this: CustomW
       },
     )
     .toBeLessThanOrEqual(PIN_SLACK);
+});
+
+Then('聊天列表应以多帧平滑滚动把用户消息顶到顶部', async function (this: CustomWorld) {
+  const PIN_SLACK = 150;
+  await expect
+    .poll(
+      async () => {
+        const rect = await measurePinDelta(this);
+        return rect ? Math.abs(rect.delta) : null;
+      },
+      { message: 'latest user message did not reach the pinned position', timeout: 5000 },
+    )
+    .toBeLessThanOrEqual(PIN_SLACK);
+
+  const summary = classifyScrollTrace(await stopScrollTrace(this.page));
+  expect(summary, `scroll trace: ${JSON.stringify(summary)}`).toMatchObject({ motion: 'slide' });
 });
 
 Then('聊天列表底部补偿区域高度不应收缩', async function (this: CustomWorld) {

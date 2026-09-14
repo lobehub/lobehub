@@ -54,6 +54,8 @@ export interface ExecScriptState {
    */
   exitCode?: number;
   outputFiles?: CommandResult['outputFiles'];
+  /** The sandbox workspace was recreated before this command. */
+  sessionExpiredAndRecreated?: boolean;
   /**
    * Shell handle for a still-running command, pollable via
    * `local-system.getCommandOutput`.
@@ -68,6 +70,8 @@ export interface RunCommandOptions {
 }
 
 export interface CommandResult {
+  /** Upstream execution errors are distinct from a command's ordinary stderr. */
+  error?: unknown;
   /**
    * Where the command actually ran. Flows into the tool call's plugin state so
    * execution-target degradation is observable in the product UI.
@@ -88,6 +92,8 @@ export interface CommandResult {
     stderr?: { path: string; size?: number; truncated?: boolean };
     stdout?: { path: string; size?: number; truncated?: boolean };
   };
+  /** The sandbox workspace was recreated before this command. */
+  sessionExpiredAndRecreated?: boolean;
   /**
    * Shell handle for a still-running command, pollable via
    * `local-system.getCommandOutput`.

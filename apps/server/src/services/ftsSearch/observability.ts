@@ -31,6 +31,18 @@ export type ElasticsearchFtsSearchErrorCode =
   | 'transport_error'
   | 'unknown_http_error';
 export type ElasticsearchFtsSearchTraceContext = 'missing' | 'non_recording' | 'recording';
+export type FtsSearchUsage =
+  | 'home_search'
+  | 'knowledge_base'
+  | 'memory'
+  | 'memory_extraction'
+  | 'memory_tool'
+  | 'message_search'
+  | 'message_search_mobile'
+  | 'session_search'
+  | 'topic_search'
+  | 'unattributed'
+  | 'unified_search';
 export type UserMemoryLexicalSearchDecision = 'executed' | 'skipped_long_context';
 export type UserMemoryLexicalSearchSource =
   'api' | 'memory_extraction' | 'tool' | 'topic_retrieval';
@@ -40,6 +52,7 @@ export interface FtsSearchBackendOperationAttributes {
   operation: FtsSearchBackendOperation;
   provider: FtsSearchProvider;
   result: FtsSearchBackendOperationResult;
+  usage: FtsSearchUsage;
 }
 
 type FtsSearchBackendOperationBaseAttributes = Omit<FtsSearchBackendOperationAttributes, 'result'>;
@@ -155,6 +168,7 @@ export const buildFtsSearchBackendMetricAttributes = (
   operation: attributes.operation,
   provider: attributes.provider,
   result: attributes.result,
+  usage: attributes.usage,
 });
 
 const finishOperation = (
@@ -193,6 +207,7 @@ export const recordElasticsearchFtsSearchRequest = (input: {
   serverTookMs?: number;
   traceContext: ElasticsearchFtsSearchTraceContext;
   truncated: boolean;
+  usage: FtsSearchUsage;
 }): void => {
   recordSafely('Elasticsearch search request', () => {
     const histogramAttributes: Attributes = {
@@ -200,28 +215,32 @@ export const recordElasticsearchFtsSearchRequest = (input: {
       pagination: input.pagination,
       result: input.result,
     };
-    const requestAttributes: Attributes = {
+    const costAttributes: Attributes = {
       ...histogramAttributes,
+      usage: input.usage,
+    };
+    const requestAttributes: Attributes = {
+      ...costAttributes,
       error_code: input.errorCode,
       query_truncated: input.truncated,
       trace_context: input.traceContext,
     };
     elasticsearchRequests.add(1, requestAttributes);
-    elasticsearchRequestDuration.record(input.durationMs, histogramAttributes);
-    elasticsearchRequestBytes.record(input.requestBytes, histogramAttributes);
-    elasticsearchOriginalQueryCharacters.record(input.originalQueryChars, histogramAttributes);
-    elasticsearchExecutedQueryCharacters.record(input.executedQueryChars, histogramAttributes);
+    elasticsearchRequestDuration.record(input.durationMs, costAttributes);
+    elasticsearchRequestBytes.record(input.requestBytes, costAttributes);
+    elasticsearchOriginalQueryCharacters.record(input.originalQueryChars, costAttributes);
+    elasticsearchExecutedQueryCharacters.record(input.executedQueryChars, costAttributes);
     if (input.contentLength !== undefined) {
-      elasticsearchResponseContentLength.record(input.contentLength, histogramAttributes);
+      elasticsearchResponseContentLength.record(input.contentLength, costAttributes);
     }
     if (input.decodedBytes !== undefined) {
-      elasticsearchResponseDecodedBytes.record(input.decodedBytes, histogramAttributes);
+      elasticsearchResponseDecodedBytes.record(input.decodedBytes, costAttributes);
     }
     if (input.hits !== undefined) {
-      elasticsearchResponseHits.record(input.hits, histogramAttributes);
+      elasticsearchResponseHits.record(input.hits, costAttributes);
     }
     if (input.serverTookMs !== undefined) {
-      elasticsearchServerTook.record(input.serverTookMs, histogramAttributes);
+      elasticsearchServerTook.record(input.serverTookMs, costAttributes);
     }
   });
 };
@@ -274,6 +293,7 @@ export const observeFtsSearchBackendOperation = async <Result>(
         'fts.search.backend.entity': attributes.entity,
         'fts.search.backend.operation': attributes.operation,
         'fts.search.backend.provider': attributes.provider,
+        'fts.search.backend.usage': attributes.usage,
       },
     },
     async (span) => {
@@ -289,14 +309,20 @@ export const observeFtsSearchBackendOperation = async <Result>(
     },
   );
 
-export const createElasticsearchFtsSearchObserver = (): ElasticsearchFtsSearchObserver => ({
+export const createElasticsearchFtsSearchObserver = (
+  usage: FtsSearchUsage,
+): ElasticsearchFtsSearchObserver => ({
   observe: (entity, operation, callback) =>
-    observeFtsSearchBackendOperation({ entity, operation, provider: 'elasticsearch' }, callback),
+    observeFtsSearchBackendOperation(
+      { entity, operation, provider: 'elasticsearch', usage },
+      callback,
+    ),
 });
 
 export const withFtsSearchBackendObservability = (
   backend: FtsSearchBackend,
   resolveProvider: (request: FtsSearchBackendRequest) => FtsSearchProvider,
+  usage: FtsSearchUsage,
 ): FtsSearchBackend => ({
   key: backend.key,
   search: (request) => {
@@ -306,6 +332,7 @@ export const withFtsSearchBackendObservability = (
         entity: request.entity,
         operation: 'product_path',
         provider,
+        usage,
       },
       async () => {
         const response = await backend.search(request);

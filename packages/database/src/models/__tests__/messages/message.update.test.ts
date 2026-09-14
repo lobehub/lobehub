@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { MAX_TOOL_IDENTIFIER_LENGTH } from '@/utils/clampToolIdentifier';
 import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -589,6 +590,32 @@ describe('MessageModel Update Tests', () => {
       const result = await serverDB.select().from(messagePlugins).where(eq(messagePlugins.id, '1'));
 
       expect(result[0].identifier).toEqual('plugin2');
+    });
+
+    it('should clamp oversized plugin identifiers on update', async () => {
+      const oversizedApiName = `api-${'a'.repeat(40_000)}`;
+      const oversizedIdentifier = `plugin-${'i'.repeat(40_000)}`;
+      await serverDB.insert(messages).values({ id: '1', content: 'abc', role: 'tool', userId });
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'api1',
+        id: '1',
+        identifier: 'plugin1',
+        toolCallId: 'tool1',
+        userId,
+      });
+
+      await messageModel.updateMessagePlugin('1', {
+        apiName: oversizedApiName,
+        identifier: oversizedIdentifier,
+      });
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, '1'));
+
+      expect(plugin.apiName).toBe(oversizedApiName.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
+      expect(plugin.identifier).toBe(oversizedIdentifier.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
     });
 
     it('should throw an error if plugin does not exist', async () => {

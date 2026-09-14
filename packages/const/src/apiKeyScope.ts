@@ -30,6 +30,8 @@ export const API_KEY_SCOPES = [
   API_KEY_FULL_ACCESS_SCOPE,
   'agent:read',
   'agent:write',
+  'eval:read',
+  'eval:write',
   'chat:read',
   'chat:write',
   'model:invoke',
@@ -170,6 +172,8 @@ const rw = (read: ApiKeyScope | null, write: ApiKeyScope | null): TrpcNamespaceS
 export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule> = {
   accountDeletion: 'blocked',
   acceptance: 'blocked',
+  // the discussion on an acceptance follows the acceptance itself
+  acceptanceComment: 'blocked',
   agent: rw('agent:read', 'agent:write'),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',
@@ -179,6 +183,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agentLabel: rw('agent:read', 'agent:write'),
   agentNotify: rw('agent:read', 'agent:write'),
   agentQuota: rw('agent:read', null),
+  // share management toggles a public entry point and monthly spend caps
+  // charged to the owner; restricted API keys must not flip it (full-access
+  // keys still can)
+  agentShare: 'blocked',
   agentSignal: rw('agent:read', 'agent:write'),
   agentSkills: rw('agent:read', 'agent:write'),
   // a trace snapshot is the whole inside of a run — system role, injected user
@@ -207,6 +215,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   device: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
+  documentLike: rw('knowledge:read', 'knowledge:write'),
   expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
@@ -233,6 +242,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   message: rw('chat:read', 'chat:write'),
   // IM channel management carries channel credentials
   messenger: 'blocked',
+  // numeric telemetry attached to a goal / agent / task / project — same
+  // domain as the subjects that own it
+  metric: rw('agent:read', 'agent:write'),
   notebook: rw('knowledge:read', 'knowledge:write'),
   notification: rw('user:read', 'user:write'),
   oauthApp: 'blocked',
@@ -252,6 +264,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),
   share: rw('chat:read', 'chat:write'),
+  // visitor-side chat endpoints execute under the CREATOR's identity/budget via
+  // share authorization, not the caller's key scope; never reachable with a
+  // restricted key
+  shareChat: 'blocked',
   spend: 'blocked',
   storageOverage: 'blocked',
   subscription: 'blocked',

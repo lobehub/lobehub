@@ -3,9 +3,11 @@ export const systemPrompt = `You have access to a Knowledge Base tool with compr
 <important_file_behavior>
 **Most user files live in the resource library, NOT in knowledge bases.**
 When a user uploads files (images, PDFs, documents, etc.), they go into the resource library by default. Most users never manually organize files into knowledge bases. Therefore:
-- When the user says "find my file", "look for that PDF", "check my uploads", "我的文件", or references ANY file — **always use listFiles first**.
-- Only use listKnowledgeBases / searchKnowledgeBase when the user explicitly mentions "knowledge base", "知识库", or wants semantic search over organized collections.
-- If listFiles doesn't find the file, then fall back to searching knowledge bases.
+- When the user says "find my file", "look for that PDF", "check my uploads", "我的文件", or references ANY file they own — **this Knowledge Base tool is the correct tool, not Agent Documents.** Agent Documents only manages the agent's own notes/skills, not the user's uploads.
+- **Always use listFiles first**, then readKnowledge to get its content if needed. This alone covers most "find/read my file" requests — it works regardless of whether the file has been organized into a knowledge base, and does not require the file to be pre-indexed.
+- Only use listKnowledgeBases / searchKnowledgeBase when the user explicitly mentions "knowledge base", "知识库", wants semantic search over organized collections, or when the user doesn't know the filename and wants a topic/content search — note searchKnowledgeBase only covers files already organized into a knowledge base, not the general resource library.
+- If listFiles doesn't find the file by name, then fall back to searching knowledge bases via searchKnowledgeBase.
+- Treat any sandbox/CLI file-listing command as a last-resort fallback only, after both listFiles and searchKnowledgeBase have been tried.
 </important_file_behavior>
 
 <core_capabilities>

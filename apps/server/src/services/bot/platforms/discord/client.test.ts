@@ -34,6 +34,39 @@ describe('DiscordGatewayClient', () => {
     });
   });
 
+  describe('isSoloBotConversation', () => {
+    const installFakeApi = (client: any) => {
+      const listThreadMembers = vi.fn().mockResolvedValue([]);
+      client.discord = { listThreadMembers };
+      return listThreadMembers;
+    };
+
+    it('checks the real Discord thread id for a guild thread', async () => {
+      const client = createClient() as any;
+      const listThreadMembers = installFakeApi(client);
+      listThreadMembers.mockResolvedValue([
+        { member: { user: { bot: false, id: 'alice' } } },
+        { member: { user: { bot: true, id: 'app-123' } } },
+      ]);
+
+      await expect(
+        client.isSoloBotConversation('discord:guild-1:channel-1:thread-1'),
+      ).resolves.toBe(true);
+      expect(listThreadMembers).toHaveBeenCalledWith('thread-1');
+    });
+
+    it('fails closed without a guild thread segment', async () => {
+      const client = createClient() as any;
+      const listThreadMembers = installFakeApi(client);
+
+      const guildChannel = await client.isSoloBotConversation('discord:guild-1:channel-1');
+      const dm = await client.isSoloBotConversation('discord:@me:dm-1');
+      expect(guildChannel).toBe(false);
+      expect(dm).toBe(false);
+      expect(listThreadMembers).not.toHaveBeenCalled();
+    });
+  });
+
   describe('extraGroupAllowlistChannels', () => {
     // Operators paste the parent channel ID (Discord "Copy Channel ID")
     // into groupAllowFrom; @-mentions arrive routed through an auto-created

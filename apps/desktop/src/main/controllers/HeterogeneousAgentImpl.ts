@@ -27,16 +27,22 @@ import {
   resolveHeterogeneousAgentCommand,
   resolveHeterogeneousProviderBinding,
 } from '@lobechat/heterogeneous-agents';
+import type { AskUserBridgeOptions } from '@lobechat/heterogeneous-agents/askUser';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   LobeBuiltinMcpServer,
   McpToolResult,
 } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
-import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
+import type {
+  HeteroExecImageRef,
+  HeterogeneousAgentCancellationResult,
+  HeterogeneousAgentCancellationSignal,
+} from '@lobechat/heterogeneous-agents/protocol';
 import {
   buildHeteroExecStdinPayload,
   buildHeterogeneousPrompt,
+  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
 } from '@lobechat/heterogeneous-agents/protocol';
 import {
   CLAUDE_CODE_QUOTA_FRESH_MS,
@@ -45,6 +51,7 @@ import {
   QuotaSnapshotCache,
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
+import { isLoginShellTimeoutStatus } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
@@ -55,6 +62,8 @@ import {
   buildCodexAppServerThreadParams,
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
+  buildDevinAcpArgs,
+  buildDevinAcpPrompt,
   buildDroidAcpArgs,
   buildDroidAcpPrompt,
   buildGrokAcpArgs,
@@ -66,12 +75,14 @@ import {
   CodexThreadSession,
   createFileStoreImageUploader,
   CursorAcpSession,
+  DevinAcpSession,
   DroidAcpSession,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
   isCodexAppServerCompatibilityError,
   isCursorAcpSessionNotFoundError,
+  isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
   readCodexSessionModel,
   resolveCliSpawnPlan,
@@ -90,6 +101,7 @@ import type {
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import { sleep } from '@lobechat/utils/sleep';
 import { app as electronApp, BrowserWindow } from 'electron';
 import { isPlainObject } from 'es-toolkit';
 import semver from 'semver';
@@ -117,6 +129,7 @@ import {
   beginServerDefaultOperation,
   getProviderBindingRuntime,
   getServerDefaultEndpoint,
+  type ServerDefaultOperationSettlement,
   settleServerDefaultOperation,
 } from '@/modules/heterogeneousAgent/providerBindingPort';
 import type {
@@ -361,6 +374,7 @@ interface AgentSession {
   command: string;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
+  devinAcpSession?: DevinAcpSession;
   droidAcpSession?: DroidAcpSession;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
@@ -408,20 +422,16 @@ interface CliTraceSession {
   writeQueue: Promise<void>;
 }
 
-/** Result of cancelling a device-gateway CLI wrapper. */
-export interface LhHeteroExecCancellationResult {
-  /** Whether the wrapper emitted its exit/error terminal signal before the bounded wait elapsed. */
-  exited: boolean;
-  /** Operating-system process id when Node assigned one before cancellation. */
-  pid?: number;
-  /** Initial signal requested by the server cancellation call. */
-  signal: NodeJS.Signals;
-}
+export type LhHeteroExecCancellationResult = HeterogeneousAgentCancellationResult;
 
 interface LhHeteroExecTask {
   cancellation?: Promise<LhHeteroExecCancellationResult>;
   exit: Promise<void>;
   process: ChildProcess;
+}
+
+interface InteractiveAcpSession {
+  run: () => Promise<void>;
 }
 
 /**
@@ -698,6 +708,33 @@ export default class HeterogeneousAgentCtr {
     };
   }
 
+  private getDevinResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'devin' ||
+      !session.resumeSessionId ||
+      !isDevinAcpSessionNotFoundError(error)
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'devin',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message: 'The saved Devin session could not be found, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getCliAuthRequiredError(
     error: unknown,
     session: AgentSession,
@@ -725,7 +762,8 @@ export default class HeterogeneousAgentCtr {
       this.getCodexResumeError(error, session) ??
       this.getDroidResumeError(error, session) ??
       this.getGrokResumeError(error, session) ??
-      this.getCursorResumeError(error, session);
+      this.getCursorResumeError(error, session) ??
+      this.getDevinResumeError(error, session);
     if (resumeError) return resumeError;
 
     const authRequiredError = this.getCliAuthRequiredError(error, session);
@@ -790,7 +828,11 @@ export default class HeterogeneousAgentCtr {
     const command = this.resolveSessionCommand(session);
     const status =
       command === defaultCommand
-        ? await this.app.binaryManager?.detect?.(defaultCommand, true)
+        ? // Normal launches must reuse the successful binary/PATH detection.
+          // Forcing here invalidates the login-shell PATH cache on every message,
+          // putting a slow interactive shell back on the critical path. Explicit
+          // Rescan actions remain responsible for force-refreshing the cache.
+          await this.app.binaryManager?.detect?.(defaultCommand)
         : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
@@ -832,6 +874,23 @@ export default class HeterogeneousAgentCtr {
       // `#!/usr/bin/env node` shim spawned by absolute path still finds `node`.
       session.resolvedCommandSearchPath = useResolvedPath ? status!.resolvedPathEnv : undefined;
       return;
+    }
+
+    // A shell probe that ran out of time says nothing about whether the CLI is
+    // installed — on a busy machine it is the likeliest outcome, and the run
+    // before it may well have succeeded. Telling the user to install it would
+    // send them after software that is already there.
+    if (isLoginShellTimeoutStatus(status)) {
+      return {
+        agentType: session.agentType,
+        code: 'cli_detection_timeout',
+        command,
+        message:
+          `Timed out looking for \`${command}\` while reading PATH from your login shell. ` +
+          'This usually means the machine was busy rather than that the CLI is missing — ' +
+          'retry, or set an absolute path for the command in the agent settings.',
+        workingDirectory,
+      };
     }
 
     return this.buildCliMissingError(session);
@@ -1103,7 +1162,7 @@ export default class HeterogeneousAgentCtr {
   private setupAcpInterventionForOp(
     operationId: string,
     sessionId: string,
-    provider: 'cursor' | 'droid',
+    provider: NonNullable<AskUserBridgeOptions['provider']>,
   ): {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
@@ -1396,7 +1455,7 @@ export default class HeterogeneousAgentCtr {
    * the shared `AgentStreamPipeline` (JSONL → adapter → toStreamEvent) and
    * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
    */
-  async sendPrompt(params: SendPromptParams): Promise<void> {
+  async sendPrompt(params: SendPromptParams): Promise<ServerDefaultOperationSettlement | void> {
     const session = this.sessions.get(params.sessionId);
     if (session) session.cancelledByUs = false;
     const serverDefaultApiConfig = session?.serverDefaultApiConfig;
@@ -1414,6 +1473,7 @@ export default class HeterogeneousAgentCtr {
       topicId: params.topicId,
     });
     let result: 'done' | 'error' = 'error';
+    let settlement: ServerDefaultOperationSettlement | void;
     try {
       if (session.cancelledByUs) {
         await this.completeCancelledSessionBeforeLaunch(session);
@@ -1425,12 +1485,13 @@ export default class HeterogeneousAgentCtr {
       if (!session.cancelledByUs) result = 'done';
     } finally {
       session.serverOperationToken = undefined;
-      await settleServerDefaultOperation(this.remoteServerAuth, {
+      settlement = await settleServerDefaultOperation(this.remoteServerAuth, {
         cancelled: session.cancelledByUs,
         operationId: params.operationId,
         result,
       }).catch((error) => logger.warn('Failed to settle server-default operation:', error));
     }
+    return settlement;
   }
 
   private async sendPromptImpl(params: SendPromptParams): Promise<void> {
@@ -1535,6 +1596,10 @@ export default class HeterogeneousAgentCtr {
 
     if (session.agentType === 'droid') {
       return this.sendPromptWithDroidAcp(params, session);
+    }
+
+    if (session.agentType === 'devin') {
+      return this.sendPromptWithDevinAcp(params, session);
     }
 
     if (session.agentType === 'trae') {
@@ -2173,44 +2238,16 @@ export default class HeterogeneousAgentCtr {
     });
     session.cursorAcpSession = cursorAcpSession;
 
-    try {
-      await cursorAcpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport: 'cursor-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: this.getErrorMessage(error),
-        transport: 'cursor-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = isCursorAcpSessionNotFoundError(error)
-        ? error
-        : stderr
-          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-              cause: error,
-            })
-          : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await intervention.cleanup();
-      if (session.cursorAcpSession === cursorAcpSession) session.cursorAcpSession = undefined;
-    }
+    await this.runInteractiveAcpSession({
+      acpSession: cursorAcpSession,
+      activeSessionKey: 'cursorAcpSession',
+      cleanup: intervention.cleanup,
+      isResumeError: isCursorAcpSessionNotFoundError,
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'cursor-acp',
+    });
   }
 
   private async sendPromptWithDroidAcp(
@@ -2320,6 +2357,150 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private async sendPromptWithDevinAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildDevinAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildDevinAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const stderrChunks: string[] = [];
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'devin',
+    );
+    const devinAcpSession = new DevinAcpSession({
+      args: session.args,
+      askUserBridge: intervention.bridge,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialModel: session.model,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'devin-acp';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.devinAcpSession = devinAcpSession;
+
+    await this.runInteractiveAcpSession({
+      acpSession: devinAcpSession,
+      activeSessionKey: 'devinAcpSession',
+      cleanup: intervention.cleanup,
+      isResumeError: isDevinAcpSessionNotFoundError,
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'devin-acp',
+    });
+  }
+
+  private async runInteractiveAcpSession({
+    acpSession,
+    activeSessionKey,
+    cleanup,
+    isResumeError,
+    session,
+    stderrChunks,
+    traceSession,
+    transport,
+  }: {
+    acpSession: InteractiveAcpSession;
+    activeSessionKey: 'cursorAcpSession' | 'devinAcpSession' | 'traeAcpSession';
+    cleanup?: () => Promise<void>;
+    isResumeError?: (error: unknown) => boolean;
+    session: AgentSession;
+    stderrChunks: string[];
+    traceSession: CliTraceSession | undefined;
+    transport: 'cursor-acp' | 'devin-acp' | 'trae-acp';
+  }): Promise<void> {
+    try {
+      await acpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport,
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport,
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = isResumeError?.(error)
+        ? error
+        : stderr
+          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+              cause: error,
+            })
+          : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await cleanup?.();
+      if (activeSessionKey === 'cursorAcpSession' && session.cursorAcpSession === acpSession) {
+        session.cursorAcpSession = undefined;
+      } else if (activeSessionKey === 'devinAcpSession' && session.devinAcpSession === acpSession) {
+        session.devinAcpSession = undefined;
+      } else if (activeSessionKey === 'traeAcpSession' && session.traeAcpSession === acpSession) {
+        session.traeAcpSession = undefined;
+      }
+    }
+  }
+
   private async sendPromptWithTraeAcp(
     params: SendPromptParams,
     session: AgentSession,
@@ -2382,42 +2563,17 @@ export default class HeterogeneousAgentCtr {
     });
     session.traeAcpSession = traeAcpSession;
 
-    try {
-      await traeAcpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport: 'trae-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: this.getErrorMessage(error),
-        transport: 'trae-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = stderr
-        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-            cause: error,
-          })
-        : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await session.hostedProviderBinding?.cleanup();
-      if (session.traeAcpSession === traeAcpSession) session.traeAcpSession = undefined;
-    }
+    await this.runInteractiveAcpSession({
+      acpSession: traeAcpSession,
+      activeSessionKey: 'traeAcpSession',
+      cleanup: async () => {
+        await session.hostedProviderBinding?.cleanup();
+      },
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'trae-acp',
+    });
   }
 
   private async verifyCodexSessionModel({
@@ -2838,6 +2994,39 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private isProcessGroupAlive(pid: number): boolean {
+    try {
+      process.kill(-pid, 0);
+      return true;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+    }
+  }
+
+  private async waitForProcessTreeExit(
+    task: LhHeteroExecTask,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    if (process.platform === 'win32') {
+      let timer: NodeJS.Timeout | undefined;
+      const timedOut = new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      });
+      const exited = await Promise.race([task.exit.then(() => true as const), timedOut]);
+      if (timer) clearTimeout(timer);
+      return exited;
+    }
+    if (!task.process.pid) return true;
+
+    const deadline = Date.now() + timeoutMs;
+    while (this.isProcessGroupAlive(task.process.pid)) {
+      if (Date.now() >= deadline) return false;
+      await sleep(50);
+    }
+
+    return true;
+  }
+
   /**
    * Waits for a spawned CLI process to release its OS process handle.
    *
@@ -2904,6 +3093,10 @@ export default class HeterogeneousAgentCtr {
     if (!session) return;
 
     session.cancelledByUs = true;
+    if (session.devinAcpSession) {
+      session.devinAcpSession.interrupt();
+      return;
+    }
     if (session.grokAcpSession) {
       session.grokAcpSession.interrupt();
       return;
@@ -2961,6 +3154,11 @@ export default class HeterogeneousAgentCtr {
   async stopSession(params: StopSessionParams): Promise<void> {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
+
+    if (session.devinAcpSession) {
+      session.cancelledByUs = true;
+      session.devinAcpSession.close();
+    }
 
     if (session.grokAcpSession) {
       session.cancelledByUs = true;
@@ -3067,6 +3265,10 @@ export default class HeterogeneousAgentCtr {
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
         session.hostedProviderBinding?.cleanupSync();
+        if (session.devinAcpSession) {
+          session.cancelledByUs = true;
+          session.devinAcpSession.close();
+        }
         if (session.grokAcpSession) {
           session.cancelledByUs = true;
           session.grokAcpSession.close();
@@ -3152,6 +3354,12 @@ export default class HeterogeneousAgentCtr {
     topicId: string;
     /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
     workspaceId?: string;
+    /**
+     * Called once the child process has spawned (pid available). The caller
+     * (gateway dispatcher) uses this to register the process so a later
+     * `cancelHeteroTask` can kill it by operationId.
+     */
+    onChildSpawned?: (child: ChildProcess) => void;
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
@@ -3161,6 +3369,7 @@ export default class HeterogeneousAgentCtr {
       imageList,
       jwt,
       operationId,
+      onChildSpawned,
       prompt,
       resumeFallbackSystemContext,
       resumeSessionId,
@@ -3225,6 +3434,7 @@ export default class HeterogeneousAgentCtr {
       ...process.env,
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ELECTRON_RUN_AS_NODE: '1',
+      [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
       LOBEHUB_JWT: jwt,
       ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
@@ -3239,16 +3449,22 @@ export default class HeterogeneousAgentCtr {
     // Execute the CLI shipped with this desktop build. A bare `lh` would prefer
     // an older global install earlier on PATH, letting model discovery report a
     // capability that the actual execution runtime does not support.
+    // `detached: true` puts the CLI in its own process group so
+    // `killPlatformProcessTree(-pid, signal)` reaches the CLI and its children;
+    // the inherited-group env contract prevents the inner agent from detaching
+    // into a second, unreachable group.
     const child = spawn(process.execPath, [cliScript, ...args], {
       cwd: spawnCwd,
+      detached: true,
       env,
       stdio: ['pipe', 'inherit', 'inherit'],
+      windowsHide: true,
     });
 
-    // Keep the wrapper reachable by the gateway cancellation tool. The wrapper
-    // owns the inner agent handle and forwards SIGINT/SIGTERM into the native
-    // CLI process group, so signalling this process is the only reliable way
-    // to release a Codex thread writer before a replacement turn starts.
+    // Keep the wrapper reachable by the gateway cancellation tool. Its pid is
+    // also the inherited process-group id shared by the native agent and tool
+    // descendants, so the gateway can confirm the complete writer tree exited
+    // before a replacement turn starts.
     const exit = new Promise<void>((resolve) => {
       child.once('exit', () => resolve());
       child.once('error', () => resolve());
@@ -3286,6 +3502,12 @@ export default class HeterogeneousAgentCtr {
       });
 
       child.once('spawn', () => {
+        // Register the child with the gateway's platform task registry so a
+        // later `cancelHeteroTask` (triggered by the user clicking Stop in the
+        // web UI) can find and kill this process by operationId. Without this
+        // the CLI keeps running after the user cancels — the server only marks
+        // its own operation state as interrupted, never signalling the device.
+        onChildSpawned?.(child);
         try {
           child.stdin.write(stdinPayload);
           child.stdin.end();
@@ -3324,7 +3546,7 @@ export default class HeterogeneousAgentCtr {
    */
   async cancelLhHeteroExec(params: {
     operationId: string;
-    signal?: NodeJS.Signals;
+    signal?: HeterogeneousAgentCancellationSignal;
   }): Promise<LhHeteroExecCancellationResult | undefined> {
     const { operationId, signal = 'SIGINT' } = params;
     const task = this.lhHeteroExecTasks.get(operationId);
@@ -3332,35 +3554,14 @@ export default class HeterogeneousAgentCtr {
     if (task.cancellation) return task.cancellation;
 
     task.cancellation = (async () => {
-      const waitForExit = async (timeoutMs: number): Promise<boolean> => {
-        // Bound cancellation so an unresponsive wrapper cannot hold the gateway
-        // request forever. The timeout only gates waiting; the second signal below
-        // escalates the inner agent through the wrapper's repeated-SIGINT handler.
-        let timer: NodeJS.Timeout | undefined;
-        const timedOut = new Promise<false>((resolve) => {
-          timer = setTimeout(() => resolve(false), timeoutMs);
-        });
-        const exited = await Promise.race([task.exit.then(() => true as const), timedOut]);
-        if (timer) clearTimeout(timer);
-        return exited;
-      };
-
-      task.process.kill(signal);
-      let exited = await waitForExit(2000);
+      this.killProcessTree(task.process, signal);
+      let exited = await this.waitForProcessTreeExit(task, 2000);
 
       if (!exited) {
-        // `lh hetero exec` treats a repeated SIGINT as an explicit SIGKILL of the
-        // inner native process group. Give that path a short drain window so its
-        // heteroFinish callback can settle before the replacement starts.
-        task.process.kill(signal === 'SIGINT' ? 'SIGINT' : 'SIGKILL');
-        exited = await waitForExit(2000);
-      }
-
-      if (!exited) {
-        // Last resort: terminate the wrapper itself. This is intentionally after
-        // the cooperative path because a direct SIGKILL cannot run its finish hook.
-        task.process.kill('SIGKILL');
-        exited = await waitForExit(1000);
+        // The wrapper and native agent inherit one detached group. Escalate that
+        // complete group instead of relying on a second wrapper-only SIGINT.
+        this.killProcessTree(task.process, 'SIGKILL');
+        exited = await this.waitForProcessTreeExit(task, 3000);
       }
 
       return { exited, pid: task.process.pid, signal };

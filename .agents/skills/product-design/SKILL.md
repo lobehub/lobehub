@@ -1,6 +1,6 @@
 ---
 name: product-design
-description: 'Turn a vague product ask ("this page feels wrong", "we need a team view") into a grounded, shippable design by establishing business semantics and the user task before proposing a surface. Use when scoping a new surface, redesigning an existing one, or deciding what a feature should be. Not for auditing a built screen (ux-audit) or choosing visual details (ux).'
+description: 'Use for new surfaces, redesigns and vague product asks: establish user tasks and business meaning. Built-screen audits and visual polish have separate skills.'
 ---
 
 # Product Design

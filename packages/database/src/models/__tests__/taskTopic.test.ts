@@ -180,6 +180,40 @@ describe('TaskTopicModel', () => {
     });
   });
 
+  describe('cancelRunningByTaskIds', () => {
+    it('cancels running topics across the given tasks and stamps completedAt', async () => {
+      const taskModel = new TaskModel(serverDB, userId);
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const taskA = await taskModel.create({ instruction: 'A' });
+      const taskB = await taskModel.create({ instruction: 'B' });
+      const taskOutside = await taskModel.create({ instruction: 'Outside' });
+      await createTopic('tpc_bulk_a');
+      await createTopic('tpc_bulk_b');
+      await createTopic('tpc_bulk_done');
+      await createTopic('tpc_bulk_outside');
+
+      await topicModel.add(taskA.id, 'tpc_bulk_a', { seq: 1 });
+      await topicModel.add(taskB.id, 'tpc_bulk_b', { seq: 1 });
+      await topicModel.add(taskB.id, 'tpc_bulk_done', { seq: 2 });
+      await topicModel.updateStatus(taskB.id, 'tpc_bulk_done', 'completed');
+      await topicModel.add(taskOutside.id, 'tpc_bulk_outside', { seq: 1 });
+
+      const canceled = await topicModel.cancelRunningByTaskIds([taskA.id, taskB.id]);
+
+      expect(canceled.map(({ topicId }) => topicId).sort()).toEqual(['tpc_bulk_a', 'tpc_bulk_b']);
+      expect((await getTopic('tpc_bulk_a')).completedAt).toBeInstanceOf(Date);
+      expect((await getTopic('tpc_bulk_b')).completedAt).toBeInstanceOf(Date);
+
+      const outside = await topicModel.findByTaskId(taskOutside.id);
+      expect(outside[0]!.status).toBe('running');
+    });
+
+    it('returns an empty list for an empty id set', async () => {
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      await expect(topicModel.cancelRunningByTaskIds([])).resolves.toEqual([]);
+    });
+  });
+
   describe('timeoutRunning', () => {
     it('should timeout running topics only', async () => {
       const taskModel = new TaskModel(serverDB, userId);

@@ -24,104 +24,126 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: mockGetLatestNonToolMessageId,
-    getLatestSpineMessageId: mockGetLatestSpineMessageId,
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: mockGetLatestNonToolMessageId,
+      getLatestSpineMessageId: mockGetLatestSpineMessageId,
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(undefined),
-    releaseTaskCallbackReservation: mockReleaseReservation,
-    tryReserveTaskCallback: mockTryReserve,
-    updateMetadata: vi.fn().mockResolvedValue(undefined),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(undefined),
+      releaseTaskCallbackReservation: mockReleaseReservation,
+      tryReserveTaskCallback: mockTryReserve,
+      updateMetadata: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/chatGroup', () => ({
-  ChatGroupModel: vi.fn().mockImplementation(() => ({
-    findById: vi.fn().mockResolvedValue(undefined),
-    getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
-  })),
+  ChatGroupModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: vi.fn().mockResolvedValue(undefined),
+      getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: vi.fn().mockResolvedValue({
-      autoStarted: true,
-      messageId: 'queue-msg-1',
-      operationId: 'op-123',
-      success: true,
-    }),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: vi.fn().mockResolvedValue({
+        autoStarted: true,
+        messageId: 'queue-msg-1',
+        operationId: 'op-123',
+        success: true,
+      }),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({

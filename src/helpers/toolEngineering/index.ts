@@ -1,6 +1,7 @@
 /**
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
@@ -195,10 +196,13 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   // enableChecker rules) — a plugin, skill, connector, or user-toggleable
   // builtin tool the agent has explicitly disabled must not be discoverable/
   // activatable at all, matching the server-side (aiAgent gateway) treatment.
-  const allManifests =
-    disabledPluginIds.length === 0
-      ? combinedManifests
-      : combinedManifests.filter((m) => !disabledPluginIds.includes(m.identifier));
+  // Explicit activation bypasses enable rules; a plain Web client must not
+  // acquire the Electron IPC executor. Gateway execution uses the server engine.
+  const allManifests = combinedManifests.filter(
+    (m) =>
+      !disabledPluginIds.includes(m.identifier) &&
+      (m.identifier !== AuvManifest.identifier || isToolAvailableInCurrentEnv(m.identifier)),
+  );
 
   return new ToolsEngine({
     defaultToolIds,

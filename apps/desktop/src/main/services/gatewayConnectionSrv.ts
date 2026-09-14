@@ -691,6 +691,10 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── System Info ───
 
+  /**
+   * Triggering workflow: gateway `system_info_request` -> handleSystemInfoRequest
+   * -> {@link GatewayClient.sendSystemInfoResponse}, including desktop tool support.
+   */
   private async handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
     logger.info(`Received system_info_request: requestId=${request.requestId}`);
     const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
@@ -699,6 +703,7 @@ export default class GatewayConnectionService extends ServiceModule {
       result: {
         success: true,
         systemInfo: {
+          supportedTools: ['lobe-computer-use'],
           arch: os.arch(),
           // Tell the server-side prompt builder which shell runCommand spawns here.
           defaultShell: (await getShellInfo()).displayName,

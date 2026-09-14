@@ -1,6 +1,6 @@
 import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { CreateThreadWithMessageParams } from '../aiChat';
-import type { WorkingDirConfig } from '../device';
+import type { DeviceUnavailableErrorData, WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
@@ -174,6 +174,12 @@ export interface ExecAgentAppContext {
   threadId?: string | null;
   /** Topic ID */
   topicId?: string | null;
+  /**
+   * Goal detail page the conversation is happening on. The server builds
+   * `RuntimeInitialContext.goalOverview` from the goal graph so the agent can
+   * answer progress questions without tool calls.
+   */
+  viewedGoal?: { goalId: string };
 }
 
 /**
@@ -297,9 +303,7 @@ export interface ScheduleAgentRunResult {
   topicId: string;
 }
 
-/**
- * Response from execAgent
- */
+/** Response from execAgent. */
 export interface ExecAgentResult {
   /** The resolved agent ID */
   agentId: string;
@@ -313,6 +317,8 @@ export interface ExecAgentResult {
   createdThreadId?: string;
   /** Error message if operation failed to start */
   error?: string;
+  /** Structured availability context when a device dispatch failed before acceptance. */
+  errorData?: DeviceUnavailableErrorData;
   /**
    * External heterogeneous producer for this run. `null` explicitly denotes
    * the normal AgentRuntime path; `undefined` is reserved for rolling clients

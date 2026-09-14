@@ -40,9 +40,10 @@ const ModelSwitch = memo(() => {
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
-  // Reasoning effort is a per-model user preference, so it rides along with the
-  // model trigger instead of claiming a second action slot.
-  const effort = useReasoningEffortControl(model, provider);
+  // Reasoning effort rides along with the model trigger instead of claiming a
+  // second action slot. Like the model, it pins to the active topic when there
+  // is one and edits the user's per-model default otherwise.
+  const effort = useReasoningEffortControl(model, provider, activeTopicId ?? undefined);
   // A pinned model still opens the menu when there is an effort to pick there.
   const interactive = canSelectModel || effort.hasReasoningParams;
 
@@ -56,8 +57,9 @@ const ModelSwitch = memo(() => {
     [activeTopicId, canSelectModel, selectModel, updateTopicModel],
   );
 
-  // Both current values in one label, the way the heterogeneous selector reads:
-  // "GPT-5.6 Sol 中". The effort half is dropped for models without one.
+  // Both current values on one chip, the way the heterogeneous selector reads:
+  // "GPT-5.6 Sol 中". The effort half is dropped for models without one; the
+  // chip keeps the two halves apart so the effort is never ellipsised away.
   const effortLabel = effort.effortValue
     ? t(`reasoningEffort.levels.${effort.effortValue}`)
     : undefined;
@@ -67,7 +69,8 @@ const ModelSwitch = memo(() => {
     <SelectorTrigger
       aria-disabled={!interactive}
       ariaLabel={triggerText}
-      text={triggerText}
+      secondaryText={effortLabel}
+      text={displayName}
       {...(interactive ? {} : { style: { cursor: 'default' } })}
     />
   );

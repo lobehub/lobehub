@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
+import { messageService } from '@/services/message';
+import { workService } from '@/services/work';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
@@ -102,6 +104,10 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 // the notification branch. The service is dynamically imported inside executeClientAgent.
 const desktopFlag = vi.hoisted(() => ({ value: false }));
 const desktopNotificationMock = vi.hoisted(() => ({ showNotification: vi.fn() }));
+const completionSoundMock = vi.hoisted(() => ({
+  getNotificationSoundFile: vi.fn(),
+  play: vi.fn(),
+}));
 vi.mock('@lobechat/const', async (importOriginal) => {
   const actual = await importOriginal<typeof LobeChatConst>();
   return {
@@ -113,6 +119,9 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 });
 vi.mock('@/services/electron/desktopNotification', () => ({
   desktopNotificationService: desktopNotificationMock,
+}));
+vi.mock('@/services/electron/completionSound', () => ({
+  completionSoundService: completionSoundMock,
 }));
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: () => ({
@@ -187,7 +196,10 @@ beforeEach(() => {
   resetTestEnvironment();
   setupMockSelectors();
   spyOnMessageService();
+  vi.spyOn(workService, 'listByRootOperation').mockResolvedValue([]);
   desktopFlag.value = false;
+  completionSoundMock.getNotificationSoundFile.mockReset().mockResolvedValue(undefined);
+  completionSoundMock.play.mockReset().mockResolvedValue(undefined);
   serverConfigMock.enableMultimodalUnderstanding = false;
 
   act(() => {
@@ -209,61 +221,106 @@ afterEach(() => {
 });
 
 describe('StreamingExecutor actions', () => {
+  it('keeps the original source message when initializing and resuming a run', () => {
+    const params = {
+      agentId: TEST_IDS.SESSION_ID,
+      messages: [],
+      parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+      topicId: TEST_IDS.TOPIC_ID,
+    };
+    const { state } = useChatStore.getState().internal_createAgentState(params);
+    expect(state.metadata?.sourceMessageId).toBe(TEST_IDS.USER_MESSAGE_ID);
+    const resumed = useChatStore.getState().internal_createAgentState({
+      ...params,
+      initialState: state,
+      parentMessageId: 'intermediate-assistant',
+    });
+    expect(resumed.state.metadata?.sourceMessageId).toBe(TEST_IDS.USER_MESSAGE_ID);
+  });
+
   describe('executeClientAgent', () => {
-    it('should handle the core AI message processing', async () => {
-      act(() => {
-        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
-      });
-
-      const { result } = renderHook(() => useChatStore());
-      const userMessage = {
-        id: TEST_IDS.USER_MESSAGE_ID,
-        role: 'user',
-        content: TEST_CONTENT.USER_MESSAGE,
-        sessionId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      } as UIChatMessage;
-      const messages = [userMessage];
-      seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, messages);
-
-      const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
-        await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
-      });
-
-      await act(async () => {
-        await result.current.executeClientAgent({
-          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
-          messages,
-          parentMessageId: userMessage.id,
-          parentMessageType: 'user',
+    it.each([false, true])(
+      'completes the reply and anchors only registered Works (hasWork=%s)',
+      async (hasWork) => {
+        if (hasWork) {
+          vi.mocked(workService.listByRootOperation).mockResolvedValue([
+            { id: 'registered-work' } as Awaited<
+              ReturnType<typeof workService.listByRootOperation>
+            >[number],
+          ]);
+        }
+        act(() => {
+          useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
         });
-      });
 
-      // Verify agent runtime executed successfully
-      expect(streamSpy).toHaveBeenCalled();
-      expect(result.current.refreshMessages).toHaveBeenCalledWith({
-        agentId: TEST_IDS.SESSION_ID,
-        topicId: TEST_IDS.TOPIC_ID,
-      });
+        const { result } = renderHook(() => useChatStore());
+        const userMessage = {
+          id: TEST_IDS.USER_MESSAGE_ID,
+          role: 'user',
+          content: TEST_CONTENT.USER_MESSAGE,
+          sessionId: TEST_IDS.SESSION_ID,
+          topicId: TEST_IDS.TOPIC_ID,
+        } as UIChatMessage;
+        const messages = [userMessage];
+        seedDbMessages({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }, messages);
 
-      // Verify operation was completed
-      const operations = Object.values(result.current.operations);
-      const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
-      expect(execOperation?.status).toBe('completed');
-      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({
+        const streamSpy = spyOnClientLLMStream(async ({ onFinish }) => {
+          await onFinish?.(TEST_CONTENT.AI_RESPONSE, {} as any);
+        });
+
+        await act(async () => {
+          await result.current.executeClientAgent({
+            context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+            messages,
             parentMessageId: userMessage.id,
             parentMessageType: 'user',
-            triggerMessageId: userMessage.id,
-          }),
-          sourceId: `${execOperation?.id}:client:start`,
-          sourceType: 'client.runtime.start',
-        }),
-      );
+          });
+        });
 
-      streamSpy.mockRestore();
-    });
+        // Verify agent runtime executed successfully
+        expect(streamSpy).toHaveBeenCalled();
+        expect(result.current.refreshMessages).toHaveBeenCalledWith({
+          agentId: TEST_IDS.SESSION_ID,
+          topicId: TEST_IDS.TOPIC_ID,
+        });
+
+        // Verify operation was completed
+        const operations = Object.values(result.current.operations);
+        const execOperation = operations.find((op) => op.type === 'execAgentRuntime');
+        expect(execOperation?.status).toBe('completed');
+        expect(workService.listByRootOperation).toHaveBeenCalledWith({
+          limit: 1,
+          rootOperationId: execOperation?.id,
+        });
+        const anchorWrites = vi
+          .mocked(messageService.updateMessageMetadata)
+          .mock.calls.filter(([, metadata]) => metadata.work);
+        expect(anchorWrites).toHaveLength(hasWork ? 1 : 0);
+        if (hasWork) {
+          expect(anchorWrites[0]).toEqual([
+            expect.any(String),
+            { work: { rootOperationId: execOperation?.id, userMessageId: userMessage.id } },
+            { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          ]);
+          expect(
+            vi.mocked(messageService.updateMessageMetadata).mock.invocationCallOrder[0],
+          ).toBeLessThan(vi.mocked(result.current.refreshMessages).mock.invocationCallOrder[0]);
+        }
+        expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              parentMessageId: userMessage.id,
+              parentMessageType: 'user',
+              triggerMessageId: userMessage.id,
+            }),
+            sourceId: `${execOperation?.id}:client:start`,
+            sourceType: 'client.runtime.start',
+          }),
+        );
+
+        streamSpy.mockRestore();
+      },
+    );
 
     it('writes topics.status=running at run start so off-conversation surfaces see it', async () => {
       act(() => {

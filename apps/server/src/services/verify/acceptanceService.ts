@@ -1,6 +1,7 @@
-import { normalizeVerifySurface } from '@lobechat/const/verify';
+import { isDraftVerifyRun, normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
   AcceptanceAttachment,
+  AcceptanceCheckGroup,
   AcceptanceCheckReviewAction,
   AcceptanceConfig,
   AcceptanceRejectIntent,
@@ -143,7 +144,10 @@ const itemSurface = (item: VerifyCheckItem | undefined): VerifySurface | null =>
  *   item's iteration timeline, so a semantically-dead older wording stops
  *   showing up as its own row.
  */
-export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheckRow[] => {
+export const buildAcceptanceCheckUnion = (
+  rounds: RoundInput[],
+  groups: AcceptanceCheckGroup[] = [],
+): AcceptanceCheckRow[] => {
   const ordered = [...rounds].sort((a, b) => (a.run.roundIndex ?? 0) - (b.run.roundIndex ?? 0));
 
   const rows = new Map<string, AcceptanceCheckRow>();
@@ -178,13 +182,21 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     const plan = (run.plan ?? []) as VerifyCheckItem[];
     const planById = new Map(plan.map((item) => [item.id, item]));
     const logicalIdByCheckItemId = new Map(
-      plan.map((item) => [item.id, item.sourceCriterionId ?? item.id]),
+      plan.map((item) => [
+        item.id,
+        item.sourceFlowNode ? item.id : (item.sourceCriterionId ?? item.id),
+      ]),
     );
 
     for (const item of plan) {
-      const logicalId = item.sourceCriterionId ?? item.id;
+      const logicalId = item.sourceFlowNode ? item.id : (item.sourceCriterionId ?? item.id);
       const row = ensureRow(logicalId, roundIndex);
       // The latest snapshot wins: repair rounds may refine method/expected.
+      if (item.sourceFlowNode) {
+        // A rerun is a fresh execution; historical evidence stays in the timeline.
+        row.result = undefined;
+        row.resultRound = undefined;
+      }
       row.planItem = item;
       row.title = item.title;
       row.required = item.required;
@@ -255,7 +267,16 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     }
   }
 
-  return [...rows.values()];
+  // Organization belongs to the current acceptance, not its immutable execution
+  // snapshots. Preserve IDs, numbering and result references when a check moves.
+  const grouped = new Map<string, AcceptanceCheckRow>();
+  for (const group of groups) {
+    for (const id of group.checkItemIds) {
+      const row = rows.get(id);
+      if (row) grouped.set(id, { ...row, category: group.title });
+    }
+  }
+  return [...grouped.values(), ...[...rows.values()].filter((row) => !grouped.has(row.id))];
 };
 
 // ============================================
@@ -314,7 +335,7 @@ export interface AcceptanceCheckReviewOverlay {
  * already folded their results into this row's timeline.
  */
 export const buildCheckReviewOverlay = (
-  check: Pick<AcceptanceCheckRow, 'timeline'>,
+  check: Pick<AcceptanceCheckRow, 'timeline'> & Partial<Pick<AcceptanceCheckRow, 'planItem'>>,
   resultsById: Map<string, VerifyCheckResultItem>,
   currentRoundIndex: number,
 ): AcceptanceCheckReviewOverlay => {
@@ -353,7 +374,9 @@ export const buildCheckReviewOverlay = (
       comment: latest.comment,
       createdAt: latest.createdAt,
       roundIndex: latest.roundIndex,
-      stale: latest.action === 'reject' && latest.roundIndex < currentRoundIndex,
+      stale:
+        (Boolean(check.planItem?.sourceFlowNode) || latest.action === 'reject') &&
+        latest.roundIndex < currentRoundIndex,
     },
   };
 };
@@ -480,7 +503,9 @@ export class AcceptanceService {
         return task ? { title: task.name ?? task.identifier } : null;
       }
       case 'topic': {
-        const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findById(
+        // Creator-facing lookup: an agent-share visitor topic must not be
+        // treated as a valid acceptance subject for the creator.
+        const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicById(
           subjectId,
         );
         return topic ? { title: topic.title ?? null } : null;
@@ -581,7 +606,7 @@ export class AcceptanceService {
     // physical ids alone lets both routes write into a settled row unblocked.
     const candidates = new Map<string, string>();
     for (const item of run.plan ?? []) {
-      const logicalId = item.sourceCriterionId ?? item.id;
+      const logicalId = item.sourceFlowNode ? item.id : (item.sourceCriterionId ?? item.id);
       if (logicalId) candidates.set(logicalId, item.id);
       if (item.id) candidates.set(item.id, item.id);
       for (const superseded of item.supersedes ?? []) {
@@ -662,6 +687,24 @@ export class AcceptanceService {
     }
 
     await this.assertPlanLeavesAcceptedChecksAlone(existing, acceptanceId);
+
+    // A round that is still only planned has nothing to preserve: the incoming
+    // run folds into it instead of pushing the ledger to yet another number.
+    // Only the newest round counts — `listByAcceptance` is ascending, and an
+    // older draft the chain has moved past is an abandoned ledger position.
+    const latest = (await this.runModel.listByAcceptance(acceptanceId)).at(-1);
+    const draft = latest && isDraftVerifyRun(latest) ? latest : undefined;
+    if (draft) {
+      const folded = await this.runModel.foldIntoRound(runId, draft.id);
+      await this.recomputeStatus(acceptanceId);
+      log(
+        'run %s folded into draft round %d of acceptance %s',
+        runId,
+        folded.roundIndex,
+        acceptanceId,
+      );
+      return folded;
+    }
 
     // Rounds inherit the aggregate's visibility so a private acceptance's new
     // round never leaks through its own report URL.
@@ -753,6 +796,41 @@ export class AcceptanceService {
     return runs.at(-1) ?? null;
   };
 
+  regroupChecks = async (
+    acceptanceId: string,
+    groups: AcceptanceCheckGroup[],
+    expectedVersion: number,
+  ) => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) throw new Error('Acceptance not found');
+    const { results, runs } = await this.loadRounds(acceptanceId);
+    const resultsByRun = new Map<string, VerifyCheckResultItem[]>();
+    for (const result of results) {
+      const bucket = resultsByRun.get(result.verifyRunId!) ?? [];
+      bucket.push(result);
+      resultsByRun.set(result.verifyRunId!, bucket);
+    }
+    const checks = buildAcceptanceCheckUnion(
+      runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+    );
+    const known = new Set(checks.map((check) => check.id));
+    const assigned = new Set<string>();
+    const titles = new Set<string>();
+    const normalized = groups.map((group) => {
+      const title = group.title.trim();
+      if (!title || titles.has(title) || group.checkItemIds.length === 0)
+        throw new Error('Check groups need unique, non-empty titles and members');
+      titles.add(title);
+      for (const id of group.checkItemIds) {
+        if (!known.has(id)) throw new Error(`Unknown check item: ${id}`);
+        if (assigned.has(id)) throw new Error(`Check assigned to multiple groups: ${id}`);
+        assigned.add(id);
+      }
+      return { ...group, title };
+    });
+    return this.acceptanceModel.setCheckGroups(acceptanceId, normalized, expectedVersion);
+  };
+
   /**
    * The user accepts the delivery — the terminal business event (P-12). Stamps
    * the decision on the current round, closes the aggregate, and best-effort
@@ -776,7 +854,7 @@ export class AcceptanceService {
    * agent-bound rounds via the repair pipeline, for ingested rounds via the
    * next `lh verify ingest-report`.)
    *
-   * A Goal Work Task is no exception: its next attempt is started by the Goal
+   * A Goal Task is no exception: its next attempt is started by the Goal
    * coordinator on the following tick, which reads the rejected round's
    * decision detail through the prompt builder.
    */
@@ -1027,7 +1105,9 @@ export class AcceptanceService {
         new TaskModel(this.db, this.userId, this.workspaceId).resolveMany(
           idsByType.get('task') ?? [],
         ),
-        new TopicModel(this.db, this.userId, this.workspaceId).findByIds(
+        // Creator-facing lookup: exclude agent-share visitor topics from the
+        // subject summary batch.
+        new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicsByIds(
           idsByType.get('topic') ?? [],
         ),
         new DocumentModel(this.db, this.userId, this.workspaceId).findByIds(
@@ -1144,6 +1224,7 @@ export class AcceptanceService {
     options: {
       filter?: 'active' | 'all' | 'completed';
       limit?: number;
+      projectId?: string;
       q?: string;
     } = {},
   ) => {
@@ -1158,6 +1239,7 @@ export class AcceptanceService {
       limit: normalizedQuery ? undefined : limit,
       statuses,
       unbounded: Boolean(normalizedQuery),
+      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
     const subjects = await this.resolveSubjects(candidates);
     const withSubjects = candidates.map((row) => ({
@@ -1199,11 +1281,13 @@ export class AcceptanceService {
     cursor?: string;
     filter?: AcceptanceListFilter;
     limit?: number;
+    projectId?: string;
   }) => {
     const { items, nextCursor } = await this.acceptanceModel.queryPage({
       cursor: options.cursor,
       limit: options.limit,
       statuses: statusesForFilter(options.filter ?? 'all'),
+      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
 
     const subjects = await this.resolveSubjects(items);

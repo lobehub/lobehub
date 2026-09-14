@@ -93,8 +93,15 @@ export default {
     '{{actorLabel}} replied to your comment in "{{documentTitle}}".',
   'document_comment_activity_replied_title': 'New reply to your comment',
   'document_comment_activity_title': 'New comment on your document',
+  'document_comment_activity_thread':
+    '{{actorLabel}} replied in a comment thread you\'re part of in "{{documentTitle}}".',
+  'document_comment_activity_thread_title': 'New reply in your comment thread',
   'document_comment_mentioned': '{{actorLabel}} mentioned you in a comment on "{{documentTitle}}".',
   'document_comment_mentioned_title': 'You were mentioned in a document comment',
+  'document_mentioned': '{{actorLabel}} mentioned you in "{{documentTitle}}".',
+  'document_mentioned_title': 'You were mentioned in a document',
+  'document_liked': '{{actorLabel}} liked your document "{{documentTitle}}".',
+  'document_liked_title': 'Someone liked your document',
   'subscription_payment_failed':
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',
@@ -110,6 +117,12 @@ export default {
   'subscription_renewed':
     'Your {{plan}} subscription has renewed and your subscription credits were reset for the new billing cycle.',
   'subscription_renewed_title': 'Subscription renewed',
+  'task_assigned': '{{actorLabel}} assigned you the task "{{taskTitle}}".',
+  'task_assigned_title': "You've been assigned a task",
+  'task_comment_activity': '{{actorLabel}} commented on the task "{{taskTitle}}".',
+  'task_comment_activity_title': 'New comment on your task',
+  'task_comment_mentioned': '{{actorLabel}} mentioned you in a comment on task "{{taskTitle}}".',
+  'task_comment_mentioned_title': 'You were mentioned in a task comment',
   'topic_comment_activity': '{{actorLabel}} commented in a topic you participate in.',
   'topic_comment_activity_message': '{{actorLabel}} commented on your message.',
   'topic_comment_activity_message_title': 'New comment on your message',

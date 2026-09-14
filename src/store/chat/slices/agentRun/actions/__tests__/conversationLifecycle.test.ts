@@ -10,6 +10,8 @@ import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type {
@@ -58,6 +60,14 @@ vi.mock('@/services/resourcePermission', () => ({
 
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: mockLocalFileService,
+}));
+
+vi.mock('@/store/tool/slices/builtin/loadBuiltinSkills', () => ({
+  loadBuiltinSkill: async (identifier: string) =>
+    toolStoreModule
+      .getToolStoreState()
+      .builtinSkills.find((skill: any) => skill.identifier === identifier),
+  loadBuiltinSkills: async () => toolStoreModule.getToolStoreState().builtinSkills,
 }));
 
 // Mock lambdaClient to prevent network requests
@@ -1517,6 +1527,18 @@ describe('ConversationLifecycle actions', () => {
       it('should snapshot the agent model onto the newTopic (top-level) when the send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        let loaded = false;
+        vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
+        vi.spyOn(useAiInfraStore.getState(), 'ensureModelReasoningConfig').mockImplementation(
+          async () => {
+            await Promise.resolve();
+            loaded = true;
+          },
+        );
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'high',
+        }));
         const newTopicId = TEST_IDS.NEW_TOPIC_ID;
 
         act(() => {
@@ -1560,6 +1582,7 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageInServerSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             newTopic: expect.objectContaining({
+              metadata: expect.objectContaining({ reasoningConfig: { reasoningEffort: 'high' } }),
               model: expect.any(String),
               provider: expect.any(String),
             }),
@@ -1876,6 +1899,7 @@ describe('ConversationLifecycle actions', () => {
             model: expect.any(String),
             provider: expect.any(String),
             metadata: {
+              executionConfig: { inheritWorkspaceScope: true },
               repos: [selectedRepo],
               workingDirectory: selectedRepo,
               workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
@@ -1888,6 +1912,7 @@ describe('ConversationLifecycle actions', () => {
               model: expect.any(String),
               provider: expect.any(String),
               metadata: {
+                executionConfig: { inheritWorkspaceScope: true },
                 repos: [selectedRepo],
                 workingDirectory: selectedRepo,
                 workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
@@ -1977,6 +2002,11 @@ describe('ConversationLifecycle actions', () => {
         // run executes in); the config keeps the SOURCE repo, which is what
         // By-Project groups on.
         const expectedMetadata = {
+          executionConfig: {
+            boundDeviceId: deviceId,
+            executionTarget: 'local',
+            inheritWorkspaceScope: true,
+          },
           workingDirectory: worktreePath,
           workingDirectoryConfig: {
             git: { activeWorktree: worktreePath },
@@ -2043,6 +2073,11 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             optimisticTopic: expect.objectContaining({
               metadata: {
+                executionConfig: {
+                  boundDeviceId: deviceId,
+                  executionTarget: 'device',
+                  inheritWorkspaceScope: true,
+                },
                 workingDirectory: '/repo/default',
                 workingDirectoryConfig: { path: '/repo/default' },
               },
@@ -2096,6 +2131,11 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             newTopic: expect.objectContaining({
               metadata: {
+                executionConfig: {
+                  boundDeviceId: deviceId,
+                  executionTarget: 'local',
+                  inheritWorkspaceScope: true,
+                },
                 workingDirectory: '/repo/lobehub',
                 workingDirectoryConfig: { path: '/repo/lobehub' },
               },
@@ -2148,7 +2188,15 @@ describe('ConversationLifecycle actions', () => {
 
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
           expect.objectContaining({
-            optimisticTopic: expect.not.objectContaining({ metadata: expect.anything() }),
+            optimisticTopic: expect.objectContaining({
+              metadata: {
+                executionConfig: {
+                  boundDeviceId: deviceId,
+                  executionTarget: 'local',
+                  inheritWorkspaceScope: true,
+                },
+              },
+            }),
           }),
         );
       });
@@ -2207,6 +2255,16 @@ describe('ConversationLifecycle actions', () => {
           window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
         });
 
+        it('snapshots the heterogeneous effort into the first-send topic', async () => {
+          const sendSpy = setupHeteroRun({
+            heterogeneousProvider: { command: 'codex', effort: 'high', type: 'codex' },
+          });
+          await sendHeteroMessage();
+          expect(sendSpy.mock.calls[0][0].newTopic?.metadata).toMatchObject({
+            heteroEffort: 'high',
+          });
+        });
+
         it('prefers the bound device defaultCwd over the desktop fallback', async () => {
           const sendMessageInServerSpy = setupHeteroRun();
           act(() => {
@@ -2233,6 +2291,11 @@ describe('ConversationLifecycle actions', () => {
             expect.objectContaining({
               newTopic: expect.objectContaining({
                 metadata: {
+                  executionConfig: {
+                    boundDeviceId: HETERO_DEVICE_ID,
+                    executionTarget: 'local',
+                    inheritWorkspaceScope: true,
+                  },
                   workingDirectory: '/repo/device-default',
                   workingDirectoryConfig: { path: '/repo/device-default' },
                 },

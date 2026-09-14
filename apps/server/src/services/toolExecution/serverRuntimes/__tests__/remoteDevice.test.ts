@@ -17,11 +17,13 @@ const mockQueryPersonal = vi.fn();
 const mockQueryWorkspaceDevices = vi.fn();
 const mockQueryWorkspaceHiddenDeviceIds = vi.fn();
 vi.mock('@/database/models/device', () => ({
-  DeviceModel: vi.fn().mockImplementation(() => ({
-    queryPersonal: mockQueryPersonal,
-    queryWorkspaceDevices: mockQueryWorkspaceDevices,
-    queryWorkspaceHiddenDeviceIds: mockQueryWorkspaceHiddenDeviceIds,
-  })),
+  DeviceModel: vi.fn().mockImplementation(function () {
+    return {
+      queryPersonal: mockQueryPersonal,
+      queryWorkspaceDevices: mockQueryWorkspaceDevices,
+      queryWorkspaceHiddenDeviceIds: mockQueryWorkspaceHiddenDeviceIds,
+    };
+  }),
 }));
 
 // Import after mock setup
@@ -76,6 +78,30 @@ describe('remoteDeviceRuntime', () => {
       expect(runtime).toBeInstanceOf(RemoteDeviceExecutionRuntime);
     });
 
+    /** @example Workspace discovery without a registry connection fails closed. */
+    it('does not expose raw workspace Gateway devices when the database is unavailable', async () => {
+      mockQueryDeviceList.mockResolvedValue([
+        {
+          deviceId: 'gateway-only-workspace-device',
+          hostname: 'stale-client',
+          lastSeen: '2026-09-09T00:00:00.000Z',
+          online: true,
+          platform: 'darwin',
+        },
+      ]);
+      const context: ToolExecutionContext = {
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      };
+
+      const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
+      const result = await runtime.listOnlineDevices();
+
+      expect(mockQueryDeviceList).not.toHaveBeenCalled();
+      expect(result.state).toEqual({ devices: [] });
+    });
+
     it('should query only the personal pool when no workspaceId is in context', async () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
@@ -104,6 +130,7 @@ describe('remoteDeviceRuntime', () => {
 
     it('lists ONLY workspace devices in a workspace run (personal devices excluded)', async () => {
       const context: ToolExecutionContext = {
+        serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
         userId: 'user-1',
         workspaceId: 'ws-1',
@@ -124,9 +151,12 @@ describe('remoteDeviceRuntime', () => {
         platform: 'darwin',
       };
 
-      mockQueryDeviceList.mockImplementation((_userId: string, wsId?: string) =>
-        Promise.resolve(wsId ? [workspaceDevice] : [personalDevice]),
-      );
+      mockQueryDeviceList.mockImplementation(function (_userId: string, wsId?: string) {
+        return Promise.resolve(wsId ? [workspaceDevice] : [personalDevice]);
+      });
+      mockQueryWorkspaceDevices.mockResolvedValue([
+        { ...workspaceDevice, lastSeenAt: new Date(workspaceDevice.lastSeen) },
+      ]);
 
       const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
 
@@ -166,9 +196,12 @@ describe('remoteDeviceRuntime', () => {
         online: true,
         platform: 'darwin',
       };
-      mockQueryDeviceList.mockImplementation((_userId: string, wsId?: string) =>
-        Promise.resolve(wsId ? [workspaceDevice] : [personalDevice]),
-      );
+      mockQueryDeviceList.mockImplementation(function (_userId: string, wsId?: string) {
+        return Promise.resolve(wsId ? [workspaceDevice] : [personalDevice]);
+      });
+      mockQueryWorkspaceDevices.mockResolvedValue([
+        { ...workspaceDevice, lastSeenAt: new Date(workspaceDevice.lastSeen) },
+      ]);
 
       const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
 
@@ -221,9 +254,9 @@ describe('remoteDeviceRuntime', () => {
         online: true,
         platform: 'linux',
       };
-      mockQueryDeviceList.mockImplementation((_userId: string, wsId?: string) =>
-        Promise.resolve(wsId ? [gatewayWorkspaceDevice] : []),
-      );
+      mockQueryDeviceList.mockImplementation(function (_userId: string, wsId?: string) {
+        return Promise.resolve(wsId ? [gatewayWorkspaceDevice] : []);
+      });
       mockQueryWorkspaceDevices.mockResolvedValue([
         {
           deviceId: 'd-ws',
@@ -249,10 +282,8 @@ describe('remoteDeviceRuntime', () => {
       });
     });
 
-    it('still returns gateway devices when the DB enrichment lookup fails', async () => {
-      // The gateway is authoritative for "online"; a DB failure must degrade to
-      // gateway-only (no alias) rather than blanking the list / disabling
-      // auto-activation.
+    /** @example A registry outage cannot authorize raw workspace Gateway presence. */
+    it('fails closed when the workspace DB lookup fails', async () => {
       const context: ToolExecutionContext = {
         serverDB: makeServerDB('ws-1'),
         toolManifestMap: {},
@@ -261,8 +292,8 @@ describe('remoteDeviceRuntime', () => {
       };
 
       mockQueryWorkspaceDevices.mockRejectedValue(new Error('db down'));
-      mockQueryDeviceList.mockImplementation((_userId: string, wsId?: string) =>
-        Promise.resolve(
+      mockQueryDeviceList.mockImplementation(function (_userId: string, wsId?: string) {
+        return Promise.resolve(
           wsId
             ? [
                 {
@@ -274,17 +305,14 @@ describe('remoteDeviceRuntime', () => {
                 },
               ]
             : [],
-        ),
-      );
+        );
+      });
 
       const runtime = remoteDeviceRuntime.factory(context) as RemoteDeviceExecutionRuntime;
       const result = await runtime.listOnlineDevices();
 
-      expect(result.success).toBe(true);
-      const parsed = JSON.parse(result.content);
-      expect(parsed).toEqual([
-        expect.objectContaining({ deviceId: 'd-ws', online: true, scope: 'workspace' }),
-      ]);
+      expect(result.state).toEqual({ devices: [] });
+      expect(result.content).toContain('No online devices found');
     });
   });
 });

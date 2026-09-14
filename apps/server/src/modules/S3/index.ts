@@ -1,10 +1,15 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  paginateListParts,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import mime from 'mime';
@@ -25,6 +30,8 @@ export type FileType = z.infer<typeof fileSchema>;
 
 const DEFAULT_S3_REGION = 'us-east-1';
 const PUBLIC_READ_ACL_HEADER = 'public-read';
+// S3 DeleteObjects rejects more than 1000 keys per request.
+const DELETE_OBJECTS_MAX_KEYS = 1000;
 
 const encodeContentDispositionFilename = (fileName: string) =>
   encodeURIComponent(fileName || 'download').replaceAll(
@@ -86,18 +93,30 @@ export class S3 {
   }
 
   public async deleteFiles(keys: string[]) {
-    const command = new DeleteObjectsCommand({
-      Bucket: this.bucket,
-      Delete: { Objects: keys.map((key) => ({ Key: key })) },
-    });
+    const batches = [];
+    for (let i = 0; i < keys.length; i += DELETE_OBJECTS_MAX_KEYS) {
+      batches.push(keys.slice(i, i + DELETE_OBJECTS_MAX_KEYS));
+    }
+    if (batches.length === 0) batches.push([]);
 
-    return this.client.send(command);
+    const results = [];
+    for (const batch of batches) {
+      const command = new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Objects: batch.map((key) => ({ Key: key })) },
+      });
+      results.push(await this.client.send(command));
+    }
+
+    return results.at(-1)!;
   }
 
-  public async getFileContent(key: string): Promise<string> {
+  public async getFileContent(key: string, byteLength?: number): Promise<string> {
+    const boundedLength = byteLength ? Math.max(1, Math.floor(byteLength)) : undefined;
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
+      ...(boundedLength ? { Range: `bytes=0-${boundedLength - 1}` } : {}),
     });
 
     const response = await this.client.send(command);
@@ -144,15 +163,19 @@ export class S3 {
     };
   }
 
-  public async createPreSignedUrl(key: string): Promise<string> {
-    const upload = await this.createPreSignedUpload(key);
+  public async createPreSignedUrl(key: string, contentLength?: number): Promise<string> {
+    const upload = await this.createPreSignedUpload(key, contentLength);
     return upload.url;
   }
 
-  public async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
+  public async createPreSignedUpload(
+    key: string,
+    contentLength?: number,
+  ): Promise<PreSignedUpload> {
     const command = new PutObjectCommand({
       ACL: this.setAcl ? PUBLIC_READ_ACL_HEADER : undefined,
       Bucket: this.bucket,
+      ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       Key: key,
     });
 
@@ -162,6 +185,107 @@ export class S3 {
       headers: this.setAcl ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
       url,
     };
+  }
+
+  public async createMultipartUpload(key: string, contentType?: string): Promise<string> {
+    const response = await this.client.send(
+      new CreateMultipartUploadCommand({
+        ACL: this.setAcl ? PUBLIC_READ_ACL_HEADER : undefined,
+        Bucket: this.bucket,
+        ContentType: contentType || undefined,
+        Key: key,
+      }),
+    );
+
+    if (!response.UploadId) throw new Error(`S3 did not return an upload id for ${key}`);
+
+    return response.UploadId;
+  }
+
+  public async createPreSignedUploadPartUrl(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    contentLength?: number,
+  ): Promise<string> {
+    const command = new UploadPartCommand({
+      Bucket: this.bucket,
+      ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
+      Key: key,
+      PartNumber: partNumber,
+      UploadId: uploadId,
+    });
+
+    return getSignedUrl(this.client, command, { expiresIn: 3600 });
+  }
+
+  public async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    expectedPartCount: number,
+    uploadedParts?: Array<{ ETag: string; PartNumber: number }>,
+    expectedFile?: { partSize: number; size: number },
+  ) {
+    const parts: Array<{ ETag: string; PartNumber: number; Size?: number }> =
+      uploadedParts && !expectedFile ? [...uploadedParts] : [];
+
+    if (!uploadedParts || expectedFile) {
+      for await (const page of paginateListParts(
+        { client: this.client },
+        { Bucket: this.bucket, Key: key, UploadId: uploadId },
+      )) {
+        for (const part of page.Parts ?? []) {
+          if (!part.ETag || !part.PartNumber) continue;
+          parts.push({ ETag: part.ETag, PartNumber: part.PartNumber, Size: part.Size });
+        }
+      }
+    }
+
+    parts.sort((a, b) => a.PartNumber - b.PartNumber);
+    const hasAllParts =
+      parts.length === expectedPartCount &&
+      parts.every((part, index) => part.PartNumber === index + 1);
+
+    if (!hasAllParts) {
+      throw new Error(
+        `S3 multipart upload ${uploadId} has ${parts.length}/${expectedPartCount} parts`,
+      );
+    }
+
+    if (expectedFile) {
+      const hasExpectedSizes = parts.every((part, index) => {
+        const expectedSize =
+          index === expectedPartCount - 1
+            ? expectedFile.size - expectedFile.partSize * (expectedPartCount - 1)
+            : expectedFile.partSize;
+        return part.Size === expectedSize;
+      });
+
+      if (!hasExpectedSizes) {
+        throw new Error(`S3 multipart upload ${uploadId} has an unexpected part size`);
+      }
+    }
+
+    return this.client.send(
+      new CompleteMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        MultipartUpload: {
+          Parts: parts.map(({ ETag, PartNumber }) => ({ ETag, PartNumber })),
+        },
+        UploadId: uploadId,
+      }),
+    );
+  }
+
+  public async abortMultipartUpload(key: string, uploadId: string) {
+    return this.client.send(
+      new AbortMultipartUploadCommand({
+        Bucket: this.bucket,
+        Key: key,
+        UploadId: uploadId,
+      }),
+    );
   }
 
   public async createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {

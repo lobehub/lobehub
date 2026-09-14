@@ -25,6 +25,33 @@ afterEach(async () => {
 });
 
 describe('AgentOperationModel', () => {
+  it('matches diagnostic source identity within both topic and owner', async () => {
+    await serverDB.insert(topics).values({ id: 'diagnostic-topic', userId });
+    const model = new AgentOperationModel(serverDB, userId);
+    await model.recordStart({
+      operationId: 'diagnostic-operation',
+      topicId: 'diagnostic-topic',
+      appContext: { sourceMessageId: 'server-incident-message' },
+    });
+    await model.recordStart({
+      operationId: 'unrelated-operation',
+      topicId: 'diagnostic-topic',
+      appContext: { sourceMessageId: 'another-message' },
+    });
+    expect(
+      (await model.findByTopicSourceMessage('diagnostic-topic', 'server-incident-message'))?.id,
+    ).toBe('diagnostic-operation');
+    expect(
+      await model.findByTopicSourceMessage('different-topic', 'server-incident-message'),
+    ).toBeUndefined();
+    expect(
+      await new AgentOperationModel(serverDB, otherUserId).findByTopicSourceMessage(
+        'diagnostic-topic',
+        'server-incident-message',
+      ),
+    ).toBeUndefined();
+  });
+
   describe('recordStart', () => {
     it('inserts a row with status=running and the provided ids', async () => {
       const model = new AgentOperationModel(serverDB, userId);
@@ -183,6 +210,99 @@ describe('AgentOperationModel', () => {
       ).resolves.toBe(false);
       expect((await model.findById(operationId))?.metadata).not.toHaveProperty(
         'agentInterventionPreparation',
+      );
+    });
+  });
+
+  describe('server-default relay invocation attestation', () => {
+    it('records the first accepted invocation and reuses it for matching retries', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-server-default-relay';
+      await model.recordStart({
+        metadata: {
+          agentType: 'trae',
+          preserved: true,
+          serverDefaultHeterogeneous: true,
+        },
+        model: 'gpt-5.4',
+        operationId,
+        provider: 'lobehub',
+      });
+      const first = {
+        acceptedAt: '2026-09-01T00:00:00.000Z',
+        agentType: 'trae',
+        ingress: 'openai-responses' as const,
+        model: 'gpt-5.4',
+        operationId,
+        provider: 'lobehub',
+      };
+
+      await expect(model.recordServerDefaultRelayInvocation(operationId, first)).resolves.toEqual(
+        first,
+      );
+      await expect(
+        model.recordServerDefaultRelayInvocation(operationId, {
+          ...first,
+          acceptedAt: '2026-09-01T00:01:00.000Z',
+        }),
+      ).resolves.toEqual(first);
+
+      expect((await model.findById(operationId))?.metadata).toEqual({
+        agentType: 'trae',
+        preserved: true,
+        serverDefaultHeterogeneous: true,
+        serverDefaultRelayInvocation: first,
+      });
+    });
+
+    it('rejects an unmarked, mismatched, terminal, or foreign operation', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const otherOwner = new AgentOperationModel(serverDB, otherUserId);
+      const invocation = {
+        acceptedAt: '2026-09-01T00:00:00.000Z',
+        agentType: 'trae',
+        ingress: 'openai-responses' as const,
+        model: 'gpt-5.4',
+        operationId: 'op-relay-authority',
+        provider: 'lobehub',
+      };
+
+      await model.recordStart({
+        metadata: { agentType: 'trae' },
+        model: invocation.model,
+        operationId: invocation.operationId,
+        provider: invocation.provider,
+      });
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, invocation),
+      ).resolves.toBeNull();
+
+      await serverDB
+        .update(agentOperations)
+        .set({ metadata: { agentType: 'trae', serverDefaultHeterogeneous: true } })
+        .where(eq(agentOperations.id, invocation.operationId));
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, {
+          ...invocation,
+          model: 'gpt-5.5',
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, {
+          ...invocation,
+          operationId: 'different-operation',
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        otherOwner.recordServerDefaultRelayInvocation(invocation.operationId, invocation),
+      ).resolves.toBeNull();
+
+      await model.settleRunning(invocation.operationId, 'done');
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, invocation),
+      ).resolves.toBeNull();
+      expect((await model.findById(invocation.operationId))?.metadata).not.toHaveProperty(
+        'serverDefaultRelayInvocation',
       );
     });
   });
@@ -564,13 +684,69 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('findOwnOperationById', () => {
+    beforeEach(async () => {
+      await serverDB.insert(topics).values([
+        { id: 'own-tpc', userId },
+        // Agent-share visitor topic: creator's userId + a visitor senderId.
+        { id: 'own-tpc-visitor', senderId: 'visitor-user-x', userId },
+      ]);
+      await serverDB.insert(agentOperations).values([
+        { id: 'op-own', status: 'done', topicId: 'own-tpc', userId },
+        { id: 'op-own-visitor', status: 'done', topicId: 'own-tpc-visitor', userId },
+        { id: 'op-own-topicless', status: 'done', userId },
+      ]);
+    });
+
+    it('hides an operation recorded inside an agent-share visitor topic', async () => {
+      // Visitor runs execute under the creator's identity, so the row passes
+      // ownership — the creator-facing trace lookup must still read it as absent.
+      const model = new AgentOperationModel(serverDB, userId);
+
+      expect(await model.findOwnOperationById('op-own-visitor')).toBeNull();
+      // The runtime lookup keeps working: it drives the visitor's own run.
+      expect(await model.findById('op-own-visitor')).toMatchObject({ id: 'op-own-visitor' });
+    });
+
+    it('returns the creator own operations, topic-bound or not', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      expect(await model.findOwnOperationById('op-own')).toMatchObject({ id: 'op-own' });
+      expect(await model.findOwnOperationById('op-own-topicless')).toMatchObject({
+        id: 'op-own-topicless',
+      });
+    });
+
+    it('does not cross the ownership boundary', async () => {
+      const model = new AgentOperationModel(serverDB, otherUserId);
+
+      expect(await model.findOwnOperationById('op-own')).toBeNull();
+    });
+  });
+
   describe('listByTopic', () => {
     beforeEach(async () => {
       await serverDB.insert(topics).values([
         { id: 'tpc-a', userId },
         { id: 'tpc-b', userId },
         { id: 'tpc-foreign', userId: otherUserId },
+        // Agent-share visitor topic: creator's userId + a visitor senderId.
+        { id: 'tpc-visitor', senderId: 'visitor-user-x', userId },
       ]);
+    });
+
+    it('excludes operations recorded inside an agent-share visitor topic', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      // Visitor runs execute under the creator's identity, so their operation
+      // rows pass the ownership filter — the trace panel must still not expose
+      // a visitor conversation's trajectory.
+      await serverDB
+        .insert(agentOperations)
+        .values([{ id: 'op-visitor', status: 'done', topicId: 'tpc-visitor', userId }]);
+
+      const rows = await model.listByTopic('tpc-visitor');
+      expect(rows).toEqual([]);
     });
 
     it('returns the topic operations newest first, owner-scoped', async () => {

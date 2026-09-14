@@ -1,6 +1,6 @@
 ---
 name: model-bank-metadata
-description: 'Backfill and maintain model-bank metadata (knowledgeCutoff, family, generation). Use when adding models, fixing cutoff/family data, running a metadata sweep across aiModels providers, or researching official knowledge cutoffs.'
+description: 'Use for model knowledgeCutoff, family and generation metadata: onboarding, corrections, research and bulk backfills.'
 user-invocable: false
 ---
 

@@ -25,6 +25,7 @@ import {
   visualizationMetadata,
 } from './verify';
 import { registerAcceptanceCommands } from './verifyAcceptance';
+import { evidenceDescriptionForFile } from './verifyHelpers';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -809,6 +810,41 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     });
   });
 
+  it('reuses the asset when the acceptance row is keyed by criterion rather than plan item', async () => {
+    mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+      acceptance: {
+        id: 'acceptance-existing',
+        status: 'delivered',
+        subjectId: 'subject',
+        subjectType: 'standalone',
+      },
+      checks: [
+        { id: 'criterion-1', planItem: { id: 'stable-check', sourceCriterionId: 'criterion-1' } },
+      ],
+    });
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [{ id: 'stable-check', name: '输入区域可用', status: 'pass' }],
+        plan: [
+          {
+            id: 'stable-check',
+            title: '输入区域可用',
+            verifier: 'agent',
+            method: '打开输入区域',
+            expected: '可以输入',
+          },
+        ],
+      }),
+    );
+    await run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+    expect(mockTrpcClient.verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: [expect.objectContaining({ id: 'stable-check', sourceCriterionId: 'criterion-1' })],
+      }),
+    );
+  });
+
   it('appends a re-verification round directly to an existing acceptance', async () => {
     mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
       acceptance: {
@@ -1416,5 +1452,24 @@ describe('formatAnnotationRegion', () => {
   it('returns undefined when there is no location at all', () => {
     expect(formatAnnotationRegion({ comment: 'just a note' })).toBeUndefined();
     expect(formatAnnotationRegion({ rect: { x: 0.1 } })).toBeUndefined();
+  });
+});
+
+describe('file evidence descriptions', () => {
+  it('preserves an explicit description', () => {
+    expect(evidenceDescriptionForFile('Goal final state', '/tmp/state.json')).toBe(
+      'Goal final state',
+    );
+  });
+
+  it('retains the basename when a file is inlined without a description', () => {
+    expect(evidenceDescriptionForFile(undefined, '/tmp/goal-final-state.json')).toBe(
+      'goal-final-state.json',
+    );
+    expect(evidenceDescriptionForFile('  ', '/tmp/events.json')).toBe('events.json');
+  });
+
+  it('does not invent a description for inline content', () => {
+    expect(evidenceDescriptionForFile(undefined)).toBeUndefined();
   });
 });

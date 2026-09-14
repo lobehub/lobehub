@@ -6,7 +6,7 @@ skill reads it — it never guesses LobeHub's commands.
 
 Its two siblings:
 
-- [`PROCESS.md`](./PROCESS.md) — the run process (approval gate, execution rules,
+- [`PROCESS.md`](./PROCESS.md) — the run process (plan gate, execution rules,
   publishing, teardown).
 - `.agents/skills/acceptance/` — the portable skill: what a check, evidence,
   report, and round are. In this repository that path is a symlink onto the
@@ -251,6 +251,16 @@ stale standalone install: a recently added workspace package fails to resolve �
   login), Vite port, and IPC id. Drive each with a distinct
   `agent-browser --session s<port> --cdp <port>`. Pool design, the collision
   matrix, and the login-copy recipe: `.agents/acceptance/references/multi-instance.md`.
+
+### Heterogeneous-agent compatibility (project skill)
+
+The live official-provider model matrix belongs to the
+`testing-heterogeneous-agents` project skill
+(`.agents/skills/testing-heterogeneous-agents/`). It extends Acceptance with the
+matrix semantics and harness while reusing the Electron environment, auth, and
+CDP commands above. It is manual-only: the user must explicitly invoke
+`/testing-heterogeneous-agents` in Claude Code or `$testing-heterogeneous-agents`
+in Codex. Do not automatically load or run it during other acceptance tasks.
 
 ### Bot channels (project skill)
 

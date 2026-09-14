@@ -31,13 +31,29 @@ invocation:
    labeled as a guess. Never execute against an unconfirmed guess.
 3. Only when nothing is inferable, ask one direct open question.
 
-**Once the target is known**, read both layers of both living logs in full:
+**Once the target is known**, load both layers of both living logs — silently,
+each by its own retrieval shape (the shape is defined in the generic file's
+"How this file is injected"):
 
-- Generic (ships with the skill, read-only here):
-  `.agents/skills/acceptance/references/common-mistakes.md` and
-  `probe-mock-patterns.md`.
-- Project (writable, ours): [`common-mistakes.md`](./common-mistakes.md) and
-  [`probe-mock-patterns.md`](./probe-mock-patterns.md).
+- **`common-mistakes.md` — the Checklist in full**, both layers: generic
+  `.agents/skills/acceptance/references/common-mistakes.md` (read-only here) and
+  project [`common-mistakes.md`](./common-mistakes.md). Re-read both checklists
+  before marking any case `pass`; pull an entry by id only when its line applies.
+- **`probe-mock-patterns.md` — index first, entries on demand**, both layers:
+  generic `.agents/skills/acceptance/references/probe-mock-patterns.md` and
+  project [`probe-mock-patterns.md`](./probe-mock-patterns.md). The headings are
+  the index; a round needs a handful of the \~100 recipes, not all of them.
+
+```bash
+P=.agents/acceptance/probe-mock-patterns.md
+rg -n '^#{2,4} ' "$P"           # the index, with line numbers
+sed -n '<start>,<next-1>p' "$P" # one entry, in full — bounds from the index
+```
+
+Pick from the index by meaning, not by keyword — `rg` over the body is a
+fallback for when no heading obviously matches. Reading an entry you turned out
+not to need is cheap; skipping one because you searched for `dropdown` and the
+heading says `slash menu` is not.
 
 Two that keep biting: never declare a case `passed` from grep or skeleton counts
 — open the screenshot with Read and confirm it rendered; and when the goal is an
@@ -57,20 +73,35 @@ passing all five is recorded automatically — no separate user request needed:
    underlying failure is the same.
 5. **Actionable** — can a future verifier choose a different action or reject
    invalid evidence with it? Product taste and incident narrative cannot.
+6. **Mechanism-bound** — can you write its `holds-while:` line, naming the script
+   default, validator gap, or platform behavior it depends on (`always` only for
+   pure judgment)? An entry that cannot name its mechanism is a symptom, not a
+   rule — it goes to the field notes as "cause not established".
+
+Every admitted entry is one checklist line plus a Trap / Rule entry carrying
+`since` and `holds-while`. **Exit rule:** the day a mechanism moves into a script
+default or an ingest check, delete the entry in the same change — do not keep it
+"for reference"; the field notes hold history. A rule an agent skips under
+pressure (not a judgment call) goes into the table under Step 4, not the log.
 
 A candidate that fails only for being too implementation-specific gets routed:
 product behavior to the spec, UI values to the component, regressions to a test,
-long incident context to `references/probe-field-notes.md`. Do not skip the
-recording merely because it requires abstracting the feedback first.
+long incident context to `references/common-mistakes-field-notes.md` or
+`references/probe-field-notes.md`. Do not skip the recording merely because it
+requires abstracting the feedback first.
 
 ### Step 1 — Prepare the plan
 
 Skip to Step 2 if this is a re-run after a fix, the plan is already agreed, or
-the user gave exact commands.
+the user gave exact commands. Skip straight to Step 5 when the delivery was
+already verified on the real product earlier in this session: the run's own
+observations, logs, command output, and captures are the evidence, and the
+round is written from them and ingested without re-execution or a checker stage
+(SKILL.md → Decide whether to execute).
 
 Draft the surface, cases, expected evidence, assumptions, and deliverable — but
-do not ask for approval yet: Step 2 must establish real environment state first,
-so the user approves one complete, evidence-backed plan.
+do not send it for review yet: Step 2 must establish real environment state
+first, so the acceptance-checker reviews one complete, evidence-backed plan.
 
 Every case must be a delivery outcome a person can judge. Never plan the repo's
 own programmatic gates (tests, coverage, type-check, lint, build) — ingest drops
@@ -105,20 +136,29 @@ regardless.
    (`agent-browser screenshot`, `cdp-screenshot.sh`, `record-app-screen.sh`) is
    unaffected.
 
-### The approval gate
+### The plan gate
 
-At the end of Step 2, for the **first run against a subject Acceptance**, send one
-plan feedback and one structured confirmation question. Format, status markers,
-and confirmation behavior: [`references/plan-feedback.md`](./references/plan-feedback.md).
+At the end of Step 2, for the **first round of every Acceptance** — including a
+standalone authored round whose Acceptance only comes into being at ingest — write
+the plan feedback (format and status markers:
+[`references/plan-feedback.md`](./references/plan-feedback.md)) into the round's
+review notes and hand it to the **acceptance-checker** for plan review, per the skill's
+`references/acceptance-checker.md`. The acceptance-checker's "ready" decision — or its material
+findings resolved — is the gate; execution starts without asking the user. Do
+not present the plan to the user for confirmation.
 
-That approval covers later iterations on the same Acceptance. On follow-up
-feedback: read the Acceptance, silently re-check environment and auth, repair,
-re-run the affected checks, and publish a new round — no second approval. Ask
-again only on a **material boundary change**: a new surface, external system,
-account, secret, permission, or destructive action; a materially changed business
-goal; a user-owned blocker; or an environment change that invalidates the approved
-evidence strategy. Code revisions, restarts, recaptures, retries, and new rounds
-are not material changes.
+The user is asked only for a **user-owned prerequisite** (a secret, a device/2FA
+approval, a permission only they can grant, a destructive action) or a product
+decision that materially changes the plan: a new surface, external system, or
+account; a materially changed business goal; or an environment change that
+invalidates the evidence strategy. Ask with one structured question and stop.
+
+On follow-up feedback: read the Acceptance, silently re-check environment and
+auth, repair, re-run the affected checks, and publish a new round. The acceptance-checker is
+not involved in follow-up rounds — it reviews the plan and the first round's
+evidence only; afterwards the primary inspects its own evidence. Code
+revisions, restarts, recaptures, retries, and new rounds never involve the
+user.
 
 ## Phase 2 — Execute
 
@@ -187,6 +227,16 @@ Leave the trace in the report directory — `acceptance run ingest` prices it wi
 the platform's timing model. There is no analyze step, and no cost is published
 when no trace exists. Contract:
 `.agents/skills/acceptance/references/interaction-cost.md`.
+
+**Rules that hold under pressure.** Not judgment calls — each excuse below was
+made in a real LobeHub round. The generic set is in the skill's SKILL.md.
+
+| Excuse                                                                    | Reality                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "The agent operation finished, I'll stop the dev server"                  | Verification and repair can start minutes later and still own pending operations. Keep every dependency alive until the bound Task reaches a stable terminal state or non-progress is proven. (was L-S4)                                                                                                                       |
+| "No popup in the DOM 500ms after the click — the trigger is broken"       | A Chrome MCP tab is hidden: `visibilityState === 'hidden'`, rAF delivers 0 frames. Assert on state (`data-open`, the store), confirm the tab's health first, and get timing-dependent behavior confirmed in a foreground tab. A negative from a hidden tab is not evidence. (was L-S10)                                        |
+| "My change has no effect — must be the Vite cache" / "the app won't open" | Another session may have stashed the whole tree (`pre-rebase2-<pr>-<sha>`) or left conflict markers. Confirm your file is in `git status` with a unique marker before and after capture; recover only your file with `git checkout stash@{n} -- <file>`; never pop or drop their stash or resolve their conflicts. (was L-S13) |
+| "The fix is in and the tests are green"                                   | Reproduce the failure's precondition first (here: the empty→non-empty task-list transition swaps the composer instance). A run that cannot fail proves nothing; when the mocked seam is the suspect, drop the mock and drive the real kernel. (was L-S18, now generic M31)                                                     |
 
 ### Step 5 — Report and publish
 

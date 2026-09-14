@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Codex 앱 서버 런타임",
   "features.desktopSplitView.desc": "두 개의 데스크탑 탭을 나란히 표시하며, 독립적인 탐색과 크기 조정이 가능한 구분선을 제공합니다.",
   "features.desktopSplitView.title": "탭 분할 보기",
+  "features.evalCapture.desc": "대화의 이전 컨텍스트, 입력 및 생성된 답변을 평가 테스트 케이스로 캡처하는 메시지 작업을 추가합니다.",
+  "features.evalCapture.title": "대화 단계를 평가 케이스로 저장",
   "features.groupChat.desc": "다중 도우미 그룹 채팅 조정 기능을 활성화합니다.",
   "features.groupChat.title": "그룹 채팅 (다중 도우미)",
   "features.heteroSessionImport.desc": "주제 목록 메뉴에 \"로컬 에이전트 세션 가져오기\" 항목 추가: 로컬 Claude Code / Codex CLI 대화 기록을 스캔하여 주제로 가져오고, 다시 가져올 때 점진적으로 동기화합니다.",

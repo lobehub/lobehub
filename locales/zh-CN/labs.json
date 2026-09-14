@@ -2,8 +2,6 @@
   "description": "这些功能仍处于实验阶段，可能会被移除，也可能存在问题。欢迎在使用过程中向我们提供反馈。",
   "features.agentGraphConfig.desc": "在助理档案的进阶设置中显示 Graph 运行时配置。",
   "features.agentGraphConfig.title": "Agent Graph 运行时配置",
-  "features.agentProviderBinding.desc": "让支持的本地 Agent 使用 API 而非订阅运行——可选用 LobeHub 默认服务商，或已配置的 API 服务商和模型。目前仅支持部分 Agent，且仅限桌面端本地执行。",
-  "features.agentProviderBinding.title": "Agent 服务商绑定",
   "features.agentSelfIteration.desc": "允许助理自我反思、自我感知，并在持续的尝试与交互中不断自我迭代。",
   "features.agentSelfIteration.title": "Agent 自我迭代",
   "features.artifactDeployment.desc": "将 Artifact 发布为可访问的托管链接，并在会话侧边栏管理发布版本",

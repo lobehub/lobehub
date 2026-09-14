@@ -34,12 +34,11 @@ describe('generationTopicRouter', () => {
     };
 
     const mockCreate = vi.fn().mockResolvedValue(mockCreatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.createTopic();
@@ -64,12 +63,11 @@ describe('generationTopicRouter', () => {
     };
 
     const mockCreate = vi.fn().mockResolvedValue(mockCreatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller({
       ...mockCtx,
@@ -118,12 +116,11 @@ describe('generationTopicRouter', () => {
     ];
 
     const mockQueryAll = vi.fn().mockResolvedValue(mockTopics);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          queryAll: mockQueryAll,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        queryAll: mockQueryAll,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.getAllGenerationTopics();
@@ -148,13 +145,12 @@ describe('generationTopicRouter', () => {
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopic({
@@ -183,20 +179,18 @@ describe('generationTopicRouter', () => {
     const mockCreateCoverFromUrl = vi.fn().mockResolvedValue(mockNewCoverKey);
     const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
 
-    vi.mocked(GenerationService).mockImplementation(
-      () =>
-        ({
-          createCoverFromUrl: mockCreateCoverFromUrl,
-        }) as any,
-    );
+    vi.mocked(GenerationService).mockImplementation(function () {
+      return {
+        createCoverFromUrl: mockCreateCoverFromUrl,
+      } as any;
+    });
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopicCover({
@@ -228,20 +222,18 @@ describe('generationTopicRouter', () => {
     });
     const mockDeleteFiles = vi.fn();
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -271,20 +263,18 @@ describe('generationTopicRouter', () => {
     });
     const mockDeleteFiles = vi.fn().mockResolvedValue(true);
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -314,22 +304,20 @@ describe('generationTopicRouter', () => {
 
     // Mock file deletion to fail
     const mockDeleteFiles = vi.fn().mockRejectedValue(new Error('S3 deletion failed'));
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -363,20 +351,18 @@ describe('generationTopicRouter', () => {
     });
     const mockDeleteFiles = vi.fn().mockResolvedValue(true);
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -409,22 +395,20 @@ describe('generationTopicRouter', () => {
     const mockDeleteFiles = vi
       .fn()
       .mockRejectedValue(new Error('Some files could not be deleted from S3'));
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-          findById: vi.fn().mockResolvedValue(mockDeletedTopic),
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -445,20 +429,18 @@ describe('generationTopicRouter', () => {
     const mockDelete = vi.fn().mockResolvedValue(undefined);
     const mockDeleteFiles = vi.fn();
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-          findById: vi.fn().mockResolvedValue(undefined),
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(undefined),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
 
@@ -486,13 +468,12 @@ describe('generationTopicRouter', () => {
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopic({
@@ -521,13 +502,12 @@ describe('generationTopicRouter', () => {
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopic({
@@ -546,13 +526,12 @@ describe('generationTopicRouter', () => {
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          findById: vi.fn().mockResolvedValue(undefined),
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue(undefined),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
 

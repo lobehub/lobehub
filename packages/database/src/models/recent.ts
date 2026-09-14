@@ -1,10 +1,19 @@
 import type { ChatTopicStatus, TaskStatus } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
-import { unionAll } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
 import removeMarkdown from 'remove-markdown';
 
-import { agents, DOCUMENT_FOLDER_TYPE, documents, messages, tasks, topics } from '../schemas';
+import {
+  agents,
+  chatGroups,
+  DOCUMENT_FOLDER_TYPE,
+  documents,
+  messages,
+  tasks,
+  topics,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
@@ -14,6 +23,13 @@ export interface RecentDbItem {
   metadata?: any;
   routeGroupId: string | null;
   routeId: string | null;
+  /**
+   * Slug source for a task link — the deliberate `tasks.name`, never the
+   * instruction. `title` coalesces the two for display, but a prompt body must
+   * not reach a URL, where it would land in history, analytics page views,
+   * access logs and anything pasted from the clipboard.
+   */
+  slugTitle?: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
   status: TaskStatus | null;
   title: string;
@@ -35,6 +51,15 @@ const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as c
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 const TOPIC_INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
 const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
+
+// A shared feed answers "what is the workspace working on", so a conversation
+// owned by a PRIVATE agent/group never belongs in it — not even the viewer's
+// own. `buildWorkspaceWhere` deliberately keeps a member's own private rows
+// visible (correct for the "mine" feed), which is exactly what let a private
+// agent's topic surface under the team tab. NULL counts as shared for rows
+// that pre-date the column, matching `buildWorkspaceWhere`.
+const sharedParentWhere = (visibility: AnyPgColumn) =>
+  or(isNull(visibility), eq(visibility, 'public'));
 
 // Best-effort markdown → plain text; previews render in a plain-text row, so
 // syntax noise (**, #, []() …) would show up literally.
@@ -62,6 +87,14 @@ export class RecentModel {
     types?: RecentDbItem['type'][],
     withTopicPreview?: boolean,
     mineOnly?: boolean,
+    /**
+     * Restrict a workspace feed to conversations the whole team can see, i.e.
+     * drop topics whose owning agent/group is `visibility: 'private'`. Set by
+     * the home "team" tab; the sidebar feed and the "mine" tab leave it off so
+     * a member keeps their own private conversations. A no-op in personal mode,
+     * where every row is the owner's already.
+     */
+    sharedOnly?: boolean,
   ): Promise<RecentDbItem[]> => {
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
     const requestedTypes = types ? new Set(types) : undefined;
@@ -88,6 +121,7 @@ export class RecentModel {
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
+        slugTitle: sql<string | null>`NULL`.as('slug_title'),
         status: sql<TaskStatus | null>`NULL`.as('status'),
         title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
         type: sql<RecentDbItem['type']>`'topic'`.as('type'),
@@ -96,16 +130,31 @@ export class RecentModel {
       })
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(
         requestedTypes && !requestedTypes.has('topic')
           ? sql`false`
           : and(
               buildWorkspaceWhere(scope, topics),
+              // Agent-share visitor topics keep the creator's userId — never
+              // surface a visitor's conversation in the creator's own Recent feed.
+              notShareVisitorTopic(),
               mineTopicWhere,
+              // Topic scope alone is insufficient: stale/mismatched rows can
+              // point at a personal or foreign-workspace agent/group. Check
+              // the parent scope before returning titles or loading previews.
               or(
-                isNotNull(topics.groupId),
-                eq(agents.slug, 'inbox'),
-                and(isNull(topics.groupId), ne(agents.virtual, true)),
+                and(
+                  isNotNull(topics.groupId),
+                  buildWorkspaceWhere(scope, chatGroups),
+                  sharedOnly ? sharedParentWhere(chatGroups.visibility) : undefined,
+                ),
+                and(
+                  isNull(topics.groupId),
+                  buildWorkspaceWhere(scope, agents),
+                  sharedOnly ? sharedParentWhere(agents.visibility) : undefined,
+                  or(eq(agents.slug, 'inbox'), ne(agents.virtual, true)),
+                ),
               ),
               or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
               or(isNull(topics.status), not(inArray(topics.status, TOPIC_INBOX_STATUSES))),
@@ -119,6 +168,7 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
+        slugTitle: sql<string | null>`NULL`.as('slug_title'),
         status: sql<TaskStatus | null>`NULL`.as('status'),
         title:
           sql<string>`COALESCE(${documents.title}, ${documents.filename}, 'Untitled Document')`.as(
@@ -148,6 +198,10 @@ export class RecentModel {
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
+        // Display title falls back to the instruction so a nameless task still
+        // reads as something; `slugTitle` deliberately does not, so the link
+        // this row builds carries only what the task was actually named.
+        slugTitle: sql<string | null>`${tasks.name}`.as('slug_title'),
         status: sql<TaskStatus | null>`${tasks.status}`.as('status'),
         title: sql<string>`COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task')`.as(
           'title',
@@ -188,6 +242,7 @@ export class RecentModel {
         metadata: row.metadata ?? undefined,
         routeGroupId: row.routeGroupId,
         routeId: row.routeId,
+        slugTitle: row.slugTitle,
         status: row.status,
         title: row.title,
         type: row.type,

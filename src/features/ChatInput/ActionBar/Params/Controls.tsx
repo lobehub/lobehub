@@ -11,7 +11,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

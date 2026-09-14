@@ -29,16 +29,11 @@ jobs:
 
       - name: Ensure lockfile exists
         run: |
-          # Temporarily override .npmrc lockfile=false setting
-          # to generate pnpm-lock.yaml for reproducible builds
+          # pnpm 12 reads only auth/registry keys from .npmrc, and `lockfile: false`
+          # lives in pnpm-workspace.yaml — force lockfile generation with the CLI flag.
           if [ ! -f "pnpm-lock.yaml" ]; then
             echo "Generating pnpm-lock.yaml..."
-            # Create temporary .npmrc override
-            mv .npmrc .npmrc.bak
-            echo "lockfile=true" > .npmrc
-            cat .npmrc.bak >> .npmrc
-            pnpm i
-            mv .npmrc.bak .npmrc
+            pnpm i --lockfile
           fi
 
       - name: Generate build secrets

@@ -99,6 +99,40 @@ describe('AssistantAction', () => {
 
       expect(globalHelpers.getCurrentLanguage).toHaveBeenCalled();
     });
+
+    it('should drop previous detail data when the identifier changes', async () => {
+      const first = { identifier: 'assistant-a', name: 'A' };
+      const second = { identifier: 'assistant-b', name: 'B' };
+      let resolveSecond!: (value: typeof second) => void;
+      const secondRequest = new Promise<typeof second>((resolve) => {
+        resolveSecond = resolve;
+      });
+      vi.spyOn(discoverService, 'getAssistantDetail').mockImplementation(async (params) =>
+        params?.identifier === 'assistant-b' ? secondRequest : (first as any),
+      );
+      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+
+      const { result, rerender } = renderHook(
+        ({ identifier }) => useStore.getState().useAssistantDetail({ identifier }),
+        { initialProps: { identifier: 'assistant-a' } },
+      );
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual(first);
+      });
+
+      rerender({ identifier: 'assistant-b' });
+
+      await waitFor(() => {
+        expect(result.current.data).toBeUndefined();
+      });
+
+      resolveSecond(second);
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual(second);
+      });
+    });
   });
 
   describe('useAssistantIdentifiers', () => {

@@ -2,6 +2,7 @@ import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   AgentDeviceOverride,
   DeviceExecutionTarget,
+  ExecutionPlan,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
   RuntimeEnvMode,
@@ -118,6 +119,7 @@ export const isHeterogeneousSandboxExecutionAvailable = (type: string | undefine
   type !== 'codebuddy' &&
   type !== 'cursor' &&
   type !== 'droid' &&
+  type !== 'devin' &&
   type !== 'kimi-code' &&
   type !== 'hermes' &&
   type !== 'opencode' &&
@@ -306,44 +308,7 @@ export const resolveRuntimeMode = (
     }),
   );
 
-export type ExecutionPlanUnroutedReason =
-  /** `auto` mode with more than one device online — the model must pick one */
-  | 'ambiguous-online-devices'
-  /** an explicitly bound device exists but is offline — never silently fall back */
-  | 'bound-device-offline'
-  /**
-   * device-capable target (`auto` / `local` / `device`) but no device selected —
-   * nothing bound/requested, and not the `auto` single-online-device case
-   */
-  | 'no-bound-device'
-  /** `auto` mode but no device online at all */
-  | 'no-online-device';
-
-/**
- * Where (and whether) a run executes, resolved ONCE at the entry point.
- * Downstream layers consume the plan instead of re-deriving the answer from
- * `executionTarget` / `boundDeviceId` / online state themselves.
- *
- * `target` is the EFFECTIVE execution target (platform defaults and coercions
- * applied; degraded to `none` when device access is denied) — consumers must
- * read it instead of re-resolving `agencyConfig.executionTarget`.
- */
-export type ExecutionPlan = { target: DeviceExecutionTarget } &
-  /** route execution / device tools to this device (the local machine is a registered device) */
-  (
-    | { deviceId: string; kind: 'device' }
-    /**
-     * Device-targeted but no routable device right now. The run proceeds without
-     * an active device; the remote-device proxy may let the model activate one
-     * mid-run (native agents), or the caller may treat this as a hard error
-     * (hetero dispatch).
-     */
-    | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
-    /** plain chat — no execution environment, no run tools, no device ever */
-    | { kind: 'none' }
-    /** ephemeral cloud sandbox */
-    | { kind: 'sandbox' }
-  );
+export type { ExecutionPlan, ExecutionPlanUnroutedReason } from '@lobechat/types';
 
 export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
 
@@ -420,6 +385,16 @@ export interface ResolveExecutionPlanParams {
   /** See {@link ResolveExecutionTargetOptions.sandboxExecutionAvailable}. */
   sandboxExecutionAvailable?: boolean;
   /**
+   * Resolve to the cloud sandbox instead of `none` whenever the run cannot
+   * route to a device (a device-capable target denied by `canUseDevice`, or a
+   * stored `none` target). Set by the aiAgent caller for Agent Share visitor
+   * runs the creator granted `lobe-cloud-sandbox`: a visitor can never reach
+   * the creator's device, so the sandbox is the only surface that grant can
+   * mean, and it only materializes when the plan resolves to `sandbox`. Chat
+   * mode still wins — it means "no tools", not "no device".
+   */
+  sandboxFallback?: boolean;
+  /**
    * What initiated this run. Bot triggers have no UI to pick a device, so a
    * stored `local` target (in-process IPC, unreachable from the cloud bot
    * server) is upgraded to `auto` and auto-activates an online device. `none`
@@ -441,7 +416,8 @@ export interface ResolveExecutionPlanParams {
  * 2. `none` / `sandbox` NEVER route to a device — no auto-activation, no
  *    step-level re-injection, no exceptions.
  * 3. `canUseDevice === false` degrades any device-capable target to `none`
- *    (sandbox stays available — it never touches the user's machines).
+ *    (sandbox stays available — it never touches the user's machines). With
+ *    `sandboxFallback` the degraded run resolves to the sandbox instead.
  * 4. With online info: a bound device is used only if online (an offline
  *    binding stays unrouted rather than guessing another machine). An UNBOUND
  *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
@@ -463,6 +439,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     onlineDeviceIds,
     requestedDeviceId,
     sandboxExecutionAvailable,
+    sandboxFallback,
     trigger,
     workspaceScoped,
   } = params;
@@ -499,6 +476,10 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     // no device can run. Device-only providers stay pending at `none` so the
     // caller can require an explicit local/connected-device selection.
     if (isHetero && sandboxAvailable) return { kind: 'sandbox', target: 'sandbox' };
+    // Share-visitor runs granted the cloud sandbox land here for every
+    // device-capable target (visitors never pass `canUseDevice`); the grant
+    // is honoured with the sandbox rather than dropped with `none`.
+    if (sandboxFallback) return { kind: 'sandbox', target: 'sandbox' };
     // a device-capable target denied by the access policy degrades to plain
     // chat — the effective target is `none`, not the stored one
     return { kind: 'none', target: 'none' };

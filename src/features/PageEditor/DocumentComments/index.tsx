@@ -1,9 +1,8 @@
 'use client';
 
-import { Center, Empty, Flexbox, Skeleton } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { MessageCircle } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -13,6 +12,7 @@ import { documentCommentService } from '@/services/documentComment';
 
 import Composer from './Composer';
 import {
+  useDocumentCommentDetail,
   useDocumentCommentSummary,
   useDocumentCommentThreads,
   useOptimisticDocumentComment,
@@ -27,6 +27,10 @@ import {
 } from './optimistic';
 import { styles } from './styles';
 import Thread from './Thread';
+import {
+  type DocumentCommentFocusMissReason,
+  useDocumentCommentDeepLink,
+} from './useDocumentCommentDeepLink';
 
 const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   const { t } = useTranslation('file');
@@ -34,6 +38,7 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   const summary = useDocumentCommentSummary(workspaceId ? documentId : undefined);
   const threads = useDocumentCommentThreads(workspaceId ? documentId : undefined);
   const createOptimistic = useOptimisticDocumentComment();
+  const { clearFocus, focus, focusRoot } = useDocumentCommentDeepLink(documentId);
   const reloadSummary = summary.mutate;
   const reloadThreads = threads.reload;
   const mutateThreads = threads.mutate;
@@ -128,6 +133,86 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   );
   const isHeaderLoading = threads.isLoadingInitial || (summary.isLoading && !summary.data);
 
+  // Deep-link landing. Lists are oldest-first and a notification usually points at the
+  // newest comment, so the target root is fetched by id and pinned above the list until it
+  // shows up on a loaded page. NOT_FOUND, a non-root id, or a root from another document
+  // means the thread is gone; any other lookup failure is reported, never swallowed.
+  const focusRootCommentId = focus?.rootCommentId;
+  const hasFocusedThread =
+    Boolean(focusRootCommentId) && threads.items.some(({ root }) => root.id === focusRootCommentId);
+  const focusedRoot = useDocumentCommentDetail(hasFocusedThread ? undefined : focusRootCommentId);
+  const focusedRootData = focusedRoot.data;
+  const isFocusedRootUsable =
+    Boolean(focusedRootData) &&
+    !focusedRootData?.parentCommentId &&
+    focusedRootData?.documentId === documentId;
+  const pinnedThread =
+    focus && !hasFocusedThread && focusedRootData && isFocusedRootUsable
+      ? { replyCount: focusedRootData.replyCount, root: focusedRootData }
+      : undefined;
+  const isFocusedRootMissing =
+    Boolean(focusRootCommentId) &&
+    (focusedRoot.isNotFound || (Boolean(focusedRootData) && !isFocusedRootUsable));
+  const isFocusedRootFailed =
+    Boolean(focusRootCommentId) && Boolean(focusedRoot.error) && !focusedRoot.isNotFound;
+  const handleFocusMissing = useCallback(() => {
+    toast.info(t('pageEditor.comments.deepLinkMissing'));
+    clearFocus();
+  }, [clearFocus, t]);
+  const handleFocusFailed = useCallback(() => {
+    toast.error(t('pageEditor.comments.deepLinkLoadFailed'));
+    clearFocus();
+  }, [clearFocus, t]);
+  // The linked reply is gone (or failed to load) but its thread is not: keep the thread and
+  // land on the root.
+  const handleReplyFocusMissing = useCallback(
+    (reason: DocumentCommentFocusMissReason) => {
+      if (reason === 'missing') toast.info(t('pageEditor.comments.deepLinkMissing'));
+      else toast.error(t('pageEditor.comments.deepLinkLoadFailed'));
+      focusRoot();
+    },
+    [focusRoot, t],
+  );
+  useEffect(() => {
+    if (isFocusedRootMissing) handleFocusMissing();
+    else if (isFocusedRootFailed) handleFocusFailed();
+  }, [handleFocusFailed, handleFocusMissing, isFocusedRootFailed, isFocusedRootMissing]);
+  // The pinned root lives in its own detail entry, so the list handlers (which only patch
+  // the paginated caches) are mirrored into it; a post-delete 404 flows through
+  // `isNotFound` and is not a refresh failure.
+  const mutateFocusedRoot = focusedRoot.mutate;
+  const refreshPinned = useCallback(async () => {
+    await Promise.all([mutateFocusedRoot().catch(() => undefined), refresh()]);
+  }, [mutateFocusedRoot, refresh]);
+  const updatePinnedReplyCount = useCallback(
+    async (rootCommentId: string, delta: number) => {
+      await Promise.all([
+        updateReplyCount(rootCommentId, delta),
+        mutateFocusedRoot(
+          (current) =>
+            current && current.id === rootCommentId
+              ? { ...current, replyCount: Math.max(0, current.replyCount + delta) }
+              : current,
+          { revalidate: false },
+        ),
+      ]);
+    },
+    [mutateFocusedRoot, updateReplyCount],
+  );
+  const handlePinnedRootUpdate: DocumentCommentUpdateHandler = useCallback(
+    async (comment, value) => {
+      await handleUpdate(comment, value);
+      await mutateFocusedRoot(
+        (current) =>
+          current && current.id === comment.id
+            ? { ...current, ...value, updatedAt: new Date() }
+            : current,
+        { revalidate: false },
+      );
+    },
+    [handleUpdate, mutateFocusedRoot],
+  );
+
   if (!workspaceId) return null;
 
   return (
@@ -140,8 +225,8 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
       <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
         {isHeaderLoading ? (
           <>
-            <Skeleton.Button active style={{ height: 28, width: 48 }} />
-            <Skeleton.Button active style={{ height: 20, width: 16 }} />
+            <Skeleton height={28} width={48} />
+            <Skeleton height={20} width={16} />
           </>
         ) : (
           <>
@@ -157,29 +242,52 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
         )}
       </Flexbox>
 
-      {threads.isInitialError ? (
-        <AsyncError error={threads.error} variant={'block'} onRetry={() => void threads.reload()} />
-      ) : threads.isLoadingInitial ? (
-        <SurfaceSkeleton header={false} variant={'list'} />
-      ) : threads.items.length === 0 ? (
-        <Center className={styles.empty}>
-          <Empty description={t('pageEditor.comments.empty')} icon={MessageCircle} />
-        </Center>
-      ) : (
+      {/* The pinned deep-link thread renders on its own, so a pending or failed list
+          request never hides a target that was already fetched. */}
+      {threads.isInitialError ||
+      threads.isLoadingInitial ||
+      threads.items.length > 0 ||
+      pinnedThread ? (
         <Flexbox className={styles.threadList}>
-          {threads.items.map(({ replyCount, root }) => (
+          {pinnedThread && (
             <Thread
               documentId={documentId}
-              key={root.id}
-              replyCount={replyCount}
-              root={root}
-              onMutated={refresh}
-              onReplyCountChange={updateReplyCount}
-              onRootUpdate={handleUpdate}
+              focus={focus}
+              key={pinnedThread.root.id}
+              replyCount={pinnedThread.replyCount}
+              root={pinnedThread.root}
+              onFocusMissing={handleReplyFocusMissing}
+              onMutated={refreshPinned}
+              onReplyCountChange={updatePinnedReplyCount}
+              onRootUpdate={handlePinnedRootUpdate}
               onSummaryChange={updateSummaryTotal}
             />
-          ))}
-          {threads.error ? (
+          )}
+          {threads.isInitialError ? (
+            <AsyncError
+              error={threads.error}
+              variant={'block'}
+              onRetry={() => void threads.reload()}
+            />
+          ) : threads.isLoadingInitial ? (
+            <SurfaceSkeleton header={false} variant={'list'} />
+          ) : (
+            threads.items.map(({ replyCount, root }) => (
+              <Thread
+                documentId={documentId}
+                focus={focus?.rootCommentId === root.id ? focus : undefined}
+                key={root.id}
+                replyCount={replyCount}
+                root={root}
+                onFocusMissing={handleReplyFocusMissing}
+                onMutated={refresh}
+                onReplyCountChange={updateReplyCount}
+                onRootUpdate={handleUpdate}
+                onSummaryChange={updateSummaryTotal}
+              />
+            ))
+          )}
+          {threads.error && !threads.isInitialError ? (
             <AsyncError
               error={threads.error}
               retrying={threads.isRetrying}
@@ -200,9 +308,13 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
             )
           )}
         </Flexbox>
-      )}
+      ) : null}
 
-      <Composer documentId={documentId} key={`root:${documentId}`} onSubmit={handleCreate} />
+      {/* While the thread list is still skeleton-loading the composer would
+          float against placeholder content — reveal it with the real list. */}
+      {!threads.isLoadingInitial && (
+        <Composer documentId={documentId} key={`root:${documentId}`} onSubmit={handleCreate} />
+      )}
     </Flexbox>
   );
 });

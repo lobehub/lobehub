@@ -38,8 +38,8 @@ describe('buildWorkspaceAwarePath', () => {
   });
 
   it('bypasses the prefix when `escape` is true', () => {
-    expect(buildWorkspaceAwarePath('/settings/profile', 'acme', { escape: true })).toBe(
-      '/settings/profile',
+    expect(buildWorkspaceAwarePath('/settings/memory', 'acme', { escape: true })).toBe(
+      '/settings/memory',
     );
     expect(buildWorkspaceAwarePath('/settings/plans', 'acme', { escape: true })).toBe(
       '/settings/plans',
@@ -111,11 +111,26 @@ describe('buildWorkspaceAwarePath', () => {
     );
   });
 
+  // Account-level tabs are mirrored under the workspace so members can reach
+  // them without leaving it.
+  it('prefixes the account-level settings tabs', () => {
+    expect(buildWorkspaceAwarePath('/settings/profile', 'acme')).toBe('/acme/settings/profile');
+    expect(buildWorkspaceAwarePath('/settings/appearance', 'acme')).toBe(
+      '/acme/settings/appearance',
+    );
+    expect(buildWorkspaceAwarePath('/settings/hotkey', 'acme')).toBe('/acme/settings/hotkey');
+    expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/acme/settings/messenger');
+    expect(buildWorkspaceAwarePath('/settings/messenger/slack', 'acme')).toBe(
+      '/acme/settings/messenger/slack',
+    );
+    expect(buildWorkspaceAwarePath('/settings/advanced', 'acme')).toBe('/acme/settings/advanced');
+    expect(buildWorkspaceAwarePath('/settings/labs', 'acme')).toBe('/acme/settings/labs');
+    expect(buildWorkspaceAwarePath('/settings/about', 'acme')).toBe('/acme/settings/about');
+  });
+
   it('skips prefix for personal-only settings sub-paths', () => {
-    expect(buildWorkspaceAwarePath('/settings/profile', 'acme')).toBe('/settings/profile');
     expect(buildWorkspaceAwarePath('/settings/llm', 'acme')).toBe('/settings/llm');
     expect(buildWorkspaceAwarePath('/settings/memory', 'acme')).toBe('/settings/memory');
-    expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/settings/messenger');
     expect(buildWorkspaceAwarePath('/settings/referral', 'acme')).toBe('/settings/referral');
     expect(buildWorkspaceAwarePath('/settings/system-tools', 'acme')).toBe(
       '/settings/system-tools',

@@ -40,33 +40,41 @@ const {
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({
-    create: createMsg,
-    findById: findMessage,
-    getLastMainThreadSpineMessageId: getLastLeaf,
-  })),
+  MessageModel: vi.fn(function () {
+    return {
+      create: createMsg,
+      findById: findMessage,
+      getLastMainThreadSpineMessageId: getLastLeaf,
+    };
+  }),
 }));
 
 vi.mock('./redisStore', () => ({
-  TaskResultCallbackRedisStore: vi.fn(() => ({
-    attachCreatorOperation,
-    claimPending,
-    createPending,
-    release,
-    settle,
-  })),
+  TaskResultCallbackRedisStore: vi.fn(function () {
+    return {
+      attachCreatorOperation,
+      claimPending,
+      createPending,
+      release,
+      settle,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({
-    findById: topicFindById,
-    releaseTaskCallbackReservation: releaseReservation,
-    tryReserveTaskCallback: tryReserve,
-  })),
+  TopicModel: vi.fn(function () {
+    return {
+      findById: topicFindById,
+      releaseTaskCallbackReservation: releaseReservation,
+      tryReserveTaskCallback: tryReserve,
+    };
+  }),
 }));
 
 vi.mock('../aiAgent', () => ({
-  AiAgentService: vi.fn(() => ({ execAgent })),
+  AiAgentService: vi.fn(function () {
+    return { execAgent };
+  }),
 }));
 
 const TEST_USER = 'user-1';
@@ -232,12 +240,11 @@ describe('TaskResultBridgeService.deliver', () => {
 
   it('keeps the reservation until the callback continuation is dispatched', async () => {
     let finishDispatch: (() => void) | undefined;
-    execAgent.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishDispatch = () => resolve({ operationId: 'op-new', topicId: 'topic-origin' } as any);
-        }),
-    );
+    execAgent.mockImplementationOnce(function () {
+      return new Promise((resolve) => {
+        finishDispatch = () => resolve({ operationId: 'op-new', topicId: 'topic-origin' } as any);
+      });
+    });
 
     const delivery = new TaskResultBridgeService(db, TEST_USER).deliver(baseParams);
     await vi.waitFor(() => expect(execAgent).toHaveBeenCalledTimes(1));

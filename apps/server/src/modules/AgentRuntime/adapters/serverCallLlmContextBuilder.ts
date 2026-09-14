@@ -13,12 +13,12 @@ import { AGENT_PLAN_FILE_TYPE, COMPOSIO_APP_TYPES } from '@lobechat/const';
 import type {
   AgentBuilderContext,
   AgentContextDocument,
-  AgentGroupConfig,
   GroupAgentBuilderContext,
   GroupOfficialToolItem,
   OfficialToolItem,
   OnboardingContext,
   PlanTodoConfig,
+  WorkspaceContext,
 } from '@lobechat/context-engine';
 import { resolveTopicReferences } from '@lobechat/context-engine';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
@@ -39,6 +39,8 @@ import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { WorkspaceModel } from '@/database/models/workspace';
+import { appEnv } from '@/envs/app';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { MarketService } from '@/server/services/market';
@@ -78,7 +80,7 @@ export const buildServerCallLlmContext = async ({
   state,
   tooling,
 }: BuildServerCallLlmContextInput): Promise<ServerCallLlmContextBuildResult> => {
-  const agentConfig = ctx.agentConfig;
+  const agentConfig = state.world?.agent;
   if (!agentConfig) {
     return {
       processedMessages: llmPayload.messages as ChatStreamPayload['messages'],
@@ -87,12 +89,14 @@ export const buildServerCallLlmContext = async ({
   }
 
   const { operationId, stepIndex } = ctx;
-  const { resolved, resolvedSkills, toolDiscoveryConfig } = tooling;
+  const { resolved, resolvedSkills, toolDiscoveryConfig, activeDeviceId, executionTarget } =
+    tooling;
   const contextHints = await resolveServerCallLlmContextHints({
     ctx,
     llmPayload,
     model,
     provider,
+    world: state.world,
   });
   const {
     capabilities,
@@ -116,32 +120,70 @@ export const buildServerCallLlmContext = async ({
   if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
     const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
     const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
+    const agentShareVisitor = ctx.agentShareVisitor;
+    // Topic references are limited to the visitor's own topics in shared runs.
+    // `TopicModel`'s built-in ownership scoping is not sufficient here — the
+    // rows are owned by the CREATOR, so every one of the creator's private
+    // topics would otherwise be addressable by a `<refer_topic>` tag the
+    // visitor typed. Match the visitor/agent pairing of the active share
+    // instead: a visitor topic is tied to its share purely through
+    // `(agentId, senderId)`, since `agent_shares` is 1:1 per agent.
+    //
+    // Known gap: a topic created before the owner paused the share still
+    // matches `(agentId, senderId)` for a returning visitor, because topics
+    // carry no share-instance column. Such a topic is the SAME visitor's own
+    // prior conversation with the SAME agent, so this leaks nothing across
+    // identities — it only means old context can resurface once the share is
+    // turned back on.
+    const isTopicVisibleToRun = (
+      topic: { agentId?: string | null; senderId?: string | null } | null | undefined,
+    ): boolean => {
+      if (!agentShareVisitor) return true;
+      return (
+        topic?.senderId === agentShareVisitor.visitorUserId &&
+        topic?.agentId === agentShareVisitor.agentId
+      );
+    };
     topicReferences = await resolveTopicReferences(
       messagesForContext as Array<{ content: string | unknown }>,
-      async (topicId) => topicModel.findById(topicId),
       async (topicId) => {
         const topic = await topicModel.findById(topicId);
+        return isTopicVisibleToRun(topic) ? topic : null;
+      },
+      async (topicId) => {
+        const topic = await topicModel.findById(topicId);
+        if (!isTopicVisibleToRun(topic)) return [];
+
         return messageModel.query(
           {
             agentId: topic?.agentId ?? undefined,
             groupId: topic?.groupId ?? undefined,
             topicId,
           },
-          { postProcessUrl: buildPostProcessUrl(ctx) },
+          // `isTopicVisibleToRun` above already proved this referenced topic is
+          // the SAME visitor's own conversation with the SAME agent, so the
+          // creator-facing agent-share exclusion must not apply here.
+          { allowShareVisitor: true, postProcessUrl: buildPostProcessUrl(ctx) },
         );
       },
     );
   }
 
   // Fetch agent documents for context injection.
+  // A share visitor run never sees the creator's agent context documents.
+  // `applyShareGateToAgentConfig` already blanks `agentConfig.files` /
+  // `knowledgeBases`, but this source is fetched independently of agentConfig,
+  // so it needs its own gate. Fail closed unconditionally: the share config has
+  // no setting that could grant file access.
+  const agentDocumentsAllowedForShare = !ctx.agentShareVisitor;
   let agentDocuments: AgentContextDocument[] | undefined;
-  const agentId = state.metadata?.agentId;
-  if (agentId && ctx.serverDB && ctx.userId) {
+  const agentId = state.origin?.agentId;
+  if (agentId && ctx.serverDB && ctx.userId && agentDocumentsAllowedForShare) {
     try {
       const agentDocService = new AgentDocumentsService(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const docs = await agentDocService.getAgentContextDocuments(agentId);
       if (docs.length > 0) {
@@ -170,7 +212,20 @@ export const buildServerCallLlmContext = async ({
     );
   });
 
-  if (isOnboardingAgent && !alreadyHasOnboardingContext && ctx.serverDB && ctx.userId) {
+  // Onboarding context is the creator's own persona, SOUL document and initial
+  // user info — personal profile data with no share permission that could ever
+  // grant it, so a share visitor run never builds it. Two paths reach here: the
+  // builtin `web-onboarding` agent, and any shared agent whose enabled tools
+  // include `lobe-web-onboarding`. Gating on `ctx.agentShareVisitor` closes both.
+  const onboardingContextAllowedForShare = !ctx.agentShareVisitor;
+
+  if (
+    isOnboardingAgent &&
+    onboardingContextAllowedForShare &&
+    !alreadyHasOnboardingContext &&
+    ctx.serverDB &&
+    ctx.userId
+  ) {
     try {
       const { formatWebOnboardingStateMessage } =
         await import('@lobechat/builtin-tool-web-onboarding/utils');
@@ -178,7 +233,7 @@ export const buildServerCallLlmContext = async ({
       const docService = new AgentDocumentsService(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
@@ -221,9 +276,9 @@ export const buildServerCallLlmContext = async ({
   // (`packages/builtin-skills/src/lobehub/content.ts`) so it can render
   // `{{agent_id}}` / `{{agent_title}}` / `{{topic_id}}` etc. into the
   // model's prompt without needing a separate context injector.
-  const lobehubSkillAgentId = state.metadata?.agentId;
-  const lobehubSkillTopicId = ctx.topicId ?? state.metadata?.topicId;
-  const lobehubSkillAgentMeta = state.metadata?.agentConfig as
+  const lobehubSkillAgentId = state.origin?.agentId;
+  const lobehubSkillTopicId = ctx.topicId ?? state.origin?.topicId;
+  const lobehubSkillAgentMeta = state.world?.agent as
     { description?: string | null; title?: string | null } | undefined;
 
   let lobehubSkillTopicTitle = '';
@@ -248,11 +303,18 @@ export const buildServerCallLlmContext = async ({
   // Tool-specific template variable resolution. The client-side
   // contextEngineering.ts resolves these via Zustand stores and lambdaClient.
   // In execAgent (server/bot) mode we must fetch from DB directly.
+  //
+  // `{{username}}` / `{{language}}` render back to whoever is actually
+  // conversing. In a share-visitor run `ctx.userId` is the CREATOR (the agent
+  // still executes under their identity), so resolving from it here would leak
+  // the creator's own name/locale into a link visitor's turn. Resolve from the
+  // visitor's own user id instead whenever this is a share-visitor run.
   let serverUsername = '';
   let serverLanguage = '';
-  if (ctx.serverDB && ctx.userId) {
+  const userInfoUserId = ctx.agentShareVisitor?.visitorUserId ?? ctx.userId;
+  if (ctx.serverDB && userInfoUserId) {
     try {
-      const userInfo = await UserModel.getInfoForAIGeneration(ctx.serverDB, ctx.userId);
+      const userInfo = await UserModel.getInfoForAIGeneration(ctx.serverDB, userInfoUserId);
       serverUsername = userInfo.userName;
       serverLanguage = userInfo.responseLanguage;
     } catch (error) {
@@ -260,7 +322,27 @@ export const buildServerCallLlmContext = async ({
     }
   }
 
+  // Where the run lives — app origin + workspace slug — so the model can
+  // write in-app links that resolve to the right scope. `workspaceId` is only
+  // threaded through for DB scoping otherwise, so without this the model has no
+  // idea it is inside a team workspace and composes personal-space (or
+  // training-data) URLs. Best-effort: a failed lookup skips the block and
+  // never blocks the LLM call.
+  const workspaceContext = await resolveWorkspaceContext(ctx, state);
+
   const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
+  // `sandbox_enabled` tracks whether the dedicated Cloud Sandbox tool is
+  // offered — true for target 'sandbox', and (so the model can choose sandbox
+  // vs. an auto-routed device per call) for 'auto' too, regardless of whether
+  // a device ended up routed. It's still not the full answer for
+  // `injectCredsToSandbox` reachability: `lobe-skills`' `runCommand`/
+  // `execScript` ALSO silently fall back to that same cloud sandbox session
+  // whenever no device is actively routed, for targets where the dedicated
+  // tool isn't offered at all (e.g. the common no-device 'none' web/agent
+  // session). So a credential is reachable whenever EITHER condition holds:
+  // the dedicated tool is exposed for 'auto' (independent of device routing),
+  // or no device is routed (independent of target).
+  const credsSandboxReachable = String(!activeDeviceId || executionTarget === 'auto');
   let sandboxUploadedFiles = '';
   if (sandboxEnabled === 'true' && ctx.serverDB && ctx.userId && lobehubSkillTopicId) {
     try {
@@ -276,14 +358,12 @@ export const buildServerCallLlmContext = async ({
   const sessionDate = new Intl.DateTimeFormat('en-US', {
     day: 'numeric',
     month: 'long',
-    timeZone: ctx.userTimezone || 'UTC',
+    timeZone: state.world?.userTimezone || 'UTC',
     weekday: 'long',
     year: 'numeric',
   }).format(new Date());
 
-  const memoryEffort = String(
-    (state.metadata?.agentConfig as any)?.chatConfig?.memory?.effort ?? '',
-  );
+  const memoryEffort = String(agentConfig.chatConfig?.memory?.effort ?? '');
 
   const messageTodos = extractTodosFromMessages(messagesForContext);
   let planTodo: PlanTodoConfig | undefined =
@@ -300,7 +380,7 @@ export const buildServerCallLlmContext = async ({
       const topicDocumentModel = new TopicDocumentModel(
         ctx.serverDB,
         ctx.userId,
-        state.metadata?.workspaceId ?? ctx.workspaceId,
+        state.origin?.workspaceId ?? ctx.workspaceId,
       );
       const [planDocument] = await topicDocumentModel.findByTopicId(lobehubSkillTopicId, {
         type: AGENT_PLAN_FILE_TYPE,
@@ -585,18 +665,22 @@ export const buildServerCallLlmContext = async ({
   const contextEngineInput = {
     additionalContexts: llmPayload.additionalContexts,
     agentDocuments,
+    // Identity lives on the agent row, not in the prompt text — inject it so
+    // the model introduces itself by the user-given name.
+    agentIdentity: { name: agentConfig.name ?? undefined, title: agentConfig.title ?? undefined },
     ...(agentBuilderContext && { agentBuilderContext }),
-    agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,
+    agentGroup: state.world?.group,
     agentManagementContext: (state as any).initialContext?.initialContext?.mentionedAgents?.length
       ? {
           mentionedAgents: (state as any).initialContext.initialContext.mentionedAgents,
         }
       : undefined,
     additionalVariables: {
-      ...state.metadata?.deviceSystemInfo,
+      ...state.binding?.device?.systemInfo,
       ...lobehubSkillVariables,
       COMPOSIO_SERVICES_LIST: composioServicesListStr,
       CREDS_LIST: credsListStr,
+      creds_sandbox_reachable: credsSandboxReachable,
       language: serverLanguage,
       // Only override the generator's 'en-US' locale fallback when the user info
       // fetch actually resolved a language — an empty string would render blank.
@@ -607,13 +691,14 @@ export const buildServerCallLlmContext = async ({
       session_date: sessionDate,
       username: serverUsername,
     },
-    userTimezone: ctx.userTimezone,
+    userTimezone: state.world?.userTimezone,
     capabilities,
-    botPlatformContext: ctx.botPlatformContext,
-    discordContext: ctx.discordContext,
+    botPlatformContext: state.world?.channel?.botPlatform,
+    ...(workspaceContext && { workspaceContext }),
+    discordContext: state.world?.channel?.discord,
     enableExpertise: state.enableExpertise,
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
-    evalContext: ctx.evalContext,
+    evalContext: state.world?.eval,
     expertise: state.expertise,
     forceFinish: state.forceFinish,
     ...(groupAgentBuilderContext && { groupAgentBuilderContext }),
@@ -640,13 +725,15 @@ export const buildServerCallLlmContext = async ({
     modelKnowledgeCutoff,
     provider,
     ...(planTodo && { planTodo }),
+    connectorOwnershipNote: state.world?.connectorOwnershipNote,
+    projectInstructions: state.world?.projectInstructions,
     systemRole: agentConfig.systemRole ?? undefined,
     toolDiscoveryConfig,
     toolsConfig: {
       manifests: Object.values(resolved.promptManifestMap),
       tools: resolved.enabledToolIds,
     },
-    userMemory: state.metadata?.userMemory,
+    userMemory: state.world?.userMemory,
     ...(resolvedSkills?.enabledSkills?.length && {
       skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
     }),
@@ -719,4 +806,46 @@ export const buildServerCallLlmContext = async ({
     resolvedExtendParams,
     shouldReplayAssistantReasoning,
   };
+};
+
+const getAppUrl = (): string | undefined => {
+  try {
+    return appEnv.APP_URL;
+  } catch {
+    return process.env.APP_URL;
+  }
+};
+
+const resolveWorkspaceContext = async (
+  ctx: RuntimeExecutorContext,
+  state: AgentState,
+): Promise<WorkspaceContext | undefined> => {
+  // A share visitor converses under the CREATOR's identity: the creator's
+  // routes (workspace or personal) are not the visitor's, so never describe
+  // that scope to them — skip the block entirely, whatever the run's scope.
+  if (ctx.agentShareVisitor) return undefined;
+
+  const appUrl = getAppUrl();
+  const workspaceId = state.origin?.workspaceId ?? ctx.workspaceId;
+
+  // Personal space: the origin alone is enough to anchor links.
+  if (!workspaceId) return appUrl ? { appUrl } : undefined;
+
+  // Workspace run whose slug cannot be resolved: injecting origin-only would
+  // wrongly tell the model it is in the personal space, so inject nothing
+  // (the pre-fix behaviour) rather than a false statement.
+  if (!ctx.serverDB || !ctx.userId) return undefined;
+
+  try {
+    const workspace = await new WorkspaceModel(ctx.serverDB, ctx.userId).findById(workspaceId);
+    if (!workspace?.slug) {
+      log('Workspace %s has no slug; skipping workspace context', workspaceId);
+      return undefined;
+    }
+
+    return { appUrl, workspace: { slug: workspace.slug } };
+  } catch (error) {
+    log('Failed to resolve workspace context for %s: %O', workspaceId, error);
+    return undefined;
+  }
 };

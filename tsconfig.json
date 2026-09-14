@@ -64,6 +64,7 @@
     "scripts/elasticsearchReindex/**/*.ts",
     "scripts/elasticsearchSync/**/*.ts",
     "scripts/installFtsSearchSyncCapture/**/*.ts",
+    "scripts/pgSearchCleanup/**/*.ts",
     "*.ts",
     "*.mts",
     "*.cts",

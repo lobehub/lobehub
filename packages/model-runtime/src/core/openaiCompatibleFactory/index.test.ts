@@ -77,6 +77,10 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),
 }));
+// Mock getModelPricing to prevent async issues
+vi.mock('../../utils/model', () => ({
+  getModelPricing: vi.fn().mockResolvedValue({}),
+}));
 
 let instance: LobeOpenAICompatibleRuntime;
 
@@ -1825,6 +1829,7 @@ describe('LobeOpenAICompatibleFactory', () => {
     describe('responses routing', () => {
       it(
         'should route to Responses API when chatCompletion.useResponse is true',
+        { timeout: 10000 },
         async () => {
           const LobeMockProviderUseResponses = createOpenAICompatibleRuntime({
             baseURL: 'https://api.test.com/v1',
@@ -1849,10 +1854,6 @@ describe('LobeOpenAICompatibleFactory', () => {
             } as any);
 
           // Mock getModelPricing to prevent async issues
-          vi.mock('../../utils/model', () => ({
-            getModelPricing: vi.fn().mockResolvedValue({}),
-          }));
-
           try {
             await inst.chat({
               messages: [{ content: 'hi', role: 'user' }],
@@ -1865,7 +1866,6 @@ describe('LobeOpenAICompatibleFactory', () => {
 
           expect(mockResponsesCreate).toHaveBeenCalled();
         },
-        { timeout: 10000 },
       );
 
       it('should enable strictToolPairing when building Responses API input', async () => {
@@ -2029,6 +2029,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
       it(
         'should route to Responses API when model matches useResponseModels',
+        { timeout: 10000 },
         async () => {
           const LobeMockProviderUseResponseModels = createOpenAICompatibleRuntime({
             baseURL: 'https://api.test.com/v1',
@@ -2096,7 +2097,6 @@ describe('LobeOpenAICompatibleFactory', () => {
           }
           expect(spy).toHaveBeenCalledTimes(2); // Ensure no additional calls were made
         },
-        { timeout: 10000 },
       );
     });
 

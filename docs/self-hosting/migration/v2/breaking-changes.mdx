@@ -76,6 +76,13 @@ For deployment guides, see [Getting Started](/docs/self-hosting/start).
 
 LobeHub 2.0 recommends using **PostgreSQL 17** or higher.
 
-This is because LobeHub 2.0 uses the [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search) extension for full-text search capabilities. If you use Serverless Postgres services like Neon, the pg\_search extension is only available on PostgreSQL 17.
+LobeHub 2.0 introduced the [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search)
+extension for full-text search. When 2.0 shipped, Neon provided it to new PostgreSQL 17 projects.
+Neon has since stopped offering `pg_search` to new projects and has notified affected existing
+customers that the extension will be removed on September 21, 2026. Existing Neon deployments
+should complete
+[Migrate from pg\_search to Elasticsearch](/docs/self-hosting/advanced/elasticsearch-migration).
+See [Full-Text Search](/docs/self-hosting/advanced/full-text-search) before choosing the search
+backend for a current deployment.
 
 If you self-host your database with Docker, we recommend using the `paradedb/paradedb:latest-pg17` image.

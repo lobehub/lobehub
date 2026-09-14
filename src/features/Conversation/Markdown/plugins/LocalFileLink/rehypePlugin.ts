@@ -1,4 +1,3 @@
-import { isDesktop } from '@lobechat/const';
 import { SKIP, visit } from 'unist-util-visit';
 
 import { LOBE_LOCAL_FILE_LINK_TAG, parseLocalFileHref } from './parse';
@@ -11,8 +10,6 @@ const getNodeText = (node: any): string => {
 };
 
 export const rehypeLocalFileLink = () => (tree: any) => {
-  if (!isDesktop) return;
-
   visit(tree, 'element', (node: any) => {
     if (node.tagName !== 'a') return;
 

@@ -64,8 +64,19 @@ join an explanation from an older round with fresh execution output.
 - Use `--file` for binary artifacts and larger text/DOM/transcript files.
 - Use `--content` for short text assertions. Pass exactly one of `--file` and
   `--content`.
-- Keep the description factual: identify the action, observed state, and relevant
-  target. Do not place the verdict in the description unless explicitly asked.
+- **Description is mandatory for every file artifact.** Always supply a non-empty
+  `--desc` when using `--file`, and a `description` when attaching a `fileId` or
+  adding a file to an ingest manifest. Small text files converted to inline
+  content still require it; do not rely on the filename fallback.
+- Write a concise, factual sentence identifying the file's contents and their
+  relevance to the criterion, including the action, observed state, or target
+  where useful. The reviewer should know why to open it without inspecting the
+  payload. A filename, path, id, "JSON", or "evidence" alone is insufficient.
+  Do not invent conclusions or place the verdict in the description unless
+  explicitly asked.
+- Example: `goal-final-state.json` → "Goal final state after training: completion
+  status and the four final validation results." Describe each artifact
+  separately instead of repeating the criterion title for every file.
 
 ```bash
 # File artifact captured by the selected surface.

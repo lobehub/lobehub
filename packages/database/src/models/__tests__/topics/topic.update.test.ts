@@ -331,6 +331,87 @@ describe('TopicModel - Update', () => {
       );
     });
 
+    it('patches a child running operation without replacing its parent or siblings', async () => {
+      const topicId = 'task-callback-patch-child-operation';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              {
+                assistantMessageId: 'assistant-child-1',
+                hooks: [{ id: 'child-hook', type: 'onComplete', webhook: { url: '/child-hook' } }],
+                operationId: 'child-operation-1',
+              },
+              { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+            ],
+            hooks: [{ id: 'parent-hook', type: 'onComplete', webhook: { url: '/parent-hook' } }],
+            operationId: 'parent-operation',
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.patchRunningOperation(topicId, 'child-operation-1', {
+          deviceId: 'device-1',
+          heteroType: 'devin',
+        }),
+      ).resolves.toBe(true);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        hooks: [{ id: 'parent-hook', type: 'onComplete', webhook: { url: '/parent-hook' } }],
+        operationId: 'parent-operation',
+      });
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([
+        expect.objectContaining({
+          deviceId: 'device-1',
+          heteroType: 'devin',
+          hooks: [{ id: 'child-hook', type: 'onComplete', webhook: { url: '/child-hook' } }],
+          operationId: 'child-operation-1',
+        }),
+        { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+      ]);
+    });
+
+    it('patches a root running operation without changing its children', async () => {
+      const topicId = 'task-callback-patch-root-operation';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              { assistantMessageId: 'assistant-child', operationId: 'child-operation' },
+            ],
+            operationId: 'parent-operation',
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.patchRunningOperation(topicId, 'parent-operation', {
+          deviceId: 'device-1',
+          heteroType: 'devin',
+        }),
+      ).resolves.toBe(true);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        deviceId: 'device-1',
+        heteroType: 'devin',
+        operationId: 'parent-operation',
+      });
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([
+        { assistantMessageId: 'assistant-child', operationId: 'child-operation' },
+      ]);
+    });
+
     it('atomically takes a child running operation once', async () => {
       const topicId = 'task-callback-take-child-operation';
       await serverDB.insert(topics).values({

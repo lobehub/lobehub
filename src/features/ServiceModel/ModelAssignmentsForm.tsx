@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, InputNumber, Skeleton, TextArea, Tooltip } from '@lobehub/ui';
+import { Flexbox, Form, InputNumber, TextArea, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -104,7 +105,7 @@ const ModelAssignmentsForm = memo(() => {
           onRetry={() => refreshUserState()}
         />
       );
-    return <Skeleton active paragraph={{ rows: 8 }} title={false} />;
+    return <RouteLoading />;
   }
 
   const updateDefaultAgentModel = async ({

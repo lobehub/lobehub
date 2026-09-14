@@ -14,6 +14,7 @@ import {
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 
 import { styles } from './styles';
+import { useFreezeHeightWhileResizingImage } from './useFreezeHeightWhileResizingImage';
 
 export type DocumentCommentEditorValue = TopicCommentEditorValue;
 
@@ -57,6 +58,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     const internalEditor = useEditor();
     const editor = externalEditor ?? internalEditor;
     const mentionOption = useWorkspaceCommentMentionOption();
+    const rootRef = useFreezeHeightWhileResizingImage();
 
     const setValue = useCallback(
       (value: DocumentCommentEditorValue) => {
@@ -85,8 +87,9 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     );
 
     return (
-      <div className={`${styles.commentEditor} ${mentionFilledClassName}`}>
+      <div className={`${styles.commentEditor} ${mentionFilledClassName}`} ref={rootRef}>
         <EditorCanvas
+          blockImageCaretGuard
           disabled={disabled}
           editor={editor}
           editorData={{ content: initialContent, editorData: initialEditorData }}
@@ -96,10 +99,14 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
           mentionOption={mentionOption}
           placeholder={placeholder}
           contentStyle={{
-            maxHeight: compact ? 120 : 184,
             minHeight: compact ? 24 : 44,
-            overflowY: 'auto',
-            padding: 0,
+            // On top of ChatInput's own 8px/12px body padding: keep content —
+            // images especially — clear of the box edges. Only the vertical
+            // padding lives here: the editor forwards this style to its
+            // absolutely positioned placeholder as well, so a horizontal
+            // padding would push the placeholder 8px past the caret. The
+            // inline padding sits on `styles.commentEditor` instead.
+            paddingBlock: '6px 10px',
           }}
           onContentChange={() => onChange?.(readTopicCommentEditorValue(editor))}
           onInit={handleInit}

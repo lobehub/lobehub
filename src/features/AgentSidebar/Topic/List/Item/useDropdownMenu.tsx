@@ -1,7 +1,7 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
+import { copyToClipboard, Icon } from '@lobehub/ui';
 import { toast } from '@lobehub/ui/base-ui';
 import {
   Archive,
@@ -217,8 +217,8 @@ export const useTopicItemDropdownMenu = ({
         icon: <Icon icon={Hash} />,
         key: 'copySessionId',
         label: t('actions.copySessionId'),
-        onClick: () => {
-          navigator.clipboard.writeText(id);
+        onClick: async () => {
+          await copyToClipboard(id);
           toast.success(t('actions.copySessionIdSuccess'));
         },
       },
@@ -226,10 +226,10 @@ export const useTopicItemDropdownMenu = ({
         icon: <Icon icon={Link2} />,
         key: 'copyLink',
         label: t('actions.copyLink'),
-        onClick: () => {
+        onClick: async () => {
           if (!activeAgentId) return;
           const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(activeAgentId, id)}`;
-          navigator.clipboard.writeText(url);
+          await copyToClipboard(url);
           toast.success(t('actions.copyLinkSuccess'));
         },
       },

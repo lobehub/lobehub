@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { DeviceControlDeps } from '@lobechat/device-control';
 import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import type { HeterogeneousAgentCancellationSignal } from '@lobechat/heterogeneous-agents/protocol';
 import type { RemotePlatformCommandRuntime } from '@lobechat/heterogeneous-agents/scanHost';
 import {
   resolveRemotePlatformCommand,
@@ -13,6 +14,7 @@ import {
 } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
+import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 import { createLogger } from '@/utils/logger';
@@ -35,6 +37,7 @@ type AvailableRemotePlatformRuntime = Extract<RemotePlatformCommandRuntime, { av
 // Hardcoded (not imported) so the desktop main process keeps zero builtin-tool
 // package deps — importing one risks the @lobechat/types stub runtime leak.
 const BrowserIdentifier = 'lobe-browser';
+const AuvIdentifier = 'lobe-computer-use';
 
 function parseHermesSessionId(stderr: string): string | undefined {
   for (const line of stderr.split(/\r?\n/).reverse()) {
@@ -125,7 +128,7 @@ const safeJsonParse = (input: string): unknown => {
 export default class GatewayConnectionCtr extends ControllerModule {
   static override readonly groupName = 'gatewayConnection';
 
-  /** In-memory registry for running platform agent tasks (openclaw / hermes). */
+  /** In-memory registry for running hetero agent tasks (openclaw / hermes / local-cli dispatch). */
   private readonly platformTasks = new Map<string, PlatformTaskEntry>();
   private readonly platformTaskKillTimers = new Map<number, NodeJS.Timeout>();
 
@@ -142,6 +145,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   private get service() {
     return this.app.getService(GatewayConnectionService);
+  }
+
+  private get auvService() {
+    return this.app.getService(AuvService);
   }
 
   private get remoteServerConfigCtr() {
@@ -321,6 +328,30 @@ export default class GatewayConnectionCtr extends ControllerModule {
         systemContext: request.systemContext,
         topicId: request.topicId,
         workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
+        // Register the spawned CLI process so `cancelHeteroTask` (sent by the
+        // server's `interruptTask` when the user clicks Stop) can find and kill
+        // it by operationId. The entry is cleaned up on child exit below.
+        onChildSpawned: (child: ChildProcess) => {
+          const pid = child.pid;
+          if (pid === undefined) return;
+          const taskId = request.operationId;
+          this.platformTasks.set(taskId, {
+            agentType: request.agentType,
+            operationId: request.operationId,
+            pid,
+            topicId: request.topicId,
+            workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
+          });
+          child.once('exit', () => {
+            // Only clear if this exit belongs to the current entry — a
+            // superseding run for the same operationId may have already
+            // replaced it.
+            const current = this.platformTasks.get(taskId);
+            if (current?.pid === pid) {
+              this.platformTasks.delete(taskId);
+            }
+          });
+        },
       });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
@@ -382,6 +413,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // the gateway connections, so both handlers route straight to it.
       enrollWorkspace: (params) => this.service.enrollWorkspace(params),
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
+      readExternalAssetForPublish: (params) =>
+        this.localFileCtr.readExternalAssetForPublish(params),
+      copyAssetForPublish: (params) => this.localFileCtr.copyAssetForPublish(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
       listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
@@ -402,11 +436,29 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
+  /**
+   * Dispatches a device-gateway tool call to its desktop-owned runtime.
+   *
+   * Triggering workflow:
+   *
+   * {@link GatewayConnectionService.setToolCallHandler}
+   *   -> `tool_call_request`
+   *     -> {@link GatewayConnectionCtr.executeToolCall}
+   *
+   * Upstream:
+   * - {@link GatewayConnectionService.setToolCallHandler}
+   *
+   * Downstream:
+   * - {@link GatewayConnectionCtr.executeAuvToolCall}
+   * - {@link LocalSystemExecutionRuntime.executeToolCall}
+   */
   private async executeToolCall(
     identifier: string | undefined,
     apiName: string,
     args: unknown,
   ): Promise<BuiltinServerRuntimeOutput> {
+    if (identifier === AuvIdentifier) return this.executeAuvToolCall(apiName, args);
+
     // Browser is a renderer-resident tool: forward to the client executor via
     // BrowserControlCtr instead of the local-system apiName switch below.
     if (identifier === BrowserIdentifier) {
@@ -490,6 +542,40 @@ export default class GatewayConnectionCtr extends ControllerModule {
         );
       }
     }
+  }
+
+  /**
+   * Executes the stable LobeHub CLI tool against the app-owned AUV daemon.
+   *
+   * Triggering workflow:
+   *
+   * {@link GatewayConnectionCtr.executeToolCall}
+   *   -> `lobe-computer-use/runCommand`
+   *     -> {@link GatewayConnectionCtr.executeAuvToolCall}
+   *
+   * Upstream:
+   * - {@link GatewayConnectionCtr.executeToolCall}
+   *
+   * Downstream:
+   * - {@link AuvService.runCommand}
+   */
+  private async executeAuvToolCall(
+    apiName: string,
+    args: unknown,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    if (apiName !== 'runCommand') {
+      throw new Error(`AUV tool "${apiName}" is not available on this device`);
+    }
+
+    const result = await this.auvService.runCommand(args as AuvRunCommandParams);
+    return {
+      content: JSON.stringify(result),
+      ...(result.exitCode !== 0 && {
+        error: result.stderr || `Computer Use exited with code ${result.exitCode}`,
+      }),
+      state: result,
+      success: result.exitCode === 0,
+    };
   }
 
   /**
@@ -1049,7 +1135,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const { signal = 'SIGINT', taskId } = args;
     const localExec = await this.heterogeneousAgentCtr.cancelLhHeteroExec({
       operationId: taskId,
-      signal: signal as NodeJS.Signals,
+      signal: signal as HeterogeneousAgentCancellationSignal,
     });
     if (localExec) {
       return JSON.stringify({ ...localExec, taskId });

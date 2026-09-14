@@ -299,6 +299,22 @@ export class HeterogeneousAgentService {
     let orchestrationRole: 'member' | 'supervisor' | undefined;
     let staleActiveOperationId: string | undefined;
 
+    // The operation row is the durable lifecycle owner. The frontend may have
+    // already consumed the in-stream terminal event and cleared the topic's
+    // runningOperation marker before this explicit finish callback arrives.
+    try {
+      const operation = await this.agentOperationModel.findById(operationId);
+      const metadata = operation?.metadata as Record<string, unknown> | null | undefined;
+      const operationHooks = metadata?._hooks;
+      if (Array.isArray(operationHooks)) serializedHooks = operationHooks as SerializedHook[];
+      if (typeof metadata?.assistantMessageId === 'string') {
+        assistantMessageId = metadata.assistantMessageId;
+      }
+      isolationThreadId = operation?.threadId ?? undefined;
+    } catch (err) {
+      log('heteroFinish: failed to load operation lifecycle metadata (non-fatal): %O', err);
+    }
+
     // `cancelled` is only an intermediate process signal. Keep the marker for
     // the following success/error terminal callback, which owns completion.
     if (result !== 'cancelled') {
@@ -309,8 +325,8 @@ export class HeterogeneousAgentService {
         } else {
           assistantMessageId = settled.assistantMessageId ?? assistantMessageId;
           if (settled.status === 'settled') {
-            serializedHooks = settled.hooks as SerializedHook[] | undefined;
-            isolationThreadId = settled.threadId;
+            serializedHooks ??= settled.hooks as SerializedHook[] | undefined;
+            isolationThreadId = settled.threadId ?? isolationThreadId;
             orchestrationRole = settled.orchestrationRole;
           }
         }

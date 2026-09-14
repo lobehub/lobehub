@@ -41,8 +41,8 @@ import { useTranslation } from 'react-i18next';
 import { isDesktop } from '@/const/version';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
@@ -171,8 +171,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
       handleOpenChangeComplete: completeOpenChange,
       open,
     } = useMenuContentLifecycle(onSelect);
-    const { agencyConfig, isPreferenceLoading, workspaceScoped } =
-      useEffectiveAgencyConfig(agentId);
+    const { agencyConfig, isPreferenceLoading, workspaceScoped } = useTopicAgencyConfig(agentId);
     const isLogin = useUserStore(authSelectors.isLogin);
     const { isLoading: isDeviceListLoading } = useDeviceStore((s) => s.useFetchDevices)(
       isLogin || isDesktop,

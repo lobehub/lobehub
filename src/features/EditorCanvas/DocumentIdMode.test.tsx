@@ -42,7 +42,8 @@ const mockDocumentStore = {
   useFetchDocument,
 };
 
-vi.mock('zustand-utils', () => ({
+vi.mock('zustand-utils', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStoreUpdater: () => () => undefined,
 }));
 

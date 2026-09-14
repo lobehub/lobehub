@@ -200,7 +200,7 @@ const TaskSubtasks = memo(() => {
   const handleNavigate = useCallback(
     (identifier: string) => {
       const subtask = subtaskMap.get(identifier);
-      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined));
+      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined, subtask?.name));
     },
     [navigate, subtaskMap],
   );

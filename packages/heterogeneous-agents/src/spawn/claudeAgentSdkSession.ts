@@ -124,6 +124,7 @@ export interface HeterogeneousAgentRuntimeStatus {
     | 'codex-app-server'
     | 'cursor-acp'
     | 'droid-acp'
+    | 'devin-acp'
     | 'trae-acp';
 }
 

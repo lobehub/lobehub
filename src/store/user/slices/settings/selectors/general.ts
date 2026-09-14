@@ -35,6 +35,8 @@ const telemetry = (s: UserStore) => generalConfig(s).telemetry;
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
 const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLinkIcon ?? true;
+const workflowStreamingExpandLevel = (s: UserStore) =>
+  generalConfig(s).expandWorkflowWhileStreaming ? 'semi' : 'collapsed';
 
 export const userGeneralSettingsSelectors = {
   animationMode,
@@ -51,4 +53,5 @@ export const userGeneralSettingsSelectors = {
   responseLanguage,
   telemetry,
   transitionMode,
+  workflowStreamingExpandLevel,
 };

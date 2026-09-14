@@ -13,7 +13,6 @@ import {
 } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import {
   AGENT_PLAN_FILE_TYPE,
@@ -35,8 +34,10 @@ import type {
   PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
+  WorkspaceContext,
 } from '@lobechat/context-engine';
-import { MessagesEngine, resolveTopicReferences } from '@lobechat/context-engine';
+import { resolveTopicReferences } from '@lobechat/context-engine';
+import { type ContextSnapshot, runContextEngineering } from '@lobechat/mecha';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
   getActivePluginIds,
@@ -48,6 +49,7 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -64,6 +66,8 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
 import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
+import { getElectronStoreState } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
@@ -705,79 +709,73 @@ export const contextEngineering = async ({
     }
   }
 
+  // The agent's identity lives on the agent row (name/title), not in the
+  // prompt text — inject it so the model can answer "who are you?" with the
+  // name the user gave it instead of the product/model name.
+  const agentIdentityMeta = agentId
+    ? agentSelectors.getAgentMetaById(agentId)(agentStoreState)
+    : undefined;
+
+  // Where the run lives (app origin + active workspace slug) so the model
+  // writes in-app links that resolve to the right scope. Mirrors the server
+  // runtime's `resolveWorkspaceContext`.
+  const workspaceContext = resolveClientWorkspaceContext();
+
   // Create MessagesEngine with injected dependencies
-  const engine = new MessagesEngine({
-    additionalContexts,
-    // Agent configuration
-    enableHistoryCount,
-    formatHistorySummary: historySummaryPrompt,
-    historyCount,
-    historySummary,
-    inputTemplate,
-    systemRole,
-
-    // Capability injection
-    capabilities: {
-      isCanUseAudio,
-      isCanUseFC,
-      isCanUseVideo,
-      isCanUseVision,
+  // Everything gathered above is host-specific; shaping it into engine
+  // parameters is shared with the server through `@lobechat/mecha`.
+  const snapshot: ContextSnapshot = {
+    agent: {
+      documents: agentDocuments,
+      enableHistoryCount,
+      historyCount,
+      identity: { name: agentIdentityMeta?.name, title: agentIdentityMeta?.title },
+      inputTemplate,
+      knowledge: { fileContents, knowledgeBases },
+      systemRole,
     },
-
     // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
     fileContext: { enabled: true, includeFileUrl: !isDesktop },
-
-    // Knowledge injection
-    knowledge: {
-      fileContents,
-      knowledgeBases,
+    model: {
+      capabilities: { isCanUseAudio, isCanUseFC, isCanUseVideo, isCanUseVision },
+      displayName: getRuntimeModelDisplayName(model, provider),
+      knowledgeCutoff: getRuntimeModelKnowledgeCutoff(model, provider),
+      model,
+      provider,
     },
-    agentDocuments,
-
-    // Messages
-    messages,
-
-    // Model info
-    model,
-    modelDisplayName: getRuntimeModelDisplayName(model, provider),
-    modelKnowledgeCutoff: getRuntimeModelKnowledgeCutoff(model, provider),
-    provider,
-
-    // runtime context
-    initialContext,
-    stepContext,
-
-    // Selected skills/tools from user for this request
-    selectedSkills: initialContext?.selectedSkills,
-    selectedTools: initialContext?.selectedTools,
-
-    // MessagesEngine force-disables skills / agent-document injectors when this
-    // is `false` (chat mode). ChatService resolves it from stored user intent
-    // plus the selected model's function-call ability.
-    enableAgentMode: effectiveEnableAgentMode,
-
-    // Skills configuration (resolved above)
-    skillsConfig: {
+    run: {
+      additionalContexts,
+      // MessagesEngine force-disables skills / agent-document injectors when this
+      // is `false` (chat mode). ChatService resolves it from stored user intent
+      // plus the selected model's function-call ability.
+      enableAgentMode: effectiveEnableAgentMode,
+      formatHistorySummary: historySummaryPrompt,
+      historySummary,
+      initialContext,
+      messages,
+      stepContext,
+    },
+    step: {
+      ...(isAgentBuilderEnabled && { agentBuilderContext }),
+      ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
+      agentManagementContext,
+      onboardingContext,
+      planTodo: planTodoConfig,
+      topicReferences,
+      workspaceContext,
+    },
+    tools: {
       enabledSkills,
-    },
-
-    // Tool Discovery configuration
-    toolDiscoveryConfig,
-
-    // Tools configuration
-    toolsConfig: {
-      disabledToolIdentifiers: tools?.includes(PageAgentIdentifier)
-        ? undefined
-        : [PageAgentIdentifier],
+      enabledToolIds: tools,
       manifests,
-      tools,
+      // Selected skills/tools from user for this request
+      selectedSkills: initialContext?.selectedSkills,
+      selectedTools: initialContext?.selectedTools,
+      toolDiscoveryConfig,
     },
-
-    // User memory configuration
-    userMemory: userMemoryConfig,
-
-    // Variable generators
-    variableGenerators: {
+    // Browser-resolved placeholders. The store-backed generators stay lazy so a
+    // placeholder that never renders costs nothing.
+    variables: {
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
@@ -820,29 +818,36 @@ export const contextEngineering = async ({
         return topic?.title ?? '';
       },
     },
-
-    // Extended contexts - only pass when enabled
-    ...(isAgentBuilderEnabled && { agentBuilderContext }),
-    ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
-    ...(agentManagementContext && { agentManagementContext }),
-    ...(agentGroup && { agentGroup }),
-    ...(planTodoConfig && { planTodo: planTodoConfig }),
-    ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
-    ...(onboardingContext && { onboardingContext }),
-  });
+    world: { group: agentGroup, userMemory: userMemoryConfig },
+  };
 
   log('Input messages count: %d', messages.length);
 
-  const result = await engine.process();
+  const processed = await runContextEngineering(snapshot);
 
-  log('Output messages count: %d', result.messages.length);
+  log('Output messages count: %d', processed.length);
 
-  if (messages.length > 0 && result.messages.length === 0) {
+  if (messages.length > 0 && processed.length === 0) {
     log(
       'WARNING: Messages were reduced to 0! Input messages: %o',
       messages.map((m) => ({ id: m.id, role: m.role })),
     );
   }
 
-  return result.messages;
+  return processed;
+};
+
+const resolveClientAppOrigin = (): string | undefined => {
+  if (isDesktop) return electronSyncSelectors.remoteServerUrl(getElectronStoreState()) || undefined;
+  if (typeof window === 'undefined') return undefined;
+  return window.location.origin || undefined;
+};
+
+const resolveClientWorkspaceContext = (): WorkspaceContext | undefined => {
+  const appUrl = resolveClientAppOrigin();
+  const slug = getActiveWorkspaceSlug();
+
+  if (!appUrl && !slug) return undefined;
+
+  return { appUrl, ...(slug && { workspace: { slug } }) };
 };

@@ -27,6 +27,7 @@ import type {
   VerifyVisualizationValue,
   VerifyVisualizationView,
 } from '@lobechat/types';
+import { verifyCheckDefinitionSchema } from '@lobechat/types';
 import { parseKlmTrace, summarizeKlmTrace } from '@lobechat/utils/verify/interactionCost';
 import pc from 'picocolors';
 
@@ -756,6 +757,11 @@ export function planFromResult(result: Record<string, unknown>, droppedIds?: Set
       {
         ...(category === undefined ? {} : { category }),
         description: firstString(item.description),
+        sourceCriterionId: firstString(item.sourceCriterionId),
+        definition:
+          item.definition === undefined
+            ? undefined
+            : verifyCheckDefinitionSchema.parse(item.definition),
         id,
         index,
         onFail: 'manual' as const,
@@ -979,4 +985,12 @@ export function formatAnnotationRegion(
   if (!label && !position) return undefined;
   if (!position) return label;
   return label ? `${label} @ ${position}` : position;
+}
+
+/** Keep file identity when small text artifacts are stored inline. */
+export function evidenceDescriptionForFile(
+  description?: string,
+  file?: string,
+): string | undefined {
+  return description?.trim() || (file ? path.basename(file) : undefined);
 }

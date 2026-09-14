@@ -158,9 +158,12 @@ const DeviceItem = memo<DeviceItemProps>(({ device, isCurrent, onSelect, selecte
   // CONNECTED", not "last active". The copy says exactly that; it becomes a
   // true last-active once a writer stamps liveness.
   const activityText = online
-    ? t('devices.channel.connected', {
-        time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
-      })
+    ? `${t('devices.status.onlineConnections', { count: channels.length })} · ${t(
+        'devices.channel.connected',
+        {
+          time: dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow(),
+        },
+      )}`
     : t('devices.lastSeen', { time: dayjs(device.lastSeen).fromNow() });
 
   // Publish / make-private for workspace enrollments. Reuses the

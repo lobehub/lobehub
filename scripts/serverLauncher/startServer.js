@@ -15,6 +15,7 @@ const { checkDeprecatedAuth } = require(sharedModulePath);
 
 // Set file paths
 const DB_MIGRATION_SCRIPT_PATH = '/app/docker.cjs';
+const ES_MIGRATION_SCRIPT_PATH = '/app/fts-search-elasticsearch-reindex.cjs';
 const SERVER_SCRIPT_PATH = '/app/server.js';
 const PROXYCHAINS_CONF_PATH = '/etc/proxychains4.conf';
 
@@ -114,12 +115,13 @@ ${protocol} ${ip} ${port} ${user} ${pass}
 };
 
 // Function to execute a script with child process spawn
-const runScript = (scriptPath, useProxy = false) => {
+const runScript = (scriptPath, useProxy = false, args = []) => {
   const command = useProxy
-    ? ['/bin/proxychains', '-q', '/bin/node', scriptPath]
-    : ['/bin/node', scriptPath];
+    ? ['/bin/proxychains', '-q', '/bin/node', scriptPath, ...args]
+    : ['/bin/node', scriptPath, ...args];
   return new Promise((resolve, reject) => {
     const process = spawn(command.shift(), command, { stdio: 'inherit' });
+    process.on('error', reject);
     process.on('close', (code) =>
       code === 0 ? resolve() : reject(new Error(`🔴 Process exited with code ${code}`)),
     );
@@ -243,13 +245,14 @@ const runServer = async () => {
   console.log('🌐 DNS Server:', dns.getServers());
   console.log('-------------------------------------');
 
-  if (process.env.DATABASE_DRIVER) {
+  const migrateElasticsearch = process.env.FTS_SEARCH_PROVIDER === 'elasticsearch';
+  if (process.env.DATABASE_DRIVER || migrateElasticsearch) {
     try {
       await fs.access(DB_MIGRATION_SCRIPT_PATH);
 
       await runScript(DB_MIGRATION_SCRIPT_PATH);
     } catch (err) {
-      if (err.code === 'ENOENT') {
+      if (err.code === 'ENOENT' && !migrateElasticsearch) {
         console.log(
           `⚠️ DB Migration: Not found ${DB_MIGRATION_SCRIPT_PATH}. Skipping DB migration. Ensure to migrate database manually.`,
         );
@@ -259,6 +262,19 @@ const runServer = async () => {
         console.error(err);
         process.exit(1);
       }
+    }
+  }
+
+  /** Search indexes must be ready before the application can accept requests. */
+  if (migrateElasticsearch) {
+    try {
+      const args = ['--startup', '--yes'];
+      if (process.env.ENABLE_TELEMETRY) args.push('--telemetry-environment=production');
+      await runScript(ES_MIGRATION_SCRIPT_PATH, false, args);
+    } catch (err) {
+      console.error('❌ Elasticsearch migration failed; application startup stopped.');
+      console.error(err);
+      process.exit(1);
     }
   }
 

@@ -1085,6 +1085,55 @@
       "when": 1788141397076,
       "tag": "0154_goal_node_task_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1788177029327,
+      "tag": "0155_document_likes",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1788281814640,
+      "tag": "0156_project_working_directories",
+      "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1788399005304,
+      "tag": "0157_add_metrics_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1788457369087,
+      "tag": "0158_file_upload_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 159,
+      "version": "7",
+      "when": 1788751998345,
+      "tag": "0159_task_activities",
+      "breakpoints": true
+    },
+    {
+      "idx": 160,
+      "version": "7",
+      "when": 1788849739068,
+      "tag": "0160_acceptance_check_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 161,
+      "version": "7",
+      "when": 1789038060245,
+      "tag": "0161_acceptance_comments",
+      "breakpoints": true
     }
   ],
   "version": "6"

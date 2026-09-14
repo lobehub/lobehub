@@ -11,11 +11,15 @@ import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } f
 // We need to mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  after: vi.fn((callback: () => void) => callback()),
+  after: vi.fn(function (callback: () => void) {
+    return callback();
+  }),
 }));
 
 /**

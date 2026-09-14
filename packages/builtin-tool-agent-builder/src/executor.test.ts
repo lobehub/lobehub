@@ -19,7 +19,9 @@ const {
 }));
 
 vi.mock('@lobechat/agent-manager-runtime', () => ({
-  AgentManagerRuntime: vi.fn(() => ({ updateAgentConfig: mockUpdateAgentConfig })),
+  AgentManagerRuntime: vi.fn(function () {
+    return { updateAgentConfig: mockUpdateAgentConfig };
+  }),
 }));
 
 vi.mock('@/services/agent', () => ({ agentService: {} }));

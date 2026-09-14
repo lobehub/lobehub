@@ -36,6 +36,7 @@ import { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 import { LobeLMStudioAI } from './providers/lmstudio';
 import { LobeHubAI } from './providers/lobehub';
 import { LobeLongCatAI } from './providers/longcat';
+import { LobeMetaAI } from './providers/meta';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMinimaxCodingPlanAI } from './providers/minimaxCodingPlan';
 import { LobeMistralAI } from './providers/mistral';
@@ -68,6 +69,7 @@ import { LobeSuperGrokAI } from './providers/superGrok';
 import { LobeTaichuAI } from './providers/taichu';
 import { LobeTencentCloudAI } from './providers/tencentcloud';
 import { LobeTogetherAI } from './providers/togetherai';
+import { LobeUnslothAI } from './providers/unsloth';
 import { LobeUpstageAI } from './providers/upstage';
 import { LobeV0AI } from './providers/v0';
 import { LobeVercelAIGatewayAI } from './providers/vercelaigateway';
@@ -121,6 +123,7 @@ export const providerRuntimeMap = {
   lmstudio: LobeLMStudioAI,
   lobehub: LobeHubAI,
   longcat: LobeLongCatAI,
+  meta: LobeMetaAI,
   minimax: LobeMinimaxAI,
   minimaxcodingplan: LobeMinimaxCodingPlanAI,
   mistral: LobeMistralAI,
@@ -154,6 +157,7 @@ export const providerRuntimeMap = {
   taichu: LobeTaichuAI,
   tencentcloud: LobeTencentCloudAI,
   togetherai: LobeTogetherAI,
+  unsloth: LobeUnslothAI,
   upstage: LobeUpstageAI,
   v0: LobeV0AI,
   vercelaigateway: LobeVercelAIGatewayAI,

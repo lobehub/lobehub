@@ -5,14 +5,14 @@ import debug from 'debug';
 import type { AiFullModelCard, AiModelType } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import type { ClientOptions } from 'openai';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { ErrorClassifier, refineErrorCode } from '../../errors';
 import {
-  isGPT5ProResponsesModel,
+  isGPTProResponsesModel,
   isResponsesAPIModel,
-  supportsGPT5ResponsesReasoningEffortNone,
+  supportsGPTResponsesReasoningEffortNone,
 } from '../../providers/openai/modelId';
 import type {
   ASROptions,
@@ -75,6 +75,7 @@ import type { OpenAIStreamOptions } from '../streams';
 import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import { type ChatPayloadForTransformStream, readableFromAsyncIterable } from '../streams/protocol';
 import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';
+import { OpenAICompatibleClient } from './client';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
@@ -164,12 +165,12 @@ const getGenerateObjectResponsesReasoningParams = ({
   reasoning_effort,
   thinking,
 }: GenerateObjectReasoningParams & { model: string }) => {
-  if (isGPT5ProResponsesModel(model)) {
+  if (isGPTProResponsesModel(model)) {
     return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
   }
 
   if (thinking?.type === 'disabled') {
-    return supportsGPT5ResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
+    return supportsGPTResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
   }
 
   return reasoning_effort && reasoning_effort !== 'max'
@@ -387,7 +388,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       if (customClient?.createClient) {
         this.client = customClient.createClient(initOptions as any);
       } else {
-        this.client = new OpenAI(initOptions);
+        this.client = new OpenAICompatibleClient(initOptions);
       }
 
       this.baseURL = baseURL || this.client.baseURL;
@@ -710,7 +711,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           if (customClient?.createClient) {
             this.client = customClient.createClient(initOptions);
           } else {
-            this.client = new OpenAI(initOptions);
+            this.client = new OpenAICompatibleClient(initOptions);
           }
 
           this.baseURL = targetBaseURL;

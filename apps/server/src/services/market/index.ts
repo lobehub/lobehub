@@ -6,6 +6,7 @@ import { type NextRequest } from 'next/server';
 
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 
 import { listSkillToolsWithLiveFallback } from './listSkillToolsWithLiveFallback';
 
@@ -687,6 +688,9 @@ export class MarketService {
         }
 
         const message = responseError?.message || dataMessage || 'LobeHub Skill call failed';
+        const denial = getToolAccessDeniedError(responseError, message);
+        if (denial)
+          return { content: JSON.stringify({ error: denial }), error: denial, success: false };
 
         return {
           content: message,
@@ -719,6 +723,9 @@ export class MarketService {
       // Extract it so the content is not empty on failure.
       const errorBody = (err as any).errorBody;
       const skillError = errorBody?.error;
+      const denial = getToolAccessDeniedError(error, err.message);
+      if (denial)
+        return { content: JSON.stringify({ error: denial }), error: denial, success: false };
       const content = skillError ? JSON.stringify(skillError) : err.message;
 
       return {

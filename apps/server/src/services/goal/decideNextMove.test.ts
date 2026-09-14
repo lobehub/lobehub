@@ -1,13 +1,17 @@
+import { VERIFICATION_UNJUDGEABLE_ERROR } from '@lobechat/const/goal';
 import type { GoalGraphNode, GoalGraphSnapshot, TaskItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  compareMetric,
   decideNextMove,
   frontierNeedsBudget,
   GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   needsBudget,
+  needsMetricCriteria,
   selectFrontier,
+  VERIFICATION_ERRORED_ERROR,
   VERIFICATION_FAILED_ERROR,
 } from './decideNextMove';
 
@@ -48,16 +52,18 @@ const decide = (
     budget?: Parameters<typeof decideNextMove>[0]['budget'];
     concurrency?: number;
     frontierTask?: TaskItem | null;
+    metricCriteria?: Parameters<typeof decideNextMove>[0]['metricCriteria'];
     tasks?: TaskItem[];
   } = {},
 ) => {
-  const { budget, concurrency = 3, frontierTask, tasks } = extra;
+  const { budget, concurrency = 3, frontierTask, metricCriteria, tasks } = extra;
   const listed = tasks ?? (frontierTask ? [frontierTask] : []);
   return decideNextMove({
     budget,
     concurrency,
     frontier: selectFrontier(snapshot),
     graph: snapshot,
+    metricCriteria,
     tasksById: new Map(listed.map((item) => [item.id, item])),
   });
 };
@@ -93,7 +99,7 @@ describe('selectFrontier', () => {
     expect(selection.chosen?.id).toBe('a');
   });
 
-  it('drops terminal work from the frontier', () => {
+  it('drops terminal Tasks from the frontier', () => {
     const snapshot = graph({
       nodes: [node('done', { status: 'resolved' }), node('gone', { status: 'retired' })],
     });
@@ -103,7 +109,7 @@ describe('selectFrontier', () => {
 });
 
 describe('decideNextMove', () => {
-  it('stops on a paused or terminal goal before looking at work', () => {
+  it('stops on a paused or terminal goal before looking at Tasks', () => {
     const nodes = [node('a')];
     expect(decide(graph({ goal: { ...graph().goal, status: 'paused' }, nodes })).branch).toBe(
       'goal_paused',
@@ -116,7 +122,7 @@ describe('decideNextMove', () => {
     );
   });
 
-  it('parks on an open gate ahead of any ready work', () => {
+  it('parks on an open gate ahead of any ready Task', () => {
     const move = decide(
       graph({
         decisions: [
@@ -134,7 +140,7 @@ describe('decideNextMove', () => {
     });
   });
 
-  it('asks for a responsible task when the chosen work has none', () => {
+  it('asks for a responsible runner when the chosen Task has none', () => {
     expect(decide(graph({ nodes: [node('a')] }))).toMatchObject({
       branch: 'create_task',
       chosenNodeId: 'a',
@@ -173,9 +179,29 @@ describe('decideNextMove', () => {
         }).branch,
       ).toBe('recover_verification');
 
+      // A verifier that crashed never judged the delivery, so it recovers like a
+      // rejection instead of stopping the goal on a verdict nobody reached.
+      expect(
+        decide(snapshot, {
+          frontierTask: task({ error: VERIFICATION_ERRORED_ERROR, status: 'paused' }),
+        }),
+      ).toMatchObject({
+        branch: 'recover_verification',
+        message: 'Verification could not run for Task T-1',
+      });
+
       expect(
         decide(snapshot, { frontierTask: task({ error: 'Device offline', status: 'failed' }) }),
       ).toMatchObject({ branch: 'failure_decision', message: 'Device offline' });
+
+      // A criterion the review cannot settle by reading is NOT recoverable: the
+      // builder would re-deliver the same artifacts against the same unprovable
+      // check, so this one belongs to a person on the first occurrence.
+      expect(
+        decide(snapshot, {
+          frontierTask: task({ error: VERIFICATION_UNJUDGEABLE_ERROR, status: 'paused' }),
+        }),
+      ).toMatchObject({ branch: 'failure_decision', outcome: 'waiting_human' });
     });
 
     it('treats a plain pause as waiting on a person and a run as waiting on the world', () => {
@@ -205,11 +231,46 @@ describe('decideNextMove', () => {
       expect(move.message).toContain('3/');
     });
 
+    it('stops when the deadline passed instead of dispatching', () => {
+      // A calendar deadline is a budget unit the attempt/round/dollar trio
+      // cannot express; past it the coordinator must park the goal exactly
+      // like any other exhausted budget.
+      const move = decide(snapshot, {
+        budget: {
+          costLimitReached: false,
+          deadlinePassed: true,
+          roundLimitReached: false,
+          runs: 0,
+          totalCost: 0,
+        },
+        frontierTask: task(),
+      });
+
+      expect(move).toMatchObject({ branch: 'budget_exhausted', outcome: 'no_progress' });
+      expect(move.message).toContain('Deadline passed');
+    });
+
+    it('checks the deadline before the round and cost budgets', () => {
+      const move = decide(snapshot, {
+        budget: {
+          costLimitReached: true,
+          deadlinePassed: true,
+          roundLimitReached: true,
+          runs: 9,
+          totalCost: 9,
+        },
+        frontierTask: task(),
+      });
+
+      expect(move.message).toContain('Deadline passed');
+    });
+
     it('dispatches when the budget still has room', () => {
       expect(
         decide(snapshot, {
           budget: {
             costLimitReached: false,
+            deadlinePassed: false,
             roundLimitReached: false,
             runs: 1,
             totalCost: 0.5,
@@ -220,9 +281,9 @@ describe('decideNextMove', () => {
     });
   });
 
-  describe('with no ready work', () => {
+  describe('with no ready Tasks', () => {
     it('plans the decomposition for an empty graph, parks a fully blocked one', () => {
-      // A goal with no work has not been planned yet — that is the planner's
+      // A goal with no tasks has not been planned yet — that is the planner's
       // cue, not a dead end.
       expect(decide(graph())).toMatchObject({
         branch: 'plan_decomposition',
@@ -241,7 +302,7 @@ describe('decideNextMove', () => {
       });
     });
 
-    it('moves to the terminal acceptance contract once every Work is done', () => {
+    it('moves to the terminal acceptance contract once every Task is done', () => {
       const snapshot = graph({
         goal: { ...graph().goal, requirement: 'Prove it' },
         nodes: [node('a', { status: 'resolved' })],
@@ -253,7 +314,7 @@ describe('decideNextMove', () => {
       });
     });
 
-    it('holds the goal open while its acceptance Work has not passed', () => {
+    it('holds the goal open while its acceptance Task has not passed', () => {
       const snapshot = graph({
         goal: { ...graph().goal, requirement: 'Prove it' },
         nodes: [
@@ -341,7 +402,7 @@ describe('decideNextMove concurrency', () => {
     expect(move.outcome).toBe('advanced');
   });
 
-  it('does not let a paused task block independent work', () => {
+  it('does not let a paused task block an independent Task', () => {
     const snapshot = graph({ nodes: [node('a', { taskId: 'task_1' }), node('b')] });
 
     expect(decide(snapshot, { tasks: [task({ id: 'task_1', status: 'paused' })] })).toMatchObject({
@@ -414,5 +475,128 @@ describe('frontierNeedsBudget', () => {
     });
 
     expect(withTasks(snapshot, [task({ id: 'task_1', status: 'running' })])).toBe(false);
+  });
+});
+
+describe('needsMetricCriteria', () => {
+  const withCriteria = (nodes: GoalGraphNode[]) =>
+    graph({
+      goal: {
+        ...graph().goal,
+        config: { acceptance: { metrics: [{ key: 'followers', target: 1_000_000 }] } },
+      },
+      nodes,
+    });
+
+  it('only asks for criteria in the terminal phase of a goal that declares them', () => {
+    // Evaluating them is a database read per clause; a dispatch tick must not
+    // pay for it.
+    expect(needsMetricCriteria(withCriteria([node('a', { status: 'resolved' })]))).toBe(true);
+    expect(needsMetricCriteria(withCriteria([node('a', { status: 'active' })]))).toBe(false);
+    expect(needsMetricCriteria(withCriteria([]))).toBe(false);
+    expect(needsMetricCriteria(graph({ nodes: [node('a', { status: 'resolved' })] }))).toBe(false);
+  });
+});
+
+describe('compareMetric', () => {
+  it('evaluates each comparison', () => {
+    expect(compareMetric(10, 'gte', 10)).toBe(true);
+    expect(compareMetric(9, 'gte', 10)).toBe(false);
+    expect(compareMetric(10, 'gt', 10)).toBe(false);
+    expect(compareMetric(10, 'lte', 10)).toBe(true);
+    expect(compareMetric(11, 'lt', 10)).toBe(false);
+    expect(compareMetric(10, 'eq', 10)).toBe(true);
+  });
+
+  it('reads both operands at the scale observations are stored with', () => {
+    // `metric_points.value` is numeric(20, 6): recording 0.1234567 reads back
+    // as 0.123457, so a full-precision target would make the clause
+    // unsatisfiable and could flip gte/lte right at the boundary.
+    expect(compareMetric(0.123_457, 'eq', 0.123_456_7)).toBe(true);
+    expect(compareMetric(0.123_457, 'gte', 0.123_456_7)).toBe(true);
+    expect(compareMetric(0.123_457, 'lte', 0.123_456_7)).toBe(true);
+    // Differences the column can still represent are not rounded away.
+    expect(compareMetric(0.123_457, 'eq', 0.123_458)).toBe(false);
+  });
+});
+
+describe('measured acceptance', () => {
+  const terminal = graph({
+    goal: { ...graph().goal, requirement: 'Prove it' },
+    nodes: [node('a', { status: 'resolved' })],
+  });
+
+  it('holds the goal short of the delivery contract while a number is unmet', () => {
+    // The acceptance Task is never created: an unmet number is not something a
+    // verifier can talk its way past, so running it would only spend tokens to
+    // restate the gap.
+    const move = decide(terminal, {
+      metricCriteria: {
+        allMet: false,
+        criteria: [{ key: 'followers', met: false, op: 'gte', target: 1_000_000, value: 4200 }],
+      },
+    });
+
+    expect(move).toMatchObject({ branch: 'measured_acceptance', outcome: 'no_progress' });
+    expect(move.message).toContain('followers');
+    expect(move.message).toContain('4200');
+  });
+
+  it('names a clause that was never measured rather than reading it as satisfied', () => {
+    const move = decide(terminal, {
+      metricCriteria: {
+        allMet: false,
+        criteria: [{ key: 'followers', met: false, op: 'gte', target: 1_000_000, value: null }],
+      },
+    });
+
+    expect(move.message).toContain('no observation');
+  });
+
+  it('falls through to the delivery contract once every number holds', () => {
+    expect(
+      decide(terminal, {
+        metricCriteria: {
+          allMet: true,
+          criteria: [
+            { key: 'followers', met: true, op: 'gte', target: 1_000_000, value: 1_000_001 },
+          ],
+        },
+      }),
+    ).toMatchObject({ branch: 'terminal_acceptance', outcome: 'advanced' });
+  });
+});
+
+describe('exploration terminal phase', () => {
+  const explorationGraph = () => {
+    const snapshot = graph({ nodes: [node('baseline', { status: 'resolved' })] });
+    snapshot.goal.requirement = 'Deliver proven result';
+    snapshot.goal.config = {
+      exploration: { instruction: 'Compare experiments', maxExperiments: 3 },
+    };
+    return snapshot;
+  };
+  it('expands a finished experiment instead of accepting a completed task list', () => {
+    expect(decide(explorationGraph()).branch).toBe('explore_graph');
+  });
+  it('hands a reviewed search to independent acceptance and reopens when new experiments appear', () => {
+    const snapshot = explorationGraph();
+    snapshot.goal.config!.exploration!.checkpoint = {
+      token: 'lease',
+      snapshot: 'hash',
+      expiresAt: '2026-09-08T00:00:00Z',
+      readyForAcceptance: true,
+      reviewedNodeIds: ['baseline'],
+    };
+    expect(decide(snapshot).branch).toBe('terminal_acceptance');
+    snapshot.nodes.push(node('new-result', { status: 'resolved' }));
+    expect(decide(snapshot).branch).toBe('explore_graph');
+  });
+  it('waits for a running experiment and preserves the task retry path', () => {
+    const snapshot = explorationGraph();
+    snapshot.nodes[0] = node('baseline', { status: 'active', taskId: 'task_1' });
+    expect(decide(snapshot, { frontierTask: task({ status: 'running' }) }).branch).not.toBe(
+      'explore_graph',
+    );
   });
 });

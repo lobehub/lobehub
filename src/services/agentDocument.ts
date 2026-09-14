@@ -96,6 +96,7 @@ class AgentDocumentService {
       agentId: string;
       content: string;
       hintIsSkill?: boolean;
+      parentId?: string;
       title: string;
     } & AgentDocumentToolTriggerInput,
   ) => {
@@ -115,6 +116,7 @@ class AgentDocumentService {
       agentId: string;
       content: string;
       hintIsSkill?: boolean;
+      parentId?: string;
       title: string;
       topicId: string;
     } & AgentDocumentToolTriggerInput,

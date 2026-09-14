@@ -87,11 +87,20 @@ export function createDevOrchestrator({
     });
   }
 
-  function scheduleRestart() {
+  const pendingChanges = new Map();
+
+  function scheduleRestart(dir, eventType, filename) {
+    const file = path.join(dir, filename ?? '');
+    const detail = existsSync(file)
+      ? `${statSync(file).size}B @${new Date(statSync(file).mtimeMs).toISOString()}`
+      : 'missing';
+    pendingChanges.set(path.relative(desktopRoot, file), `${eventType} ${detail}`);
     clearTimeout(debounce);
     debounce = setTimeout(() => {
+      const changes = [...pendingChanges].map(([f, d]) => `  ${f}: ${d}`).join('\n');
+      pendingChanges.clear();
       if (shuttingDown || !electron) return;
-      log('[desktop-dev] main/preload bundle changed, restarting electron');
+      log(`[desktop-dev] main/preload bundle changed, restarting electron\n${changes}`);
       restarting = true;
       electron.kill();
     }, restartDebounceMs);
@@ -99,7 +108,7 @@ export function createDevOrchestrator({
 
   function watchBundles() {
     for (const dir of [path.dirname(MAIN_BUNDLE), path.dirname(PRELOAD_BUNDLE)]) {
-      watch(dir, scheduleRestart);
+      watch(dir, (eventType, filename) => scheduleRestart(dir, eventType, filename));
     }
   }
 

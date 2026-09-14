@@ -29,7 +29,6 @@ const effectiveAgencyConfig = vi.hoisted(() => ({
   },
   workspaceScoped: false,
 }));
-const labPreferences = vi.hoisted(() => ({ enableAgentProviderBinding: true }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...(await importOriginal<typeof LobechatConstModule>()),
@@ -70,8 +69,8 @@ vi.mock('@/features/ChatInput/hooks/useChatInputResourceAccess', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
-  useEffectiveAgencyConfig: () => ({
+vi.mock('@/hooks/useTopicAgencyConfig', () => ({
+  useTopicAgencyConfig: () => ({
     agencyConfig: effectiveAgencyConfig.current,
     workspaceScoped: effectiveAgencyConfig.workspaceScoped,
   }),
@@ -85,19 +84,6 @@ vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     isAgentConfigLoadingById: () => () => false,
     isWorkspaceAgentById: () => () => true,
-  },
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ preference: { lab: labPreferences } }),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: {
-    enableAgentProviderBinding: (state: {
-      preference: { lab: { enableAgentProviderBinding: boolean } };
-    }) => state.preference.lab.enableAgentProviderBinding,
   },
 }));
 
@@ -146,8 +132,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
-  const { useState } = await import('react');
-
   return {
     ...(await importOriginal<object>()),
     ActionIcon: ({
@@ -167,36 +151,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         onClick={onClick}
       />
     ),
-    Collapse: ({
-      defaultActiveKey = [],
-      items,
-    }: {
-      defaultActiveKey?: string[];
-      items: { children?: ReactNode; key: string; label?: ReactNode }[];
-    }) => {
-      const [activeKeys, setActiveKeys] = useState(defaultActiveKey);
-
-      return (
-        <div>
-          {items.map((item) => {
-            const expanded = activeKeys.includes(item.key);
-
-            return (
-              <div key={item.key}>
-                <button
-                  aria-expanded={expanded}
-                  type="button"
-                  onClick={() => setActiveKeys(expanded ? [] : [item.key])}
-                >
-                  {item.label}
-                </button>
-                {expanded && item.children}
-              </div>
-            );
-          })}
-        </div>
-      );
-    },
     Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
       <div className={className}>{children}</div>
     ),
@@ -245,6 +199,9 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
     />
   ),
   confirmModal: confirmModalMock,
+  Skeleton: ({ height }: { height?: number }) => (
+    <div data-height={height} data-testid="skeleton" />
+  ),
   toast: {
     error: toastErrorMock,
     success: toastSuccessMock,
@@ -310,7 +267,6 @@ beforeEach(() => {
     heterogeneousProvider: { command: 'codex', type: 'codex' },
   };
   effectiveAgencyConfig.workspaceScoped = false;
-  labPreferences.enableAgentProviderBinding = true;
   confirmModalMock.mockReset();
   mockService.consumeCodexRateLimitResetCredit.mockReset();
   mockService.getClaudeCodeQuota.mockReset();
@@ -378,21 +334,6 @@ describe('HeteroControlBar', () => {
     expect(screen.getByTestId('api-credits')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' })).toBeNull();
     expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
-  });
-
-  it('hides platform credits when API mode is disabled in Labs', () => {
-    labPreferences.enableAgentProviderBinding = false;
-    effectiveAgencyConfig.current = {
-      boundDeviceId: 'personal-device',
-      executionTarget: 'local',
-      heterogeneousProvider: { authMode: 'api', command: 'codex', type: 'codex' },
-    };
-
-    render(<HeteroControlBar />);
-
-    expect(screen.queryByTestId('api-credits')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })).toBeNull();
-    expect(mockService.getCodexQuota).not.toHaveBeenCalled();
   });
 });
 
@@ -1042,7 +983,6 @@ describe('CodexQuotaMenu', () => {
       screen.getAllByText((content) => content.startsWith('heteroAgent.quota.duration.')),
     ).toHaveLength(2);
     const resetCreditsSummary = screen.getByText('heteroAgent.codexQuota.resetCredits:4');
-    expect(resetCreditsSummary.closest('button')?.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('#1')).toBeNull();
 
     fireEvent.click(resetCreditsSummary);

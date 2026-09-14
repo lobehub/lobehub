@@ -1,4 +1,8 @@
-import type { AgentStreamEvent, StreamChunkData } from '@lobechat/agent-gateway-client';
+import type {
+  AgentStreamEvent,
+  StreamChunkData,
+  ToolStateChunkData,
+} from '@lobechat/agent-gateway-client';
 
 const GATEWAY_STREAM_UPDATE_INTERVAL_MS = 300;
 
@@ -22,6 +26,16 @@ const getBufferedChunkKind = (event: AgentStreamEvent): BufferedChunkKind | unde
   const chunkType = (event.data as StreamChunkData | undefined)?.chunkType;
   return chunkType === 'text' || chunkType === 'reasoning' ? chunkType : undefined;
 };
+
+const getToolStateData = (event: AgentStreamEvent): ToolStateChunkData | undefined => {
+  if (event.type !== 'stream_chunk') return;
+
+  const data = event.data as ToolStateChunkData | undefined;
+  return data?.chunkType === 'tool_state' ? data : undefined;
+};
+
+const getToolStateKey = (event: AgentStreamEvent, data: ToolStateChunkData) =>
+  `${event.operationId ?? ''}:${data.toolCallId}`;
 
 const toBufferedChunk = (event: AgentStreamEvent, kind: BufferedChunkKind): BufferedChunk => ({
   data: event.data as StreamChunkData,
@@ -101,6 +115,12 @@ export const createGatewayEventBuffer = (
   let buffered: BufferedChunk | undefined;
   let lastDeliveredAt = -Infinity;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const bufferedToolStates = new Map<
+    string,
+    { data: ToolStateChunkData; event: AgentStreamEvent }
+  >();
+  const lastToolStateDeliveredAt = new Map<string, number>();
+  let toolStateTimer: ReturnType<typeof setTimeout> | undefined;
 
   const clearTimer = () => {
     if (timer === undefined) return;
@@ -124,7 +144,77 @@ export const createGatewayEventBuffer = (
     timer = schedule(flush, Math.max(0, GATEWAY_STREAM_UPDATE_INTERVAL_MS - elapsed));
   };
 
+  const clearToolStateTimer = () => {
+    if (toolStateTimer === undefined) return;
+    unschedule(toolStateTimer);
+    toolStateTimer = undefined;
+  };
+
+  const flushToolStates = (force = true) => {
+    clearToolStateTimer();
+    const currentTime = now();
+
+    for (const [key, pending] of bufferedToolStates) {
+      const deliveredAt = lastToolStateDeliveredAt.get(key) ?? -Infinity;
+      if (!force && currentTime - deliveredAt < GATEWAY_STREAM_UPDATE_INTERVAL_MS) continue;
+
+      bufferedToolStates.delete(key);
+      lastToolStateDeliveredAt.set(key, currentTime);
+      listener(pending.event);
+    }
+
+    if (!force && bufferedToolStates.size > 0) {
+      const nextDelay = Math.min(
+        ...[...bufferedToolStates.keys()].map((key) => {
+          const deliveredAt = lastToolStateDeliveredAt.get(key) ?? -Infinity;
+          return Math.max(0, GATEWAY_STREAM_UPDATE_INTERVAL_MS - (currentTime - deliveredAt));
+        }),
+      );
+      toolStateTimer = schedule(() => flushToolStates(false), nextDelay);
+    }
+  };
+
+  const scheduleToolStateFlush = () => {
+    if (toolStateTimer !== undefined) return;
+    const currentTime = now();
+    const nextDelay = Math.min(
+      ...[...bufferedToolStates.keys()].map((key) => {
+        const deliveredAt = lastToolStateDeliveredAt.get(key) ?? -Infinity;
+        return Math.max(0, GATEWAY_STREAM_UPDATE_INTERVAL_MS - (currentTime - deliveredAt));
+      }),
+    );
+    toolStateTimer = schedule(() => flushToolStates(false), nextDelay);
+  };
+
+  const pushToolState = (event: AgentStreamEvent, data: ToolStateChunkData) => {
+    flush();
+    const key = getToolStateKey(event, data);
+    const pending = bufferedToolStates.get(key);
+    if (pending && data.snapshotSeq <= pending.data.snapshotSeq) return;
+
+    const currentTime = now();
+    const deliveredAt = lastToolStateDeliveredAt.get(key) ?? -Infinity;
+    if (currentTime - deliveredAt >= GATEWAY_STREAM_UPDATE_INTERVAL_MS) {
+      bufferedToolStates.delete(key);
+      lastToolStateDeliveredAt.set(key, currentTime);
+      listener(event);
+      return;
+    }
+
+    bufferedToolStates.set(key, { data, event });
+    scheduleToolStateFlush();
+  };
+
   const push = (event: AgentStreamEvent) => {
+    const toolStateData = getToolStateData(event);
+    if (toolStateData) {
+      pushToolState(event, toolStateData);
+      return;
+    }
+
+    // A prose chunk after a tool update is a semantic boundary too. Commit the
+    // latest state first so stream ordering remains observable in the renderer.
+    flushToolStates();
     const kind = getBufferedChunkKind(event);
 
     if (!kind) {
@@ -163,5 +253,11 @@ export const createGatewayEventBuffer = (
     scheduleFlush();
   };
 
-  return { flush, push };
+  return {
+    flush: () => {
+      flush();
+      flushToolStates();
+    },
+    push,
+  };
 };

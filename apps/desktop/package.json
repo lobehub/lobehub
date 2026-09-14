@@ -31,6 +31,7 @@
     "lint:md": "remark . --silent --output",
     "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
     "lint:ts": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
+    "log:auth": "node scripts/analyzeAuthLog.mjs",
     "package:linux": "npm run build:main && electron-builder --linux --config electron-builder.mjs  --publish never",
     "package:local": "npm run build:main && electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "package:local:reuse": "electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
@@ -47,6 +48,8 @@
     "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
+    "@auv-js/cli": "0.0.16",
+    "@auv-js/sdk": "0.0.16",
     "@lobehub/fluent-emoji": "^4.1.0",
     "@lydell/node-pty": "1.2.0-beta.12",
     "electron-log": "^5.4.4",
@@ -79,6 +82,8 @@
     "@lobechat/utils": "workspace:*",
     "@lobehub/i18n-cli": "^1.27.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@sentry/electron": "7.15.0",
+    "@sentry/vite-plugin": "5.3.0",
     "@t3-oss/env-core": "^0.13.11",
     "@types/resolve": "^1.20.6",
     "@types/semver": "^7.7.1",
@@ -93,7 +98,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "electron": "43.2.0",
-    "electron-builder": "26.14.0",
+    "electron-builder": "26.16.1",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.9",
     "electron-window-state": "^5.0.3",
@@ -109,6 +114,7 @@
     "https-proxy-agent": "^7.0.6",
     "i18next": "^25.10.10",
     "just-diff": "^6.0.2",
+    "magic-string": "0.30.21",
     "prettier": "^3.9.4",
     "remark-cli": "^12.0.1",
     "resolve": "^1.22.12",
@@ -122,24 +128,11 @@
     "undici": "^7.28.0",
     "uuid": "^14.0.1",
     "vite": "8.0.14",
-    "vitest": "3.2.6",
+    "vitest": "5.0.0",
     "zod": "^4.4.3",
     "zod-compiler": "^1.28.0"
   },
   "optionalDependencies": {
     "node-mac-permissions": "^2.5.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "electron-builder",
-      "node-mac-permissions"
-    ],
-    "overrides": {
-      "node-gyp": "^12.4.0",
-      "react": "19.2.7",
-      "react-dom": "19.2.7",
-      "vitest": "3.2.6"
-    }
   }
 }

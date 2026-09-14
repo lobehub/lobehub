@@ -42,6 +42,7 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
       setLoading(true);
       try {
         const response = await fileService.getKnowledgeItems({
+          includeContentPreview: false,
           knowledgeBaseId,
           parentId: null,
           showFilesInKnowledgeBase: false,
@@ -76,6 +77,7 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
 
         try {
           const response = await fileService.getKnowledgeItems({
+            includeContentPreview: false,
             knowledgeBaseId,
             parentId: folderId,
             showFilesInKnowledgeBase: false,
@@ -122,6 +124,7 @@ const MoveToFolderModalContent = memo<MoveToFolderModalContentProps>(
       async (folderId: string) => {
         try {
           const response = await fileService.getKnowledgeItems({
+            includeContentPreview: false,
             knowledgeBaseId,
             parentId: folderId,
             showFilesInKnowledgeBase: false,

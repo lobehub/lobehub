@@ -44,6 +44,18 @@ Feature: 发送消息与流式输出期间的视口滚动行为
     When 用户发送一条触发长文输出的消息
     Then 用户消息应固定在聊天列表顶部
 
+  # Regression guard for the lost pin animation: the send scroll fires before
+  # the spacer row exists and gets clamped, so the visible slide is the settle
+  # re-pin after mount. An instant re-pin there turns the slide into a jump.
+  @AGENT-SCROLL-007 @P0 @journey
+  Scenario: 发送消息后，用户消息以多帧平滑滚动过渡到列表顶部
+    Given 流式响应被放慢以模拟长文输出
+    And 用户进入 Lobe AI 对话页面
+    When 用户完成一轮用于垫高列表的长回复对话
+    And 开始记录聊天列表滚动轨迹
+    And 用户发送一条触发长文输出的消息
+    Then 聊天列表应以多帧平滑滚动把用户消息顶到顶部
+
   # Regression guard for the memo-staleness issue where the message
   # ResizeObserver could skip rebinding to the new turn's user/assistant DOM
   # nodes, making spacer height drift off the second send.

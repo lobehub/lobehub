@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Codexアプリサーバーランタイム",
   "features.desktopSplitView.desc": "2つのデスクトップタブを並べて表示し、独立したナビゲーションとサイズ変更可能な仕切りを備えています。",
   "features.desktopSplitView.title": "タブ分割ビュー",
+  "features.evalCapture.desc": "会話のターン、その前のコンテキスト、入力、および生成された回答を評価テストケースとしてキャプチャするメッセージアクションを追加します。",
+  "features.evalCapture.title": "ターンを評価ケースとして保存",
   "features.groupChat.desc": "複数のAIアシスタントによるグループチャット機能を有効にします。",
   "features.groupChat.title": "グループチャット（マルチアシスタント）",
   "features.heteroSessionImport.desc": "トピックリストメニューに「ローカルエージェントセッションのインポート」エントリを追加します: ローカルのClaude Code / Codex CLIトランスクリプトをスキャンしてトピックとしてインポートし、再インポート時には増分同期を行います。",

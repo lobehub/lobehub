@@ -18,7 +18,9 @@ vi.mock('@/database/models/agentDocuments', () => ({
     WRITE: 4,
   },
   AgentDocumentModel: vi.fn(),
-  buildDocumentFilename: vi.fn((title: string) => title),
+  buildDocumentFilename: vi.fn(function (title: string) {
+    return title;
+  }),
 }));
 
 vi.mock('./mounts/skills/createSkillMount', () => ({
@@ -56,9 +58,9 @@ describe('AgentDocumentVfsService', () => {
     for (const method of Object.values(mockSkillMount)) {
       method.mockReset();
     }
-    (AgentDocumentModel as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      () => mockAgentDocumentModel,
-    );
+    (AgentDocumentModel as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
+      return mockAgentDocumentModel;
+    });
     (createSkillMount as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockSkillMount);
     mockAgentDocumentModel.listByParentAndFilename.mockImplementation(async (...args) => {
       const result = await mockAgentDocumentModel.findByParentAndFilename(...args);

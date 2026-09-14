@@ -1,5 +1,6 @@
 import type { BotPlatformContext } from '@lobechat/context-engine';
 import type {
+  BotSenderMetadata,
   ChatTopicBotContext,
   ExecAgentParams,
   LobeAgentChatConfig,
@@ -10,8 +11,53 @@ import type {
 } from '@lobechat/types';
 
 import type { EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
+import type { AgentConfigWithId } from '@/server/services/agent';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
+
+import type { DeviceAccessReason } from './deviceAccessPolicy';
+import type { AgentShareGate } from './shareGate';
+
+/**
+ * Resolved run state shared by the {@link AiAgentService.execAgent} pipeline
+ * stages (`pipeline/*`). Built once inside `execAgent` after agent/topic/turn
+ * setup, then handed to each extracted stage so the data every stage consumes
+ * is explicit instead of riding on closure variables.
+ *
+ * `agentConfig` is intentionally the same MUTABLE object `execAgent` holds:
+ * stages append to `systemRole` (connector ownership notes, project
+ * instructions) and later steps — `createOperation` in particular — must see
+ * those writes.
+ */
+export interface ExecRunContext {
+  agentConfig: AgentConfigWithId;
+  appContext?: InternalExecAgentParams['appContext'];
+  /** Persisted assistant placeholder row id (spinner anchor / error sink). */
+  assistantMessageId: string;
+  canUseDevice: boolean;
+  deviceAccessReason: DeviceAccessReason;
+  /** Effective model for this run (topic-pinned model already applied). */
+  model: string;
+  parentMessageId?: string;
+  /** Persistence-attribution agent id (Agent Signal marker aware). */
+  persistAgentId: string;
+  prompt: string;
+  provider: string;
+  /** The actual executing agent row id resolved from id/slug. */
+  resolvedAgentId: string;
+  /**
+   * Shared-agent visitor gate for this run, mirrored from
+   * {@link InternalExecAgentParams.shareGate} so every extracted pipeline stage
+   * can enforce it without threading a separate argument. Undefined for every
+   * ordinary (non-share) run.
+   */
+  shareGate?: AgentShareGate;
+  /** Topic id — guaranteed to exist by the time pipeline stages run. */
+  topicId: string;
+  trigger?: string;
+  /** User turn row id; undefined when the run starts from history (resume). */
+  userMessageId?: string;
+}
 
 /**
  * Internal params for execAgent with step lifecycle callbacks
@@ -36,6 +82,11 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /**
+   * Real platform author of a bot-channel turn, persisted on the inbound user
+   * message as `metadata.botSender` so the UI shows them instead of the owner.
+   */
+  botSender?: BotSenderMetadata;
   /**
    * chatConfig overrides (thinking / reasoning-effort extend params) merged over
    * the executing agent's own chatConfig, skipping nulled keys. Internal-only:
@@ -174,6 +225,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * downstream (connectors, installed plugins) keep it to the caller's own tools.
    */
   selectedToolIds?: string[];
+  /**
+   * Shared-agent visitor gate. Set ONLY by the shareChat router after the
+   * share access check — never client-passable. Restricts tools/memory/files at
+   * operation-build time, denies device access, and scopes the visitor's rows.
+   */
+  shareGate?: AgentShareGate;
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**

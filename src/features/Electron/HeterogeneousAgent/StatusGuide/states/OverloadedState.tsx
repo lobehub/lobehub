@@ -1,11 +1,20 @@
 import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 import { Ban, Loader2, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
+
+const styles = createStaticStyles(({ css }) => ({
+  errorDetails: css`
+    && pre {
+      padding: 12px;
+    }
+  `,
+}));
 
 const OverloadedState = ({
   autoRetry,
@@ -75,8 +84,8 @@ const OverloadedState = ({
           <Highlighter
             wrap
             actionIconSize={'small'}
+            classNames={{ content: styles.errorDetails }}
             language={'log'}
-            padding={12}
             style={{ maxHeight: 200, overflow: 'auto' }}
             variant={'outlined'}
           >

@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { deepseek as deepseekChatModels, ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
@@ -8,6 +8,7 @@ import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProper
 import { isDeepSeekV4FamilyModel } from '../../utils/modelParse';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
+import { deepseekRuntimeModels } from './runtimeModels';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
 
 export const isDeepSeekV4Model = (model: string | undefined) => isDeepSeekV4FamilyModel(model);
@@ -140,7 +141,7 @@ export const buildDeepSeekAnthropicPayload = async (
     // is more actionable (fork_topic / larger-ctx suggestions) than either a
     // doomed upstream 400 or a truncated stub completion. Estimate against the
     // messages we actually send (anthropic-normalized).
-    resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekChatModels) ??
+    resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels) ??
     (await getModelPropertyWithFallback<number | undefined>(
       payload.model,
       'maxOutput',

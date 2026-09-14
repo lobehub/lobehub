@@ -19,10 +19,13 @@ const KNOWN_LOCAL_PATH_PREFIXES = [
   '/Applications/',
   '/Users/',
   '/Volumes/',
+  '/etc/',
   '/home/',
   '/mnt/',
   '/opt/',
   '/private/',
+  '/root/',
+  '/srv/',
   '/tmp/',
   '/var/',
   '/workspace/',
@@ -129,7 +132,13 @@ export const parseLocalFileHref = (
   if (!candidate) return null;
 
   const { filePath, line, column } = extractLineSuffix(candidate);
-  if (!isAbsoluteLocalPath(filePath)) return null;
+  // Keep explicit relative references as files even without a resolvable workspace.
+  if (/^(?:\.\.?[\\/]|~[\\/])/.test(filePath)) {
+    return { column, filePath, line, workingDirectory: '' };
+  }
+
+  // Protocol-relative web URLs must never be treated as local files.
+  if (filePath.startsWith('//') || !isAbsoluteLocalPath(filePath)) return null;
 
   const matchedWorkingDirectory =
     workingDirectory && isWithinDirectory(filePath, workingDirectory)

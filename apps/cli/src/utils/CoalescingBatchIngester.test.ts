@@ -289,35 +289,32 @@ describe('CoalescingBatchIngester', () => {
     expect(ingest).toHaveBeenCalledTimes(6); // initial + 5 retries
   });
 
-  it('stops accumulating text once the batcher has failed (no undeliverable retention)', async () => {
-    // Mirrors the serial ingester's fatal short-circuit: after retries are
-    // exhausted nothing can be delivered, so later text deltas must be
-    // dropped instead of retained in `accumulatedText` until process exit.
-    const ingest = vi.fn(async () => {
-      throw new Error('server down');
-    });
+  it('preserves snapshots and ordered events when the server recovers after the retry window', async () => {
+    const ingest = vi.fn<IngestSink['ingest']>().mockRejectedValue(new Error('server down'));
     const ingester = new CoalescingBatchIngester({ finish: vi.fn(), ingest });
-
     ingester.push(toolEvent(1));
-    const drained = ingester.drain();
-    const assertion = expect(drained).rejects.toThrow('server down');
+    const assertion = expect(ingester.drain()).rejects.toThrow('server down');
     await vi.advanceTimersByTimeAsync(20_000);
     await assertion;
 
-    ingester.push(textEvent('undeliverable '));
+    ingest.mockResolvedValue(undefined);
+    ingester.push(textEvent('Recovered '));
     ingester.push(textEvent('response'));
-    await vi.advanceTimersByTimeAsync(1000);
+    ingester.push(toolEvent(2));
+    await ingester.drain();
 
-    // White-box on purpose — the regression IS the internal retention: the
-    // accumulator stays empty, no snapshot is pending, no debounce armed.
-    expect((ingester as any).accumulatedText).toBe('');
-    expect((ingester as any).pendingTextEvent).toBeUndefined();
-    expect((ingester as any).timer).toBeNull();
-
-    // And nothing new ever reaches the sink; drain keeps rethrowing.
-    const redrained = expect(ingester.drain()).rejects.toThrow('server down');
-    await vi.advanceTimersByTimeAsync(20_000);
-    await redrained;
-    expect(ingest).toHaveBeenCalledTimes(6); // unchanged after the failure
+    const recovered = ingest.mock.calls.at(-1)![0];
+    expect(recovered.map((event) => event.type)).toEqual([
+      'tool_start',
+      'stream_chunk',
+      'tool_start',
+    ]);
+    expect(recovered[0].data?.toolCallId).toBe('tc-1');
+    expect(recovered[1].data).toMatchObject({
+      content: 'Recovered response',
+      snapshotMode: 'replace',
+      snapshotSeq: 1,
+    });
+    expect(recovered[2].data?.toolCallId).toBe('tc-2');
   });
 });

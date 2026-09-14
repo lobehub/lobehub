@@ -1,0 +1,21 @@
+{
+  "name": "@lobechat/mecha",
+  "version": "0.0.1",
+  "description": "Host-agnostic Mecha layer: resolving an agent's effective run configuration and the context it runs on",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@lobechat/builtin-agents": "workspace:*",
+    "@lobechat/builtin-tool-local-system": "workspace:*",
+    "@lobechat/builtin-tool-page-agent": "workspace:*",
+    "@lobechat/builtin-tool-task": "workspace:*",
+    "@lobechat/context-engine": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/types": "workspace:*",
+    "debug": "^4.4.3",
+    "immer": "^10.1.3"
+  }
+}

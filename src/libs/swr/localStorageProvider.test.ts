@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bootTiming } from '@/libs/bootTiming';
 
-import { taskTemplateKeys } from './keys';
+import { builtinAgentKeys, taskTemplateKeys } from './keys';
 import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
   CACHE_TIERS,
@@ -58,6 +58,25 @@ describe('createCacheProvider — tiering', () => {
   it('getScopedCacheKey namespaces by scope', () => {
     expect(getScopedCacheKey('u1:personal')).toBe('lobechat-swr-cache:u1:personal');
     expect(getScopedCacheKey('anon:personal')).not.toBe(getScopedCacheKey('u1:personal'));
+  });
+
+  it('restores the builtin agent configuration from durable storage after a reload', async () => {
+    const scope = { value: 's1' };
+    const options = { idbPatterns: [...CACHE_TIERS.idb], localPatterns: [...CACHE_TIERS.local] };
+    const { provider } = buildProvider(scope, options);
+    await provider.hydrateScope?.();
+    const key = JSON.stringify(builtinAgentKeys.init('inbox', 's1'));
+    const data = { data: { id: 'inbox-1', profile: { fullBodyArtwork: '/custom.webp' } } };
+    provider().set(key, data);
+    await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
+
+    const { provider: restored } = buildProvider(scope, options);
+    await restored.hydrateScope?.();
+    expect(restored().get(key)).toEqual(data);
+
+    const { provider: otherUser } = buildProvider({ value: 's2' }, options);
+    await otherUser.hydrateScope?.();
+    expect(otherUser().get(key)).toBeUndefined();
   });
 
   it('routes local-tier keys to scoped localStorage only', async () => {

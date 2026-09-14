@@ -4,9 +4,6 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
-  'features.agentProviderBinding.desc':
-    'Let supported local agents run on API instead of their subscription — through the LobeHub default provider or a configured API provider and model. Available for select agents on Desktop local execution.',
-  'features.agentProviderBinding.title': 'Agent Provider Binding',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -52,8 +49,8 @@ export default {
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',
   'features.taskVerify.desc':
-    'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
-  'features.taskVerify.title': 'Task Delivery Acceptance',
+    'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
+  'features.taskVerify.title': 'Acceptance',
   'features.selfLearning.desc':
     'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
   'features.selfLearning.title': 'Self-evolving',

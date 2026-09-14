@@ -27,47 +27,6 @@ const modelscopeChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'DeepSeek V3.2',
-    enabled: true,
-    family: 'deepseek',
-    generation: 'deepseek-v3.2',
-    id: 'deepseek-ai/DeepSeek-V3.2',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.2 Exp uses a hybrid reasoning architecture and supports both thinking and non-thinking modes.',
-    displayName: 'DeepSeek V3.2 Exp',
-    family: 'deepseek',
-    generation: 'deepseek-v3.2',
-    id: 'deepseek-ai/DeepSeek-V3.2-Exp',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.1 uses a hybrid reasoning architecture and supports both thinking and non-thinking modes.',
-    displayName: 'DeepSeek V3.1',
-    family: 'deepseek',
-    generation: 'deepseek-v3.1',
-    id: 'deepseek-ai/DeepSeek-V3.1',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -76,18 +35,6 @@ const modelscopeChatModels: AIChatModelCard[] = [
     family: 'qwen',
     generation: 'qwen3',
     id: 'Qwen/Qwen3-235B-A22B',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description: 'Qwen3 32B is a Qwen3 model with strong reasoning and chat capabilities.',
-    displayName: 'Qwen3 32B',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'Qwen/Qwen3-32B',
     type: 'chat',
   },
 ];

@@ -17,8 +17,10 @@ import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
+import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
+import * as chatHelper from './helper';
 import { chatService } from './index';
 import * as mechaModule from './mecha';
 import { type ResolvedAgentConfig } from './mecha';
@@ -97,6 +99,14 @@ vi.mock('i18next', () => ({
   t: vi.fn((key) => `translated_${key}`),
 }));
 
+// 默认设置 isServerMode 为 false
+vi.mock(import('@/const/version'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  isServerMode: false,
+  isDeprecatedEdition: true,
+  isDesktop: false,
+}));
+
 vi.stubGlobal(
   'fetch',
   vi.fn(() => Promise.resolve(new Response(JSON.stringify({ some: 'data' })))),
@@ -107,6 +117,13 @@ vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
   const module = await importOriginal();
 
   return { ...(module as any), getMessageError: vi.fn() };
+});
+vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
+  const module = await importOriginal();
+  return {
+    ...(module as any),
+    fetchSSE: vi.fn(),
+  };
 });
 vi.mock('@lobechat/utils/url', () => ({
   isDesktopLocalStaticServerUrl: vi.fn(),
@@ -128,12 +145,9 @@ beforeEach(async () => {
   // 清除所有模块的缓存
   vi.resetModules();
 
-  // 默认设置 isServerMode 为 false
-  vi.mock('@/const/version', () => ({
-    isServerMode: false,
-    isDeprecatedEdition: true,
-    isDesktop: false,
-  }));
+  // Vitest 5 keeps the module-mock factory instance across `vi.resetModules()`, so a
+  // `mockReturnValue` set inside a test leaks into every later test; restore the default.
+  vi.mocked(isCanUseFC).mockReturnValue(true);
 
   // Default mock for agentSelectors - resolveAgentConfig needs these
   vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
@@ -581,6 +595,69 @@ describe('ChatService', () => {
           provider: 'deepseek',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-v4-pro', provider: 'deepseek' },
+          }),
+        });
+
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            thinking: {
+              type: 'disabled',
+            },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should map Qwen3.8 Max reasoning effort to enabled thinking', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+        const messages = [
+          { content: 'Test Qwen3.8 Max reasoning effort', role: 'user' },
+        ] as UIChatMessage[];
+
+        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'qwen38ReasoningEffort',
+        ]);
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
+            chatConfig: { qwen38ReasoningEffort: 'medium' },
+          }),
+        });
+
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reasoning_effort: 'medium',
+            thinking: {
+              type: 'enabled',
+            },
+          }),
+          expect.anything(),
+        );
+      });
+
+      it('should map Qwen3.8 Max reasoning effort none to disabled thinking', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+        const messages = [
+          { content: 'Test Qwen3.8 Max reasoning disabled', role: 'user' },
+        ] as UIChatMessage[];
+
+        vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'qwen38ReasoningEffort',
+        ]);
+
+        await chatService.createAssistantMessage({
+          messages,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'qwen3.8-max', provider: 'qwen' },
+            chatConfig: { qwen38ReasoningEffort: 'none' },
           }),
         });
 
@@ -1716,6 +1793,29 @@ describe('ChatService', () => {
       mockCreateHeaderWithAuth.mockClear();
     });
 
+    it('should preserve the topic ID when using the browser runtime', async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      useUserStore.setState({ isSignedIn: true });
+      const runtime = await import('@lobechat/model-runtime');
+      const chat = vi.fn().mockResolvedValue(new Response('ok'));
+      vi.spyOn(mechaModule, 'initializeWithClientStore').mockResolvedValue(
+        new runtime.ModelRuntime({ chat }),
+      );
+      mockFetchSSE.mockImplementation(
+        async (_url: string, options: { fetcher: () => Promise<Response> }) => options.fetcher(),
+      );
+
+      await chatService.getChatCompletion(
+        { messages: [], model: 'glm-5', provider: ModelProvider.OpenCodeCodingPlan },
+        { topicId: 'topic-browser' },
+      );
+
+      expect(chat).toHaveBeenCalledWith(
+        expect.not.objectContaining({ topicId: expect.anything() }),
+        expect.objectContaining({ metadata: { topicId: 'topic-browser' } }),
+      );
+    });
+
     it('should make a POST request with the correct payload', async () => {
       const params: Partial<ChatStreamPayload> = {
         model: 'test-model',
@@ -1987,13 +2087,6 @@ describe('ChatService private methods', () => {
   describe('getChatCompletion', () => {
     it('should merge responseAnimation styles correctly', async () => {
       const { fetchSSE } = await import('@lobechat/fetch-sse');
-      vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
-        const module = await importOriginal();
-        return {
-          ...(module as any),
-          fetchSSE: vi.fn(),
-        };
-      });
 
       // Mock provider config
       const { aiProviderSelectors } = await import('@/store/aiInfra');

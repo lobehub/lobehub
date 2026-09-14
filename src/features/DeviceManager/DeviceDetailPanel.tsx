@@ -156,9 +156,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   };
 
   const handleAddRecent = async () => {
-    // This machine: browse natively. A remote / non-current device isn't
-    // browsable from here, so fall back to manual absolute-path entry (the same
-    // modal the chat control bar uses), statting the path on the target device.
+    // Browse this machine natively; other devices use the shared remote browser.
     if (canBrowse) {
       const result = await electronSystemService.selectFolder({
         title: t('devices.detail.addDir'),
@@ -168,6 +166,8 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     }
 
     openAddWorkingDirModal({
+      defaultPath: device.defaultCwd || undefined,
+      deviceId: device.deviceId,
       onSubmit: async (path) => {
         const result = await deviceService.statPath(device.deviceId, path);
         if (result) {
@@ -234,7 +234,9 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
           </Text>
           <Flexbox horizontal align={'center'} gap={8}>
             <Tag color={online ? 'success' : 'default'} size={'small'}>
-              {online ? t('devices.status.online') : t('devices.status.offline')}
+              {online
+                ? t('devices.status.onlineConnections', { count: channels.length })
+                : t('devices.status.offline')}
             </Tag>
             {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
           </Flexbox>
