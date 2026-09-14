@@ -35,6 +35,7 @@ import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
 import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
+import { createOperationTokenRenewal } from '../utils/OperationTokenRenewal';
 import { createLocalTraceStore } from '../utils/traceStore';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
@@ -482,6 +483,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
       ? createOperationHeartbeat({
           operationId,
           push: (event) => serverIngester.push(event),
+        })
+      : undefined;
+
+  // The heartbeat only renews the lease while the token under it is valid. The
+  // server signs that token for four hours; a longer run renews it in place, or
+  // every ingest after that point is rejected and the operation is reclaimed.
+  const operationTokenRenewal =
+    serverIngester && operationId
+      ? createOperationTokenRenewal({
+          operationId,
+          renew: async (id) =>
+            (await getTrpcClient()).aiAgent.refreshHeteroOperationToken.mutate({ operationId: id }),
         })
       : undefined;
 
@@ -965,6 +978,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   if (serverIngester && sink) {
     operationHeartbeat?.stop();
+    // Renewal runs an hour ahead of expiry, so the token still covers the drain
+    // and the finish receipt below.
+    operationTokenRenewal?.stop();
     try {
       await serverIngester.drain();
     } catch (err) {
