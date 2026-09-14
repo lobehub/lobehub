@@ -16,6 +16,7 @@ import {
   fileChunks,
   files,
   messageGroups,
+  messagePlugins,
   messageQueries,
   messageQueryChunks,
   messages,
@@ -407,6 +408,141 @@ describe('MessageModel Query Tests', () => {
         'files/query-by-id.png',
         expect.objectContaining({ fileType: 'image/png', id: 'query-by-id-file' }),
       );
+    });
+
+    it('should re-resolve tool result image urls from their fileId', async () => {
+      // Regression: `pluginState.images[].url` is a snapshot of whatever URL the
+      // producer got at upload time. On a deployment that hands out presigned
+      // storage URLs it expires within hours, so reopening the topic rendered a
+      // broken image and handed the model an unfetchable link.
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(topics).values({ id: 'tool-image-topic', sessionId: '1', userId });
+        await trx.insert(messages).values({
+          content: '',
+          createdAt: new Date('2023-01-01'),
+          id: 'tool-image-message',
+          role: 'tool',
+          topicId: 'tool-image-topic',
+          userId,
+        });
+        await trx.insert(files).values({
+          fileType: 'image/png',
+          id: 'tool-image-file',
+          name: 'capture.png',
+          size: 2048,
+          url: 'files/2026-09-10/capture.png',
+          userId,
+        });
+        await trx.insert(messagePlugins).values({
+          apiName: 'readFile',
+          id: 'tool-image-message',
+          identifier: 'lobe-local-system',
+          state: {
+            images: [
+              {
+                fileId: 'tool-image-file',
+                mediaType: 'image/png',
+                url: 'https://s3.example.com/files/capture.png?X-Amz-Expires=7200&stale=1',
+              },
+            ],
+            path: '/tmp/capture.png',
+          },
+          toolCallId: 'tool-image-call',
+          userId,
+        });
+      });
+
+      const postProcessUrl = vi.fn(async (path: string | null) => `/fresh/${path}`);
+
+      const [page] = await messageModel.query({ topicId: 'tool-image-topic' }, { postProcessUrl });
+      expect((page.pluginState as any).images[0].url).toBe('/fresh/files/2026-09-10/capture.png');
+
+      const [byId] = await messageModel.queryByIds(['tool-image-message'], { postProcessUrl });
+      expect((byId.pluginState as any).images[0].url).toBe('/fresh/files/2026-09-10/capture.png');
+      expect(postProcessUrl).toHaveBeenCalledWith(
+        'files/2026-09-10/capture.png',
+        expect.objectContaining({ fileType: 'image/png', id: 'tool-image-file' }),
+      );
+    });
+
+    it('should leave a proxy-shaped tool image url alone without a lookup', async () => {
+      // Production stores `/f/<fileId>`, which never expires: re-resolving it
+      // would cost a query per read and hand back the same string.
+      const proxyUrl = 'https://app.lobehub.com/f/tool-image-durable-file';
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(topics).values({ id: 'tool-image-durable-topic', sessionId: '1', userId });
+        await trx.insert(messages).values({
+          content: '',
+          createdAt: new Date('2023-01-01'),
+          id: 'tool-image-durable-message',
+          role: 'tool',
+          topicId: 'tool-image-durable-topic',
+          userId,
+        });
+        await trx.insert(files).values({
+          fileType: 'image/png',
+          id: 'tool-image-durable-file',
+          name: 'capture.png',
+          size: 2048,
+          url: 'files/2026-09-10/capture.png',
+          userId,
+        });
+        await trx.insert(messagePlugins).values({
+          apiName: 'readFile',
+          id: 'tool-image-durable-message',
+          identifier: 'lobe-local-system',
+          state: {
+            images: [{ fileId: 'tool-image-durable-file', mediaType: 'image/png', url: proxyUrl }],
+          },
+          toolCallId: 'tool-image-durable-call',
+          userId,
+        });
+      });
+
+      const postProcessUrl = vi.fn(async (path: string | null) => `/fresh/${path}`);
+
+      const [page] = await messageModel.query(
+        { topicId: 'tool-image-durable-topic' },
+        { postProcessUrl },
+      );
+
+      expect((page.pluginState as any).images[0].url).toBe(proxyUrl);
+      expect(postProcessUrl).not.toHaveBeenCalled();
+    });
+
+    it('should keep the stored tool image url when its file is gone', async () => {
+      const staleUrl = 'https://s3.example.com/files/deleted.png?X-Amz-Expires=7200';
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(topics).values({ id: 'tool-image-gone-topic', sessionId: '1', userId });
+        await trx.insert(messages).values({
+          content: '',
+          createdAt: new Date('2023-01-01'),
+          id: 'tool-image-gone-message',
+          role: 'tool',
+          topicId: 'tool-image-gone-topic',
+          userId,
+        });
+        await trx.insert(messagePlugins).values({
+          apiName: 'readFile',
+          id: 'tool-image-gone-message',
+          identifier: 'lobe-local-system',
+          state: {
+            images: [{ fileId: 'missing-file', mediaType: 'image/png', url: staleUrl }],
+          },
+          toolCallId: 'tool-image-gone-call',
+          userId,
+        });
+      });
+
+      const postProcessUrl = vi.fn(async (path: string | null) => `/fresh/${path}`);
+
+      const [page] = await messageModel.query(
+        { topicId: 'tool-image-gone-topic' },
+        { postProcessUrl },
+      );
+
+      expect((page.pluginState as any).images[0].url).toBe(staleUrl);
+      expect(postProcessUrl).not.toHaveBeenCalled();
     });
 
     it('should hydrate sender in queryByIds like the main query path', async () => {
