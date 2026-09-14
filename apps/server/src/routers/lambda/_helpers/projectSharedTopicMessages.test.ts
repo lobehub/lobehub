@@ -63,7 +63,7 @@ describe('projectSharedTopicMessages', () => {
     ];
 
     const result = projectSharedTopicMessages(messages);
-    const safeError = { body: { traceId: 'trace-123' }, type: ChatErrorType.InternalServerError };
+    const safeError = { type: ChatErrorType.InternalServerError };
 
     expect(result[0].error).toEqual(safeError);
     expect(result[0].children?.[0].error).toEqual(safeError);
@@ -83,7 +83,7 @@ describe('projectSharedTopicMessages', () => {
     expect(messages[0].error).toEqual(rawError);
   });
 
-  it('keeps normal shared content and discards untrusted trace ids', () => {
+  it('keeps normal shared content and discards diagnostic identifiers', () => {
     const input = [
       message('answer', {
         content: 'The model answer',

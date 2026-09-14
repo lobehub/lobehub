@@ -15,6 +15,7 @@ const updateMessageErrorMock = vi.fn();
 const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
+const shareContextMock = vi.hoisted(() => ({ topicShareId: '' }));
 const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
 const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
 // Keyed by message id so a test can decide whether `data.id` is a top-level
@@ -160,6 +161,7 @@ vi.mock('@/features/Conversation/store', () => ({
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
+      context: shareContextMock,
       delAndRegenerateMessage: delAndRegenerateMessageMock,
       deleteMessage: vi.fn(),
       heteroOverloadRetryAttempts: {},
@@ -187,6 +189,7 @@ describe('ErrorMessageExtra', () => {
     missingTranslationKeys.clear();
     businessSlot.render = false;
     serverConfigMock.enableBusinessFeatures = false;
+    shareContextMock.topicShareId = '';
     businessErrorContentMock.mockReturnValue({
       errorType: undefined,
       hideMessage: false,
@@ -320,7 +323,9 @@ describe('ErrorMessageExtra', () => {
     expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
   });
 
-  it('shows a translated fallback for a shared error without business features', () => {
+  it('shows a translated fallback without diagnostic details on a shared topic', () => {
+    shareContextMock.topicShareId = 'share-1';
+
     render(
       <ErrorMessageWithContent
         data={{
@@ -334,7 +339,7 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('response.500')).toBeInTheDocument();
-    expect(screen.getByText(/trace-fixture-1/)).toBeInTheDocument();
+    expect(screen.queryByText(/trace-fixture-1/)).not.toBeInTheDocument();
   });
 
   it('keeps the group retry callback on the internal server error UI', () => {

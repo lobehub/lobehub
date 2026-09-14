@@ -283,6 +283,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // access on top of the workspace-role capability.
     const { canUseResource } = useConversationResourceAccess();
     const canCreate = canCreateContent && canUseResource;
+    const isSharedTopic = useConversationStore((s) => !!s.context.topicShareId);
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
     const errorDetails = getErrorDetails(error);
@@ -526,16 +527,17 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         error={{
           ...alertError,
           message: displayMessage,
-          extra: errorDetails ? (
-            <Highlighter
-              actionIconSize={'small'}
-              language={'json'}
-              padding={8}
-              variant={'borderless'}
-            >
-              {JSON.stringify(errorDetails, null, 2)}
-            </Highlighter>
-          ) : undefined,
+          extra:
+            !isSharedTopic && errorDetails ? (
+              <Highlighter
+                actionIconSize={'small'}
+                language={'json'}
+                padding={8}
+                variant={'borderless'}
+              >
+                {JSON.stringify(errorDetails, null, 2)}
+              </Highlighter>
+            ) : undefined,
         }}
         onRegenerate={canRetry ? handleManualRetry : undefined}
       />

@@ -4,19 +4,13 @@ import {
   type ChatMessageError,
   type UIChatMessage,
 } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils/object';
 
 const projectError = (
   error: ChatMessageError | null | undefined,
 ): ChatMessageError | null | undefined => {
   if (!error) return error;
 
-  const traceId = isRecord(error.body) ? error.body.traceId : undefined;
-
-  return {
-    ...(typeof traceId === 'string' ? { body: { traceId } } : {}),
-    type: ChatErrorType.InternalServerError,
-  };
+  return { type: ChatErrorType.InternalServerError };
 };
 
 const projectBlock = (block: AssistantContentBlock): AssistantContentBlock => ({
