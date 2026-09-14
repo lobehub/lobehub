@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { VERIFICATION_UNJUDGEABLE_ERROR } from '@lobechat/const/goal';
+import {
+  ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_UNJUDGEABLE_ERROR,
+} from '@lobechat/const/goal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
@@ -143,6 +146,38 @@ describe('driveTaskFromVerify', () => {
     expect(taskUpdateStatus).not.toHaveBeenCalledWith('task-1', 'paused', {
       error: 'Delivery did not pass verification.',
     });
+  });
+
+  /**
+   * Regression: a review that could not run paused the Task with the errored
+   * contract string, which the coordinator recovers by starting another builder
+   * attempt. A review that failed the same way every time — its model could not
+   * download a screenshot — re-delivered the same work until the attempt budget
+   * ran out, without the delivery ever being judged.
+   */
+  it('parks a review that keeps failing on a person instead of another attempt', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    vi.mocked(reviewGoalDelivery).mockResolvedValue({
+      status: 'errored',
+      feedback: 'Error while downloading file. Upstream status code: 407.',
+      predictionIds: [],
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    // The review retries its own errored checks; the settle path must not rerun
+    // the whole review, which would re-ask checks that already rejected.
+    expect(reviewGoalDelivery).toHaveBeenCalledTimes(1);
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: ACCEPTANCE_REVIEW_ERRORED_ERROR,
+    });
+    // The creator still hears the delivery was not evaluated, not that it failed.
+    expect(deliverMock.mock.calls[0][0].errorMessage.toLowerCase()).toContain('internal error');
   });
 
   it('does not launch a duplicate review when task drive is already claimed', async () => {

@@ -1,4 +1,5 @@
 import {
+  ACCEPTANCE_REVIEW_ERRORED_ERROR,
   VERIFICATION_ERRORED_ERROR,
   VERIFICATION_FAILED_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
@@ -104,6 +105,9 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
+    // The review already retries a check whose review could not run. An
+    // `errored` result here is the reviewer's problem, and another builder
+    // attempt would only re-deliver into the same broken review.
     const goalReview =
       run.status === 'passed'
         ? await reviewGoalDelivery(db, userId, taskOperation.taskId, operationId, workspaceId)
@@ -112,7 +116,7 @@ export const driveTaskFromVerify = async (
       goalReview?.status === 'rejected'
         ? 'failed'
         : goalReview?.status === 'errored'
-          ? 'errored'
+          ? 'review_errored'
           : goalReview?.status === 'unjudgeable'
             ? 'unjudgeable'
             : run.status;
@@ -137,27 +141,32 @@ export const driveTaskFromVerify = async (
         log('verify passed → task %s completed', taskOperation.taskId);
       }
     } else {
-      // Three non-pass outcomes, kept distinct so an infra error never reads as a
+      // Four non-pass outcomes, kept distinct so an infra error never reads as a
       // rejected delivery:
-      // - failed:      the verifier ran and judged the delivery short of the criteria.
-      // - errored:     the verifier could not run (infra) — the delivery was NOT
-      //                evaluated, so we must not claim it "did not pass".
-      // - unjudgeable: the review read the evidence and the criterion turned out
-      //                undecidable from it. Another attempt would re-deliver the
-      //                same artifacts against the same unprovable criterion, so
-      //                this one routes to a person instead of a retry.
-      const isErrored = outcome === 'errored';
+      // - failed:         the verifier ran and judged the delivery short of the criteria.
+      // - errored:        the verifier could not run (infra) — the delivery was NOT
+      //                   evaluated, so we must not claim it "did not pass".
+      // - review_errored: the verifiers passed, but the Acceptance review on top of
+      //                   them still could not run after its retry. The builder
+      //                   cannot fix a broken reviewer, so this routes to a person.
+      // - unjudgeable:    the review read the evidence and the criterion turned out
+      //                   undecidable from it. Another attempt would re-deliver the
+      //                   same artifacts against the same unprovable criterion, so
+      //                   this one routes to a person instead of a retry.
+      const isErrored = outcome === 'errored' || outcome === 'review_errored';
 
-      // All three summaries are contract strings, not copy: the Goal coordinator
+      // Every summary is a contract string, not copy: the Goal coordinator
       // matches on them to decide whether a paused Goal Task starts another
       // attempt or opens a decision gate. They live in `@lobechat/const/goal`
       // so the writer and the reader cannot drift apart.
       const pauseSummary =
         outcome === 'unjudgeable'
           ? VERIFICATION_UNJUDGEABLE_ERROR
-          : isErrored
-            ? VERIFICATION_ERRORED_ERROR
-            : VERIFICATION_FAILED_ERROR;
+          : outcome === 'review_errored'
+            ? ACCEPTANCE_REVIEW_ERRORED_ERROR
+            : isErrored
+              ? VERIFICATION_ERRORED_ERROR
+              : VERIFICATION_FAILED_ERROR;
       if (task.automationMode) {
         // Mirror of the pass branch: verify judges THIS tick, not the lifetime
         // schedule. Pausing here would permanently disarm the cron (the
@@ -189,7 +198,7 @@ export const driveTaskFromVerify = async (
       const errorMessage =
         outcome === 'failed'
           ? 'Delivery did not pass verification.'
-          : outcome === 'errored'
+          : outcome === 'errored' || outcome === 'review_errored'
             ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
             : outcome === 'unjudgeable'
               ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'

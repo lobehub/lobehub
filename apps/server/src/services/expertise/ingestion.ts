@@ -26,6 +26,7 @@ import type { CompletionCallbackParams } from '@/server/services/agentSignal/pol
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { resolveExpertiseModelConfig } from './modelConfig';
+import { isProviderAccountError } from './providerAccountError';
 
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
@@ -231,13 +232,26 @@ export class ExpertiseIngestionService {
     return row?.count ?? 0;
   };
 
-  /** Imports one old topic with a stable key, so retrying the workflow cannot duplicate runs. */
-  ingestHistoricalTopic = async (agentId: string, topicId: string) =>
-    this.ingestCompletion({
-      agentId,
-      ingestionKey: `historical-v1:${topicId}`,
-      topicId,
-    });
+  /**
+   * Imports one old topic with a stable key, so retrying the workflow cannot duplicate runs.
+   *
+   * A provider account refusal is the user's to fix, not a server fault: it finishes as a skip so
+   * the durable workflow neither reports a 500 nor retries every topic against a dead account.
+   */
+  ingestHistoricalTopic = async (agentId: string, topicId: string) => {
+    try {
+      return await this.ingestCompletion({
+        agentId,
+        ingestionKey: `historical-v1:${topicId}`,
+        topicId,
+      });
+    } catch (error) {
+      if (isProviderAccountError(error)) {
+        return { ingested: 0, reason: 'provider-account-error' } as const;
+      }
+      throw error;
+    }
+  };
 
   /** Local-runtime fallback for the durable workflow used in queue deployments. */
   ingestHistory = async (agentId: string) => {
@@ -250,6 +264,8 @@ export class ExpertiseIngestionService {
         const result = await this.ingestHistoricalTopic(agentId, topic.topicId);
         ingested += result.ingested;
         scanned += 1;
+        // Every remaining topic would hit the same refusal until the user fixes their account.
+        if (result.reason === 'provider-account-error') return { ingested, scanned };
       }
       const last = topicRows.at(-1);
       if (!last || topicRows.length < 50 || !last.lastActivityAt) break;

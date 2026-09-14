@@ -5,6 +5,7 @@ import * as isCanUseFCModule from '@/helpers/isCanUseFC';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
+import { useUserStore } from '@/store/user';
 
 import * as helpers from '../helper';
 import { contextEngineering } from './contextEngineering';
@@ -34,9 +35,7 @@ vi.hoisted(() => {
 
 // Mock VARIABLE_GENERATORS
 vi.mock('@/helpers/parserPlaceholder', () => ({
-  VARIABLE_GENERATORS: {
-    date: () => '2023-12-25',
-    time: () => '14:30:45',
+  HOST_VARIABLE_GENERATORS: {
     username: () => 'TestUser',
     random: () => '12345',
   },
@@ -75,6 +74,9 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 
 beforeEach(() => {
   vi.mocked(agentService.queryAgents).mockResolvedValue([]);
+  // Temporal placeholders render in the user's timezone; pin it so the
+  // expectations below do not depend on the machine running the suite.
+  useUserStore.setState({ settings: { general: { timezone: 'UTC' } } } as any);
   useAgentStore.setState({
     activeAgentId: undefined,
     agentMap: {},
@@ -84,6 +86,7 @@ beforeEach(() => {
 
 afterEach(() => {
   runtimeFlags.isServerMode = false;
+  vi.useRealTimers();
   vi.resetModules();
   vi.clearAllMocks();
 });
@@ -673,6 +676,8 @@ describe('contextEngineering', () => {
 
   describe('Process placeholder variables', () => {
     it('should process placeholder variables in string content', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2023-12-25T14:30:45Z'));
       const messages: UIChatMessage[] = [
         {
           role: 'user',
@@ -700,13 +705,65 @@ describe('contextEngineering', () => {
         content: expect.stringContaining(getCurrentDateContent()),
         role: 'system',
       });
+      // Temporal placeholders come from the shared core: the user's timezone,
+      // `en-US`, the same rendering a server-mode run produces.
       expect(result[1].content).toBe(
-        'Hello TestUser, today is 2023-12-25 and the time is 14:30:45',
+        'Hello TestUser, today is Monday, December 25, 2023 and the time is 2:30:45 PM',
       );
       expect(result[2].content).toBe('Hi there! Your random number is 12345');
     });
 
+    it('renders temporal placeholders in the user timezone setting', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2023-12-25T23:30:00Z'));
+      useUserStore.setState({ settings: { general: { timezone: 'Asia/Tokyo' } } } as any);
+
+      const result = await contextEngineering({
+        messages: [
+          {
+            role: 'user',
+            content: '{{date}} / {{hour}} / {{timezone}}',
+            createdAt: Date.now(),
+            id: 'tz-1',
+            updatedAt: Date.now(),
+          },
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.at(-1)?.content).toBe('Tuesday, December 26, 2023 / 08 / Asia/Tokyo');
+    });
+
+    it('renders session_date in the same timezone as the temporal placeholders', async () => {
+      // 23:30 UTC is already the next day in Tokyo; both dates must roll over
+      // together or the prompt would carry two different "today"s.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2023-12-25T23:30:00Z'));
+      useUserStore.setState({ settings: { general: { timezone: 'Asia/Tokyo' } } } as any);
+
+      const result = await contextEngineering({
+        messages: [
+          {
+            role: 'user',
+            content: '{{session_date}} | {{date}}',
+            createdAt: Date.now(),
+            id: 'session-date-1',
+            updatedAt: Date.now(),
+          },
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result.at(-1)?.content).toBe(
+        'Tuesday, December 26, 2023 | Tuesday, December 26, 2023',
+      );
+    });
+
     it('should process placeholder variables in array content', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2023-12-25T14:30:45Z'));
       const messages = [
         {
           role: 'user',
@@ -738,7 +795,7 @@ describe('contextEngineering', () => {
       });
       expect(Array.isArray(result[1].content)).toBe(true);
       const content = result[1].content as any[];
-      expect(content[0].text).toBe('Hello TestUser, today is 2023-12-25');
+      expect(content[0].text).toBe('Hello TestUser, today is Monday, December 25, 2023');
       expect(content[1].image_url.url).toBe('data:image/png;base64,abc123');
     });
 
@@ -863,6 +920,8 @@ describe('contextEngineering', () => {
     });
 
     it('should process placeholder variables combined with other processors', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2023-12-25T14:30:45Z'));
       runtimeFlags.isServerMode = true;
       vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(true);
 
@@ -897,7 +956,9 @@ describe('contextEngineering', () => {
       const content = result[1].content as any[];
 
       // Should contain processed placeholder variables in the text content
-      expect(content[0].text).toContain('Hello TestUser, check this image from 2023-12-25');
+      expect(content[0].text).toContain(
+        'Hello TestUser, check this image from Monday, December 25, 2023',
+      );
 
       // Should also contain file context from MessageContentProcessor
       expect(content[0].text).toContain('SYSTEM CONTEXT');

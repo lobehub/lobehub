@@ -51,7 +51,7 @@ import debug from 'debug';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
-import { VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
+import { HOST_VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   agentService,
@@ -76,6 +76,8 @@ import {
   toolSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import {
   getRuntimeModelDisplayName,
@@ -722,6 +724,11 @@ export const contextEngineering = async ({
   const workspaceContext = resolveClientWorkspaceContext();
 
   // Create MessagesEngine with injected dependencies
+  // One timezone for every date the prompt renders — the core's temporal
+  // placeholders, the system-date line and the host's own `session_date` —
+  // so a run near midnight cannot carry two different dates.
+  const userTimezone = userGeneralSettingsSelectors.currentTimezone(useUserStore.getState());
+
   // Everything gathered above is host-specific; shaping it into engine
   // parameters is shared with the server through `@lobechat/mecha`.
   const snapshot: ContextSnapshot = {
@@ -774,9 +781,11 @@ export const contextEngineering = async ({
       toolDiscoveryConfig,
     },
     // Browser-resolved placeholders. The store-backed generators stay lazy so a
-    // placeholder that never renders costs nothing.
+    // placeholder that never renders costs nothing. Temporal placeholders are
+    // not among them: the core renders those in the user's timezone, the same
+    // way on every host.
     variables: {
-      ...VARIABLE_GENERATORS,
+      ...HOST_VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Composio integrations)
@@ -786,6 +795,7 @@ export const contextEngineering = async ({
         new Intl.DateTimeFormat('en-US', {
           day: 'numeric',
           month: 'long',
+          timeZone: userTimezone,
           weekday: 'long',
           year: 'numeric',
         }).format(new Date()),
@@ -818,7 +828,11 @@ export const contextEngineering = async ({
         return topic?.title ?? '';
       },
     },
-    world: { group: agentGroup, userMemory: userMemoryConfig },
+    world: {
+      group: agentGroup,
+      userMemory: userMemoryConfig,
+      userTimezone,
+    },
   };
 
   log('Input messages count: %d', messages.length);

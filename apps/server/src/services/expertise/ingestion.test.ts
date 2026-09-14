@@ -113,6 +113,54 @@ describe('ExpertiseIngestionService historical ingestion', () => {
       ['agent_1', 'topic_2'],
     ]);
   });
+
+  it('finishes a topic as a skip when the provider account refuses', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    // The raw OpenAI SDK error xAI throws when the account has no credits: no runtime errorType.
+    const outOfCredits = Object.assign(
+      new Error('403 "You have run out of credits or need a Grok subscription."'),
+      { status: 403 },
+    );
+    vi.spyOn(service, 'ingestCompletion').mockRejectedValue(outOfCredits);
+
+    await expect(service.ingestHistoricalTopic('agent_1', 'topic_1')).resolves.toEqual({
+      ingested: 0,
+      reason: 'provider-account-error',
+    });
+  });
+
+  it('treats a wrapped runtime quota error as a provider account refusal', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    vi.spyOn(service, 'ingestCompletion').mockRejectedValue({ errorType: 'InsufficientQuota' });
+
+    await expect(service.ingestHistoricalTopic('agent_1', 'topic_1')).resolves.toEqual({
+      ingested: 0,
+      reason: 'provider-account-error',
+    });
+  });
+
+  it('still throws transient provider failures so the workflow retries them', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    const overloaded = Object.assign(new Error('503 overloaded'), { status: 503 });
+    vi.spyOn(service, 'ingestCompletion').mockRejectedValue(overloaded);
+
+    await expect(service.ingestHistoricalTopic('agent_1', 'topic_1')).rejects.toBe(overloaded);
+  });
+
+  it('stops the local backfill once the provider account refuses', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    vi.spyOn(service, 'listHistoricalTopics').mockResolvedValue([
+      { topicId: 'topic_1' },
+      { topicId: 'topic_2' },
+      { topicId: 'topic_3' },
+    ] as never);
+    const ingest = vi
+      .spyOn(service, 'ingestHistoricalTopic')
+      .mockResolvedValue({ ingested: 0, reason: 'provider-account-error' });
+
+    await expect(service.ingestHistory('agent_1')).resolves.toEqual({ ingested: 0, scanned: 1 });
+    expect(ingest).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ExpertiseIngestionService.ingestCompletion', () => {
