@@ -2,8 +2,7 @@ import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
-import { builtinTools } from '@lobechat/builtin-tools';
-import type { AgentManagementContext, ProjectInstructionFile } from '@lobechat/context-engine';
+import type { ProjectInstructionFile } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot, SkillEngine } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
@@ -17,7 +16,6 @@ import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
-import { AiModelModel } from '@/database/models/aiModel';
 import { DeviceModel } from '@/database/models/device';
 import { ExpertiseModel } from '@/database/models/expertise';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -443,156 +441,9 @@ export const prepareOperation = async (
 
   const deviceSystemInfo = await fetchDeviceSystemInfoForTemplate(activeDeviceId);
 
-  // 9.5. Build Agent Management context
-  // - availableAgents is injected whenever the user is in auto mode (so the supervisor
-  //   can decide to activate agent-management on its own) OR when the tool is explicitly enabled.
-  // - availableProviders / availablePlugins are only built when the tool is explicitly
-  //   enabled, since they're solely needed for createAgent / updateAgent.
-  const isAgentManagementEnabled = toolsResult.enabledToolIds?.includes('lobe-agent-management');
-  const isInAutoSkillMode = agentConfig.chatConfig?.skillActivateMode !== 'manual';
-  const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
-  let agentManagementContext: AgentManagementContext | undefined;
-
-  if (shouldInjectAvailableAgents) {
-    // Query user's most recently updated agents.
-    // Over-fetch by 2: +1 reserved for the current agent (filtered out below
-    // so the model has no exposure to its own id and cannot self-delegate)
-    // and +1 to detect overflow for the `hasMore` flag.
-    const AVAILABLE_AGENTS_LIMIT = 10;
-    const recentAgents = await deps.agentModel.queryAgents({
-      limit: AVAILABLE_AGENTS_LIMIT + 2,
-    });
-
-    // Exclude the current agent from `availableAgents` — the model is the current
-    // agent. Its persona/identity is already established by `systemRole`, so we
-    // don't re-inject it here, and removing self from the list ensures the model
-    // never sees its own id in the agent-management context (so it can't
-    // accidentally call itself via `callAgent`).
-    const otherAgents = recentAgents.filter((a) => a.id !== resolvedAgentId);
-    const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_LIMIT;
-    const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
-      description: a.description ?? undefined,
-      id: a.id,
-      title: a.title ?? 'Untitled',
-    }));
-
-    agentManagementContext = {
-      availableAgents,
-      availableAgentsHasMore: hasMoreAgents,
-      ...(resolvedAgentId && {
-        currentAgent: {
-          id: resolvedAgentId,
-          title: agentConfig.title ?? undefined,
-        },
-      }),
-    };
-  }
-
-  if (isAgentManagementEnabled) {
-    // Query user's enabled models from database
-    const aiModelModel = new AiModelModel(deps.db, deps.userId);
-    const allUserModels = await aiModelModel.getAllModels();
-
-    // Filter only enabled chat models and group by provider
-    const providerMap = new Map<
-      string,
-      {
-        id: string;
-        models: Array<{ abilities?: any; description?: string; id: string; name: string }>;
-        name: string;
-      }
-    >();
-
-    for (const userModel of allUserModels) {
-      // Only include enabled chat models
-      if (!userModel.enabled || userModel.type !== 'chat') continue;
-
-      // Get model info from builtin metadata for full metadata.
-      const modelInfo = builtinModels.find(
-        (m) => m.id === userModel.id && m.providerId === userModel.providerId,
-      );
-
-      if (!providerMap.has(userModel.providerId)) {
-        providerMap.set(userModel.providerId, {
-          id: userModel.providerId,
-          models: [],
-          name: userModel.providerId, // TODO: Map to friendly provider name
-        });
-      }
-
-      const modelProvider = providerMap.get(userModel.providerId)!;
-      modelProvider.models.push({
-        abilities: userModel.abilities || modelInfo?.abilities,
-        description: modelInfo?.description,
-        id: userModel.id,
-        name: userModel.displayName || modelInfo?.displayName || userModel.id,
-      });
-    }
-
-    // Build availablePlugins from all plugin sources
-    // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
-    const INTERNAL_TOOLS = new Set([
-      'lobe-agent-management', // Don't show agent-management in its own context
-      'lobe-agent-builder', // Used for editing current agent, not for creating new agents
-      'lobe-group-agent-builder', // Used for editing current group, not for creating new agents
-      'lobe-page-agent', // Page-editor specific tool
-    ]);
-
-    const availablePlugins = [
-      // All builtin tools (including hidden ones like web-browsing, cloud-sandbox)
-      ...builtinTools
-        .filter((tool) => !INTERNAL_TOOLS.has(tool.identifier))
-        .map((tool) => ({
-          description: tool.manifest.meta?.description,
-          identifier: tool.identifier,
-          name: tool.manifest.meta?.title || tool.identifier,
-          type: 'builtin' as const,
-        })),
-      // Lobehub Skills
-      ...lobehubSkillManifests.map((manifest) => ({
-        description: manifest.meta?.description,
-        identifier: manifest.identifier,
-        name: manifest.meta?.title || manifest.identifier,
-        type: 'lobehub-skill' as const,
-      })),
-      // Composio tools
-      ...composioManifests.map((manifest) => ({
-        description: manifest.meta?.description,
-        identifier: manifest.identifier,
-        name: manifest.meta?.title || manifest.identifier,
-        type: 'composio' as const,
-      })),
-      // Custom connectors (user-added MCP servers)
-      ...connectorManifests.map((manifest) => ({
-        description: manifest.meta?.description,
-        identifier: manifest.identifier,
-        name: manifest.meta?.title || manifest.identifier,
-        type: 'custom' as const,
-      })),
-    ];
-
-    // Merge models / plugins into the (already-initialized) agentManagementContext.
-    // availableAgents was populated above by `shouldInjectAvailableAgents`, which is
-    // always true when isAgentManagementEnabled.
-    agentManagementContext = {
-      ...agentManagementContext!,
-      availablePlugins,
-      // Limit to first 5 providers to avoid context bloat
-      availableProviders: Array.from(providerMap.values()).slice(0, 5),
-    };
-
-    log(
-      'execAgent: built agentManagementContext with %d providers, %d plugins, %d agents',
-      agentManagementContext.availableProviders!.length,
-      agentManagementContext.availablePlugins!.length,
-      agentManagementContext.availableAgents?.length ?? 0,
-    );
-  } else if (agentManagementContext) {
-    log(
-      'execAgent: injected availableAgents only (auto mode, agent-management tool not enabled): %d agents',
-      agentManagementContext.availableAgents?.length ?? 0,
-    );
-  }
+  // 9.5. The agent-management context (available agents / providers / plugins)
+  // is gathered per step by the shared context rules (`@lobechat/mecha`),
+  // together with the @-mentioned agents persisted on `initialContext` below.
 
   await throwIfExecutionAborted('tool preparation');
 
@@ -800,8 +651,8 @@ export const prepareOperation = async (
 
   // Persist the @-mentioned agents into the runtime initialContext so the
   // context engine injects the delegation context on every step (survives the
-  // queue-mode dispatch). `callLlm` bridges this into `agentManagementContext`
-  // for the AgentManagementContextInjector — mirrors the client runtime.
+  // queue-mode dispatch). The shared context rules fold them into the
+  // agent-management context on every step — mirrors the client runtime.
   if (hasMentionedAgents) {
     initialContext = {
       ...initialContext,

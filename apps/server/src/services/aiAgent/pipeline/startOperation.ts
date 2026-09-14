@@ -32,6 +32,8 @@ export interface StartOperationInput {
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   clientIp?: string;
+  /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
+  disabledPluginIds?: string[];
   discordContext?: any;
   discovery: ToolDiscoveryResult;
   enableExpertise: boolean;
@@ -95,6 +97,7 @@ export const startOperation = async (
     botContext,
     botPlatformContext,
     clientIp,
+    disabledPluginIds,
     discordContext,
     discovery,
     enableExpertise,
@@ -174,6 +177,7 @@ export const startOperation = async (
         : undefined,
       deviceSystemInfo:
         Object.keys(prep.deviceSystemInfo).length > 0 ? prep.deviceSystemInfo : undefined,
+      disabledPluginIds,
       executionPlan: discovery.executionPlan,
       searchDecision: discovery.searchDecision,
       userTimezone,

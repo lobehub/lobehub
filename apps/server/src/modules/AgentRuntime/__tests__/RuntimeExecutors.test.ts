@@ -2227,7 +2227,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           state,
         );
 
-        return mockChat.mock.calls[0][0].messages.find(
+        // The shared context rules may prepend an agent-management block as its
+        // own user turn; the TODO state rides on the actual user message.
+        return mockChat.mock.calls[0][0].messages.findLast(
           (message: { role?: string }) => message.role === 'user',
         )?.content as string;
       };
@@ -2262,8 +2264,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         expect(content).toContain('New task');
         expect(content).not.toContain('Old task');
+        // The plan document is still read for the plan block, but history wins
+        // for the TODO state.
         expect(content).not.toContain('Stale metadata task');
-        expect(mockFindPlanDocuments).not.toHaveBeenCalled();
       });
 
       it.each([{ items: [], updatedAt: 'canonical-clear' }, []])(
@@ -2288,7 +2291,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
           expect(content).not.toContain('<todo_context>');
           expect(content).not.toContain('Stale metadata task');
-          expect(mockFindPlanDocuments).not.toHaveBeenCalled();
         },
       );
 

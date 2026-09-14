@@ -1325,6 +1325,7 @@ export class AiAgentService {
         botContext,
         botPlatformContext,
         clientIp,
+        disabledPluginIds,
         discordContext,
         discovery,
         enableExpertise,

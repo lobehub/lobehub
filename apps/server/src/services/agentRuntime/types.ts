@@ -487,6 +487,8 @@ export interface OperationCreationParams {
   deviceAccessPolicy?: { canUseDevice: boolean; reason: DeviceAccessReason };
   /** Device system info for placeholder variable replacement in Local System systemRole */
   deviceSystemInfo?: Record<string, string>;
+  /** Tri-state disabled plugin identifiers, kept on `state.world` for the context rules. */
+  disabledPluginIds?: string[];
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
   /** Whether ContextEngine may inject the operation expertise snapshot. */
