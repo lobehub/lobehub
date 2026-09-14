@@ -155,22 +155,6 @@ describe('driveTaskFromVerify', () => {
    * download a screenshot — re-delivered the same work until the attempt budget
    * ran out, without the delivery ever being judged.
    */
-  it('retries a review that could not run once before settling the delivery', async () => {
-    runFindByOperation.mockResolvedValue({
-      id: 'run-1',
-      acceptanceId: 'acceptance-1',
-      status: 'passed',
-    });
-    vi.mocked(reviewGoalDelivery)
-      .mockResolvedValueOnce({ status: 'errored', feedback: 'ECONNRESET', predictionIds: [] })
-      .mockResolvedValueOnce({ status: 'passed', feedback: '', predictionIds: ['p1'] });
-
-    await driveTaskFromVerify(db, 'u1', 'op-1');
-
-    expect(reviewGoalDelivery).toHaveBeenCalledTimes(2);
-    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
-  });
-
   it('parks a review that keeps failing on a person instead of another attempt', async () => {
     runFindByOperation.mockResolvedValue({
       id: 'run-1',
@@ -185,7 +169,9 @@ describe('driveTaskFromVerify', () => {
 
     await driveTaskFromVerify(db, 'u1', 'op-1');
 
-    expect(reviewGoalDelivery).toHaveBeenCalledTimes(2);
+    // The review retries its own errored checks; the settle path must not rerun
+    // the whole review, which would re-ask checks that already rejected.
+    expect(reviewGoalDelivery).toHaveBeenCalledTimes(1);
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
     expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
       error: ACCEPTANCE_REVIEW_ERRORED_ERROR,

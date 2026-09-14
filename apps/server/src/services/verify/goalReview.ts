@@ -97,19 +97,27 @@ export const reviewGoalDelivery = async (
         );
         return;
       }
-      const prediction = await predictor
-        .predict({
-          checkResultId: check.result.id,
-          includeTextEvidence: true,
-          instructionDocumentId: check.planItem?.documentId,
-          modelConfig,
-          requirement: acceptance.requirement,
-          surface: check.surface,
-        })
-        .catch((error) => {
-          console.error('[goal-review] Check review failed:', error);
-          return null;
-        });
+      const checkResultId = check.result.id;
+      const judge = () =>
+        predictor
+          .predict({
+            checkResultId,
+            includeTextEvidence: true,
+            instructionDocumentId: check.planItem?.documentId,
+            modelConfig,
+            requirement: acceptance.requirement,
+            surface: check.surface,
+          })
+          .catch((error) => {
+            console.error('[goal-review] Check review failed:', error);
+            return null;
+          });
+      let prediction = await judge();
+      // A check whose review could not run is retried once, on its own, which
+      // absorbs a dropped connection. Retrying the whole review instead re-asks
+      // every other check, and a nondeterministic second opinion can overwrite a
+      // first-pass rejection and let the delivery through.
+      if (!prediction || prediction.status === 'errored') prediction = await judge();
       if (prediction) review.predictionIds.push(prediction.id);
       if (prediction?.status === 'judged' && prediction.action === 'accept') return;
       if (prediction?.status === 'errored' || !prediction) {

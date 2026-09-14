@@ -217,6 +217,36 @@ describe('Goal automatic Acceptance review', () => {
       statusReason: 'provider unavailable',
     });
     expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({ status: 'errored' });
+    // Retried once before giving up.
+    expect(mocks.predict).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * Regression: a review that could not run on one check was retried by
+   * rerunning the whole review. Every other check was re-asked and its opinion
+   * upserted over the first one, so a nondeterministic second pass could turn a
+   * rejection into an acceptance and let the delivery complete.
+   */
+  it('retries only the check whose review could not run, keeping the other verdicts', async () => {
+    const second = { ...check, id: 'c2', index: 1, title: 'Chart rendered' };
+    mocks.rounds.mockResolvedValue({
+      runs: [{ id: 'r1', roundIndex: 1, plan: [check, second] }],
+      results: [result, { ...result, id: 'result2', checkItemId: 'c2' }],
+    });
+    let firstCheckAttempts = 0;
+    mocks.predict.mockImplementation(async ({ checkResultId }: { checkResultId: string }) => {
+      if (checkResultId === 'result2')
+        return { id: 'p2', status: 'judged', action: 'reject', comment: 'The chart is blank.' };
+      firstCheckAttempts += 1;
+      return firstCheckAttempts === 1
+        ? { id: 'p1', status: 'errored', statusReason: 'ECONNRESET' }
+        : { id: 'p1', status: 'judged', action: 'accept' };
+    });
+
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({ status: 'rejected' });
+    const calls = mocks.predict.mock.calls.map(([params]) => params.checkResultId);
+    expect(calls.filter((id) => id === 'result1')).toHaveLength(2);
+    expect(calls.filter((id) => id === 'result2')).toHaveLength(1);
   });
 });
 

@@ -105,17 +105,13 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
-    const goalTaskId = taskOperation.taskId;
-    const review = () => reviewGoalDelivery(db, userId, goalTaskId, operationId, workspaceId);
-    let goalReview = run.status === 'passed' ? await review() : undefined;
-    // A review that could not run never looked at the delivery. One immediate
-    // retry absorbs a dropped connection; whatever is still broken after it is
-    // the reviewer's problem, and another builder attempt would only re-deliver
-    // into the same broken review.
-    if (goalReview?.status === 'errored') {
-      log('goal review for task %s could not run, retrying once', goalTaskId);
-      goalReview = await review();
-    }
+    // The review already retries a check whose review could not run. An
+    // `errored` result here is the reviewer's problem, and another builder
+    // attempt would only re-deliver into the same broken review.
+    const goalReview =
+      run.status === 'passed'
+        ? await reviewGoalDelivery(db, userId, taskOperation.taskId, operationId, workspaceId)
+        : undefined;
     const outcome =
       goalReview?.status === 'rejected'
         ? 'failed'
