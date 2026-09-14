@@ -15,6 +15,8 @@ import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useServerConfigStore } from '@/store/serverConfig';
 
+import { switchToPageRewriteDraft } from './pageRewriteDraft';
+
 interface PageAgentProviderProps {
   children: ReactNode;
   /**
@@ -111,7 +113,7 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(
       syncedAgentIdRef.current = selectedAgentId;
 
       if (shouldResetTopic) {
-        void chatState.switchTopic(null, { scope: 'page', skipRefreshMessage: true });
+        switchToPageRewriteDraft(chatState.switchTopic);
       }
     }, [selectedAgentId, setActiveAgentId, syncActiveAgent]);
 

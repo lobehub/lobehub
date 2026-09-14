@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import {
+  buildDefaultAnthropicPayload,
   createAnthropicCompatibleRuntime,
   createDefaultAnthropicClient,
   DEFAULT_ANTHROPIC_TIMEOUT,
@@ -536,6 +537,61 @@ describe('createAnthropicCompatibleRuntime', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('should map a required chat tool choice and disabled thinking to the Anthropic wire payload', async () => {
+    const payload = await buildDefaultAnthropicPayload({
+      messages: [{ content: 'Finish this rewrite', role: 'user' }],
+      model: 'deepseek/deepseek-v4-pro',
+      reasoning_effort: 'none',
+      stream: true,
+      tool_choice: 'required',
+      thinking: { type: 'disabled' },
+      tools: [
+        {
+          function: {
+            description: 'Submit the rewrite',
+            name: 'submit_document_rewrite_block',
+            parameters: {
+              additionalProperties: false,
+              properties: { kind: { type: 'string' } },
+              required: ['kind'],
+              type: 'object',
+            },
+          },
+          type: 'function',
+        },
+      ],
+    });
+
+    expect(payload.tool_choice).toEqual({ type: 'any' });
+    expect(payload.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('should preserve disabled thinking for a source rewrite without tools on DeepSeek', async () => {
+    const payload = await buildDefaultAnthropicPayload({
+      messages: [{ content: '<!doctype html>...', role: 'user' }],
+      model: 'deepseek/deepseek-v4-flash',
+      reasoning_effort: 'none',
+      stream: true,
+      thinking: { type: 'disabled' },
+    });
+
+    expect(payload.thinking).toEqual({ type: 'disabled' });
+    expect(payload.tools).toBeUndefined();
+    expect(payload).not.toHaveProperty('tool_choice');
+  });
+
+  it('should keep omitting disabled thinking for Claude models that always think', async () => {
+    const payload = await buildDefaultAnthropicPayload({
+      messages: [{ content: 'Source rewrite', role: 'user' }],
+      model: 'claude-fable-5',
+      reasoning_effort: 'none',
+      stream: true,
+      thinking: { type: 'disabled' },
+    });
+
+    expect(payload).not.toHaveProperty('thinking');
   });
 
   it('should keep logical model for generateObject and pass mapped id as request config', async () => {

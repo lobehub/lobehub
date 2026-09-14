@@ -20,6 +20,7 @@ describe('PageAgentExecutor', () => {
       getPageContent: vi.fn(),
       initPage: vi.fn(),
       isReady: vi.fn(() => true),
+      isCollaborationRequired: vi.fn(() => false),
       modifyNodes: vi.fn(),
       replaceText: vi.fn(),
     } as unknown as EditorRuntime;
@@ -38,6 +39,7 @@ describe('PageAgentExecutor', () => {
       expect(executor.hasApi('getPageContent')).toBe(true);
       expect(executor.hasApi('modifyNodes')).toBe(true);
       expect(executor.hasApi('replaceText')).toBe(true);
+      expect(executor.hasApi('rewriteSelection')).toBe(true);
     });
 
     it('should return false for non-existent API', () => {
@@ -337,6 +339,58 @@ describe('PageAgentExecutor', () => {
         title: undefined,
       });
     });
+
+    it('does not feed collaborative body echoes into the editor or document store', async () => {
+      vi.mocked(mockRuntime.isCollaborationRequired).mockReturnValue(true);
+
+      await executor.onAfterCall({
+        result: {
+          state: {
+            documentContent: '# Stale server echo',
+            documentEditorData: { root: { children: [] } },
+            documentId: 'doc-123',
+          },
+          success: true,
+        },
+      } as any);
+
+      expect(mockRuntime.applyServerSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('keeps collaborative title metadata synchronization without importing body content', async () => {
+      vi.mocked(mockRuntime.isCollaborationRequired).mockReturnValue(true);
+
+      await executor.onAfterCall({
+        result: {
+          state: {
+            documentContent: '# Stale server echo',
+            documentId: 'doc-123',
+            documentTitle: 'Updated title',
+          },
+          success: true,
+        },
+      } as any);
+
+      expect(mockRuntime.applyServerSnapshot).toHaveBeenCalledWith({ title: 'Updated title' });
+    });
+
+    it('should consume targeted rewrite status without applying a returned snapshot', async () => {
+      await executor.onAfterCall({
+        apiName: 'rewriteSelection',
+        result: {
+          state: {
+            documentContent: '# Must not be applied',
+            documentEditorData: { root: { children: [] } },
+            documentId: 'doc-123',
+            requestId: 'request-1',
+            status: 'queued',
+          },
+          success: true,
+        },
+      } as any);
+
+      expect(mockRuntime.applyServerSnapshot).not.toHaveBeenCalled();
+    });
   });
 
   describe('invoke method', () => {
@@ -357,6 +411,31 @@ describe('PageAgentExecutor', () => {
 
       expect(result.success).toBe(false);
       expect(result.error?.type).toBe('ApiNotFound');
+    });
+
+    it('does not expose a client-side mutation path for rewriteSelection', async () => {
+      const result = await executor.invoke(
+        'rewriteSelection',
+        { requestId: 'request-1' },
+        mockContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('PageAgentServerOnly');
+      expect(mockRuntime.applyServerSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('fails closed for legacy body mutations while collaboration owns the Page', async () => {
+      vi.mocked(mockRuntime.isCollaborationRequired).mockReturnValue(true);
+
+      const result = await executor.invoke(
+        'modifyNodes',
+        { operations: [{ action: 'remove', id: 'node-1' }] },
+        mockContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('PageAgentCollaborationBodyOwned');
     });
   });
 });

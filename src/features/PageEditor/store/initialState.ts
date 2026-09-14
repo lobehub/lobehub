@@ -4,6 +4,7 @@ import { type EditLockHealth } from '@/features/EditLock';
 
 export type MetaSaveStatus = 'idle' | 'saving' | 'saved';
 export type RightPanelMode = 'copilot' | 'history';
+export type RightPanelTab = 'agent-edits' | 'annotations' | 'topic';
 
 export interface PublicState {
   autoSave?: boolean;
@@ -62,6 +63,7 @@ export interface State extends PublicState {
   lockOwnerId?: string;
   metaSaveStatus?: MetaSaveStatus;
   rightPanelMode: RightPanelMode;
+  rightPanelTab: RightPanelTab;
 }
 
 export const initialState: State = {
@@ -81,5 +83,6 @@ export const initialState: State = {
   lockOwnerId: undefined,
   metaSaveStatus: 'idle',
   rightPanelMode: 'copilot',
+  rightPanelTab: 'topic',
   title: undefined,
 };

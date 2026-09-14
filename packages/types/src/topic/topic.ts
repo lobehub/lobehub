@@ -162,6 +162,12 @@ export interface ChatTopicMetadata {
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
+  /** Internal document rewrite session marker; hidden from the main sidebar. */
+  documentRewrite?: {
+    agentId?: string;
+    documentId?: string;
+    sessionId: string;
+  };
   /**
    * The agent whose Profile page this Agent Builder conversation was started
    * from (mirrors `ExecAgentAppContext.editingAgentId`).

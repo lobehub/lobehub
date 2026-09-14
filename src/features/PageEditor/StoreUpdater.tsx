@@ -1,5 +1,6 @@
 'use client';
 
+import { type IEditor } from '@lobehub/editor';
 import { memo, useEffect } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -18,6 +19,7 @@ import { useResourceEvents } from './useResourceEvents';
 type PageAgentEditor = NonNullable<Parameters<typeof pageAgentRuntime.setEditor>[0]>;
 
 export interface StoreUpdaterProps extends Partial<PublicState> {
+  editor?: IEditor;
   pageId?: string;
 }
 
@@ -29,6 +31,7 @@ export interface StoreUpdaterProps extends Partial<PublicState> {
  */
 const StoreUpdater = memo<StoreUpdaterProps>(
   ({
+    editor,
     pageId,
     knowledgeBaseId,
     metaReadOnly,
@@ -45,7 +48,6 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
 
-    const editor = usePageEditorStore((s) => s.editor);
     const initMeta = usePageEditorStore((s) => s.initMeta);
     const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
     // Workspace pages are view-first; resolve once here so the lock + gating read
@@ -76,6 +78,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     // Update store with props
     useStoreUpdater('documentId', pageId);
+    useStoreUpdater('editor', editor);
     useStoreUpdater('isWorkspacePage', isWorkspacePage);
     useStoreUpdater('isWorkspaceScopedPage', isWorkspaceScopedPage);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);
@@ -137,6 +140,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
       return () => {
         pageAgentRuntime.setCurrentDocId(undefined);
+        pageAgentRuntime.setCollaborationRequired(false);
         pageAgentRuntime.setAfterMutateHandler(null);
         pageAgentRuntime.setTitleHandlers(null, null);
         pageAgentRuntime.setBeforeMutateHandler(null);

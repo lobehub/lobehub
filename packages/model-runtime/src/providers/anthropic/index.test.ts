@@ -363,6 +363,44 @@ describe('LobeAnthropicAI', () => {
       });
     });
 
+    it('should normalize the standard required choice to Anthropic any for terminal tools', async () => {
+      await instance.chat({
+        messages: [{ content: 'Submit the rewrite', role: 'user' }],
+        model: 'deepseek/deepseek-v4-pro',
+        reasoning_effort: 'none',
+        thinking: { type: 'disabled' },
+        tool_choice: 'required',
+        tools: [
+          {
+            function: {
+              description: 'Submit one document rewrite block',
+              name: 'submit_document_rewrite_block',
+              parameters: {
+                additionalProperties: false,
+                properties: { kind: { enum: ['source', 'patch'], type: 'string' } },
+                required: ['kind'],
+                type: 'object',
+              },
+            },
+            type: 'function',
+          },
+        ],
+      } as ChatStreamPayload);
+
+      expect(instance['client'].messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thinking: { type: 'disabled' },
+          tool_choice: { type: 'any' },
+          tools: [
+            expect.objectContaining({
+              name: 'submit_document_rewrite_block',
+            }),
+          ],
+        }),
+        expect.anything(),
+      );
+    });
+
     describe('chat with tools', () => {
       it('should call tools when tools are provided', async () => {
         // Arrange

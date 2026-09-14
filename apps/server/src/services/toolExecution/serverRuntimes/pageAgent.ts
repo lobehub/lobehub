@@ -13,6 +13,7 @@ import { type LobeChatDatabase } from '@/database/type';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { DocumentService } from '@/server/services/document';
 
+import { createPageAgentRewriteSelectionService } from './pageAgentRewriteSelection';
 import type { ServerRuntimeRegistration } from './types';
 
 type SerializedEditor = SerializedEditorState<SerializedLexicalNode>;
@@ -286,6 +287,11 @@ const buildService = (
   const documentModel = new DocumentModel(db, userId, workspaceId);
   const documentService = new DocumentService(db, userId, workspaceId);
   const serviceCtx: PageAgentServiceContext = { documentModel, documentService };
+  const rewriteSelection = createPageAgentRewriteSelectionService({
+    db,
+    userId,
+    workspaceId,
+  });
 
   return {
     editTitle: (args, ctx) =>
@@ -386,6 +392,11 @@ const buildService = (
           },
         };
       }),
+
+    // Targeted collaborative rewrite is intentionally isolated from the legacy
+    // DB snapshot runtime above. It only drives the durable request/worker
+    // queue; the live room and persistence worker own document mutation.
+    rewriteSelection,
   };
 };
 
@@ -401,8 +412,9 @@ const buildService = (
  *      a `documentHistories` snapshot).
  *
  * The renderer's `PageAgentExecutor.onAfterCall` consumes the returned
- * `result.state.document*` fields to apply the new editorData to the live
- * Lexical editor and reconcile the document store.
+ * `result.state.document*` fields for the legacy non-collaborative APIs. The
+ * targeted `rewriteSelection` path returns request status only and never
+ * returns or applies a document snapshot.
  */
 export const pageAgentRuntime: ServerRuntimeRegistration = {
   factory: (context) => {

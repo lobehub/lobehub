@@ -1,6 +1,6 @@
 'use client';
 
-import type { IEditor } from '@lobehub/editor';
+import { type IEditor, IYjsService } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
@@ -28,11 +28,36 @@ export interface SaveMetadata {
 }
 
 export interface SaveExecutionOptions {
+  /** Persist only title/metadata; never include the editor body in the request. */
+  metadataOnly?: boolean;
   restoreFromHistoryId?: string;
   saveSource?: 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
 }
 
 type Setter = StoreSetter<DocumentStore>;
+
+const getCollaborationStateVector = (editor: IEditor): string | undefined => {
+  if (typeof (editor as { requireService?: unknown }).requireService !== 'function')
+    return undefined;
+  const state = editor.requireService(IYjsService)?.getState();
+  return (
+    state?.provider as
+      | {
+          getStateVector?: () => string;
+        }
+      | undefined
+  )?.getStateVector?.();
+};
+
+const hasCollaborationProvider = (editor: IEditor): boolean => {
+  if (typeof (editor as { requireService?: unknown }).requireService !== 'function') return false;
+
+  try {
+    return Boolean(editor.requireService(IYjsService)?.getState()?.provider);
+  } catch {
+    return false;
+  }
+};
 export const createEditorSlice = (set: Setter, get: () => DocumentStore, _api?: unknown) =>
   new EditorActionImpl(set, get, _api);
 
@@ -85,22 +110,37 @@ export class EditorActionImpl {
       const editorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
       const markdown = this.getPersistedMarkdown(id, editorMarkdown);
       const editorData = editor.getDocument('json');
+      const collaborationActive = hasCollaborationProvider(editor);
 
       const markdownChanged = markdown !== doc.lastSavedContent;
       const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
       const contentChanged = markdownChanged || editorDataChanged;
+      const collaborationStateVector =
+        !collaborationActive && contentChanged ? getCollaborationStateVector(editor) : undefined;
 
       internal_dispatchDocument(
         {
           id,
           type: 'updateDocument',
-          value: { content: markdown, editorData, isDirty: contentChanged },
+          value: {
+            content: markdown,
+            editorData,
+            // Yjs owns persistence for collaborative body content. Keep this
+            // mirror clean so metadata saves cannot accidentally include it.
+            isDirty: collaborationActive ? false : contentChanged,
+            ...(collaborationStateVector ? { collaborationStateVector } : {}),
+          },
         },
         'handleContentChange',
       );
 
       // Only trigger auto-save if content actually changed AND autoSave is enabled
-      if (options.triggerAutoSave !== false && contentChanged && doc.autoSave !== false) {
+      if (
+        !collaborationActive &&
+        options.triggerAutoSave !== false &&
+        contentChanged &&
+        doc.autoSave !== false
+      ) {
         this.#get().triggerDebouncedSave(id);
       }
 
@@ -303,7 +343,24 @@ export class EditorActionImpl {
     const doc = documents[id];
     if (!doc || !editor) return;
 
+    const metadataOnly = options?.metadataOnly === true;
+    const collaborationActive = hasCollaborationProvider(editor);
+    const shouldSaveBody = !metadataOnly && !collaborationActive;
     const hasMetadataChanges = metadata?.emoji !== undefined || metadata?.title !== undefined;
+
+    // Once Yjs is active, a body save must never fall through to the legacy
+    // updateDocument endpoint. The collaboration room owns the body; only
+    // explicit metadata saves may still use this service.
+    if (!shouldSaveBody && !hasMetadataChanges) {
+      if (collaborationActive && doc.isDirty) {
+        internal_dispatchDocument({
+          id,
+          type: 'updateDocument',
+          value: { isDirty: false, saveStatus: 'saved' },
+        });
+      }
+      return;
+    }
 
     // Skip save if neither document content nor metadata changed
     if (!doc.isDirty && !hasMetadataChanges) return;
@@ -312,11 +369,36 @@ export class EditorActionImpl {
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
 
     try {
-      const currentEditorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
-      const currentContent = this.getPersistedMarkdown(id, currentEditorMarkdown);
-      const currentEditorData = editor.getDocument('json');
+      // A debounced save belongs to the local snapshot that marked this document dirty.
+      // Do not re-read the live editor here: a collaboration update can legitimately replace
+      // that surface before the timer fires, which would let an empty remote room overwrite the
+      // already-captured local text and NodeState. Manual/agent saves call syncEditorContent first,
+      // so the store snapshot is current for those paths as well.
+      const liveEditorMarkdown = shouldSaveBody
+        ? (editor.getDocument('markdown') as unknown as string) || ''
+        : undefined;
+      const liveEditorData = shouldSaveBody ? editor.getDocument('json') : undefined;
+      const hasCapturedDirtySnapshot =
+        shouldSaveBody && doc.isDirty && isValidEditorData(doc.editorData);
+      const currentContent = hasCapturedDirtySnapshot
+        ? doc.content
+        : shouldSaveBody
+          ? this.getPersistedMarkdown(id, liveEditorMarkdown || '')
+          : undefined;
+      const currentEditorData = shouldSaveBody
+        ? hasCapturedDirtySnapshot
+          ? doc.editorData
+          : liveEditorData
+        : undefined;
+      const expectedUpdatedAt =
+        hasCapturedDirtySnapshot && !doc.collaborationStateVector && doc.lastUpdatedTime
+          ? doc.lastUpdatedTime
+          : undefined;
+      const expectedCollaborationStateVector = hasCapturedDirtySnapshot
+        ? doc.collaborationStateVector
+        : undefined;
 
-      if (!isValidEditorData(currentEditorData)) {
+      if (shouldSaveBody && !isValidEditorData(currentEditorData)) {
         console.warn('[DocumentStore] Refusing to save invalid editorData:', currentEditorData);
         internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'idle' } });
         return;
@@ -325,11 +407,14 @@ export class EditorActionImpl {
       // Preserve diff nodes (pending review) through the save path.
       // Normalization only happens when the user explicitly clicks Accept/Reject
       // in DiffAllToolbar, which mutates editor state before calling performSave.
-      const requestSave = (expectedUpdatedAt?: Date) =>
+      const requestSave = (expectedUpdatedAtOverride?: Date) =>
         documentService.updateDocument({
-          content: currentContent,
-          editorData: JSON.stringify(currentEditorData),
-          expectedUpdatedAt,
+          ...(currentContent === undefined ? {} : { content: currentContent }),
+          ...(currentEditorData === undefined
+            ? {}
+            : { editorData: JSON.stringify(currentEditorData) }),
+          expectedCollaborationStateVector,
+          expectedUpdatedAt: expectedUpdatedAtOverride ?? expectedUpdatedAt,
           id,
           lockOwnerId: doc.lockOwnerId,
           metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
@@ -346,26 +431,49 @@ export class EditorActionImpl {
         // history restore replays fields the recovery's content+editorData
         // comparison cannot vouch for (a collaborator's metadata-only change
         // would be silently overwritten), so those keep the plain CONFLICT flow.
-        if (hasMetadataChanges || options?.restoreFromHistoryId) throw error;
+        if (collaborationActive || hasMetadataChanges || options?.restoreFromHistoryId) throw error;
         result = await this.retrySaveAfterLockReclaim(id, doc, error, requestSave);
       }
 
-      // Mark as clean and update save status
-      internal_dispatchDocument({
-        id,
-        type: 'updateDocument',
-        value: {
-          content: currentContent,
-          editorData: structuredClone(currentEditorData),
+      const latestDocument = this.#get().documents[id];
+      const snapshotIsStillCurrent =
+        !shouldSaveBody ||
+        !hasCapturedDirtySnapshot ||
+        Boolean(
+          latestDocument &&
+          latestDocument.content === currentContent &&
+          isEqual(latestDocument.editorData, currentEditorData),
+        );
 
-          isDirty: false,
-          lastSavedContent: currentContent,
-          lastSavedEditorData: structuredClone(currentEditorData),
-          lastUpdatedTime: result.savedAt ? new Date(result.savedAt) : new Date(),
-          saveBlockedByLock: false,
-          saveStatus: 'saved',
-        },
-      });
+      // A newer local edit may arrive while this request is in flight. Record
+      // what reached the server, but never replace the newer store snapshot or
+      // mark it clean; its own debounce remains responsible for the next save.
+      const value: Record<string, unknown> = {
+        lastUpdatedTime: result.savedAt ? new Date(result.savedAt) : new Date(),
+        saveBlockedByLock: false,
+        saveStatus: 'saved',
+      };
+      if (shouldSaveBody) {
+        if (snapshotIsStillCurrent) {
+          Object.assign(value, {
+            content: currentContent,
+            editorData: structuredClone(currentEditorData),
+            isDirty: false,
+            lastSavedContent: currentContent,
+            lastSavedEditorData: structuredClone(currentEditorData),
+          });
+        } else {
+          Object.assign(value, {
+            isDirty: true,
+            lastSavedContent: currentContent,
+            lastSavedEditorData: structuredClone(currentEditorData),
+            saveStatus: 'idle',
+          });
+        }
+      } else if (collaborationActive) {
+        value.isDirty = false;
+      }
+      internal_dispatchDocument({ id, type: 'updateDocument', value });
     } catch (error) {
       // The server rejects writes to a workspace document another collaborator is
       // actively editing (CONFLICT). Surface it as a lock block so the editor can

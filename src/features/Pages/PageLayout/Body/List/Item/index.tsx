@@ -12,6 +12,7 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import { useElectronStore } from '@/store/electron';
 import { pageSelectors, usePageStore } from '@/store/page';
 
+import { buildPagePath } from '../../../../navigation';
 import Actions from './Actions';
 import Editing from './Editing';
 import { useDropdownMenu } from './useDropdownMenu';
@@ -70,7 +71,7 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
     }
-    addTab(buildWorkspaceAwarePath(`/page/${pageId}`, activeWorkspaceSlug));
+    addTab(buildWorkspaceAwarePath(buildPagePath(pageId), activeWorkspaceSlug));
     selectPage(pageId);
   }, [pageId, activeWorkspaceSlug, addTab, selectPage]);
 
@@ -92,7 +93,7 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
         className={className}
         contextMenuItems={dropdownMenu}
         disabled={editing}
-        href={`/page/${pageId}`}
+        href={buildPagePath(pageId)}
         icon={icon}
         key={pageId}
         title={title}

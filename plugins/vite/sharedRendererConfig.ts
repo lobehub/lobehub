@@ -528,6 +528,7 @@ export const sharedRendererDedupe = [
   'lexical',
   'react',
   'react-dom',
+  'yjs',
 ];
 
 export const __testing = { isUiCoreModule, sharedChunkFileNames, sharedManualChunks };

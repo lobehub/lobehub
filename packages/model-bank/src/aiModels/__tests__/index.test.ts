@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { gptImage2Schema } from '../../const/imageParameters';
 import { ModelProvider } from '../../const/modelProvider';
 import { loadModels, LOBE_DEFAULT_MODEL_LIST } from '../index';
 
@@ -145,6 +146,79 @@ describe('OpenCode Go models', () => {
         contextWindowTokens: 1_048_576,
         enabled: true,
         maxOutput: 131_072,
+      }),
+    );
+  });
+});
+
+describe('ZenMux image models', () => {
+  it('classifies the canonical GPT Image 2 route as an enabled image model', () => {
+    const gptImage2 = LOBE_DEFAULT_MODEL_LIST.find(
+      (model) => model.providerId === ModelProvider.ZenMux && model.id === 'openai/gpt-image-2',
+    );
+
+    expect(gptImage2).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        id: 'openai/gpt-image-2',
+        organization: 'openai',
+        parameters: gptImage2Schema,
+        providerId: ModelProvider.ZenMux,
+        type: 'image',
+      }),
+    );
+    expect(gptImage2?.pricing).toBeUndefined();
+    expect(
+      LOBE_DEFAULT_MODEL_LIST.some(
+        (model) =>
+          model.providerId === ModelProvider.ZenMux &&
+          model.id === 'openai/gpt-image-2' &&
+          model.type === 'chat',
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps the requested provider-qualified catalog models and Nano Banana metadata', () => {
+    const zenmuxModels = LOBE_DEFAULT_MODEL_LIST.filter(
+      (model) => model.providerId === ModelProvider.ZenMux,
+    );
+    const modelById = (id: string) => zenmuxModels.find((model) => model.id === id);
+
+    expect(modelById('openai/gpt-5.6-sol')).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({ reasoning: true, vision: true }),
+        contextWindowTokens: 1_050_000,
+        enabled: true,
+        type: 'chat',
+      }),
+    );
+    expect(modelById('deepseek/deepseek-v4-pro')).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({ reasoning: true }),
+        contextWindowTokens: 1_000_000,
+        enabled: true,
+        type: 'chat',
+      }),
+    );
+    expect(modelById('google/gemini-3.1-flash-image')).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({ imageOutput: true, reasoning: true, vision: true }),
+        enabled: true,
+        type: 'chat',
+      }),
+    );
+    expect(modelById('google/gemini-3.1-flash-lite-image')).toEqual(
+      expect.objectContaining({
+        abilities: expect.objectContaining({ imageOutput: true, reasoning: true, vision: true }),
+        enabled: true,
+        type: 'chat',
+      }),
+    );
+    expect(modelById('google/gemini-3.1-flash-lite-image:image')).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        parameters: expect.objectContaining({ aspectRatio: expect.anything() }),
+        type: 'image',
       }),
     );
   });

@@ -27,14 +27,14 @@ describe('EditorRuntime', () => {
   });
 
   describe('applyServerSnapshot', () => {
-    it('delegates editor data to the collaboration service instead of re-importing the tree', () => {
+    it('does not route a server body echo through the collaboration service', () => {
       const applyExternalEditorData = vi.fn().mockReturnValue(true);
       vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
       const setDocument = vi.spyOn(editor, 'setDocument');
       const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
 
-      expect(runtime.applyServerSnapshot({ editorData })).toBe(true);
-      expect(applyExternalEditorData).toHaveBeenCalledWith(editorData);
+      expect(runtime.applyServerSnapshot({ editorData })).toBe(false);
+      expect(applyExternalEditorData).not.toHaveBeenCalled();
       expect(setDocument).not.toHaveBeenCalled();
     });
 
@@ -56,6 +56,105 @@ describe('EditorRuntime', () => {
       expect(runtime.applyServerSnapshot({ editorData })).toBe(false);
       expect(setDocument).not.toHaveBeenCalled();
     });
+
+    it('fails closed before the collaboration service has initialized', () => {
+      vi.spyOn(editor, 'requireService').mockReturnValue(null);
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      runtime.setCollaborationRequired(true);
+
+      expect(runtime.applyServerSnapshot({ content: '# provider not ready' })).toBe(false);
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+
+    it('keeps Page collaboration body single-channel for JSON and Markdown echoes', () => {
+      const applyExternalEditorData = vi.fn().mockReturnValue(true);
+      vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
+
+      runtime.setCollaborationRequired(true);
+
+      expect(
+        runtime.applyServerSnapshot({
+          content: '# stale server echo',
+          editorData,
+        }),
+      ).toBe(false);
+      expect(applyExternalEditorData).not.toHaveBeenCalled();
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+
+    it('does not let out-of-order echoes overwrite local or remote room edits', () => {
+      const applyExternalEditorData = vi.fn().mockReturnValue(true);
+      vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      runtime.setCollaborationRequired(true);
+
+      runtime.applyServerSnapshot({ content: '# newer room state' });
+      runtime.applyServerSnapshot({ content: '# older server echo' });
+
+      expect(applyExternalEditorData).not.toHaveBeenCalled();
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['connecting', null],
+      ['fatal', { provider: null }],
+    ])('does not treat a %s collaboration state as non-collaborative', (_label, state) => {
+      const applyExternalEditorData = vi.fn().mockReturnValue(true);
+      vi.spyOn(editor, 'requireService').mockReturnValue({
+        applyExternalEditorData,
+        getState: () => state,
+      } as any);
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      runtime.setCollaborationRequired(true);
+
+      expect(runtime.applyServerSnapshot({ content: '# must stay in the room' })).toBe(false);
+      expect(applyExternalEditorData).not.toHaveBeenCalled();
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+
+    it('keeps title metadata while rejecting the collaborative body echo', () => {
+      const applyExternalEditorData = vi.fn().mockReturnValue(true);
+      vi.spyOn(editor, 'requireService').mockReturnValue({ applyExternalEditorData } as any);
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
+      runtime.setCollaborationRequired(true);
+
+      expect(runtime.applyServerSnapshot({ editorData, title: 'Server title' })).toBe(true);
+      expect(mockTitleSetter).toHaveBeenCalledWith('Server title');
+      expect(applyExternalEditorData).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when collaboration service lookup throws', () => {
+      vi.spyOn(editor, 'requireService').mockImplementation(() => {
+        throw new Error('provider is still connecting');
+      });
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
+
+      expect(runtime.applyServerSnapshot({ content: '# must not import', editorData })).toBe(false);
+      expect(setDocument).not.toHaveBeenCalled();
+    });
+
+    it('preserves legacy JSON and Markdown imports without collaboration', () => {
+      vi.spyOn(editor, 'requireService').mockReturnValue(null);
+      // Kernel initialization alone intentionally has an empty root, which
+      // the editor rejects as an invalid JSON snapshot. Use a real document
+      // fixture for this legacy import contract without perturbing IDs in the
+      // rest of the deterministic test suite.
+      editor.setDocument('markdown', 'Initial editor content');
+      const setDocument = vi.spyOn(editor, 'setDocument');
+      const editorData = editor.getDocument('json') as unknown as Record<string, unknown>;
+
+      expect(runtime.applyServerSnapshot({ editorData })).toBe(true);
+      expect(runtime.applyServerSnapshot({ content: '# legacy content' })).toBe(true);
+      expect(setDocument).toHaveBeenNthCalledWith(1, 'json', JSON.stringify(editorData), {
+        keepId: true,
+      });
+      expect(setDocument).toHaveBeenNthCalledWith(2, 'markdown', '# legacy content', {
+        keepId: true,
+      });
+    });
   });
 
   describe('initPage', () => {
@@ -68,9 +167,11 @@ describe('EditorRuntime', () => {
       expect(result.nodeCount).toBeGreaterThanOrEqual(0);
       expect(result.extractedTitle).toBeUndefined();
 
-      // Verify editor state - full text match (editor adds trailing space)
+      // Verify editor state and semantic paragraph structure. Current editor
+      // exports one terminal newline without formatter-added trailing spaces.
       const editorMarkdown = editor.getDocument('markdown') as unknown as string;
-      expect(editorMarkdown).toBe('Hello world\n\nThis is a paragraph. \n\n');
+      expect(editorMarkdown).toBe('Hello world\n\nThis is a paragraph.\n');
+      expect(editorMarkdown).toContain('Hello world\n\nThis is a paragraph.');
 
       // Verify XML structure
       const editorXml = editor.getDocument('litexml') as unknown as string;
@@ -87,9 +188,10 @@ describe('EditorRuntime', () => {
       expect(result.extractedTitle).toBe('My Document Title');
       expect(mockTitleSetter).toHaveBeenCalledWith('My Document Title');
 
-      // Verify editor state - only content without title (editor adds trailing space)
+      // Verify editor state - only content without the title heading.
       const editorMarkdown = editor.getDocument('markdown') as unknown as string;
-      expect(editorMarkdown).toBe('This is the content. \n\n');
+      expect(editorMarkdown).toBe('This is the content.\n');
+      expect(editorMarkdown).toContain('This is the content.');
     });
 
     it('should handle markdown with multiple headings', async () => {
@@ -101,11 +203,13 @@ describe('EditorRuntime', () => {
       // Verify title extraction (only first h1)
       expect(result.extractedTitle).toBe('Main Title');
 
-      // Verify editor state - content after title extraction (editor adds trailing space)
+      // Verify editor state - content and heading hierarchy after title extraction.
       const editorMarkdown = editor.getDocument('markdown') as unknown as string;
       expect(editorMarkdown).toBe(
-        '## Section 1\n\nContent here. \n\n## Section 2\n\nMore content. \n\n',
+        '## Section 1\n\nContent here.\n\n## Section 2\n\nMore content.\n',
       );
+      expect(editorMarkdown).toContain('## Section 1\n\nContent here.');
+      expect(editorMarkdown).toContain('## Section 2\n\nMore content.');
     });
 
     it('should throw error when editor is not initialized', async () => {

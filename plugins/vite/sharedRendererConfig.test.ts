@@ -66,6 +66,7 @@ describe('sharedRendererDedupe', () => {
         '@lexical/utils',
         '@lexical/yjs',
         'lexical',
+        'yjs',
       ]),
     );
   });

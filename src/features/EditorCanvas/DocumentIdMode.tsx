@@ -39,6 +39,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     documentId,
     autoSave = true,
     collaborationEnabled = false,
+    collaborationRequired = false,
     sourceType = 'page',
     topicId,
     onContentChange,
@@ -54,20 +55,32 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     storeUpdater('editor', editor);
 
     // Get document store actions
-    const [onEditorInit, handleContentChangeStore, useFetchDocument, performSave] =
-      useDocumentStore((s) => [
-        s.onEditorInit,
-        s.handleContentChange,
-        s.useFetchDocument,
-        s.performSave,
-      ]);
+    const [
+      cancelDebouncedSave,
+      onEditorInit,
+      handleContentChangeStore,
+      useFetchDocument,
+      performSave,
+    ] = useDocumentStore((s) => [
+      s.cancelDebouncedSave,
+      s.onEditorInit,
+      s.handleContentChange,
+      s.useFetchDocument,
+      s.performSave,
+    ]);
 
     const handleManualSave = useCallback(async () => {
+      if (collaborationRequired) return;
+
       handleContentChangeStore();
       await performSave(documentId, undefined, { saveSource: 'manual' });
-    }, [documentId, handleContentChangeStore, performSave]);
+    }, [collaborationRequired, documentId, handleContentChangeStore, performSave]);
 
     useSaveDocumentHotkey(handleManualSave);
+
+    useEffect(() => {
+      if (collaborationRequired) cancelDebouncedSave(documentId);
+    }, [cancelDebouncedSave, collaborationRequired, documentId]);
 
     // Use SWR hook for document fetching (auto-initializes via onSuccess in DocumentStore)
     const {
@@ -77,7 +90,9 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       isLoading: isFetchingDocument,
       mutate,
     } = useFetchDocument(documentId, {
-      autoSave,
+      // A collaborative Page must never bootstrap the legacy autosave path,
+      // including while its browser ticket/provider is still initializing.
+      autoSave: autoSave && !collaborationRequired,
       editor,
       sourceType,
       topicId,
@@ -92,6 +107,7 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
 
     const handleAutoSaveBeforeLeave = useCallback(async () => {
       if (!shouldGuardUnsavedChanges) return true;
+      if (collaborationRequired) return true;
 
       handleContentChangeStore();
       await performSave(documentId, undefined, { saveSource: 'system' });
@@ -102,7 +118,14 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       if (latestDocument?.saveBlockedByLock)
         throw new Error(t('pageEditor.editMode.lockedBySomeone'));
       return latestDocument ? !latestDocument.isDirty : true;
-    }, [documentId, handleContentChangeStore, performSave, shouldGuardUnsavedChanges, t]);
+    }, [
+      collaborationRequired,
+      documentId,
+      handleContentChangeStore,
+      performSave,
+      shouldGuardUnsavedChanges,
+      t,
+    ]);
 
     const unsavedGuardNode = (
       <UnsavedChangesGuard
@@ -115,7 +138,10 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
 
     // Handle content change
     const handleChange = () => {
-      handleContentChangeStore();
+      // Yjs is the source of truth for collaborative body content. Keep the
+      // DocumentStore out of the legacy content autosave path; metadata saves
+      // remain independent and continue through performSave(metadataOnly).
+      if (!collaborationRequired) handleContentChangeStore();
       onContentChange?.();
     };
 

@@ -175,6 +175,32 @@ export const PageAgentManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+
+    // ============ Collaborative targeted rewrite ==========
+    {
+      description:
+        'Start or resume a targeted collaborative rewrite for an already-created request. The room worker applies the validated rewrite directly after durable persistence. Pass only the durable request ID; the server re-checks document, agent, user, and workspace access, then enqueues the request. This tool does not accept selection anchors, node keys, room tickets, snapshots, or raw editor data.',
+      name: DocumentApiName.rewriteSelection,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          instruction: {
+            description:
+              'Optional replacement instruction. It can update the request only while its durable status is queued.',
+            maxLength: 32768,
+            type: 'string',
+          },
+          requestId: {
+            description: 'ID of an existing durable rewrite request created by the current user.',
+            maxLength: 255,
+            minLength: 1,
+            type: 'string',
+          },
+        },
+        required: ['requestId'],
+        type: 'object',
+      },
+    },
   ],
   identifier: PageAgentIdentifier,
   meta: {

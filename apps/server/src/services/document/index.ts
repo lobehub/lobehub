@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
-import { documents, files } from '@lobechat/database/schemas';
+import { documentCollaborationStates, documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -640,9 +640,104 @@ export class DocumentService {
         this.workspaceId,
       );
 
+      // Browser autosave carries the document timestamp captured when its
+      // local dirty snapshot was created. Lock and re-read the row before
+      // comparing it so a room projection that commits concurrently wins the
+      // race instead of being overwritten by an older debounce payload.
+      const expectedCollaborationStateVector = params.expectedCollaborationStateVector?.trim();
+      if (
+        params.expectedCollaborationStateVector !== undefined &&
+        (!expectedCollaborationStateVector || expectedCollaborationStateVector.length > 16_384)
+      ) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Invalid expectedCollaborationStateVector',
+        });
+      }
+      const expectedUpdatedAt = params.expectedUpdatedAt?.getTime();
+      if (params.expectedUpdatedAt && !Number.isFinite(expectedUpdatedAt)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Invalid expectedUpdatedAt',
+        });
+      }
+      if (params.expectedUpdatedAt || expectedCollaborationStateVector) {
+        const [lockedDocument] = await transactionDb
+          .select({ id: documents.id })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.id, id),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                documents,
+              ),
+            ),
+          )
+          .for('update')
+          .limit(1);
+        if (!lockedDocument) throw new Error(`Document not found: ${id}`);
+      }
+
       const currentDocument = await documentModel.findById(id);
       if (!currentDocument) {
         throw new Error(`Document not found: ${id}`);
+      }
+      if (
+        expectedUpdatedAt !== undefined &&
+        !expectedCollaborationStateVector &&
+        currentDocument.updatedAt.getTime() !== expectedUpdatedAt
+      ) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Document version changed; refresh before saving',
+        });
+      }
+
+      let collaborationBodyAcknowledged = false;
+      if (expectedCollaborationStateVector) {
+        if (params.content === undefined && params.editorData === undefined) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Collaborative CAS requires a document body snapshot',
+          });
+        }
+
+        const [collaborationState] = await transactionDb
+          .select({
+            roomId: documentCollaborationStates.roomId,
+            stateVector: documentCollaborationStates.stateVector,
+            userId: documentCollaborationStates.userId,
+            workspaceId: documentCollaborationStates.workspaceId,
+          })
+          .from(documentCollaborationStates)
+          .where(eq(documentCollaborationStates.documentId, id))
+          .for('update')
+          .limit(1);
+        if (
+          !collaborationState ||
+          collaborationState.roomId !== id ||
+          collaborationState.stateVector !== expectedCollaborationStateVector ||
+          collaborationState.userId !== currentDocument.userId ||
+          collaborationState.workspaceId !== currentDocument.workspaceId
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Collaboration room has a newer persisted projection',
+          });
+        }
+
+        const contentMatches =
+          params.content === undefined || params.content === currentDocument.content;
+        const editorDataMatches =
+          params.editorData === undefined || isEqual(params.editorData, currentDocument.editorData);
+        if (!contentMatches || !editorDataMatches) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Collaborative snapshot does not match the persisted room projection',
+          });
+        }
+        collaborationBodyAcknowledged = true;
       }
 
       // Optimistic-concurrency predicate for the client's CONFLICT recovery:
@@ -677,6 +772,7 @@ export class DocumentService {
           ? undefined
           : normalizeEditorDataDiffNodes(params.editorData);
       const historyAppended =
+        !collaborationBodyAcknowledged &&
         nextEditorDataAccepted !== undefined &&
         !isEqual(nextEditorDataAccepted, currentEditorDataAccepted);
       // Mentions are diffed on the accepted view so a chip inside a pending
@@ -692,8 +788,9 @@ export class DocumentService {
       // unchanged body. The lease auto-expires in Redis; when Redis is down this
       // returns null (fail-open) so the lock can't block saving.
       const contentChanged =
-        historyAppended ||
-        (params.content !== undefined && params.content !== currentDocument.content);
+        !collaborationBodyAcknowledged &&
+        (historyAppended ||
+          (params.content !== undefined && params.content !== currentDocument.content));
       if (contentChanged && this.isCollaborativeDocument(currentDocument)) {
         const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
         if (!canWrite) {
@@ -707,13 +804,13 @@ export class DocumentService {
 
       const updates: Record<string, unknown> = {};
 
-      if (params.content !== undefined) {
+      if (params.content !== undefined && !collaborationBodyAcknowledged) {
         updates.content = params.content;
         updates.totalCharCount = params.content.length;
         updates.totalLineCount = params.content.split('\n').length;
       }
 
-      if (params.editorData !== undefined) {
+      if (params.editorData !== undefined && !collaborationBodyAcknowledged) {
         updates.editorData = params.editorData;
       }
 
@@ -737,7 +834,13 @@ export class DocumentService {
       // The lock lease is refreshed by the client heartbeat (acquireDocumentLock),
       // so a save does not need to touch it.
 
-      let savedAt: Date | undefined;
+      let savedAt: Date | undefined = currentDocument.updatedAt;
+      const isMetadataOnlyUpdate =
+        params.content === undefined &&
+        params.editorData === undefined &&
+        params.fileType === undefined &&
+        params.parentId === undefined &&
+        (params.title !== undefined || params.metadata !== undefined);
 
       if (historyAppended) {
         savedAt = new Date();
@@ -751,7 +854,18 @@ export class DocumentService {
       }
 
       if (Object.keys(updates).length > 0) {
-        await documentModel.update(id, updates as Partial<DocumentItem>);
+        if (isMetadataOnlyUpdate) {
+          // `documents.updatedAt` is also the collaboration ledger's body CAS
+          // timestamp. A title/metadata-only save must not invalidate the
+          // room's next Yjs projection; body updates keep the normal timestamp.
+          await documentModel.update(id, updates as Partial<DocumentItem>, {
+            touchUpdatedAt: false,
+          });
+        } else {
+          await documentModel.update(id, updates as Partial<DocumentItem>);
+        }
+        const updatedDocument = await documentModel.findById(id);
+        savedAt = updatedDocument?.updatedAt ?? new Date();
       }
 
       if ((params.title !== undefined || params.parentId !== undefined) && currentDocument.fileId) {

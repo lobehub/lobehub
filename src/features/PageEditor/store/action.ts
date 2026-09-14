@@ -10,7 +10,7 @@ import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
-import { type RightPanelMode, type State } from './initialState';
+import { type RightPanelMode, type RightPanelTab, type State } from './initialState';
 import { initialState } from './initialState';
 
 const log = debug('page:editor');
@@ -42,6 +42,7 @@ export interface Action {
     holderOwnerId?: string | null,
   ) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
+  setRightPanelTab: (tab: RightPanelTab) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
 }
@@ -165,7 +166,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
               emoji,
               title,
             },
-            { saveSource: 'autosave' },
+            { metadataOnly: true, saveSource: 'autosave' },
           );
 
           // Notify parent after successful save
@@ -225,6 +226,10 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
 
       setRightPanelMode: (rightPanelMode) => {
         set({ rightPanelMode });
+      },
+
+      setRightPanelTab: (rightPanelTab) => {
+        set({ rightPanelTab });
       },
 
       setTitle: (title: string) => {

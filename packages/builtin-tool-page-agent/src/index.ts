@@ -8,6 +8,11 @@ export {
   type ModifyNodesState,
   PageAgentIdentifier,
   type ReplaceTextState,
+  type RewriteProgress,
+  type RewriteProgressEvent,
+  type RewriteProgressStage,
+  type RewriteSelectionArgs,
+  type RewriteSelectionState,
 } from './types';
 export type {
   EditTitleArgs,

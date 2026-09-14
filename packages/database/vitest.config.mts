@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -30,7 +31,6 @@ export default defineConfig({
       '@/server/services': resolve(__dirname, '../../apps/server/src/services'),
       '@/server/modules': resolve(__dirname, '../../apps/server/src/modules'),
       '@': resolve(__dirname, '../../src'),
-
     },
     coverage: {
       exclude: [
@@ -62,7 +62,7 @@ export default defineConfig({
     ],
     server: {
       deps: {
-        inline: ['vitest-canvas-mock'],
+        inline: ['vitest-canvas-mock', /@lobehub\/editor/],
       },
     },
     setupFiles: './tests/setup-db.ts',

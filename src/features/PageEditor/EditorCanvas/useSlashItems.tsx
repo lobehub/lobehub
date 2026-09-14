@@ -1,4 +1,8 @@
-import { type SlashOptions } from '@lobehub/editor';
+import {
+  type CapturedCollaborativeRewriteSelection,
+  INSERT_BLOCK_IMAGE_COMMAND,
+  type SlashOptions,
+} from '@lobehub/editor';
 import {
   INSERT_ARTIFACT_COMMAND,
   INSERT_CHECK_LIST_COMMAND,
@@ -32,7 +36,17 @@ import { useTranslation } from 'react-i18next';
 
 import { openFileSelector } from '@/features/EditorCanvas';
 
-export const useSlashItems = (): SlashOptions['items'] => {
+import { createPageRewriteNodeSelection } from './PageRewriteBlockMenuPlugin';
+
+interface UseSlashItemsOptions {
+  documentId?: string;
+  onRewriteSelection?: (selection: CapturedCollaborativeRewriteSelection) => void;
+}
+
+export const useSlashItems = ({
+  documentId,
+  onRewriteSelection,
+}: UseSlashItemsOptions = {}): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
 
   return useMemo(() => {
@@ -129,6 +143,23 @@ export const useSlashItems = (): SlashOptions['items'] => {
             },
           },
           {
+            icon: ImageIcon,
+            key: 'generate-image',
+            label: t('slash.generateImage'),
+            layout: 'tile',
+            onSelect: (editor) => {
+              if (!documentId || !onRewriteSelection) return;
+              editor.dispatchCommand(INSERT_BLOCK_IMAGE_COMMAND, {
+                onInserted: (nodeId: string) => {
+                  const selection = createPageRewriteNodeSelection(editor, nodeId, documentId);
+                  if (!selection) return;
+                  editor.blur();
+                  onRewriteSelection(selection);
+                },
+              });
+            },
+          },
+          {
             icon: MinusIcon,
             key: 'hr',
             label: t('slash.hr'),
@@ -214,5 +245,5 @@ export const useSlashItems = (): SlashOptions['items'] => {
       },
     ];
     return data;
-  }, [t]);
+  }, [documentId, onRewriteSelection, t]);
 };

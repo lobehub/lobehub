@@ -52,6 +52,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &:hover [data-lobehub-file-download] {
       opacity: 1;
     }
+
+    [data-block-file].selected & {
+      position: relative;
+      border-color: ${cssVar.colorPrimary};
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
+    }
+
+    [data-block-file].selected &::after {
+      pointer-events: none;
+      content: '';
+
+      position: absolute;
+      inset: 0;
+
+      border-radius: inherit;
+
+      opacity: 0.35;
+      background: ${cssVar.colorPrimaryBg};
+    }
+
+    [data-block-file].selected &::selection,
+    [data-block-file].selected & *::selection {
+      color: currentcolor;
+      background: transparent;
+    }
   `,
   download: css`
     flex-shrink: 0;
@@ -272,8 +297,7 @@ LinearFileCard.displayName = 'LinearFileCard';
 interface LinearFilePluginProps {
   handleUpload: EditorAttachmentUpload;
   /**
-   * Class applied to the outer Lexical `<span>` wrapper. Set to a block-level
-   * style so the file card claims its own line in the paragraph.
+   * Class applied to the block-file host so the file card keeps its own line.
    */
   theme?: { file?: string };
 }
@@ -307,6 +331,7 @@ const LinearFilePlugin: FC<LinearFilePluginProps> = ({ handleUpload, theme }) =>
     editor.registerPlugin(UploadPlugin);
     editor.registerPlugin(FilePlugin, {
       decorator: (node) => <LinearFileCard node={node} uploadTracker={uploadTracker} />,
+      defaultBlockFile: true,
       handleUpload: trackedHandleUpload,
       theme,
     });

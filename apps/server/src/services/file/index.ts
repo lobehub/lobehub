@@ -203,6 +203,7 @@ export class FileService {
       name: string;
       size: number;
       url: string;
+      visibility?: 'private' | 'public';
     },
     trx?: Transaction,
   ): Promise<{ fileId: string; url: string }> {
@@ -234,6 +235,7 @@ export class FileService {
         metadata: params.metadata,
         name: params.name,
         size: params.size,
+        ...(params.visibility ? { visibility: params.visibility } : {}),
         url: params.url,
       },
       !isExist, // insertToGlobalFiles

@@ -165,6 +165,13 @@ export default {
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
   'pageEditor.editMode.lockedDescription':
     'The page is read-only while they edit. Your changes won’t be saved until they’re done.',
+  'pageEditor.editMode.collaboration.backendUnavailableTitle':
+    'Collaboration service temporarily unavailable',
+  'pageEditor.editMode.collaboration.backendUnavailableDescription':
+    'This page is read-only until the collaboration service is available again. Please try again shortly.',
+  'pageEditor.editMode.collaboration.readOnlyTitle': 'Editing temporarily unavailable',
+  'pageEditor.editMode.collaboration.readOnlyDescription':
+    'This page is read-only because the collaboration session could not be established. Please refresh or try again later.',
   'pageEditor.editMode.lockLostDescription':
     'Recent edits haven’t synced yet. They’ll resume saving once the connection recovers.',
   'pageEditor.editMode.lockLostTitle': 'Edit lock temporarily lost',

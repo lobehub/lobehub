@@ -1,7 +1,7 @@
 'use client';
 
 import { type IEditor, type TocItem, useToc } from '@lobehub/editor';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import type { FC, RefObject } from 'react';

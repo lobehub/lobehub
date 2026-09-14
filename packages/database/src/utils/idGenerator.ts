@@ -16,6 +16,8 @@ const prefixes = {
   budget: 'bgt',
   chatGroups: 'cg',
   documents: 'docs',
+  documentRewriteSessions: 'rws',
+  documentRewriteRequests: 'rwr',
   evalBenchmarks: 'evb',
   evalDatasets: 'ds',
   evalExperiments: 'exp',

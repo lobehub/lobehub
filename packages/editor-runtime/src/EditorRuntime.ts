@@ -31,6 +31,11 @@ interface CollaborationSnapshotService {
   applyExternalEditorData?: (editorData: Record<string, unknown>) => boolean;
 }
 
+interface CollaborationServiceLookup {
+  failed: boolean;
+  service: CollaborationSnapshotService | null;
+}
+
 interface LiteXMLNodeMatch {
   attributes: string;
   content: string;
@@ -55,6 +60,7 @@ export type LiteXMLBatchOperation =
   | { action: 'remove'; id: string };
 
 export interface EditorRuntimeDebugSnapshot {
+  collaborationRequired: boolean;
   currentDocId?: string;
   dataSourceTypes: string[];
   hasAfterMutateHandler: boolean;
@@ -92,6 +98,13 @@ const hasDataSource = (editor: InspectableEditor, type: string) =>
  */
 export class EditorRuntime {
   private editor: IEditor | null = null;
+  /**
+   * Page sets this before mounting the Yjs provider. Keep it separate from
+   * the provider's current state: `connecting`, `fatal`, and an empty service
+   * state are still collaboration mode, never permission to use legacy body
+   * import paths.
+   */
+  private collaborationRequired = false;
   private titleSetter: ((title: string) => void) | null = null;
   private titleGetter: (() => string) | null = null;
   private currentDocId: string | undefined = undefined;
@@ -114,6 +127,20 @@ export class EditorRuntime {
     log('Setting current doc ID:', docId);
     this.currentDocId = docId;
     log('[EditorRuntime] setCurrentDocId', this.getDebugSnapshot());
+  }
+
+  /**
+   * Declare whether the mounted host owns the document body through
+   * collaboration. Page calls this before the provider is initialized so an
+   * early server echo cannot fall through to `setDocument`.
+   */
+  setCollaborationRequired(required: boolean): void {
+    this.collaborationRequired = required;
+    log('[EditorRuntime] setCollaborationRequired', { required });
+  }
+
+  isCollaborationRequired(): boolean {
+    return this.collaborationRequired;
   }
 
   /**
@@ -167,6 +194,7 @@ export class EditorRuntime {
     })();
 
     return {
+      collaborationRequired: this.collaborationRequired,
       currentDocId: this.currentDocId,
       dataSourceTypes: inspectableEditor ? getDataSourceTypes(inspectableEditor) : [],
       hasAfterMutateHandler: !!this.afterMutateHandler,
@@ -191,48 +219,30 @@ export class EditorRuntime {
     }
   }
 
-  /**
-   * Apply an editor-data snapshot through the Yjs binding when collaboration is
-   * active. The editor package owns the binding because only it can reconcile
-   * Lexical node keys with the shared Y.Doc. `undefined` means that no Yjs
-   * service is registered, so callers may use the legacy non-collaborative
-   * datasource path. A registered but incompatible service returns `false` and
-   * is never sent through that fallback.
-   */
-  private applyCollaborationSnapshot(editorData: Record<string, unknown>): boolean | undefined {
-    if (!this.editor) return undefined;
+  private lookupCollaborationService(): CollaborationServiceLookup {
+    if (!this.editor) return { failed: false, service: null };
 
     try {
-      const service = this.editor.requireService(
-        IYjsService,
-      ) as CollaborationSnapshotService | null;
-
-      if (!service) return undefined;
-      if (typeof service.applyExternalEditorData !== 'function') {
-        log('[EditorRuntime] collaboration snapshot unsupported by loaded editor package');
-        return false;
-      }
-
-      try {
-        return service.applyExternalEditorData(editorData);
-      } catch (error) {
-        // Do not fall back to setDocument after a collaboration-aware service has
-        // started. A fallback would re-import the full tree and recreate the
-        // duplication this boundary is intended to prevent.
-        log('[EditorRuntime] collaboration snapshot apply failed', error);
-        return false;
-      }
+      return {
+        failed: false,
+        service: this.editor.requireService(IYjsService) as CollaborationSnapshotService | null,
+      };
     } catch (error) {
+      // An exception means the runtime cannot prove that this is a
+      // non-collaborative editor. Never reinterpret it as permission to import
+      // a complete JSON/Markdown tree.
       log('[EditorRuntime] collaboration snapshot service unavailable', error);
-      return undefined;
+      return { failed: true, service: null };
     }
   }
 
   /**
    * Apply a snapshot produced by the server-side PageAgent execution runtime
-   * onto the currently mounted editor. Collaboration-aware editors apply the
-   * payload through their Yjs binding in one controlled transaction. The
-   * server already wrote the row, so this method never calls
+   * onto the currently mounted editor. In a collaborative Page the live room
+   * is the only body channel; server JSON/Markdown is treated as an echo and
+   * is never imported into the Yjs root. An explicitly non-collaborative editor
+   * with no Yjs service keeps the legacy import behavior. The server already
+   * wrote the row, so this method never calls
    * `afterMutateHandler` and cannot loop the save path back through
    * `commitEditorMutation`.
    *
@@ -245,17 +255,23 @@ export class EditorRuntime {
     title?: string;
   }): boolean {
     let applied = false;
+    const collaborationLookup = this.lookupCollaborationService();
+    const bodyImportBlocked =
+      this.collaborationRequired || collaborationLookup.failed || !!collaborationLookup.service;
 
-    if (this.editor && snapshot.editorData) {
+    if (this.editor && bodyImportBlocked) {
+      // A registered service is already a collaboration boundary, even while
+      // its provider state is connecting or fatal. The direct worker/Yjs room
+      // path owns the body; no service capability is invoked here.
+      log('[EditorRuntime] server body snapshot rejected by collaboration boundary', {
+        collaborationRequired: this.collaborationRequired,
+        lookupFailed: collaborationLookup.failed,
+        hasService: !!collaborationLookup.service,
+      });
+    } else if (this.editor && snapshot.editorData) {
       try {
-        const collaborationResult = this.applyCollaborationSnapshot(snapshot.editorData);
-
-        if (collaborationResult === undefined) {
-          this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
-          applied = true;
-        } else {
-          applied = collaborationResult;
-        }
+        this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
+        applied = true;
       } catch (error) {
         log('[EditorRuntime] applyServerSnapshot:editorData failed', error);
       }

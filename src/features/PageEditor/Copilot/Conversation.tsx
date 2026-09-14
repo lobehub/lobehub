@@ -1,6 +1,6 @@
 import { isChatGroupSessionId } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import { actionMap } from '@/features/ChatInput/ActionBar/config';
@@ -19,11 +19,13 @@ import {
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import { selectors, usePageEditorStore } from '../store';
 import { usePageLockedByOther } from '../usePageLockedByOther';
+import AgentEditsPanel from './AgentEditsPanel';
 import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
 import AnnotationPanel from './AnnotationPanel';
 import CopilotModelSelect from './CopilotModelSelect';
-import CopilotToolbar, { type CopilotPanelTab } from './Toolbar';
+import CopilotToolbar from './Toolbar';
 import Welcome from './Welcome';
 
 const Search = actionMap['search'];
@@ -31,7 +33,8 @@ const Search = actionMap['search'];
 const EMPTY_LEFT_ACTIONS: [] = [];
 
 const Conversation = memo(() => {
-  const [activeTab, setActiveTab] = useState<CopilotPanelTab>('topic');
+  const activeTab = usePageEditorStore(selectors.rightPanelTab);
+  const setActiveTab = usePageEditorStore((s) => s.setRightPanelTab);
   const [setActiveAgentId, useFetchAgentConfig] = useAgentStore((s) => [
     s.setActiveAgentId,
     s.useFetchAgentConfig,
@@ -81,6 +84,8 @@ const Conversation = memo(() => {
         <CopilotToolbar activeTab={activeTab} onTabChange={setActiveTab} />
         {activeTab === 'annotations' ? (
           <AnnotationPanel />
+        ) : activeTab === 'agent-edits' ? (
+          <AgentEditsPanel />
         ) : (
           <>
             <Flexbox flex={1} style={{ overflow: 'hidden' }}>

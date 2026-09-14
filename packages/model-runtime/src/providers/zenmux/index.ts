@@ -1,9 +1,12 @@
+import { GoogleGenAI } from '@google/genai';
 import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import urlJoin from 'url-join';
 
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { LobeGoogleAI } from '../google';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 interface ZenMuxPricingEntry {
   conditions?: Record<string, unknown>;
@@ -36,6 +39,37 @@ const getPerMTokensPrice = (entries?: ZenMuxPricingEntry[]): number | undefined 
   entries?.find((entry) => entry.unit === 'perMTokens')?.value;
 
 const DEFAULT_BASE_URL = 'https://zenmux.ai';
+const DEFAULT_GOOGLE_PROTOCOL_BASE_URL = urlJoin(DEFAULT_BASE_URL, '/api/vertex-ai');
+
+type ZenMuxGoogleOptions = NonNullable<ConstructorParameters<typeof LobeGoogleAI>[0]>;
+
+/**
+ * ZenMux's Google Protocol endpoint is Vertex-shaped but still authenticates
+ * with the ZenMux API key. Use the Google SDK's Vertex mode with ZenMux's
+ * explicit v1 base URL instead of the normal Gemini API (v1beta) defaults.
+ */
+export class LobeZenMuxGoogleAI extends LobeGoogleAI {
+  constructor(options: ZenMuxGoogleOptions = {}) {
+    // Let the base class preserve the provider's InvalidProviderAPIKey error
+    // instead of allowing the Google SDK to fall through to ADC credentials.
+    if (!options.apiKey) {
+      super(options);
+      return;
+    }
+
+    const client = new GoogleGenAI({
+      apiKey: options.apiKey,
+      httpOptions: {
+        apiVersion: 'v1',
+        baseUrl: options.baseURL ?? DEFAULT_GOOGLE_PROTOCOL_BASE_URL,
+        headers: options.defaultHeaders,
+      },
+      vertexai: true,
+    });
+
+    super({ ...options, client, isVertexAi: true });
+  }
+}
 
 export const params = {
   chatCompletion: {
@@ -71,11 +105,19 @@ export const params = {
     // vision/reasoning stay correct for vendors the keyword heuristics don't know about —
     // otherwise native-vision models get vision=false and are forced through analyzeMedia
     const formattedModels = modelList.map((model) => {
-      const { capabilities, context_length, input_modalities, pricings, publish_time } = model;
+      const {
+        capabilities,
+        context_length,
+        display_name,
+        input_modalities,
+        pricings,
+        publish_time,
+      } = model;
 
       return {
         ...model,
         contextWindowTokens: context_length,
+        displayName: display_name,
         pricing: {
           cachedInput: getPerMTokensPrice(pricings?.input_cache_read),
           input: getPerMTokensPrice(pricings?.prompt),
@@ -91,7 +133,7 @@ export const params = {
 
     return processMultiProviderModelList(formattedModels, 'zenmux');
   },
-  routers: (options) => {
+  routers: (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || DEFAULT_BASE_URL;
     const userBaseURL = baseURL.replace(/\/v\d+[a-z]*\/?$/, '').replace(/\/api\/?$/, '');
 
@@ -108,13 +150,20 @@ export const params = {
       },
       {
         apiType: 'google',
-        models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-          (id) => detectModelProvider(id) === 'google',
+        // ZenMux returns provider-qualified IDs (for example,
+        // `google/gemini-3.1-flash-lite-image`) that are not part of the
+        // static model bank. Include the requested detected-Google model so
+        // it still reaches ZenMux's Google-native protocol endpoint.
+        models: resolveProviderRouteModels(
+          'google',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
         ),
         options: {
           ...options,
           baseURL: urlJoin(userBaseURL, '/api/vertex-ai'),
         },
+        runtime: LobeZenMuxGoogleAI,
       },
       {
         apiType: 'openai',

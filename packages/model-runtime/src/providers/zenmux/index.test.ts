@@ -4,7 +4,7 @@ import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as modelParseModule from '../../utils/modelParse';
-import { params } from './index';
+import { LobeZenMuxGoogleAI, params } from './index';
 
 // Mock external dependencies
 vi.mock('../../utils/modelParse');
@@ -249,6 +249,61 @@ describe('ZenMux Runtime', () => {
         const openaiRouter = routers.find((r) => r.apiType === 'openai');
         expect(openaiRouter?.options.baseURL).toBe('https://zenmux.ai/api/v1');
       });
+
+      it.each(['google/gemini-3.1-flash-image', 'google/gemini-3.1-flash-lite-image'])(
+        'routes provider-qualified Google model %s to the native endpoint',
+        (model) => {
+          mockDetectModelProvider.mockImplementation((id) =>
+            id.startsWith('google/') ? 'google' : 'openai',
+          );
+
+          const routers = params.routers({ baseURL: 'https://zenmux.ai/api/v1' }, { model });
+          const googleRouter = routers.find((router) => router.apiType === 'google');
+
+          expect(googleRouter?.models).toContain(model);
+          expect(googleRouter?.options.baseURL).toBe('https://zenmux.ai/api/vertex-ai');
+          expect(googleRouter?.runtime).toBe(LobeZenMuxGoogleAI);
+        },
+      );
+
+      it('uses ZenMux Google Protocol v1 with the provider-qualified model ID', async () => {
+        mockFetch.mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              candidates: [
+                {
+                  content: {
+                    parts: [{ inlineData: { data: 'aW1hZ2U=', mimeType: 'image/png' } }],
+                  },
+                },
+              ],
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          ),
+        );
+
+        const runtime = new LobeZenMuxGoogleAI({
+          apiKey: 'zenmux-test-key',
+          id: 'zenmux',
+        });
+
+        await runtime.createImage({
+          model: 'google/gemini-3.1-flash-lite-image:image',
+          params: { prompt: 'a small test image' },
+        } as any);
+
+        const [request, init] = mockFetch.mock.calls[0] as [RequestInfo, RequestInit];
+        expect(String(request)).toBe(
+          'https://zenmux.ai/api/vertex-ai/v1/publishers/google/models/gemini-3.1-flash-lite-image:generateContent',
+        );
+        expect(new Headers(init.headers).get('x-goog-api-key')).toBe('zenmux-test-key');
+      });
+
+      it('keeps the standard invalid-key error when no ZenMux key is supplied', () => {
+        expect(() => new LobeZenMuxGoogleAI()).toThrowError(
+          expect.objectContaining({ errorType: 'InvalidProviderAPIKey' }),
+        );
+      });
     });
     describe('Models Function', () => {
       it('should fetch and process models correctly', async () => {
@@ -325,6 +380,7 @@ describe('ZenMux Runtime', () => {
                   object: 'model',
                   created: 1786609177,
                   owned_by: 'z-ai',
+                  display_name: 'Z.AI: GLM 5.3',
                   input_modalities: ['text'],
                   output_modalities: ['text'],
                   capabilities: { reasoning: true },
@@ -353,6 +409,7 @@ describe('ZenMux Runtime', () => {
           [
             expect.objectContaining({
               contextWindowTokens: 393100,
+              displayName: 'Dots Studio: Dots3-Note Preview (Free)',
               id: 'dots-studio/dots3-note-prev',
               pricing: expect.objectContaining({ cachedInput: 0, input: 0, output: 0 }),
               reasoning: true,
@@ -362,6 +419,7 @@ describe('ZenMux Runtime', () => {
             }),
             expect.objectContaining({
               contextWindowTokens: 1000000,
+              displayName: 'Z.AI: GLM 5.3',
               id: 'z-ai/glm-5.3',
               pricing: expect.objectContaining({ input: 1.4, output: 4.4 }),
               reasoning: true,

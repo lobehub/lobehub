@@ -24,11 +24,13 @@ const log = debug('lobe-image:generation-service');
 export async function fetchImageFromUrl(
   url: string,
   fetchHeaders?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<{
   buffer: Buffer;
   mimeType: string;
 }> {
   if (url.startsWith('data:')) {
+    if (signal?.aborted) throw new Error('Image fetch was aborted');
     log('Data URI length:', url.length);
 
     log('parseDataUri: start');
@@ -57,13 +59,17 @@ export async function fetchImageFromUrl(
     // are read and returned, other responses leak status/statusText for blind probing.
     // ssrfSafeFetch blocks private/link-local IPs at connect time and on every redirect hop.
     // See GHSA-53h9-fmjf-frwr / #16536.
-    const response = await ssrfSafeFetch(url, { headers: fetchHeaders });
+    const response = await ssrfSafeFetch(url, {
+      ...(fetchHeaders ? { headers: fetchHeaders } : {}),
+      ...(signal ? { signal } : {}),
+    });
     if (!response.ok) {
       throw new Error(
         `Failed to fetch image from ${url}: ${response.status} ${response.statusText}`,
       );
     }
     const arrayBuffer = await response.arrayBuffer();
+    if (signal?.aborted) throw new Error('Image fetch was aborted');
     const buffer = Buffer.from(arrayBuffer);
     const mimeType = response.headers.get('content-type') || 'application/octet-stream';
     return { buffer, mimeType };
@@ -97,6 +103,7 @@ export class GenerationService {
   async transformImageForGeneration(
     url: string,
     fetchHeaders?: Record<string, string>,
+    signal?: AbortSignal,
   ): Promise<{
     image: ImageForGeneration;
     thumbnailImage: ImageForGeneration;
@@ -108,6 +115,7 @@ export class GenerationService {
     const { buffer: originalImageBuffer, mimeType: originalMimeType } = await fetchImageFromUrl(
       url,
       fetchHeaders,
+      signal,
     );
     log('fetchImageFromUrl: done, buffer size:', originalImageBuffer.length);
 

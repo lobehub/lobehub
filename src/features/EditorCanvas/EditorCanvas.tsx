@@ -43,13 +43,6 @@ export interface EditorCanvasProps {
   autoSave?: boolean;
 
   /**
-   * Whether a collaboration provider owns live document state after the
-   * initial server snapshot is loaded. When enabled, SWR revalidation must not
-   * re-apply autosave echoes to the bound editor.
-   */
-  collaborationEnabled?: boolean;
-
-  /**
    * Keep the caret out of Lexical's root node around block images by pushing
    * an empty paragraph next to the image (otherwise a horizontal root-level
    * caret shows above / below it). Off by default; comment editors opt in.
@@ -60,6 +53,20 @@ export interface EditorCanvasProps {
    * Class name applied to the editor wrapper, e.g. to restyle inline chips.
    */
   className?: string;
+
+  /**
+   * Whether a collaboration provider owns live document state after the
+   * initial server snapshot is loaded. When enabled, SWR revalidation must not
+   * re-apply autosave echoes to the bound editor.
+   */
+  collaborationEnabled?: boolean;
+
+  /**
+   * Whether this document is configured to require collaboration. This is
+   * true while the browser ticket/provider is still bootstrapping, so the
+   * legacy document autosave must be disabled before Yjs takes ownership.
+   */
+  collaborationRequired?: boolean;
 
   /**
    * Reload an already-mounted editor when an authoritative external content
@@ -116,13 +123,13 @@ export interface EditorCanvasProps {
   /** Resolve the portal host used by slash and mention menus. */
   getPopupContainer?: EditorProps['getPopupContainer'];
 
-  /** Structured @mention configuration forwarded to the editor. */
-  mentionOption?: EditorProps['mentionOption'];
-
   /**
    * Optional configured link plugin. Defaults to ReactLinkPlugin.
    */
   linkPlugin?: EditorPlugins[number];
+
+  /** Structured @mention configuration forwarded to the editor. */
+  mentionOption?: EditorProps['mentionOption'];
 
   /**
    * Content change handler

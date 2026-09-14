@@ -5,16 +5,17 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
-import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { usePageAgentPanelControl, usePageAgentPanelOverride } from '../RightPanel/OverrideContext';
+import { styles } from './copilotToolbar.styles';
 import TopicItem from './TopicSelector/TopicItem';
 
-export type CopilotPanelTab = 'annotations' | 'topic';
+export type CopilotPanelTab = 'agent-edits' | 'annotations' | 'topic';
 
 interface CopilotToolbarProps {
   activeTab?: CopilotPanelTab;
@@ -29,7 +30,10 @@ const CopilotToolbar = memo<CopilotToolbarProps>(
     const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
     const agentId = useConversationStore(conversationSelectors.agentId);
 
-    useFetchAgentChatTopics(agentId);
+    useChatStore((s) => s.useFetchTopics)(true, {
+      agentId,
+      excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+    });
 
     const [globalActiveTopicId, switchTopic, topics] = useChatStore((s) => [
       s.activeTopicId,
@@ -48,23 +52,28 @@ const CopilotToolbar = memo<CopilotToolbarProps>(
 
     return (
       <NavHeader
+        className={styles.header}
         showTogglePanelButton={false}
+        slotClassNames={{ left: styles.left, right: styles.right }}
         left={
           onTabChange ? (
             <Tabs
               activeKey={activeTab}
+              className={styles.tabs}
+              classNames={{ list: styles.tabsList, tab: styles.tab }}
               size="small"
               variant="point"
               items={[
                 { key: 'topic', label: t('copilot.tabs.topic', { ns: 'editor' }) },
                 { key: 'annotations', label: t('copilot.tabs.annotations', { ns: 'editor' }) },
+                { key: 'agent-edits', label: t('copilot.tabs.agentEdits', { ns: 'editor' }) },
               ]}
               onChange={(key) => onTabChange(key as CopilotPanelTab)}
             />
           ) : (
             <Text
+              className={styles.title}
               ellipsis={{ tooltipWhenOverflow: true }}
-              style={{ fontSize: 13, fontWeight: 500, marginLeft: 8 }}
               type="secondary"
             >
               {topicTitle}

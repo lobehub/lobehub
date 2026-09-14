@@ -1,10 +1,18 @@
 'use client';
 
+import {
+  type AnnotationClickContext,
+  type AnnotationComposerContext,
+  type CapturedCollaborativeRewriteSelection,
+  ICollaborativeTargetLeaseService,
+  IYjsService,
+  type YjsAwarenessUser,
+} from '@lobehub/editor';
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
@@ -13,21 +21,40 @@ import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { usePermission } from '@/hooks/usePermission';
+import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { usePageStore } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
+import { PageAnnotationComposerProvider } from './annotationComposerContext';
+import {
+  PageAnnotationNavigationProvider,
+  type PageAnnotationNavigationRequest,
+} from './annotationNavigationContext';
+import { PageAnnotationStorageProvider } from './Copilot/annotationStorage';
+import { isPageRewriteActiveStatus, usePageRewriteRequests } from './Copilot/rewriteRequests';
 import DocumentComments from './DocumentComments';
 import DocumentLikes from './DocumentLikes';
 import EditorCanvas from './EditorCanvas';
+import { clearPageAIProvenanceFocus } from './EditorCanvas/aiProvenance';
+import { PAGE_EDITOR_SCROLL_ANCHORING_ATTRIBUTE } from './EditorCanvas/collaborationScrollAnchoring';
+import PageRewriteBlockMenuPlugin from './EditorCanvas/PageRewriteBlockMenuPlugin';
+import RewriteSelectionHighlightPlugin from './EditorCanvas/RewriteSelectionHighlightPlugin';
+import { createPageRewriteTargetLeases } from './EditorCanvas/targetLeaseProjection';
 import Header from './Header';
 import LockedAlert from './LockedAlert';
 import LockStatusBanner from './LockStatusBanner';
 import { PageAgentProvider } from './PageAgentProvider';
-import { PageEditorProvider } from './PageEditorProvider';
+import { PageEditorProvider, usePageEditorEditorLifecycle } from './PageEditorProvider';
+import { switchToPageRewriteDraft } from './pageRewriteDraft';
 import PageTableOfContents from './PageTableOfContents';
+import {
+  PageRewriteComposerProvider,
+  type PageRewriteContinuationTarget,
+} from './rewriteComposerContext';
 import RightPanel from './RightPanel';
+import { usePageAgentPanelControl } from './RightPanel/OverrideContext';
 import { usePageEditorStore } from './store';
 import TitleSection from './TitleSection';
 import { usePageEditable } from './usePageEditable';
@@ -101,7 +128,9 @@ const styles = StyleSheet.create({
 
 const overrideStyles = createStaticStyles(({ css }) => ({
   editorContent: css`
-    .lobe-editor-table-scroll-wrapper.lobe-editor-table-scroll-wrapper {
+    .lobe-editor-table-scroll-wrapper.lobe-editor-table-scroll-wrapper:not(
+        [data-hole-table-viewport]
+      ) {
       --lobe-block-anchor-padding: var(--lobe-pageeditor-table-bleed-inline);
 
       position: relative;
@@ -110,8 +139,75 @@ const overrideStyles = createStaticStyles(({ css }) => ({
       margin-inline: calc(var(--lobe-pageeditor-table-bleed-inline) * -1);
     }
 
-    .lobe-editor-table-scroll-wrapper .editor_table {
+    .lobe-editor-table-scroll-wrapper:not([data-hole-table-viewport]) .editor_table {
       width: max-content;
+    }
+  `,
+  editorRoot: css`
+    /* stylelint-disable selector-pseudo-element-no-unknown */
+    &::highlight(ai-session-active) {
+      background-color: ${cssVar.colorWarningBg};
+    }
+
+    &::highlight(ai-session-hover) {
+      background-color: ${cssVar.colorInfoBg};
+    }
+    /* stylelint-enable selector-pseudo-element-no-unknown */
+
+    &[data-ai-session-highlight-overlay='true']
+      .ai-session-highlight-overlay[data-ai-session-highlight-kind='active'],
+    &
+      [data-ai-session-highlight-overlay='true']
+      .ai-session-highlight-overlay[data-ai-session-highlight-kind='active'] {
+      background-color: ${cssVar.colorWarningBg};
+    }
+
+    &[data-ai-session-highlight-overlay='true']
+      .ai-session-highlight-overlay[data-ai-session-highlight-kind='hover'],
+    &
+      [data-ai-session-highlight-overlay='true']
+      .ai-session-highlight-overlay[data-ai-session-highlight-kind='hover'] {
+      background-color: ${cssVar.colorInfoBg};
+    }
+
+    &.ai-session-active,
+    & .ai-session-active {
+      background-color: ${cssVar.colorWarningBg};
+      box-decoration-break: slice;
+    }
+
+    &.ai-session-hover,
+    & .ai-session-hover {
+      background-color: ${cssVar.colorInfoBg};
+      box-decoration-break: slice;
+    }
+
+    /* Atomic cards use one host-bound overlay, not text ranges or a label
+       inserted into document flow. Existing lease guards still own access. */
+    &
+      :is([data-hole='true'], [data-lexical-decorator='true']):is(
+        [data-collaborative-target-locked='true'],
+        [data-page-rewrite-block-selected='true']
+      ) {
+      position: relative;
+    }
+
+    &
+      :is([data-hole='true'], [data-lexical-decorator='true']):is(
+        [data-collaborative-target-locked='true'],
+        [data-page-rewrite-block-selected='true']
+      )::after {
+      pointer-events: none;
+      content: '';
+
+      position: absolute;
+      z-index: 5;
+      inset: 0;
+
+      border: 1px solid color-mix(in srgb, ${cssVar.purple} 45%, transparent);
+      border-radius: inherit;
+
+      background: color-mix(in srgb, ${cssVar.purple} 16%, transparent);
     }
   `,
 }));
@@ -162,14 +258,214 @@ interface PageEditorCanvasProps {
   fullWidthHeader?: boolean;
   header?: PageEditorHeader;
   rightPanel?: boolean;
+  syncPageAgentActiveState?: boolean;
 }
 
 const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
-  const { askCopilotTarget, header, fullWidthHeader, rightPanel } = props;
+  const {
+    askCopilotTarget,
+    header,
+    fullWidthHeader,
+    rightPanel,
+    syncPageAgentActiveState = true,
+  } = props;
   const showRightPanel = rightPanel !== false;
   const editable = usePageEditable();
-  const editor = usePageEditorStore((s) => s.editor);
+  const storeEditor = usePageEditorStore((s) => s.editor);
+  const pageEditorEditorLifecycle = usePageEditorEditorLifecycle();
+  const editor = pageEditorEditorLifecycle?.editor ?? storeEditor;
   const documentId = usePageEditorStore((s) => s.documentId);
+  const { requests: rewriteRequests } = usePageRewriteRequests(documentId);
+  const activeRewriteRequests = useMemo(
+    () => rewriteRequests.filter((request) => isPageRewriteActiveStatus(request.status)),
+    [rewriteRequests],
+  );
+  const activeRewriteNodeIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          activeRewriteRequests.flatMap((request) => {
+            const selection = request.selection as {
+              targetKind?: unknown;
+              targetNodeIds?: unknown;
+            };
+            if (selection?.targetKind !== 'node' || !Array.isArray(selection.targetNodeIds)) {
+              return [];
+            }
+            return selection.targetNodeIds.filter(
+              (nodeId): nodeId is string => typeof nodeId === 'string' && nodeId.length > 0,
+            );
+          }),
+        ),
+      ),
+    [activeRewriteRequests],
+  );
+  const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
+  const setRightPanelTab = usePageEditorStore((s) => s.setRightPanelTab);
+  const switchTopic = useChatStore((s) => s.switchTopic);
+  const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
+  const togglePageAgentPanelRef = useRef(togglePageAgentPanel);
+  togglePageAgentPanelRef.current = togglePageAgentPanel;
+  const [annotationComposer, setAnnotationComposer] = useState<AnnotationComposerContext | null>(
+    null,
+  );
+  const [annotationNavigationRequest, setAnnotationNavigationRequest] =
+    useState<PageAnnotationNavigationRequest | null>(null);
+  const [selectedAnnotationIds, setSelectedAnnotationIds] = useState<string[]>([]);
+  const [rewriteSelection, setRewriteSelection] =
+    useState<CapturedCollaborativeRewriteSelection | null>(null);
+  const [continuationTarget, setContinuationTarget] =
+    useState<PageRewriteContinuationTarget | null>(null);
+  const [selectionVersion, setSelectionVersion] = useState(0);
+  const [draftHighlightVisible, setDraftHighlightVisible] = useState(false);
+  const annotationRequestTokenRef = useRef(0);
+  const requestAnnotation = useCallback((annotationId: string) => {
+    if (!annotationId) return;
+    annotationRequestTokenRef.current += 1;
+    setAnnotationNavigationRequest({
+      annotationId,
+      token: annotationRequestTokenRef.current,
+    });
+  }, []);
+  const selectAnnotationIds = useCallback((ids: readonly string[]) => {
+    const next = [
+      ...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0)),
+    ];
+    setSelectedAnnotationIds(next);
+  }, []);
+  useLayoutEffect(() => {
+    setSelectedAnnotationIds([]);
+    setRewriteSelection(null);
+    setContinuationTarget(null);
+    setDraftHighlightVisible(false);
+  }, [documentId]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    let disposed = false;
+    let unsubscribeAwareness: (() => void) | undefined;
+    let boundLeaseService: ICollaborativeTargetLeaseService | null = null;
+
+    const replaceLeases = (awarenessUsers: readonly YjsAwarenessUser[] = []): void => {
+      if (disposed) return;
+      const leaseService = editor.requireService(ICollaborativeTargetLeaseService);
+      if (!leaseService) return;
+      boundLeaseService = leaseService;
+      leaseService.replaceLeases(
+        createPageRewriteTargetLeases({
+          awarenessUsers,
+          documentId,
+          requests: rewriteRequests,
+        }),
+      );
+    };
+
+    const tryBind = (): void => {
+      if (disposed) return;
+      const leaseService = editor.requireService(ICollaborativeTargetLeaseService);
+      if (!leaseService) return;
+      boundLeaseService = leaseService;
+      const yjsService = editor.requireService(IYjsService);
+      if (yjsService && !unsubscribeAwareness) {
+        unsubscribeAwareness = yjsService.subscribeAwarenessUsers((users) => {
+          replaceLeases(users);
+        });
+      }
+      replaceLeases(yjsService?.getAwarenessUsers() ?? []);
+    };
+
+    const onInitialized = (): void => {
+      tryBind();
+    };
+
+    editor.on('initialized', onInitialized);
+    tryBind();
+
+    return () => {
+      disposed = true;
+      editor.off('initialized', onInitialized);
+      unsubscribeAwareness?.();
+      boundLeaseService?.replaceLeases([]);
+    };
+  }, [documentId, editor, rewriteRequests]);
+  const handleAnnotationClick = useCallback(
+    (context: AnnotationClickContext) => {
+      const { ids } = context;
+      const groupIds = (context as AnnotationClickContext & { groupIds?: readonly string[] })
+        .groupIds;
+      const annotationId = ids[0];
+      if (!annotationId) return;
+      selectAnnotationIds(groupIds?.length ? groupIds : ids);
+      requestAnnotation(annotationId);
+      setRightPanelMode('copilot');
+      setRightPanelTab('annotations');
+      togglePageAgentPanelRef.current(true);
+    },
+    [requestAnnotation, selectAnnotationIds, setRightPanelMode, setRightPanelTab],
+  );
+  const handleComposerChange = useCallback(
+    (next: AnnotationComposerContext | null) => {
+      setAnnotationComposer(next);
+      if (next) {
+        setRightPanelMode('copilot');
+        setRightPanelTab('annotations');
+        togglePageAgentPanelRef.current(true);
+      }
+    },
+    [setRightPanelMode, setRightPanelTab],
+  );
+  const handleRewriteSelection = useCallback(
+    (selection: CapturedCollaborativeRewriteSelection) => {
+      // A fresh editor selection supersedes any open continuation session. The
+      // right panel derives its visible mode from this selection, while
+      // clearing the explicit target here lets the canvas drop the old
+      // highlight in the same React update.
+      clearPageAIProvenanceFocus(editor);
+      setContinuationTarget(null);
+      // A fresh rewrite is a new page-scoped draft. Drop the visible topic
+      // pointer, but leave its persisted history and any in-flight generation
+      // untouched so the user can return to it later.
+      if (syncPageAgentActiveState) switchToPageRewriteDraft(switchTopic);
+      setSelectionVersion((version) => version + 1);
+      setRewriteSelection(selection);
+      setDraftHighlightVisible(true);
+      setRightPanelMode('copilot');
+      setRightPanelTab('agent-edits');
+      togglePageAgentPanelRef.current(true);
+    },
+    [
+      editor,
+      setRightPanelMode,
+      setRightPanelTab,
+      setContinuationTarget,
+      switchTopic,
+      syncPageAgentActiveState,
+    ],
+  );
+  const closeRewriteComposer = useCallback(() => {
+    setRewriteSelection(null);
+    setContinuationTarget(null);
+    setDraftHighlightVisible(false);
+  }, []);
+  const rewriteComposerValue = useMemo(
+    () => ({
+      close: closeRewriteComposer,
+      draftHighlightVisible,
+      setDraftHighlightVisible,
+      continuationTarget,
+      selectionVersion,
+      selection: rewriteSelection,
+      setContinuationTarget,
+    }),
+    [
+      closeRewriteComposer,
+      continuationTarget,
+      draftHighlightVisible,
+      rewriteSelection,
+      selectionVersion,
+    ],
+  );
   const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
   const tableBleedInline = wideScreen
     ? `${TABLE_BASE_BLEED}px`
@@ -249,9 +545,13 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
 
   const handleEditorScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
+      const node = event.currentTarget;
+      if (node.hasAttribute(PAGE_EDITOR_SCROLL_ANCHORING_ATTRIBUTE)) {
+        lastEditorScrollTopRef.current = node.scrollTop;
+        return;
+      }
       if (isRestoringScrollRef.current) return;
 
-      const node = event.currentTarget;
       const nextScrollTop = node.scrollTop;
       const previousScrollTop = lastEditorScrollTopRef.current;
 
@@ -357,7 +657,26 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
                 {/* Prominent in-body notice when another member holds the lock; the
                     compact status badge lives in the Header (EditingIndicator). */}
                 <LockedAlert />
-                <EditorCanvas askCopilotTarget={askCopilotTarget} />
+                <EditorCanvas
+                  activeAnnotationIds={selectedAnnotationIds}
+                  askCopilotTarget={askCopilotTarget}
+                  rootClassName={overrideStyles.editorRoot}
+                  onAnnotationClick={handleAnnotationClick}
+                  onComposerChange={handleComposerChange}
+                  onRewriteSelection={showRightPanel ? handleRewriteSelection : undefined}
+                />
+                <PageRewriteBlockMenuPlugin
+                  activeNodeIds={activeRewriteNodeIds}
+                  editor={editor}
+                  roomId={documentId}
+                  onRewriteSelection={showRightPanel ? handleRewriteSelection : undefined}
+                />
+                {/* Draft text uses ranges; atomic cards use a host marker. */}
+                <RewriteSelectionHighlightPlugin
+                  continuationTarget={draftHighlightVisible ? continuationTarget : null}
+                  editor={editor}
+                  selection={draftHighlightVisible ? rewriteSelection : null}
+                />
                 {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
                 {documentId && <DocumentComments documentId={documentId} />}
               </Flexbox>
@@ -372,26 +691,56 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
 
   if (fullWidthHeader) {
     return (
-      <Flexbox height={'100%'} style={{ backgroundColor: cssVar.colorBgContainer }} width={'100%'}>
-        {headerSlot}
-        <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
-          {editorPane}
-          {showRightPanel && <RightPanel />}
-        </Flexbox>
-      </Flexbox>
+      <PageAnnotationNavigationProvider
+        request={annotationNavigationRequest}
+        requestAnnotation={requestAnnotation}
+        selectAnnotationIds={selectAnnotationIds}
+        selectedAnnotationIds={selectedAnnotationIds}
+      >
+        <PageAnnotationComposerProvider value={{ composer: annotationComposer }}>
+          <PageRewriteComposerProvider value={rewriteComposerValue}>
+            <PageAnnotationStorageProvider documentId={documentId} editor={editor}>
+              <Flexbox
+                height={'100%'}
+                style={{ backgroundColor: cssVar.colorBgContainer }}
+                width={'100%'}
+              >
+                {headerSlot}
+                <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
+                  {editorPane}
+                  {showRightPanel && <RightPanel />}
+                </Flexbox>
+              </Flexbox>
+            </PageAnnotationStorageProvider>
+          </PageRewriteComposerProvider>
+        </PageAnnotationComposerProvider>
+      </PageAnnotationNavigationProvider>
     );
   }
 
   return (
-    <Flexbox
-      horizontal
-      height={'100%'}
-      style={{ backgroundColor: cssVar.colorBgContainer }}
-      width={'100%'}
+    <PageAnnotationNavigationProvider
+      request={annotationNavigationRequest}
+      requestAnnotation={requestAnnotation}
+      selectAnnotationIds={selectAnnotationIds}
+      selectedAnnotationIds={selectedAnnotationIds}
     >
-      {editorPane}
-      {showRightPanel && <RightPanel />}
-    </Flexbox>
+      <PageAnnotationComposerProvider value={{ composer: annotationComposer }}>
+        <PageRewriteComposerProvider value={rewriteComposerValue}>
+          <PageAnnotationStorageProvider documentId={documentId} editor={editor}>
+            <Flexbox
+              horizontal
+              height={'100%'}
+              style={{ backgroundColor: cssVar.colorBgContainer }}
+              width={'100%'}
+            >
+              {editorPane}
+              {showRightPanel && <RightPanel />}
+            </Flexbox>
+          </PageAnnotationStorageProvider>
+        </PageRewriteComposerProvider>
+      </PageAnnotationComposerProvider>
+    </PageAnnotationNavigationProvider>
   );
 });
 
@@ -458,6 +807,7 @@ export const PageEditor: FC<PageEditorProps> = ({
             fullWidthHeader={fullWidthHeader}
             header={header}
             rightPanel={rightPanel}
+            syncPageAgentActiveState={syncPageAgentActiveState}
           />
         </PageEditorProvider>
       </EditorProvider>

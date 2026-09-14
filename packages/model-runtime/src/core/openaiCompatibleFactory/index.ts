@@ -933,10 +933,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       log('using default createOpenAICompatibleImage');
       // Use the new createOpenAICompatibleImage function
       return createOpenAICompatibleImage(this.client, payload, this.id, {
+        maxRetries: options?.maxRetries,
         pricingContext: options?.pricingContext,
         pricingModel: payload.model,
         requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
         routingModel: payload.model,
+        signal: options?.signal,
       });
     }
 

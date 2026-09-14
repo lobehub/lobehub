@@ -34,9 +34,11 @@ export interface InitDocumentParams {
   documentId: string;
   editor: IEditor;
   editorData?: unknown;
-
   sourceType: DocumentSourceType;
+
   topicId?: string;
+  /** Timestamp used by autosave as the optimistic document CAS value. */
+  updatedAt?: Date | null;
 }
 
 /**
@@ -141,6 +143,17 @@ export class DocumentActionImpl {
   };
 
   /**
+   * Cancel a pending legacy body save without sending its captured snapshot.
+   * Collaboration takes ownership of the body before its provider is ready,
+   * so a queued debounce must be discarded rather than flushed during that
+   * handoff.
+   */
+  cancelDebouncedSave = (documentId?: string): void => {
+    const id = documentId || this.#get().activeDocumentId;
+    if (id) this.#cleanupDebouncedSave(id);
+  };
+
+  /**
    * Initialize a document with editor - stores state only.
    * Content is loaded into editor via onEditorInit when Editor component is ready.
    */
@@ -172,6 +185,7 @@ export class DocumentActionImpl {
         contentFormat,
         editorData,
 
+        ...(params.updatedAt ? { lastUpdatedTime: params.updatedAt } : {}),
         lastSavedContent: content ?? undefined,
         lastSavedEditorData: editorData,
         sourceType,
@@ -240,6 +254,7 @@ export class DocumentActionImpl {
           documentId,
           editor,
           editorData: document.editorData,
+          updatedAt: document.updatedAt,
 
           sourceType,
           topicId: topicId ?? undefined,

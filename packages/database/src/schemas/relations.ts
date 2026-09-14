@@ -13,9 +13,12 @@ import {
 import { agentShares } from './agentShare';
 import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
+import { documentAnnotations } from './documentAnnotation';
+import { documentCollaborationStates } from './documentCollaborationState';
 import { documentCommentMentions, documentComments } from './documentComment';
 import { documentHistories } from './documentHistory';
 import { documentLikes } from './documentLike';
+import { documentRewriteRequests } from './documentRewriteRequest';
 import { documents, files, knowledgeBases } from './file';
 import { generationBatches, generations, generationTopics } from './generation';
 import { messageGroups, messages, messagesFiles, messageTranslates } from './message';
@@ -325,6 +328,53 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   comments: many(documentComments),
   likes: many(documentLikes),
   histories: many(documentHistories),
+  annotations: many(documentAnnotations),
+  collaborationState: one(documentCollaborationStates),
+  rewriteRequests: many(documentRewriteRequests),
+}));
+
+export const documentAnnotationsRelations = relations(documentAnnotations, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentAnnotations.documentId],
+    references: [documents.id],
+  }),
+  user: one(users, {
+    fields: [documentAnnotations.userId],
+    references: [users.id],
+  }),
+}));
+
+export const documentCollaborationStatesRelations = relations(
+  documentCollaborationStates,
+  ({ one }) => ({
+    document: one(documents, {
+      fields: [documentCollaborationStates.documentId],
+      references: [documents.id],
+    }),
+    user: one(users, {
+      fields: [documentCollaborationStates.userId],
+      references: [users.id],
+    }),
+    workspace: one(workspaces, {
+      fields: [documentCollaborationStates.workspaceId],
+      references: [workspaces.id],
+    }),
+  }),
+);
+
+export const documentRewriteRequestsRelations = relations(documentRewriteRequests, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentRewriteRequests.documentId],
+    references: [documents.id],
+  }),
+  requestedByUser: one(users, {
+    fields: [documentRewriteRequests.requestedByUserId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [documentRewriteRequests.workspaceId],
+    references: [workspaces.id],
+  }),
 }));
 
 export const documentLikesRelations = relations(documentLikes, ({ one }) => ({

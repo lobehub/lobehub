@@ -1670,7 +1670,7 @@ describe('convertImageUrlToFile', () => {
 
       const result = await convertImageUrlToFile('https://example.com/image.jpg');
 
-      expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg');
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg', undefined);
       expect(result).toBeDefined();
       expect(result).toHaveProperty('name', 'image.jpeg');
       expect(result).toHaveProperty('type', 'image/jpeg');
@@ -1708,6 +1708,22 @@ describe('convertImageUrlToFile', () => {
       }
     });
 
+    it('should pass an abort signal to the HTTP fetch', async () => {
+      const controller = new AbortController();
+      const mockHeaders = new Headers({ 'content-type': 'image/png' });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(4)),
+        headers: mockHeaders,
+      } satisfies Partial<Response>);
+
+      await convertImageUrlToFile('https://example.com/image.png', controller.signal);
+
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.png', {
+        signal: controller.signal,
+      });
+    });
+
     it('should throw error when HTTP request fails', async () => {
       mockFetch.mockResolvedValue({
         ok: false,
@@ -1718,7 +1734,7 @@ describe('convertImageUrlToFile', () => {
         'Failed to fetch image from https://example.com/nonexistent.jpg: Not Found',
       );
 
-      expect(mockFetch).toHaveBeenCalledWith('https://example.com/nonexistent.jpg');
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/nonexistent.jpg', undefined);
     });
 
     it('should throw error when network request fails', async () => {
@@ -1728,7 +1744,7 @@ describe('convertImageUrlToFile', () => {
         'Network error',
       );
 
-      expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg');
+      expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg', undefined);
     });
   });
 

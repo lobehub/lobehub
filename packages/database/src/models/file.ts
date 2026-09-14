@@ -504,6 +504,17 @@ export class FileModel {
     });
   };
 
+  /** Resolve a storage key through the caller's scoped file ownership. */
+  findByUrl = async (url: string, trx?: Transaction) => {
+    const database = trx || this.db;
+    const [file] = await database
+      .select()
+      .from(files)
+      .where(and(eq(files.url, url), this.ownership()))
+      .limit(1);
+    return file;
+  };
+
   /**
    * Whether any of the given topics contains a user-owned file attached to a
    * message. This intentionally checks for attachment presence rather than

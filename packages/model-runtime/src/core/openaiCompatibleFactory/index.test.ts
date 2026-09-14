@@ -2189,6 +2189,24 @@ describe('LobeOpenAICompatibleFactory', () => {
         });
       });
 
+      it('forwards a request-level zero retry budget to the image API', async () => {
+        vi.spyOn(instance['client'].images, 'generate').mockResolvedValue({
+          data: [{ b64_json: 'no-retry-image' }],
+        } as any);
+
+        await (instance as any).createImage(
+          {
+            model: 'gpt-image-2',
+            params: { prompt: 'Generate without SDK retries' },
+          },
+          { maxRetries: 0 },
+        );
+
+        expect(instance['client'].images.generate).toHaveBeenCalledWith(expect.any(Object), {
+          maxRetries: 0,
+        });
+      });
+
       it('should route mapped logical image-chat models through chat completions', async () => {
         const mappedInstance = new LobeMockProvider({
           apiKey: 'test',
