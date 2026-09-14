@@ -413,6 +413,47 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
     CAPTURE_INSTALL_TEST_TIMEOUT,
   );
 
+  it('upgrades v1 without dropping triggers or locking unchanged source tables', async () => {
+    await dropCaptureInfrastructure();
+    await installHistoricalCapture(1);
+    const statements: string[] = [];
+    const recordingDatabase = {
+      execute: db.execute.bind(db),
+      transaction: (
+        callback: (transaction: { execute: (statement: SQL) => unknown }) => Promise<void>,
+      ) =>
+        db.transaction(async (transaction) =>
+          callback({
+            execute: (statement) => {
+              statements.push(normalizeSql(statement));
+              return transaction.execute(statement);
+            },
+          }),
+        ),
+    } as unknown as ConstructorParameters<typeof FtsSearchSyncOutboxRepository>[0];
+
+    try {
+      await new FtsSearchSyncOutboxRepository(recordingDatabase).installCaptureInfrastructure();
+      expect(statements.filter((statement) => statement.startsWith('DROP TRIGGER'))).toEqual([]);
+      expect(statements.filter((statement) => statement.startsWith('LOCK TABLE'))).toEqual([
+        'LOCK TABLE "public"."messages", "public"."topics" IN SHARE ROW EXCLUSIVE MODE',
+      ]);
+      expect(
+        statements.filter((statement) => statement.startsWith('SET LOCAL lock_timeout')),
+      ).toEqual(["SET LOCAL lock_timeout = '60s'"]);
+      expect(
+        statements
+          .filter((statement) => statement.startsWith('CREATE OR REPLACE TRIGGER'))
+          .map((statement) => statement.split(' ')[4])
+          .sort(),
+      ).toEqual(['fts_search_sync_messages', 'fts_search_sync_topics']);
+      await expect(repository.assertCaptureInfrastructure()).resolves.toBeUndefined();
+    } finally {
+      await dropCaptureInfrastructure();
+      await repository.installCaptureInfrastructure();
+    }
+  });
+
   it('rolls back definitions and the version marker when an upgrade fails', async () => {
     await dropCaptureInfrastructure();
     await installHistoricalCapture(1);
@@ -425,7 +466,7 @@ describe('FtsSearchSyncOutboxRepository', { concurrent: false }, () => {
         db.transaction(async (transaction) =>
           callback({
             execute: (statement) => {
-              if (normalizeSql(statement).startsWith('CREATE TRIGGER')) {
+              if (/^CREATE (?:OR REPLACE )?TRIGGER/.test(normalizeSql(statement))) {
                 throw new Error('injected trigger creation failure');
               }
               return transaction.execute(statement);

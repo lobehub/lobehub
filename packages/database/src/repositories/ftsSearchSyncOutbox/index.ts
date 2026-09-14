@@ -330,7 +330,7 @@ export class FtsSearchSyncOutboxRepository {
    */
   async installCaptureInfrastructure(): Promise<void> {
     await this.db.transaction(async (transaction) => {
-      await transaction.execute(sql`SET LOCAL lock_timeout = '3s'`);
+      await transaction.execute(sql`SET LOCAL lock_timeout = '60s'`);
       /** Serialize installers before inspecting state so two deployments cannot both create DDL. */
       await transaction.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext('lobehub.fts_search_sync_capture'))`,
@@ -359,8 +359,6 @@ export class FtsSearchSyncOutboxRepository {
         return;
       }
 
-      // A source-table lock closes the window between replacing the function and its triggers.
-      await lockCaptureSourceWrites(transaction);
       if (!state.persisted) {
         await transaction.execute(sql`
           INSERT INTO fts_search_sync_capture_version (id, version)
@@ -373,16 +371,41 @@ export class FtsSearchSyncOutboxRepository {
         nextVersion++
       ) {
         const next = CAPTURE_VERSIONS.find(({ version }) => version === nextVersion)!;
+        const previous = CAPTURE_VERSIONS.find(({ version }) => version === nextVersion - 1)!;
+        const changedTriggers = next.triggers.filter(
+          (trigger) =>
+            !previous.triggers.some(
+              (old) =>
+                old.name === trigger.name &&
+                old.table === trigger.table &&
+                old.definition === trigger.definition,
+            ),
+        );
+        if (changedTriggers.length > 0) {
+          const tables = sql.join(
+            [...new Set(changedTriggers.map(({ table }) => table))]
+              .sort()
+              .map((table) => sql`${sql.identifier('public')}.${sql.identifier(table)}`),
+            sql`, `,
+          );
+          /**
+           * Acquire the replacement lock before changing functions so affected writes cannot
+           * observe a mixed definition. Unlike DROP TRIGGER, this permits ordinary readers.
+           * https://www.postgresql.org/docs/17/explicit-locking.html
+           */
+          await transaction.execute(sql`LOCK TABLE ${tables} IN SHARE ROW EXCLUSIVE MODE`);
+        }
         if (nextVersion === CURRENT_CAPTURE_VERSION) {
           for (const statement of FTS_SEARCH_SYNC_CAPTURE_FUNCTION_STATEMENTS) {
             await transaction.execute(statement);
           }
         }
-        for (const { name, table } of FTS_SEARCH_SYNC_CAPTURE_TRIGGER_TARGETS) {
-          await transaction.execute(sql.raw(`DROP TRIGGER "${name}" ON public."${table}"`));
-        }
-        for (const trigger of next.triggers) {
-          await transaction.execute(sql.raw(`${trigger.definition};`));
+        for (const trigger of changedTriggers) {
+          await transaction.execute(
+            sql.raw(
+              `${trigger.definition.replace(/^CREATE TRIGGER /, 'CREATE OR REPLACE TRIGGER ')};`,
+            ),
+          );
         }
         await transaction.execute(sql`
           UPDATE fts_search_sync_capture_version SET version = ${nextVersion}
