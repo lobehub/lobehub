@@ -448,7 +448,15 @@ export class UserModel {
    * drop `topics` where `senderId = id`; messages, threads, and topic
    * documents cascade from `topics.id`, so the topic delete is enough.
    */
-  static deleteUser = async (db: LobeChatDatabase, id: string) => {
+  static deleteUser = async (
+    db: LobeChatDatabase,
+    id: string,
+    options: { statementTimeoutMs?: number } = {},
+  ) => {
+    const timeoutMs = options.statementTimeoutMs;
+    if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) {
+      throw new Error('Account deletion statement timeout must be a positive integer');
+    }
     // A pending agent-TRANSFER backfill means message rows moved to (or from)
     // this user still carry the other side's scope snapshot; cascading the
     // delete now would destroy history the transfer already re-homed. Transfer
@@ -459,10 +467,78 @@ export class UserModel {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
     return db.transaction(async (tx) => {
+      if (timeoutMs !== undefined) {
+        await tx.execute(sql`SELECT set_config('statement_timeout', ${String(timeoutMs)}, true)`);
+      }
       // Purge share-visitor topics authored by this user under any creator.
       await tx.delete(topics).where(eq(topics.senderId, id));
       return tx.delete(users).where(eq(users.id, id));
     });
+  };
+
+  /**
+   * Remove high-volume rows in committed batches before the final user cascade.
+   * An interrupted call can safely resume from the remaining rows. The final
+   * transaction still checks for pending transfers and handles concurrent writes.
+   */
+  static deleteUserInBatches = async (
+    db: LobeChatDatabase,
+    id: string,
+    options: {
+      batchSize?: number;
+      finalStatementTimeoutMs?: number;
+      shouldContinue?: () => boolean;
+    } = {},
+  ) => {
+    const batchSize = options.batchSize ?? 500;
+    if (!Number.isSafeInteger(batchSize) || batchSize < 1) {
+      throw new Error('Account deletion batch size must be a positive integer');
+    }
+
+    if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
+      throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+    }
+
+    const deleteMessages = async (where: ReturnType<typeof eq>) => {
+      for (;;) {
+        if (options.shouldContinue?.() === false) return false;
+        const rows = await db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(where)
+          .limit(batchSize);
+        if (rows.length === 0) return true;
+        await db.delete(messages).where(
+          inArray(
+            messages.id,
+            rows.map((row) => row.id),
+          ),
+        );
+      }
+    };
+
+    if (!(await deleteMessages(eq(messages.userId, id)))) return false;
+
+    for (;;) {
+      if (options.shouldContinue?.() === false) return false;
+      const [topic] = await db
+        .select({ id: topics.id })
+        .from(topics)
+        .where(or(eq(topics.userId, id), eq(topics.senderId, id)))
+        .limit(1);
+      if (!topic) break;
+
+      // A visitor's topic can contain messages owned by the host account.
+      if (!(await deleteMessages(eq(messages.topicId, topic.id)))) return false;
+      await db.delete(topics).where(eq(topics.id, topic.id));
+    }
+
+    if (options.shouldContinue?.() === false) return false;
+
+    await UserModel.deleteUser(db, id, {
+      statementTimeoutMs: options.finalStatementTimeoutMs,
+    });
+    return true;
   };
 
   static findById = async (db: LobeChatDatabase, id: string) => {
