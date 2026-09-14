@@ -43,6 +43,16 @@ export const gptImage2Schema: ModelParamsSchema = {
   },
 };
 
+export const gptImage25Schema: ModelParamsSchema = {
+  ...gptImage2Schema,
+  // The GPT Image 2.5 model pages list six quality tiers. The two extra ones are rejected
+  // by gpt-image-2, which answers 400 "does not support quality 'xhigh'" (same for 'max').
+  quality: {
+    default: 'auto',
+    enum: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+  },
+};
+
 export const nanoBananaParameters: ModelParamsSchema = {
   aspectRatio: {
     default: 'auto',
