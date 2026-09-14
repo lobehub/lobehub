@@ -637,6 +637,33 @@ describe('UserModel', () => {
     });
 
     describe('deleteUser', () => {
+      it.each([0, Number.NaN, 1.5])(
+        'rejects invalid batched statement timeout %s before deleting user data',
+        async (timeout) => {
+          await serverDB.insert(messages).values({
+            id: 'message-invalid-timeout',
+            role: 'user',
+            userId,
+          });
+
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, {
+              batchSize: 1,
+              finalStatementTimeoutMs: timeout,
+            }),
+          ).rejects.toThrow('Account deletion statement timeout must be a positive integer');
+
+          expect(
+            await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+          ).toBeDefined();
+          expect(
+            await serverDB.query.messages.findFirst({
+              where: eq(messages.id, 'message-invalid-timeout'),
+            }),
+          ).toBeDefined();
+        },
+      );
+
       it('commits message batches and resumes after the final transfer guard blocks deletion', async () => {
         await serverDB.insert(topics).values({ id: 'topic-batched-delete', userId });
         await serverDB.insert(messages).values(

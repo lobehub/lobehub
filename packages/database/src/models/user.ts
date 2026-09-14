@@ -495,6 +495,10 @@ export class UserModel {
     if (!Number.isSafeInteger(batchSize) || batchSize < 1) {
       throw new Error('Account deletion batch size must be a positive integer');
     }
+    const timeoutMs = options.finalStatementTimeoutMs;
+    if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) {
+      throw new Error('Account deletion statement timeout must be a positive integer');
+    }
 
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
