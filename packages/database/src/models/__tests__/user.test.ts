@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { messages, nextauthAccounts, topics, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { AgentTransferJobModel } from '../agentTransferJob';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from '../agentTransferJob';
 import type { ListUsersForMemoryExtractorCursor } from '../user';
 import { UserModel, UserNotFoundError } from '../user';
 
@@ -637,7 +637,7 @@ describe('UserModel', () => {
     });
 
     describe('deleteUser', () => {
-      it.each([0, Number.NaN, 1.5])(
+      it.each([0, Number.NaN, 1.5, 2_147_483_648])(
         'rejects invalid batched statement timeout %s before deleting user data',
         async (timeout) => {
           await serverDB.insert(messages).values({
@@ -651,7 +651,9 @@ describe('UserModel', () => {
               batchSize: 1,
               finalStatementTimeoutMs: timeout,
             }),
-          ).rejects.toThrow('Account deletion statement timeout must be a positive integer');
+          ).rejects.toThrow(
+            'Account deletion statement timeout must be between 1 and 2147483647 milliseconds',
+          );
 
           expect(
             await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
@@ -677,6 +679,10 @@ describe('UserModel', () => {
 
         const pendingTransfer = vi
           .spyOn(AgentTransferJobModel, 'hasPendingJobTouchingUser')
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(true);
         try {
@@ -736,6 +742,75 @@ describe('UserModel', () => {
         expect(
           await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
         ).toBeUndefined();
+      });
+
+      it('preserves a topic and its remaining messages after ownership moves between batches', async () => {
+        const topicId = 'topic-transferred-during-delete';
+        await serverDB.insert(topics).values({ id: topicId, userId });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 3 }, (_, index) => ({
+            id: `message-transferred-during-delete-${index}`,
+            role: 'user',
+            topicId,
+            userId,
+          })),
+        );
+        let checks = 0;
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 1,
+            shouldContinue: () => ++checks <= 3,
+          }),
+        ).resolves.toBe(false);
+
+        await serverDB.update(topics).set({ userId: otherUserId }).where(eq(topics.id, topicId));
+        await serverDB
+          .update(messages)
+          .set({ userId: otherUserId })
+          .where(eq(messages.topicId, topicId));
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 1 }),
+        ).resolves.toBe(true);
+        expect(
+          await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) }),
+        ).toBeDefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.topicId, topicId) }),
+        ).toHaveLength(2);
+      });
+
+      it('stops before a topic batch when a transfer becomes pending after the initial guard', async () => {
+        const topicId = 'topic-transfer-started-during-delete';
+        await serverDB.insert(topics).values({ id: topicId, userId });
+        await serverDB.insert(messages).values({
+          id: 'message-transfer-started-during-delete',
+          role: 'user',
+          topicId,
+          userId,
+        });
+
+        const pendingTransfer = vi
+          .spyOn(AgentTransferJobModel, 'hasPendingJobTouchingUser')
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(true);
+        try {
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 1 }),
+          ).rejects.toThrow(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        } finally {
+          pendingTransfer.mockRestore();
+        }
+
+        expect(
+          await serverDB.query.topics.findFirst({ where: eq(topics.id, topicId) }),
+        ).toBeDefined();
+        expect(
+          await serverDB.query.messages.findFirst({
+            where: eq(messages.id, 'message-transfer-started-during-delete'),
+          }),
+        ).toBeDefined();
       });
 
       it('should delete a user', async () => {
