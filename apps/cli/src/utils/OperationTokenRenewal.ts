@@ -5,8 +5,11 @@ const RENEW_BEFORE_EXPIRY_MS = 60 * 60 * 1000;
 const RETRY_DELAY_MS = 60 * 1000;
 const MIN_DELAY_MS = 30 * 1000;
 
-/** The server will never renew after these: the token is gone, out of scope, or the run ended. */
-const TERMINAL_CODES = new Set(['CONFLICT', 'FORBIDDEN', 'UNAUTHORIZED']);
+/**
+ * The server will never renew after these: the token is gone, out of scope, the
+ * run ended, or the server predates the renewal endpoint.
+ */
+const TERMINAL_CODES = new Set(['CONFLICT', 'FORBIDDEN', 'NOT_FOUND', 'UNAUTHORIZED']);
 
 interface OperationTokenRenewalOptions {
   operationId: string;
