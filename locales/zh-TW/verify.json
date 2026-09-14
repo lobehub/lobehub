@@ -247,6 +247,7 @@
   "acceptance.review.detailPlaceholder": "為此檢查留下評論。它將與您的決定一起提交…",
   "acceptance.review.draftSaved": "您的草稿已儲存在此裝置上。",
   "acceptance.review.drawRegion": "繪製區域",
+  "acceptance.review.feedbackLabel": "您的反饋",
   "acceptance.review.fullscreen": "全屏註解",
   "acceptance.review.fullscreenDone": "完成註解",
   "acceptance.review.historicalReadOnly": "這是過去的回合。返回所有回合以審核當前交付。",

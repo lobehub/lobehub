@@ -247,6 +247,7 @@
   "acceptance.review.detailPlaceholder": "Оставьте комментарий для этой проверки. Он будет отправлен вместе с вашим решением…",
   "acceptance.review.draftSaved": "Ваш черновик сохранен на этом устройстве.",
   "acceptance.review.drawRegion": "Нарисовать область",
+  "acceptance.review.feedbackLabel": "Ваш отзыв",
   "acceptance.review.fullscreen": "Аннотировать на весь экран",
   "acceptance.review.fullscreenDone": "Аннотация завершена",
   "acceptance.review.historicalReadOnly": "Это прошлый раунд. Вернитесь ко всем раундам, чтобы проверить текущую доставку.",

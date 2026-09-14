@@ -247,6 +247,7 @@
   "acceptance.review.detailPlaceholder": "Bu kontrol için bir yorum bırakın. Kararınızla birlikte gönderilecektir…",
   "acceptance.review.draftSaved": "Taslağınız bu cihazda kaydedildi.",
   "acceptance.review.drawRegion": "Bölge çiz",
+  "acceptance.review.feedbackLabel": "Geri bildiriminiz",
   "acceptance.review.fullscreen": "Tam ekran açıklama ekle",
   "acceptance.review.fullscreenDone": "Açıklama ekleme tamamlandı",
   "acceptance.review.historicalReadOnly": "Bu geçmiş bir turdur. Mevcut teslimatı incelemek için tüm turlara geri dönün.",

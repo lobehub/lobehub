@@ -247,6 +247,7 @@
   "acceptance.review.detailPlaceholder": "このチェックにコメントを残してください。決定とともに送信されます…",
   "acceptance.review.draftSaved": "下書きがこのデバイスに保存されました。",
   "acceptance.review.drawRegion": "領域を描画",
+  "acceptance.review.feedbackLabel": "あなたのフィードバック",
   "acceptance.review.fullscreen": "全画面で注釈を追加",
   "acceptance.review.fullscreenDone": "注釈付け完了",
   "acceptance.review.historicalReadOnly": "これは過去のラウンドです。現在の配信を確認するには、すべてのラウンドに戻ってください。",

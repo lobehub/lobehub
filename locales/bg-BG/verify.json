@@ -247,6 +247,7 @@
   "acceptance.review.detailPlaceholder": "Оставете коментар за тази проверка. Той ще бъде изпратен с вашето решение…",
   "acceptance.review.draftSaved": "Вашият чернова е запазен на това устройство.",
   "acceptance.review.drawRegion": "Начертайте регион",
+  "acceptance.review.feedbackLabel": "Вашата обратна връзка",
   "acceptance.review.fullscreen": "Анотиране на цял екран",
   "acceptance.review.fullscreenDone": "Анотирането е завършено",
   "acceptance.review.historicalReadOnly": "Това е предишен кръг. Върнете се към всички кръгове, за да прегледате текущата доставка.",

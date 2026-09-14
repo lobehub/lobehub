@@ -247,6 +247,7 @@
   "acceptance.review.detailPlaceholder": "اترك تعليقًا لهذا الفحص. سيتم تقديمه مع قرارك...",
   "acceptance.review.draftSaved": "تم حفظ المسودة على هذا الجهاز.",
   "acceptance.review.drawRegion": "رسم المنطقة",
+  "acceptance.review.feedbackLabel": "ملاحظاتك",
   "acceptance.review.fullscreen": "تعليق على الشاشة الكاملة",
   "acceptance.review.fullscreenDone": "تم الانتهاء من التعليق",
   "acceptance.review.historicalReadOnly": "هذه جولة سابقة. عد إلى جميع الجولات لمراجعة التسليم الحالي.",

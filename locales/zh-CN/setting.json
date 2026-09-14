@@ -2681,6 +2681,7 @@
   "workspace.members.invite.partialSuccess": "{{success}} 已邀请，{{failed}} 失败。请检查地址并重试。",
   "workspace.members.invite.roleLabel": "角色",
   "workspace.members.invite.seatInsufficient": "仅剩 {{remaining}} 个席位，不足以邀请 {{required}} 名新成员。请购买更多席位，或将部分角色改为查看者（不占席位）。",
+  "workspace.members.invite.seatInsufficientNoBuy": "仅剩 {{remaining}} 个席位，不足以邀请新成员。请联系工作区所有者购买更多席位，或将部分角色改为查看者（不占席位）。",
   "workspace.members.invite.seatLimitReached": "当前席位已达上限，请前往增购席位。也可以改为邀请查看者（不占席位）。",
   "workspace.members.invite.seatLimitReachedFreePlan": "当前席位已达上限，升级到 Pro 可获得更多席位。也可以改为邀请查看者（不占席位）。",
   "workspace.members.invite.seatLimitReachedNoBuy": "当前席位已达上限，请联系工作区所有者增购席位。也可以改为邀请查看者（不占席位）。",

@@ -247,6 +247,7 @@
   "acceptance.review.detailPlaceholder": "Laissez un commentaire pour cette vérification. Il sera soumis avec votre décision…",
   "acceptance.review.draftSaved": "Votre brouillon est enregistré sur cet appareil.",
   "acceptance.review.drawRegion": "Dessiner une région",
+  "acceptance.review.feedbackLabel": "Votre retour",
   "acceptance.review.fullscreen": "Annoter en plein écran",
   "acceptance.review.fullscreenDone": "Annotation terminée",
   "acceptance.review.historicalReadOnly": "Ceci est un tour précédent. Retournez à tous les tours pour examiner la livraison actuelle.",
