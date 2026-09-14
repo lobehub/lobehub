@@ -1,6 +1,6 @@
 ---
 name: full-text-search
-description: 'Use for product search: FtsSearchRepo, pg_search/Elasticsearch, mapping migrations, projections, Outbox sync, reindexing and performance. Excludes agent web search.'
+description: 'Use for product search: FtsSearchRepo, pg_search/pg_like/Elasticsearch, mapping migrations, projections, Outbox sync, reindexing and performance. Excludes agent web search.'
 ---
 
 # Product Full-Text Search
@@ -36,11 +36,17 @@ router/service -> createFtsSearchRepo -> FtsSearchRepo -> selected backend -> ex
 
 ## Provider and Permission Invariants
 
-- `FTS_SEARCH_PROVIDER` is a deployment-level provider selector with current values `pg_search` and
-  `elasticsearch`. It is not a feature flag or a user rollout. Add another enum value only when its
-  provider is implemented end to end.
-- Elasticsearch errors, missing configuration, and unsupported candidate behavior must remain
-  visible. Never silently retry through PostgreSQL or add an `ilike` fallback.
+- `FTS_SEARCH_PROVIDER` is a deployment-level provider selector with current values `pg_search`,
+  `elasticsearch`, and `pg_like`. It is not a feature flag or a user rollout. Add another enum value
+  only when its provider covers all entities in `FTS_SEARCH_BACKEND_ENTITIES` end to end, including
+  `mode: 'candidates'` when the provider enables `ftsSearchCandidateEnabled`.
+- Provider errors, missing configuration, and unsupported candidate behavior must remain visible.
+  Never silently retry through another provider. `pg_like` is an explicitly selected lightweight
+  provider, not an implicit fallback: a missing extension or unreachable service must still fail.
+- `pg_search` and `pg_like` share the query modules under
+  `packages/database/src/repositories/ftsSearch/pgSearch/`; only `pgSearch/dialect.ts` differs
+  (match predicate, score expression, query preparation). Keep scoping, joins, pagination, and
+  hydration in the shared modules rather than forking per provider.
 - Before selecting Elasticsearch, require coverage tests proving that it supports every entity in
   the provider-neutral backend contract. Do not add per-entity routing between providers.
 - Preserve `userId`, `workspaceId`, and caller-agent visibility throughout every provider. Candidate
@@ -52,6 +58,18 @@ router/service -> createFtsSearchRepo -> FtsSearchRepo -> selected backend -> ex
   not make routers understand provider-specific result shapes.
 
 ## Changing a Searchable Entity
+
+### Scope for pg\_like
+
+`pg_like` primarily serves individual users with small datasets. Review it for correct matching,
+permissions, and usable result ordering at that scale. For richer search quality or larger datasets,
+recommend self-hosted Elasticsearch or Elastic Cloud. Do not add indexes or change the database
+schema as part of pg\_like optimization. Keep repairs bounded; distinguish new implementation bugs
+from shared provider limitations and deliberate lightweight-search trade-offs. Do not infer a
+personal-user performance problem from large shared development datasets without representative
+measurements.
+
+### Entity changes
 
 Treat an entity addition or projection change as one cross-layer change. Inspect and update every
 applicable item:

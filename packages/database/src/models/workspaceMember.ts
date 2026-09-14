@@ -9,6 +9,7 @@ import { tasks } from '../schemas/task';
 import { users } from '../schemas/user';
 import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
+import { ilikeContains as containsIgnoreCase } from '../utils/like';
 import { ResourcePermissionModel } from './resourcePermission';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
@@ -19,10 +20,6 @@ type MemberRole = 'admin' | 'member' | 'viewer';
 const ASSIGNABLE_MEMBER_ROLES = (['owner', 'admin', 'member', 'viewer'] as const).filter((role) =>
   canWorkspaceRoleBeTaskAssignee(role),
 );
-
-const escapeLike = (value: string): string => value.replaceAll(/[\\%_]/g, (c) => `\\${c}`);
-const containsIgnoreCase = (column: unknown, needle: string) =>
-  sql<boolean>`${column} ILIKE ${`%${escapeLike(needle)}%`} ESCAPE '\\'`;
 
 export class WorkspaceMemberModel {
   private readonly db: LobeChatDatabase;
