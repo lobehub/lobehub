@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { messages, nextauthAccounts, topics, users, userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { AgentTransferJobModel } from '../agentTransferJob';
 import type { ListUsersForMemoryExtractorCursor } from '../user';
 import { UserModel, UserNotFoundError } from '../user';
 
@@ -636,6 +637,80 @@ describe('UserModel', () => {
     });
 
     describe('deleteUser', () => {
+      it('commits message batches and resumes after the final transfer guard blocks deletion', async () => {
+        await serverDB.insert(topics).values({ id: 'topic-batched-delete', userId });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            id: `message-batched-delete-${index}`,
+            role: 'user',
+            topicId: 'topic-batched-delete',
+            userId,
+          })),
+        );
+
+        const pendingTransfer = vi
+          .spyOn(AgentTransferJobModel, 'hasPendingJobTouchingUser')
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(true);
+        try {
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, {
+              batchSize: 2,
+              finalStatementTimeoutMs: 120_000,
+            }),
+          ).rejects.toThrow();
+        } finally {
+          pendingTransfer.mockRestore();
+        }
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toEqual([]);
+
+        await UserModel.deleteUserInBatches(serverDB, userId, {
+          batchSize: 2,
+          finalStatementTimeoutMs: 120_000,
+        });
+
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+        expect(await serverDB.query.topics.findMany({ where: eq(topics.userId, userId) })).toEqual(
+          [],
+        );
+      });
+
+      it('stops between committed batches and resumes without repeating completed work', async () => {
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            id: `message-deadline-${index}`,
+            role: 'user',
+            userId,
+          })),
+        );
+        let checks = 0;
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 2,
+            shouldContinue: () => ++checks <= 2,
+          }),
+        ).resolves.toBe(false);
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toHaveLength(1);
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 2 }),
+        ).resolves.toBe(true);
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+      });
+
       it('should delete a user', async () => {
         await UserModel.deleteUser(serverDB, userId);
 
@@ -682,6 +757,32 @@ describe('UserModel', () => {
           where: eq(users.id, creatorId),
         });
         expect(creator).toBeDefined();
+      });
+
+      it('batches messages in a share-visitor topic without deleting the host account', async () => {
+        await serverDB.insert(topics).values({
+          id: 'topic-visitor-batched',
+          senderId: otherUserId,
+          userId,
+        });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            id: `message-visitor-batched-${index}`,
+            role: 'user',
+            topicId: 'topic-visitor-batched',
+            userId,
+          })),
+        );
+
+        await UserModel.deleteUserInBatches(serverDB, otherUserId, { batchSize: 2 });
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(
+          await serverDB.query.topics.findFirst({ where: eq(topics.id, 'topic-visitor-batched') }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toEqual([]);
       });
     });
 
