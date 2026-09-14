@@ -161,6 +161,36 @@ describe('DocumentHistoryModel', () => {
       });
       expect(anchored).toHaveLength(1);
       expect((anchored[0]?.editorData as any).tag).toBe(2);
+
+      const tieTimestamp = new Date('2026-04-11T00:00:04.000Z');
+      await historyModel.create({
+        documentId,
+        editorData: { tag: 4 },
+        saveSource: 'autosave',
+        savedAt: tieTimestamp,
+      });
+      await historyModel.create({
+        documentId,
+        editorData: { tag: 5 },
+        saveSource: 'manual',
+        savedAt: tieTimestamp,
+      });
+
+      const sameTimestampRows = await historyModel.list({ documentId, limit: 10 });
+      const cursor = sameTimestampRows[0];
+      if (!cursor) throw new Error('Expected a history cursor');
+      const beforeId = await historyModel.list({
+        beforeId: cursor.id,
+        beforeSavedAt: cursor.savedAt,
+        documentId,
+        limit: 10,
+      });
+      expect(beforeId.map((row) => row.id)).toEqual(
+        sameTimestampRows.slice(1).map((row) => row.id),
+      );
+
+      await expect(historyModel.query({ documentId, limit: 1 })).resolves.toHaveLength(1);
+      await expect(historyModel.listByDocumentId(documentId, 1)).resolves.toHaveLength(1);
     });
   });
 
@@ -243,6 +273,29 @@ describe('DocumentHistoryModel', () => {
 
       expect(rows).toHaveLength(0);
       expect(otherRows).toHaveLength(1);
+    });
+
+    it('should delete all history rows owned by the current user only', async () => {
+      const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+      const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
+
+      await historyModel.create({
+        documentId,
+        editorData: { tag: 1 },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-11T00:00:01.000Z'),
+      });
+      await historyModel2.create({
+        documentId: otherDocumentId,
+        editorData: { tag: 2 },
+        saveSource: 'manual',
+        savedAt: new Date('2026-04-11T00:00:02.000Z'),
+      });
+
+      await historyModel.deleteAll();
+
+      expect(await historyModel.list({ documentId })).toHaveLength(0);
+      expect(await historyModel2.list({ documentId: otherDocumentId })).toHaveLength(1);
     });
   });
 

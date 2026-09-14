@@ -29,7 +29,10 @@ import {
   DOCUMENT_REWRITE_WHOLE_DOCUMENT_TARGET,
   DocumentRewriteRequestModel,
 } from '../documentRewriteRequest';
-import { collectAISessionProjection } from '../documentRewriteRequest.validation';
+import {
+  collectAISessionProjection,
+  normalizeSelection,
+} from '../documentRewriteRequest.validation';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -488,6 +491,118 @@ describe('DocumentRewriteRequestModel', () => {
     expect(next?.request.selection).toMatchObject({
       quotedText: 'A concise sentence.',
     });
+  });
+
+  it('updates queued instructions idempotently and lists scoped status projections', async () => {
+    const first = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Original queued instruction',
+      selection: blockSelection('list-target-one'),
+    });
+    const second = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Second queued instruction',
+      selection: blockSelection('list-target-two'),
+    });
+
+    const updated = await model.updateInstruction(first.request.id, {
+      instruction: 'Updated queued instruction',
+    });
+    expect(updated?.instruction).toBe('Updated queued instruction');
+    expect(
+      (
+        await model.updateInstruction(first.request.id, {
+          instruction: 'Updated queued instruction',
+        })
+      )?.instruction,
+    ).toBe('Updated queued instruction');
+
+    await model.claim(first.request.id, { attempt: 1, workerId: 'worker-list' });
+    await expect(
+      model.updateInstruction(first.request.id, { instruction: 'Cannot rewrite claimed row' }),
+    ).rejects.toThrow(DOCUMENT_REWRITE_REQUEST_CONFLICT);
+
+    expect(
+      (await model.list({ documentId, statuses: ['queued'], limit: 1 })).map(
+        (request) => request.id,
+      ),
+    ).toEqual([second.request.id]);
+    expect((await model.list({ statuses: ['connecting'] })).map((request) => request.id)).toEqual([
+      first.request.id,
+    ]);
+  });
+
+  it('rechecks request capacity and attempt while holding the document lock', async () => {
+    const created = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Check capacity',
+      selection: blockSelection('capacity-target'),
+    });
+
+    await expect(model.assertCapacityForRequest(created.request.id, 0)).rejects.toThrow('attempt');
+    expect(await model.assertCapacityForRequest(created.request.id, 2)).toBeUndefined();
+    expect(await model.assertCapacityForRequest(created.request.id, 1)).toMatchObject({
+      id: created.request.id,
+      status: 'queued',
+    });
+  });
+
+  it('persists bounded progress only for the claimed worker attempt', async () => {
+    const created = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Report progress',
+      selection: relativeSelection(),
+    });
+    await model.claim(created.request.id, { attempt: 1, workerId: 'worker-progress' });
+
+    const updated = await model.updateProgress(created.request.id, {
+      attempt: 1,
+      progress: {
+        currentStage: 'generating_replacement',
+        events: [
+          {
+            at: 'invalid-time',
+            detail: 'd'.repeat(300),
+            stage: 'generating_replacement',
+            tool: 'unknown-tool',
+          },
+          { at: '2026-09-14T00:00:00.000Z', stage: 'invalid-stage' as never },
+        ],
+        summary: 's'.repeat(600),
+        updatedAt: 'invalid-time',
+      },
+      workerId: 'worker-progress',
+    });
+    expect(updated?.progress).toMatchObject({ currentStage: 'generating_replacement' });
+    expect(updated?.progress?.events).toHaveLength(1);
+    expect(updated?.progress?.events[0]?.detail).toHaveLength(160);
+    expect(updated?.progress?.summary).toHaveLength(512);
+    expect(updated?.progress?.updatedAt).toMatch(/Z$/);
+    expect(
+      await model.updateProgress(created.request.id, {
+        attempt: 1,
+        progress: null,
+        workerId: 'other-worker',
+      }),
+    ).toBeUndefined();
+    expect(
+      await model.updateProgress(created.request.id, {
+        attempt: 2,
+        progress: null,
+        workerId: 'worker-progress',
+      }),
+    ).toBeUndefined();
+    await expect(
+      model.updateProgress(created.request.id, {
+        attempt: 1,
+        progress: {} as never,
+        workerId: 'worker-progress',
+      }),
+    ).rejects.toThrow('progress');
   });
 
   it('preserves captured quote whitespace so the stored hash remains aligned', async () => {
@@ -1289,6 +1404,22 @@ describe('DocumentRewriteRequestModel', () => {
     });
   });
 
+  it('requires an applied parent before continuing a rewrite session', async () => {
+    expect(
+      await model.continue('missing-rewrite-request', { instruction: 'Continue missing' }),
+    ).toBe(undefined);
+
+    const queued = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Continue queued request',
+      selection: blockSelection('continue-queued'),
+    });
+    await expect(
+      model.continue(queued.request.id, { instruction: 'Continue before apply' }),
+    ).rejects.toThrow('continuation requires an applied output');
+  });
+
   it('refreshes a node continuation source proof from the persisted post-apply node', async () => {
     const capturedSource = '<main>Original artifact</main>';
     const appliedSource = '<main>Applied artifact</main>';
@@ -1748,13 +1879,16 @@ describe('DocumentRewriteRequestModel', () => {
 
     // Target overlap is document-owned too: another member cannot claim the
     // same block merely because the request row belongs to their user scope.
+    const reservedIndex = sameWorkspaceResults.findIndex((result) => result.status === 'fulfilled');
+    expect(reservedIndex).toBeGreaterThanOrEqual(0);
+    const reservedInput = sameWorkspaceInputs[reservedIndex]!;
     await expect(
       workspaceModelB.create({
         agentId: 'workspace-overlap-agent',
         documentId: workspaceDocument.id,
         id: 'workspace-overlap',
         instruction: 'Overlapping workspace rewrite',
-        selection: blockSelection('node-workspace-0'),
+        selection: blockSelection(reservedInput.selection.startNodeId),
       }),
     ).rejects.toThrow(`${DOCUMENT_REWRITE_REQUEST_CONFLICT}: target already active`);
   });
@@ -2051,6 +2185,29 @@ describe('DocumentRewriteRequestModel', () => {
     expect((await model.findById(created.request.id))?.requestedProvider).toBe('retry-provider');
   });
 
+  it('keeps retry promotion scoped to a valid attempt, status, and due time', async () => {
+    const created = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Guard retry promotion',
+      selection: relativeSelection(),
+    });
+
+    await expect(model.promoteRetry(created.request.id, 0)).rejects.toThrow('attempt');
+    expect(await model.promoteRetry(created.request.id, 1)).toBeUndefined();
+
+    await model.claim(created.request.id, { attempt: 1, workerId: 'worker-retry-guard' });
+    await model.transition(created.request.id, {
+      attempt: 1,
+      status: 'failed',
+      workerId: 'worker-retry-guard',
+    });
+    await model.retry(created.request.id, { attempt: 1, delayMs: 60_000 });
+
+    expect(await model.promoteRetry(created.request.id, 2)).toBeUndefined();
+    expect((await model.findById(created.request.id))?.status).toBe('retry_wait');
+  });
+
   it('atomically retries a live worker without releasing its target reservation', async () => {
     const created = await model.create({
       agentId: 'agent-rewrite',
@@ -2098,6 +2255,76 @@ describe('DocumentRewriteRequestModel', () => {
         selection: blockSelection('node-atomic-retry'),
       }),
     ).rejects.toThrow(`${DOCUMENT_REWRITE_REQUEST_CONFLICT}: target already active`);
+  });
+
+  it('keeps worker retry guarded by lease, cancellation, and request expiry', async () => {
+    const leaseExpired = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Retry after lease expiry',
+      selection: blockSelection('retry-lease-expired'),
+    });
+    await model.claim(leaseExpired.request.id, { attempt: 1, workerId: 'worker-expired' });
+    await model.transition(leaseExpired.request.id, {
+      attempt: 1,
+      status: 'syncing',
+      workerId: 'worker-expired',
+    });
+    await serverDB
+      .update(documentRewriteRequests)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1) })
+      .where(eq(documentRewriteRequests.id, leaseExpired.request.id));
+    expect(
+      await model.retryWorker(leaseExpired.request.id, {
+        attempt: 1,
+        workerId: 'worker-expired',
+      }),
+    ).toBeUndefined();
+
+    const canceled = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Retry after cancellation',
+      selection: blockSelection('retry-canceled'),
+    });
+    await model.claim(canceled.request.id, { attempt: 1, workerId: 'worker-canceled' });
+    await model.transition(canceled.request.id, {
+      attempt: 1,
+      status: 'syncing',
+      workerId: 'worker-canceled',
+    });
+    await model.cancel(canceled.request.id, { attempt: 1 });
+    expect(
+      await model.retryWorker(canceled.request.id, {
+        attempt: 1,
+        workerId: 'worker-canceled',
+      }),
+    ).toBeUndefined();
+
+    const expired = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      expiresAt: new Date(Date.now() + 60_000),
+      instruction: 'Retry after request expiry',
+      selection: blockSelection('retry-request-expired'),
+    });
+    await model.claim(expired.request.id, { attempt: 1, workerId: 'worker-request-expired' });
+    await model.transition(expired.request.id, {
+      attempt: 1,
+      status: 'syncing',
+      workerId: 'worker-request-expired',
+    });
+    await serverDB
+      .update(documentRewriteRequests)
+      .set({ expiresAt: new Date(Date.now() - 1) })
+      .where(eq(documentRewriteRequests.id, expired.request.id));
+    expect(
+      await model.retryWorker(expired.request.id, {
+        attempt: 1,
+        workerId: 'worker-request-expired',
+      }),
+    ).toBeUndefined();
+    expect((await model.findById(expired.request.id))?.status).toBe('stale');
   });
 
   it('does not retry a canceled-after-write request before its pending diff is settled', async () => {
@@ -2406,6 +2633,110 @@ describe('DocumentRewriteRequestModel', () => {
     expect((await model.findById(created.request.id))?.lastCommandId).toBe('direct-command');
   });
 
+  it('keeps direct apply gated by proof, generation, command, owner, and persistence', async () => {
+    const created = await model.create({
+      agentId: 'agent-rewrite',
+      documentId,
+      instruction: 'Guard direct apply',
+      selection: relativeSelection(),
+    });
+    await model.claim(created.request.id, { attempt: 1, workerId: 'worker-direct-guard' });
+    await model.transition(created.request.id, {
+      attempt: 1,
+      status: 'syncing',
+      workerId: 'worker-direct-guard',
+    });
+    await model.transition(created.request.id, {
+      attempt: 1,
+      status: 'thinking',
+      workerId: 'worker-direct-guard',
+    });
+    await model.transition(created.request.id, {
+      attempt: 1,
+      generationId: 'generation-direct-guard',
+      lastCommandId: 'command-direct-guard',
+      status: 'writing',
+      workerId: 'worker-direct-guard',
+    });
+
+    await expect(
+      model.markDirectApplied(created.request.id, {
+        attempt: 0,
+        commandId: 'command-direct-guard',
+        generationId: 'generation-direct-guard',
+        outputText: '',
+        workerId: 'worker-direct-guard',
+      }),
+    ).rejects.toThrow('attempt');
+    await expect(
+      model.markDirectApplied(created.request.id, {
+        attempt: 1,
+        commandId: 'command-direct-guard',
+        generationId: 'generation-direct-guard',
+        outputText: '',
+        stateVector: ' '.repeat(1),
+        workerId: 'worker-direct-guard',
+      }),
+    ).rejects.toThrow('stateVector');
+    await expect(
+      model.markDirectApplied(created.request.id, {
+        attempt: 1,
+        commandId: 'command-direct-guard',
+        generationId: 'generation-direct-guard',
+        outputText: 'x'.repeat(32_769),
+        workerId: 'worker-direct-guard',
+      }),
+    ).rejects.toThrow('outputText');
+    expect(
+      await model.markDirectApplied(created.request.id, {
+        attempt: 1,
+        commandId: 'command-direct-guard',
+        generationId: 'generation-direct-guard',
+        outputText: '',
+        workerId: 'other-worker',
+      }),
+    ).toBeUndefined();
+    expect(
+      await model.markDirectApplied(created.request.id, {
+        attempt: 1,
+        commandId: 'command-direct-guard',
+        generationId: 'wrong-generation',
+        outputText: '',
+        workerId: 'worker-direct-guard',
+      }),
+    ).toBeUndefined();
+    await expect(
+      model.markDirectApplied(created.request.id, {
+        attempt: 1,
+        commandId: 'wrong-command',
+        generationId: 'generation-direct-guard',
+        outputText: '',
+        workerId: 'worker-direct-guard',
+      }),
+    ).rejects.toThrow('command mismatch');
+    expect(
+      await model.markDirectApplied(created.request.id, {
+        attempt: 1,
+        commandId: 'command-direct-guard',
+        generationId: 'generation-direct-guard',
+        outputText: '',
+        workerId: 'worker-direct-guard',
+      }),
+    ).toBeUndefined();
+
+    await persistDirectRewriteEvidence(created.request.id, 'direct-guard-vector');
+    expect(
+      await model.markDirectApplied(created.request.id, {
+        attempt: 1,
+        commandId: 'command-direct-guard',
+        generationId: 'generation-direct-guard',
+        outputText: '',
+        stateVector: 'direct-guard-vector',
+        workerId: 'worker-direct-guard',
+      }),
+    ).toMatchObject({ request: { status: 'applied' } });
+  });
+
   it('clears a retry error when a later attempt is directly applied', async () => {
     const created = await model.create({
       agentId: 'agent-rewrite',
@@ -2651,6 +2982,32 @@ describe('DocumentRewriteRequestModel', () => {
         } as unknown as DocumentRewriteSelection,
       }),
     ).rejects.toThrow('selection.startOffset');
+  });
+
+  it('rejects invalid persisted timestamps and inconsistent target projections', () => {
+    expect(() => normalizeSelection({ ...relativeSelection(), capturedAt: 'not-a-date' })).toThrow(
+      'selection.capturedAt',
+    );
+    expect(() =>
+      normalizeSelection({
+        ...relativeSelection(),
+        startNodeId: DOCUMENT_REWRITE_WHOLE_DOCUMENT_TARGET,
+        targetNodeIds: ['node-a'],
+      }),
+    ).toThrow('selection.nodeId');
+    expect(() =>
+      normalizeSelection({
+        ...relativeSelection(),
+        startNodeId: 'node-b',
+        targetNodeIds: ['node-a'],
+      }),
+    ).toThrow('selection.targetNodeIds');
+    expect(() =>
+      normalizeSelection({
+        ...blockSelection(),
+        startNodeId: DOCUMENT_REWRITE_WHOLE_DOCUMENT_TARGET,
+      }),
+    ).toThrow('selection.nodeId');
   });
 
   it('rejects expired requests before a worker can claim or transition them', async () => {

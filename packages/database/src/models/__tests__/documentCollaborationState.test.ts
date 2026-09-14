@@ -4,7 +4,14 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documentCollaborationStates, documentHistories, documents, users } from '../../schemas';
+import {
+  documentCollaborationStates,
+  documentHistories,
+  documentRewriteRequests,
+  documents,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 import {
@@ -264,6 +271,81 @@ describe('DocumentCollaborationStateModel', () => {
     ).toHaveLength(0);
   });
 
+  it('rejects a lower room revision against the current ledger without changing content', async () => {
+    const first = await model.persist({
+      documentId,
+      expected: await model.readVersion(documentId),
+      history: {
+        idempotencyKey: 'revision-current',
+        requestId: 'revision-current',
+        saveSource: 'llm_call',
+        source: 'agent_collaboration',
+      },
+      next: nextProjection(documentId, 2, 'Current revision'),
+    });
+    expect(first.status).toBe('persisted');
+
+    const staleRevision = await model.persist({
+      documentId,
+      expected: await model.readVersion(documentId),
+      history: {
+        idempotencyKey: 'revision-stale',
+        requestId: 'revision-stale',
+        saveSource: 'llm_call',
+        source: 'agent_collaboration',
+      },
+      next: nextProjection(documentId, 1, 'Older revision'),
+    });
+    expect(staleRevision).toEqual({ status: 'conflict' });
+
+    const [document] = await serverDB
+      .select({ content: documents.content })
+      .from(documents)
+      .where(eq(documents.id, documentId));
+    expect(document?.content).toBe('Current revision');
+    expect(
+      await serverDB
+        .select()
+        .from(documentHistories)
+        .where(eq(documentHistories.requestId, 'revision-stale')),
+    ).toHaveLength(0);
+  });
+
+  it('rejects initial snapshot seeding when the document epoch or room binding is stale', async () => {
+    const expected = await model.readVersion(documentId);
+    await serverDB
+      .update(documents)
+      .set({ updatedAt: new Date(expected.documentUpdatedAt.getTime() + 1000) })
+      .where(eq(documents.id, documentId));
+
+    await expect(
+      model.ensureSnapshot({
+        documentId,
+        expectedDocumentUpdatedAt: expected.documentUpdatedAt,
+        seed: {
+          roomId: documentId,
+          roomRevision: 0,
+          snapshotUpdate: Buffer.from('stale-document').toString('base64'),
+          stateVector: 'stale-document-state-vector',
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_COLLABORATION_SNAPSHOT_VERSION_MISMATCH);
+
+    const current = await model.readVersion(documentId);
+    await expect(
+      model.ensureSnapshot({
+        documentId,
+        expectedDocumentUpdatedAt: current.documentUpdatedAt,
+        seed: {
+          roomId: 'wrong-room',
+          roomRevision: 0,
+          snapshotUpdate: Buffer.from('wrong-room').toString('base64'),
+          stateVector: 'wrong-room-state-vector',
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_COLLABORATION_SNAPSHOT_VERSION_MISMATCH);
+  });
+
   it('detects a browser autosave after readVersion and preserves the human edit', async () => {
     const expected = await model.readVersion(documentId);
     const first = await model.persist({
@@ -373,6 +455,62 @@ describe('DocumentCollaborationStateModel', () => {
     await expect(model.readVersion(otherDocument.id)).rejects.toThrow('Document not found');
   });
 
+  it('allows a shared workspace ledger but rejects a document from another workspace', async () => {
+    const workspaceId = 'document-collaboration-shared-workspace';
+    const otherWorkspaceId = 'document-collaboration-other-workspace';
+    await serverDB.insert(workspaces).values([
+      {
+        id: workspaceId,
+        name: 'Collaboration Workspace',
+        primaryOwnerId: userId,
+        slug: 'collaboration-workspace',
+      },
+      {
+        id: otherWorkspaceId,
+        name: 'Other Collaboration Workspace',
+        primaryOwnerId: otherUserId,
+        slug: 'other-collaboration-workspace',
+      },
+    ]);
+    const workspaceDocument = await new DocumentModel(serverDB, userId, workspaceId).create({
+      content: 'Shared workspace content',
+      editorData: { root: { children: [{ text: 'Shared workspace content' }] } },
+      fileType: 'text/plain',
+      source: 'test://shared-collaboration',
+      sourceType: 'api',
+      title: 'Shared collaboration document',
+      totalCharCount: 24,
+      totalLineCount: 1,
+      visibility: 'public',
+    });
+    const ownerModel = new DocumentCollaborationStateModel(serverDB, userId, workspaceId);
+    const sharedModel = new DocumentCollaborationStateModel(serverDB, otherUserId, workspaceId);
+    const otherWorkspaceModel = new DocumentCollaborationStateModel(
+      serverDB,
+      userId,
+      otherWorkspaceId,
+    );
+
+    const persisted = await ownerModel.persist({
+      documentId: workspaceDocument.id,
+      expected: await ownerModel.readVersion(workspaceDocument.id),
+      history: {
+        idempotencyKey: 'shared-workspace-write',
+        requestId: null,
+        saveSource: 'autosave',
+        source: 'collaboration',
+      },
+      next: nextProjection(workspaceDocument.id, 1, 'Shared workspace result'),
+    });
+    expect(persisted.status).toBe('persisted');
+    await expect(sharedModel.readVersion(workspaceDocument.id)).resolves.toMatchObject({
+      roomRevision: 1,
+    });
+    await expect(otherWorkspaceModel.readVersion(workspaceDocument.id)).rejects.toThrow(
+      'Document not found',
+    );
+  });
+
   it('stores browser collaboration history as autosave without a requestId', async () => {
     const result = await model.persist({
       documentId,
@@ -396,6 +534,297 @@ describe('DocumentCollaborationStateModel', () => {
       .from(documentHistories)
       .where(eq(documentHistories.documentId, documentId));
     expect(history).toEqual({ requestId: null, saveSource: 'autosave', source: 'collaboration' });
+  });
+
+  it('seeds an absent collaboration ledger through the explicit administrative path', async () => {
+    const expected = await model.readVersion(documentId);
+    await expect(
+      model.seedSnapshot({
+        documentId,
+        expected: { ...expected, versionToken: 'stale-ledger-token' },
+        seed: {
+          roomId: documentId,
+          roomRevision: 0,
+          snapshotUpdate: Buffer.from('must-not-seed').toString('base64'),
+          stateVector: 'must-not-seed-state-vector',
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_COLLABORATION_SNAPSHOT_VERSION_MISMATCH);
+
+    const result = await model.seedSnapshot({
+      documentId,
+      expected,
+      seed: {
+        roomId: documentId,
+        roomRevision: 0,
+        snapshotUpdate: Buffer.from('explicit-seed').toString('base64'),
+        stateVector: 'explicit-seed-state-vector',
+      },
+    });
+
+    expect(result.status).toBe('seeded');
+    expect((await model.readVersion(documentId)).snapshotUpdate).toBe(
+      Buffer.from('explicit-seed').toString('base64'),
+    );
+
+    const existing = await model.seedSnapshot({
+      documentId,
+      expected: await model.readVersion(documentId),
+      seed: {
+        roomId: documentId,
+        roomRevision: 99,
+        snapshotUpdate: Buffer.from('must-keep-original').toString('base64'),
+        stateVector: 'must-keep-original-vector',
+      },
+    });
+    expect(existing.status).toBe('existing');
+    expect(existing.version.snapshotUpdate).toBe(Buffer.from('explicit-seed').toString('base64'));
+  });
+
+  it('rejects explicit seed when the document epoch is stale or an existing room binding changed', async () => {
+    const expected = await model.readVersion(documentId);
+    await serverDB
+      .update(documents)
+      .set({ updatedAt: new Date(expected.documentUpdatedAt.getTime() + 1000) })
+      .where(eq(documents.id, documentId));
+    await expect(
+      model.seedSnapshot({
+        documentId,
+        expected,
+        seed: {
+          roomId: documentId,
+          roomRevision: 0,
+          snapshotUpdate: Buffer.from('stale-explicit-seed').toString('base64'),
+          stateVector: 'stale-explicit-seed-vector',
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_COLLABORATION_SNAPSHOT_VERSION_MISMATCH);
+
+    const current = await model.readVersion(documentId);
+    const seeded = await model.ensureSnapshot({
+      documentId,
+      expectedDocumentUpdatedAt: current.documentUpdatedAt,
+      seed: {
+        roomId: documentId,
+        roomRevision: 0,
+        snapshotUpdate: Buffer.from('binding-check').toString('base64'),
+        stateVector: 'binding-check-vector',
+      },
+    });
+    expect(seeded.status).toBe('seeded');
+    await serverDB
+      .update(documentCollaborationStates)
+      .set({ roomId: 'corrupt-room-binding' })
+      .where(eq(documentCollaborationStates.documentId, documentId));
+    const corrupted = await model.readVersion(documentId);
+
+    await expect(
+      model.ensureSnapshot({
+        documentId,
+        expectedDocumentUpdatedAt: corrupted.documentUpdatedAt,
+        seed: {
+          roomId: documentId,
+          roomRevision: 0,
+          snapshotUpdate: Buffer.from('binding-check-2').toString('base64'),
+          stateVector: 'binding-check-vector-2',
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_COLLABORATION_SNAPSHOT_VERSION_MISMATCH);
+    await expect(
+      model.seedSnapshot({
+        documentId,
+        expected: corrupted,
+        seed: {
+          roomId: documentId,
+          roomRevision: 0,
+          snapshotUpdate: Buffer.from('binding-check-3').toString('base64'),
+          stateVector: 'binding-check-vector-3',
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_COLLABORATION_SNAPSHOT_VERSION_MISMATCH);
+
+    await expect(
+      model.persist({
+        documentId,
+        expected: corrupted,
+        history: {
+          idempotencyKey: 'corrupt-room-partial-flush',
+          requestId: null,
+          saveSource: 'autosave',
+          source: 'collaboration',
+        },
+        next: nextProjection(documentId, 1, 'Must reject corrupt room'),
+      }),
+    ).resolves.toEqual({ status: 'conflict' });
+  });
+
+  it('rejects an explicit seed when the legacy ledger changes after its CAS read', async () => {
+    const first = await model.persist({
+      documentId,
+      expected: await model.readVersion(documentId),
+      history: {
+        idempotencyKey: 'legacy-ledger-seed',
+        requestId: null,
+        saveSource: 'llm_call',
+        source: 'agent_collaboration',
+      },
+      next: nextProjection(documentId, 1, 'Legacy ledger'),
+    });
+    expect(first.status).toBe('persisted');
+    await serverDB
+      .update(documentCollaborationStates)
+      .set({ snapshotUpdate: null })
+      .where(eq(documentCollaborationStates.documentId, documentId));
+    const expected = await model.readVersion(documentId);
+    await serverDB
+      .update(documentCollaborationStates)
+      .set({ versionToken: 'changed-after-read' })
+      .where(eq(documentCollaborationStates.documentId, documentId));
+
+    await expect(
+      model.seedSnapshot({
+        documentId,
+        expected,
+        seed: {
+          roomId: documentId,
+          roomRevision: 1,
+          snapshotUpdate: Buffer.from('stale-legacy-seed').toString('base64'),
+          stateVector: 'stale-legacy-seed-vector',
+        },
+      }),
+    ).rejects.toThrow(DOCUMENT_COLLABORATION_SNAPSHOT_VERSION_MISMATCH);
+  });
+
+  it('treats an empty absent room version as a duplicate no-op', async () => {
+    const expected = await model.readVersion(documentId);
+    const result = await model.persist({
+      documentId,
+      expected,
+      history: {
+        idempotencyKey: 'empty-room',
+        requestId: null,
+        saveSource: 'autosave',
+        source: 'collaboration',
+      },
+      next: {
+        content: 'Ignored empty room projection',
+        editorData: { root: { children: [] } },
+        roomId: documentId,
+        roomRevision: 0,
+        stateVector: '',
+      },
+    });
+
+    expect(result.status).toBe('duplicate');
+    if (result.status !== 'duplicate') return;
+    expect(result.version).toMatchObject({
+      roomRevision: 0,
+      snapshotUpdate: null,
+      stateVector: '',
+      versionToken: DOCUMENT_COLLABORATION_STATE_ABSENT_TOKEN,
+    });
+    const [document] = await serverDB
+      .select({ content: documents.content })
+      .from(documents)
+      .where(eq(documents.id, documentId));
+    expect(document?.content).toBe('Original');
+  });
+
+  it('rejects unsupported history sources before changing the room projection', async () => {
+    const expected = await model.readVersion(documentId);
+    await expect(
+      model.persist({
+        documentId,
+        expected,
+        history: {
+          idempotencyKey: 'unsupported-history-source',
+          requestId: null,
+          saveSource: 'manual' as never,
+          source: 'collaboration',
+        },
+        next: nextProjection(documentId, 1, 'Must not persist'),
+      }),
+    ).rejects.toThrow('Unsupported document collaboration history source');
+    expect(await model.readVersion(documentId)).toMatchObject(expected);
+  });
+
+  it('fails closed for a missing document and rejects a wrong room during a partial flush', async () => {
+    const expected = await model.readVersion(documentId);
+    await expect(
+      model.persist({
+        documentId: 'missing-collaboration-document',
+        expected,
+        history: {
+          idempotencyKey: 'missing-document',
+          requestId: null,
+          saveSource: 'autosave',
+          source: 'collaboration',
+        },
+        next: nextProjection('missing-collaboration-document', 1, 'Must not persist'),
+      }),
+    ).rejects.toThrow('Document not found');
+
+    const wrongRoom = await model.persist({
+      documentId,
+      expected,
+      history: {
+        idempotencyKey: 'wrong-room-flush',
+        requestId: null,
+        saveSource: 'autosave',
+        source: 'collaboration',
+      },
+      next: { ...nextProjection(documentId, 1, 'Wrong room'), roomId: 'wrong-room' },
+    });
+    expect(wrongRoom).toEqual({ status: 'conflict' });
+    expect(await model.readVersion(documentId)).toMatchObject(expected);
+  });
+
+  it('advances a request-linked history row on a later partial room flush', async () => {
+    await serverDB.insert(documentRewriteRequests).values({
+      agentId: 'agent-1',
+      documentId,
+      id: 'linked-request',
+      instruction: 'Rewrite this page',
+      requestedByUserId: userId,
+      selection: { kind: 'relative', quotedText: 'Original', quotedTextHash: 'hash-original' },
+      sessionId: 'rewrite-session',
+      status: 'queued',
+    });
+
+    const first = await model.persist({
+      documentId,
+      expected: await model.readVersion(documentId),
+      history: {
+        idempotencyKey: 'linked-history',
+        requestId: 'linked-request',
+        saveSource: 'llm_call',
+        source: 'agent_collaboration',
+      },
+      next: nextProjection(documentId, 1, 'Partial room result'),
+    });
+    expect(first.status).toBe('persisted');
+
+    const second = await model.persist({
+      documentId,
+      expected: await model.readVersion(documentId),
+      history: {
+        idempotencyKey: 'linked-history',
+        requestId: 'linked-request',
+        saveSource: 'llm_call',
+        source: 'agent_collaboration',
+      },
+      next: nextProjection(documentId, 2, 'Final room result'),
+    });
+    expect(second.status).toBe('persisted');
+
+    const histories = await serverDB
+      .select({ editorData: documentHistories.editorData })
+      .from(documentHistories)
+      .where(eq(documentHistories.requestId, 'linked-request'));
+    expect(histories).toHaveLength(1);
+    expect(histories[0]?.editorData).toEqual({
+      root: { children: [{ text: 'Final room result' }] },
+    });
   });
 
   it('atomically seeds one Yjs snapshot and applies a pending local delta after restart', async () => {

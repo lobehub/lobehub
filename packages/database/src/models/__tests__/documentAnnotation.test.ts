@@ -3,15 +3,22 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documentAnnotations, documents, users } from '../../schemas';
+import { documentAnnotations, documents, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
-import { DocumentAnnotationConflictError, DocumentAnnotationModel } from '../documentAnnotation';
+import {
+  DocumentAnnotationConflictError,
+  DocumentAnnotationModel,
+  documentAnnotationRecordFromRow,
+  documentAnnotationRecordsFromRows,
+} from '../documentAnnotation';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'document-annotation-model-test-user-id';
 const otherUserId = 'document-annotation-model-test-other-user-id';
+const workspaceId = 'document-annotation-test-workspace';
+const otherWorkspaceId = 'document-annotation-test-other-workspace';
 
 let documentId: string;
 let annotationModel: DocumentAnnotationModel;
@@ -94,6 +101,76 @@ describe('DocumentAnnotationModel', () => {
     });
     expect(second.annotations[0]?.version).toBe(first.annotations[0]?.version);
     expect(await annotationModel.listByDocument(documentId)).toHaveLength(1);
+  });
+
+  it('keeps legacy import ordering deterministic and last-wins within one snapshot', async () => {
+    const timestamp = '2026-08-26T00:00:00.000Z';
+    const result = await annotationModel.bulkUpsertLegacy(documentId, [
+      {
+        createdAt: timestamp,
+        id: 'legacy-z',
+        payload: { text: 'first copy' },
+        updatedAt: timestamp,
+      },
+      {
+        createdAt: timestamp,
+        id: 'legacy-a',
+        payload: { text: 'alphabetically first' },
+        updatedAt: timestamp,
+      },
+      {
+        createdAt: timestamp,
+        id: 'legacy-z',
+        payload: { text: 'last copy wins' },
+        updatedAt: timestamp,
+      },
+    ]);
+
+    expect(result).toMatchObject({ createdCount: 2, unchangedCount: 0, updatedCount: 0 });
+    expect(result.annotations.map((annotation) => annotation.id)).toEqual(['legacy-a', 'legacy-z']);
+    expect(result.annotations[1]?.payload).toEqual({ text: 'last copy wins' });
+  });
+
+  it('treats semantically equal partial upserts as duplicates and preserves fields', async () => {
+    const created = await annotationModel.create(documentId, {
+      anchorMetadata: { nodeKeys: ['node-1'], selector: { offset: 2 } },
+      author: { id: userId },
+      id: 'stable-annotation',
+      payload: { a: 1, b: [2, { nested: true }] },
+      quotedText: 'Stable quote',
+    });
+
+    const duplicate = await annotationModel.upsert(documentId, {
+      id: created.annotation.id,
+      payload: { b: [2, { nested: true }], a: 1 },
+    });
+    expect(duplicate).toMatchObject({ isDuplicate: true });
+    expect(duplicate.annotation.version).toBe(created.annotation.version);
+    expect(duplicate.annotation.quotedText).toBe('Stable quote');
+
+    const statusUpdate = await annotationModel.upsert(documentId, {
+      id: created.annotation.id,
+      status: 'resolved',
+    });
+    expect(statusUpdate.isDuplicate).toBe(false);
+    expect(statusUpdate.annotation.version).toBe(2);
+    expect(statusUpdate.annotation.payload).toEqual({ a: 1, b: [2, { nested: true }] });
+    expect(statusUpdate.annotation.anchorMetadata).toEqual({
+      nodeKeys: ['node-1'],
+      selector: { offset: 2 },
+    });
+
+    await expect(
+      annotationModel.upsert(
+        documentId,
+        { id: created.annotation.id, payload: { text: 'stale upsert' } },
+        created.annotation.version,
+      ),
+    ).rejects.toBeInstanceOf(DocumentAnnotationConflictError);
+
+    const unchanged = await annotationModel.update(documentId, created.annotation.id, {});
+    expect(unchanged.version).toBe(statusUpdate.annotation.version);
+    expect(unchanged.payload).toEqual({ a: 1, b: [2, { nested: true }] });
   });
 
   it('enforces optimistic versions and soft-deletes without removing history', async () => {
@@ -201,5 +278,104 @@ describe('DocumentAnnotationModel', () => {
       .from(documentAnnotations)
       .where(eq(documentAnnotations.documentId, documentId));
     expect(rows).toHaveLength(0);
+  });
+
+  it('does not reinterpret a globally conflicting annotation id as belonging to this document', async () => {
+    const otherDocument = await new DocumentModel(serverDB, userId).create({
+      content: 'Second document',
+      fileType: 'text/plain',
+      source: 'test://document-annotation-second',
+      sourceType: 'api',
+      title: 'Second annotation document',
+      totalCharCount: 15,
+      totalLineCount: 1,
+    });
+    await annotationModel.create(otherDocument.id, { id: 'globally-conflicting-id' });
+
+    await expect(
+      annotationModel.create(documentId, { id: 'globally-conflicting-id' }),
+    ).rejects.toThrow('Document annotation not found');
+    expect(await annotationModel.listByDocument(documentId)).toEqual([]);
+  });
+
+  it('rejects mutation attempts for a missing annotation without leaking another row', async () => {
+    await expect(
+      annotationModel.update(documentId, 'missing-annotation', { status: 'resolved' }),
+    ).rejects.toThrow('Document annotation not found');
+    await expect(annotationModel.softDelete(documentId, 'missing-annotation')).rejects.toThrow(
+      'Document annotation not found',
+    );
+  });
+
+  it('keeps workspace annotations isolated by workspace while allowing the shared scope', async () => {
+    await serverDB.insert(workspaces).values([
+      {
+        id: workspaceId,
+        name: 'Annotation Workspace',
+        primaryOwnerId: userId,
+        slug: 'annotation-workspace',
+      },
+      {
+        id: otherWorkspaceId,
+        name: 'Other Annotation Workspace',
+        primaryOwnerId: otherUserId,
+        slug: 'other-annotation-workspace',
+      },
+    ]);
+    const workspaceDocument = await new DocumentModel(serverDB, userId, workspaceId).create({
+      content: 'Workspace annotation document',
+      fileType: 'text/plain',
+      source: 'test://workspace-annotation',
+      sourceType: 'api',
+      title: 'Workspace annotation document',
+      totalCharCount: 30,
+      totalLineCount: 1,
+      visibility: 'public',
+    });
+    const workspaceModel = new DocumentAnnotationModel(serverDB, userId, workspaceId);
+    const otherWorkspaceModel = new DocumentAnnotationModel(serverDB, userId, otherWorkspaceId);
+
+    await workspaceModel.create(workspaceDocument.id, { id: 'workspace-annotation' });
+    await expect(workspaceModel.listByDocument(workspaceDocument.id)).resolves.toHaveLength(1);
+    await expect(otherWorkspaceModel.listByDocument(workspaceDocument.id)).rejects.toThrow(
+      'Document not found',
+    );
+  });
+
+  it('projects node keys while filtering malformed anchor metadata values', async () => {
+    const created = await annotationModel.create(documentId, {
+      anchorMetadata: { nodeKeys: ['node-1'], source: 'editor' },
+      id: 'projection-annotation',
+    });
+    const malformed = {
+      ...created.annotation,
+      anchorMetadata: { nodeKeys: ['node-1', 42, null] },
+    } as any;
+
+    expect(documentAnnotationRecordFromRow(malformed)).toMatchObject({
+      id: 'projection-annotation',
+      nodeKeys: ['node-1'],
+    });
+    expect(
+      documentAnnotationRecordFromRow({ ...created.annotation, anchorMetadata: null }),
+    ).toMatchObject({
+      id: 'projection-annotation',
+      nodeKeys: undefined,
+    });
+    expect(documentAnnotationRecordsFromRows([malformed])).toHaveLength(1);
+
+    const nullAnchor = await annotationModel.create(documentId, {
+      anchorMetadata: null,
+      id: 'null-anchor-annotation',
+    });
+    expect(nullAnchor.annotation.anchorMetadata).toBeNull();
+  });
+
+  it('makes repeated tombstone deletion idempotent', async () => {
+    const created = await annotationModel.create(documentId, { id: 'repeat-delete' });
+    const deleted = await annotationModel.softDelete(documentId, created.annotation.id);
+    const repeated = await annotationModel.softDelete(documentId, created.annotation.id);
+
+    expect(repeated).toMatchObject({ status: 'deleted', version: deleted.version });
   });
 });
