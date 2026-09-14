@@ -21,7 +21,59 @@ describe('fetchPublicUrl', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
+
+  it('honors explicit IP exceptions for caller-supplied attachment URLs', async () => {
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', ' 192.168.1.234, ,invalid ');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
+    const result = await fetchPublicUrl('http://192.168.1.234:3210/f/file_1', 1000);
+    expect(result?.response.ok).toBe(true);
+    await result?.dispose();
+  });
+
+  it('allows DNS answers explicitly listed by the administrator', async () => {
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '10.0.0.5');
+    mocks.lookup.mockResolvedValue([{ address: '10.0.0.5', family: 4 }]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok()));
+    const result = await fetchPublicUrl('http://storage.internal/file', 1000);
+    expect(result?.response.ok).toBe(true);
+    await result?.dispose();
+  });
+
+  it('rejects mixed DNS answers containing an unlisted private IP', async () => {
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '10.0.0.5');
+    mocks.lookup.mockResolvedValue([
+      { address: '10.0.0.5', family: 4 },
+      { address: '10.0.0.6', family: 4 },
+    ]);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await fetchPublicUrl('http://storage.internal/file', 1000)).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rechecks redirects from an allowed IP to an unlisted private IP', async () => {
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '10.0.0.5');
+    const fetchMock = vi.fn().mockResolvedValue({
+      status: 302,
+      headers: new Headers({ location: 'http://169.254.169.254/secret' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await fetchPublicUrl('http://10.0.0.5/file', 1000)).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['', '10.0.0.0/8', '*', 'storage.internal', '10.0.0.50'])(
+    'does not broaden IP exceptions: %s',
+    async (list) => {
+      vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', list);
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      expect(await fetchPublicUrl('http://10.0.0.5/file', 1000)).toBeUndefined();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('fetches a public host', async () => {
     const fetchMock = vi.fn().mockResolvedValue(ok());

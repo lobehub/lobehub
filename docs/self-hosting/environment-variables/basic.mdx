@@ -210,6 +210,8 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - Allow access to internal API gateway: `10.0.0.50`
 - Allow access to internal documentation server: `172.16.0.10`
 
+Outbound bot attachments also honor this list, including each redirect and DNS answer. Entries are exact IP addresses, not hostnames or CIDR ranges. An exception allows requests to that IP across ports and paths; list only servers you intend bot tools to access. The attachment downloader does not enable unrestricted private access via `SSRF_ALLOW_PRIVATE_IP_ADDRESS`.
+
 ### `ASSET_BASE_URL`
 
 - Type: Optional
