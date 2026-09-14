@@ -3707,6 +3707,10 @@ export const aiAgentRouter = router({
    * against the op's registered owner, so the token only has to carry the
    * caller's identity. Short-lived (5m) like the v1 token; the client re-mints
    * before every connect attempt.
+   *
+   * Blocked for restricted API keys (`TRPC_BLOCKED_PATH_PREFIXES`), like
+   * `refreshGatewayToken`: the JWT it returns passes `oidcAuth` as ordinary
+   * non-API-key auth, so a scoped key must never be able to mint one.
    */
   issueGatewayUserToken: aiAgentProcedure.query(async ({ ctx }) => {
     const token = await signUserJWT(ctx.userId);
