@@ -127,12 +127,14 @@ describe('supervisor recovery authority', () => {
       } as AgentOperationItem).eligible,
     ).toBe(false);
     expect(
-      recoveryEligibility(graph, { ...task, totalTopics: 3, status: 'paused' }, settled).eligible,
+      recoveryEligibility(graph, { ...task, totalTopics: 8, status: 'paused' }, settled).eligible,
     ).toBe(false);
   });
 
   it('respects attempt exhaustion and explicit manual decisions', () => {
-    expect(recoveryEligibility(graph, { ...task, totalTopics: 3 }, operation).eligible).toBe(false);
+    // No `recovery.maxAttemptsPerTask` on this goal, so the default budget applies.
+    expect(recoveryEligibility(graph, { ...task, totalTopics: 7 }, operation).eligible).toBe(true);
+    expect(recoveryEligibility(graph, { ...task, totalTopics: 8 }, operation).eligible).toBe(false);
     expect(
       recoveryEligibility(
         { ...graph, decisions: [{ status: 'pending' }] } as GoalGraphSnapshot,

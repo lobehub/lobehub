@@ -384,7 +384,7 @@ export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
  * (`tasks.config.verify.maxIterations`). Their product is the worst-case number
  * of agent runs a goal can pay for.
  */
-export const DEFAULT_GOAL_MAX_ROUNDS = 3;
+export const DEFAULT_GOAL_MAX_ROUNDS = 8;
 
 /** Bounds the round budget a goal may be created with. */
 export const GOAL_MAX_ROUNDS_RANGE = { max: 10, min: 2 } as const;
