@@ -114,7 +114,7 @@ const AcceptanceRow = memo<{
   /** Multi-select is running: the row picks instead of navigating. */
   selectable?: boolean;
   selected?: boolean;
-  onToggleSelect?: () => void;
+  onToggleSelect?: (shift: boolean) => void;
 }>(({ active, item, onChanged, onToggleSelect, selectable, selected, showProject }) => {
   const { t } = useTranslation('verify');
   const navigate = useNavigate();
@@ -379,7 +379,13 @@ const AcceptanceRow = memo<{
             }
           : undefined
       }
-      onClick={() => (selectable ? onToggleSelect?.() : navigate(`/acceptance/${item.id}`))}
+      onClick={(e) => {
+        if (selectable || e.shiftKey || e.metaKey || e.ctrlKey) {
+          onToggleSelect?.(e.shiftKey);
+          return;
+        }
+        navigate(`/acceptance/${item.id}`);
+      }}
     />
   );
 });

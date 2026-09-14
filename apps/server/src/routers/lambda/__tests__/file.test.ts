@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
+import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
@@ -229,11 +230,15 @@ const mockFileServiceGetFileContent = vi.fn();
 const mockFileServiceGetFileAccessUrl = vi.fn();
 const mockFileServiceGetFileMetadata = vi.fn();
 const mockFileServiceDeleteFile = vi.fn();
+const mockUploadFromBuffer = vi.fn();
+
+vi.mock('@/server/services/file/downloadRemoteImage', () => ({ downloadRemoteImage: vi.fn() }));
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
     return {
       deleteFile: mockFileServiceDeleteFile,
+      uploadFromBuffer: mockUploadFromBuffer,
       deleteFiles: vi.fn(),
       getFileAccessUrl: mockFileServiceGetFileAccessUrl,
       getFileContent: mockFileServiceGetFileContent,
@@ -308,6 +313,58 @@ const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
 }));
+
+describe('fileRouter rehostImage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
+    vi.mocked(downloadRemoteImage).mockResolvedValue({
+      buffer: Buffer.from('image'),
+      extension: 'png',
+      mimeType: 'image/png',
+    });
+    mockUploadFromBuffer.mockImplementation(async (_buffer, _mime, _path, beforeRecord) => {
+      await beforeRecord(routerMocks.transactionClient);
+      return { fileId: 'image-id', key: 'stored-key', url: 'https://lobehub.com/f/image-id' };
+    });
+  });
+
+  it('returns an attachment after checking actual bytes within the upload transaction', async () => {
+    const { caller } = createCallerWithCtx();
+    await expect(
+      caller.rehostImage({ url: 'https://cdn.discordapp.com/image.png' }),
+    ).resolves.toEqual({ fileId: 'image-id', url: 'https://lobehub.com/f/image-id' });
+    expect(mockUploadFromBuffer.mock.calls[0][4]).toEqual({
+      source: FileSource.PageEditor,
+      visibility: 'private',
+    });
+    expect(routerMocks.businessFileUploadCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualSize: 5,
+        inputSize: 5,
+        userId: 'test-user',
+        transaction: routerMocks.transactionClient,
+      }),
+    );
+  });
+
+  it('propagates quota rejection instead of returning an attachment', async () => {
+    routerMocks.businessFileUploadCheck.mockRejectedValueOnce(new TRPCError({ code: 'FORBIDDEN' }));
+    const { caller } = createCallerWithCtx();
+    await expect(
+      caller.rehostImage({ url: 'https://cdn.discordapp.com/image.png' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('does not upload failed downloads', async () => {
+    vi.mocked(downloadRemoteImage).mockRejectedValueOnce(new Error('Download failed'));
+    const { caller } = createCallerWithCtx();
+    await expect(
+      caller.rehostImage({ url: 'https://cdn.discordapp.com/image.png' }),
+    ).rejects.toThrow('Download failed');
+    expect(mockUploadFromBuffer).not.toHaveBeenCalled();
+  });
+});
 
 describe('fileRouter', () => {
   let ctx: any;

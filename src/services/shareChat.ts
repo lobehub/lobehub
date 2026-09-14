@@ -48,6 +48,15 @@ class ShareChatService {
   async refreshGatewayToken(shareId: string, topicId: string): Promise<{ token: string }> {
     return await lambdaClient.shareChat.refreshGatewayToken.query({ shareId, topicId });
   }
+
+  /**
+   * Mint the visitor's per-user JWT for the multiplexed Gateway WebSocket —
+   * the visitor counterpart of `aiAgentService.issueGatewayUserToken`. Keyed by
+   * shareId only (no topic / running operation required).
+   */
+  async issueGatewayUserToken(shareId: string): Promise<{ token: string }> {
+    return await lambdaClient.shareChat.issueGatewayUserToken.query({ shareId });
+  }
 }
 
 export const shareChatService = new ShareChatService();

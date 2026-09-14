@@ -860,6 +860,7 @@ export default {
     'Pick a verification report from the list to see its verdict, checks, and evidence.',
   'workspace.emptyDetail.title': 'No report selected',
   'workspace.expand': 'Show report list',
+  'workspace.pin': 'Pin report list',
   'workspace.listEmpty':
     'Reports appear here after a checker run finishes or a report is ingested.',
   'workspace.listEmptyTitle': 'No reports yet',

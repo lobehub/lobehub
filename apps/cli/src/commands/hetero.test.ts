@@ -37,6 +37,11 @@ vi.mock('../api/client', () => ({
   getTrpcClient: mockGetTrpcClient,
 }));
 
+const { mockRenewalStop } = vi.hoisted(() => ({ mockRenewalStop: vi.fn() }));
+vi.mock('../utils/OperationTokenRenewal', () => ({
+  createOperationTokenRenewal: () => ({ active: true, stop: mockRenewalStop }),
+}));
+
 /**
  * Build a Promise resolving to a fake `SpawnAgentHandle`. `spawnAgent` itself
  * is async, so test mocks return the handle wrapped — same iterable contract,
@@ -1751,6 +1756,56 @@ describe('hetero exec command', () => {
       'ingest:agent_runtime_end:terminal',
       'finish',
     ]);
+  });
+
+  /**
+   * Regression: renewal was stopped before the final drain, so a token expiring
+   * while the drain or the finish receipt sat in retries rejected both — the
+   * very loss renewal exists to prevent.
+   */
+  it('keeps the operation token renewing until the finish receipt is sent', async () => {
+    const callOrder: string[] = [];
+    mockRenewalStop.mockReset();
+    mockRenewalStop.mockImplementation(() => callOrder.push('renewal:stop'));
+    mockHeteroIngestMutate.mockImplementation(async () => {
+      callOrder.push('ingest');
+      return { ack: true };
+    });
+    mockHeteroFinishMutate.mockImplementation(async () => {
+      callOrder.push('finish');
+      return { ack: true };
+    });
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { reason: 'success' },
+            operationId: 'op-renew',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'agent_runtime_end',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-renew',
+      '--render',
+      'none',
+    ]);
+
+    expect(callOrder).toEqual(['ingest', 'finish', 'renewal:stop']);
   });
 
   it('finishes with result "error" when a terminal error event is pushed despite a clean exit', async () => {

@@ -25,6 +25,7 @@ import InlineToolbar from './InlineToolbar';
 import LinearFilePlugin from './LinearFilePlugin';
 import { registerAttachmentClickOpen } from './registerAttachmentClickOpen';
 import { registerBlockDecoratorCaretGuard } from './registerBlockDecoratorCaretGuard';
+import { needsImageRehost, rehostImage } from './rehostImage';
 import { useFileUpload, useImageUpload } from './useImageUpload';
 
 const IMAGE_FILTERS = [
@@ -165,7 +166,10 @@ const InternalEditor = memo<InternalEditorProps>(
 
       const imagePlugin = Editor.withProps(ReactImagePlugin, {
         defaultBlockImage: true,
+        handleRehost: rehostImage,
         handleUpload: handleImageUpload,
+        needRehost: (url: string) =>
+          !!editor.getLexicalEditor?.()?.isEditable() && needsImageRehost(url),
         onPickFile: isDesktop ? handlePickFile : undefined,
       });
 

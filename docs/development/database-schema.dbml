@@ -1743,6 +1743,11 @@ table knowledge_bases {
   }
 }
 
+table fts_search_sync_capture_version {
+  id text [pk, not null]
+  version integer [not null]
+}
+
 table fts_search_sync_outbox {
   attempts integer [not null, default: 0]
   available_at "timestamp with time zone" [not null, default: `now()`]

@@ -126,6 +126,29 @@ docker run --rm --env-file .env \
 
 迁移失败时应用不会启动，请查看应用容器日志并按下面的说明恢复。持续同步容器仍需保持运行，它不会由一次启动迁移替代。
 
+可选的搜索 capture 安装器会在 PostgreSQL 中记录 schema 版本。必须先完成数据库迁移，再安装 capture。旧版本应用不得覆盖更新的 capture 定义；若安装器报告未知或不完整定义，应保持当前版本运行，查明不一致后再重试。升级期间会锁住来源表写入并在同一事务中替换定义，因此单纯升级 capture 不会漏掉变更，也无需因此重建全部索引。已建索引的 tool 消息仍需在所有同步 worker 更新资格规则后，另行进行版本化清理。
+
+对于已有的 Elasticsearch 安装，先更新全部应用和持续同步 worker，再预览 PostgreSQL 中不合格消息的数量，并另行记录 Elasticsearch `messages` alias 中仍有效的 `role=tool` 数量：
+
+```bash
+docker run --rm --env-file .env \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-ineligible-message-cleanup.cjs --status
+```
+
+全部同步 worker 更新后，再单独安排分批清理；继续挂载同一个卷来保存私有检查点：
+
+```bash
+docker run --rm --env-file .env \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-ineligible-message-cleanup.cjs \
+  --apply --yes --all-workers-upgraded \
+  --state-file=/app/.elasticsearch-reindex/ineligible-messages.json \
+  --batch-size=250 --max-batches=10 --delay-ms=1000
+```
+
+请保留检查点卷以便恢复，不要在两次运行之间删除它。重跑同一批是安全的：它会分配更新的 Outbox revision，由正常同步 worker 写入带版本围栏的软墓碑，或写入消息当前合格的投影。等待 Outbox 清空且无死信后，确认 Elasticsearch 计数向零下降。此命令不修改 PostgreSQL 消息，也不直接向 Elasticsearch 写入。
+
 ## 迁移中断怎么办
 
 保留 `lobehub-search-state` 数据卷。首次手动导入中断时，修正错误后重新执行导入命令，去掉 `--fresh-run`。应用启动时的自动迁移失败，则在修正错误、处理残留锁后重新启动应用容器，它会继续完成回填、追平和切换。

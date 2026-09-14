@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Collapsible, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -282,7 +282,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   return (
     <Flexbox gap={8}>
       {header}
-      {sectionExpanded && (
+      <Collapsible open={sectionExpanded}>
         <Flexbox className={styles.body} gap={14}>
           {bundleLoading && <NeuralNetworkLoading size={28} />}
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
@@ -388,7 +388,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
             </>
           )}
         </Flexbox>
-      )}
+      </Collapsible>
     </Flexbox>
   );
 });

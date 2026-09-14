@@ -396,10 +396,21 @@ describe('documentRouter publishDocumentToWorkspace', () => {
     expect(mocks.setAccessLevel).toHaveBeenCalledWith('document', 'doc-1', 'edit', 'creator-1');
   });
 
+  // Regression: the default used to be `view`, so publishing a page handed the
+  // rest of the workspace a read-only copy of something the creator had just
+  // deliberately shared.
   it('falls back to the default level when nothing was staged', async () => {
     mocks.getAccessLevel.mockResolvedValue(null);
 
     await caller().publishDocumentToWorkspace({ id: 'doc-1' });
+
+    expect(mocks.setAccessLevel).toHaveBeenCalledWith('document', 'doc-1', 'edit', 'creator-1');
+  });
+
+  it('still honours an explicit view level chosen at publish time', async () => {
+    mocks.getAccessLevel.mockResolvedValue(null);
+
+    await caller().publishDocumentToWorkspace({ accessLevel: 'view', id: 'doc-1' });
 
     expect(mocks.setAccessLevel).toHaveBeenCalledWith('document', 'doc-1', 'view', 'creator-1');
   });

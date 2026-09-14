@@ -18,6 +18,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 
 const editorProps = vi.hoisted(() => ({
   last: undefined as any,
+  image: undefined as any,
 }));
 
 vi.mock('@lobehub/editor/react', () => ({
@@ -26,7 +27,12 @@ vi.mock('@lobehub/editor/react', () => ({
       editorProps.last = props;
       return <div data-testid="editor" />;
     }),
-    { withProps: (plugin: unknown) => plugin },
+    {
+      withProps: (plugin: unknown, props: any) => {
+        if (props?.defaultBlockImage) editorProps.image = props;
+        return plugin;
+      },
+    },
   ),
   useEditorState: () => ({}),
 }));
@@ -43,6 +49,8 @@ vi.mock('@lobehub/editor', () => ({
 vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
   createChatInputRichPlugins: () => [],
 }));
+
+vi.mock('./rehostImage', () => ({ needsImageRehost: () => true, rehostImage: vi.fn() }));
 
 vi.mock('./InlineToolbar', () => ({
   default: () => <div />,
@@ -77,6 +85,26 @@ describe('InternalEditor readonly state', () => {
 
   beforeEach(() => {
     editorProps.last = undefined;
+  });
+
+  it('only rehosts images while the live editor is editable', () => {
+    let editable = false;
+    const liveEditor = {
+      ...editor,
+      getLexicalEditor: () => ({
+        isEditable: () => editable,
+        registerCommand: vi.fn(() => vi.fn()),
+        registerRootListener: vi.fn(() => vi.fn()),
+        registerUpdateListener: vi.fn(() => vi.fn()),
+      }),
+    } as unknown as IEditor;
+    render(<InternalEditor editor={liveEditor} />);
+    expect(editorProps.image.handleRehost).toBeTypeOf('function');
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(false);
+    editable = true;
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(true);
+    editable = false;
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(false);
   });
 
   it('passes editable=false to the editor when disabled', () => {

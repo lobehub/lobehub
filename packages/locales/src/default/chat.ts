@@ -2216,7 +2216,7 @@ export default {
   'taskList.assigneeSearch.memberPlaceholder': 'Search Assignee...',
   'taskList.assigneeSearch.placeholder': 'Search Assignee or Agent...',
   'taskList.assigneeSelector.agentGroup': 'Agents',
-  'taskList.assigneeSelector.memberGroup': 'Assignee',
+  'taskList.assigneeSelector.workspaceMemberGroup': 'Workspace members',
   'taskList.contextMenu.copyConfirm': 'Copy',
   'taskList.contextMenu.copyDescription':
     'Clone this task (and all its subtasks) into another workspace. Status resets to backlog.',

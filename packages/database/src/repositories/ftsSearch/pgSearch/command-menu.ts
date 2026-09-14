@@ -13,6 +13,7 @@ import {
 } from '../../../schemas';
 import { sanitizeBm25Query } from '../../../utils/bm25';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { searchableMessageText } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
@@ -238,6 +239,7 @@ export async function searchMessages(
       model: messages.model,
       role: messages.role,
       score: sql<number>`paradedb.score(${messages.id})`.as('score'),
+      summary: messages.summary,
       topicId: messages.topicId,
       updatedAt: messages.updatedAt,
       workspaceId: messages.workspaceId,
@@ -286,6 +288,9 @@ export async function searchMessages(
       and(
         context.liftedScopeWhere(hits.workspaceId),
         agentId ? eq(hits.agentId, agentId) : undefined,
+        // ParadeDB rejects regex predicates inside the scored BM25 scan. Blank content cannot
+        // match content @@@, so filtering after the candidate pool preserves eligible hits.
+        searchableMessageText(hits.content, hits.summary),
       ),
     )
     .orderBy(desc(hits.score))

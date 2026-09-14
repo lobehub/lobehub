@@ -19,6 +19,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { hasWorkspaceMemberDirectory } from '../shared/memberAssigneeMode';
+import { partitionSelfMember } from './assigneeMemberOptions';
 
 interface AssigneeMemberSelectorProps {
   children: ReactNode;
@@ -70,6 +71,9 @@ const memberName = (member: WorkspaceMemberRow) =>
   member.user?.username?.trim() ||
   member.user?.email?.trim() ||
   member.userId;
+
+const toMemberOption = (member: WorkspaceMemberRow) =>
+  ({ key: `member:${member.userId}`, kind: 'member', member }) as const;
 
 const matchesSearch = (member: WorkspaceMemberRow, query: string) =>
   [member.user?.fullName, member.user?.username, member.user?.email].some((label) =>
@@ -130,14 +134,19 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
     );
     const unassignedLabel = t('taskList.unassigned');
     const showUnassigned = !query || unassignedLabel.toLowerCase().includes(query);
+    // Self sits right under "Unassigned" and out of the workspace member group,
+    // so assigning a task to yourself never means scanning the directory.
+    const { others: otherMembers, self: selfMember } = useMemo(
+      () => partitionSelfMember(filteredMembers, selfUserId),
+      [filteredMembers, selfUserId],
+    );
     const flatOptions = useMemo<MemberOption[]>(
       () => [
         ...(showUnassigned ? [{ key: 'unassigned', kind: 'unassigned' } as const] : []),
-        ...filteredMembers.map(
-          (member) => ({ key: `member:${member.userId}`, kind: 'member', member }) as const,
-        ),
+        ...(selfMember ? [toMemberOption(selfMember)] : []),
+        ...otherMembers.map((member) => toMemberOption(member)),
       ],
-      [filteredMembers, showUnassigned],
+      [otherMembers, selfMember, showUnassigned],
     );
     const optionIndexByKey = useMemo(
       () => new Map(flatOptions.map((option, index) => [option.key, index])),
@@ -301,14 +310,13 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
                 style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
               >
                 {showUnassigned && renderOption({ key: 'unassigned', kind: 'unassigned' })}
-                {filteredMembers.length > 0 && (
+                {selfMember && renderOption(toMemberOption(selfMember))}
+                {otherMembers.length > 0 && (
                   <div className={styles.sectionHeader}>
-                    {t('taskList.assigneeSelector.memberGroup')}
+                    {t('taskList.assigneeSelector.workspaceMemberGroup')}
                   </div>
                 )}
-                {filteredMembers.map((member) =>
-                  renderOption({ key: `member:${member.userId}`, kind: 'member', member }),
-                )}
+                {otherMembers.map((member) => renderOption(toMemberOption(member)))}
               </Flexbox>
             )}
           </Flexbox>

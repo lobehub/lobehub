@@ -202,7 +202,9 @@ export class FileService {
       metadata?: Record<string, unknown>;
       name: string;
       size: number;
+      source?: FileItem['source'];
       url: string;
+      visibility?: FileItem['visibility'];
     },
     trx?: Transaction,
   ): Promise<{ fileId: string; url: string }> {
@@ -234,7 +236,9 @@ export class FileService {
         metadata: params.metadata,
         name: params.name,
         size: params.size,
+        source: params.source,
         url: params.url,
+        visibility: params.visibility,
       },
       !isExist, // insertToGlobalFiles
       trx,
@@ -401,6 +405,7 @@ export class FileService {
      * is removed again when it rejects.
      */
     beforeRecord?: (trx: Transaction) => Promise<void>,
+    recordOptions?: Pick<FileItem, 'source' | 'visibility'>,
   ): Promise<{ fileId: string; key: string; url: string }> {
     // Use uploadBuffer with explicit contentType so S3 Content-Type matches
     // the actual bytes (e.g. PNG buffer won't get image/jpeg from .jpg pathname)
@@ -436,6 +441,7 @@ export class FileService {
             name,
             size,
             url: key,
+            ...recordOptions,
           },
           trx,
         );

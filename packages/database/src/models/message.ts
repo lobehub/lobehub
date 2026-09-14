@@ -97,6 +97,7 @@ import { notCopiedTranscript } from '../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
+import { searchableMessage } from '../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
@@ -2828,6 +2829,7 @@ export class MessageModel {
         and(
           this.ownership(),
           notShareVisitorMessage(),
+          searchableMessage(),
           candidateIds
             ? inJsonStringArray(messages.id, candidateIds)
             : sql`${messages.content} @@@ ${bm25Query}`,

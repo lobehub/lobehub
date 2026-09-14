@@ -11,7 +11,7 @@ class FakeChild extends EventEmitter {
 const createHarness = (overrides = {}) => {
   const spawned = [];
   const watchers = [];
-  const state = { bundlesExist: false, mtime: 1, portReady: false };
+  const state = { bundlesExist: false, mtime: Date.now() + 1, portReady: false };
 
   const options = {
     checkPort: vi.fn(async () => state.portReady),
@@ -22,6 +22,7 @@ const createHarness = (overrides = {}) => {
     log: vi.fn(),
     logError: vi.fn(),
     nodeBin: '/bin/node',
+    rmSync: vi.fn(),
     spawn: vi.fn((bin, args, opts) => {
       const child = new FakeChild();
       spawned.push({ args, bin, child, opts });
@@ -84,6 +85,19 @@ describe('createDevOrchestrator', () => {
     ]);
   });
 
+  it('wipes the stale dist before spawning the watch builds', () => {
+    const h = createHarness();
+    h.orchestrator.start();
+
+    expect(h.options.rmSync).toHaveBeenCalledWith('/repo/apps/desktop/dist', {
+      force: true,
+      recursive: true,
+    });
+    expect(h.options.rmSync.mock.invocationCallOrder[0]).toBeLessThan(
+      h.options.spawn.mock.invocationCallOrder[0],
+    );
+  });
+
   it('shuts everything down when a vite child exits early', () => {
     const h = createHarness();
     h.orchestrator.start();
@@ -123,11 +137,26 @@ describe('createDevOrchestrator', () => {
     h.state.portReady = true;
 
     await vi.advanceTimersByTimeAsync(600);
-    h.state.mtime = 2;
+    h.state.mtime += 1;
     await vi.advanceTimersByTimeAsync(600);
     expect(h.electronSpawns()).toHaveLength(0);
 
     await vi.advanceTimersByTimeAsync(1400);
+    expect(h.electronSpawns()).toHaveLength(1);
+  });
+
+  it('ignores bundles left over from a previous run until the watch build rewrites them', async () => {
+    const h = createHarness();
+    h.state.mtime = Date.now() - 1;
+    h.orchestrator.start();
+    h.state.bundlesExist = true;
+    h.state.portReady = true;
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(h.electronSpawns()).toHaveLength(0);
+
+    h.state.mtime = Date.now();
+    await vi.advanceTimersByTimeAsync(2000);
     expect(h.electronSpawns()).toHaveLength(1);
   });
 
