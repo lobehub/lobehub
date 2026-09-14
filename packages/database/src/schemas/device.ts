@@ -65,6 +65,20 @@ export const devices = pgTable(
     hostname: text('hostname'),
     /** 'darwin' | 'win32' | 'linux' */
     platform: varchar('platform', { length: 20 }),
+    /**
+     * CPU architecture as reported by the client (`process.arch`: 'x64' | 'arm64',
+     * stored raw — no normalization — so future values like linux arm keep working).
+     * Only a device running a client new enough to report it gets a value;
+     * historical rows stay NULL (arch is not derivable from stored data).
+     */
+    architecture: varchar('architecture', { length: 20 }),
+    /**
+     * Extensible bag of client-reported device info (app version, electron /
+     * chrome / node versions, host OS release). Keys are non-contractual and
+     * the bag is always nullable — add fields here instead of new columns
+     * when the data is purely informational.
+     */
+    metadata: jsonb('metadata').$type<Record<string, string>>(),
     /** User-editable alias */
     friendlyName: text('friendly_name'),
 

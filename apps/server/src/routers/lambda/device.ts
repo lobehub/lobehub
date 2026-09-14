@@ -1109,9 +1109,15 @@ export const deviceRouter = router({
     .use(serverDatabase)
     .input(
       z.object({
+        architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
         identitySource: z.enum(['machine-id', 'fallback']),
+        /** Extensible client-reported info bag; free-form, size-capped to guard the column. */
+        metadata: z
+          .record(z.string().max(64), z.string().max(200))
+          .refine((m) => Object.keys(m).length <= 20, 'metadata supports at most 20 keys')
+          .nullish(),
         platform: z.string().max(20).nullish(),
         // 'private' enrolls the device for the calling member only (settings
         // page "Private" tab / `lh connect --workspace <id> --private`);
@@ -1433,9 +1439,15 @@ export const deviceRouter = router({
   register: deviceProcedure
     .input(
       z.object({
+        architecture: z.string().max(20).nullish(),
         deviceId: z.string().min(1).max(64),
         hostname: z.string().nullish(),
         identitySource: z.enum(['machine-id', 'fallback']),
+        /** Extensible client-reported info bag; free-form, size-capped to guard the column. */
+        metadata: z
+          .record(z.string().max(64), z.string().max(200))
+          .refine((m) => Object.keys(m).length <= 20, 'metadata supports at most 20 keys')
+          .nullish(),
         platform: z.string().max(20).nullish(),
       }),
     )
