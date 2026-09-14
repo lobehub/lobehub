@@ -8,7 +8,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { and, asc, eq, gt, inArray, max, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, max, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -23,6 +23,22 @@ type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
   userId?: string,
 ) => Promise<UserKeyVaults>;
+
+/** PostgreSQL stores statement_timeout as a signed 32-bit millisecond value.
+ * @see https://github.com/postgres/postgres/blob/f9562b95/src/backend/utils/misc/guc_parameters.dat
+ */
+const MAX_STATEMENT_TIMEOUT_MS = 2_147_483_647;
+
+const validateDeletionStatementTimeout = (timeoutMs?: number) => {
+  if (
+    timeoutMs !== undefined &&
+    (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_STATEMENT_TIMEOUT_MS)
+  ) {
+    throw new Error(
+      `Account deletion statement timeout must be between 1 and ${MAX_STATEMENT_TIMEOUT_MS} milliseconds`,
+    );
+  }
+};
 
 export class UserNotFoundError extends TRPCError {
   constructor() {
@@ -454,13 +470,11 @@ export class UserModel {
     options: { statementTimeoutMs?: number } = {},
   ) => {
     const timeoutMs = options.statementTimeoutMs;
-    if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) {
-      throw new Error('Account deletion statement timeout must be a positive integer');
-    }
+    validateDeletionStatementTimeout(timeoutMs);
     // A pending agent-TRANSFER backfill means message rows moved to (or from)
     // this user still carry the other side's scope snapshot; cascading the
     // delete now would destroy history the transfer already re-homed. Transfer
-    // is admin-initiated and drains in minutes — the delete can simply be
+    // drains in minutes — the delete can simply be
     // retried afterwards. Pending `copy` jobs do not block: they duplicate
     // rather than move, and both sides self-heal (see `isPendingTransfer`).
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
@@ -496,46 +510,87 @@ export class UserModel {
       throw new Error('Account deletion batch size must be a positive integer');
     }
     const timeoutMs = options.finalStatementTimeoutMs;
-    if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) {
-      throw new Error('Account deletion statement timeout must be a positive integer');
-    }
+    validateDeletionStatementTimeout(timeoutMs);
 
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
 
-    const deleteMessages = async (where: ReturnType<typeof eq>) => {
-      for (;;) {
-        if (options.shouldContinue?.() === false) return false;
-        const rows = await db
-          .select({ id: messages.id })
-          .from(messages)
-          .where(where)
-          .limit(batchSize);
-        if (rows.length === 0) return true;
-        await db.delete(messages).where(
+    // A transfer can leave the old userId on topic messages until its async job
+    // finishes. Only pre-delete standalone messages here; topic messages must be
+    // drained under their topic lock, and linked topicless messages stay for the
+    // final guarded cascade.
+    const standaloneMessage = and(
+      eq(messages.userId, id),
+      isNull(messages.topicId),
+      isNull(messages.agentId),
+      isNull(messages.groupId),
+      isNull(messages.sessionId),
+    );
+    for (;;) {
+      if (options.shouldContinue?.() === false) return false;
+      const rows = await db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(standaloneMessage)
+        .limit(batchSize);
+      if (rows.length === 0) break;
+      await db.delete(messages).where(
+        and(
+          standaloneMessage,
           inArray(
             messages.id,
             rows.map((row) => row.id),
           ),
-        );
-      }
-    };
+        ),
+      );
+    }
 
-    if (!(await deleteMessages(eq(messages.userId, id)))) return false;
-
+    const ownedTopic = or(eq(topics.userId, id), eq(topics.senderId, id));
     for (;;) {
       if (options.shouldContinue?.() === false) return false;
-      const [topic] = await db
-        .select({ id: topics.id })
-        .from(topics)
-        .where(or(eq(topics.userId, id), eq(topics.senderId, id)))
-        .limit(1);
+      const [topic] = await db.select({ id: topics.id }).from(topics).where(ownedTopic).limit(1);
       if (!topic) break;
 
-      // A visitor's topic can contain messages owned by the host account.
-      if (!(await deleteMessages(eq(messages.topicId, topic.id)))) return false;
-      await db.delete(topics).where(eq(topics.id, topic.id));
+      for (;;) {
+        if (options.shouldContinue?.() === false) return false;
+        const drained = await db.transaction(async (tx) => {
+          // Transfers lock the topic before changing its owner and messages.
+          // Holding the same row lock through this batch prevents a transfer
+          // from rehoming captured message IDs before they are deleted.
+          const [currentTopic] = await tx
+            .select({ id: topics.id })
+            .from(topics)
+            .where(and(eq(topics.id, topic.id), ownedTopic))
+            .for('update');
+          if (!currentTopic) return true;
+          if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id)) {
+            throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+          }
+
+          // A visitor's topic can contain messages owned by the host account.
+          const rows = await tx
+            .select({ id: messages.id })
+            .from(messages)
+            .where(eq(messages.topicId, topic.id))
+            .limit(batchSize);
+          if (rows.length === 0) {
+            await tx.delete(topics).where(and(eq(topics.id, topic.id), ownedTopic));
+            return true;
+          }
+          await tx.delete(messages).where(
+            and(
+              eq(messages.topicId, topic.id),
+              inArray(
+                messages.id,
+                rows.map((row) => row.id),
+              ),
+            ),
+          );
+          return false;
+        });
+        if (drained) break;
+      }
     }
 
     if (options.shouldContinue?.() === false) return false;
