@@ -210,6 +210,8 @@ export interface UIChatMessage {
    */
   children?: AssistantContentBlock[];
   chunksList?: ChatFileChunk[];
+  /** Parallel response columns created by conversation-flow for virtual compare messages. */
+  columns?: UIChatMessage[][];
   /**
    * All messages within a compression group (role: 'compressedGroup')
    * Used for rendering expanded view with conversation-flow parsing

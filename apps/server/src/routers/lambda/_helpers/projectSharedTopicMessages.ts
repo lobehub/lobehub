@@ -18,11 +18,10 @@ const projectError = (
   };
 };
 
-const projectBlock = (block: AssistantContentBlock): AssistantContentBlock => ({
+const projectAssistantContentBlock = (block: AssistantContentBlock): AssistantContentBlock => ({
   ...block,
   council: block.council?.map(projectMessage),
   error: projectError(block.error),
-  tasks: block.tasks?.map((task) => ({ ...task, error: undefined })),
   tools: block.tools?.map((tool) => ({
     ...tool,
     result: tool.result ? { ...tool.result, error: undefined } : undefined,
@@ -31,13 +30,13 @@ const projectBlock = (block: AssistantContentBlock): AssistantContentBlock => ({
 
 const projectMessage = (message: UIChatMessage): UIChatMessage => ({
   ...message,
-  children: message.children?.map(projectBlock),
+  children: message.children?.map(projectAssistantContentBlock),
+  ...(message.columns && { columns: message.columns.map((column) => column.map(projectMessage)) }),
   compressedMessages: message.compressedMessages?.map(projectMessage),
   error: projectError(message.error),
   members: message.members?.map(projectMessage),
   pluginError: undefined,
-  taskCompletions: message.taskCompletions?.map(projectBlock),
-  taskDetail: message.taskDetail ? { ...message.taskDetail, error: undefined } : undefined,
+  taskCompletions: message.taskCompletions?.map(projectAssistantContentBlock),
   tasks: message.tasks?.map(projectMessage),
 });
 
