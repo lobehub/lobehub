@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Click to copy",
   "unknownError.desc": "An unexpected error occurred. You can retry or report on",
   "unknownError.retry": "Retry",
+  "unknownError.sharedDesc": "Please report this issue on",
+  "unknownError.sharedTitle": "Unable to generate this answer",
   "unknownError.title": "Oops, the request took a nap",
   "unknownError.traceIdLabel": "Trace ID:",
   "unlock.addProxyUrl": "Add OpenAI proxy URL (optional)",

@@ -106,6 +106,8 @@ export default {
   'unknownError.copyTraceIdTooltip': 'Click to copy',
   'unknownError.desc': 'An unexpected error occurred. You can retry or report on',
   'unknownError.retry': 'Retry',
+  'unknownError.sharedDesc': 'Please report this issue on',
+  'unknownError.sharedTitle': 'Unable to generate this answer',
   'unknownError.traceIdLabel': 'Trace ID:',
   'unknownError.title': 'Oops, the request took a nap',
 

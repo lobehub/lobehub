@@ -10,7 +10,12 @@ const projectError = (
 ): ChatMessageError | null | undefined => {
   if (!error) return error;
 
-  return { type: ChatErrorType.InternalServerError };
+  const traceId = error.body?.traceId;
+
+  return {
+    ...(typeof traceId === 'string' ? { body: { traceId } } : {}),
+    type: ChatErrorType.InternalServerError,
+  };
 };
 
 const projectBlock = (block: AssistantContentBlock): AssistantContentBlock => ({

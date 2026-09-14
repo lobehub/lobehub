@@ -506,8 +506,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // Show a report action for unknown or fallback-bucket traceable errors.
     // Specific known error types keep their dedicated localized message below.
     if (
-      enableBusinessFeatures &&
-      (error?.type === ChatErrorType.InternalServerError || shouldShowTraceIdError(error))
+      (enableBusinessFeatures &&
+        (error?.type === ChatErrorType.InternalServerError || shouldShowTraceIdError(error))) ||
+      (isSharedTopic && error?.type === ChatErrorType.InternalServerError)
     ) {
       const traceId =
         typeof error?.body?.traceId === 'string' ? (error.body.traceId as string) : undefined;
@@ -515,8 +516,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       return (
         <TraceIdError
           id={data.id}
+          showRetry={!isSharedTopic}
           traceId={traceId}
-          onRetry={canRetry ? handleManualRetry : undefined}
+          onRetry={!isSharedTopic && canRetry ? handleManualRetry : undefined}
         />
       );
     }

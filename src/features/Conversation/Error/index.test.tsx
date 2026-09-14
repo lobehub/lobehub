@@ -323,7 +323,7 @@ describe('ErrorMessageExtra', () => {
     expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
   });
 
-  it('shows a translated fallback without diagnostic details on a shared topic', () => {
+  it('shows the copyable trace ID card without a retry on a shared topic', () => {
     shareContextMock.topicShareId = 'share-1';
 
     render(
@@ -338,8 +338,11 @@ describe('ErrorMessageExtra', () => {
       />,
     );
 
-    expect(screen.getByText('response.500')).toBeInTheDocument();
-    expect(screen.queryByText(/trace-fixture-1/)).not.toBeInTheDocument();
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ showRetry: false, traceId: 'trace-fixture-1' }),
+    );
+    expect(screen.queryByText('dynamic-retry')).not.toBeInTheDocument();
   });
 
   it('keeps the group retry callback on the internal server error UI', () => {
