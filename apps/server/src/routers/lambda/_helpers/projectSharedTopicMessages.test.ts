@@ -114,7 +114,7 @@ describe('projectSharedTopicMessages', () => {
       message('answer-2', { parentId: 'question' }),
     ]);
 
-    expect(flatList.some((item) => item.role === 'compare')).toBe(true);
+    expect(flatList.some((item) => item.columns?.length === 2)).toBe(true);
     expect(JSON.stringify(flatList)).toContain('sensitive upstream diagnostic');
 
     const result = projectSharedTopicMessages([
@@ -123,7 +123,8 @@ describe('projectSharedTopicMessages', () => {
 
     expect(JSON.stringify(result)).not.toContain('sensitive upstream diagnostic');
     expect(
-      result[0].compressedMessages?.find((item) => item.role === 'compare')?.columns?.[0][0].error,
+      result[0].compressedMessages?.find((item) => item.columns?.length === 2)?.columns?.[0][0]
+        .error,
     ).toEqual({
       body: { traceId: 'trace-123' },
       type: ChatErrorType.InternalServerError,
