@@ -1,6 +1,7 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import {
   existsSync as nodeExistsSync,
+  rmSync as nodeRmSync,
   statSync as nodeStatSync,
   watch as nodeWatch,
 } from 'node:fs';
@@ -29,6 +30,7 @@ export function createDevOrchestrator({
   restartDebounceMs = 400,
   spawn = nodeSpawn,
   existsSync = nodeExistsSync,
+  rmSync = nodeRmSync,
   statSync = nodeStatSync,
   watch = nodeWatch,
   checkPort = defaultCheckPort,
@@ -113,6 +115,7 @@ export function createDevOrchestrator({
   }
 
   function start() {
+    rmSync(path.join(desktopRoot, 'dist'), { force: true, recursive: true });
     children.push(
       spawnVite(['--config', 'vite.renderer.config.ts']),
       spawnVite(['build', '--watch', '--mode', 'development', '--config', 'vite.main.config.ts']),
@@ -135,6 +138,9 @@ export function createDevOrchestrator({
     // The two build configs `emptyOutDir` on startup and finish at different times,
     // so wait until the renderer server accepts connections and both bundles exist
     // and have been quiet for a second before launching electron or attaching watchers.
+    // Bundles left over from a previous run look "quiet" too, so ignore anything
+    // written before this run started — otherwise electron boots on the stale dist
+    // right as the watch build empties it.
     const started = Date.now();
     let lastChange = Date.now();
     let lastSignature = '';
@@ -151,7 +157,9 @@ export function createDevOrchestrator({
           return;
         }
         if (!existsSync(MAIN_BUNDLE) || !existsSync(PRELOAD_BUNDLE)) return;
-        const signature = [MAIN_BUNDLE, PRELOAD_BUNDLE].map((f) => statSync(f).mtimeMs).join(':');
+        const mtimes = [MAIN_BUNDLE, PRELOAD_BUNDLE].map((f) => statSync(f).mtimeMs);
+        if (mtimes.some((mtime) => mtime < started)) return;
+        const signature = mtimes.join(':');
         if (signature !== lastSignature) {
           lastSignature = signature;
           lastChange = Date.now();
