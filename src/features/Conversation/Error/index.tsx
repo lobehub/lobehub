@@ -283,7 +283,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // access on top of the workspace-role capability.
     const { canUseResource } = useConversationResourceAccess();
     const canCreate = canCreateContent && canUseResource;
-    const isSharedTopic = useConversationStore((s) => !!s.context.topicShareId);
+    const isSharedTopic = useConversationStore((s) => !!s.context?.topicShareId);
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
     const errorDetails = getErrorDetails(error);
