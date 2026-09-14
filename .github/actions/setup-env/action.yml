@@ -29,7 +29,7 @@ runs:
         bun-version: ${{ inputs.bun-version }}
 
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
         package-manager-cache: ${{ inputs.package-manager-cache }}
