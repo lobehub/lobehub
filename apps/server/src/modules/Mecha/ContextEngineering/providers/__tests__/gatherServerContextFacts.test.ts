@@ -1,34 +1,58 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { gatherServerContextFacts } from '../index';
+import { gatherServerContextFacts, PROVIDER_CONCURRENCY } from '../index';
 import { resolveSandboxVariables } from '../sandboxVariables';
 import type { ServerContextFactInput } from '../types';
 
-const {
-  resolveAgentDocumentFacts,
-  resolveCredsListVariable,
-  resolveTopicReferenceFacts,
-  resolveUserInfoVariables,
-} = vi.hoisted(() => ({
-  resolveAgentDocumentFacts: vi.fn(),
-  resolveCredsListVariable: vi.fn(),
-  resolveTopicReferenceFacts: vi.fn(),
-  resolveUserInfoVariables: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const names = [
+    'resolveAgentBuilderContextFacts',
+    'resolveAgentDocumentFacts',
+    'resolveComposioServicesVariable',
+    'resolveCredsListVariable',
+    'resolveGroupAgentBuilderContextFacts',
+    'resolveLobehubSkillVariables',
+    'resolveOnboardingContextFacts',
+    'resolvePlanTodoFacts',
+    'resolveTopicReferenceFacts',
+    'resolveUserInfoVariables',
+    'resolveWorkspaceContextFacts',
+  ] as const;
+  return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<
+    (typeof names)[number],
+    ReturnType<typeof vi.fn>
+  >;
+});
 
-vi.mock('../agentDocuments', () => ({ resolveAgentDocumentFacts }));
-vi.mock('../credsList', () => ({ resolveCredsListVariable }));
-vi.mock('../topicReferences', () => ({ resolveTopicReferenceFacts }));
-vi.mock('../userInfoVariables', () => ({ resolveUserInfoVariables }));
-vi.mock('../agentBuilderContext', () => ({ resolveAgentBuilderContextFacts: vi.fn() }));
-vi.mock('../groupAgentBuilderContext', () => ({ resolveGroupAgentBuilderContextFacts: vi.fn() }));
-vi.mock('../composioServices', () => ({ resolveComposioServicesVariable: vi.fn(async () => '') }));
-vi.mock('../lobehubSkillVariables', () => ({
-  resolveLobehubSkillVariables: vi.fn(async () => ({ agent_id: 'agt_1', topic_title: 'T' })),
+vi.mock('../agentBuilderContext', () => ({
+  resolveAgentBuilderContextFacts: mocks.resolveAgentBuilderContextFacts,
 }));
-vi.mock('../onboardingContext', () => ({ resolveOnboardingContextFacts: vi.fn() }));
-vi.mock('../planTodo', () => ({ resolvePlanTodoFacts: vi.fn() }));
-vi.mock('../workspaceContext', () => ({ resolveWorkspaceContextFacts: vi.fn() }));
+vi.mock('../agentDocuments', () => ({
+  resolveAgentDocumentFacts: mocks.resolveAgentDocumentFacts,
+}));
+vi.mock('../composioServices', () => ({
+  resolveComposioServicesVariable: mocks.resolveComposioServicesVariable,
+}));
+vi.mock('../credsList', () => ({ resolveCredsListVariable: mocks.resolveCredsListVariable }));
+vi.mock('../groupAgentBuilderContext', () => ({
+  resolveGroupAgentBuilderContextFacts: mocks.resolveGroupAgentBuilderContextFacts,
+}));
+vi.mock('../lobehubSkillVariables', () => ({
+  resolveLobehubSkillVariables: mocks.resolveLobehubSkillVariables,
+}));
+vi.mock('../onboardingContext', () => ({
+  resolveOnboardingContextFacts: mocks.resolveOnboardingContextFacts,
+}));
+vi.mock('../planTodo', () => ({ resolvePlanTodoFacts: mocks.resolvePlanTodoFacts }));
+vi.mock('../topicReferences', () => ({
+  resolveTopicReferenceFacts: mocks.resolveTopicReferenceFacts,
+}));
+vi.mock('../userInfoVariables', () => ({
+  resolveUserInfoVariables: mocks.resolveUserInfoVariables,
+}));
+vi.mock('../workspaceContext', () => ({
+  resolveWorkspaceContextFacts: mocks.resolveWorkspaceContextFacts,
+}));
 
 const input = (overrides: Partial<ServerContextFactInput> = {}): ServerContextFactInput => ({
   ctx: {} as never,
@@ -39,30 +63,39 @@ const input = (overrides: Partial<ServerContextFactInput> = {}): ServerContextFa
 });
 
 describe('gatherServerContextFacts', () => {
-  it('runs the providers concurrently instead of one after another', async () => {
-    const order: string[] = [];
-    const slow = (name: string, ms: number, value: unknown) => async () => {
-      order.push(`${name}:start`);
-      await new Promise((resolve) => setTimeout(resolve, ms));
-      order.push(`${name}:end`);
+  it('overlaps the providers but never runs more than the cap at once', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const slow = (value: unknown) => async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
       return value;
     };
-    resolveAgentDocumentFacts.mockImplementation(slow('docs', 20, [{ id: 'd1' }]));
-    resolveCredsListVariable.mockImplementation(slow('creds', 5, 'creds'));
-    resolveTopicReferenceFacts.mockImplementation(slow('refs', 10, [{ id: 't1' }]));
-    resolveUserInfoVariables.mockResolvedValue({ language: 'zh-CN', username: 'arvin' });
+    for (const mock of Object.values(mocks)) mock.mockImplementation(slow(undefined));
+    mocks.resolveAgentDocumentFacts.mockImplementation(slow([{ id: 'd1' }]));
+    mocks.resolveCredsListVariable.mockImplementation(slow('creds'));
+    mocks.resolveTopicReferenceFacts.mockImplementation(slow([{ id: 't1' }]));
+    mocks.resolveLobehubSkillVariables.mockImplementation(
+      slow({ agent_id: 'agt_1', topic_title: 'T' }),
+    );
+    mocks.resolveUserInfoVariables.mockImplementation(
+      slow({ language: 'zh-CN', username: 'arvin' }),
+    );
 
     const facts = await gatherServerContextFacts(input());
 
-    // Every provider started before the slowest one finished.
-    expect(order.indexOf('creds:start')).toBeLessThan(order.indexOf('docs:end'));
-    expect(order.indexOf('refs:start')).toBeLessThan(order.indexOf('docs:end'));
+    // Eleven slow providers (the sandbox one is real and returns at once),
+    // eight at a time: bounded, but still overlapping.
+    expect(maxInFlight).toBe(PROVIDER_CONCURRENCY);
     expect(facts.agentDocuments).toEqual([{ id: 'd1' }]);
     expect(facts.step.topicReferences).toEqual([{ id: 't1' }]);
     expect(facts.variables).toMatchObject({
       CREDS_LIST: 'creds',
       agent_id: 'agt_1',
       language: 'zh-CN',
+      sandbox_enabled: 'false',
       topic_title: 'T',
       username: 'arvin',
     });
