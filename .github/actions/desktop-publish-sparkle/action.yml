@@ -1,0 +1,154 @@
+name: Desktop Publish Sparkle Appcast
+description: Generate, sign and upload the macOS Sparkle appcast and delta patches for a published release
+
+inputs:
+  channel:
+    description: 'Update channel (canary)'
+    required: true
+  version:
+    description: 'Release version (e.g., 2.1.29-canary.1)'
+    required: true
+  server-url:
+    description: 'Public update server base URL (UPDATE_SERVER_URL)'
+    required: true
+  ed-private-key:
+    description: 'Sparkle EdDSA private key value; empty skips publishing'
+    required: false
+    default: ''
+  release-notes:
+    description: 'Markdown release notes embedded into the appcast item'
+    required: false
+    default: ''
+  delta-bases:
+    description: 'Previous releases to generate direct delta patches from'
+    required: false
+    default: '1'
+  delta-history:
+    description: 'Previous releases kept in the appcast for delta chains (0-32)'
+    required: false
+    default: '6'
+  sparkle-version:
+    description: 'Sparkle release providing generate_appcast and sign_update'
+    required: false
+    default: '2.9.4'
+  sparkle-sha256:
+    description: 'Expected sha256 of the Sparkle release tarball'
+    required: false
+    default: 'ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9'
+  aws-access-key-id:
+    description: 'AWS access key ID'
+    required: true
+  aws-secret-access-key:
+    description: 'AWS secret access key'
+    required: true
+  s3-bucket:
+    description: 'S3 bucket name'
+    required: true
+  s3-region:
+    description: 'S3 region'
+    required: false
+    default: 'us-east-1'
+  s3-endpoint:
+    description: 'Custom S3 endpoint (for R2/MinIO etc.)'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Check Sparkle publishing is configured
+      id: gate
+      shell: bash
+      env:
+        ED_PRIVATE_KEY: ${{ inputs.ed-private-key }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        SERVER_URL: ${{ inputs.server-url }}
+      run: |
+        if [ -z "$ED_PRIVATE_KEY" ] || [ -z "$S3_BUCKET" ] || [ -z "$SERVER_URL" ]; then
+          echo "⏭️ Sparkle publishing skipped: SPARKLE_ED_PRIVATE_KEY, S3 bucket or UPDATE_SERVER_URL not configured"
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Download merged artifacts
+      if: steps.gate.outputs.enabled == 'true'
+      uses: actions/download-artifact@v7
+      with:
+        name: merged-release
+        path: release
+
+    - name: Fetch Sparkle tools
+      if: steps.gate.outputs.enabled == 'true'
+      shell: bash
+      env:
+        SPARKLE_VERSION: ${{ inputs.sparkle-version }}
+        SPARKLE_TARBALL_SHA256: ${{ inputs.sparkle-sha256 }}
+      run: |
+        set -euo pipefail
+        TOOLS_DIR="$RUNNER_TEMP/sparkle-tools"
+        TARBALL="$RUNNER_TEMP/sparkle.tar.xz"
+        curl -sSL --retry 3 -o "$TARBALL" \
+          "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+        echo "${SPARKLE_TARBALL_SHA256}  $TARBALL" | shasum -a 256 -c -
+        mkdir -p "$TOOLS_DIR"
+        tar -xf "$TARBALL" -C "$TOOLS_DIR" bin/
+        chmod +x "$TOOLS_DIR"/bin/*
+        echo "SPARKLE_BIN=$TOOLS_DIR/bin" >> "$GITHUB_ENV"
+
+    - name: Fetch appcast history tooling from electron-sparkle-updater
+      if: steps.gate.outputs.enabled == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        SPEC=$(node -p "require('./apps/desktop/package.json').dependencies['electron-sparkle-updater']")
+        PKG_DIR="$RUNNER_TEMP/electron-sparkle-updater"
+        mkdir -p "$PKG_DIR"
+        cd "$PKG_DIR"
+        TARBALL=$(npm pack "electron-sparkle-updater@${SPEC}" --silent)
+        tar -xzf "$TARBALL" package/native/scripts/appcast-history.py
+        echo "SPARKLE_HISTORY_SCRIPT=$PKG_DIR/package/native/scripts/appcast-history.py" >> "$GITHUB_ENV"
+
+    - name: Generate, sign and upload appcasts (EdDSA key lives only on a RAM disk)
+      if: steps.gate.outputs.enabled == 'true'
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        AWS_REGION: ${{ inputs.s3-region }}
+        SPARKLE_ED_PRIVATE_KEY: ${{ inputs.ed-private-key }}
+        RELEASE_NOTES: ${{ inputs.release-notes }}
+        CHANNEL: ${{ inputs.channel }}
+        VERSION: ${{ inputs.version }}
+        SERVER_URL: ${{ inputs.server-url }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_ENDPOINT: ${{ inputs.s3-endpoint }}
+        DELTA_BASES: ${{ inputs.delta-bases }}
+        DELTA_HISTORY: ${{ inputs.delta-history }}
+      run: |
+        set -euo pipefail
+        DEV="$(hdiutil attach -nomount ram://16384 | awk '{print $1}')"
+        diskutil erasevolume HFS+ SparkleKeyRAM "$DEV" >/dev/null
+        KEY_FILE="/Volumes/SparkleKeyRAM/ed_private_key"
+        printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEY_FILE"
+
+        cleanup() {
+          dd if=/dev/urandom of="$KEY_FILE" bs=1024 count=4 conv=notrunc 2>/dev/null || true
+          rm -f "$KEY_FILE" || true
+          hdiutil detach "$DEV" || true
+        }
+        trap cleanup EXIT
+
+        node apps/desktop/scripts/sparkleAppcast.mjs \
+          --release-dir release \
+          --out "$RUNNER_TEMP/sparkle-appcast" \
+          --channel "$CHANNEL" \
+          --version "$VERSION" \
+          --server-url "$SERVER_URL" \
+          --bucket "$S3_BUCKET" \
+          --endpoint "$S3_ENDPOINT" \
+          --key-file "$KEY_FILE" \
+          --sparkle-bin "$SPARKLE_BIN" \
+          --history-script "$SPARKLE_HISTORY_SCRIPT" \
+          --delta-bases "$DELTA_BASES" \
+          --delta-history "$DELTA_HISTORY"

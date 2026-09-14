@@ -15,6 +15,11 @@ name: Release Desktop Canary
 #   基于最新 stable tag 的 patch+1, postfix 为递增序号
 #   格式: X.Y.(Z+1)-canary.N
 #   例: 当前 tag v2.1.28 → v2.1.29-canary.1, 下次 → v2.1.29-canary.2
+#
+# macOS Sparkle 试点 (缺少任一 secret 时自动跳过，客户端回退 electron-updater):
+#   - SPARKLE_ED_PUBLIC_KEY: 打进 Info.plist 的 SUPublicEDKey
+#   - SPARKLE_ED_PRIVATE_KEY: `generate_keys -x` 导出的 base64 seed，用于签 appcast/delta
+#   发布 {channel}/appcast-{arch}.xml 与 {channel}/{version}/*.delta 到 S3
 # ============================================
 
 on:
@@ -298,6 +303,7 @@ jobs:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          SPARKLE_ED_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -483,6 +489,37 @@ jobs:
           channel: canary
           cloud-ref: ${{ needs.calculate-version.outputs.cloud_ref }}
           version: ${{ needs.calculate-version.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  # ============================================
+  # 发布 Sparkle appcast + delta（macOS canary 试点）
+  # 依赖 publish-s3：appcast 的 enclosure 指向 S3 上已经存在的 zip
+  # ============================================
+  publish-sparkle:
+    needs: [publish-s3, calculate-version]
+    name: Publish Sparkle Appcast
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - uses: ./.github/actions/desktop-publish-sparkle
+        with:
+          channel: canary
+          version: ${{ needs.calculate-version.outputs.version }}
+          server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          ed-private-key: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          release-notes: ${{ needs.calculate-version.outputs.release_notes }}
           aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
           s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
