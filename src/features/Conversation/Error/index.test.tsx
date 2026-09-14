@@ -320,6 +320,23 @@ describe('ErrorMessageExtra', () => {
     expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
   });
 
+  it('shows a translated fallback for a shared error without business features', () => {
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            body: { traceId: 'trace-fixture-1' },
+            type: ChatErrorType.InternalServerError,
+          },
+          id: 'msg-shared-internal-error',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('response.500')).toBeInTheDocument();
+    expect(screen.getByText(/trace-fixture-1/)).toBeInTheDocument();
+  });
+
   it('keeps the group retry callback on the internal server error UI', () => {
     serverConfigMock.enableBusinessFeatures = true;
     const onRegenerate = vi.fn();
