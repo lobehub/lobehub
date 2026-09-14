@@ -38,6 +38,7 @@ export {
 export * from './helpers';
 export { LobeAkashChatAI } from './providers/akashchat';
 export { LobeAntGroupAI } from './providers/antgroup';
+export { LobeApiRouteAI } from './providers/api-route';
 export { LobeAnthropicAI } from './providers/anthropic';
 export * from './providers/anthropic/modelId';
 export { LobeAzureAI } from './providers/azureai';
