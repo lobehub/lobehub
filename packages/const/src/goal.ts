@@ -76,3 +76,15 @@ export const VERIFICATION_ERRORED_ERROR =
  */
 export const VERIFICATION_UNJUDGEABLE_ERROR =
   'Acceptance review could not judge the delivery from evidence alone; the criterion needs a judge that can act on the system.';
+/**
+ * The delivery's own verifiers ran and passed, but the Acceptance review layered
+ * on top of them could not run — a provider outage that outlived the in-place
+ * retry, a reviewer without credentials, an artifact the review model could not
+ * open.
+ *
+ * Deliberately has NO recovery branch. Recovering it like a rejection started a
+ * fresh builder attempt, which re-delivered into the same broken review and spent
+ * the Task's attempt budget without the delivery ever being judged.
+ */
+export const ACCEPTANCE_REVIEW_ERRORED_ERROR =
+  'Acceptance review could not run; the delivery passed its verifiers but was never reviewed.';

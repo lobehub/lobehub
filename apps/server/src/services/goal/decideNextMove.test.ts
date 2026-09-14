@@ -1,4 +1,7 @@
-import { VERIFICATION_UNJUDGEABLE_ERROR } from '@lobechat/const/goal';
+import {
+  ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_UNJUDGEABLE_ERROR,
+} from '@lobechat/const/goal';
 import type { GoalGraphNode, GoalGraphSnapshot, TaskItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
@@ -200,6 +203,15 @@ describe('decideNextMove', () => {
       expect(
         decide(snapshot, {
           frontierTask: task({ error: VERIFICATION_UNJUDGEABLE_ERROR, status: 'paused' }),
+        }),
+      ).toMatchObject({ branch: 'failure_decision', outcome: 'waiting_human' });
+
+      // A review that still could not run after its own retry is a reviewer
+      // problem. Another builder attempt would re-deliver into the same broken
+      // review and spend the attempt budget, so it goes to a person.
+      expect(
+        decide(snapshot, {
+          frontierTask: task({ error: ACCEPTANCE_REVIEW_ERRORED_ERROR, status: 'paused' }),
         }),
       ).toMatchObject({ branch: 'failure_decision', outcome: 'waiting_human' });
     });

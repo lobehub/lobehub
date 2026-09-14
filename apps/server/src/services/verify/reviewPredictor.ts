@@ -18,6 +18,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
+import { resolveModelReadableFrameUrl } from './modelFrames';
 import type { ReviewEvidenceRow } from './reviewEvidence';
 import { formatTextEvidence, TEXT_EVIDENCE_TYPES } from './reviewEvidence';
 import { describeWithheldEvidence } from './reviewInspection';
@@ -359,7 +360,7 @@ export class VerifyReviewPredictorService {
         const file = await this.fileModel.findById(row.fileId!);
         if (!file) return null;
         return {
-          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+          accessUrl: await resolveModelReadableFrameUrl(this.fileService, file),
           description: row.description,
           evidenceId: row.id,
         };

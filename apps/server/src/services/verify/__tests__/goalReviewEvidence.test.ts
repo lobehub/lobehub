@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   file: vi.fn(),
   content: vi.fn(),
   url: vi.fn(),
+  bytes: vi.fn(),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
   VerifyCheckResultModel: vi.fn(function () {
@@ -47,7 +48,11 @@ vi.mock('@/database/models/file', () => ({
 }));
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {
-    return { getFileAccessUrl: mocks.url, getFileContent: mocks.content };
+    return {
+      getFileAccessUrl: mocks.url,
+      getFileByteArray: mocks.bytes,
+      getFileContent: mocks.content,
+    };
   }),
 }));
 vi.mock('@/server/services/aiGeneration', () => ({
@@ -163,6 +168,39 @@ describe('Goal review evidence', () => {
     // The caveat rides on the judged row: "rejected blind" and "rejected having
     // seen everything" are otherwise the same verdict in the agreement stats.
     expect(prediction?.statusReason).toContain('1 more frame(s)');
+  });
+
+  /**
+   * Regression: frames went to the provider as links it had to download. A
+   * provider that could not reach the storage behind them (a bucket on
+   * localhost or a private network) failed every review of the check with
+   * "Error while downloading file", and a Goal Task spent its whole attempt
+   * budget re-delivering into a review that could never open its screenshot.
+   */
+  it('sends a stored frame inline instead of a link the provider must fetch', async () => {
+    mocks.evidence.mockResolvedValue([{ fileId: 'f1', id: 's1', type: 'screenshot' }]);
+    mocks.file.mockResolvedValue({ fileType: 'image/png', id: 'f1', size: 4, url: 'key-f1' });
+    mocks.bytes.mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+
+    await review().predict(params);
+    const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
+    expect(payload).toContain('data:image/png;base64,iVBORw==');
+    expect(mocks.url).not.toHaveBeenCalled();
+  });
+
+  it('links a frame too large to send inline', async () => {
+    mocks.evidence.mockResolvedValue([{ fileId: 'f1', id: 's1', type: 'screenshot' }]);
+    mocks.file.mockResolvedValue({
+      fileType: 'image/png',
+      id: 'f1',
+      size: 50 * 1024 * 1024,
+      url: 'key-f1',
+    });
+    mocks.url.mockResolvedValue('https://x/f1');
+
+    await review().predict(params);
+    expect(JSON.stringify(mocks.generate.mock.calls[0][0].messages)).toContain('https://x/f1');
+    expect(mocks.bytes).not.toHaveBeenCalled();
   });
 
   it('leaves no caveat on a check whose evidence was fully shown', async () => {
