@@ -43,15 +43,8 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
-vi.mock('antd', async (importOriginal) => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  App: {
-    useApp: () => ({
-      message: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
-      modal: { confirm: vi.fn() },
-    }),
-  },
-  ConfigProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tree: ({
     onRightClick,
     onSelect,
@@ -78,6 +71,16 @@ vi.mock('antd', async (importOriginal) => ({
       ))}
     </div>
   ),
+}));
+
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  App: {
+    useApp: () => ({
+      message: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
+      modal: { confirm: vi.fn() },
+    }),
+  },
 }));
 
 vi.mock('antd-style', async (importOriginal) => ({
@@ -156,7 +159,7 @@ vi.mock('../shared/AccordionArrowIcon', () => ({
 }));
 
 vi.mock('../shared/style', () => ({
-  styles: { subtaskTree: 'subtask-tree' },
+  styles: { subtaskTreeTitle: 'subtask-tree-title' },
 }));
 
 vi.mock('./RunSubtasksPreview', () => ({
