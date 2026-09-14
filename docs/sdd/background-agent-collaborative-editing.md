@@ -80,7 +80,8 @@ room persistence worker 负责将已同步的房间状态落库。
 
 `scripts/page-collaboration/server.cjs` 保留协议与连接生命周期，维护单实例的
 `Map<documentId, Y.Doc>`、bootstrap barrier、awareness、心跳和空房间 TTL。正式
-`scripts/page-collaboration/start.ts` 组合会注入 `roomBackend`：Redis backend 负责按
+`scripts/page-collaboration/start.mts` launcher 会将 `start.ts` 组合打成 Node ESM 并注入
+`roomBackend`：Redis backend 负责按
 document/workspace（私有文档再含 user）持有 owner lease、revision、跨实例 update/awareness
 pub/sub、bounded replay store、browser/Agent presence reservation 和 immutable snapshot；数据库 projection 是 Redis snapshot
 过期后的 ACL 校验 bootstrap fallback。没有 Redis 的生产启动会 fail-closed，不能静默退回内存。

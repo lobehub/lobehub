@@ -14,7 +14,7 @@ import {
   createPageCollaborationRoomSnapshotLoader,
   installPageCollaborationYjsSingleton,
   type PageCollaborationCompositionOptions,
-} from './start';
+} from './start.ts';
 
 const require = createRequire(import.meta.url);
 const db = await getTestDB();

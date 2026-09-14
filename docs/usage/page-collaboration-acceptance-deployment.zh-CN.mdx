@@ -2,7 +2,7 @@
 
 本文记录 Page 协同验收环境的可回滚增量发布流程。它适用于只更新前端 SPA 和 `@lobehub/editor` 编译产物、Yjs 服务协议不变的 editor PR 验收；不包含生产发布，也不保存服务器地址、账号或密钥。
 
-> 本分支自身包含 `lobe-yjs-v1` 鉴权、ticket 和持久化 wiring；首次部署或协议升级必须同时部署 `scripts/page-collaboration/start.ts` 及其服务端改动。下文的前端增量切换仅适用于服务端已先完成 v1 部署的后续 editor-only 验收。
+> 本分支自身包含 `lobe-yjs-v1` 鉴权、ticket 和持久化 wiring；首次部署或协议升级必须同时部署 `scripts/page-collaboration/start.mts` 及其服务端改动。该入口会先将 `start.ts` 组合打成 Node ESM，再启动 relay。下文的前端增量切换仅适用于服务端已先完成 v1 部署的后续 editor-only 验收。
 
 > 多实例验收必须使用 `REDIS_URL` 和 `PAGE_COLLABORATION_BACKEND=redis`。开发无 Redis 时只能显式使用 `PAGE_COLLABORATION_BACKEND=memory`；不要把 memory fake backend 当作生产 HA 证据。
 

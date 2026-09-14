@@ -1,8 +1,5 @@
 import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
 
-import * as dotenv from 'dotenv';
-import dotenvExpand from 'dotenv-expand';
 import { sql } from 'drizzle-orm';
 
 import type {
@@ -32,6 +29,8 @@ import type { LobeChatDatabase } from '../../packages/database/src/type';
 import { assertAgentUsableBy } from '../../packages/database/src/utils/agent-access';
 import { type CollaborationRoomScope, createPageCollaborationRoomBackend } from './roomBackend';
 
+export { loadPageCollaborationEnvironment } from './environment.mjs';
+
 const require = createRequire(import.meta.url);
 
 /**
@@ -54,15 +53,6 @@ export const installPageCollaborationYjsSingleton = async (): Promise<void> => {
   if (runtime.__LOBE_PAGE_YJS__ !== yjs) {
     throw new Error('Page collaboration loaded multiple Yjs module identities');
   }
-};
-
-/** Load the same env layers as Next before importing the DB adapter. */
-export const loadPageCollaborationEnvironment = (): void => {
-  const environment = process.env.NODE_ENV || 'development';
-  dotenvExpand.expand(dotenv.config());
-  dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${environment}` }));
-  dotenvExpand.expand(dotenv.config({ override: true, path: '.env.local' }));
-  dotenvExpand.expand(dotenv.config({ override: true, path: `.env.${environment}.local` }));
 };
 
 export interface PageCollaborationCompositionOptions {
@@ -266,7 +256,6 @@ export const createPageCollaborationRoomSnapshotLoader =
   };
 
 export const startPageCollaborationServer = async (): Promise<PageCollaborationServer> => {
-  loadPageCollaborationEnvironment();
   await installPageCollaborationYjsSingleton();
   const { migrateLegacyBlockImagesInYjsDoc } = await import('@lobehub/editor/headless');
   const browserSecret = process.env.DOCUMENT_COLLABORATION_BROWSER_TICKET_SECRET?.trim();
@@ -319,32 +308,3 @@ export const startPageCollaborationServer = async (): Promise<PageCollaborationS
     throw error;
   }
 };
-
-const isMainModule = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
-
-if (isMainModule) {
-  let server: PageCollaborationServer | undefined;
-  let closing = false;
-  const shutdown = async (signal: string) => {
-    if (closing) return;
-    closing = true;
-    try {
-      await server?.close();
-      console.info(`[page-collaboration] closed after ${signal}`);
-      process.exit(0);
-    } catch (error) {
-      console.error('[page-collaboration] shutdown failed', error);
-      process.exit(1);
-    }
-  };
-  process.once('SIGINT', () => void shutdown('SIGINT'));
-  process.once('SIGTERM', () => void shutdown('SIGTERM'));
-  startPageCollaborationServer()
-    .then((started) => {
-      server = started;
-    })
-    .catch((error) => {
-      console.error('[page-collaboration] startup failed', error);
-      process.exitCode = 1;
-    });
-}

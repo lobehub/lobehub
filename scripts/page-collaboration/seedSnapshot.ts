@@ -10,7 +10,7 @@ import {
 } from '../../packages/database/src/models/documentCollaborationState';
 import { documents } from '../../packages/database/src/schemas';
 import type { LobeChatDatabase } from '../../packages/database/src/type';
-import { installPageCollaborationYjsSingleton, loadPageCollaborationEnvironment } from './start';
+import { installPageCollaborationYjsSingleton } from './start.ts';
 
 export interface SeedSnapshotCliOptions {
   apply: boolean;
@@ -218,7 +218,6 @@ export const runSeedSnapshotCli = async (args: string[] = process.argv.slice(2))
     console.info(usage);
     return;
   }
-  loadPageCollaborationEnvironment();
   await installPageCollaborationYjsSingleton();
   const { getServerDB } = await import('../../packages/database/src/core/db-adaptor');
   const db = await getServerDB();

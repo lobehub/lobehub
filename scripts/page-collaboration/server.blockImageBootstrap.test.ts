@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 
 import { createMemoryCollaborationRoomBackend, type MemoryRoomBackendStore } from './roomBackend';
-import { installPageCollaborationYjsSingleton } from './start';
+import { installPageCollaborationYjsSingleton } from './start.ts';
 
 await installPageCollaborationYjsSingleton();
 
