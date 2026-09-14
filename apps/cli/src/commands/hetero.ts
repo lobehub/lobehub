@@ -978,9 +978,6 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   if (serverIngester && sink) {
     operationHeartbeat?.stop();
-    // Renewal runs an hour ahead of expiry, so the token still covers the drain
-    // and the finish receipt below.
-    operationTokenRenewal?.stop();
     try {
       await serverIngester.drain();
     } catch (err) {
@@ -1049,6 +1046,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
       log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }
   }
+  // Only now: the drain and the finish receipt above both authenticate with the
+  // operation token, and either can sit in retries long enough for it to expire.
+  operationTokenRenewal?.stop();
 
   // Tear down the AskUserQuestion MCP: stop polling, cancel any in-flight
   // pending (→ CC's tool returns cleanly), close the server, drop the temp
