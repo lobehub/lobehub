@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { executeToolWithRetry } from '@lobechat/agent-runtime';
+import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -23,6 +25,209 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  it('keeps a failed command HTTP status as command output', async () => {
+    const output = 'curl: (22) The requested URL returned error: 403';
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: output, success: false }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'runCommand',
+        arguments: '{}',
+        id: 'http-command',
+        identifier: 'lobe-cloud-sandbox',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.content).toBe(output);
+    expect(result.error).not.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it.each(['returned', 'thrown'])(
+    'retries a read-only sandbox %s network failure',
+    async (mode) => {
+      const error = { code: 'SERVICE_UNAVAILABLE', message: 'Network error', status: 503 };
+      const call =
+        mode === 'returned'
+          ? vi
+              .fn()
+              .mockResolvedValueOnce({ error, result: null, success: false })
+              .mockResolvedValue({ result: { content: 'ok' }, success: true })
+          : vi
+              .fn()
+              .mockRejectedValueOnce(Object.assign(new Error(error.message), error))
+              .mockResolvedValue({ result: { content: 'ok' }, success: true });
+      const runtime = new CloudSandboxExecutionRuntime({
+        callTool: call,
+        exportAndUploadFile: vi.fn(),
+      });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: () => runtime.readFile({ path: '/page.html' }) } as any,
+        mcpService: {} as any,
+      });
+      const { attempts, result } = await executeToolWithRetry(
+        () =>
+          service.executeTool(
+            {
+              apiName: 'readFile',
+              arguments: '{}',
+              id: 'read-retry',
+              identifier: 'lobe-cloud-sandbox',
+              type: 'builtin',
+            },
+            { toolManifestMap: {} },
+          ),
+        { maxRetries: 2 },
+      );
+
+      expect(result.success).toBe(true);
+      expect(attempts).toBe(2);
+      expect(call).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  describe.each(['writeFile', 'runCommand', 'executeCode', 'exportFile'] as const)(
+    'non-retryable sandbox %s failures',
+    (api) => {
+      it.each(['returned', 'thrown'])(
+        'does not repeat side effects after a %s network error',
+        async (mode) => {
+          const error = {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Network error after execution',
+            status: 503,
+          };
+          const call =
+            mode === 'returned'
+              ? vi
+                  .fn()
+                  .mockResolvedValue({ error, result: null, filename: 'page.html', success: false })
+              : vi.fn().mockRejectedValue(Object.assign(new Error(error.message), error));
+          const runtime = new CloudSandboxExecutionRuntime({
+            callTool: call,
+            exportAndUploadFile: call,
+          });
+          const execute = () =>
+            api === 'writeFile'
+              ? runtime.writeFile({ content: 'content', path: '/page.html' })
+              : api === 'runCommand'
+                ? runtime.runCommand({ command: 'echo effect' })
+                : api === 'executeCode'
+                  ? runtime.executeCode({ code: 'print("effect")' })
+                  : runtime.exportFile({ path: '/page.html' });
+          const service = new ToolExecutionService({
+            builtinToolsExecutor: { execute } as any,
+            mcpService: {} as any,
+          });
+          const { attempts, result } = await executeToolWithRetry(
+            () =>
+              service.executeTool(
+                {
+                  apiName: api,
+                  arguments: '{}',
+                  id: 'side-effect',
+                  identifier: 'lobe-cloud-sandbox',
+                  type: 'builtin',
+                },
+                { toolManifestMap: {} },
+              ),
+            { maxRetries: 2 },
+          );
+
+          expect(result.success).toBe(false);
+          expect(result.error).toMatchObject({ kind: 'stop', message: error.message });
+          expect(attempts).toBe(1);
+          expect(call).toHaveBeenCalledTimes(1);
+        },
+      );
+    },
+  );
+
+  it.each([
+    { identifier: 'lobe-cloud-sandbox', error: { message: 'Forbidden' } },
+    { identifier: 'linear', error: { code: 'LOBEHUB_SKILL_ERROR', message: 'Forbidden' } },
+  ])('makes a bare denial actionable for $identifier', async ({ identifier, error }) => {
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: 'Forbidden', error, success: false }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      { apiName: 'writeFile', arguments: '{}', id: 'denied-call', identifier, type: 'builtin' },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(result.content).error).toMatchObject({
+      code: 'FORBIDDEN',
+      hint: expect.stringContaining('Do not retry'),
+      kind: 'stop',
+      message: 'Forbidden',
+    });
+    expect(result.error).toMatchObject({ code: 'FORBIDDEN', kind: 'stop' });
+    expect(result.content).not.toContain('matched_pattern');
+  });
+
+  it('preserves upstream refusal details in the model-visible content', async () => {
+    const error = {
+      code: 'PERMISSION_DENIED',
+      hint: 'Ask the workspace administrator to grant access.',
+      message: 'Access denied',
+      status: 403,
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockRejectedValue(Object.assign(new Error(error.message), error)),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'writeFile',
+        arguments: '{}',
+        id: 'denied-call',
+        identifier: 'tool',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(JSON.parse(result.content).error).toMatchObject({ ...error, kind: 'stop' });
+    expect(result.error).toMatchObject(error);
+  });
+
+  it('does not reinterpret successful content containing Forbidden as a denial', async () => {
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: 'Forbidden', success: true }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'readFile',
+        arguments: '{}',
+        id: 'read-call',
+        identifier: 'tool',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.content).toBe('Forbidden');
+    expect(result.success).toBe(true);
+  });
+
   it('can skip low-level result truncation for AgentRuntime archival', async () => {
     const builtinToolsExecutor = {
       execute: vi.fn().mockResolvedValue({

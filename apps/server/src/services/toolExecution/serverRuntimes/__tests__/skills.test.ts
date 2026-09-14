@@ -147,6 +147,76 @@ vi.mock('../resolveWorkspaceScope', () => ({
 }));
 
 describe('skillsRuntime', () => {
+  it.each(
+    (['runCommand', 'execScript', 'exportFile'] as const).flatMap((api) =>
+      (['returned', 'thrown', 'stderr'] as const)
+        .filter((mode) => api !== 'exportFile' || mode !== 'stderr')
+        .map((mode) => ({ api, mode })),
+    ),
+  )(
+    'preserves sandbox $mode errors through the $api execution pipeline',
+    async ({ api, mode }) => {
+      const { skillsRuntime } = await import('../skills');
+      const { ToolExecutionService } = await import('../../index');
+      const error = { name: 'MarketAPIError', message: 'Forbidden' };
+      mocks.sandboxService.callTool.mockResolvedValue({ error, result: null, success: false });
+      mocks.sandboxService.exportAndUploadFile.mockResolvedValue({
+        error,
+        filename: 'page.html',
+        success: false,
+      });
+      if (mode === 'thrown') {
+        const thrown = Object.assign(new Error('Forbidden'), { status: 403 });
+        mocks.sandboxService.callTool.mockRejectedValue(thrown);
+        mocks.sandboxService.exportAndUploadFile.mockRejectedValue(thrown);
+      } else if (mode === 'stderr') {
+        mocks.sandboxService.callTool.mockResolvedValue({
+          success: true,
+          result: { success: false, exitCode: 1, stdout: '', stderr: 'Forbidden' },
+        });
+      }
+      const runtime = await skillsRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const execute = () =>
+        api === 'exportFile'
+          ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
+          : runtime[api]({ command: 'echo example', description: 'Example' });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute } as never,
+        mcpService: {} as never,
+      });
+      const result = await service.executeTool(
+        {
+          apiName: api,
+          arguments: '{}',
+          id: 'refusal',
+          identifier: 'lobe-skills',
+          type: 'builtin',
+        },
+        { toolManifestMap: {} },
+      );
+      expect(result.success).toBe(false);
+      if (mode === 'stderr') {
+        expect(result.content).toContain('Forbidden');
+        expect(result.content).not.toContain('Do not retry');
+        expect(result.error?.code).not.toBe('FORBIDDEN');
+        return;
+      }
+      expect(JSON.parse(result.content).error).toMatchObject({
+        code: 'FORBIDDEN',
+        kind: 'stop',
+        message: 'Forbidden',
+        hint: expect.stringContaining('Do not retry'),
+      });
+      expect(result.error).toMatchObject({ code: 'FORBIDDEN', kind: 'stop' });
+    },
+    30_000,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
 

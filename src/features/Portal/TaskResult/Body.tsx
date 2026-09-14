@@ -8,15 +8,20 @@ import TaskAcceptance from '@/features/AgentTasks/AgentTaskDetail/TaskAcceptance
 import TaskActivities from '@/features/AgentTasks/AgentTaskDetail/TaskActivities';
 import TaskArtifacts from '@/features/AgentTasks/AgentTaskDetail/TaskArtifacts';
 import TaskDetailSkeleton from '@/features/AgentTasks/AgentTaskDetail/TaskDetailSkeleton';
-import TopicChatDrawer from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
+import TopicChatDrawer, {
+  TopicChatDrawerBody,
+} from '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer';
 import { useActiveTaskResult } from '@/features/AgentTasks/AgentTaskDetail/useActiveTaskResult';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+
+import { useLiveRun } from './useLiveRun';
 
 const Body = memo(() => {
   const { t } = useTranslation('chat');
   const taskId = useChatStore(chatPortalSelectors.taskResultId);
   const { error, isInitialLoading, isNotFound, onRetry } = useActiveTaskResult(taskId);
+  const liveRun = useLiveRun();
 
   if (!taskId) return null;
   if (error)
@@ -29,6 +34,21 @@ const Body = memo(() => {
     return (
       <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflowY: 'auto' }}>
         <NotFound desc={t('taskDetail.notFound.desc')} title={t('taskDetail.notFound.title')} />
+      </Flexbox>
+    );
+
+  // While the run is in flight there is no report yet — the thing to read is
+  // the run itself. Stream its conversation in place; the task detail polls
+  // while the run is live, so the panel turns into the report once it settles.
+  if (!isInitialLoading && liveRun)
+    return (
+      <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+        <TopicChatDrawerBody
+          agentId={liveRun.agentId}
+          key={liveRun.topicId}
+          runningOperation={liveRun.activity.runningOperation}
+          topicId={liveRun.topicId}
+        />
       </Flexbox>
     );
 

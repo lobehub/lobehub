@@ -25,7 +25,7 @@ import {
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
-import { classifyToolError } from './errorClassification';
+import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
 import {
   type ToolExecutionContext,
@@ -76,7 +76,9 @@ const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
     return {
       ...plainError,
       code: (plainError.code as string | undefined) || normalized.code,
-      kind: normalized.kind,
+      // A runtime may know that side effects already happened; retry keywords
+      // must not override its explicit refusal to replay the operation.
+      kind: plainError.kind === 'stop' ? 'stop' : normalized.kind,
       message: clampErrorMessage(plainError.message as string | undefined) || message,
     };
   }
@@ -147,6 +149,13 @@ export class ToolExecutionService {
 
       const executionTime = Date.now() - startTime;
 
+      const denial = !data.success
+        ? getToolAccessDeniedError(data.errorData ?? data.error, data.content)
+        : undefined;
+      if (denial) {
+        data = { ...data, content: JSON.stringify({ error: denial }), error: denial };
+      }
+
       // Truncate result content to prevent context overflow
       // Use agent-specific config if provided, otherwise use default
       const truncatedContent = context.skipResultTruncation
@@ -186,10 +195,12 @@ export class ToolExecutionService {
       const executionTime = Date.now() - startTime;
       log('Error executing tool %s:%s: %O', identifier, apiName, error);
       const errorMessage = (error as Error).message;
+      const denial = getToolAccessDeniedError(error, errorMessage);
+      const content = denial ? JSON.stringify({ error: denial }) : errorMessage;
 
       return {
-        content: context.skipResultTruncation ? errorMessage : truncateToolResult(errorMessage),
-        error: normalizeExecutionError(error, errorMessage),
+        content: context.skipResultTruncation ? content : truncateToolResult(content),
+        error: denial || normalizeExecutionError(error, errorMessage),
         executionTime,
         success: false,
       };

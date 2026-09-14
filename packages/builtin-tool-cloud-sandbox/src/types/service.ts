@@ -1,10 +1,12 @@
+import type { ServiceResult } from '@lobechat/tool-runtime';
+
 // ==================== Sandbox Service Interface ====================
 
 /**
  * Result of calling a sandbox tool
  */
 export interface SandboxCallToolResult {
-  error?: { message: string; name?: string };
+  error?: ServiceResult['error'];
   result: any;
   sessionExpiredAndRecreated?: boolean;
   success: boolean;
@@ -14,7 +16,7 @@ export interface SandboxCallToolResult {
  * Result of exporting and uploading a file from sandbox
  */
 export interface SandboxExportFileResult {
-  error?: { message: string; name?: string };
+  error?: ServiceResult['error'];
   fileId?: string;
   filename: string;
   mimeType?: string;
