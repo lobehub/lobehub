@@ -73,7 +73,7 @@ services:
       - .env
 
   rustfs-init:
-    image: minio/mc:latest
+    image: rustfs/rc:latest
     container_name: lobe-rustfs-init
     depends_on:
       rustfs:
@@ -84,12 +84,11 @@ services:
     command: -c '
         set -eux;
         echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}";
-        mc --version;
-        mc alias set rustfs "http://network-service:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
-        mc ls rustfs || true;
-        mc mb "rustfs/lobe" --ignore-existing;
-        mc admin info rustfs || true;
-        mc anonymous set-json "/bucket.config.json" "rustfs/lobe";
+        rc --version;
+        rc alias set rustfs "http://network-service:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
+        rc ls rustfs || true;
+        rc mb "rustfs/lobe" --ignore-existing;
+        rc anonymous set-json "/bucket.config.json" "rustfs/lobe";
       '
     restart: 'no'
     networks:
