@@ -37,6 +37,32 @@ const envExamples = ['.env.example', '.env.zh-CN.example'].map((file) =>
 
 const ELASTICSEARCH_PROFILES = ['elasticsearch', 'elasticsearch-reindex', 'elasticsearch-sync'];
 
+describe.each(['deploy', 'dev'])('%s docker-compose rustfs-init', (directory) => {
+  const { 'rustfs-init': rustfsInit } = (
+    parse(
+      readFileSync(
+        path.resolve(import.meta.dirname, '../docker-compose', directory, 'docker-compose.yml'),
+        'utf8',
+      ),
+    ) as { services: Record<string, { command: string; entrypoint: string; image: string }> }
+  ).services;
+
+  it('initializes the bucket with the RustFS client instead of the removed minio/mc image', () => {
+    // minio/mc was removed from Docker Hub, so pulling it fails and blocks the whole stack.
+    expect(rustfsInit.image).toBe('rustfs/rc:latest');
+    expect(rustfsInit.entrypoint).toBe('/bin/sh');
+    expect(rustfsInit.command).not.toMatch(/\bmc\s/);
+  });
+
+  it('creates the lobe bucket and applies the anonymous read policy', () => {
+    expect(rustfsInit.command).toMatch(/rc alias set rustfs "http:\/\/[\w-]+:9000"/);
+    expect(rustfsInit.command).toContain('rc mb "rustfs/lobe" --ignore-existing;');
+    expect(rustfsInit.command).toContain(
+      'rc anonymous set-json "/bucket.config.json" "rustfs/lobe";',
+    );
+  });
+});
+
 describe('deploy docker-compose optional Elasticsearch', () => {
   const {
     elasticsearch,
