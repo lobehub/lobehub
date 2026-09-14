@@ -84,13 +84,20 @@ export interface AgentLoopResult {
  * stop would end every loop before it began.
  */
 export const resolveTerminalReason = (state: AgentState): AgentLoopStopReason | undefined => {
-  if (state.status === 'done') return 'done';
   if (state.status === 'error') return 'error';
   if (state.status === 'interrupted') return 'interrupted';
   if (isParkedStatus(state.status)) return 'parked';
 
-  // Exceeding the budget only stops a run that asked to be stopped; other
-  // policies let it continue and settle up elsewhere.
+  // Checked BEFORE `done`, because a `stop` policy expresses itself AS `done`:
+  // `handleCostLimitExceeded` sets that status and clears the next context.
+  // Asking about the status first reported every budget exhaustion as an
+  // ordinary completion — losing exactly the distinction this reason exists to
+  // carry, and only when driving the real `AgentRuntime.step` rather than a
+  // hand-built state.
+  //
+  // Only a `stop` policy ends the run here: `interrupt` surfaces as
+  // `interrupted` above, and `warn` lets the run continue and settle up
+  // elsewhere.
   const costLimit = state.costLimit;
   if (
     costLimit &&
@@ -98,6 +105,8 @@ export const resolveTerminalReason = (state: AgentState): AgentLoopStopReason | 
     costLimit.onExceeded === 'stop'
   )
     return 'cost_limit';
+
+  if (state.status === 'done') return 'done';
 
   return undefined;
 };

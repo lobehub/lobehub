@@ -42,8 +42,8 @@ describe('LocalMessageStore query scoping', () => {
 
   it('keeps delegated-agent replies in a concrete-topic read', () => {
     const store = new LocalMessageStore();
-    store.insert(base);
-    store.insert({ ...base, agentId: 'delegate-9', content: 'callAgent reply' });
+    store.insert(base, 'id-a');
+    store.insert({ ...base, agentId: 'delegate-9', content: 'callAgent reply' }, 'id-b');
 
     // A concrete topic IS the conversation boundary and may legitimately hold
     // messages from several agents. Scoping a topic read by agentId deletes
@@ -71,8 +71,8 @@ describe('LocalMessageStore query scoping', () => {
 
   it('returns a thread together with its parent messages', () => {
     const store = new LocalMessageStore();
-    const parent = store.insert({ ...base, content: 'the message the thread hangs off' });
-    store.insert({ ...base, content: 'in thread', threadId: 'thread-1' });
+    const parent = store.insert({ ...base, content: 'the message the thread hangs off' }, 'id-a');
+    store.insert({ ...base, content: 'in thread', threadId: 'thread-1' }, 'id-b');
     store.registerThreadParents('thread-1', [parent.id]);
 
     // The server resolves the thread's source message and returns it alongside
@@ -96,16 +96,108 @@ describe('LocalMessageStore query scoping', () => {
     ).toEqual(['in thread']);
   });
 
-  it('orders by creation, keeping insertion order within the same millisecond', () => {
+  it('orders a same-millisecond batch by creation, not by random id', () => {
     const store = new LocalMessageStore();
-    for (const content of ['a', 'b', 'c', 'd']) store.insert({ ...base, content });
+    // Ids descend while creation ascends — if ordering fell back to the id
+    // tie-break, these would come out reversed.
+    const created = ['c', 'b', 'a'].map((id, index) =>
+      store.insert({ ...base, content: `m${index}` }, `id-${id}`),
+    );
 
-    expect(store.query({ agentId: 'agent-1', topicId: 'topic-1' }).map((m) => m.content)).toEqual([
-      'a',
-      'b',
-      'c',
-      'd',
+    // `Date.now()` has millisecond resolution, so a parallel tool batch stamps
+    // rows identically. The server assigns distinct timestamps in delivery
+    // order, so a random tie-break would make the live run read one order and
+    // a restart read another.
+    expect(store.query({ topicId: 'topic-1' }).map((m) => m.content)).toEqual([
+      'm0',
+      'm1',
+      'm2',
     ]);
+    expect(new Set(created.map((m) => m.createdAt)).size).toBe(3);
+  });
+
+  it('breaks a genuine timestamp tie by id', () => {
+    const store = new LocalMessageStore();
+    // Hydrated rows carry SERVER timestamps, which really can collide — this is
+    // what the id tie-break is for now that locally created rows get distinct,
+    // monotonic ones.
+    store.hydrate([
+      { ...base, content: 'second', createdAt: 500, id: 'id-b' },
+      { ...base, content: 'first', createdAt: 500, id: 'id-a' },
+    ] as never);
+
+    expect(store.query({ topicId: 'topic-1' }).map((m) => m.content)).toEqual(['first', 'second']);
+  });
+
+  it('survives a rehydration in the same order', () => {
+    const first = new LocalMessageStore();
+    first.insert({ ...base, content: 'b' }, 'id-b');
+    first.insert({ ...base, content: 'a' }, 'id-a');
+    const before = first.query({ topicId: 'topic-1' });
+
+    // Hydrated in the opposite order, as a fresh process reading them back.
+    const second = new LocalMessageStore();
+    second.hydrate([...before].reverse());
+
+    expect(second.query({ topicId: 'topic-1' }).map((m) => m.id)).toEqual(
+      before.map((m) => m.id),
+    );
+  });
+});
+
+describe('LocalMessageStore pagination', () => {
+  const fill = (store: LocalMessageStore, count: number) => {
+    for (let index = 0; index < count; index++) {
+      // Zero-padded so id order matches creation order.
+      store.insert({ ...base, content: `m${index}` }, `id-${String(index).padStart(4, '0')}`);
+    }
+  };
+
+  it('returns the newest page, not everything, at the canonical default', () => {
+    const store = new LocalMessageStore();
+    fill(store, 1200);
+
+    const messages = store.query({ topicId: 'topic-1' });
+
+    // `MessageModel.query` defaults to the newest 1,000 rows. Returning all
+    // 1,200 would give the device a wider context than the server ever has,
+    // and grow every per-step re-query without bound.
+    expect(messages).toHaveLength(1000);
+    expect(messages[0].content).toBe('m200');
+    expect(messages.at(-1)?.content).toBe('m1199');
+  });
+
+  it('honours an explicit page size and offset from the newest end', () => {
+    const store = new LocalMessageStore();
+    fill(store, 10);
+
+    expect(store.query({ pageSize: 3, topicId: 'topic-1' }).map((m) => m.content)).toEqual([
+      'm7',
+      'm8',
+      'm9',
+    ]);
+    // `current: 1` is the page before the newest one.
+    expect(
+      store.query({ current: 1, pageSize: 3, topicId: 'topic-1' }).map((m) => m.content),
+    ).toEqual(['m4', 'm5', 'm6']);
+  });
+
+  it('keeps all() outside the page limit', () => {
+    const store = new LocalMessageStore();
+    fill(store, 1200);
+
+    // `all()` seeds a run from prior history. Routing it through the paged
+    // query would hand the caller the newest 1,000 while its name and doc
+    // promise everything — a silent truncation at exactly the wrong moment.
+    expect(store.all()).toHaveLength(1200);
+    expect(store.query({ topicId: 'topic-1' })).toHaveLength(1000);
+  });
+
+  it('returns nothing past the last page', () => {
+    const store = new LocalMessageStore();
+    fill(store, 5);
+
+    expect(store.query({ current: 5, pageSize: 3, topicId: 'topic-1' })).toEqual([]);
   });
 });
 

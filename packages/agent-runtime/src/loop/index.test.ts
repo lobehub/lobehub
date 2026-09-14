@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentRuntimeContext, AgentState } from '../types';
+import { AgentRuntime } from '../core/runtime';
+import type {
+  Agent,
+  AgentRuntimeContext,
+  AgentState,
+  Cost,
+  CostCalculationContext,
+  Usage,
+} from '../types';
 import { type AgentLoopStep, resolveStopReason, runAgentLoop } from './index';
 
 const createState = (overrides: Partial<AgentState> = {}): AgentState =>
@@ -55,6 +63,70 @@ describe('resolveStopReason', () => {
     // `warn` and `interrupt` settle up elsewhere; the loop keeps going.
     expect(resolveStopReason(exceeded('warn'), context())).toBeUndefined();
     expect(resolveStopReason(exceeded('interrupt'), context())).toBeUndefined();
+  });
+});
+
+/**
+ * Drives the REAL `AgentRuntime.step` rather than a hand-built state, which is
+ * the only way this case shows up: a `stop` cost policy reports itself through
+ * `status: 'done'`, so a fabricated `running` state with an over-budget cost
+ * never exercises the ordering that matters.
+ */
+describe('runAgentLoop over the real runtime', () => {
+  class OverBudgetAgent implements Agent {
+    async runner(_context: AgentRuntimeContext, state: AgentState) {
+      return { payload: { messages: state.messages }, type: 'call_llm' as const };
+    }
+
+    calculateUsage(_operationType: string, _operationResult: unknown, previousUsage: Usage): Usage {
+      const usage = structuredClone(previousUsage);
+      usage.llm.tokens.total += 1000;
+      return usage;
+    }
+
+    calculateCost(context: CostCalculationContext): Cost {
+      const cost = structuredClone(context.previousCost || ({} as Cost));
+      cost.calculatedAt = new Date().toISOString();
+      cost.currency = 'USD';
+      cost.total = 10;
+      return cost;
+    }
+
+    modelRuntime = async function* () {
+      yield { content: 'test response' };
+    };
+  }
+
+  const runOverBudget = async (onExceeded: 'stop' | 'interrupt') => {
+    const runtime = new AgentRuntime(new OverBudgetAgent());
+    const state = AgentRuntime.createInitialState({
+      costLimit: { currency: 'USD', maxTotalCost: 5, onExceeded },
+      messages: [{ content: 'Hello', role: 'user' }],
+      operationId: 'op-cost',
+    });
+
+    return runAgentLoop({
+      initialContext: context(),
+      state,
+      step: async ({ context: ctx, state: currentState }) => {
+        const result = await runtime.step(currentState, ctx);
+        return { nextContext: result.nextContext, state: result.newState };
+      },
+    });
+  };
+
+  it('reports an exhausted budget as cost_limit, not as an ordinary completion', async () => {
+    const result = await runOverBudget('stop');
+
+    // The runtime signals a `stop` policy by setting `status: 'done'`. Reading
+    // the status first would call this a normal finish and throw away the
+    // budget reason that hosts forward to completion hooks and signals.
+    expect(result.reason).toBe('cost_limit');
+    expect(result.state.status).toBe('done');
+  });
+
+  it('still reports an interrupt policy as interrupted', async () => {
+    expect((await runOverBudget('interrupt')).reason).toBe('interrupted');
   });
 });
 
