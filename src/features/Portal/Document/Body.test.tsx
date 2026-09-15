@@ -86,25 +86,14 @@ vi.mock('@/features/FloatingChatPanel', () => ({
   default: () => <div data-testid="floating-chat-panel" />,
 }));
 
-const docChatTopicState = vi.hoisted(() => ({
-  current: {
-    error: undefined as Error | undefined,
-    isLoading: false,
-    topicId: 'doc-topic-1' as string | undefined,
-  },
+vi.mock('./FooterActions', () => ({
+  default: () => <div data-testid="footer-actions" />,
 }));
-// Record the params so a test can assert the topic lookup never fires — passing
-// `undefined` is what keeps `getOrCreateChatTopic` from hitting the network.
-const docChatTopicCalls = vi.hoisted(() => ({ current: [] as Record<string, unknown>[] }));
+// The body no longer resolves a doc-anchored topic itself — the footer's chat
+// entry calls `getOrCreateChatTopic` on demand. Keep the mock registered so the
+// historical test comments below still name the right constraint owner.
 vi.mock('@/features/FloatingChatPanel/useDocumentChatTopic', () => ({
-  // Mirror the real hook's `enabled` gate: with either id missing it never fetches,
-  // so it can only ever return `topicId: undefined`.
-  useDocumentChatTopic: (params: Record<string, unknown>) => {
-    docChatTopicCalls.current.push(params);
-    if (!params.agentId || !params.documentId)
-      return { error: undefined, isLoading: false, topicId: undefined };
-    return docChatTopicState.current;
-  },
+  useDocumentChatTopic: () => ({ error: undefined, isLoading: false, topicId: undefined }),
 }));
 
 const mockChatState = vi.hoisted(() => ({
@@ -169,12 +158,6 @@ describe('DocumentBody', () => {
     mockChatState.current.portalStack[0].agentDocumentId = 'agent-document-1';
     mockDocumentMeta.current = { content: '', filename: 'doc.md' };
     mockUpdateDocument.mockClear();
-    docChatTopicCalls.current = [];
-    docChatTopicState.current = {
-      error: undefined,
-      isLoading: false,
-      topicId: 'doc-topic-1',
-    };
     vi.useFakeTimers();
   });
 
@@ -182,51 +165,41 @@ describe('DocumentBody', () => {
     vi.useRealTimers();
   });
 
-  it('renders FloatingChatPanel once the doc topic resolves', () => {
+  it('renders the footer actions for an agent document', () => {
     render(<DocumentBody />);
 
-    expect(screen.getByTestId('floating-chat-panel')).toBeDefined();
+    expect(screen.getByTestId('footer-actions')).toBeDefined();
   });
 
-  it('holds the panel until the doc-anchored topic id resolves', () => {
-    docChatTopicState.current = { error: undefined, isLoading: true, topicId: undefined };
-
-    render(<DocumentBody />);
-
-    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
-  });
-
-  it('does not render FloatingChatPanel without an active agent', () => {
-    mockAgentState.current.activeAgentId = undefined;
-
-    render(<DocumentBody />);
-
-    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
-  });
-
-  // A plain notebook document is opened as `openDocument(document.id)` — no
-  // agentDocumentId. It has no `agent_documents` row, so `getOrCreateChatTopic`
-  // would throw NOT_FOUND. The panel must not render *and* must not look up a topic.
-  it('does not render FloatingChatPanel for a plain document with no agentDocumentId', () => {
+  it('holds the footer until the document is agent-bound', () => {
+    // The useDocumentChatTopic hook is not mounted by the body anymore — the
+    // footer's own chat entry resolves the topic on demand. The comment above
+    // the original panel tests is kept for history: the NOT_FOUND constraint
+    // now lives in ./FooterActions instead of the body's render gate.
     mockChatState.current.portalStack[0].agentDocumentId = undefined;
 
     render(<DocumentBody />);
 
-    expect(screen.queryByTestId('floating-chat-panel')).toBeNull();
-    expect(docChatTopicCalls.current.length).toBeGreaterThan(0);
-    for (const call of docChatTopicCalls.current) {
-      expect(call.agentId).toBeUndefined();
-      expect(call.documentId).toBeUndefined();
-    }
+    expect(screen.queryByTestId('footer-actions')).toBeNull();
   });
 
-  it('looks up the doc topic for an agent document', () => {
+  it('does not render footer actions without an active agent', () => {
+    mockAgentState.current.activeAgentId = undefined;
+
     render(<DocumentBody />);
 
-    expect(docChatTopicCalls.current.at(-1)).toMatchObject({
-      agentId: 'agent-1',
-      documentId: 'document-1',
-    });
+    expect(screen.queryByTestId('footer-actions')).toBeNull();
+  });
+
+  // A plain notebook document is opened as `openDocument(document.id)` — no
+  // agentDocumentId. It has no `agent_documents` row, so the footer's
+  // `getOrCreateChatTopic` would throw NOT_FOUND. The footer must not render.
+  it('does not render footer actions for a plain document with no agentDocumentId', () => {
+    mockChatState.current.portalStack[0].agentDocumentId = undefined;
+
+    render(<DocumentBody />);
+
+    expect(screen.queryByTestId('footer-actions')).toBeNull();
   });
 
   it('renders highlight editor for non-markdown files', () => {
