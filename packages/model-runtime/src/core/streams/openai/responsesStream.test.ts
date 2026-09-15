@@ -891,6 +891,96 @@ describe('OpenAIResponsesStream', () => {
     expect(chunks.some((chunk) => chunk.includes('unscoped-encrypted'))).toBe(false);
   });
 
+  it('should surface response.failed as an error while preserving usage', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        response: {
+          error: { code: 'server_error', message: 'Upstream generation failed' },
+          id: 'resp_failed',
+          status: 'failed',
+          usage: { input_tokens: 10, output_tokens: 0, total_tokens: 10 },
+        },
+        sequence_number: 1,
+        type: 'response.failed',
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+    const usageIndex = chunks.findIndex((chunk) => chunk.includes('event: usage'));
+    const errorIndex = chunks.findIndex((chunk) => chunk.includes('event: error'));
+
+    expect(usageIndex).toBeGreaterThan(-1);
+    expect(errorIndex).toBeGreaterThan(usageIndex);
+    expect(chunks.some((chunk) => chunk.includes('Upstream generation failed'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes(AgentRuntimeErrorType.ProviderBizError))).toBe(
+      true,
+    );
+  });
+
+  it('should surface Responses error events as protocol errors', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        code: 'rate_limit_exceeded',
+        message: 'Rate limit exceeded',
+        param: null,
+        sequence_number: 1,
+        type: 'error',
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+
+    expect(chunks.some((chunk) => chunk.includes('event: error'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes('Rate limit exceeded'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes(AgentRuntimeErrorType.ProviderBizError))).toBe(
+      true,
+    );
+  });
+
+  it('should map max-output Responses incompletion to max_tokens and preserve usage', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        response: {
+          id: 'resp_incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+          status: 'incomplete',
+          usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 },
+        },
+        sequence_number: 1,
+        type: 'response.incomplete',
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+
+    expect(chunks.some((chunk) => chunk.includes('event: stop'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes('max_tokens'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes('event: usage'))).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes('event: error'))).toBe(false);
+  });
+
+  it('should surface content-filter Responses incompletion as a policy error', async () => {
+    const mockOpenAIStream = createReadableStream([
+      {
+        response: {
+          id: 'resp_content_filter',
+          incomplete_details: { reason: 'content_filter' },
+          status: 'incomplete',
+        },
+        sequence_number: 1,
+        type: 'response.incomplete',
+      },
+    ]);
+
+    const chunks = await readStreamChunk(OpenAIResponsesStream(mockOpenAIStream));
+
+    expect(chunks.some((chunk) => chunk.includes('event: error'))).toBe(true);
+    expect(
+      chunks.some((chunk) => chunk.includes(AgentRuntimeErrorType.ProviderContentPolicyViolation)),
+    ).toBe(true);
+    expect(chunks.some((chunk) => chunk.includes('event: stop'))).toBe(false);
+  });
+
   it('should handle response.completed with usage', async () => {
     const mockOpenAIStream = createReadableStream([
       {
