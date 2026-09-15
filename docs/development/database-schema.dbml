@@ -1274,6 +1274,7 @@ table document_comments {
   workspace_id text [not null]
   content text [not null]
   editor_data jsonb
+  selection_anchor jsonb
   client_id text [not null]
   deleted_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1286,6 +1287,7 @@ table document_comments {
     (document_id, created_at, id) [name: 'document_comments_document_id_created_at_id_idx']
     author_user_id [name: 'document_comments_author_user_id_idx']
     workspace_id [name: 'document_comments_workspace_id_idx']
+    
   }
 }
 
@@ -1355,8 +1357,8 @@ table environments {
   indexes {
     user_id [name: 'environments_user_id_idx']
     workspace_id [name: 'environments_workspace_id_idx']
-
-
+    
+    
   }
 }
 
@@ -1383,11 +1385,11 @@ table environment_instances {
     (device_id, working_directory) [name: 'environment_instances_device_path_unique', unique]
     (kind, provider, provider_scope, provider_resource_id, working_directory) [name: 'environment_instances_provider_path_unique', unique]
     environment_id [name: 'environment_instances_environment_id_idx']
-
-
-
-
-
+    
+    
+    
+    
+    
   }
 }
 
@@ -2822,7 +2824,7 @@ table project_environments {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-
+    
     default_instance_id [name: 'project_environments_default_instance_id_idx']
     (project_id, environment_id) [name: 'project_environments_project_environment_unique', unique]
     project_id [name: 'project_environments_project_default_unique', unique]
@@ -2830,7 +2832,7 @@ table project_environments {
     environment_id [name: 'project_environments_environment_id_idx']
     workspace_id [name: 'project_environments_workspace_id_idx']
     added_by_user_id [name: 'project_environments_added_by_user_id_idx']
-
+    
   }
 }
 
