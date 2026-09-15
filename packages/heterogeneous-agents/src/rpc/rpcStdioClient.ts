@@ -46,6 +46,8 @@ export interface RpcStdioClientOptions {
   /** Absolute (or resolved) path to the executable. */
   commandPath: string;
   cwd: string;
+  /** False keeps the child in a device wrapper's process group. Defaults to true on Unix. */
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   /**
    * Discriminates a response to a client request from a notification/event.
@@ -112,7 +114,7 @@ export class RpcStdioClient {
     if (this.closed) return;
     const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
-      detached: process.platform !== 'win32',
+      detached: process.platform !== 'win32' && (this.options.detached ?? true),
       env: this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -366,14 +368,20 @@ export class RpcStdioClient {
       return;
     }
 
-    try {
-      process.kill(-child.pid, signal);
-    } catch {
+    if (this.options.detached !== false) {
       try {
-        child.kill(signal);
+        process.kill(-child.pid, signal);
+        return;
       } catch {
-        /* already gone */
+        // Fall back to the child when its own process group is gone.
       }
+    }
+
+    // An inherited group belongs to the wrapper, not this transport.
+    try {
+      child.kill(signal);
+    } catch {
+      /* already gone */
     }
   }
 

@@ -67,6 +67,7 @@ const spawnRuntimeRegistry: Partial<
       args: spawnOpts.extraArgs ?? [],
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
+      detached: spawnOpts.detached,
       env: { ...process.env, ...spawnOpts.env },
       operationId: spawnOpts.operationId,
       prompt: await toPiRpcPrompt(spawnOpts.prompt),

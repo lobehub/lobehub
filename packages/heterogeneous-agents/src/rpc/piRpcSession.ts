@@ -4,6 +4,7 @@ import { AgentStreamPipeline, type UploadHeterogeneousImage } from '../spawn/age
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
 import {
+  PI_RPC_ABORT_TIMEOUT_MS,
   type PiExtensionUiRequest,
   type PiExtensionUiResponse,
   type PiMessageEndEvent,
@@ -34,6 +35,7 @@ export interface PiRpcSessionOptions {
   /** Absolute (or resolved) path to the `pi` executable. */
   commandPath: string;
   cwd: string;
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   /** How long a run may go without any event before it is considered stale. */
   inactivityTimeoutMs?: number;
@@ -98,6 +100,8 @@ export class PiRpcSession {
   private resolveRun?: (result: { aborted: boolean }) => void;
   private rejectRun?: (error: Error) => void;
   private runStarted = false;
+  private runPromise?: Promise<{ aborted: boolean }>;
+  private abortPromise?: Promise<void>;
   private startPromise?: Promise<void>;
   private closePromise?: Promise<void>;
   private closed = false;
@@ -115,6 +119,7 @@ export class PiRpcSession {
       ],
       commandPath: options.commandPath,
       cwd: options.cwd,
+      detached: options.detached,
       env: options.env,
       onError: (error) => this.failRun(error),
       onEvent: (event) => this.handleEvent(event),
@@ -175,12 +180,18 @@ export class PiRpcSession {
    * `agent_settled`; `{ aborted: true }` when the run was interrupted;
    * rejects on error / process death. Failed runs always close the process.
    */
-  async run(prompt: PiRpcPromptInput): Promise<{ aborted: boolean }> {
-    if (this.runStarted) throw new Error('PiRpcSession already has an active run');
-    if (this.closed) throw new PiRpcConnectionError('Pi RPC session is closed');
+  run(prompt: PiRpcPromptInput): Promise<{ aborted: boolean }> {
+    if (this.runStarted) return Promise.reject(new Error('PiRpcSession already has an active run'));
+    if (this.closed) return Promise.reject(new PiRpcConnectionError('Pi RPC session is closed'));
+    this.runStarted = true;
+    this.abortPromise = undefined;
+    this.runPromise = this.runPrompt(prompt);
+    return this.runPromise;
+  }
+
+  private async runPrompt(prompt: PiRpcPromptInput): Promise<{ aborted: boolean }> {
     // Reserve before awaiting startup. Each turn needs a fresh PiAdapter.
     this.pipeline = this.createPipeline();
-    this.runStarted = true;
     this.aborted = false;
     const completion = new Promise<{ aborted: boolean }>((resolve, reject) => {
       this.resolveRun = resolve;
@@ -189,6 +200,13 @@ export class PiRpcSession {
     const sendPrompt = async () => {
       await this.start();
       if (this.closed) throw new PiRpcConnectionError('Pi RPC session is closed');
+      const sessionId = this.client.sessionId;
+      if (sessionId) await this.pushEvent({ id: sessionId, type: 'session' }, this.pipeline);
+      // Cancellation may arrive during startup or pipeline initialization.
+      if (this.aborted) {
+        this.settleRun({ aborted: true });
+        return;
+      }
       this.armInactivityTimer();
       this.emitStatus('running');
       const command: PiRpcCommand = {
@@ -200,7 +218,6 @@ export class PiRpcSession {
       if (!response.success) {
         throw new PiRpcResponseError('prompt', response.error ?? 'Unknown error');
       }
-      if (this.aborted) await this.client.abort();
     };
     let failed = false;
     try {
@@ -224,16 +241,38 @@ export class PiRpcSession {
     }
   }
 
-  /** Gracefully interrupt the current run (sends `abort`, closes afterwards). */
-  async abort(): Promise<void> {
-    if (!this.runStarted) return;
+  /** Confirm run completion, or confirmed process shutdown, before returning. */
+  abort(): Promise<void> {
+    if (this.abortPromise) return this.abortPromise;
+    if (!this.runStarted || !this.runPromise) return this.closePromise ?? Promise.resolve();
     this.aborted = true;
-    if (!this.client.isReady) return;
+    this.abortPromise = this.abortRun(this.runPromise);
+    return this.abortPromise;
+  }
+
+  private async abortRun(run: Promise<{ aborted: boolean }>): Promise<void> {
+    if (!this.client.isReady) {
+      await this.close();
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await this.client.abort();
+      await Promise.race([
+        Promise.all([this.client.abort(), run]),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new PiRpcConnectionError('Pi cancellation did not settle in time')),
+            PI_RPC_ABORT_TIMEOUT_MS,
+          );
+        }),
+      ]);
     } catch (error) {
-      // If the connection is already gone the run will settle via close.
-      if (error instanceof PiRpcResponseError) throw error;
+      console.error('[PiRpcSession] Graceful cancellation failed; closing process:', error);
+      // Failure to confirm shutdown must reject all the way to the operation
+      // cancellation gate; otherwise it can start a second native writer.
+      await this.close();
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

@@ -564,7 +564,7 @@ vi.mock('@lobechat/heterogeneous-agents/rpc', () => {
     }
 
     async abort() {
-      piRpcSessionAbortMock();
+      return piRpcSessionAbortMock();
     }
 
     async close() {
@@ -4212,7 +4212,7 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
-    it('aborts the RPC session instead of killing the process tree', async () => {
+    it('waits for RPC cancellation instead of killing the process tree', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([
         {
@@ -4239,15 +4239,47 @@ describe('HeterogeneousAgentCtr', () => {
       const sendPromise = ctr.sendPrompt({ operationId: 'op-pi-abort', prompt: 'work', sessionId });
       await vi.waitFor(() => expect(piRpcSessionConstructMock).toHaveBeenCalled());
 
-      await ctr.cancelSession({ sessionId });
+      let finishAbort!: () => void;
+      piRpcSessionAbortMock.mockReturnValue(
+        new Promise<void>((resolve) => (finishAbort = resolve)),
+      );
+      const confirmed = vi.fn();
+      const cancellation = ctr.cancelSession({ sessionId }).then(confirmed);
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(piRpcSessionAbortMock).toHaveBeenCalled();
+      expect(confirmed).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
       // The run resolves as aborted → the session completes, not errors.
       resolveRun?.({ aborted: true });
       await sendPromise;
+      finishAbort();
+      await cancellation;
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
+
+    it.each(['cancelSession', 'stopSession'] as const)(
+      'does not confirm %s when Pi shutdown fails',
+      async (method) => {
+        let finishRun!: (result: { aborted: boolean }) => void;
+        piRpcSessionRunMock.mockReturnValue(
+          new Promise<{ aborted: boolean }>((resolve) => (finishRun = resolve)),
+        );
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+        const run = ctr.sendPrompt({ operationId: 'op-pi', prompt: 'work', sessionId });
+        await vi.waitFor(() => expect(piRpcSessionRunMock).toHaveBeenCalled());
+        piRpcSessionAbortMock.mockRejectedValue(new Error('still alive after SIGKILL'));
+
+        await expect(ctr[method]({ sessionId })).rejects.toThrow('still alive after SIGKILL');
+
+        finishRun({ aborted: true });
+        await run;
+      },
+    );
 
     it('reuses the pooled process across turns of the same conversation', async () => {
       const send = vi.fn();

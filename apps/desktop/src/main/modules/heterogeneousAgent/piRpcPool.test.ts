@@ -86,12 +86,16 @@ describe('PiRpcPool', () => {
     expect(pool.acquire('cwd::sess-a', 'fingerprint-v2')).toBeUndefined();
   });
 
-  it('never reuses a busy process', () => {
+  it('rejects acquisition of a busy process rather than allowing a second writer', () => {
     const pool = new PiRpcPool({ idleTimeoutMs: 60_000 });
-    const { session } = createSession(true);
+    const { session, close } = createSession();
     pool.register('cwd::sess-a', session);
 
-    expect(pool.acquire('cwd::sess-a')).toBeUndefined();
+    // Registered while idle, then acquired for an active follow-up turn.
+    pool.acquire('cwd::sess-a');
+    Object.defineProperty(session, 'isRunning', { value: true });
+    expect(() => pool.acquire('cwd::sess-a')).toThrow('active run');
+    expect(close).not.toHaveBeenCalled();
   });
 
   it('reaps exactly the idle key — other keys are untouched', () => {

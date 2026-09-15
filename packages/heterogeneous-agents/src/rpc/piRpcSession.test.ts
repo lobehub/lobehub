@@ -86,6 +86,82 @@ afterEach(() => {
 });
 
 describe('PiRpcSession', () => {
+  it('waits beyond the abort ACK until settlement before allowing reuse', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    mocks.abort.mockResolvedValue(undefined);
+    const run = session.run({ text: 'first' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    const cancelled = vi.fn();
+    const cancellation = session.abort().then(cancelled);
+    await vi.waitFor(() => expect(mocks.abort).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancelled).not.toHaveBeenCalled();
+    expect(session.isReusable).toBe(false);
+    await emit(session, { type: 'agent_settled' });
+    await cancellation;
+    await expect(run).resolves.toEqual({ aborted: true });
+    expect(session.isReusable).toBe(true);
+    expect(mocks.close).not.toHaveBeenCalled();
+    await session.close();
+  });
+
+  it.each(['no-ack', 'no-settlement', 'rejected'])(
+    'closes before confirming cancellation when abort has %s',
+    async (failure) => {
+      vi.useFakeTimers();
+      const { session } = createSession({ autoCloseOnSettle: false });
+      mocks.command.mockResolvedValue({ success: true });
+      if (failure === 'no-ack') mocks.abort.mockReturnValue(new Promise(() => {}));
+      else if (failure === 'rejected') mocks.abort.mockRejectedValue(new Error('abort refused'));
+      else mocks.abort.mockResolvedValue(undefined);
+      let finishClose!: () => void;
+      mocks.close.mockReturnValue(new Promise<void>((resolve) => (finishClose = resolve)));
+      const run = session.run({ text: 'work' });
+      await vi.advanceTimersByTimeAsync(0);
+      const confirmed = vi.fn();
+      const cancellation = session.abort().then(confirmed);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(mocks.close).toHaveBeenCalledOnce();
+      expect(confirmed).not.toHaveBeenCalled();
+      finishClose();
+      await cancellation;
+      await run;
+      expect(session.isReusable).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it('rejects cancellation when process shutdown cannot be confirmed', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    mocks.abort.mockRejectedValue(new Error('abort refused'));
+    mocks.close.mockRejectedValue(new Error('still alive after SIGKILL'));
+    const run = session.run({ text: 'work' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await expect(session.abort()).rejects.toThrow('still alive after SIGKILL');
+    await run;
+    expect(session.isReusable).toBe(false);
+  });
+
+  it('seeds stream provenance from the handshake on every pooled turn', async () => {
+    mocks.clientSessionId.value = 'native-rpc-session';
+    mocks.command.mockResolvedValue({ success: true });
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+    for (const text of ['first', 'second']) {
+      mocks.command.mockClear();
+      const run = session.run({ text });
+      await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+      await emit(session, { type: 'turn_start' });
+      await emit(session, { type: 'agent_settled' });
+      await run;
+    }
+    expect(
+      events.filter((event) => event.type === 'stream_start').map((event) => event.data.sessionId),
+    ).toEqual(['native-rpc-session', 'native-rpc-session']);
+    await session.close();
+  });
+
   it('waits for recovery after assistant errors and resolves the recovered run', async () => {
     const { events, session } = createSession({ autoCloseOnSettle: false });
     mocks.command.mockResolvedValue({ success: true });
@@ -215,6 +291,7 @@ describe('PiRpcSession', () => {
     mocks.close.mockResolvedValue(undefined);
 
     const runPromise = session.run({ text: 'hello' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
     await emit(session, {
       assistantMessageEvent: { reason: 'aborted', type: 'error' },
       type: 'message_update',

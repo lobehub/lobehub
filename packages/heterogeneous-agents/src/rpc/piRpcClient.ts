@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import {
+  PI_RPC_ABORT_TIMEOUT_MS,
   PI_RPC_DEFAULT_REQUEST_TIMEOUT_MS,
   PI_RPC_HANDSHAKE_TIMEOUT_MS,
   PI_RPC_MIN_CLI_VERSION,
@@ -43,6 +44,7 @@ export interface PiRpcClientOptions {
   /** Absolute (or resolved) path to the `pi` executable. */
   commandPath: string;
   cwd: string;
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   /** Startup handshake timeout (`get_state`). */
   handshakeTimeoutMs?: number;
@@ -97,6 +99,7 @@ export class PiRpcClient {
       closeGraceMs: options.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS,
       commandPath: options.commandPath,
       cwd: options.cwd,
+      detached: options.detached,
       env: options.env,
       isResponse: (message) => message?.type === 'response',
       onError: (error) => options.onError?.(this.toConnectionError(error)),
@@ -229,14 +232,9 @@ export class PiRpcClient {
     }
   }
 
-  /** Send `abort` without resolving the close lifecycle. */
+  /** Bound the abort ACK independently of ordinary command timeout settings. */
   async abort(): Promise<void> {
-    try {
-      await this.command({ type: 'abort' }, false);
-    } catch (error) {
-      if (error instanceof PiRpcResponseError) throw error;
-      // Connection already broken — the run is over either way.
-    }
+    await this.command({ type: 'abort' }, PI_RPC_ABORT_TIMEOUT_MS);
   }
 
   /**

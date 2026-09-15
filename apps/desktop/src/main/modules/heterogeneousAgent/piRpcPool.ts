@@ -20,10 +20,8 @@ const logger = createLogger('PiRpcPool');
  *   remove(s)         → run failed; close and drop
  *   closeAll()        → before-quit
  *
- * Concurrency note: the same key is naturally serial (one conversation runs
- * one turn at a time), so a busy entry is never reused; if a caller still
- * asks to register a replacement under a busy key, the old process is left
- * to finish rather than being killed mid-run.
+ * Callers must await cancellation of the previous run before acquiring again.
+ * A busy entry is an error, never a cache miss that permits a second writer.
  */
 export class PiRpcPool {
   private readonly entries = new Map<string, PiRpcPoolEntry>();
@@ -45,7 +43,8 @@ export class PiRpcPool {
     const entry = this.entries.get(key);
     // A process spawned under different runtime options (command path, args,
     // env) must not be reused — mirrors Codex app-server's canReuseFor.
-    if (!entry || entry.session.isRunning) return undefined;
+    if (!entry) return undefined;
+    if (entry.session.isRunning) throw new Error('Pi session still has an active run');
     if (!entry.session.isReusable) {
       this.reap(entry, 'removed');
       return undefined;

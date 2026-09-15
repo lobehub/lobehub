@@ -176,3 +176,6 @@ export const PI_RPC_DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 /** Timeout for the startup handshake (`get_state`). */
 export const PI_RPC_HANDSHAKE_TIMEOUT_MS = 15_000;
+
+/** Graceful cancellation must confirm settlement before falling back to process shutdown. */
+export const PI_RPC_ABORT_TIMEOUT_MS = 5_000;

@@ -236,14 +236,18 @@ describe('hetero exec command', () => {
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it('keeps the agent in the detached wrapper process group when requested by dispatch', async () => {
-    vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
-    mockSpawnAgent.mockReturnValue(createFakeHandle());
+  it.each(['codex', 'pi'])(
+    'keeps %s in the wrapper process group when requested by dispatch',
+    async (agentType) => {
+      vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
+      const spawn = agentType === 'pi' ? mockCreatePiRpcAgentHandle : mockSpawnAgent;
+      spawn.mockReturnValue(createFakeHandle());
 
-    await runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'do thing']);
+      await runCmd(['hetero', 'exec', '--type', agentType, '--prompt', 'do thing']);
 
-    expect(mockSpawnAgent).toHaveBeenCalledWith(expect.objectContaining({ detached: false }));
-  });
+      expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ detached: false }));
+    },
+  );
 
   it('does not duplicate Unix group signals inside an inherited wrapper group', async () => {
     vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');

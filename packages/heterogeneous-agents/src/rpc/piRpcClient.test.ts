@@ -81,12 +81,46 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   execFileMock.mockReset();
   spawnMock.mockReset();
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
 });
 
 describe('PiRpcClient', () => {
+  it('bounds abort even when ordinary command timeouts are disabled', async () => {
+    const { client } = await createReadyClient({ requestTimeoutMs: false });
+    vi.useFakeTimers();
+    const rejected = vi.fn();
+    const request = client.abort().catch(rejected);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(rejected).toHaveBeenCalledWith(expect.any(PiRpcConnectionError));
+    const closed = client.close();
+    await vi.advanceTimersByTimeAsync(1);
+    await Promise.all([request, closed]);
+  });
+
+  it.each([false, true])('preserves detached=%s through the Pi transport', async (detached) => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' });
+    const { child, client } = await createReadyClient({ detached, closeGraceMs: 1 });
+    expect(spawnMock.mock.calls[0][2].detached).toBe(detached);
+    child.stdin.end.mockImplementation(() => {});
+    const groupKill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      child.emit('close', null, 'SIGTERM');
+      return true;
+    });
+    child.kill.mockImplementation(() => {
+      child.emit('close', null, 'SIGTERM');
+      return true;
+    });
+    await client.close();
+    if (detached) expect(groupKill).toHaveBeenCalledWith(-child.pid, 'SIGTERM');
+    else {
+      expect(groupKill).not.toHaveBeenCalled();
+      expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    }
+  });
+
   it.each(['0.79.0', '0.80.4', '0.80.5-rc.1', 'unknown'])(
     'rejects unsupported Pi %s before spawning RPC',
     async (version) => {

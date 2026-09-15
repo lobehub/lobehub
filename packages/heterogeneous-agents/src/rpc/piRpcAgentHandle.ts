@@ -13,6 +13,7 @@ export interface PiRpcAgentHandleOptions {
   args: string[];
   commandPath: string;
   cwd: string;
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   operationId: string;
   /** Text + base64 images for the RPC `prompt` command. */
@@ -122,6 +123,7 @@ export const createPiRpcAgentHandle = async (
     args: options.args,
     commandPath: options.commandPath,
     cwd: options.cwd,
+    detached: options.detached,
     env: options.env,
     operationId: options.operationId,
     resumeSessionId: options.resumeSessionId,

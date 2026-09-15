@@ -3383,11 +3383,9 @@ export default class HeterogeneousAgentCtr {
       return;
     }
     if (session.piRpcSession) {
-      // Graceful abort: pi cancels the run, persists state, then the session
-      // recycles the process via EOF. No SIGINT/SIGKILL tree kill needed.
-      await session.piRpcSession.abort().catch((error) => {
-        logger.warn('Pi RPC abort failed:', error);
-      });
+      // Resolves only after settlement or confirmed shutdown. Propagate a
+      // failed shutdown so "Send now" cannot start another native writer.
+      await session.piRpcSession.abort();
       return;
     }
     if (session.sdkSession) {
@@ -3458,11 +3456,8 @@ export default class HeterogeneousAgentCtr {
 
     if (session.piRpcSession) {
       session.cancelledByUs = true;
-      // Gracefully interrupt any in-flight run; the process is owned by the
-      // cross-turn pool and reaped on idle — not closed here.
-      await session.piRpcSession.abort().catch((error) => {
-        logger.warn('Pi RPC abort failed while stopping the session:', error);
-      });
+      // Healthy settled processes remain pooled; failed cancellation closes them.
+      await session.piRpcSession.abort();
     }
 
     if (session.sdkSession) {
