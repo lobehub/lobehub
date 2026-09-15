@@ -3,7 +3,14 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveToken } from '../auth/resolveToken';
-import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
+import {
+  removeStatus,
+  reportDaemonStartupError,
+  reportDaemonStartupReady,
+  spawnDaemon,
+  stopDaemon,
+  writeStatus,
+} from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
 import { loadSettings, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
@@ -56,6 +63,7 @@ vi.mock('../daemon/manager', () => ({
   readStatus: vi.fn().mockImplementation(() => mockStatus),
   removePid: vi.fn(),
   removeStatus: vi.fn(),
+  reportDaemonStartupError: vi.fn().mockResolvedValue(undefined),
   reportDaemonStartupReady: vi.fn().mockResolvedValue(undefined),
   spawnDaemon: vi.fn().mockImplementation(() => {
     mockSpawnedPid = 99999;
@@ -84,7 +92,7 @@ let connectCalled = false;
 let lastSentToolResponse: any = null;
 let lastSentSystemInfoResponse: any = null;
 vi.mock('@lobechat/device-gateway-client', () => ({
-  GatewayClient: vi.fn().mockImplementation((opts: any) => {
+  GatewayClient: vi.fn().mockImplementation(function (this: any, opts: any) {
     clientOptions = opts;
     clientEventHandlers = {};
     connectCalled = false;
@@ -161,6 +169,40 @@ describe('connect command', () => {
     expect(writeStatus).toHaveBeenLastCalledWith(
       expect.objectContaining({ connectionStatus: 'connected', deviceId: 'mock-device-id' }),
     );
+  });
+
+  it('should report daemon readiness only after the gateway connects', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect', '--daemon-child']);
+
+    expect(reportDaemonStartupReady).not.toHaveBeenCalled();
+
+    clientEventHandlers.connected?.();
+
+    expect(reportDaemonStartupReady).toHaveBeenCalledOnce();
+  });
+
+  it('should exit a spawned daemon once the startup failure reached its parent', async () => {
+    vi.mocked(reportDaemonStartupError).mockResolvedValueOnce(true);
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect', '--daemon-child']);
+
+    clientEventHandlers.error?.(new Error('ECONNRESET'));
+
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1));
+  });
+
+  it('should let a service child auto-reconnect instead of exiting on a startup error', async () => {
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'connect', '--service-child']);
+
+    clientEventHandlers.error?.(new Error('ECONNRESET'));
+
+    await vi.waitFor(() => expect(reportDaemonStartupError).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 
   it('should connect to gateway', async () => {

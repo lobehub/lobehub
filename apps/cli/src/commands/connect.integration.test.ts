@@ -104,6 +104,32 @@ describe('connect daemon startup', () => {
     expect(result.stderr).toContain('ConnectionRefused');
   }, 15_000);
 
+  it('surfaces a personal-mode gateway failure instead of claiming the daemon started', async () => {
+    const portProbe = createServer();
+    await new Promise<void>((resolve) => portProbe.listen(0, '127.0.0.1', resolve));
+    const { port } = portProbe.address() as AddressInfo;
+    await new Promise<void>((resolve, reject) =>
+      portProbe.close((error) => (error ? reject(error) : resolve())),
+    );
+
+    const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({ sub: 'test-user' })).toString('base64url');
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lobehub-cli-daemon-startup-'));
+    tempHomes.push(home);
+
+    const result = await runCli(
+      ['connect', '--daemon', '--gateway', `http://127.0.0.1:${port}`],
+      home,
+      {
+        LOBEHUB_JWT: `${header}.${payload}.signature`,
+      },
+    );
+
+    expect(result.stdout).not.toContain('Daemon started');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('Failed to connect');
+  }, 30_000);
+
   it('does not report startup readiness before workspace registration succeeds', async () => {
     const requests: string[] = [];
     const server = createServer((request, response) => {

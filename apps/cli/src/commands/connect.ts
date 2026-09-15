@@ -38,6 +38,7 @@ import {
   readStatus,
   removePid,
   removeStatus,
+  reportDaemonStartupError,
   reportDaemonStartupReady,
   spawnDaemon,
   stopDaemon,
@@ -465,8 +466,14 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // shared with the workspace-share connections opened via `enrollWorkspace`.
   bindGatewayClientHandlers(client, handlerContext, workspaceId);
 
+  let daemonStartupReported = !isDaemonChild;
+
   client.on('connected', () => {
     updateStatus('connected');
+    if (isDaemonChild && !daemonStartupReported) {
+      daemonStartupReported = true;
+      void reportDaemonStartupReady();
+    }
   });
 
   client.on('disconnected', () => {
@@ -747,6 +754,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Handle errors
   client.on('error', (err) => {
     error(`Connection error: ${err.message}`);
+    if (isDaemonChild && !daemonStartupReported) {
+      reportDaemonStartupFailure(err.message);
+    }
   });
 
   // Graceful shutdown
@@ -762,6 +772,21 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     if (isDaemonChild) {
       removePid();
     }
+  };
+
+  const reportDaemonStartupFailure = (message: string) => {
+    if (!isDaemonChild || daemonStartupReported) return;
+    daemonStartupReported = true;
+    void reportDaemonStartupError(message).then((delivered) => {
+      // Only a spawned daemon has a parent waiting on the readiness report, so
+      // exiting is the signal it needs. A `--service-child` run has no parent:
+      // the unit lists exit 1 in SuccessExitStatus, so exiting here would make
+      // systemd treat the failure as success and never restart the service.
+      // Leave the client auto-reconnecting instead.
+      if (!delivered) return;
+      cleanup();
+      process.exit(1);
+    });
   };
 
   process.on('SIGINT', () => {
@@ -808,9 +833,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     }
   }
 
-  await reportDaemonStartupReady();
-
-  // Connect
+  // Start the connection; daemon readiness is reported from the first `connected`
+  // event so a failed initial gateway handshake reaches the invoking command.
   await client.connect();
 
   // Personal mode: re-open any workspace share connections from a previous run.

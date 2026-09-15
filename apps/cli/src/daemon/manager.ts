@@ -282,24 +282,25 @@ function readStartupError(startOffset: number): string | undefined {
   }
 }
 
-function sendStartupMessage(message: DaemonStartupMessage): Promise<void> {
+/** Resolves true only when a spawned parent was holding the IPC channel to receive the report. */
+function sendStartupMessage(message: DaemonStartupMessage): Promise<boolean> {
   if (process.env.LOBEHUB_DAEMON !== '1' || !process.send || !process.connected) {
-    return Promise.resolve();
+    return Promise.resolve(false);
   }
 
   return new Promise((resolve) => {
     process.send!(message, () => {
       if (process.connected) process.disconnect();
-      resolve();
+      resolve(true);
     });
   });
 }
 
-export function reportDaemonStartupError(message: string): Promise<void> {
+export function reportDaemonStartupError(message: string): Promise<boolean> {
   return sendStartupMessage({ message, type: 'startup-error' });
 }
 
-export function reportDaemonStartupReady(): Promise<void> {
+export function reportDaemonStartupReady(): Promise<boolean> {
   return sendStartupMessage({ type: 'startup-ready' });
 }
 
