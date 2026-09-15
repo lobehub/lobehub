@@ -955,6 +955,25 @@ describe('FileModel', () => {
 
       expect(size).toBe(3500);
     });
+
+    it('should charge rows sharing a file hash only once', async () => {
+      await serverDB.insert(globalFiles).values({
+        creator: userId,
+        hashId: 'dup-hash',
+        fileType: 'video/mp4',
+        size: 1000,
+        url: 'https://example.com/dup.mp4',
+      });
+      await serverDB
+        .insert(files)
+        .values([
+          { ...sharedFileList[0], fileHash: 'dup-hash', size: 1000 },
+          { ...sharedFileList[1], fileHash: 'dup-hash', size: 1000 },
+          sharedFileList[2],
+        ]);
+
+      expect(await fileModel.countUsage()).toBe(3000);
+    });
   });
 
   describe('findByNames', () => {
