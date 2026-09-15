@@ -15,6 +15,7 @@ import {
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { useIsChatInputModelUnavailable } from '@/features/ChatInput/ChatInputNotice/useChatInputNotice';
 import {
   type SendButtonHandler,
   type SendButtonProps,
@@ -43,6 +44,7 @@ import QueueTray from './QueueTray';
 import { sendVoiceMessage } from './sendVoiceMessage';
 import {
   getContextWindowMessages,
+  getConversationChatInputDisabled,
   getConversationChatInputUiState,
   toChatInputMessages,
 } from './utils';
@@ -267,6 +269,7 @@ const ChatInput = memo<ChatInputProps>(
     const hasQueuedMessages = useChatStore(
       (s) => operationSelectors.queuedMessageCount(context)(s) > 0,
     );
+    const isModelUnavailable = useIsChatInputModelUnavailable();
 
     // Detect whether TodoProgress will render (mirrors its own gating) so we
     // can square the top corners of OpStatusTray when it sits flush below.
@@ -296,8 +299,15 @@ const ChatInput = memo<ChatInputProps>(
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     // disableSend hard-blocks regardless of content (host surface is read-only).
-    const disabled =
-      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
+    const disabled = getConversationChatInputDisabled({
+      disableQueue,
+      disableSend,
+      isInputEmpty,
+      isInputLoading,
+      isInputQueueBlocked,
+      isModelUnavailable,
+      isUploadingFiles,
+    });
 
     // `disabled` above lags the editor: `inputMessage` mirrors content through
     // the editor's debounced onChange, so a fast type→Enter arrives while the
@@ -306,7 +316,7 @@ const ChatInput = memo<ChatInputProps>(
     // at trigger time, so this only mirrors the visual disabled semantics.
     const customDisabled = customSendButtonProps?.disabled;
     const resolveSendBlocked = useCallback(() => {
-      if (disableSend) return true;
+      if (disableSend || (isModelUnavailable && !isInputLoading)) return true;
       if (customDisabled !== undefined) return customDisabled;
 
       const fileStore = useFileStore.getState();
@@ -324,7 +334,7 @@ const ChatInput = memo<ChatInputProps>(
       const hasContextSelections =
         fileChatSelectors.chatContextSelections(messageMapKey(liveContext))(fileStore).length > 0;
       return !hasText && !hasFiles && !hasContextSelections;
-    }, [customDisabled, disableQueue, disableSend, storeApi]);
+    }, [customDisabled, disableQueue, disableSend, isInputLoading, isModelUnavailable, storeApi]);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessAlerts = useBusinessChatInputAlerts();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
@@ -334,7 +344,7 @@ const ChatInput = memo<ChatInputProps>(
       async ({ clearContent, getMarkdownContent, getEditorData }) => {
         // Host surface is read-only (e.g. page locked) — block Enter too, not
         // just the grayed-out button.
-        if (disableSend) return;
+        if (disableSend || isModelUnavailable) return;
 
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
@@ -394,7 +404,15 @@ const ChatInput = memo<ChatInputProps>(
           pageSelections,
         });
       },
-      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
+      [
+        contextKey,
+        sendMessage,
+        storeApi,
+        disableQueue,
+        disableSend,
+        isInputQueueBlocked,
+        isModelUnavailable,
+      ],
     );
 
     const sendButtonProps: SendButtonProps = {

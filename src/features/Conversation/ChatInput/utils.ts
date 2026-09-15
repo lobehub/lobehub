@@ -104,3 +104,35 @@ export const getConversationChatInputUiState = ({
     showStopButton: isInputLoading,
   };
 };
+
+interface GetConversationChatInputDisabledParams {
+  disableQueue?: boolean;
+  disableSend?: boolean;
+  isInputEmpty: boolean;
+  isInputLoading: boolean;
+  isInputQueueBlocked: boolean;
+  isModelUnavailable: boolean;
+  isUploadingFiles: boolean;
+}
+
+export const getConversationChatInputDisabled = ({
+  disableQueue,
+  disableSend,
+  isInputEmpty,
+  isInputLoading,
+  isInputQueueBlocked,
+  isModelUnavailable,
+  isUploadingFiles,
+}: GetConversationChatInputDisabledParams): boolean => {
+  // An unavailable model blocks new sends, but must not disable the Stop
+  // control for a request that was already running when the model went away.
+  const shouldBlockUnavailableModel = isModelUnavailable && !isInputLoading;
+
+  return (
+    isInputEmpty ||
+    isUploadingFiles ||
+    shouldBlockUnavailableModel ||
+    (!!disableQueue && isInputQueueBlocked) ||
+    !!disableSend
+  );
+};
