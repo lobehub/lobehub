@@ -1,3 +1,4 @@
+export { conversationGoalPrompt, withConversationGoalPrompt } from './conversationGoalPrompt';
 export {
   buildGoalRequirement,
   type GoalCriterionInput,

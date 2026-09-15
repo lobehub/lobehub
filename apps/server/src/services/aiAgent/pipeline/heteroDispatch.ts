@@ -1,3 +1,4 @@
+import { withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LOADING_FLAT } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
@@ -374,7 +375,10 @@ export const dispatchHeteroAgent = async (
   let operationJwt: string;
   try {
     operationJwt = await signHeteroOperationJWT({
-      capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+      // `goal:manage` lets `/goal` in this conversation create a goal the agent
+      // supervises (`lh goal create --conversation`); the server still derives
+      // the agent and topic from this operation, never from the CLI.
+      capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'goal:manage'],
       operationId,
       userId: deps.userId,
       workspaceId: deps.workspaceId,
@@ -451,8 +455,14 @@ export const dispatchHeteroAgent = async (
   // Build the primary context without conversation history. If native resume
   // fails, the CLI switches to the complete fallback prompt on its fresh
   // retry; successful same-session runs never consume the duplicate history.
+  // `/goal` reaches a hetero agent as instructions, not a tool: it creates and
+  // plans the goal through `lh` in this same run.
+  const agentSystemContext = withConversationGoalPrompt(
+    agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+    prompt,
+  );
   const systemContext = buildCloudHeteroContext({
-    agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+    agentSystemContext,
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
     githubToken,
     repos: topicRepos,
@@ -460,7 +470,7 @@ export const dispatchHeteroAgent = async (
   const resumeFallbackSystemContext =
     resumeSessionId && conversationHistory
       ? buildCloudHeteroContext({
-          agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+          agentSystemContext,
           conversationHistory,
           githubToken,
           repos: topicRepos,
@@ -961,13 +971,13 @@ export const dispatchHeteroAgent = async (
       // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
       // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
       const deviceSystemContext = buildRemoteDeviceHeteroContext({
-        agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        agentSystemContext,
         conversationHistory: resumeSessionId ? undefined : conversationHistory,
       });
       const deviceResumeFallbackSystemContext =
         resumeSessionId && conversationHistory
           ? buildRemoteDeviceHeteroContext({
-              agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+              agentSystemContext,
               conversationHistory,
             })
           : undefined;

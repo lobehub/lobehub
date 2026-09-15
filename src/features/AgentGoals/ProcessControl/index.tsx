@@ -1,6 +1,5 @@
 'use client';
 
-import { experimentOwner } from '@lobechat/utils/goalGraph';
 import { Flexbox } from '@lobehub/ui';
 import { Accordion, type AccordionItemType, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -8,19 +7,23 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
-import { goalService } from '@/services/goal';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
-import { isExperiment } from '../Experiments/model';
 import GoalAcceptanceCriteria from '../GoalAcceptanceCriteria';
 import Activity from './Activity';
 import Deliverables from './Deliverables';
 import Findings from './Findings';
-import Frontier, { type FrontierActions } from './Frontier';
-import { buildGoalGraphView, opensOnResultSurface } from './goalGraphViewModel';
+import Frontier from './Frontier';
+import { buildGoalGraphView } from './goalGraphViewModel';
 import Graph from './Graph';
+import {
+  isGoalClosed,
+  isGoalPlanning,
+  useFrontierActions,
+  useGoalNodeSelect,
+} from './useGoalProcessActions';
 
 /**
  * The process-control band of the goal detail page: what can move now
@@ -52,79 +55,41 @@ const ProcessControl = memo<ProcessControlProps>(
     const selectedId = nodePortal?.goalId === goalId ? nodePortal.nodeId : lastSelectedId;
 
     const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
-    const decideGoal = useGoalStore((s) => s.decideGoal);
-    const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
-    const openTaskResult = useChatStore((s) => s.openTaskResult);
-    const openTaskDetail = useChatStore((s) => s.openTaskDetail);
-    const openGoalNode = useChatStore((s) => s.openGoalNode);
     useFetchGoalGraph(goalId);
     const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
     const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
 
-    const actions: FrontierActions = useMemo(
-      () => ({
-        addTask: async (title: string, description?: string) => {
-          await goalService.addNode({ description, id: goalId, kind: 'task', title });
-          await refreshGoalGraph(goalId);
-        },
-        decide: (decisionId, optionId, resolution) =>
-          void decideGoal(goalId, { decisionId, optionId, resolution }),
-      }),
-      [decideGoal, goalId, refreshGoalGraph],
-    );
+    const actions = useFrontierActions(goalId);
+    const openNode = useGoalNodeSelect(goalId, graph);
 
     // Every click funnels here: keep the map highlight (spatial continuity) and
-    // open the drill-down. A Task with a delivery to read, or a healthy run in
-    // flight, lands on its result surface — the live run while it works, the
-    // report once it settles. A Task waiting or in trouble opens the original
-    // Task detail, where configuration and failure context live.
+    // open the drill-down (see `useGoalNodeSelect` for where each node lands).
     const select = useCallback(
       (nodeId: string) => {
         setSelectedId(nodeId);
-        const view = graph?.byId[nodeId];
-        const taskId = view?.node.taskId;
-        if (!taskId || (graph && view && isExperiment(graph, view))) {
-          openGoalNode(goalId, nodeId);
-          return;
-        }
-        if (
-          graph &&
-          experimentOwner(
-            { nodes: graph.nodes.map((item) => item.node), edges: graph.edges },
-            nodeId,
-          )
-        )
-          openTaskDetail(taskId);
-        else if (view && opensOnResultSurface(view)) openTaskResult(taskId);
-        else openTaskDetail(taskId);
+        openNode(nodeId);
       },
-      [goalId, graph, openGoalNode, openTaskDetail, openTaskResult],
+      [openNode],
     );
 
     // Task-carried goals share the `goals` table but never grow a graph. Nothing
     // to control here, so the page keeps its original shape.
     if (!graph || graph.nodes.length === 0) return null;
 
-    // The coordinator is decomposing the problem into tasks. `running` with zero
-    // Task counts too: the decomposition claim flips the status before the
-    // planner returns, and a re-plan after all Tasks were removed is the same
-    // state. The surfaces below promise the incoming structure instead of
-    // reading as an empty goal — the graph poll fills them in as nodes land.
-    const planning =
-      ['planning', 'running'].includes(graph.goal.status) &&
-      !graph.nodes.some((view) => view.node.kind === 'task');
+    // While the coordinator decomposes the problem, the surfaces below promise
+    // the incoming structure instead of reading as an empty goal — the graph
+    // poll fills them in as nodes land.
+    const planning = isGoalPlanning(graph);
     // Presence of the acceptance block (not a non-empty list) keeps the section
     // mounted: removing the last criterion must leave the add control reachable,
     // while legacy prose-only goals (no acceptance config at all) show nothing.
     const acceptanceConfig = graph.goal.config?.acceptance;
     const criteriaIds = acceptanceConfig?.criteriaIds ?? [];
-    // A closed goal cannot move: the coordinator returns immediately for these,
-    // and a Task added here would sit `proposed` forever. Stop offering actions
-    // that cannot land. The goal otherwise advances entirely on its own — the
-    // only legitimate human control over its pace is pause/resume.
-    const closed = ['achieved', 'canceled', 'failed'].includes(graph.goal.status);
-    const canAct = canEdit && !closed;
+    // Stop offering actions that cannot land on a closed goal. The goal otherwise
+    // advances entirely on its own — the only legitimate human control over its
+    // pace is pause/resume.
+    const canAct = canEdit && !isGoalClosed(graph);
     const hasExperiments = graph.nodes.some((view) => view.node.kind === 'experiment');
 
     const map = (

@@ -43,6 +43,9 @@ const SERVER_ADVANCING_STATUSES = new Set<GoalStatus>(['planning', 'running', 'v
 /** Kept coarse on purpose — this is liveness, not a progress bar. */
 const GOAL_GRAPH_POLL_INTERVAL = 5000;
 
+/** A conversation rarely plans more than one goal; this only bounds a runaway topic. */
+const TOPIC_GOAL_FETCH_LIMIT = 20;
+
 export type GoalStore = GoalState & GoalAction;
 type Setter = StoreSetter<GoalStore>;
 
@@ -162,6 +165,25 @@ export class GoalActionImpl {
         graph && SERVER_ADVANCING_STATUSES.has(graph.goal.status) ? GOAL_GRAPH_POLL_INTERVAL : 0,
       revalidateOnFocus: true,
     });
+
+  /**
+   * Goals created from one conversation. A goal a CLI agent creates through
+   * `lh goal create --conversation` leaves no tool result to derive a card from,
+   * so the conversation reads the link from the goal rows instead. Polls on the
+   * graph's cadence while any of them is still advancing on the server.
+   */
+  useFetchTopicGoals = (topicId?: string | null) =>
+    useClientDataSWR(
+      topicId ? goalKeys.topicGoals(topicId) : null,
+      () => goalService.list({ limit: TOPIC_GOAL_FETCH_LIMIT, topicId: topicId! }),
+      {
+        refreshInterval: (result) =>
+          result?.goals.some(({ goal }) => SERVER_ADVANCING_STATUSES.has(goal.status))
+            ? GOAL_GRAPH_POLL_INTERVAL
+            : 0,
+        revalidateOnFocus: true,
+      },
+    );
 
   /**
    * North-star data of the goal detail header. Polls on the same cadence logic

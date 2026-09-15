@@ -15,6 +15,8 @@ export interface GoalListParams {
   offset?: number;
   projectId?: string;
   statuses?: GoalStatus[];
+  /** Goals created from this conversation. */
+  topicId?: string;
 }
 
 /** Every graph method takes the `goals` row id. */

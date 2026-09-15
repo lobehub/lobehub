@@ -528,6 +528,7 @@ export class AgentOperationModel {
     return this.db
       .select({
         agentId: agentOperations.agentId,
+        appContext: agentOperations.appContext,
         createdAt: agentOperations.createdAt,
         id: agentOperations.id,
         model: agentOperations.model,

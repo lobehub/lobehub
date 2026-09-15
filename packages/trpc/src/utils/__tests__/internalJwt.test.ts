@@ -219,6 +219,22 @@ describe('internalJwt', () => {
       expect(validateHeteroOperationClaims(validClaims)).toEqual(validClaims);
     });
 
+    it('accepts the goal capability dispatched runs carry for /goal', async () => {
+      const { validateHeteroOperationClaims } = await import('../internalJwt');
+      const claims = {
+        ...validClaims,
+        capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'goal:manage'],
+      };
+      expect(validateHeteroOperationClaims(claims)).toEqual(claims);
+    });
+
+    it('rejects a capability it does not know', async () => {
+      const { validateHeteroOperationClaims } = await import('../internalJwt');
+      expect(
+        validateHeteroOperationClaims({ ...validClaims, capabilities: ['goal:delete'] }),
+      ).toBeNull();
+    });
+
     it.each(['aud', 'iss', 'purpose', 'operation_id', 'capabilities'])(
       'rejects invalid %s',
       async (field) => {

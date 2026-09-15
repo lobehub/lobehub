@@ -341,9 +341,11 @@ export class GoalModel {
       offset?: number;
       projectId?: string;
       statuses?: GoalStatus[];
+      /** Goals created from this conversation (`subject_type = 'topic'`). */
+      topicId?: string;
     } = {},
   ): Promise<{ goals: GoalListItem[]; total: number }> => {
-    const { agentId, limit = 50, offset = 0, projectId, statuses } = options;
+    const { agentId, limit = 50, offset = 0, projectId, statuses, topicId } = options;
 
     // Only goals that actually have a graph. Rows created by the earlier
     // task-carried flow have no `goal_nodes`, so they would render as a
@@ -353,6 +355,7 @@ export class GoalModel {
     if (agentId) conditions.push(eq(goals.agentId, agentId));
     if (projectId) conditions.push(eq(goals.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));
+    if (topicId) conditions.push(eq(goals.subjectType, 'topic'), eq(goals.subjectId, topicId));
 
     const [countRow] = await this.db
       .select({ count: sql<number>`count(*)` })

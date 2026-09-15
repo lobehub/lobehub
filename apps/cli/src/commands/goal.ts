@@ -163,6 +163,25 @@ function printTick(result: GoalTickResult) {
   if (result.nodeId) console.log(`  ${pc.dim(`node: ${result.nodeId}`)}`);
 }
 
+/**
+ * Whether this process runs with a server-minted operation token (device and
+ * gateway runs) rather than the user's own login. Operation tokens are refused
+ * on ordinary routes, so commands that act for the running conversation pick
+ * the operation-authenticated endpoint instead.
+ */
+const hasOperationToken = () => {
+  const injectedJwt = process.env.LOBEHUB_JWT;
+  if (!injectedJwt) return false;
+  try {
+    return (
+      JSON.parse(Buffer.from(injectedJwt.split('.')[1], 'base64url').toString()).purpose ===
+      'hetero-operation'
+    );
+  } catch {
+    return false;
+  }
+};
+
 export function registerGoalCommand(program: Command) {
   const goal = program.command('goal').description('Run long-horizon Goal Graphs');
   goal
@@ -183,12 +202,7 @@ export function registerGoalCommand(program: Command) {
         const operationId = options.operation ?? process.env.LOBEHUB_OPERATION_ID;
         if (!operationId) throw new Error('Current manager operation ID required');
         const client = await getTrpcClient();
-        const injectedJwt = process.env.LOBEHUB_JWT;
-        const isOperationToken =
-          injectedJwt &&
-          JSON.parse(Buffer.from(injectedJwt.split('.')[1], 'base64url').toString()).purpose ===
-            'hetero-operation';
-        const endpoint = isOperationToken
+        const endpoint = hasOperationToken()
           ? client.goal.submitOperationPlan
           : client.goal.submitPlan;
         const result = await endpoint.mutate({
@@ -245,16 +259,25 @@ export function registerGoalCommand(program: Command) {
       '--operation-lease-timeout-ms <n>',
       'Reclaim a Task operation after this idle time (minimum: 60000)',
     )
+    .option(
+      '--conversation',
+      'Create the goal from the current conversation run (/goal): this agent supervises it from this conversation, and the output carries a turnToken for the first plan',
+    )
+    .option('--criterion <text...>', 'Acceptance criterion (repeatable)')
     .option('--json [fields]', 'Output JSON')
     .action(async (title: string, options) => {
       if (options.maxExperiments && !options.explore) {
         throw new Error('--max-experiments requires --explore');
       }
+      const operationId = process.env.LOBEHUB_OPERATION_ID;
+      if (options.conversation && !operationId) {
+        throw new Error(
+          '--conversation must run inside an agent conversation (LOBEHUB_OPERATION_ID)',
+        );
+      }
       const client = await getTrpcClient();
       const buildUrl = await resolveAppUrlBuilder(client);
-      const result = await client.goal.create.mutate({
-        agentId: options.agent ?? process.env.LOBEHUB_AGENT_ID,
-        createdByAgentId: process.env.LOBEHUB_AGENT_ID,
+      const goalInput = {
         config:
           options.maxManagerTurns ||
           options.explore ||
@@ -299,6 +322,9 @@ export function registerGoalCommand(program: Command) {
                 },
               }
             : undefined,
+        criteria: (options.criterion as string[] | undefined)?.map((criterion) => ({
+          title: criterion,
+        })),
         maxRounds: options.maxRounds ? Number.parseInt(options.maxRounds, 10) : undefined,
         maxTotalCost: options.maxCost ? Number.parseFloat(options.maxCost) : undefined,
         problemDescription: options.instruction,
@@ -306,14 +332,43 @@ export function registerGoalCommand(program: Command) {
         requirement: options.requirement,
         title,
         tasks: options.task,
-      });
+      };
+      // A conversation goal takes its agent and conversation from the running
+      // operation on the server; the CLI only names the run. Device and gateway
+      // runs hold an operation token, which only the operation endpoint accepts.
+      // A local desktop run keeps its operation client-side, so it also names
+      // its conversation and agent for the server to check.
+      const result = options.conversation
+        ? hasOperationToken()
+          ? await client.goal.createConversationGoal.mutate({
+              ...goalInput,
+              operationId: operationId!,
+            })
+          : await client.goal.create.mutate({
+              ...goalInput,
+              agentId: process.env.LOBEHUB_AGENT_ID,
+              conversationOperationId: operationId,
+              conversationTopicId: process.env.LOBEHUB_TOPIC_ID,
+            })
+        : await client.goal.create.mutate({
+            ...goalInput,
+            agentId: options.agent ?? process.env.LOBEHUB_AGENT_ID,
+            createdByAgentId: process.env.LOBEHUB_AGENT_ID,
+          });
+      const turnToken = 'turnToken' in result ? result.turnToken : undefined;
       // `goal.create` returns the whole graph snapshot, so the id is on its
       // goal — `result.data.id` is undefined, and the CLI cannot resolve the
       // router's types to catch that, which is how it reached a printed URL.
-      const url = buildUrl(`/goal/${encodeURIComponent(result.data.goal.id)}`);
-      if (options.json !== undefined) return outputJson({ ...result.data, url }, options.json);
-      printGraph(result.data);
+      const url = buildUrl(`/goal/${encodeURIComponent(result.data!.goal.id)}`);
+      if (options.json !== undefined)
+        return outputJson({ ...result.data, turnToken, url }, options.json);
+      printGraph(result.data!);
       console.log(`${pc.bold('goal')}: ${url}`);
+      if (turnToken) {
+        console.log(
+          `${pc.bold('planning turn')}: lh goal plan ${result.data!.goal.id} --token ${turnToken} --file <plan.json>`,
+        );
+      }
     });
 
   goal

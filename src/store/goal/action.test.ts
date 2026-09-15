@@ -61,6 +61,37 @@ describe('GoalAction', () => {
     });
   });
 
+  describe('useFetchTopicGoals', () => {
+    it('reads the goals created from the topic under a topic-scoped key', () => {
+      useGoalStore.getState().useFetchTopicGoals('tpc-1');
+      const [key, fetcher] = vi.mocked(useClientDataSWR).mock.calls[0];
+
+      expect(key).toEqual(['goal:topicGoals', 'tpc-1']);
+      void (fetcher as () => unknown)();
+      expect(goalService.list).toHaveBeenCalledWith({ limit: 20, topicId: 'tpc-1' });
+    });
+
+    it('does not fetch without a topic', () => {
+      useGoalStore.getState().useFetchTopicGoals(undefined);
+
+      expect(vi.mocked(useClientDataSWR).mock.calls[0][0]).toBeNull();
+    });
+
+    it('polls only while one of the goals is still advancing on the server', () => {
+      useGoalStore.getState().useFetchTopicGoals('tpc-1');
+      const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {
+        refreshInterval: (result?: { goals: Array<{ goal: { status: string } }> }) => number;
+      };
+      const withStatuses = (...statuses: string[]) => ({
+        goals: statuses.map((status) => ({ goal: { status } })),
+      });
+
+      expect(options.refreshInterval(withStatuses('achieved', 'running'))).toBeGreaterThan(0);
+      expect(options.refreshInterval(withStatuses('review', 'paused'))).toBe(0);
+      expect(options.refreshInterval(undefined)).toBe(0);
+    });
+  });
+
   it('stores goal lists independently for each agent', () => {
     useGoalStore.getState().useFetchGoals('agent-1');
     const options = vi.mocked(useClientDataSWR).mock.calls[0][2] as {

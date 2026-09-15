@@ -221,6 +221,13 @@ export interface GoalManagerPolicy {
 
 /** Server-owned dispatch receipt, retained across backend restarts. */
 export interface GoalManagerState {
+  /**
+   * The turn was not dispatched by the manager: it is the conversation run that
+   * created the goal (`/goal` → `lh goal create --conversation`), adopted as the
+   * first planning turn. The turn is keyed by `operationId` instead of the
+   * server-minted `msg_goal_manager_<token>` source message.
+   */
+  adopted?: boolean;
   consumed?: boolean;
   operationId?: string;
   /**

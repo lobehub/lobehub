@@ -276,6 +276,151 @@ describe('CLI main Agent planning', () => {
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
   });
 
+  describe('/goal from a conversation run', () => {
+    const conversationTopicId = 'tpc_goal_conversation';
+    const conversationOpId = 'op_goal_conversation';
+
+    const startConversationRun = async () => {
+      await db.insert(topics).values({ agentId, id: conversationTopicId, userId });
+      await ops().recordStart({
+        agentId,
+        appContext: { sourceMessageId: 'msg_user_goal_request' },
+        operationId: conversationOpId,
+        topicId: conversationTopicId,
+      });
+    };
+
+    it('supervises from the conversation and plans in the same run', async () => {
+      await startConversationRun();
+
+      const { graph, turnToken } = await service().createFromConversation(conversationOpId, {
+        criteria: [{ title: 'Report delivered' }],
+        title: 'Ship the report',
+      });
+
+      expect(graph.goal).toMatchObject({
+        agentId,
+        subjectId: conversationTopicId,
+        subjectType: 'topic',
+      });
+      const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+      expect(state).toMatchObject({
+        adopted: true,
+        operationId: conversationOpId,
+        token: turnToken,
+        topicId: conversationTopicId,
+        turns: 1,
+      });
+
+      // The creating run plans with the returned token, no dispatched turn needed.
+      expect(await manager().submit(graph.goal.id, turnToken, conversationOpId, taskPlan)).toEqual({
+        action: 'tasks',
+        recorded: true,
+      });
+      expect((await service().tick(graph.goal.id)).outcome).toBe('waiting_external');
+      await ops().recordCompletion(conversationOpId, { status: 'done' });
+      expect((await service().tick(graph.goal.id)).outcome).toBe('advanced');
+      expect((await service().tick(graph.goal.id)).taskId).toBeTruthy();
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).not.toHaveBeenCalled();
+      expect(
+        (await model().list({ topicId: conversationTopicId })).goals.map((item) => item.goal.id),
+      ).toEqual([graph.goal.id]);
+    });
+
+    it('counts only planning turns, not the rest of the conversation, as management spend', async () => {
+      await startConversationRun();
+      await ops().recordStart({
+        agentId,
+        appContext: { sourceMessageId: 'msg_user_unrelated_chat' },
+        operationId: 'op_goal_conversation_chat',
+        topicId: conversationTopicId,
+      });
+      await db
+        .update(agentOperations)
+        .set({ totalCost: 2 })
+        .where(eq(agentOperations.id, conversationOpId));
+      await db
+        .update(agentOperations)
+        .set({ totalCost: 5 })
+        .where(eq(agentOperations.id, 'op_goal_conversation_chat'));
+
+      const { graph } = await service().createFromConversation(conversationOpId, {
+        title: 'Budgeted goal',
+      });
+      const state = (await model().findById(graph.goal.id))!.config!.managerState!;
+
+      expect((await manager().usage(state)).totalCost).toBe(2);
+    });
+
+    it('plans a local desktop run that has no server operation row', async () => {
+      await db.insert(topics).values({ agentId, id: conversationTopicId, userId });
+      const localRun = { agentId, topicId: conversationTopicId };
+
+      const { graph, turnToken } = await service().createFromConversation(
+        'op_client_only_local_run',
+        { title: 'Local goal' },
+        localRun,
+      );
+      expect(graph.goal).toMatchObject({ agentId, subjectId: conversationTopicId });
+
+      expect(
+        await manager().submit(graph.goal.id, turnToken, 'op_client_only_local_run', taskPlan),
+      ).toEqual({ action: 'tasks', recorded: true });
+      // No run to watch exit: the submitted plan settles the turn.
+      expect((await service().tick(graph.goal.id)).outcome).toBe('advanced');
+      expect((await service().tick(graph.goal.id)).taskId).toBeTruthy();
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).not.toHaveBeenCalled();
+
+      await expect(
+        manager().submit(graph.goal.id, turnToken, 'op_some_other_run', taskPlan),
+      ).rejects.toThrow();
+    });
+
+    it("refuses a local run whose conversation is not the agent's", async () => {
+      await db.insert(agents).values({ id: 'other-local-agent', userId });
+      await db.insert(topics).values({
+        agentId: 'other-local-agent',
+        id: conversationTopicId,
+        userId,
+      });
+
+      await expect(
+        service().createFromConversation(
+          'op_client_only_local_run',
+          { title: 'Borrowed conversation' },
+          { agentId, topicId: conversationTopicId },
+        ),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('refuses a conversation run that has already ended', async () => {
+      await startConversationRun();
+      await ops().recordCompletion(conversationOpId, { status: 'done' });
+
+      await expect(
+        service().createFromConversation(conversationOpId, { title: 'Too late' }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('lets an operation token create the goal only with the goal capability', async () => {
+      await startConversationRun();
+
+      await expect(
+        operationCaller(conversationOpId).createConversationGoal({
+          operationId: conversationOpId,
+          title: 'No capability',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      const result = await operationCaller(conversationOpId, {
+        capabilities: ['hetero:ingest', 'goal:manage'],
+      }).createConversationGoal({ operationId: conversationOpId, title: 'From device' });
+
+      expect(result.turnToken).toBeTruthy();
+      expect(result.data?.goal).toMatchObject({ agentId, subjectType: 'topic' });
+    });
+  });
+
   it('does not dispatch the previous supervisor when a handoff lands before the claim', async () => {
     const { id, op } = await start();
     await ops().recordCompletion(op.id, { status: 'done' });

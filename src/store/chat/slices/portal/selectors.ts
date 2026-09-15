@@ -255,6 +255,8 @@ const taskResultId = (s: ChatStoreState): string | undefined => {
 };
 
 // Goal detail drill-down selectors
+const goalPortalId = (s: ChatStoreState): string | undefined =>
+  getViewData(s, PortalViewType.Goal)?.goalId;
 const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
 const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
 
@@ -341,6 +343,7 @@ export const chatPortalSelectors = {
   // Goal drill-down data
   goalMetricView,
   goalNodeView,
+  goalPortalId,
 
   // Local file data
   activeLocalFileId,
