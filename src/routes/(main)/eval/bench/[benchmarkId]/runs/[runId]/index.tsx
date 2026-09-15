@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Button, confirmModal, Progress, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';

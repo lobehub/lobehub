@@ -2,8 +2,7 @@
 
 import { AsyncTaskStatus } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Alert, Progress, Text } from '@lobehub/ui/base-ui';
 import { Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

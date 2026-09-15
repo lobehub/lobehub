@@ -1,6 +1,12 @@
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui/base-ui';
-import { Pagination } from 'antd';
+import {
+  ActionIcon,
+  Pagination,
+  TabsIndicator,
+  TabsList,
+  TabsRoot,
+  TabsTab,
+} from '@lobehub/ui/base-ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

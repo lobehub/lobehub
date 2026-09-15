@@ -1,6 +1,6 @@
 import { DropdownMenu, Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { Pagination, Table } from 'antd';
+import { ActionIcon, Button, Pagination, Text } from '@lobehub/ui/base-ui';
+import { Table } from 'antd';
 import { type ColumnsType } from 'antd/es/table';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
@@ -425,7 +425,6 @@ const TestCaseTable = memo<TestCaseTableProps>(
             style={{ paddingBlock: 12, paddingInline: 16 }}
           >
             <Pagination
-              simple
               current={pagination.current}
               pageSize={pagination.pageSize}
               size="small"

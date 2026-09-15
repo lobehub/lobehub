@@ -1,7 +1,6 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Progress, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CircleAlertIcon, Loader2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -36,7 +35,7 @@ const UploadStatus = memo<UploadStateProps>(({ error, status, size, uploadState 
     case 'uploading': {
       return (
         <Flexbox horizontal align={'center'} gap={4}>
-          <Progress percent={uploadState?.progress} size={14} type="circle" />
+          <Progress percent={uploadState?.progress ?? 0} size={14} type="circle" />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size * ((uploadState?.progress || 0) / 100), 0)}
           </Text>
@@ -47,7 +46,7 @@ const UploadStatus = memo<UploadStateProps>(({ error, status, size, uploadState 
     case 'processing': {
       return (
         <Flexbox horizontal align={'center'} gap={4}>
-          <Progress percent={uploadState?.progress} size={14} type="circle" />
+          <Progress percent={uploadState?.progress ?? 0} size={14} type="circle" />
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {formatSize(size)}
           </Text>

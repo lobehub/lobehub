@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Progress, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -101,11 +100,12 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
                     {item.title}
                   </Text>
                   <Progress
-                    percent={item.percent}
+                    percent={item.percent ?? 0}
+                    segments={5}
                     showInfo={false}
-                    size={[2, 12]}
-                    steps={5}
+                    size={12}
                     strokeColor={item.strokeColor}
+                    variant="segments"
                   />
                   <Text fontSize={12} type={'secondary'}>
                     {item.percent}%

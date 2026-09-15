@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Progress, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -109,7 +108,13 @@ export const IdentityMemoryCard = memo<IdentityMemoryCardProps>(
                     <Text fontSize={12} type={'secondary'} weight={500}>
                       Confidence
                     </Text>
-                    <Progress percent={confidence} showInfo={false} size={[2, 12]} steps={5} />
+                    <Progress
+                      percent={confidence}
+                      segments={5}
+                      showInfo={false}
+                      size={12}
+                      variant="segments"
+                    />
                     <Text fontSize={12} type={'secondary'}>
                       {confidence}%
                     </Text>
