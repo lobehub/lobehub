@@ -2,11 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createServerContextFactProviders } from './index';
 
-const { findById, getInfoForAIGeneration, loadConnectedComposioIds } = vi.hoisted(() => ({
-  findById: vi.fn(),
-  getInfoForAIGeneration: vi.fn(),
-  loadConnectedComposioIds: vi.fn(),
-}));
+const { findById, getInfoForAIGeneration, loadConnectedComposioIds, pluginQuery } = vi.hoisted(
+  () => ({
+    findById: vi.fn(),
+    getInfoForAIGeneration: vi.fn(),
+    loadConnectedComposioIds: vi.fn(),
+    pluginQuery: vi.fn(),
+  }),
+);
 
 vi.mock('@/database/models/user', () => ({
   UserModel: Object.assign(
@@ -15,6 +18,11 @@ vi.mock('@/database/models/user', () => ({
     },
     { getInfoForAIGeneration },
   ),
+}));
+vi.mock('@/database/models/plugin', () => ({
+  PluginModel: class {
+    query = pluginQuery;
+  },
 }));
 vi.mock('@/database/models/workspace', () => ({
   WorkspaceModel: class {
@@ -66,6 +74,24 @@ describe('createServerContextFactProviders', () => {
 
     const ids = new Set(await providers.listConnectedConnectorIds!('agt_1'));
     expect(ids).toEqual(new Set(['gmail', 'lobehub-skill-x']));
+  });
+
+  it('offers every installed custom MCP connector, pinned or not, and nothing else', async () => {
+    pluginQuery.mockResolvedValue([
+      {
+        identifier: 'my-mcp',
+        manifest: { meta: { description: 'Local files', title: 'My MCP' } },
+        type: 'customPlugin',
+      },
+      { identifier: 'market-plugin', manifest: { meta: { title: 'Market' } }, type: 'plugin' },
+    ]);
+
+    await expect(
+      createServerContextFactProviders(source({ operationToolSet: { sourceMap: {} } }))
+        .listCustomPlugins!(),
+    ).resolves.toEqual([
+      { description: 'Local files', identifier: 'my-mcp', name: 'My MCP', type: 'custom' },
+    ]);
   });
 
   it('returns the app origin and the workspace slug when it resolves', async () => {

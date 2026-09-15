@@ -11,6 +11,7 @@ import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
+import { PluginModel } from '@/database/models/plugin';
 import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { UserModel } from '@/database/models/user';
@@ -229,15 +230,18 @@ export const createServerContextFactProviders = ({
     },
 
     // Custom MCP connectors the user installed, beyond the shared catalog.
+    // Read from the installed-plugins table: the run's tool source map only
+    // classifies skill / Composio / client tools, so it cannot tell a custom
+    // connector apart, and a connector the agent has not pinned yet must
+    // still be offered to createAgent / updateAgent.
     listCustomPlugins: async () => {
-      const manifestMap = state.operationToolSet?.manifestMap ?? state.toolManifestMap ?? {};
-      const sourceMap = state.operationToolSet?.sourceMap ?? state.toolSourceMap ?? {};
-      return Object.entries(manifestMap)
-        .filter(([identifier]) => sourceMap[identifier] === 'mcp')
-        .map(([identifier, manifest]) => ({
-          description: manifest?.meta?.description,
-          identifier,
-          name: manifest?.meta?.title || identifier,
+      const installed = await new PluginModel(db, userId, ctx.workspaceId).query();
+      return installed
+        .filter((plugin) => plugin.type === 'customPlugin')
+        .map((plugin) => ({
+          description: plugin.manifest?.meta?.description,
+          identifier: plugin.identifier,
+          name: plugin.manifest?.meta?.title || plugin.identifier,
           type: 'custom' as const,
         }));
     },
