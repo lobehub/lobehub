@@ -31,7 +31,9 @@ import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
 
 interface CommentCardProps {
   comment: DocumentCommentItem;
-  /** Set when a deep link targets this comment; each new token scrolls + highlights again. */
+  /** Whether a focus also scrolls the card into view. Defaults to true; a pick in the body passes false. */
+  focusScroll?: boolean;
+  /** Set when a deep link targets this comment; each new token highlights (and by default scrolls) again. */
   focusToken?: number;
   onMutated: () => void | Promise<void>;
   onReply?: () => void;
@@ -65,7 +67,16 @@ const CommentContent = memo<Pick<DocumentCommentItem, 'content' | 'editorData'>>
 CommentContent.displayName = 'DocumentCommentContent';
 
 const CommentCard = memo<CommentCardProps>(
-  ({ comment, focusToken, onMutated, onReply, onUpdate, replying, variant = 'root' }) => {
+  ({
+    comment,
+    focusScroll = true,
+    focusToken,
+    onMutated,
+    onReply,
+    onUpdate,
+    replying,
+    variant = 'root',
+  }) => {
     const { t } = useTranslation('file');
     const cardRef = useRef<HTMLDivElement>(null);
     const { text: time, title: timeTitle } = useActivityTime(comment.createdAt);
@@ -99,16 +110,18 @@ const CommentCard = memo<CommentCardProps>(
     useEffect(() => {
       const node = cardRef.current;
       if (focusToken === undefined || !node) return;
-      // Honor reduced motion: jump instead of gliding; the steady highlight itself stays.
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+      if (focusScroll) {
+        // Honor reduced motion: jump instead of gliding; the steady highlight itself stays.
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+      }
       node.classList.add(styles.highlighted);
       const timer = setTimeout(() => node.classList.remove(styles.highlighted), 2400);
       return () => {
         clearTimeout(timer);
         node.classList.remove(styles.highlighted);
       };
-    }, [focusToken]);
+    }, [focusScroll, focusToken]);
 
     const handleUpdate = useCallback(async () => {
       const editorValue: DocumentCommentEditorValue = editorRef.current?.getValue() ?? {

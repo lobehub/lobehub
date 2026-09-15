@@ -130,7 +130,7 @@ export const useOptimisticDocumentComment = () => {
 
 /**
  * Every anchored root of the document, independent of how many thread pages
- * the list has loaded. Body highlights and badges are painted from this so a
+ * the list has loaded. Body highlights are painted from this so a
  * newer anchored comment is discoverable from the document right after a
  * reload, not only once the reader has paged the list far enough to reach it.
  */
