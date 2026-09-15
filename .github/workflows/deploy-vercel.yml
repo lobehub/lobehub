@@ -1,0 +1,52 @@
+name: Deploy to Vercel (Prebuilt)
+
+on:
+  push:
+    branches:
+      - canary
+  workflow_run:
+    workflows: ["Upstream Sync"]
+    types:
+      - completed
+    branches:
+      - canary
+  workflow_dispatch:
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  Deploy-to-Vercel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 3. Setup Bun (新增步骤：安装 Bun 环境)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          
+      - name: 4. Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - name: 5. Install dependencies
+        run: pnpm install
+
+      - name: 6. Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: 7. Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: 8. Build Project Artifacts
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: 9. Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} --archive=tgz
