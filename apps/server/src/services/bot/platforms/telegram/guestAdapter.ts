@@ -6,6 +6,7 @@ import debug from 'debug';
 
 import { normalizeBotReplyLocale } from '../const';
 import { TelegramApi } from './api';
+import { requestTelegramDraftStop } from './draftSession';
 import {
   deliverGuestCreate,
   deliverGuestEdit,
@@ -51,6 +52,11 @@ interface TelegramGuestMessage {
 
 interface TelegramGuestUpdate {
   guest_message?: TelegramGuestMessage;
+  stopped_message_generation?: {
+    chat: TelegramGuestChat;
+    draft_id: number;
+    message_thread_id?: number;
+  };
 }
 
 /**
@@ -89,8 +95,42 @@ export class LobeTelegramAdapter extends TelegramAdapter {
     this.sessionScope = sessionScope;
   }
 
+  override async handleWebhook(request: Request, options?: WebhookOptions): Promise<Response> {
+    const cloned = request.clone();
+    let update: TelegramGuestUpdate | undefined;
+    try {
+      update = (await cloned.json()) as TelegramGuestUpdate;
+    } catch {
+      return super.handleWebhook(request, options);
+    }
+    const stopped = update.stopped_message_generation;
+    if (!stopped) return super.handleWebhook(request, options);
+
+    const response = await super.handleWebhook(request, options);
+    if (response.status !== 200) return response;
+
+    const threadId = ['telegram', String(stopped.chat.id), stopped.message_thread_id]
+      .filter((part) => part !== undefined)
+      .join(':');
+    try {
+      await this.handleStoppedGeneration(threadId, stopped.draft_id);
+      return response;
+    } catch (error) {
+      log('failed to stop Telegram draft generation: %O', error);
+      return new Response('Failed to stop generation', { status: 503 });
+    }
+  }
+
   protected override processUpdate(update: unknown, options?: WebhookOptions): void {
-    const guestMessage = (update as TelegramGuestUpdate).guest_message;
+    const telegramUpdate = update as TelegramGuestUpdate;
+    const stopped = telegramUpdate.stopped_message_generation;
+    if (stopped) {
+      // Stop is awaited in `handleWebhook` so interrupt failure can return 503.
+      // Chat SDK otherwise always answers Telegram with HTTP 200 after processUpdate.
+      return;
+    }
+
+    const guestMessage = telegramUpdate.guest_message;
     if (guestMessage) {
       const senderId = guestMessage.guest_bot_caller_user?.id ?? guestMessage.from?.id;
       if (
@@ -103,6 +143,26 @@ export class LobeTelegramAdapter extends TelegramAdapter {
       return;
     }
     super.processUpdate(update as never, options);
+  }
+
+  private async handleStoppedGeneration(threadId: string, draftId: number): Promise<void> {
+    const session = await requestTelegramDraftStop(this.sessionScope, threadId, draftId);
+    if (!session) return;
+
+    if (!session.operationId) return;
+
+    const [{ getServerDB }, { AiAgentService }] = await Promise.all([
+      import('@/database/core/db-adaptor'),
+      import('@/server/services/aiAgent'),
+    ]);
+    const db = await getServerDB();
+    const service = new AiAgentService(db, session.userId, {
+      workspaceId: session.workspaceId,
+    });
+    const result = await service.interruptTask({ operationId: session.operationId });
+    if (!result.success) {
+      throw new Error(`Failed to interrupt Telegram draft operation ${session.operationId}`);
+    }
   }
 
   override isDM(threadId: string): boolean {
@@ -214,9 +274,6 @@ export class LobeTelegramAdapter extends TelegramAdapter {
     const guestQueryId = guestMessage.guest_query_id;
     const dispatch = async () => {
       if (guestQueryId) {
-        // Remember the summoning user's Telegram locale so Guest Mode
-        // notices (truncation / attachment fallbacks) render in their
-        // language on the first reply and every later edit.
         await initializeTelegramGuestSession(this.sessionScope, threadId, {
           guestQueryId,
           locale: normalizeBotReplyLocale(caller?.language_code),

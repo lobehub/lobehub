@@ -1,7 +1,4 @@
-import debug from 'debug';
-
 import { renderGuestCopy, renderGuestTruncated } from '../../replyTemplate';
-import type { BotReplyLocale } from '../const';
 import type { BotMessageAttachment, MessengerContent } from '../types';
 import { messengerContentText } from '../types';
 import type { TelegramApi } from './api';
@@ -10,158 +7,96 @@ import {
   saveTelegramGuestSession,
   type TelegramGuestSession,
 } from './guestSession';
-import { markdownToTelegramHTML } from './markdownToHTML';
+import { prepareTelegramRichMessage, TELEGRAM_RICH_MESSAGE_LIMIT } from './richMessage';
 import { decodeGuestInlineMessageId, encodeGuestInlineMessageId } from './threadId';
 
-const log = debug('lobe-server:bot:telegram-guest-outbound');
+const escapeMarkdownLabel = (value: string): string => value.replaceAll(/([\\`*_[\]<>])/g, '\\$1');
 
-const TELEGRAM_CAPTION_LIMIT = 1024;
-const TELEGRAM_TEXT_LIMIT = 4096;
-
-const escapeTelegramHTML = (value: string): string =>
-  value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-
-const attachmentFallbackText = (
+const attachmentFallbackMarkdown = (
   attachment: BotMessageAttachment,
   index: number,
-  lng?: BotReplyLocale,
+  locale: TelegramGuestSession['locale'],
 ): string => {
-  const label = escapeTelegramHTML(attachment.name?.trim() || `Attachment ${index + 1}`);
+  const label = escapeMarkdownLabel(
+    attachment.name?.trim().replaceAll(/\s+/g, ' ') || `Attachment ${index + 1}`,
+  );
   if (!attachment.fetchUrl) {
-    return `${label}: ${renderGuestCopy('guestMediaUnavailable', lng)}`;
+    return `⚠️ **${label}** — _${renderGuestCopy('guestMediaUnavailable', locale)}_`;
   }
-  return `<a href="${escapeTelegramHTML(attachment.fetchUrl)}">${label}</a>`;
+  const url = encodeURI(attachment.fetchUrl).replaceAll('(', '%28').replaceAll(')', '%29');
+  return `📎 [${label}](${url})`;
 };
 
-const guestBodyLimit = (mediaType: TelegramGuestSession['mediaType']): number =>
-  mediaType === 'photo' ? TELEGRAM_CAPTION_LIMIT : TELEGRAM_TEXT_LIMIT;
-
-interface GuestTextOptions {
-  attachments?: BotMessageAttachment[];
-  limit?: number;
-  locale?: BotReplyLocale;
-  retainedTailLength?: number;
-  retainTruncationNotice?: boolean;
-}
-
-interface PreparedGuestText {
+interface PreparedGuestMarkdown {
   displayText: string;
   storedText: string;
   truncated: boolean;
 }
 
-const prepareGuestText = (
+const characterLength = (value: string): number => Array.from(value).length;
+
+const sliceCharacters = (value: string, start: number, end?: number): string =>
+  Array.from(value).slice(start, end).join('');
+
+const prepareGuestMarkdown = (
   text: string,
-  {
-    attachments,
-    limit = TELEGRAM_TEXT_LIMIT,
-    locale,
-    retainedTailLength = 0,
-    retainTruncationNotice = false,
-  }: GuestTextOptions = {},
-): PreparedGuestText => {
+  attachments: BotMessageAttachment[] | undefined,
+  session: TelegramGuestSession,
+  retainedTailLength = 0,
+  retainTruncation = true,
+): PreparedGuestMarkdown => {
   const fallbackLines =
-    attachments?.map((att, index) => attachmentFallbackText(att, index, locale)) ?? [];
+    attachments?.flatMap((attachment, index) =>
+      attachment.fetchUrl ? [] : [attachmentFallbackMarkdown(attachment, index, session.locale)],
+    ) ?? [];
   const fallbackText = fallbackLines.join('\n');
-  let combinedText = fallbackText || text;
-  if (text.trim() && fallbackText) {
-    combinedText = `${text}\n\n${fallbackText}`;
-  }
-  if (combinedText.length <= limit && !retainTruncationNotice) {
-    return { displayText: combinedText, storedText: text, truncated: false };
+  const displayText = [text.trim(), fallbackText].filter(Boolean).join('\n\n');
+  if (
+    characterLength(displayText) <= TELEGRAM_RICH_MESSAGE_LIMIT &&
+    (!session.truncated || !retainTruncation)
+  ) {
+    return { displayText, storedText: text, truncated: false };
   }
 
-  const truncatedNotice = `\n\n${renderGuestTruncated(limit, locale)}`;
-  const overflowNotice = renderGuestCopy('guestAttachmentOverflow', locale);
-  const fallbackBudget = limit - truncatedNotice.length - overflowNotice.length;
-  const includedFallbacks: string[] = [];
-  for (const line of fallbackLines) {
-    const candidate = [...includedFallbacks, line].join('\n');
-    if (candidate.length > fallbackBudget) break;
-    includedFallbacks.push(line);
-  }
-  const omittedAttachments = includedFallbacks.length < fallbackLines.length;
-  const fallbackSection = [
-    ...includedFallbacks,
-    ...(omittedAttachments ? [overflowNotice] : []),
-  ].join('\n');
-  const suffix = fallbackSection ? `${truncatedNotice}\n\n${fallbackSection}` : truncatedNotice;
-  const textBudget = Math.max(0, limit - suffix.length);
+  const notice = `_${renderGuestTruncated(TELEGRAM_RICH_MESSAGE_LIMIT, session.locale)}_`;
+  const suffix = [notice, fallbackText].filter(Boolean).join('\n\n');
+  const textBudget = Math.max(0, TELEGRAM_RICH_MESSAGE_LIMIT - characterLength(suffix) - 2);
   const tailLength = Math.min(retainedTailLength, textBudget);
+  const textLength = characterLength(text);
   const storedText =
-    tailLength > 0 && text.length > textBudget
-      ? `${text.slice(0, textBudget - tailLength)}${text.slice(-tailLength)}`
-      : text.slice(0, textBudget);
+    textLength > textBudget
+      ? `${sliceCharacters(text, 0, textBudget - tailLength)}${
+          tailLength > 0 ? sliceCharacters(text, -tailLength) : ''
+        }`
+      : text;
+
   return {
-    displayText: `${storedText}${suffix}`,
+    displayText: [storedText, suffix].filter(Boolean).join('\n\n'),
     storedText,
     truncated: true,
   };
 };
 
-const canApplyMedia = (
-  attachments: BotMessageAttachment[] | undefined,
-  caption: string,
-): attachments is [BotMessageAttachment & { fetchUrl: string }] =>
-  attachments?.length === 1 &&
-  attachments[0]?.type === 'image' &&
-  Boolean(attachments[0].fetchUrl) &&
-  caption.length <= TELEGRAM_CAPTION_LIMIT;
-
-const applyMedia = async (
-  api: TelegramApi,
-  inlineMessageId: string,
-  attachment: BotMessageAttachment & { fetchUrl: string },
-  caption: string,
-): Promise<boolean> => {
-  try {
-    await api.editInlineMessageMedia({
-      caption: caption.trim() ? caption : undefined,
-      inlineMessageId,
-      mediaType: 'photo',
-      source: { url: attachment.fetchUrl },
-    });
-    return true;
-  } catch (error) {
-    log('editInlineMessageMedia failed: %O', error);
-    return false;
-  }
-};
-
-const tryApplyMedia = async (
-  api: TelegramApi,
-  inlineMessageId: string,
-  attachments: BotMessageAttachment[] | undefined,
+const prepareGuestRichMessage = async (
   text: string,
-  options: Omit<GuestTextOptions, 'attachments' | 'limit'>,
-): Promise<PreparedGuestText | undefined> => {
-  if (!canApplyMedia(attachments, text)) return undefined;
-
-  const prepared = prepareGuestText(text, { ...options, limit: TELEGRAM_CAPTION_LIMIT });
-  const delivered = await applyMedia(api, inlineMessageId, attachments[0], prepared.displayText);
-  return delivered ? prepared : undefined;
-};
-
-/**
- * Telegram distinguishes text vs media edits. After `editMessageMedia` the
- * inline message is a photo, so later body updates must use caption edits.
- * Guest Mode keeps the photo rather than trying to convert it back to text.
- */
-const editGuestMessageBody = async (
-  api: TelegramApi,
-  inlineMessageId: string,
-  text: string,
-  mediaType: TelegramGuestSession['mediaType'],
-): Promise<void> => {
-  if (mediaType === 'photo') {
-    await api.editInlineMessageCaption({ caption: text, inlineMessageId });
-    return;
-  }
-  await api.editMessageText(inlineMessageId, text);
+  attachments: BotMessageAttachment[] | undefined,
+  session: TelegramGuestSession,
+  retainedTailLength = 0,
+  retainTruncation = true,
+) => {
+  const prepared = prepareGuestMarkdown(
+    text,
+    attachments,
+    session,
+    retainedTailLength,
+    retainTruncation,
+  );
+  const { richMessage } = await prepareTelegramRichMessage(
+    prepared.displayText,
+    attachments?.filter((attachment) => attachment.fetchUrl),
+    { linksOnly: true },
+  );
+  return { prepared, richMessage };
 };
 
 export const deliverGuestCreate = async (
@@ -221,26 +156,20 @@ const answerGuestQuery = async (
   text: string,
   attachments: BotMessageAttachment[] | undefined,
 ): Promise<{ id: string }> => {
-  const fallbackPrepared = prepareGuestText(text, {
-    attachments,
-    limit: guestBodyLimit(session.mediaType),
-    locale: session.locale,
-  });
-  const { inline_message_id: inlineMessageId } = await api.answerGuestArticle(
+  const { prepared, richMessage } = await prepareGuestRichMessage(text, attachments, session);
+  if (!richMessage.markdown.trim()) {
+    throw new Error('Telegram guest rich reply is empty');
+  }
+  const { inline_message_id: inlineMessageId } = await api.answerGuestRichArticle(
     session.guestQueryId,
-    fallbackPrepared.displayText,
+    richMessage,
   );
-  const mediaPrepared = await tryApplyMedia(api, inlineMessageId, attachments, text, {
-    locale: session.locale,
-  });
-  const persistedPrepared = mediaPrepared ?? fallbackPrepared;
 
   await saveTelegramGuestSession(sessionScope, threadId, {
     ...session,
     inlineMessageId,
-    lastText: persistedPrepared.storedText,
-    mediaType: mediaPrepared ? 'photo' : session.mediaType,
-    truncated: persistedPrepared.truncated,
+    lastText: prepared.storedText,
+    truncated: prepared.truncated,
   });
   return { id: encodeGuestInlineMessageId(inlineMessageId) };
 };
@@ -256,7 +185,7 @@ const editExistingGuest = async (
 ): Promise<{ id: string }> => {
   const inlineMessageId = session.inlineMessageId!;
   let nextText = text;
-  let appendedTextLength = 0;
+  let retainedTailLength = 0;
   if (
     !options.replaceText &&
     session.lastText?.trim() &&
@@ -265,50 +194,39 @@ const editExistingGuest = async (
   ) {
     const separator = '\n\n';
     nextText = `${session.lastText}${separator}${text}`;
-    appendedTextLength = separator.length + text.length;
+    retainedTailLength = characterLength(separator) + characterLength(text);
   }
-  const retainTruncationNotice = !options.replaceText && session.truncated;
-  const retainedTailLength = session.truncated ? appendedTextLength : 0;
-  const fallbackPrepared = prepareGuestText(nextText, {
+  const { prepared, richMessage } = await prepareGuestRichMessage(
+    nextText,
     attachments,
-    limit: guestBodyLimit(session.mediaType),
-    locale: session.locale,
+    session,
     retainedTailLength,
-    retainTruncationNotice,
-  });
-  let mediaType = session.mediaType;
-  let persistedPrepared = fallbackPrepared;
-
-  const mediaPrepared = await tryApplyMedia(api, inlineMessageId, attachments, nextText, {
-    locale: session.locale,
-    retainedTailLength,
-    retainTruncationNotice,
-  });
-  if (mediaPrepared) {
-    mediaType = 'photo';
-    persistedPrepared = mediaPrepared;
-  } else if (fallbackPrepared.displayText.trim()) {
-    await editGuestMessageBody(api, inlineMessageId, fallbackPrepared.displayText, mediaType);
+    !options.replaceText,
+  );
+  if (!richMessage.markdown.trim()) {
+    throw new Error('Telegram guest rich edit is empty');
   }
+  await api.editRichMessageText({
+    inlineMessageId,
+    richMessage,
+  });
 
   await saveTelegramGuestSession(sessionScope, threadId, {
     ...session,
     inlineMessageId,
-    lastText: persistedPrepared.storedText,
-    mediaType,
-    truncated: persistedPrepared.truncated,
+    lastText: prepared.storedText,
+    truncated: prepared.truncated,
   });
   return { id: encodeGuestInlineMessageId(inlineMessageId) };
 };
 
 /**
- * Convert a Chat SDK postable payload into the HTML + attachment shape
- * Guest Mode outbound expects. Callbacks already HTML-format via
- * `formatMarkdown`; local `thread.post({ markdown })` still needs conversion.
+ * Convert a Chat SDK postable payload into the raw Markdown + attachment
+ * shape used by Rich Message delivery.
  */
 export const messengerContentFromPostable = (message: unknown): MessengerContent => {
   if (typeof message === 'string') {
-    return markdownToTelegramHTML(message);
+    return message;
   }
   if (!message || typeof message !== 'object') return '';
   const record = message as {
@@ -323,8 +241,7 @@ export const messengerContentFromPostable = (message: unknown): MessengerContent
     markdown?: string;
     text?: string;
   };
-  const rawText = record.markdown ?? record.text ?? '';
-  const content = record.markdown ? markdownToTelegramHTML(rawText) : rawText;
+  const content = record.markdown ?? record.text ?? '';
   const attachments = record.attachments?.flatMap((att) => {
     if (!att.type) return [];
     return [

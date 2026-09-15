@@ -1,96 +1,134 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as PublicUrlFetchModule from '../publicUrlFetch';
 import { TelegramMessageService } from './service';
 
-// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
-// for real, which has nothing to do with what they assert. Its own behaviour is
-// covered in publicUrlFetch.test.ts.
-vi.mock('../publicUrlFetch', async () => ({
-  // Spread the real module: a full mock silently drops every export it
-  // does not name, so adding one to publicUrlFetch breaks suites that
-  // never cared about it.
-  ...(await vi.importActual<typeof PublicUrlFetchModule>('../publicUrlFetch')),
-  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
-    dispose: async () => undefined,
-    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
-  }),
-}));
-
 const makeApi = () => ({
-  sendAudio: vi.fn().mockResolvedValue({ message_id: 1 }),
-  sendDocument: vi.fn().mockResolvedValue({ message_id: 1 }),
-  sendMessage: vi.fn().mockResolvedValue({ message_id: 10 }),
-  sendPhoto: vi.fn().mockResolvedValue({ message_id: 1 }),
-  sendVideo: vi.fn().mockResolvedValue({ message_id: 1 }),
+  editRichMessageText: vi.fn().mockResolvedValue(undefined),
+  sendRichMessage: vi.fn().mockResolvedValue({ message_id: 10 }),
 });
 
-describe('TelegramMessageService.sendMessage', () => {
+describe('TelegramMessageService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('uses sendMessage when no attachments', async () => {
+  it('sends text through Rich Messages', async () => {
     const api = makeApi();
     const service = new TelegramMessageService(api as any);
 
     const result = await service.sendMessage({
       channelId: 'chat-1',
-      content: 'hello',
+      content: '# hello',
       platform: 'telegram',
     });
 
-    expect(api.sendMessage).toHaveBeenCalledWith('chat-1', 'hello');
-    expect(api.sendPhoto).not.toHaveBeenCalled();
+    expect(api.sendRichMessage).toHaveBeenCalledWith({
+      chatId: 'chat-1',
+      richMessage: { markdown: '# hello' },
+      uploads: [],
+    });
     expect(result.messageId).toBe('10');
   });
 
-  it('dispatches attachments to typed media methods with content as caption', async () => {
+  it('embeds attachments in the same Rich Message', async () => {
     const api = makeApi();
-    const service = new TelegramMessageService(api as any);
-    // Documents are uploaded as bytes now (a URL only works for .pdf/.zip and
-    // fails outright for the extension-less file proxy), so the document leg
-    // has to materialize before `sendDocument` is reached.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(new Response(Buffer.from('pdf-bytes'), { status: 200 })),
-    );
-
-    try {
-      await service.sendMessage({
-        attachments: [
-          { fetchUrl: 'https://cdn.example.com/a.png', type: 'image' },
-          { fetchUrl: 'https://cdn.example.com/b.pdf', type: 'file' },
-        ],
-        channelId: 'chat-1',
-        content: 'caption',
-        platform: 'telegram',
-      });
-    } finally {
-      vi.unstubAllGlobals();
-    }
-
-    expect(api.sendMessage).not.toHaveBeenCalled();
-    expect(api.sendPhoto).toHaveBeenCalledWith(
-      expect.objectContaining({ caption: 'caption', chatId: 'chat-1' }),
-    );
-    expect(api.sendDocument).toHaveBeenCalledWith(expect.objectContaining({ caption: undefined }));
-  });
-
-  it('falls back to text sendMessage when all attachments fail', async () => {
-    const api = makeApi();
-    api.sendPhoto.mockRejectedValueOnce(new Error('429'));
     const service = new TelegramMessageService(api as any);
 
     await service.sendMessage({
       attachments: [{ fetchUrl: 'https://cdn.example.com/a.png', type: 'image' }],
       channelId: 'chat-1',
-      content: 'still send',
+      content: 'caption',
       platform: 'telegram',
     });
 
-    expect(api.sendPhoto).toHaveBeenCalled();
-    expect(api.sendMessage).toHaveBeenCalledWith('chat-1', 'still send');
+    expect(api.sendRichMessage).toHaveBeenCalledWith({
+      chatId: 'chat-1',
+      richMessage: {
+        markdown: 'caption\n\n![](tg://photo?id=media_0)',
+        media: [
+          {
+            id: 'media_0',
+            media: { media: 'https://cdn.example.com/a.png', type: 'photo' },
+          },
+        ],
+      },
+      uploads: [],
+    });
+  });
+
+  it('does not swallow a rejected data-only attachment as an empty success', async () => {
+    const api = makeApi();
+    api.sendRichMessage.mockRejectedValueOnce(
+      new Error('Telegram API sendRichMessage failed: 400 DOCUMENT_INVALID'),
+    );
+    const service = new TelegramMessageService(api as any);
+
+    await expect(
+      service.sendMessage({
+        attachments: [
+          {
+            data: Buffer.from('pdf').toString('base64'),
+            mimeType: 'application/pdf',
+            name: 'report.pdf',
+            type: 'file',
+          },
+        ],
+        channelId: 'chat-1',
+        content: '',
+        platform: 'telegram',
+      }),
+    ).rejects.toThrow('400 DOCUMENT_INVALID');
+    expect(api.sendRichMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not treat an unsourced data-only attachment as an empty success', async () => {
+    const api = makeApi();
+    const service = new TelegramMessageService(api as any);
+
+    await expect(
+      service.sendMessage({
+        attachments: [{ name: 'report.pdf', type: 'file' }],
+        channelId: 'chat-1',
+        content: '',
+        platform: 'telegram',
+      }),
+    ).rejects.toThrow('no deliverable content');
+    expect(api.sendRichMessage).not.toHaveBeenCalled();
+  });
+
+  it('edits text through Rich Messages', async () => {
+    const api = makeApi();
+    const service = new TelegramMessageService(api as any);
+
+    await service.editMessage({
+      channelId: 'chat-1',
+      content: '**updated**',
+      messageId: '42',
+      platform: 'telegram',
+    });
+
+    expect(api.editRichMessageText).toHaveBeenCalledWith({
+      chatId: 'chat-1',
+      messageId: 42,
+      richMessage: { markdown: '**updated**' },
+    });
+  });
+
+  it('applies structural sanitizing when editing Rich Messages', async () => {
+    const api = makeApi();
+    const service = new TelegramMessageService(api as any);
+    const content = Array.from({ length: 501 }, (_, index) => `block ${index}`).join('\n\n');
+
+    await service.editMessage({
+      channelId: 'chat-1',
+      content,
+      messageId: '42',
+      platform: 'telegram',
+    });
+
+    const markdown = api.editRichMessageText.mock.calls[0]![0].richMessage.markdown;
+    expect(markdown).toContain('block 499');
+    expect(markdown).not.toContain('block 500');
   });
 });

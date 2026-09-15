@@ -48,10 +48,10 @@ export const schema: FieldSchema[] = [
       makeUserIdField('telegram'),
       {
         key: 'charLimit',
-        default: 4000,
+        default: 32768,
         description: 'channel.charLimitHint',
         label: 'channel.charLimit',
-        maximum: 4096,
+        maximum: 32768,
         minimum: 100,
         type: 'number',
       },

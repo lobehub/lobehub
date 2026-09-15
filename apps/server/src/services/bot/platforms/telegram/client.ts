@@ -20,12 +20,23 @@ import {
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
-import { TELEGRAM_API_BASE, TelegramApi } from './api';
+import { TELEGRAM_API_BASE, TelegramApi, TelegramEditUnavailableError } from './api';
+import {
+  claimTelegramDraftCompletion,
+  clearTelegramDraftSession,
+  completeTelegramDraftSession,
+  markTelegramDraftDelivered,
+  releaseTelegramDraftCompletion,
+  renewTelegramDraftCompletion,
+  saveTelegramDraftSession,
+  setTelegramDraftOperation,
+  updateActiveTelegramDraftSession,
+} from './draftSession';
 import { createLobeTelegramAdapter } from './guestAdapter';
 import { deliverGuestCreate, deliverGuestEdit } from './guestOutbound';
 import { extractBotId, resolveTelegramSecretToken, setTelegramWebhook } from './helpers';
-import { markdownToTelegramHTML } from './markdownToHTML';
-import { sendTelegramAttachments } from './sendAttachments';
+import { sanitizeTelegramRichMarkdown } from './richMessage';
+import { sendTelegramRichReply } from './sendRichReply';
 import { isGuestTelegramThreadId, parseTelegramThreadId } from './threadId';
 
 const log = debug('bot-platform:telegram:bot');
@@ -272,32 +283,42 @@ class TelegramWebhookClient implements PlatformClient {
       };
     }
 
-    const chatId = extractChatId(platformThreadId);
-    return {
+    const parsedThread = parseTelegramThreadId(platformThreadId);
+    const chatId = parsedThread.chatId;
+    const isPrivateChat = Number(chatId) > 0;
+    const messenger: PlatformMessenger = {
       addReaction: (messageId, emoji) =>
         telegram.setMessageReaction(chatId, parseTelegramMessageId(messageId), emoji),
       createMessage: async (content) => {
         const text = messengerContentText(content);
         const attachments = typeof content === 'string' ? undefined : content.attachments;
-        if (attachments?.length) {
-          const delivered = await sendTelegramAttachments(telegram, chatId, attachments, text);
-          if (delivered > 0) return;
-          // All attachments failed → fall through to text-only so the reply
-          // still reaches the user.
-        }
-        if (text.trim()) {
-          await telegram.sendMessage(chatId, text);
-        }
+        await sendTelegramRichReply(telegram, {
+          attachments,
+          chatId,
+          messageThreadId: parsedThread.messageThreadId,
+          text,
+        });
       },
       // editMessage keeps the text-only contract. Telegram doesn't support
       // converting a text message into a media message — new chunks with
       // attachments flow through createMessage instead.
-      editMessage: (messageId, content) =>
-        telegram.editMessageText(
-          chatId,
-          parseTelegramMessageId(messageId),
-          messengerContentText(content),
-        ),
+      editMessage: async (messageId, content) => {
+        const text = messengerContentText(content);
+        try {
+          await telegram.editRichMessageText({
+            chatId,
+            messageId: parseTelegramMessageId(messageId),
+            richMessage: { markdown: sanitizeTelegramRichMarkdown(text) },
+          });
+        } catch (error) {
+          if (!(error instanceof TelegramEditUnavailableError)) throw error;
+          await sendTelegramRichReply(telegram, {
+            chatId,
+            messageThreadId: parsedThread.messageThreadId,
+            text,
+          });
+        }
+      },
       removeReaction: (messageId) =>
         telegram.removeMessageReaction(chatId, parseTelegramMessageId(messageId)),
       // Telegram replaces the whole reaction list in one call — one API
@@ -309,6 +330,87 @@ class TelegramWebhookClient implements PlatformClient {
       },
       triggerTyping: () => telegram.sendChatAction(chatId, 'typing'),
     };
+    if (isPrivateChat) {
+      const sendDraft = (draftId: number, markdown: string) =>
+        telegram.sendRichMessageDraft({
+          canStop: true,
+          chatId,
+          draftId,
+          messageThreadId: parsedThread.messageThreadId,
+          richMessage: { markdown },
+        });
+
+      messenger.claimDraftCompletion = (draftId) =>
+        claimTelegramDraftCompletion(this.applicationId, platformThreadId, Number(draftId));
+      messenger.renewDraftCompletion = (draftId, owner) =>
+        renewTelegramDraftCompletion(this.applicationId, platformThreadId, Number(draftId), owner);
+      messenger.createDraft = async (content, context) => {
+        const draftId = Math.floor(Math.random() * 2_147_483_646) + 1;
+        const richMessage = { markdown: sanitizeTelegramRichMarkdown(content) };
+        const saved = await saveTelegramDraftSession(
+          {
+            applicationId: this.applicationId,
+            content: richMessage.markdown,
+            draftId,
+            platformThreadId,
+            userId: context.userId,
+            workspaceId: context.workspaceId,
+          },
+          context.durable,
+        );
+        if (!saved) throw new Error('Durable Telegram draft storage is unavailable');
+        try {
+          await sendDraft(draftId, richMessage.markdown);
+        } catch (error) {
+          await clearTelegramDraftSession(this.applicationId, platformThreadId, draftId);
+          throw error;
+        }
+        return String(draftId);
+      };
+      messenger.updateDraft = async (draftId, content) => {
+        const numericDraftId = Number(draftId);
+        const markdown = sanitizeTelegramRichMarkdown(content);
+        await updateActiveTelegramDraftSession(
+          this.applicationId,
+          platformThreadId,
+          numericDraftId,
+          async () => {
+            await sendDraft(numericDraftId, markdown);
+            return markdown;
+          },
+        );
+      };
+      messenger.renewDraft = async (draftId) => {
+        const numericDraftId = Number(draftId);
+        await updateActiveTelegramDraftSession(
+          this.applicationId,
+          platformThreadId,
+          numericDraftId,
+          async (session) => {
+            await sendDraft(numericDraftId, session.content);
+          },
+        );
+      };
+      messenger.setDraftOperation = (draftId, operationId) =>
+        setTelegramDraftOperation(
+          this.applicationId,
+          platformThreadId,
+          Number(draftId),
+          operationId,
+        );
+      messenger.clearDraft = (draftId, owner) =>
+        completeTelegramDraftSession(this.applicationId, platformThreadId, Number(draftId), owner);
+      messenger.markDraftDelivered = (draftId, owner) =>
+        markTelegramDraftDelivered(this.applicationId, platformThreadId, Number(draftId), owner);
+      messenger.releaseDraftCompletion = (draftId, owner) =>
+        releaseTelegramDraftCompletion(
+          this.applicationId,
+          platformThreadId,
+          Number(draftId),
+          owner,
+        );
+    }
+    return messenger;
   }
 
   extractChatId(platformThreadId: string): string {
@@ -475,10 +577,6 @@ class TelegramWebhookClient implements PlatformClient {
         return undefined;
       }
     }
-  }
-
-  formatMarkdown(markdown: string): string {
-    return markdownToTelegramHTML(markdown);
   }
 
   formatReply(body: string, stats?: UsageStats): string {

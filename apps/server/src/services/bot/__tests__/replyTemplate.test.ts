@@ -932,9 +932,7 @@ describe('replyTemplate', () => {
 
   describe('renderGuestCopy', () => {
     it('returns the English Guest Mode copy by default', () => {
-      expect(renderGuestCopy('guestMediaUnavailable')).toBe(
-        'This attachment can’t be delivered in Telegram Guest Mode.',
-      );
+      expect(renderGuestCopy('guestMediaUnavailable')).toBe('Unavailable in Telegram Guest Mode.');
       expect(renderGuestTruncated(4096)).toContain('4096');
       expect(renderGuestTruncated(1024)).toContain('1024');
       expect(renderGuestCopy('guestLinkPromptDm')).toContain('send /start');
@@ -942,7 +940,7 @@ describe('replyTemplate', () => {
 
     it('returns the Chinese Guest Mode copy when locale is zh-CN', () => {
       expect(renderGuestCopy('guestMediaUnavailable', 'zh-CN')).toBe(
-        '该附件无法通过 Telegram 访客模式送达。',
+        '无法通过 Telegram 访客模式发送。',
       );
       expect(renderGuestTruncated(4096, 'zh-CN')).toContain('4096');
       expect(renderGuestTruncated(1024, 'zh-CN')).toContain('1024');

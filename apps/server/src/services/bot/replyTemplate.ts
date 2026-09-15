@@ -417,7 +417,7 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     guestLinkPromptDm:
       'Open a private chat with this bot and send /start to link your LobeHub account.',
     guestLinkTitle: 'Link LobeHub',
-    guestMediaUnavailable: 'This attachment can’t be delivered in Telegram Guest Mode.',
+    guestMediaUnavailable: 'Unavailable in Telegram Guest Mode.',
     guestPairingCapacityExceeded:
       'This bot is handling too many Guest Mode access requests right now. Please try again in a few minutes.',
     guestPairingCode: (code) =>
@@ -536,7 +536,7 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     guestLinkPromptChat: '请在私聊中继续，以完成 LobeHub 账户关联。',
     guestLinkPromptDm: '请私聊该机器人并发送 /start，以完成 LobeHub 账户关联。',
     guestLinkTitle: '关联 LobeHub',
-    guestMediaUnavailable: '该附件无法通过 Telegram 访客模式送达。',
+    guestMediaUnavailable: '无法通过 Telegram 访客模式发送。',
     guestPairingCapacityExceeded: '该机器人当前待处理的访客模式访问请求过多，请稍后再试。',
     guestPairingCode: (code) =>
       `若要通过访客模式使用该机器人，请把以下配对码发给机器人管理员：\`${code}\`，他们将通过 \`/approve ${code}\` 命令为你授权。配对码 1 小时后失效。`,

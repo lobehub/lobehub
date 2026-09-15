@@ -159,12 +159,25 @@ export interface BotMessageAttachment {
  */
 export type MessengerContent = string | { attachments?: BotMessageAttachment[]; content?: string };
 
+export interface MessengerDraftContext {
+  durable?: boolean;
+  userId: string;
+  workspaceId?: string;
+}
+
 /**
  * Helper for messenger implementations that don't (yet) support attachments:
  * coerces `MessengerContent` to its text payload.
  */
 export const messengerContentText = (input: MessengerContent): string =>
   typeof input === 'string' ? input : (input.content ?? '');
+
+export type DraftCompletionClaim =
+  | { owner: string; status: 'claimed' }
+  | { status: 'busy' }
+  | { status: 'completed' }
+  | { status: 'finalize' }
+  | { status: 'missing' };
 
 // --------------- Platform Messenger ---------------
 
@@ -177,9 +190,16 @@ export interface PlatformMessenger {
    * can omit this). Callers must no-op on platforms that don't implement it.
    */
   addReaction?: (messageId: string, emoji: string) => Promise<void>;
+  claimDraftCompletion?: (draftId: string) => Promise<DraftCompletionClaim>;
+  clearDraft?: (draftId: string, owner?: string) => Promise<boolean | void>;
+  createDraft?: (content: string, context: MessengerDraftContext) => Promise<string>;
   createMessage: (content: MessengerContent) => Promise<void>;
   editMessage: (messageId: string, content: MessengerContent) => Promise<void>;
+  markDraftDelivered?: (draftId: string, owner: string) => Promise<boolean>;
+  releaseDraftCompletion?: (draftId: string, owner: string) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;
+  renewDraft?: (draftId: string) => Promise<void>;
+  renewDraftCompletion?: (draftId: string, owner: string) => Promise<boolean>;
   /**
    * Transition the bot's reaction on a message from `prevEmoji` to
    * `nextEmoji`. Either can be `null`: `prev=null` means "nothing was there,
@@ -199,7 +219,9 @@ export interface PlatformMessenger {
     prevEmoji: string | null,
     nextEmoji: string | null,
   ) => Promise<void>;
+  setDraftOperation?: (draftId: string, operationId: string) => Promise<boolean>;
   triggerTyping?: () => Promise<void>;
+  updateDraft?: (draftId: string, content: string) => Promise<void>;
   updateThreadName?: (name: string) => Promise<void>;
 }
 

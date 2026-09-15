@@ -158,19 +158,19 @@ vi.mock('@/server/services/bot/platforms/discord/api', () => ({
   }),
 }));
 
-const mockTelegramSendMessage = vi.fn();
+const mockTelegramSendRichMessage = vi.fn();
 vi.mock('@/server/services/bot/platforms/telegram/api', () => ({
   TelegramApi: vi.fn().mockImplementation(function () {
     return {
+      createForumTopic: vi.fn(),
       deleteMessage: vi.fn(),
-      editMessageText: vi.fn(),
+      editRichMessageText: vi.fn(),
       getChat: vi.fn(),
       getChatMember: vi.fn(),
-      createForumTopic: vi.fn(),
       pinChatMessage: vi.fn(),
-      sendMessage: mockTelegramSendMessage,
       sendMessageToTopic: vi.fn(),
       sendPoll: vi.fn(),
+      sendRichMessage: mockTelegramSendRichMessage,
       setMessageReaction: vi.fn(),
       unpinChatMessage: vi.fn(),
     };
@@ -344,7 +344,7 @@ describe('messageRuntime', () => {
   describe('Telegram adapter', () => {
     it('should send a message via Telegram', async () => {
       mockProviderFor('telegram', { botToken: 'tg-token' });
-      mockTelegramSendMessage.mockResolvedValue({ message_id: 42 });
+      mockTelegramSendRichMessage.mockResolvedValue({ message_id: 42 });
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.sendMessage({
@@ -495,7 +495,7 @@ describe('messageRuntime', () => {
         botToken: 'tg-env-token',
         botUsername: 'lobehub_bot',
       });
-      mockTelegramSendMessage.mockResolvedValue({ message_id: 99 });
+      mockTelegramSendRichMessage.mockResolvedValue({ message_id: 99 });
 
       const runtime = await messageRuntime.factory(validContext);
       const result = await runtime.sendMessage({
