@@ -398,8 +398,12 @@ export class GoalManagerService {
     const claimed = await this.db.transaction(async (db) => {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const fresh = await model.lockById(goal.id);
+      // `managerSnapshot` does not cover the goal agent, so a handoff landing
+      // between the caller's graph read and this lock would otherwise dispatch
+      // the previous supervisor and spend one of the new supervisor's turns.
       if (
         !fresh ||
+        fresh.agentId !== agentId ||
         !activeStatuses.has(fresh.status) ||
         fresh.config?.managerState?.token !== state?.token ||
         fresh.config?.managerState?.turns !== state?.turns ||

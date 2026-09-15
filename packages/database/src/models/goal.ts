@@ -118,6 +118,25 @@ export class GoalModel {
       .where(and(eq(goals.id, id), this.ownership()));
   };
 
+  /**
+   * Patch only `config.taskAgentId` (or drop it with `null`), for the same
+   * reason as `updatePauseReason`: a whole-config write here would race budget
+   * and acceptance edits on the same column and discard whichever landed first.
+   */
+  updateTaskAgentId = async (id: string, taskAgentId: string | null) => {
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        config: taskAgentId
+          ? sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{taskAgentId}', ${JSON.stringify(taskAgentId)}::jsonb)`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - 'taskAgentId'`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()))
+      .returning();
+    return row as GoalItem | undefined;
+  };
+
   /** Compare-and-swap only the supervisor namespace; concurrent budget edits survive. */
   updateSupervisorState = async (
     id: string,

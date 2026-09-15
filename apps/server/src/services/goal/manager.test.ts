@@ -276,6 +276,23 @@ describe('CLI main Agent planning', () => {
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
   });
 
+  it('does not dispatch the previous supervisor when a handoff lands before the claim', async () => {
+    const { id, op } = await start();
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    // The coordinator read the graph, then the goal was handed over before it
+    // locked the row to claim the next turn.
+    const staleGraph = await service().graph(id);
+    await db.insert(agents).values({ id: 'handoff-supervisor', userId });
+    await service().setAgent(id, 'handoff-supervisor');
+    const turnsBefore = (await model().findById(id))!.config!.managerState!.turns;
+
+    await manager().advance(staleGraph, { mayStartTurn: true });
+
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+    expect((await model().findById(id))!.config!.managerState!.turns).toBe(turnsBefore);
+  });
+
   it('opens the next planning turn in the new supervisor history after a handoff', async () => {
     const { id, state, op } = await start();
     await ops().recordCompletion(op.id, { status: 'done' });

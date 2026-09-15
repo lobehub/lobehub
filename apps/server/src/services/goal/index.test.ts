@@ -827,6 +827,48 @@ describe('GoalService', () => {
     await expect(service.setAgent(graph.goal.id, 'agt_missing')).rejects.toThrow();
   });
 
+  it('falls back to the goal agent when the dedicated executor was deleted', async () => {
+    await serverDB.insert(agents).values([
+      { id: 'agt_lead_fallback', slug: 'agt-lead-fallback', userId },
+      { id: 'agt_gone_executor', slug: 'agt-gone-executor', userId },
+    ]);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      agentId: 'agt_lead_fallback',
+      config: { taskAgentId: 'agt_gone_executor' },
+      tasks: ['Only task'],
+      title: 'Executor deleted',
+    });
+    await serverDB.delete(agents).where(eq(agents.id, 'agt_gone_executor'));
+
+    const created = await service.tick(graph.goal.id);
+
+    expect(created.taskId).toBeTruthy();
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_lead_fallback');
+  });
+
+  it('writes only the executor slot, so a concurrent policy edit survives', async () => {
+    await serverDB.insert(agents).values([
+      { id: 'agt_policy_lead', slug: 'agt-policy-lead', userId },
+      { id: 'agt_policy_worker', slug: 'agt-policy-worker', userId },
+    ]);
+    const service = new GoalService(serverDB, userId);
+    const model = new GoalModel(serverDB, userId);
+    const graph = await service.create({ agentId: 'agt_policy_lead', title: 'Policy race' });
+    // setTaskAgent reads the row, then a budget edit lands before it writes.
+    const stale = (await model.findById(graph.goal.id))!;
+    await model.update(graph.goal.id, { config: { ...stale.config, maxConcurrentTasks: 5 } });
+    // `findById` is an instance arrow property, so spy on the service's own model.
+    const serviceModel = (service as unknown as { goalModel: GoalModel }).goalModel;
+    vi.spyOn(serviceModel, 'findById').mockResolvedValueOnce(stale);
+
+    const result = await service.setTaskAgent(graph.goal.id, 'agt_policy_worker');
+
+    expect(result.goal.config?.taskAgentId).toBe('agt_policy_worker');
+    expect(result.goal.config?.maxConcurrentTasks).toBe(5);
+  });
+
   it('moves supervision without moving the tasks a dedicated executor holds', async () => {
     await serverDB.insert(agents).values([
       { id: 'agt_supervisor', slug: 'agt-supervisor', userId },

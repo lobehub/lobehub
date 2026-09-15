@@ -24,6 +24,7 @@ import { experimentOwner, provenanceParentId } from '@lobechat/utils/goalGraph';
 import { TRPCError } from '@trpc/server';
 import { sql } from 'drizzle-orm';
 
+import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -146,6 +147,7 @@ const DELIVERABLE_EVENTS_PER_RUN = 200;
 
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
+  private readonly agentModel: AgentModel;
   private readonly goalModel: GoalModel;
   /**
    * Graph writes attributed to the person who asked for them: seeding a goal,
@@ -170,6 +172,7 @@ export class GoalService {
     private readonly workspaceId?: string,
   ) {
     this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
+    this.agentModel = new AgentModel(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.coordinatorGraph = new GoalGraphModel(db, userId, workspaceId, {
@@ -1020,17 +1023,32 @@ export class GoalService {
     }
     const current = await this.goalModel.findById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
-    const { taskAgentId: _previous, ...rest } = current.config ?? {};
     // Naming the goal agent itself is the same as clearing: one agent, one slot.
-    const config =
-      agentId && agentId !== current.agentId ? { ...rest, taskAgentId: agentId } : rest;
-    const goal = await this.goalModel.update(goalId, { config });
+    const goal = await this.goalModel.updateTaskAgentId(
+      goalId,
+      agentId && agentId !== current.agentId ? agentId : null,
+    );
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
 
     const assignee = goalTaskAgentId(goal);
     const reassignedTaskIds =
       options?.goalOnly || !assignee ? [] : await this.reassignUnfinishedTasks(goalId, assignee);
     return { goal, reassignedTaskIds };
+  };
+
+  /**
+   * The agent the next coordinator-created Task goes to.
+   *
+   * `taskAgentId` lives in JSON, so deleting the executor does not null it the
+   * way the `agent_id` foreign key is nulled. Handing that stale id to
+   * `createTask` fails with NOT_FOUND on every tick and the goal can never
+   * create work again — so a missing executor falls back to the goal agent.
+   */
+  private resolveTaskAssignee = async (goal: GoalItem) => {
+    const taskAgentId = goal.config?.taskAgentId;
+    if (taskAgentId && !(await this.agentModel.existsById(taskAgentId)))
+      return goal.agentId ?? undefined;
+    return goalTaskAgentId(goal);
   };
 
   /**
@@ -1128,12 +1146,9 @@ export class GoalService {
     // its tasks and live runs still belong to the old one.
     let goal = graph.goal;
     if (options?.agentId) {
-      const updated = await this.goalModel.update(
-        goalId,
-        goal.config?.taskAgentId
-          ? { config: { ...goal.config, taskAgentId: options.agentId } }
-          : { agentId: options.agentId },
-      );
+      const updated = goal.config?.taskAgentId
+        ? await this.goalModel.updateTaskAgentId(goalId, options.agentId)
+        : await this.goalModel.update(goalId, { agentId: options.agentId });
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
       goal = updated;
     }
@@ -1663,7 +1678,7 @@ export class GoalService {
         .filter(Boolean)
         .join('\n\n');
       task = await this.taskService.createTask({
-        assigneeAgentId: goalTaskAgentId(graph.goal),
+        assigneeAgentId: await this.resolveTaskAssignee(graph.goal),
         config: { checkpoint: { topic: { after: false } } },
         description: description?.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
         instruction: this.buildTaskInstruction(graph, frontier.title, description),
