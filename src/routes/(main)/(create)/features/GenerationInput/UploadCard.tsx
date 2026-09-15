@@ -1,8 +1,7 @@
 'use client';
 
 import { Block } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { Spin } from 'antd';
+import { ActionIcon, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Plus, X } from 'lucide-react';
 import type { ChangeEvent, CSSProperties } from 'react';
@@ -274,7 +273,7 @@ const UploadCard = memo<UploadCardProps>(
               />
               {uploading && (
                 <div className={uploadCardStyles.uploadOverlay}>
-                  <Spin percent={'auto'} size="small" />
+                  <Spin size="small" />
                 </div>
               )}
             </div>

@@ -1,8 +1,7 @@
 'use client';
 
 import { Center, Flexbox, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Badge } from 'antd';
+import { Badge, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -52,13 +51,7 @@ const ContextRightPanel = memo(() => {
         {context.title}
         <Tooltip title={context.currentStatus}>
           <Center flex={'none'} height={20} style={{ display: 'inline-flex' }} width={20}>
-            <Badge
-              status="processing"
-              style={{ marginLeft: 8 }}
-              styles={{
-                indicator: { alignSelf: 'center', marginBottom: 4 },
-              }}
-            />
+            <Badge status="processing" style={{ marginLeft: 8 }} />
           </Center>
         </Tooltip>
       </Text>

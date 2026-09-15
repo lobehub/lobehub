@@ -1,8 +1,8 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { Spin, Upload } from 'antd';
+import { Avatar, Spin } from '@lobehub/ui/base-ui';
+import { Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, PencilIcon, X } from 'lucide-react';
 import { memo, useMemo } from 'react';

@@ -6,10 +6,11 @@ import {
   Alert,
   createModal,
   type ModalInstance,
+  Spin,
   toast,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Spin, Typography, Upload } from 'antd';
+import { Typography, Upload } from 'antd';
 import { sha256 } from 'js-sha256';
 import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
