@@ -1,7 +1,13 @@
 import path from 'node:path';
 
 import type { AgentInputPlan } from '../spawn/input';
-import type { JsonValue, SandboxMode, ThreadStartParams, UserInput } from './protocol';
+import type {
+  AskForApproval,
+  JsonValue,
+  SandboxMode,
+  ThreadStartParams,
+  UserInput,
+} from './protocol';
 
 const CODEX_DANGEROUS_BYPASS_FLAG = '--dangerously-bypass-approvals-and-sandbox';
 const CODEX_FULL_AUTO_FLAG = '--full-auto';
@@ -55,6 +61,9 @@ const parseConfigOverride = (raw: string) => {
 const isSandboxMode = (value: string): value is SandboxMode =>
   value === 'danger-full-access' || value === 'read-only' || value === 'workspace-write';
 
+const isAskForApproval = (value: unknown): value is AskForApproval =>
+  value === 'never' || value === 'on-request' || value === 'untrusted';
+
 /** Thread-scoped configuration is sent over RPC; the shared process needs only its subcommand. */
 export const buildCodexAppServerArgs = (_args: string[] = []): string[] => ['app-server'];
 
@@ -106,7 +115,7 @@ export const getCodexAppServerUnsupportedArgs = (
         CODEX_APPROVAL_FLAGS.includes(
           (exactFlag ?? inlineFlag) as (typeof CODEX_APPROVAL_FLAGS)[number],
         ) &&
-        value !== 'never'
+        !isAskForApproval(value)
       ) {
         unsupported.push(arg);
       }
@@ -124,7 +133,7 @@ export const getCodexAppServerUnsupportedArgs = (
         )
       ) {
         const override = parseConfigOverride(value);
-        if (override?.key === 'approval_policy' && override.value !== 'never') {
+        if (override?.key === 'approval_policy' && !isAskForApproval(override.value)) {
           unsupported.push(arg);
         }
       }
@@ -152,16 +161,18 @@ export const buildCodexAppServerThreadParams = (
   initialModel?: string,
 ): ThreadStartParams => {
   const config: Record<string, JsonValue> = {};
+  let approvalPolicy: AskForApproval = 'on-request';
   let effectiveCwd = cwd;
   let ephemeral = false;
   let model = initialModel;
   let modelProvider: string | undefined;
-  let sandbox: SandboxMode = 'danger-full-access';
+  let sandbox: SandboxMode = 'workspace-write';
   let serviceTier: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === CODEX_DANGEROUS_BYPASS_FLAG) {
+      approvalPolicy = 'never';
       sandbox = 'danger-full-access';
       continue;
     }
@@ -187,8 +198,12 @@ export const buildCodexAppServerThreadParams = (
     }
 
     const approvalValue = getFlagValue(arg, CODEX_APPROVAL_FLAGS);
-    if (approvalValue !== undefined) continue;
+    if (approvalValue !== undefined) {
+      if (isAskForApproval(approvalValue)) approvalPolicy = approvalValue;
+      continue;
+    }
     if (CODEX_APPROVAL_FLAGS.includes(arg as (typeof CODEX_APPROVAL_FLAGS)[number]) && next) {
+      if (isAskForApproval(next)) approvalPolicy = next;
       index += 1;
       continue;
     }
@@ -222,6 +237,9 @@ export const buildCodexAppServerThreadParams = (
     const configOverride = parseConfigOverride(configValue ?? next ?? '');
     if (!configOverride) continue;
     config[configOverride.key] = configOverride.value;
+    if (configOverride.key === 'approval_policy' && isAskForApproval(configOverride.value)) {
+      approvalPolicy = configOverride.value;
+    }
     if (configOverride.key === 'model' && typeof configOverride.value === 'string') {
       model = configOverride.value;
     }
@@ -241,7 +259,7 @@ export const buildCodexAppServerThreadParams = (
   }
 
   return {
-    approvalPolicy: 'never',
+    approvalPolicy,
     ...(Object.keys(config).length > 0 ? { config } : {}),
     cwd: effectiveCwd,
     ...(ephemeral ? { ephemeral } : {}),

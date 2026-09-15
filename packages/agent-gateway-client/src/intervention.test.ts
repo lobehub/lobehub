@@ -54,6 +54,14 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     ).toMatchObject({ interactionKind: 'permission', provider: 'droid' });
   });
 
+  it('accepts Codex as an explicit permission provider', () => {
+    expect(
+      sanitizeAgentInterventionRequestForReview(
+        request({ identifier: 'claude-code', provider: 'codex' }),
+      ),
+    ).toMatchObject({ interactionKind: 'permission', provider: 'codex' });
+  });
+
   it('fails closed when a permission option lacks an id or ids are duplicated', () => {
     const missingId = request({
       arguments: JSON.stringify({

@@ -1224,9 +1224,9 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
           ],
         }),
         deadline: 1_900_000_000_000,
-        identifier: 'devin',
+        identifier: 'claude-code',
         interactionKind: 'permission',
-        provider: 'devin',
+        provider: 'codex',
         toolCallId: 'permission-1',
       });
 
@@ -1263,7 +1263,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
               type: 'permission',
             },
             interactionKind: 'permission',
-            provider: 'devin',
+            provider: 'codex',
             sourceRef: {
               operationId: 'op-test',
               toolCallId: 'permission-1',

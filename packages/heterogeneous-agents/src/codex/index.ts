@@ -17,4 +17,7 @@ export {
   type CodexThreadTurnOptions,
 } from './CodexThreadSession';
 export type * from './protocol';
-export { CODEX_APP_SERVER_PROTOCOL_REVISION } from './protocol';
+export {
+  CODEX_APP_SERVER_APPROVAL_PROTOCOL_REVISION,
+  CODEX_APP_SERVER_PROTOCOL_REVISION,
+} from './protocol';

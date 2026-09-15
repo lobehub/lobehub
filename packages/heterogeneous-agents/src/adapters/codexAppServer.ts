@@ -39,6 +39,7 @@ import { isCodexCapacityError } from '../utils/codexErrors';
 import { toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
+const CODEX_INTERVENTION_IDENTIFIER = 'claude-code';
 
 type CommandItem = Extract<ThreadItem, { type: 'commandExecution' }>;
 type AgentMessageItem = Extract<ThreadItem, { type: 'agentMessage' }>;
@@ -403,6 +404,55 @@ export class CodexAppServerAdapter {
     if (model === this.currentModel) return [];
     this.currentModel = model;
     return [this.makeEvent('step_complete', this.turnMetadata())];
+  }
+
+  /** Materialize a provider-neutral approval card before its intervention request is emitted. */
+  startApprovalIntervention(toolCallId: string, arguments_: unknown): HeterogeneousAgentEvent[] {
+    if (this.terminal || this.pendingTools.has(toolCallId)) return [];
+    const payload: ToolCallPayload = {
+      apiName: 'askUserQuestion',
+      arguments: JSON.stringify(arguments_),
+      id: toolCallId,
+      identifier: CODEX_INTERVENTION_IDENTIFIER,
+      type: 'default',
+    };
+    this.hasToolActivity = true;
+    this.pendingTools.set(toolCallId, payload);
+    this.stepToolCalls.push(payload);
+    return [
+      this.makeEvent('stream_chunk', {
+        chunkType: 'tools_calling',
+        toolsCalling: [...this.stepToolCalls],
+      }),
+      this.makeEvent('tool_start', { toolCallId }),
+    ];
+  }
+
+  /** Resolve the synthetic approval card after Codex has received the mapped decision. */
+  completeApprovalIntervention(
+    toolCallId: string,
+    answer: { cancelled?: boolean; cancelReason?: string },
+  ): HeterogeneousAgentEvent[] {
+    const payload = this.pendingTools.get(toolCallId);
+    if (!payload) return [];
+    this.pendingTools.delete(toolCallId);
+    const success = !answer.cancelled;
+    const content = success
+      ? 'Permission response submitted.'
+      : `Permission request cancelled${answer.cancelReason ? `: ${answer.cancelReason}` : '.'}`;
+    return [
+      this.makeEvent('tool_result', {
+        content,
+        isError: !success,
+        toolCallId,
+      } satisfies ToolResultData),
+      this.makeEvent('tool_end', {
+        isSuccess: success,
+        payload: { toolCalling: payload },
+        result: { content, success },
+        toolCallId,
+      }),
+    ];
   }
 
   adapt(method: string, rawParams: unknown): HeterogeneousAgentEvent[] {

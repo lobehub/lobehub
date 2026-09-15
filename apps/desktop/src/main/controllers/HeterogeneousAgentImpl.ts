@@ -80,7 +80,6 @@ import {
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
-  isCodexAppServerCompatibilityError,
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
@@ -370,7 +369,6 @@ interface AgentSession {
    * intentional, not agent failures.
    */
   cancelledByUs?: boolean;
-  codexAppServerFallback?: boolean;
   command: string;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
@@ -1167,10 +1165,10 @@ export default class HeterogeneousAgentCtr {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
   } {
-    // Cursor keeps its legacy Claude Code renderer identifier. Droid has a
-    // first-class identifier, while provider remains explicit for both.
+    // Cursor and Codex reuse the canonical Claude Code AskUserQuestion
+    // renderer. Provider identity remains explicit on the wire.
     const bridge = new AskUserBridge(operationId, {
-      identifier: provider === 'cursor' ? 'claude-code' : provider,
+      identifier: provider === 'cursor' || provider === 'codex' ? 'claude-code' : provider,
       provider,
     });
     const pumpDone = (async () => {
@@ -1565,7 +1563,6 @@ export default class HeterogeneousAgentCtr {
     if (
       session.agentType === 'codex' &&
       !session.hostedProviderBinding &&
-      !session.codexAppServerFallback &&
       (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
     ) {
       const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
@@ -1573,16 +1570,10 @@ export default class HeterogeneousAgentCtr {
       });
       if (unsupportedArgs.length === 0) {
         if (await this.sendPromptWithCodexAppServer(params, session)) return;
-      } else if (session.agentSessionId) {
-        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+      } else {
+        const message = `Codex app-server cannot safely run this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
         this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
         throw new Error(message);
-      } else {
-        session.codexAppServerFallback = true;
-        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
-          sessionId: session.sessionId,
-          unsupportedArgs,
-        });
       }
     }
 
@@ -1993,9 +1984,15 @@ export default class HeterogeneousAgentCtr {
       cwd,
       sessionId: session.sessionId,
     });
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'codex',
+    );
 
     try {
       await appServerSession.run({
+        askUserBridge: intervention.bridge,
         input,
         onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
         operationId: params.operationId,
@@ -2008,42 +2005,15 @@ export default class HeterogeneousAgentCtr {
       this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
       return true;
     } catch (error) {
-      if (appServerSession.canFallbackToExec && isCodexAppServerCompatibilityError(error)) {
-        session.codexAppServerFallback = true;
-        logger.warn('Falling back to codex exec because native app-server is unavailable:', {
-          message: this.getErrorMessage(error),
-          sessionId: session.sessionId,
-        });
-        void this.writeCliTraceJson(traceSession, 'fallback.json', {
-          message: this.getErrorMessage(error),
-          transport: 'codex-app-server',
-        });
-        await this.flushCliTrace(traceSession);
-        this.broadcast('heteroAgentEvent', {
-          event: {
-            data: {
-              message:
-                'Codex app-server is unavailable or incompatible. Upgrade Codex to use the Labs transport; continuing with codex exec.',
-            },
-            operationId: params.operationId,
-            stepIndex: 0,
-            timestamp: Date.now(),
-            type: 'stream_retry',
-          } satisfies AgentStreamEvent,
-          sessionId: session.sessionId,
-        });
-        appServerSession.close();
-        if (session.appServerSession === appServerSession) session.appServerSession = undefined;
-        if (!client.hasConsumers) {
-          client.close();
-          if (this.codexAppServerClient === client) this.codexAppServerClient = undefined;
-        }
-        return false;
-      }
-
       logger.error('Codex app-server session error:', error);
       appServerSession.close();
       if (session.appServerSession === appServerSession) session.appServerSession = undefined;
+      // A pre-thread handshake failure leaves this process-global client unusable.
+      // Dispose it, but never replay the prompt through the unbridged exec path.
+      if (appServerSession.canFallbackToExec && !client.hasConsumers) {
+        client.close();
+        if (this.codexAppServerClient === client) this.codexAppServerClient = undefined;
+      }
       void this.writeCliTraceJson(traceSession, 'process-error.json', {
         message: error instanceof Error ? error.message : String(error),
         name: error instanceof Error ? error.name : 'Error',
@@ -2064,6 +2034,8 @@ export default class HeterogeneousAgentCtr {
       throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
         cause: error,
       });
+    } finally {
+      await intervention.cleanup();
     }
   }
 

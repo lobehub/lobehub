@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AskUserBridge } from '../askUser/AskUserBridge';
 import * as resolveCliCommand from './resolveCliCommand';
 
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
@@ -319,6 +320,83 @@ const createCursorAcpProc = () => {
     stdout,
   });
 
+  return { proc, requests };
+};
+
+const createCodexAppServerProc = () => {
+  const proc = new EventEmitter() as any;
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const requests: Array<{ id?: number; method?: string; params?: Record<string, unknown> }> = [];
+  const send = (message: Record<string, unknown>) =>
+    stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+  const stdin = new EventEmitter() as any;
+  stdin.write = vi.fn((chunk: string) => {
+    const message = JSON.parse(chunk.trim()) as {
+      id?: number;
+      method?: string;
+      params?: Record<string, unknown>;
+    };
+    if (message.method) requests.push(message);
+    queueMicrotask(() => {
+      switch (message.method) {
+        case 'initialize': {
+          send({
+            id: message.id,
+            result: {
+              codexHome: '/tmp/codex',
+              platformFamily: 'unix',
+              platformOs: 'linux',
+              userAgent: 'codex-test',
+            },
+          });
+          return;
+        }
+        case 'thread/start': {
+          send({ id: message.id, result: { model: 'gpt-5.5-codex', thread: { id: 'thread-1' } } });
+          return;
+        }
+        case 'turn/start': {
+          const inProgressTurn = {
+            completedAt: null,
+            durationMs: null,
+            error: null,
+            id: 'turn-1',
+            items: [],
+            itemsView: 'full',
+            startedAt: 1,
+            status: 'inProgress',
+          };
+          send({ id: message.id, result: { turn: inProgressTurn } });
+          send({
+            method: 'turn/completed',
+            params: {
+              threadId: 'thread-1',
+              turn: {
+                ...inProgressTurn,
+                completedAt: 2,
+                durationMs: 1,
+                status: 'completed',
+              },
+            },
+          });
+          return;
+        }
+        case 'turn/interrupt': {
+          send({ id: message.id, result: {} });
+        }
+      }
+    });
+    return true;
+  });
+  Object.assign(proc, {
+    kill: vi.fn(() => true),
+    killed: false,
+    pid: undefined,
+    stderr,
+    stdin,
+    stdout,
+  });
   return { proc, requests };
 };
 
@@ -1109,6 +1187,60 @@ describe('spawnAgent', () => {
     expect(args).toContain('--skip-git-repo-check');
     expect(args).toContain('--dangerously-bypass-approvals-and-sandbox');
     expect(args).not.toContain('--full-auto');
+  });
+
+  it('uses Codex app-server with safe defaults when an approval bridge owns the turn', async () => {
+    const fake = createCodexAppServerProc();
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'codex',
+      askUserBridge: new AskUserBridge('op-codex', {
+        identifier: 'claude-code',
+        provider: 'codex',
+      }),
+      operationId: 'op-codex',
+      prompt: 'inspect safely',
+    });
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0]).toMatchObject({
+      args: ['app-server'],
+      command: 'codex',
+      options: { detached: true },
+    });
+    expect(fake.requests.find(({ method }) => method === 'thread/start')?.params).toMatchObject({
+      approvalPolicy: 'on-request',
+      sandbox: 'workspace-write',
+    });
+    expect(fake.requests.find(({ method }) => method === 'turn/start')?.params).toMatchObject({
+      input: [{ text: 'inspect safely', text_elements: [], type: 'text' }],
+      threadId: 'thread-1',
+    });
+    expect(events.some(({ type }) => type === 'agent_runtime_end')).toBe(true);
+    expect(handle.sessionId).toBe('thread-1');
+  });
+
+  it('fails closed instead of falling back to codex exec with unsupported app-server args', async () => {
+    const { spawnAgent } = await import('./spawnAgent');
+
+    await expect(
+      spawnAgent({
+        agentType: 'codex',
+        askUserBridge: new AskUserBridge('op-codex', {
+          identifier: 'claude-code',
+          provider: 'codex',
+        }),
+        extraArgs: ['--profile', 'work'],
+        operationId: 'op-codex',
+        prompt: 'do not bypass',
+      }),
+    ).rejects.toThrow('Interactive approval cannot safely fall back to codex exec');
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it('does not add the default codex execution mode when extraArgs already choose one', async () => {

@@ -6,13 +6,21 @@ import { PassThrough } from 'node:stream';
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import type { AskUserBridge } from '../askUser/AskUserBridge';
+import {
+  buildCodexAppServerArgs,
+  buildCodexAppServerInput,
+  buildCodexAppServerThreadParams,
+  getCodexAppServerUnsupportedArgs,
+} from '../codex/appServerParams';
+import { CodexAppServerClient } from '../codex/CodexAppServerClient';
+import { CodexThreadSession } from '../codex/CodexThreadSession';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
 import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
-import { buildDroidAcpPrompt, DroidAcpSession } from './droidAcpSession';
 import { buildDevinAcpPrompt, DevinAcpSession } from './devinAcpSession';
+import { buildDroidAcpPrompt, DroidAcpSession } from './droidAcpSession';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
@@ -648,6 +656,86 @@ const spawnDevinAcpAgent = async (
   return createAcpSpawnHandle(bridge, session);
 };
 
+/** Use Codex's bidirectional app-server whenever a remote approval bridge owns the turn. */
+const spawnCodexAppServerAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const extraArgs = options.extraArgs ?? [];
+  const unsupported = getCodexAppServerUnsupportedArgs(extraArgs, {
+    resume: !!options.resumeSessionId,
+  });
+  if (unsupported.length > 0) {
+    throw new Error(
+      `Unsupported Codex app-server argument(s): ${unsupported.join(', ')}. ` +
+        'Interactive approval cannot safely fall back to codex exec.',
+    );
+  }
+
+  const childEnv = { ...process.env, ...options.env };
+  const inputPlan = await buildAgentInput('codex', options.prompt, options.inputOptions);
+  const input = buildCodexAppServerInput(inputPlan);
+  const initialModel = await resolveCodexInitialModel({ args: extraArgs, env: childEnv });
+  const initialCumulativeUsage = options.resumeSessionId
+    ? (await readCodexSessionModel(options.resumeSessionId, { env: childEnv }))?.cumulativeUsage
+    : undefined;
+  const appServerArgs = buildCodexAppServerArgs(extraArgs);
+  const bridge = createAcpSpawnBridge();
+  const client = new CodexAppServerClient({
+    args: appServerArgs.slice(0, -1),
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    detached: options.detached,
+    env: childEnv,
+  });
+  let nativeSessionId = options.resumeSessionId;
+  const unsubscribeStderr = client.onStderr(bridge.onStderr);
+  const session = new CodexThreadSession({
+    client,
+    initialCumulativeUsage,
+    initialModel: initialModel?.model,
+    initialThreadId: options.resumeSessionId,
+    onEvents: bridge.onEvents,
+    onModel: () => {},
+    onRuntimeStatus: () => {},
+    onSessionId: (sessionId) => {
+      nativeSessionId = sessionId;
+    },
+    sessionId: options.operationId,
+    threadParams: buildCodexAppServerThreadParams(extraArgs, cwd, initialModel?.model),
+  });
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    unsubscribeStderr();
+    session.close();
+    client.close();
+  };
+  const runner = {
+    close,
+    interrupt: () => {
+      void session.interrupt();
+    },
+    run: async () => {
+      try {
+        await session.run({
+          askUserBridge: options.askUserBridge,
+          input,
+          onRawMessage: teeAcpRawStdout(options.onRawStdout),
+          operationId: options.operationId,
+        });
+      } finally {
+        close();
+      }
+    },
+  };
+
+  return createAcpSpawnHandle(bridge, runner, () => nativeSessionId);
+};
+
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
  * Factory Droid, Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
@@ -680,6 +768,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   }
   if (options.agentType === 'droid') {
     return spawnDroidAcpAgent(options, command, cwd);
+  }
+  if (options.agentType === 'codex' && options.askUserBridge) {
+    return spawnCodexAppServerAgent(options, command, cwd);
   }
 
   const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);

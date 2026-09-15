@@ -54,7 +54,15 @@ interface ConnectionState {
 }
 
 type NotificationHandler = (method: string, params: unknown) => Promise<void> | void;
-type ServerRequestHandler = (method: string, params: unknown) => Promise<unknown> | unknown;
+export interface CodexServerRequestContext {
+  onResponseSent: (callback: () => Promise<void> | void) => void;
+}
+
+type ServerRequestHandler = (
+  method: string,
+  params: unknown,
+  context: CodexServerRequestContext,
+) => Promise<unknown> | unknown;
 type TextHandler = (data: string) => Promise<void> | void;
 
 export interface CodexAppServerClientOptions {
@@ -62,6 +70,8 @@ export interface CodexAppServerClientOptions {
   clientVersion: string;
   commandPath: string;
   cwd: string;
+  /** Create a dedicated process group; disable beneath an already-detached wrapper. */
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   reconnectBaseDelayMs?: number;
   reconnectMaxAttempts?: number;
@@ -151,7 +161,7 @@ export class CodexAppServerClient {
 
   /** Process-global options must stay identical while this long-lived client is reused. */
   canReuseFor(
-    options: Pick<CodexAppServerClientOptions, 'args' | 'commandPath' | 'cwd' | 'env'>,
+    options: Pick<CodexAppServerClientOptions, 'args' | 'commandPath' | 'cwd' | 'detached' | 'env'>,
   ): boolean {
     const currentArgs = this.options.args ?? [];
     const nextArgs = options.args ?? [];
@@ -160,6 +170,7 @@ export class CodexAppServerClient {
       (this.options.commandPath.includes('/') || this.options.commandPath.includes('\\'));
     if (
       this.options.commandPath !== options.commandPath ||
+      (this.options.detached ?? true) !== (options.detached ?? true) ||
       (commandIsRelativePath && this.options.cwd !== options.cwd) ||
       currentArgs.length !== nextArgs.length ||
       currentArgs.some((arg, index) => arg !== nextArgs[index])
@@ -360,7 +371,7 @@ export class CodexAppServerClient {
 
     const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
-      detached: process.platform !== 'win32',
+      detached: process.platform !== 'win32' && (this.options.detached ?? true),
       env: this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -549,10 +560,18 @@ export class CodexAppServerClient {
     const handlers = threadId ? this.serverRequestHandlers.get(threadId) : undefined;
     const handler = handlers?.values().next().value as ServerRequestHandler | undefined;
     let response: Record<string, unknown>;
+    let onResponseSent: (() => Promise<void> | void) | undefined;
 
     try {
       if (handler) {
-        response = { id, result: await handler(method, params) };
+        response = {
+          id,
+          result: await handler(method, params, {
+            onResponseSent: (callback) => {
+              onResponseSent = callback;
+            },
+          }),
+        };
       } else if (APPROVAL_REQUEST_METHODS.has(method)) {
         response = { id, result: { decision: 'cancel' } };
       } else {
@@ -574,9 +593,10 @@ export class CodexAppServerClient {
     if (!this.isCurrentGeneration(generation)) return;
     try {
       this.writeForGeneration(generation, response);
+      await onResponseSent?.();
     } catch (error) {
       this.fail(
-        this.toConnectionError(error, 'Failed to write Codex app-server response'),
+        this.toConnectionError(error, 'Failed to deliver Codex app-server response'),
         generation,
       );
     }

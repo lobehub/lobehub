@@ -300,6 +300,7 @@ const INTERVENTION_KINDS = new Set<AgentInterventionInteractionKind>([
 
 const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
   'claude-code',
+  'codex',
   'cursor',
   'devin',
   'droid',

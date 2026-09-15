@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { AskUserBridge } from '../askUser/AskUserBridge';
 import {
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
@@ -24,6 +25,7 @@ interface ClientHarness {
   notify: (method: string, params: unknown) => Promise<void> | void;
   registeredResumeParams: () => unknown;
   releaseConsumer: ReturnType<typeof vi.fn>;
+  requestFromServer: (method: string, params: unknown) => Promise<unknown>;
   requests: Array<{ method: string; params: unknown }>;
   resolveThreadStart: () => void;
   resolveTurnStart: () => void;
@@ -46,6 +48,13 @@ const createClientHarness = (
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
   let notificationHandler: ((method: string, params: unknown) => Promise<void>) | undefined;
+  let serverRequestHandler:
+    | ((
+        method: string,
+        params: unknown,
+        context: { onResponseSent: (callback: () => Promise<void> | void) => void },
+      ) => Promise<unknown> | unknown)
+    | undefined;
   let registration:
     | {
         onResume: (response: unknown) => Promise<void> | void;
@@ -144,13 +153,36 @@ const createClientHarness = (
       notificationHandler = handler;
       return vi.fn();
     }),
-    subscribeServerRequests: vi.fn(() => vi.fn()),
+    subscribeServerRequests: vi.fn(
+      (
+        _threadId: string,
+        handler: (
+          method: string,
+          params: unknown,
+          context: { onResponseSent: (callback: () => Promise<void> | void) => void },
+        ) => Promise<unknown> | unknown,
+      ) => {
+        serverRequestHandler = handler;
+        return vi.fn();
+      },
+    ),
   };
 
   return {
     client,
     disconnect: () => disconnectHandler?.(),
     notify,
+    requestFromServer: async (method, params) => {
+      if (!serverRequestHandler) throw new Error('server request handler is not attached');
+      let onResponseSent: (() => Promise<void> | void) | undefined;
+      const response = await serverRequestHandler(method, params, {
+        onResponseSent: (callback) => {
+          onResponseSent = callback;
+        },
+      });
+      await onResponseSent?.();
+      return response;
+    },
     registeredResumeParams: () => resumeParams,
     releaseConsumer,
     requests,
@@ -185,8 +217,9 @@ const createSession = (
       sandbox: 'danger-full-access',
     },
   });
-  const run = (operationId: string, text: string) =>
+  const run = (operationId: string, text: string, askUserBridge?: AskUserBridge) =>
     session.run({
+      askUserBridge,
       input: [{ text, text_elements: [], type: 'text' }],
       onRawMessage: vi.fn(),
       operationId,
@@ -241,6 +274,155 @@ describe('CodexThreadSession', () => {
       warn.mockRestore();
       session.close();
     }
+  });
+
+  it('bridges a command approval with exact Codex decision ids', async () => {
+    const harness = createClientHarness({ autoComplete: false });
+    const { events, run, session } = createSession(harness);
+    const bridge = new AskUserBridge('operation-1', {
+      identifier: 'claude-code',
+      provider: 'codex',
+    });
+    const bridgeEvents = bridge.events()[Symbol.asyncIterator]();
+    const runPromise = run('operation-1', 'run a command', bridge);
+    await vi.waitFor(() =>
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+    );
+
+    const responsePromise = harness.requestFromServer('item/commandExecution/requestApproval', {
+      approvalId: 'approval-1',
+      availableDecisions: ['decline', 'accept'],
+      command: 'do-not-persist-this-command',
+      itemId: 'command-1',
+      startedAtMs: 1,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const intervention = await bridgeEvents.next();
+    expect(intervention.value).toMatchObject({
+      data: {
+        identifier: 'claude-code',
+        interactionKind: 'permission',
+        provider: 'codex',
+        toolCallId: 'codex-command-approval-approval-1',
+      },
+      operationId: 'operation-1',
+      type: 'agent_intervention_request',
+    });
+    const arguments_ = JSON.parse(intervention.value!.data.arguments);
+    expect(arguments_.questions[0].options.map(({ id }: { id: string }) => id)).toEqual([
+      'decline',
+      'accept',
+    ]);
+    expect(intervention.value!.data.arguments).not.toContain('do-not-persist-this-command');
+
+    bridge.resolve('codex-command-approval-approval-1', {
+      result: { [arguments_.questions[0].question]: 'accept' },
+    });
+    await expect(responsePromise).resolves.toEqual({ decision: 'accept' });
+    await harness.notify('turn/completed', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'completed'),
+    });
+    await runPromise;
+    session.close();
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          data: expect.objectContaining({
+            toolCallId: 'codex-command-approval-approval-1',
+          }),
+          type: 'tool_start',
+        }),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            toolCallId: 'codex-command-approval-approval-1',
+          }),
+          type: 'tool_result',
+        }),
+      ]),
+    );
+  });
+
+  it('fails a forged file-approval label closed as Codex cancel', async () => {
+    const harness = createClientHarness({ autoComplete: false });
+    const { run, session } = createSession(harness);
+    const bridge = new AskUserBridge('operation-1', {
+      identifier: 'claude-code',
+      provider: 'codex',
+    });
+    const bridgeEvents = bridge.events()[Symbol.asyncIterator]();
+    const runPromise = run('operation-1', 'change a file', bridge);
+    await vi.waitFor(() =>
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+    );
+
+    const responsePromise = harness.requestFromServer('item/fileChange/requestApproval', {
+      itemId: 'file-1',
+      reason: 'needs write access',
+      startedAtMs: 1,
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const intervention = await bridgeEvents.next();
+    const arguments_ = JSON.parse(intervention.value!.data.arguments);
+    bridge.resolve('codex-file-approval-file-1', {
+      result: {
+        [arguments_.questions[0].question]: 'Allow once',
+        unexpected: 'accept',
+      },
+    });
+
+    await expect(responsePromise).resolves.toEqual({ decision: 'cancel' });
+    await expect(bridgeEvents.next()).resolves.toMatchObject({
+      value: {
+        data: { cancelReason: 'user_cancelled', cancelled: true, producerAck: true },
+        type: 'agent_intervention_response',
+      },
+    });
+    await harness.notify('turn/completed', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'completed'),
+    });
+    await runPromise;
+    session.close();
+  });
+
+  it('rejects an unsupported command-approval amendment without inventing a decision', async () => {
+    const harness = createClientHarness({ autoComplete: false });
+    const { run, session } = createSession(harness);
+    const bridge = new AskUserBridge('operation-1', {
+      identifier: 'claude-code',
+      provider: 'codex',
+    });
+    const runPromise = run('operation-1', 'run a command', bridge);
+    await vi.waitFor(() =>
+      expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+    );
+
+    await expect(
+      harness.requestFromServer('item/commandExecution/requestApproval', {
+        availableDecisions: [
+          {
+            acceptWithExecpolicyAmendment: {
+              execpolicy_amendment: ['prefix_rule(pattern=["git", "status"], decision="allow")'],
+            },
+          },
+        ],
+        itemId: 'command-1',
+        startedAtMs: 1,
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+      }),
+    ).rejects.toThrow('Unsupported Codex approval decision variant');
+
+    await harness.notify('turn/completed', {
+      threadId: 'thread-1',
+      turn: turn('turn-1', 'completed'),
+    });
+    await runPromise;
+    session.close();
   });
 
   it('reuses one native thread across multiple turns', async () => {

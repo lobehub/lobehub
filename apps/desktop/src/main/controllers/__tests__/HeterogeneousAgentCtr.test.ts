@@ -3077,13 +3077,16 @@ describe('HeterogeneousAgentCtr', () => {
         expect.objectContaining({
           threadName: 'stream this',
           threadParams: expect.objectContaining({
+            approvalPolicy: 'on-request',
             cwd: FAKE_DESKTOP_PATH,
             model: 'gpt-5.5-codex',
+            sandbox: 'workspace-write',
           }),
         }),
       );
       expect(codexAppServerRunMock).toHaveBeenCalledWith(
         expect.objectContaining({
+          askUserBridge: expect.any(Object),
           input: [{ text: 'stream this', text_elements: [], type: 'text' }],
           operationId: 'op-test',
         }),
@@ -3196,29 +3199,54 @@ describe('HeterogeneousAgentCtr', () => {
       expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
     });
 
-    it.each([
-      { args: ['--profile', 'work'], label: 'profile' },
-      { args: ['-a', 'on-request'], label: 'interactive approval policy' },
-    ])('keeps unsupported Codex $label arguments on exec', async ({ args }) => {
-      const { proc } = createFakeProc();
-      nextFakeProc = proc;
+    it.each([{ args: ['--profile', 'work'], label: 'profile' }])(
+      'fails closed for unsupported Codex app-server $label arguments',
+      async ({ args }) => {
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({
+          agentType: 'codex',
+          args,
+          command: 'codex',
+          useCodexAppServer: true,
+        });
+
+        await expect(
+          ctr.sendPrompt({
+            operationId: 'op-test',
+            prompt: 'preserve CLI semantics',
+            sessionId,
+          }),
+        ).rejects.toThrow('cannot safely run this session');
+
+        expect(codexAppServerClientConstructMock).not.toHaveBeenCalled();
+        expect(codexAppServerConstructMock).not.toHaveBeenCalled();
+        expect(spawnCalls).toHaveLength(0);
+      },
+    );
+
+    it('keeps a supported Codex approval policy on app-server', async () => {
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
       } as any);
       const { sessionId } = await ctr.startSession({
         agentType: 'codex',
-        args,
+        args: ['-a', 'untrusted'],
         command: 'codex',
         useCodexAppServer: true,
       });
 
-      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'preserve CLI semantics', sessionId });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'ask before acting', sessionId });
 
-      expect(codexAppServerClientConstructMock).not.toHaveBeenCalled();
-      expect(codexAppServerConstructMock).not.toHaveBeenCalled();
-      expect(spawnCalls).toHaveLength(1);
-      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(args));
+      expect(spawnCalls).toHaveLength(0);
+      expect(codexAppServerConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadParams: expect.objectContaining({ approvalPolicy: 'untrusted' }),
+        }),
+      );
     });
 
     it('does not replay an existing thread through exec when its arguments are unsupported', async () => {
@@ -3236,14 +3264,14 @@ describe('HeterogeneousAgentCtr', () => {
 
       await expect(
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'preserve CLI semantics', sessionId }),
-      ).rejects.toThrow('cannot safely resume this session');
+      ).rejects.toThrow('cannot safely run this session');
 
       expect(codexAppServerClientConstructMock).not.toHaveBeenCalled();
       expect(codexAppServerConstructMock).not.toHaveBeenCalled();
       expect(spawnCalls).toHaveLength(0);
     });
 
-    it('falls back to codex exec when the native handshake is incompatible', async () => {
+    it('fails closed when the native handshake is incompatible', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([
         {
@@ -3251,8 +3279,6 @@ describe('HeterogeneousAgentCtr', () => {
           webContents: { send },
         },
       ]);
-      const { proc } = createFakeProc();
-      nextFakeProc = proc;
       codexAppServerShouldFallback.value = true;
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
@@ -3264,28 +3290,17 @@ describe('HeterogeneousAgentCtr', () => {
         useCodexAppServer: true,
       });
 
-      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'fallback safely', sessionId });
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-test', prompt: 'fail safely', sessionId }),
+      ).rejects.toThrow('Method not found: initialize');
 
       expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(1);
       expect(codexAppServerClientCloseMock).toHaveBeenCalledTimes(1);
-      expect(spawnCalls).toHaveLength(1);
-      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['exec', '--json']));
-      expect(send).toHaveBeenCalledWith('heteroAgentEvent', {
-        event: expect.objectContaining({
-          data: expect.objectContaining({ message: expect.stringContaining('Upgrade Codex') }),
-          operationId: 'op-test',
-          type: 'stream_retry',
-        }),
+      expect(spawnCalls).toHaveLength(0);
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: 'Method not found: initialize',
         sessionId,
       });
-
-      codexAppServerShouldFallback.value = false;
-      const { proc: retryProc } = createFakeProc();
-      nextFakeProc = retryProc;
-      await ctr.sendPrompt({ operationId: 'op-retry', prompt: 'stay on exec', sessionId });
-
-      expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(1);
-      expect(spawnCalls).toHaveLength(2);
     });
 
     it('does not fall back to exec after the native thread is established', async () => {

@@ -54,7 +54,7 @@ describe('Codex app-server payload builders', () => {
       serviceTier: 'fast',
     });
     expect(buildCodexAppServerThreadParams(['--full-auto'], '/workspace')).toMatchObject({
-      approvalPolicy: 'never',
+      approvalPolicy: 'on-request',
       sandbox: 'workspace-write',
     });
     expect(
@@ -68,8 +68,8 @@ describe('Codex app-server payload builders', () => {
       '--ignore-user-config',
     ]);
     expect(getCodexAppServerUnsupportedArgs(['--full-auto'])).toEqual(['--full-auto']);
-    expect(getCodexAppServerUnsupportedArgs(['-a', 'on-request'])).toEqual(['-a']);
-    expect(getCodexAppServerUnsupportedArgs(['-c', 'approval_policy="untrusted"'])).toEqual(['-c']);
+    expect(getCodexAppServerUnsupportedArgs(['-a', 'on-request'])).toEqual([]);
+    expect(getCodexAppServerUnsupportedArgs(['-c', 'approval_policy="untrusted"'])).toEqual([]);
     expect(getCodexAppServerUnsupportedArgs(['--search'])).toEqual(['--search']);
     expect(getCodexAppServerUnsupportedArgs(['--model', '--ephemeral'])).toEqual(['--model']);
     expect(getCodexAppServerUnsupportedArgs(['--sandbox', 'invalid'])).toEqual(['--sandbox']);
@@ -95,6 +95,19 @@ describe('Codex app-server payload builders', () => {
         '--ephemeral',
       ]),
     ).toEqual([]);
+  });
+
+  it('requests approval by default and preserves explicit approval policy overrides', () => {
+    expect(buildCodexAppServerThreadParams([], '/workspace')).toMatchObject({
+      approvalPolicy: 'on-request',
+      sandbox: 'workspace-write',
+    });
+    expect(
+      buildCodexAppServerThreadParams(['-c', 'approval_policy="untrusted"'], '/workspace'),
+    ).toMatchObject({ approvalPolicy: 'untrusted' });
+    expect(
+      buildCodexAppServerThreadParams(['--ask-for-approval=never'], '/workspace'),
+    ).toMatchObject({ approvalPolicy: 'never' });
   });
 
   it('converts Codex text and --image args into v2 turn inputs', () => {

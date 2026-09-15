@@ -512,20 +512,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
   let askServer: LobeBuiltinMcpServer | undefined;
   let askBridge: AskUserBridge | undefined;
+  let askBridgePump: Promise<void> | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
   if (
     serverIngest &&
     (agentType === 'claude-code' ||
+      agentType === 'codex' ||
       agentType === 'cursor' ||
       agentType === 'droid' ||
       agentType === 'devin' ||
       agentType === 'qoder') &&
     serverIngester
   ) {
-    if (agentType === 'cursor' || agentType === 'droid') {
+    if (agentType === 'codex' || agentType === 'cursor' || agentType === 'droid') {
       askBridge = new AskUserBridge(operationId, {
-        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
+        identifier: agentType === 'cursor' || agentType === 'codex' ? 'claude-code' : agentType,
         provider: agentType,
       });
     } else if (agentType === 'devin') {
@@ -562,7 +564,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // the producer ACK (producerAck=true + resolutionRequestId) that transitions
     // Cloud from `resolving` to terminal. Persistence de-dupes transitions by
     // (operationId, toolCallId, transition).
-    void (async () => {
+    askBridgePump = (async () => {
       for await (const event of askBridge!.events()) {
         serverIngester!.push(event as AgentStreamEvent);
       }
@@ -976,6 +978,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   const { code, signal, sessionId } = result;
 
+  // End the producer-side bridge before the final ingest drain. This queues a
+  // durable session_ended response for every approval still pending when the
+  // CLI/app-server exits, then waits until those terminal events have entered
+  // the same ordered batcher as the request.
+  askPollAbort.abort();
+  if (askServer) {
+    askServer.unregisterOperation(operationId);
+    await askServer.stop().catch(() => {});
+  } else askBridge?.cancelAll('session_ended');
+  await askBridgePump;
+  if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
+
   if (serverIngester && sink) {
     operationHeartbeat?.stop();
     try {
@@ -1049,16 +1063,6 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Only now: the drain and the finish receipt above both authenticate with the
   // operation token, and either can sit in retries long enough for it to expire.
   operationTokenRenewal?.stop();
-
-  // Tear down the AskUserQuestion MCP: stop polling, cancel any in-flight
-  // pending (→ CC's tool returns cleanly), close the server, drop the temp
-  // config. Best-effort — the process is about to exit anyway.
-  askPollAbort.abort();
-  if (askServer) {
-    askServer.unregisterOperation(operationId);
-    await askServer.stop().catch(() => {});
-  } else askBridge?.cancelAll('session_ended');
-  if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
   if (code !== null) {
     const hasRunError =

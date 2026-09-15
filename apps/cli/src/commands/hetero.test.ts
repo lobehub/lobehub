@@ -698,6 +698,78 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('persists Codex producer session_ended before the final finish', async () => {
+    let pendingAnswer: Promise<unknown> | undefined;
+    mockSpawnAgent.mockImplementation((options) => {
+      pendingAnswer = options.askUserBridge?.pending({
+        arguments: {
+          questions: [
+            {
+              header: 'Codex command approval',
+              multiSelect: false,
+              options: [{ id: 'accept', label: 'Allow once' }],
+              question: 'Allow Codex to run the requested command?',
+            },
+          ],
+        },
+        interactionKind: 'permission',
+        toolCallId: 'codex-command-approval-1',
+      });
+      return createFakeHandle();
+    });
+    mockGetTrpcClient.mockResolvedValue({
+      aiAgent: {
+        heteroFinish: { mutate: mockHeteroFinishMutate },
+        heteroIngest: { mutate: mockHeteroIngestMutate },
+        waitInterventionResponse: { query: vi.fn(() => new Promise(() => {})) },
+      },
+    });
+    const callOrder: string[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events }) => {
+      callOrder.push(...events.map(({ type }: { type: string }) => type));
+      return { ack: true };
+    });
+    mockHeteroFinishMutate.mockImplementation(async () => {
+      callOrder.push('finish');
+      return { ack: true };
+    });
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'do thing',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-codex-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'codex',
+        askUserBridge: expect.objectContaining({ pending: expect.any(Function) }),
+      }),
+    );
+    await expect(pendingAnswer).resolves.toEqual({
+      cancelReason: 'session_ended',
+      cancelled: true,
+    });
+    expect(callOrder).toEqual([
+      'agent_intervention_request',
+      'agent_intervention_response',
+      'finish',
+    ]);
+    expect(mockHeteroIngestMutate.mock.calls[0][0].events[1]).toMatchObject({
+      data: { cancelReason: 'session_ended', cancelled: true, producerAck: true },
+      type: 'agent_intervention_response',
+    });
+  });
+
   it('passes an intervention bridge to server-ingest Devin runs', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -1073,8 +1145,6 @@ describe('hetero exec command', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  // `codex` rather than `claude-code`: the latter mounts the AskUserQuestion MCP
-  // long-poll on server-ingest runs, which never settles under a faked handle.
   it('wires a tool_result image uploader for server-ingest runs', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

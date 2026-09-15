@@ -47,6 +47,12 @@ export interface PendingArgs {
 
 export interface PendingOptions {
   /**
+   * Wait for the provider transport to confirm delivery before emitting the
+   * durable producer ACK. Codex app-server uses this because resolving the
+   * local callback and writing its JSON-RPC response are separate steps.
+   */
+  deferProducerAck?: boolean;
+  /**
    * Called every `progressIntervalMs` while the call is pending. Use it to
    * push MCP `notifications/progress` to keep the SSE channel from timing
    * out (CC's HTTP transport drops at ~5min without keepalive).
@@ -62,12 +68,20 @@ export interface PendingOptions {
    * Default: 10 minutes.
    */
   timeoutMs?: number;
+  /**
+   * Provider-owned fail-closed validation before a user result is ACKed.
+   * Invalid results are converted to a user cancellation, so a forged label
+   * or unknown option id can never become an approved durable transition.
+   */
+  validateResult?: (result: unknown) => boolean;
 }
 
 interface PendingEntry {
   cleanup: () => void;
+  deferProducerAck?: boolean;
   reject: (err: unknown) => void;
   resolve: (answer: InterventionAnswer) => void;
+  validateResult?: PendingOptions['validateResult'];
 }
 
 export interface AskUserBridgeOptions {
@@ -112,6 +126,15 @@ export interface AskUserBridgeOptions {
  * not an exception.
  */
 export class AskUserBridge {
+  private readonly deferredResponses = new Map<
+    string,
+    {
+      cancelReason?: InterventionAnswer['cancelReason'];
+      cancelled?: boolean;
+      result?: unknown;
+      resolutionRequestId?: string;
+    }
+  >();
   private readonly pending_ = new Map<string, PendingEntry>();
   private readonly outboundQueue: AgentStreamEvent[] = [];
   private readonly outboundWaiters: Array<(value: IteratorResult<AgentStreamEvent>) => void> = [];
@@ -166,7 +189,9 @@ export class AskUserBridge {
         // finishes and gets garbage-collected. Without this, the renderer
         // would still show the form as pending after the bridge has already
         // given up.
-        this.emitResponse(toolCallId, { cancelReason: 'timeout', cancelled: true });
+        const response = { cancelReason: 'timeout' as const, cancelled: true };
+        if (options.deferProducerAck) this.deferredResponses.set(toolCallId, response);
+        else this.emitResponse(toolCallId, response);
         resolve({ cancelled: true, cancelReason: 'timeout' });
       }, timeoutMs);
 
@@ -183,7 +208,13 @@ export class AskUserBridge {
         if (progressTimer) clearInterval(progressTimer);
       };
 
-      this.pending_.set(toolCallId, { cleanup, reject, resolve });
+      this.pending_.set(toolCallId, {
+        cleanup,
+        deferProducerAck: options.deferProducerAck,
+        reject,
+        resolve,
+        validateResult: options.validateResult,
+      });
 
       // Emit the intervention request AFTER setting up the pending entry,
       // so any synchronous resolve from a test fixture finds the slot.
@@ -227,21 +258,42 @@ export class AskUserBridge {
     if (!entry) return;
     this.pending_.delete(toolCallId);
     entry.cleanup();
+    let resultIsValid = true;
+    if (!payload.cancelled && entry.validateResult) {
+      try {
+        resultIsValid = entry.validateResult(payload.result);
+      } catch {
+        resultIsValid = false;
+      }
+    }
+    const cancelled = payload.cancelled || (!resultIsValid ? true : undefined);
+    const cancelReason = cancelled ? (payload.cancelReason ?? 'user_cancelled') : undefined;
     // Echo the resolution on the outbound stream. For user-driven submits
     // the consumer has already optimistically updated, but emitting keeps
     // the wire contract symmetric (request → response) and lets late
     // subscribers reconstruct the terminal state purely from events.
-    this.emitResponse(toolCallId, {
-      cancelReason: payload.cancelled ? (payload.cancelReason ?? 'user_cancelled') : undefined,
-      cancelled: payload.cancelled,
-      result: payload.cancelled ? undefined : payload.result,
+    const response = {
+      cancelReason,
+      cancelled,
+      result: cancelled ? undefined : payload.result,
       resolutionRequestId: payload.resolutionRequestId,
-    });
+    };
+    if (entry.deferProducerAck) this.deferredResponses.set(toolCallId, response);
+    else this.emitResponse(toolCallId, response);
     entry.resolve(
-      payload.cancelled
-        ? { cancelReason: payload.cancelReason ?? 'user_cancelled', cancelled: true }
+      cancelled
+        ? { cancelReason: cancelReason ?? 'user_cancelled', cancelled: true }
         : { result: payload.result },
     );
+  }
+
+  /** Emit a response previously held until its provider transport confirmed delivery. */
+  acknowledge(toolCallId: string): boolean {
+    const response = this.deferredResponses.get(toolCallId);
+    if (!response || this.closed) return false;
+    this.deferredResponses.delete(toolCallId);
+    this.emitResponse(toolCallId, response);
+    return true;
   }
 
   /**
@@ -249,6 +301,16 @@ export class AskUserBridge {
    * one intervention without ending the whole op.
    */
   cancel(toolCallId: string, reason: InterventionAnswer['cancelReason'] = 'user_cancelled'): void {
+    const deferred = this.deferredResponses.get(toolCallId);
+    if (deferred) {
+      this.deferredResponses.delete(toolCallId);
+      this.emitResponse(toolCallId, {
+        cancelReason: reason,
+        cancelled: true,
+        resolutionRequestId: deferred.resolutionRequestId,
+      });
+      return;
+    }
     this.resolve(toolCallId, { cancelReason: reason, cancelled: true });
   }
 
@@ -270,6 +332,14 @@ export class AskUserBridge {
       entry.resolve({ cancelReason: reason, cancelled: true });
     }
     this.pending_.clear();
+    for (const [toolCallId, response] of this.deferredResponses) {
+      this.emitResponse(toolCallId, {
+        cancelReason: reason,
+        cancelled: true,
+        resolutionRequestId: response.resolutionRequestId,
+      });
+    }
+    this.deferredResponses.clear();
     this.closed = true;
     // Drain any waiters with a "done" so consumers can break their loop.
     while (this.outboundWaiters.length > 0) {

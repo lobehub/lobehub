@@ -2,12 +2,18 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { isRecord, pickString } from '@lobechat/utils/object';
 
 import { CodexAppServerAdapter } from '../adapters/codexAppServer';
+import type { AskUserBridge, InterventionAnswer } from '../askUser/AskUserBridge';
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { toStreamEvent } from '../spawn/streamEvent';
 import type { UsageData } from '../types';
-import type { CodexAppServerClient } from './CodexAppServerClient';
+import type { CodexAppServerClient, CodexServerRequestContext } from './CodexAppServerClient';
 import { CodexAppServerConnectionError } from './CodexAppServerClient';
 import type {
+  CodexCommandExecutionRequestApprovalParams,
+  CommandExecutionApprovalDecision,
+  CommandExecutionRequestApprovalResponse,
+  FileChangeApprovalDecision,
+  FileChangeRequestApprovalResponse,
   ThreadResumeParams,
   ThreadResumeResponse,
   ThreadStartParams,
@@ -20,6 +26,125 @@ import type {
 } from './protocol';
 
 const CODEX_APP_SERVER_TRANSPORT = 'codex-app-server' as const;
+const COMMAND_APPROVAL_METHOD = 'item/commandExecution/requestApproval';
+const FILE_APPROVAL_METHOD = 'item/fileChange/requestApproval';
+
+type CodexStringApprovalDecision = Extract<CommandExecutionApprovalDecision, string>;
+
+interface CodexApprovalOption {
+  decision: CodexStringApprovalDecision;
+  description: string;
+  id: CodexStringApprovalDecision;
+  label: string;
+}
+
+interface CodexApprovalRequest {
+  arguments: {
+    questions: Array<{
+      header: string;
+      multiSelect: false;
+      options: Array<Pick<CodexApprovalOption, 'description' | 'id' | 'label'>>;
+      question: string;
+    }>;
+  };
+  options: CodexApprovalOption[];
+  question: string;
+  toolCallId: string;
+}
+
+const CODEX_APPROVAL_OPTIONS: Record<
+  CodexStringApprovalDecision,
+  Omit<CodexApprovalOption, 'id'>
+> = {
+  accept: {
+    decision: 'accept',
+    description: 'Approve this request once.',
+    label: 'Allow once',
+  },
+  acceptForSession: {
+    decision: 'acceptForSession',
+    description: 'Approve this request and equivalent requests for the current session.',
+    label: 'Allow for session',
+  },
+  cancel: {
+    decision: 'cancel',
+    description: 'Cancel this approval request.',
+    label: 'Cancel',
+  },
+  decline: {
+    decision: 'decline',
+    description: 'Reject this request and let Codex continue safely.',
+    label: 'Reject',
+  },
+};
+const DEFAULT_CODEX_APPROVAL_DECISIONS: CodexStringApprovalDecision[] = [
+  'accept',
+  'acceptForSession',
+  'decline',
+  'cancel',
+];
+
+const isCodexStringApprovalDecision = (value: unknown): value is CodexStringApprovalDecision =>
+  typeof value === 'string' && value in CODEX_APPROVAL_OPTIONS;
+
+const getSelectedApprovalId = (result: unknown, question: string): string | undefined => {
+  if (!isRecord(result)) return;
+  const entries = Object.entries(result);
+  if (entries.length !== 1 || entries[0][0] !== question) return;
+  return typeof entries[0][1] === 'string' ? entries[0][1] : undefined;
+};
+
+const buildCodexApprovalRequest = (
+  method: typeof COMMAND_APPROVAL_METHOD | typeof FILE_APPROVAL_METHOD,
+  rawParams: unknown,
+): CodexApprovalRequest => {
+  if (!isRecord(rawParams)) throw new Error(`Invalid Codex app-server request: ${method}`);
+  const itemId = pickString(rawParams.itemId);
+  const threadId = pickString(rawParams.threadId);
+  const turnId = pickString(rawParams.turnId);
+  if (!itemId || !threadId || !turnId) {
+    throw new Error(`Invalid Codex app-server request: ${method}`);
+  }
+
+  const isCommand = method === COMMAND_APPROVAL_METHOD;
+  const requestedDecisions = isCommand
+    ? (rawParams as CodexCommandExecutionRequestApprovalParams).availableDecisions
+    : undefined;
+  const decisionIds = [
+    ...new Set(
+      requestedDecisions
+        ? requestedDecisions.filter(isCodexStringApprovalDecision)
+        : DEFAULT_CODEX_APPROVAL_DECISIONS,
+    ),
+  ];
+  if (decisionIds.length === 0) {
+    throw new Error(`Unsupported Codex approval decision variant: ${method}`);
+  }
+  const options = decisionIds.map((id) => ({ id, ...CODEX_APPROVAL_OPTIONS[id] }));
+  const question = isCommand
+    ? 'Allow Codex to run the requested command?'
+    : 'Allow Codex to apply the requested file changes?';
+  const callbackId =
+    isCommand && pickString((rawParams as CodexCommandExecutionRequestApprovalParams).approvalId);
+  const toolCallId = `codex-${isCommand ? 'command' : 'file'}-approval-${callbackId || itemId}`;
+  const header = isCommand ? 'Codex command approval' : 'Codex file approval';
+
+  return {
+    arguments: {
+      questions: [
+        {
+          header,
+          multiSelect: false,
+          options: options.map(({ description, id, label }) => ({ description, id, label })),
+          question,
+        },
+      ],
+    },
+    options,
+    question,
+    toolCallId,
+  };
+};
 
 const toThreadResumeParams = (threadId: string, params: ThreadStartParams): ThreadResumeParams => {
   const resumeParams = { ...params };
@@ -32,6 +157,7 @@ const toThreadResumeParams = (threadId: string, params: ThreadStartParams): Thre
 
 interface ActiveTurn {
   adapter: CodexAppServerAdapter;
+  askUserBridge?: AskUserBridge;
   completion: Promise<void>;
   interruptRequest?: Promise<void>;
   interruptRequested: boolean;
@@ -50,6 +176,7 @@ interface ThreadNameSetParams {
 }
 
 export interface CodexThreadTurnOptions {
+  askUserBridge?: AskUserBridge;
   input: UserInput[];
   onRawMessage: (line: string) => Promise<void> | void;
   operationId: string;
@@ -127,6 +254,7 @@ export class CodexThreadSession {
       });
       const activeTurn: ActiveTurn = {
         adapter,
+        askUserBridge: options.askUserBridge,
         completion,
         interruptRequested: this.interruptRequested,
         notificationQueue: Promise.resolve(),
@@ -174,6 +302,7 @@ export class CodexThreadSession {
       this.emitStatus('error', options.operationId);
       throw error;
     } finally {
+      options.askUserBridge?.cancelAll('session_ended');
       for (const unsubscribe of traceUnsubscribers) unsubscribe();
       this.activeTurn = undefined;
       this.interruptRequested = false;
@@ -188,6 +317,7 @@ export class CodexThreadSession {
     if (!activeTurn) return;
 
     activeTurn.interruptRequested = true;
+    activeTurn.askUserBridge?.cancelAll('user_cancelled');
     if (!activeTurn.turnId) return;
     try {
       await this.requestInterrupt(activeTurn);
@@ -209,6 +339,7 @@ export class CodexThreadSession {
     this.interruptRequested = true;
     if (this.activeTurn) {
       this.activeTurn.interruptRequested = true;
+      this.activeTurn.askUserBridge?.cancelAll('session_ended');
       if (this.activeTurn.turnId) {
         void this.requestInterrupt(this.activeTurn).catch((error) => {
           console.error('Failed to interrupt Codex turn while closing the session:', error);
@@ -281,15 +412,9 @@ export class CodexThreadSession {
       this.options.client.subscribe(threadId, (method, params) =>
         this.enqueueNotification(method, params),
       ),
-      this.options.client.subscribeServerRequests(threadId, (method) => {
-        if (
-          method === 'item/commandExecution/requestApproval' ||
-          method === 'item/fileChange/requestApproval'
-        ) {
-          return { decision: 'cancel' };
-        }
-        throw new Error(`Unsupported Codex app-server request: ${method}`);
-      }),
+      this.options.client.subscribeServerRequests(threadId, (method, params, context) =>
+        this.handleServerRequest(method, params, context),
+      ),
       this.options.client.registerThread(
         threadId,
         toThreadResumeParams(threadId, this.options.threadParams),
@@ -307,6 +432,78 @@ export class CodexThreadSession {
     if (this.closedByHost) return;
     this.attached = true;
     if (response.model) this.updateModel(response.model);
+  }
+
+  private async handleServerRequest(
+    method: string,
+    params: unknown,
+    context: CodexServerRequestContext,
+  ): Promise<unknown> {
+    if (method !== COMMAND_APPROVAL_METHOD && method !== FILE_APPROVAL_METHOD) {
+      throw new Error(`Unsupported Codex app-server request: ${method}`);
+    }
+
+    const activeTurn = this.activeTurn;
+    if (!activeTurn?.askUserBridge || !isRecord(params)) return { decision: 'cancel' };
+    const requestThreadId = pickString(params.threadId);
+    const requestTurnId = pickString(params.turnId);
+    if (
+      !requestThreadId ||
+      requestThreadId !== this.threadId ||
+      !requestTurnId ||
+      (activeTurn.turnId && activeTurn.turnId !== requestTurnId)
+    ) {
+      return { decision: 'cancel' };
+    }
+    if (!activeTurn.turnId) activeTurn.turnId = requestTurnId;
+
+    const approval = buildCodexApprovalRequest(method, params);
+    await this.emitEvents(
+      activeTurn.adapter.startApprovalIntervention(approval.toolCallId, approval.arguments),
+      activeTurn.operationId,
+    );
+
+    let answer: InterventionAnswer;
+    try {
+      answer = await activeTurn.askUserBridge.pending(
+        {
+          arguments: approval.arguments,
+          interactionKind: 'permission',
+          toolCallId: approval.toolCallId,
+        },
+        {
+          deferProducerAck: true,
+          validateResult: (result) => {
+            const selectedId = getSelectedApprovalId(result, approval.question);
+            return approval.options.some(({ id }) => id === selectedId);
+          },
+        },
+      );
+    } catch {
+      answer = { cancelReason: 'session_ended', cancelled: true };
+    }
+
+    const selectedId = answer.cancelled
+      ? undefined
+      : getSelectedApprovalId(answer.result, approval.question);
+    const decision =
+      approval.options.find(({ id }) => id === selectedId)?.decision ?? ('cancel' as const);
+    context.onResponseSent(async () => {
+      // This is the producer ACK boundary: Codex's JSON-RPC response has been
+      // written successfully. A process/write failure before here is closed as
+      // session_ended by the run cleanup instead of falsely becoming terminal.
+      activeTurn.askUserBridge?.acknowledge(approval.toolCallId);
+      await this.emitEvents(
+        activeTurn.adapter.completeApprovalIntervention(approval.toolCallId, answer),
+        activeTurn.operationId,
+      );
+    });
+
+    return method === COMMAND_APPROVAL_METHOD
+      ? ({ decision } satisfies CommandExecutionRequestApprovalResponse)
+      : ({
+          decision: decision as FileChangeApprovalDecision,
+        } satisfies FileChangeRequestApprovalResponse);
   }
 
   private handleDisconnect(): void {

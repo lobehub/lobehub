@@ -156,6 +156,7 @@ describe('CodexAppServerClient', () => {
     expect(client.canReuseFor(launchOptions)).toBe(true);
     expect(client.canReuseFor({ ...launchOptions, commandPath: '/opt/codex' })).toBe(false);
     expect(client.canReuseFor({ ...launchOptions, args: [] })).toBe(false);
+    expect(client.canReuseFor({ ...launchOptions, detached: false })).toBe(false);
     expect(
       client.canReuseFor({
         ...launchOptions,
@@ -217,11 +218,15 @@ describe('CodexAppServerClient', () => {
     const client = createClient();
     const notifications: string[] = [];
     const serverRequests: string[] = [];
+    const responseSent = vi.fn(() => {
+      expect(messages).toContainEqual({ id: 'approval-1', result: { decision: 'cancel' } });
+    });
     client.subscribe('thread-1', (method) => {
       notifications.push(method);
     });
-    client.subscribeServerRequests('thread-1', (method) => {
+    client.subscribeServerRequests('thread-1', (method, _params, context) => {
       serverRequests.push(method);
+      context.onResponseSent(responseSent);
       return { decision: 'cancel' };
     });
 
@@ -239,6 +244,7 @@ describe('CodexAppServerClient', () => {
     ]);
     expect(notifications).toEqual(['turn/started']);
     expect(serverRequests).toEqual(['item/commandExecution/requestApproval']);
+    expect(responseSent).toHaveBeenCalledOnce();
     expect(spawnMock).toHaveBeenCalledWith(
       'codex',
       ['app-server'],
@@ -518,10 +524,18 @@ describe('CodexAppServerClient', () => {
     const approval = new Promise<void>((resolve) => {
       resolveApproval = resolve;
     });
-    const handler = vi.fn(async () => {
-      await approval;
-      return { decision: 'accept' };
-    });
+    const responseSent = vi.fn();
+    const handler = vi.fn(
+      async (
+        _method: string,
+        _params: unknown,
+        context: { onResponseSent: (callback: () => Promise<void> | void) => void },
+      ) => {
+        context.onResponseSent(responseSent);
+        await approval;
+        return { decision: 'accept' };
+      },
+    );
     client.subscribeServerRequests('thread-1', handler);
     await client.connect();
     const writesBeforeRequest = process.messages.length;
@@ -538,6 +552,7 @@ describe('CodexAppServerClient', () => {
     await Promise.resolve();
 
     expect(process.messages).toHaveLength(writesBeforeRequest);
+    expect(responseSent).not.toHaveBeenCalled();
     client.close();
   });
 
