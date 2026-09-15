@@ -228,6 +228,13 @@ export interface GoalManagerState {
    * server-minted `msg_goal_manager_<token>` source message.
    */
   adopted?: boolean;
+  /**
+   * The conversation run adopted as the first planning turn, kept on every later
+   * receipt. `adopted` / `operationId` describe the current turn and are replaced
+   * when the next one starts; without this the first run's spend would drop out
+   * of the goal's management usage and budget.
+   */
+  adoptedOperationId?: string;
   consumed?: boolean;
   operationId?: string;
   /**

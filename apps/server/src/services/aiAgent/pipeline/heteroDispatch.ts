@@ -54,6 +54,7 @@ import {
 } from '../helpers/heteroErrors';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
 import type { ExecRunContext } from '../types';
+import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -375,10 +376,10 @@ export const dispatchHeteroAgent = async (
   let operationJwt: string;
   try {
     operationJwt = await signHeteroOperationJWT({
-      // `goal:manage` lets `/goal` in this conversation create a goal the agent
-      // supervises (`lh goal create --conversation`); the server still derives
-      // the agent and topic from this operation, never from the CLI.
-      capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read', 'goal:manage'],
+      // A `/goal` run also gets `goal:manage` so it can create the goal the agent
+      // supervises; the server still derives the agent and topic from this
+      // operation, never from the CLI.
+      capabilities: heteroOperationCapabilities(prompt),
       operationId,
       userId: deps.userId,
       workspaceId: deps.workspaceId,

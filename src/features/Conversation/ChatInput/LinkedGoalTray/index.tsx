@@ -16,7 +16,7 @@ import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
-import { selectLinkedGoals } from './linkedGoals';
+import { isGoalRequestGenerating, selectLinkedGoals } from './linkedGoals';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -112,8 +112,15 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
   const topicId = useConversationStore((s) => s.context.topicId);
   const displayMessages = useConversationStore(dataSelectors.displayMessages);
   const useFetchTopicGoals = useGoalStore((s) => s.useFetchTopicGoals);
-  const generating = useConversationStore(messageStateSelectors.isAIGenerating);
-  const { data } = useFetchTopicGoals(enabled ? topicId : undefined, generating);
+  // Discovery polling is for the run that may create a goal — a `/goal` request —
+  // not every generation; goals already found keep polling on their own status.
+  const goalRequestGenerating = useConversationStore((s) =>
+    isGoalRequestGenerating(
+      dataSelectors.displayMessages(s),
+      messageStateSelectors.isAIGenerating(s),
+    ),
+  );
+  const { data } = useFetchTopicGoals(enabled ? topicId : undefined, goalRequestGenerating);
 
   const goals = useMemo(
     () => selectLinkedGoals(data?.goals, displayMessages),

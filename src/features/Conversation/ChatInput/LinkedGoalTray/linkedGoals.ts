@@ -1,3 +1,4 @@
+import { isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { UIChatMessage } from '@lobechat/types';
 
 import type { GoalListItem } from '@/services/goal';
@@ -27,3 +28,15 @@ export const selectLinkedGoals = (
 
   return goals.filter(({ goal }) => !carded.has(goal.id)).slice(0, MAX_LINKED_GOALS);
 };
+
+/**
+ * Whether the run in flight can be the one creating a goal: something is
+ * generating and the latest user message is a `/goal` request. Polling for new
+ * goals on every generation would hit the goal list every few seconds for
+ * conversations that never asked for one.
+ */
+export const isGoalRequestGenerating = (
+  messages: UIChatMessage[] = [],
+  generating: boolean,
+): boolean =>
+  generating && isGoalPrompt(messages.findLast((message) => message.role === 'user')?.content);

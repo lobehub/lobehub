@@ -114,18 +114,22 @@ export class GoalManagerService {
     // manager turns count as management spend: the dispatched ones by their
     // server-minted source message, the adopted one by its operation id. The
     // rest of that conversation is the user's chat, not the goal's budget.
-    const operations = state
-      ? (
-          await new AgentOperationModel(this.db, this.userId, this.workspaceId).listByTopic(
-            state.topicId,
-            100,
-          )
-        ).filter(
-          (op) =>
-            op.appContext?.sourceMessageId?.startsWith(MANAGER_SOURCE_MESSAGE_PREFIX) ||
-            (state.adopted && op.id === state.operationId),
-        )
-      : [];
+    if (!state) return { totalCost: 0, totalTokens: 0 };
+    const model = new AgentOperationModel(this.db, this.userId, this.workspaceId);
+    // Later receipts replace `adopted` / `operationId`, so the adopted run is
+    // read from the id every receipt carries forward.
+    const adoptedId = state.adoptedOperationId ?? (state.adopted ? state.operationId : undefined);
+    const operations = (await model.listByTopic(state.topicId, 100)).filter(
+      (op) =>
+        op.appContext?.sourceMessageId?.startsWith(MANAGER_SOURCE_MESSAGE_PREFIX) ||
+        op.id === adoptedId,
+    );
+    // A handoff moves later turns to the new agent's topic; the adopted run
+    // stays on the original conversation and still counts.
+    if (adoptedId && !operations.some((op) => op.id === adoptedId)) {
+      const adoptedRun = await model.findById(adoptedId);
+      if (adoptedRun) operations.push(adoptedRun);
+    }
     return {
       totalCost: operations.reduce((sum, op) => sum + (Number(op.totalCost) || 0), 0),
       totalTokens: operations.reduce((sum, op) => sum + (op.totalTokens ?? 0), 0),
@@ -175,6 +179,7 @@ export class GoalManagerService {
       if (!graph) throw new Error('Goal not found');
       const state: GoalManagerState = {
         adopted: true,
+        adoptedOperationId: run.operationId,
         operationId: run.operationId,
         reviewSnapshot: (await this.reviews(graph, db)).hash,
         snapshot: managerSnapshot(graph),
@@ -512,6 +517,7 @@ export class GoalManagerService {
               ...(problem.taskId && { problemTaskId: problem.taskId }),
             }
           : {}),
+        ...(state?.adoptedOperationId && { adoptedOperationId: state.adoptedOperationId }),
         reviewSnapshot: reviews.hash,
         topicId,
         turns: (state?.turns ?? 0) + 1,

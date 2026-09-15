@@ -352,6 +352,37 @@ describe('CLI main Agent planning', () => {
       expect((await manager().usage(state)).totalCost).toBe(2);
     });
 
+    it('keeps the adopted run in management spend after a later turn replaces the receipt', async () => {
+      await startConversationRun();
+      await db
+        .update(agentOperations)
+        .set({ totalCost: 2 })
+        .where(eq(agentOperations.id, conversationOpId));
+      const { graph } = await service().createFromConversation(conversationOpId, {
+        title: 'Two-turn goal',
+      });
+      const adopted = (await model().findById(graph.goal.id))!.config!.managerState!;
+      expect(adopted.adoptedOperationId).toBe(conversationOpId);
+
+      // What `startTurn` writes for turn two: a fresh receipt with no `adopted`
+      // flag and no operation yet. The first run's spend used to vanish here,
+      // so both the displayed usage and the budget check under-counted.
+      const laterTurn = {
+        adoptedOperationId: adopted.adoptedOperationId,
+        snapshot: adopted.snapshot,
+        startedAt: new Date().toISOString(),
+        token: 'turn-two',
+        topicId: conversationTopicId,
+        turns: 2,
+      };
+
+      expect((await manager().usage(laterTurn)).totalCost).toBe(2);
+      // After a handoff the later turn lives on another topic; the run still counts.
+      expect(
+        (await manager().usage({ ...laterTurn, topicId: 'tpc_other_supervisor' })).totalCost,
+      ).toBe(2);
+    });
+
     it('plans a local desktop run that has no server operation row', async () => {
       await db.insert(topics).values({ agentId, id: conversationTopicId, userId });
       const localRun = { agentId, topicId: conversationTopicId };

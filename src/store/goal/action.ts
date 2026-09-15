@@ -179,8 +179,9 @@ export class GoalActionImpl {
    * `lh goal create --conversation` leaves no tool result to derive a card from,
    * so the conversation reads the link from the goal rows instead. Polls on the
    * graph's cadence while any of them is still advancing on the server, and
-   * while the conversation is generating — that run is the one that creates the
-   * goal, so nothing on screen would otherwise ask for it.
+   * while a `/goal` request is generating (`generating`, decided by the caller)
+   * — that run is the one that creates the goal, so nothing on screen would
+   * otherwise ask for it.
    */
   useFetchTopicGoals = (topicId?: string | null, generating?: boolean) =>
     useClientDataSWR(
