@@ -2,8 +2,8 @@
 
 import { BRANDING_EMAIL } from '@lobechat/business-const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, Input, Upload } from 'antd';
+import { Button, toast, Upload, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, Input } from 'antd';
 import { ImagePlus, Send } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -165,14 +165,7 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
                 </Button>
               </Flexbox>
             ) : (
-              <Upload
-                accept="image/*"
-                showUploadList={false}
-                beforeUpload={(file) => {
-                  handleScreenshotUpload(file);
-                  return false;
-                }}
-              >
+              <Upload accept="image/*" onFiles={([file]) => handleScreenshotUpload(file)}>
                 <Button icon={<Icon icon={ImagePlus} />} loading={uploadingScreenshot}>
                   {uploadingScreenshot
                     ? t('feedback.fields.screenshot.uploading')

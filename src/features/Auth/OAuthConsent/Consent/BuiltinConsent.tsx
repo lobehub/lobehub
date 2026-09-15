@@ -1,7 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui/base-ui';
-import { Result } from 'antd';
+import { Result, Text } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

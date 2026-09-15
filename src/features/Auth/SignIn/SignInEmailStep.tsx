@@ -1,8 +1,8 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox, Icon, Input } from '@lobehub/ui';
-import { Alert, Button, Text } from '@lobehub/ui/base-ui';
+import { Alert, Badge, Button, Text } from '@lobehub/ui/base-ui';
 import { type FormInstance, type InputRef } from 'antd';
-import { Badge, Divider, Form } from 'antd';
+import { Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
@@ -137,7 +137,7 @@ export const SignInEmailStep = ({
                 color="var(--ant-color-info)"
                 count={t('betterAuth.signin.lastUsed')}
                 key={provider}
-                styles={{ root: { display: 'block', width: '100%' } }}
+                style={{ display: 'block', width: '100%' }}
               >
                 {button}
               </Badge>
