@@ -76,18 +76,27 @@ const TASK_DESCRIPTION_MAX_LENGTH = 255;
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
 
+/** Who does the goal's Tasks: its dedicated executor, else the goal agent itself. */
+export const goalTaskAgentId = (goal: Pick<GoalItem, 'agentId' | 'config'>) =>
+  goal.config?.taskAgentId ?? goal.agentId ?? undefined;
+
 export interface CreateGoalTaskInput {
   description?: string;
   title: string;
 }
 
 export interface CreateGoalGraphInput {
+  /**
+   * The goal agent: it supervises the goal, runs its planning turns and does its
+   * Tasks unless `config.taskAgentId` names a dedicated executor. Defaults to
+   * `createdByAgentId`.
+   */
   agentId?: string;
   config?: GoalCreateConfig;
   /**
    * The agent that made this call, when a tool did. Distinct from `agentId`,
-   * which is the agent the goal is assigned to — creating a goal from the modal
-   * on an agent's page sets that, but the author is still the person.
+   * which is the agent the goal belongs to — creating a goal from the modal on
+   * an agent's page sets that, but the author is still the person.
    */
   createdByAgentId?: string;
   /**
@@ -183,8 +192,8 @@ export class GoalService {
       : this.graphModel;
 
   create = async (input: CreateGoalGraphInput): Promise<GoalGraphSnapshot> => {
-    if (input.agentId) {
-      await assertAgentUsableBy(this.db, input.agentId, {
+    if (input.agentId ?? input.createdByAgentId) {
+      await assertAgentUsableBy(this.db, (input.agentId ?? input.createdByAgentId)!, {
         userId: this.userId,
         workspaceId: this.workspaceId,
       });
@@ -200,15 +209,25 @@ export class GoalService {
     // Persist the structured acceptance criteria first: their ids ride on the
     // goal config so the page can edit them and the terminal acceptance Task
     // is gated on exactly these checks (not an AI re-derivation of the prose).
-    const creatorAgentId = input.createdByAgentId ?? input.agentId;
-    const { manager: managerOptions, ...options } = input.config ?? {};
+    // The goal's agent supervises it: it owns the goal list entry, the page and,
+    // in manager mode, every planning turn. An agent creating a goal for itself
+    // need not repeat its id; executors are routed separately (`taskAgentId`).
+    const goalAgentId = input.agentId ?? input.createdByAgentId;
+    const { manager: managerOptions, taskAgentId, ...options } = input.config ?? {};
     const managed = managerOptions !== undefined;
     let config: GoalConfig | undefined = input.config ? options : undefined;
+    if (taskAgentId && taskAgentId !== goalAgentId) {
+      await assertAgentUsableBy(this.db, taskAgentId, {
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      config = { ...config, taskAgentId };
+    }
     if (managed) {
-      if (!creatorAgentId) {
+      if (!goalAgentId) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'A main Agent requires the creating or selected Agent',
+          message: 'A main Agent requires the goal agent',
         });
       }
       const turns = managerOptions?.maxTurns ?? 12;
@@ -222,11 +241,12 @@ export class GoalService {
       // rivals: the system planner leads, supervision recovers known transport
       // failures, and the main Agent is handed whatever neither can route (see
       // `gateOrTakeOver`). Ordering resolves what exclusivity used to.
-      await assertAgentUsableBy(this.db, creatorAgentId, {
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      });
-      config = { ...options, manager: { ...managerOptions, agentId: creatorAgentId } };
+      // Rebuilt from the known fields: a legacy caller may still send an
+      // `agentId` inside the policy, and the planning identity is the goal's.
+      config = {
+        ...config,
+        manager: { instruction: managerOptions?.instruction, maxTurns: managerOptions?.maxTurns },
+      };
     }
     // A supplied requirement is the user-reviewed goal document. Criteria live
     // separately; only synthesize a document when the caller omitted one.
@@ -277,7 +297,7 @@ export class GoalService {
     }
 
     const goal = await this.goalModel.create({
-      agentId: input.agentId ?? creatorAgentId,
+      agentId: goalAgentId,
       config,
       maxRounds: input.maxRounds,
       maxTotalCost: input.maxTotalCost,
@@ -956,12 +976,12 @@ export class GoalService {
   };
 
   /**
-   * Hand the goal to a different responsible agent. Every Task the
-   * coordinator creates from here on is assigned to the new agent, and —
-   * unless the caller opts out — the graph's unfinished Tasks move with it.
-   * A Task mid-run keeps its current operation; the reassignment takes effect
-   * on its next dispatched attempt, because `runTask` reads the assignee at
-   * dispatch time.
+   * Hand the goal to a different agent. The goal agent supervises: it owns the
+   * goal page and list entry and runs every planning turn. When it also does
+   * the goal's own Tasks (no separate `taskAgentId`), every Task the
+   * coordinator creates from here on goes to the new agent and — unless the
+   * caller opts out — the unfinished ones move with it. A goal whose Tasks go
+   * to a dedicated executor keeps them there; see `setTaskAgent`.
    */
   setAgent = async (
     goalId: string,
@@ -975,30 +995,72 @@ export class GoalService {
     const goal = await this.goalModel.update(goalId, { agentId });
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
 
-    const reassignedTaskIds: string[] = [];
-    if (!options?.goalOnly) {
-      // Snapshot the graph AFTER the goal row moved: a task the coordinator
-      // binds later inherits the new agent from the goal, and a task bound
-      // before is in this snapshot — so no concurrently created task can slip
-      // through the handoff still pointing at the previous agent.
-      const graph = await this.requireGraph(goalId);
-      const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
-      for (const task of await this.taskModel.findByIds(taskIds)) {
-        if (task.status === 'completed' || task.status === 'canceled') continue;
-        if (task.assigneeAgentId === agentId) continue;
-        await this.taskModel.update(task.id, { assigneeAgentId: agentId });
-        reassignedTaskIds.push(task.id);
-      }
-    }
+    const reassignedTaskIds =
+      options?.goalOnly || goal.config?.taskAgentId
+        ? []
+        : await this.reassignUnfinishedTasks(goalId, agentId);
     return { goal, reassignedTaskIds };
+  };
+
+  /**
+   * Route the goal's Tasks to a dedicated executor, or back to the goal agent
+   * with `null`. The goal agent keeps supervising either way. Unfinished Tasks
+   * move with the change unless the caller opts out.
+   */
+  setTaskAgent = async (
+    goalId: string,
+    agentId: string | null,
+    options?: { goalOnly?: boolean },
+  ): Promise<{ goal: GoalItem; reassignedTaskIds: string[] }> => {
+    if (agentId) {
+      await assertAgentUsableBy(this.db, agentId, {
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    }
+    const current = await this.goalModel.findById(goalId);
+    if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    const { taskAgentId: _previous, ...rest } = current.config ?? {};
+    // Naming the goal agent itself is the same as clearing: one agent, one slot.
+    const config =
+      agentId && agentId !== current.agentId ? { ...rest, taskAgentId: agentId } : rest;
+    const goal = await this.goalModel.update(goalId, { config });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+
+    const assignee = goalTaskAgentId(goal);
+    const reassignedTaskIds =
+      options?.goalOnly || !assignee ? [] : await this.reassignUnfinishedTasks(goalId, assignee);
+    return { goal, reassignedTaskIds };
+  };
+
+  /**
+   * Snapshot the graph AFTER the goal row moved: a task the coordinator binds
+   * later inherits the new assignee from the goal, and a task bound before is in
+   * this snapshot — so no concurrently created task can slip through the
+   * handoff still pointing at the previous agent. A Task mid-run keeps its
+   * current operation; `runTask` reads the assignee at its next dispatch.
+   */
+  private reassignUnfinishedTasks = async (goalId: string, agentId: string) => {
+    const graph = await this.requireGraph(goalId);
+    const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
+    const reassigned: string[] = [];
+    for (const task of await this.taskModel.findByIds(taskIds)) {
+      if (task.status === 'completed' || task.status === 'canceled') continue;
+      if (task.assigneeAgentId === agentId) continue;
+      await this.taskModel.update(task.id, { assigneeAgentId: agentId });
+      reassigned.push(task.id);
+    }
+    return reassigned;
   };
 
   /**
    * Start every unfinished Task node over: interrupt the run it may still be
    * holding, clear the failure it may be parked on, and return the Task to
    * `backlog` so the next coordinator tick dispatches it afresh. Optionally
-   * hands the goal (and the restarted Tasks) to a different agent in the same
-   * gesture. Resolved nodes and their completed Tasks are left untouched.
+   * hands the restarted Tasks to a different agent in the same gesture — the
+   * goal's executor slot moves with them: `taskAgentId` when the goal routes
+   * work to a dedicated executor, otherwise the goal agent that does its own
+   * Tasks. Resolved nodes and their completed Tasks are left untouched.
    */
   restart = async (
     goalId: string,
@@ -1066,7 +1128,12 @@ export class GoalService {
     // its tasks and live runs still belong to the old one.
     let goal = graph.goal;
     if (options?.agentId) {
-      const updated = await this.goalModel.update(goalId, { agentId: options.agentId });
+      const updated = await this.goalModel.update(
+        goalId,
+        goal.config?.taskAgentId
+          ? { config: { ...goal.config, taskAgentId: options.agentId } }
+          : { agentId: options.agentId },
+      );
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
       goal = updated;
     }
@@ -1596,7 +1663,7 @@ export class GoalService {
         .filter(Boolean)
         .join('\n\n');
       task = await this.taskService.createTask({
-        assigneeAgentId: graph.goal.agentId ?? undefined,
+        assigneeAgentId: goalTaskAgentId(graph.goal),
         config: { checkpoint: { topic: { after: false } } },
         description: description?.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
         instruction: this.buildTaskInstruction(graph, frontier.title, description),

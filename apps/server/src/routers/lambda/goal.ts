@@ -218,6 +218,8 @@ export const goalRouter = router({
                 maxIncidents: z.number().int().min(1).max(100).optional(),
               })
               .optional(),
+            /** Dedicated executor for the goal's Tasks; the goal agent supervises. */
+            taskAgentId: z.string().min(1).optional(),
             recovery: z
               .object({
                 maxAttemptsPerTask: z.number().int().positive().optional(),
@@ -520,7 +522,8 @@ export const goalRouter = router({
     }),
 
   /**
-   * Hand the goal to a different responsible agent. Unfinished Tasks follow by
+   * Hand the goal to a different agent — the one that supervises and plans it.
+   * When that agent also does the goal's Tasks, unfinished ones follow by
    * default (`goalOnly` keeps them); Tasks mid-run switch on their next attempt.
    */
   setAgent: goalWriteProcedure
@@ -544,6 +547,34 @@ export const goalRouter = router({
         };
       } catch (error) {
         mapGoalError(error, 'setAgent');
+      }
+    }),
+
+  /**
+   * Route the goal's Tasks to a dedicated executor (`null` hands them back to
+   * the goal agent). Unfinished Tasks follow unless `goalOnly` is set.
+   */
+  setTaskAgent: goalWriteProcedure
+    .input(
+      idInput.extend({ agentId: z.string().min(1).nullable(), goalOnly: z.boolean().optional() }),
+    )
+    .mutation(async ({ ctx, input: { id, agentId, goalOnly } }) => {
+      try {
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const data = await ctx.goalService.setTaskAgent(id, agentId, { goalOnly });
+        const reassigned = data.reassignedTaskIds.length;
+        return {
+          data,
+          message: reassigned
+            ? `Task agent updated; ${reassigned} task(s) reassigned`
+            : 'Task agent updated',
+          success: true,
+        };
+      } catch (error) {
+        mapGoalError(error, 'setTaskAgent');
       }
     }),
 

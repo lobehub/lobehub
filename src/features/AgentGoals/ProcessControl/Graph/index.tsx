@@ -14,6 +14,7 @@ import {
   MarkerType,
   MiniMap,
   type Node as FlowNode,
+  type NodeChange,
   Panel,
   ReactFlow,
   ReactFlowProvider,
@@ -39,6 +40,7 @@ import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
 import { hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { type MeasuredSizes, mergeMeasuredSizes } from './measuredSizes';
 import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
 import { useFitViewOnResize } from './useFitViewOnResize';
@@ -366,11 +368,20 @@ const Canvas = memo<
       () => hideKinds(baseNodes, graph.edges, hiddenKinds),
       [baseNodes, graph.edges, hiddenKinds],
     );
+    // A card's height follows its content — a long title wraps to four lines —
+    // so the per-kind estimate stacked the next rank into the cards above it.
+    // The first pass lays out on the estimate; once React Flow has measured the
+    // cards, the map lays out again on what is actually on screen.
+    const [measuredSizes, setMeasuredSizes] = useState<MeasuredSizes>({});
+    const handleNodesChange = useCallback((changes: NodeChange[]) => {
+      setMeasuredSizes((previous) => mergeMeasuredSizes(previous, changes));
+    }, []);
     const positions = hasExperiments
       ? map.boxes
       : layoutGraph(
           baseNodes.filter((node) => visibleIds.has(node.id)),
           [...graph.edges, ...bridges.map((bridge) => ({ ...bridge, kind: 'leads_to' as const }))],
+          measuredSizes,
         );
 
     const ghosts = useMemo(() => {
@@ -443,6 +454,12 @@ const Canvas = memo<
               view: item,
             };
             const expanded = item.node.kind === 'experiment' && !collapsed.has(item.node.id);
+            const type = expanded
+              ? 'goalExperimentGroup'
+              : graphNodeKind(graph, item) === 'experiment'
+                ? 'goalExperiment'
+                : 'goalNode';
+            const measured = measuredSizes[item.node.id];
             return {
               data: expanded
                 ? ({
@@ -455,11 +472,7 @@ const Canvas = memo<
               draggable: false,
               id: item.node.id,
               position: { x: box?.x ?? 0, y: box?.y ?? 0 },
-              type: expanded
-                ? 'goalExperimentGroup'
-                : graphNodeKind(graph, item) === 'experiment'
-                  ? 'goalExperiment'
-                  : 'goalNode',
+              type,
               parentId: hasExperiments ? map.parents.get(item.node.id) : undefined,
               ...(expanded ? { style: { width: box.width, height: box.height } } : {}),
               ariaLabel: graphNodeLabel(
@@ -468,7 +481,12 @@ const Canvas = memo<
                 item.seq,
               ),
               width: box?.width ?? NODE_WIDTH[item.node.kind],
-              initialHeight: box?.height,
+              // A relayout hands React Flow a new node object, which it treats as
+              // unmeasured: it pins the card to `initialHeight` (clipping a tall
+              // title back to the estimate) and drops the handle positions edges
+              // are drawn from. Handing the last measurement back keeps both, so
+              // only a card that has never rendered gets the estimate.
+              ...(type === 'goalNode' && measured ? { measured } : { initialHeight: box?.height }),
             } satisfies FlowNode;
           }),
       [
@@ -485,6 +503,7 @@ const Canvas = memo<
         onSelect,
         hasExperiments,
         map.parents,
+        measuredSizes,
       ],
     );
 
@@ -632,6 +651,7 @@ const Canvas = memo<
           preventScrolling={fullscreen}
           proOptions={{ hideAttribution: true }}
           zoomOnScroll={false}
+          onNodesChange={handleNodesChange}
           onNodeClick={(_, node) => {
             if (node.type !== 'goalGhost' && node.type !== 'goalExperimentGroup') onSelect(node.id);
           }}

@@ -1,6 +1,15 @@
 # CLI main Agent Goals
 
-`lh goal create "Research objective" --agent <agent-id> --requirement "Delivery contract" --max-manager-turns 12 --max-rounds 10`
+`lh goal create "Research objective" --agent <agent-id> --task-agent <executor-id> --requirement "Delivery contract" --max-manager-turns 12 --max-rounds 10`
+
+The main Agent is the goal's own `agentId`: the agent that supervises the goal,
+owns its entry in the agent's goal list, and runs every planning turn. `--agent`
+defaults to `LOBEHUB_AGENT_ID` in the CLI and to `createdByAgentId` for the
+application tool. `config.manager` carries only the turn policy, never an
+identity. `--task-agent` (`config.taskAgentId`) routes the Tasks the coordinator
+creates to a dedicated executor; without it the goal agent does its own Tasks.
+`lh goal set-agent` hands supervision to another agent; `lh goal set-task-agent`
+changes the executor. Neither replaces the other.
 
 The main Agent must have a working shell and an authenticated `lh` CLI in its
 execution environment (for example a configured device Kimi/Codex Agent). Its
@@ -8,12 +17,10 @@ normal Agent configuration selects the runtime; dispatch uses the same
 `execAgent` service as `lh agent run`. There is no exclusive supervisor tool set.
 Manager mode is explicit: pass `--max-manager-turns` through the CLI or
 `config.manager` through the API after ensuring the Agent has a working CLI.
-The application tool supplies `createdByAgentId`; the CLI inherits
-`LOBEHUB_AGENT_ID`. A person creating a Goal uses the selected `--agent` instead.
-No separate manager identity is accepted. Without explicit planning options,
-ordinary unseeded goals keep the coordinator planner. Seed/exploration/legacy
-supervision paths retain their existing planning behavior. Task assignees can
-differ, and changing them does not replace the configured main Agent.
+Without explicit planning options, ordinary unseeded goals keep the coordinator
+planner. Seed/exploration/legacy supervision paths retain their existing planning
+behavior. After a supervision handoff the next turn opens a management Topic in
+the new agent's history instead of continuing the previous agent's.
 
 The main Agent reads `lh goal show`, `lh task view`, `lh topic view`, and document
 commands. It submits a JSON file through `lh goal plan <goal-id> --token <turn> --file plan.json`. The runtime supplies `LOBEHUB_OPERATION_ID`. Plan actions:

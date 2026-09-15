@@ -80,11 +80,11 @@ export const summarizeGoalBudget = (
   return { kind: 'uncapped', spent: totalCost };
 };
 
-/** The planner's persistent conversation belongs to the creator, not the task assignee. */
-export const goalManagerConversation = (
-  config: GoalConfig | null | undefined,
-): { agentId: string; topicId: string } | undefined => {
-  const agentId = config?.manager?.agentId;
-  const topicId = config?.managerState?.topicId;
-  return agentId && topicId ? { agentId, topicId } : undefined;
+/** The planner's persistent conversation belongs to the goal agent, not the task executor. */
+export const goalManagerConversation = (goal: {
+  agentId: string | null;
+  config?: GoalConfig | null;
+}): { agentId: string; topicId: string } | undefined => {
+  const topicId = goal.config?.manager ? goal.config.managerState?.topicId : undefined;
+  return goal.agentId && topicId ? { agentId: goal.agentId, topicId } : undefined;
 };

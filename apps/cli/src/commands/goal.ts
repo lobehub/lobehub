@@ -216,7 +216,14 @@ export function registerGoalCommand(program: Command) {
       "The ask in the user's own words, shown on the problem node",
     )
     .option('-t, --task <title...>', 'Initial task node titles (omit to let the planner decompose)')
-    .option('--agent <id>', 'Responsible agent ID')
+    .option(
+      '--agent <id>',
+      'Goal agent: supervises and plans the goal (defaults to the current agent)',
+    )
+    .option(
+      '--task-agent <id>',
+      "Dedicated executor for the goal's tasks (defaults to the goal agent)",
+    )
     .option('--project <id>', 'Project ID')
     .option('--explore <instruction>', 'Explore alternatives using completed experiment results')
     .option('--max-experiments <n>', 'Maximum experiment nodes (requires --explore, default 10)')
@@ -255,8 +262,10 @@ export function registerGoalCommand(program: Command) {
           options.maxAttemptsPerTask ||
           options.maxStepsPerRun ||
           options.operationLeaseTimeoutMs ||
-          options.maxConcurrentTasks
+          options.maxConcurrentTasks ||
+          options.taskAgent
             ? {
+                taskAgentId: options.taskAgent,
                 manager: options.maxManagerTurns
                   ? { maxTurns: Number(options.maxManagerTurns) }
                   : undefined,
@@ -497,7 +506,9 @@ export function registerGoalCommand(program: Command) {
 
   goal
     .command('set-agent <id> <agent>')
-    .description('Hand the goal to a different responsible agent (unfinished tasks follow)')
+    .description(
+      'Hand the goal to a different supervising agent (its unfinished tasks follow unless the goal has a task agent)',
+    )
     .option('--goal-only', 'Only change the goal-level agent; leave existing tasks as assigned')
     .action(async (id: string, agentId: string, options: { goalOnly?: boolean }) => {
       const result = await (
@@ -507,9 +518,29 @@ export function registerGoalCommand(program: Command) {
     });
 
   goal
+    .command('set-task-agent <id> <agent>')
+    .description(
+      'Route the goal\'s tasks to a dedicated executor; "none" hands them back to the goal agent',
+    )
+    .option('--goal-only', 'Only change future tasks; leave existing tasks as assigned')
+    .action(async (id: string, agent: string, options: { goalOnly?: boolean }) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.setTaskAgent.mutate({
+        agentId: agent === 'none' ? null : agent,
+        goalOnly: options.goalOnly,
+        id,
+      });
+      log.info(result.message);
+    });
+
+  goal
     .command('restart <id>')
     .description('Start every unfinished task over (cancel stale runs, reset to backlog)')
-    .option('--agent <id>', 'Also hand the goal and restarted tasks to this agent')
+    .option(
+      '--agent <id>',
+      "Also hand the restarted tasks (and the goal's executor slot) to this agent",
+    )
     .action(async (id: string, options: { agent?: string }) => {
       const result = await (
         await getTrpcClient()

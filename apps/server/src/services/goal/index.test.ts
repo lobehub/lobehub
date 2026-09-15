@@ -282,7 +282,7 @@ describe('GoalService', () => {
         .set({
           config: {
             ...originalConfig,
-            manager: managerEnabled ? { agentId: 'manager' } : undefined,
+            manager: managerEnabled ? {} : undefined,
             managerState: {
               consumed: true,
               readyForAcceptance: true,
@@ -827,6 +827,61 @@ describe('GoalService', () => {
     await expect(service.setAgent(graph.goal.id, 'agt_missing')).rejects.toThrow();
   });
 
+  it('moves supervision without moving the tasks a dedicated executor holds', async () => {
+    await serverDB.insert(agents).values([
+      { id: 'agt_supervisor', slug: 'agt-supervisor', userId },
+      { id: 'agt_executor', slug: 'agt-executor', userId },
+      { id: 'agt_next_supervisor', slug: 'agt-next-supervisor', userId },
+    ]);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      agentId: 'agt_supervisor',
+      config: { taskAgentId: 'agt_executor' },
+      tasks: ['Only task'],
+      title: 'Split roles',
+    });
+    expect(graph.goal.agentId).toBe('agt_supervisor');
+    const created = await service.tick(graph.goal.id);
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_executor');
+
+    const handed = await service.setAgent(graph.goal.id, 'agt_next_supervisor');
+
+    expect(handed.goal.agentId).toBe('agt_next_supervisor');
+    expect(handed.goal.config?.taskAgentId).toBe('agt_executor');
+    expect(handed.reassignedTaskIds).toEqual([]);
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_executor');
+  });
+
+  it('routes tasks to a dedicated executor and back to the goal agent', async () => {
+    await serverDB.insert(agents).values([
+      { id: 'agt_owner', slug: 'agt-owner', userId },
+      { id: 'agt_worker', slug: 'agt-worker', userId },
+    ]);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      agentId: 'agt_owner',
+      tasks: ['Only task'],
+      title: 'Delegated',
+    });
+    const created = await service.tick(graph.goal.id);
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_owner');
+
+    const delegated = await service.setTaskAgent(graph.goal.id, 'agt_worker');
+    expect(delegated.goal.agentId).toBe('agt_owner');
+    expect(delegated.goal.config?.taskAgentId).toBe('agt_worker');
+    expect(delegated.reassignedTaskIds).toEqual([created.taskId]);
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_worker');
+
+    // Naming the goal agent clears the slot rather than duplicating it.
+    const back = await service.setTaskAgent(graph.goal.id, 'agt_owner');
+    expect(back.goal.config?.taskAgentId).toBeUndefined();
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_owner');
+
+    await expect(service.setTaskAgent(graph.goal.id, 'agt_missing')).rejects.toThrow();
+  });
+
   it('restarts unfinished tasks under a new agent and cancels the stale runs they hold', async () => {
     const cancelSpy = vi.spyOn(TaskService.prototype, 'cancelTopic').mockResolvedValue();
     await serverDB.insert(agents).values({ id: 'agt_restart', slug: 'agt-restart', userId });
@@ -859,6 +914,30 @@ describe('GoalService', () => {
     await service.pause(graph.goal.id);
     const resumed = await service.restart(graph.goal.id);
     expect(resumed.goal.status).not.toBe('paused');
+  });
+
+  it('restarts a split-role goal under a new executor without replacing its supervisor', async () => {
+    vi.spyOn(TaskService.prototype, 'cancelTopic').mockResolvedValue();
+    await serverDB.insert(agents).values([
+      { id: 'agt_lead', slug: 'agt-lead', userId },
+      { id: 'agt_first_worker', slug: 'agt-first-worker', userId },
+      { id: 'agt_second_worker', slug: 'agt-second-worker', userId },
+    ]);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      agentId: 'agt_lead',
+      config: { taskAgentId: 'agt_first_worker' },
+      tasks: ['Stuck task'],
+      title: 'Restart split roles',
+    });
+    const created = await service.tick(graph.goal.id);
+
+    const result = await service.restart(graph.goal.id, { agentId: 'agt_second_worker' });
+
+    expect(result.goal.agentId).toBe('agt_lead');
+    expect(result.goal.config?.taskAgentId).toBe('agt_second_worker');
+    expect((await taskModel.findById(created.taskId!))?.assigneeAgentId).toBe('agt_second_worker');
   });
 
   it('cancels the failure gate a restart supersedes so the goal starts moving again', async () => {
