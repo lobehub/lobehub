@@ -185,6 +185,13 @@ export type CreateVideoOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
     provider: string;
   };
 
+// See CreateImageOptions above: drop openai's `provider` so ours stays `string`.
+export type CreateSpeechOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
+  ModelIdMappingOptions & {
+    apiKey: string;
+    provider: string;
+  };
+
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createChatCompletionStream?: (
     client: any,
@@ -331,6 +338,16 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       payload: ResponseCreateParamsWithPromptCacheKey;
     };
   };
+  /**
+   * Custom text-to-speech implementation, for providers that expose speech
+   * synthesis through their own API instead of the OpenAI-compatible
+   * `/audio/speech` surface.
+   */
+  textToSpeech?: (
+    payload: TextToSpeechPayload,
+    options: CreateSpeechOptions,
+    requestOptions?: TextToSpeechOptions,
+  ) => Promise<ArrayBuffer>;
 }
 
 export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>({
@@ -350,6 +367,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
   handlePollVideoStatus: customHandlePollVideoStatus,
   generateObject: generateObjectConfig,
+  textToSpeech: customTextToSpeech,
 }: OpenAICompatibleFactoryOptions<T>) => {
   const ErrorType = {
     bizError: errorType?.bizError || AgentRuntimeErrorType.ProviderBizError,
@@ -1323,7 +1341,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
       const log = debug(`${this.logPrefix}:textToSpeech`);
-      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
       log(
         'textToSpeech called with input length: %d, voice: %s',
         payload.input?.length || 0,
@@ -1331,6 +1348,23 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       );
 
       try {
+        // If custom textToSpeech implementation is provided, use it
+        if (customTextToSpeech) {
+          log('using custom textToSpeech implementation');
+
+          return await customTextToSpeech(
+            payload,
+            {
+              ...this._options,
+              apiKey: this._options.apiKey!,
+              modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
+              provider,
+            },
+            options,
+          );
+        }
+
+        const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
         const mp3 = await this.client.audio.speech.create(requestPayload as any, {
           headers: options?.headers,
           signal: options?.signal,
