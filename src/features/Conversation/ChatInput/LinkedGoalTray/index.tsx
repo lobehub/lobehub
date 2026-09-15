@@ -15,7 +15,7 @@ import { useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import { dataSelectors, useConversationStore } from '../../store';
+import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { selectLinkedGoals } from './linkedGoals';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -112,7 +112,8 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
   const topicId = useConversationStore((s) => s.context.topicId);
   const displayMessages = useConversationStore(dataSelectors.displayMessages);
   const useFetchTopicGoals = useGoalStore((s) => s.useFetchTopicGoals);
-  const { data } = useFetchTopicGoals(enabled ? topicId : undefined);
+  const generating = useConversationStore(messageStateSelectors.isAIGenerating);
+  const { data } = useFetchTopicGoals(enabled ? topicId : undefined, generating);
 
   const goals = useMemo(
     () => selectLinkedGoals(data?.goals, displayMessages),

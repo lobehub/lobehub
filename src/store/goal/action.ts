@@ -46,6 +46,14 @@ const GOAL_GRAPH_POLL_INTERVAL = 5000;
 /** A conversation rarely plans more than one goal; this only bounds a runaway topic. */
 const TOPIC_GOAL_FETCH_LIMIT = 20;
 
+const topicGoalsRefreshInterval = (
+  result: { goals: { goal: { status: GoalStatus } }[] } | undefined,
+  generating?: boolean,
+) =>
+  generating || result?.goals.some(({ goal }) => SERVER_ADVANCING_STATUSES.has(goal.status))
+    ? GOAL_GRAPH_POLL_INTERVAL
+    : 0;
+
 export type GoalStore = GoalState & GoalAction;
 type Setter = StoreSetter<GoalStore>;
 
@@ -170,17 +178,16 @@ export class GoalActionImpl {
    * Goals created from one conversation. A goal a CLI agent creates through
    * `lh goal create --conversation` leaves no tool result to derive a card from,
    * so the conversation reads the link from the goal rows instead. Polls on the
-   * graph's cadence while any of them is still advancing on the server.
+   * graph's cadence while any of them is still advancing on the server, and
+   * while the conversation is generating — that run is the one that creates the
+   * goal, so nothing on screen would otherwise ask for it.
    */
-  useFetchTopicGoals = (topicId?: string | null) =>
+  useFetchTopicGoals = (topicId?: string | null, generating?: boolean) =>
     useClientDataSWR(
       topicId ? goalKeys.topicGoals(topicId) : null,
       () => goalService.list({ limit: TOPIC_GOAL_FETCH_LIMIT, topicId: topicId! }),
       {
-        refreshInterval: (result) =>
-          result?.goals.some(({ goal }) => SERVER_ADVANCING_STATUSES.has(goal.status))
-            ? GOAL_GRAPH_POLL_INTERVAL
-            : 0,
+        refreshInterval: (result) => topicGoalsRefreshInterval(result, generating),
         revalidateOnFocus: true,
       },
     );
