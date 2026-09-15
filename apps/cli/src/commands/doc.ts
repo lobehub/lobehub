@@ -144,6 +144,11 @@ export function registerDocCommand(program: Command) {
           editorData: JSON.stringify({ content: content || '', type: 'doc' }),
           fileType: options.fileType,
           knowledgeBaseId: options.kb,
+          // Inside an agent run, credit the document to that run so it shows up
+          // as the run's deliverable (e.g. on a Goal) instead of a loose page.
+          ...(process.env.LOBEHUB_OPERATION_ID
+            ? { operationId: process.env.LOBEHUB_OPERATION_ID }
+            : {}),
           parentId: options.parent,
           slug: options.slug,
           title: options.title,
@@ -258,6 +263,8 @@ export function registerDocCommand(program: Command) {
           params.parentId = options.parent || null;
         }
         if (options.fileType) params.fileType = options.fileType;
+        // Inside an agent run, an edit becomes a new version of that run's deliverable.
+        if (process.env.LOBEHUB_OPERATION_ID) params.operationId = process.env.LOBEHUB_OPERATION_ID;
 
         await client.document.updateDocument.mutate(params as any);
         console.log(`${pc.green('✓')} Updated document ${pc.bold(id)}`);
