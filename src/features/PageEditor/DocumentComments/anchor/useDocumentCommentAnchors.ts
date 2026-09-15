@@ -9,6 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePageEditorStore } from '../../store';
 import { focusCommentCard, scrollAnchorIntoView } from './commentLocator';
 import { clearCommentHighlights, paintCommentHighlights } from './highlights';
+import type { AnchorResolveCache } from './resolveAnchors';
+import { EMPTY_ANCHOR_RESOLVE_CACHE, resolveAnchors } from './resolveAnchors';
 import type { AnchorMatch, FlattenedText } from './textAnchor';
 import {
   buildAnchorRange,
@@ -157,6 +159,9 @@ export const useDocumentCommentAnchors = (
 
   const flatRef = useRef<FlattenedText>(EMPTY_FLATTENED_TEXT);
   const matchesRef = useRef<ReadonlyMap<string, AnchorMatch>>(EMPTY_MATCHES);
+  // See `resolveAnchors`: results are reused while the body text is unchanged,
+  // so a formatting-only update never re-scans for orphaned quotes.
+  const resolveCacheRef = useRef<AnchorResolveCache>(EMPTY_ANCHOR_RESOLVE_CACHE);
   // `anchors` is rebuilt from SWR data on every render, so it can't be an
   // effect dependency — the resolve below writes state and would re-run itself
   // forever. The signature is the content that actually matters, as a string.
@@ -183,15 +188,9 @@ export const useDocumentCommentAnchors = (
     // Most documents carry no anchors at all; skip the body walk entirely for them.
     const flat =
       entries.length > 0 || hasPendingAnchor ? flattenEditorText(element) : EMPTY_FLATTENED_TEXT;
-    const matches = new Map<string, AnchorMatch>();
-    const orphaned = new Set<string>();
+    const { cache, matches, orphaned } = resolveAnchors(flat, entries, resolveCacheRef.current);
 
-    for (const { id: rootId, selectionAnchor } of entries) {
-      const match = locateAnchor(flat, selectionAnchor);
-      if (match) matches.set(rootId, match);
-      else orphaned.add(rootId);
-    }
-
+    resolveCacheRef.current = cache;
     flatRef.current = flat;
     matchesRef.current = matches;
     setOrphanedRootIds((current) => (sameRootIds(current, orphaned) ? current : orphaned));

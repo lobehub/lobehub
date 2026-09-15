@@ -36,12 +36,15 @@ const AnchorQuote = memo<AnchorQuoteProps>(
   ({ anchor, className, onDismiss, onLocate, orphaned }) => {
     const { t } = useTranslation('file');
     const clickable = Boolean(onLocate) && !orphaned;
+    // Only a jump target that has gone missing is "disabled"; a plain quote row
+    // (the composer's, which still holds an operable Remove control) is not.
+    const disabled = Boolean(onLocate) && orphaned;
 
     return (
       <Flexbox
         horizontal
         align={'center'}
-        aria-disabled={clickable ? undefined : true}
+        aria-disabled={disabled ? true : undefined}
         gap={6}
         role={clickable ? 'button' : undefined}
         tabIndex={clickable ? 0 : undefined}
