@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { openAddGoalTaskModal } from '@/features/AgentGoals/AddTaskModal';
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
@@ -392,6 +393,7 @@ const FrontierRow = memo<{
       <Flexbox horizontal align={'center'} gap={10}>
         {view.seq !== undefined && <span className={styles.num}>#{view.seq}</span>}
         <RowGlyph kind={item.kind} view={view} />
+        {view.assigneeAgentId && <AssigneeAvatar tooltip agentId={view.assigneeAgentId} />}
         <Text ellipsis style={{ flexShrink: 1, maxWidth: '60%', minWidth: 0 }} weight={500}>
           {coordinatorTitleKey ? t(coordinatorTitleKey as any) : node.title}
         </Text>

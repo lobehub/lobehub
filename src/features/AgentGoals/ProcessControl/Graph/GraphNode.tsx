@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { shinyTextStyles } from '@/styles';
 
@@ -362,6 +363,11 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                   {view.artifacts.length}
                 </span>
               </Tooltip>
+            )}
+            {view.assigneeAgentId && (
+              <span style={{ display: 'inline-flex', marginInlineStart: 'auto' }}>
+                <AssigneeAvatar tooltip agentId={view.assigneeAgentId} size={16} />
+              </span>
             )}
           </div>
         )}

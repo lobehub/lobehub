@@ -199,6 +199,19 @@ describe('buildGoalGraphView', () => {
     expect(view.needsYou).toBe(0);
   });
 
+  it('carries the assigned agent onto the task view, and nothing for an unassigned one', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        assignees: { w1: 'agt_exec' },
+        nodes: [node('w1', { taskId: 'task-1' }), node('w2')],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.assigneeAgentId).toBe('agt_exec');
+    expect(view.byId.w2).not.toHaveProperty('assigneeAgentId');
+  });
+
   it('never calls a node lost while its own acceptance says it is being judged', () => {
     // The settle window and the acceptance row are two views of one fact. Read
     // separately, an aged delivery timestamp put a red "lost" badge on the same
