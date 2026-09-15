@@ -2,6 +2,52 @@ import { aiAgentService } from '@/services/aiAgent';
 import { shareChatService } from '@/services/shareChat';
 import type { ChatStore } from '@/store/chat/store';
 
+interface FlagWrite {
+  desired: boolean;
+  sent?: boolean;
+}
+
+/** In-flight flag writes, keyed by server operation id. */
+const flagWrites = new Map<string, FlagWrite>();
+
+/**
+ * Write one operation's flag in order. Queue then delete fires two writes; sent
+ * concurrently, a delayed `true` could land after the `false` and end the run
+ * with an empty queue. While a request is in flight only the latest wanted
+ * value is kept, and it is sent once that request settles.
+ */
+const writeFlag = (
+  serverOperationId: string,
+  pending: boolean,
+  send: (pending: boolean) => Promise<unknown>,
+) => {
+  const inFlight = flagWrites.get(serverOperationId);
+  if (inFlight) {
+    inFlight.desired = pending;
+    return;
+  }
+
+  const write: FlagWrite = { desired: pending };
+  flagWrites.set(serverOperationId, write);
+
+  const drain = async () => {
+    while (write.sent !== write.desired) {
+      const value = write.desired;
+      try {
+        await send(value);
+        write.sent = value;
+      } catch (error) {
+        console.error('[Gateway] setQueuedMessages failed:', error);
+        // Retry only for a newer value; repeating the failed one would loop.
+        if (write.desired === value) break;
+      }
+    }
+    flagWrites.delete(serverOperationId);
+  };
+
+  void drain();
+};
+
 /**
  * Mirror whether a conversation still has messages queued behind its running
  * Gateway run, so the server-side run hands its turn back at the next step
@@ -37,13 +83,11 @@ export const syncQueuedMessagesFlag = (get: () => ChatStore, contextKey: string)
     // Share visitors have no access to the owner-scoped endpoint.
     if (agentShareId && !topicId) continue;
 
-    const request = agentShareId
-      ? shareChatService.setQueuedMessages(agentShareId, topicId!, serverOperationId, pending)
-      : aiAgentService.setQueuedMessages({ operationId: serverOperationId, pending });
-
-    request.catch((error: unknown) => {
-      console.error('[Gateway] setQueuedMessages failed:', error);
-    });
+    writeFlag(serverOperationId, pending, (value) =>
+      agentShareId
+        ? shareChatService.setQueuedMessages(agentShareId, topicId!, serverOperationId, value)
+        : aiAgentService.setQueuedMessages({ operationId: serverOperationId, pending: value }),
+    );
   }
 };
 

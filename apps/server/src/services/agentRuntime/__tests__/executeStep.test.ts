@@ -1861,7 +1861,10 @@ describe('AgentRuntimeService.executeStep - Agent Share authorization revoked mi
 });
 
 describe('AgentRuntimeService.executeStep - queued messages flag', () => {
-  const runStep = async (readFlag: () => Promise<boolean>) => {
+  const runStep = async (
+    readFlag: () => Promise<boolean>,
+    context: Record<string, unknown> = { payload: {}, phase: 'tools_batch_result' },
+  ) => {
     const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
     const coordinator = (service as any).coordinator;
     coordinator.loadAgentState = vi.fn().mockResolvedValue({
@@ -1890,7 +1893,7 @@ describe('AgentRuntimeService.executeStep - queued messages flag', () => {
     (service as any).createAgentRuntime = vi.fn().mockResolvedValue({ runtime: { step } });
 
     await service.executeStep({
-      context: { payload: {}, phase: 'tools_batch_result' } as any,
+      context: context as any,
       operationId: 'op-queued',
       stepIndex: 1,
     });
@@ -1908,6 +1911,20 @@ describe('AgentRuntimeService.executeStep - queued messages flag', () => {
     expect(step.mock.calls[0][1].stepContext).toEqual(
       expect.objectContaining({ hasQueuedMessages: true }),
     );
+  });
+
+  // Regression: the flag was only ever added, so a context that arrived still
+  // carrying `true` kept ending the turn after the user emptied the queue.
+  it('drops a carried-in flag once the queue is empty', async () => {
+    const { step } = await runStep(async () => false, {
+      payload: {},
+      phase: 'tools_batch_result',
+      stepContext: { hasQueuedMessages: true, todos: { items: [] } },
+    });
+
+    const stepContext = step.mock.calls[0][1].stepContext;
+    expect(stepContext?.hasQueuedMessages).toBeUndefined();
+    expect(stepContext).toEqual(expect.objectContaining({ todos: { items: [] } }));
   });
 
   it('leaves the step context untouched when nothing is queued', async () => {

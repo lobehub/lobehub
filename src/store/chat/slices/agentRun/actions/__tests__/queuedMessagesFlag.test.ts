@@ -62,7 +62,7 @@ describe('queued messages flag', () => {
     expect(setQueuedMessages).toHaveBeenCalledWith({ operationId: 'server-gw', pending: true });
   });
 
-  it('clears the flag only once the last queued message is removed', () => {
+  it('clears the flag only once the last queued message is removed', async () => {
     seedOperations([operation('gw')]);
     const store = useChatStore.getState();
     store.enqueueMessage(contextKey, queued('q1'), 'gw');
@@ -73,7 +73,49 @@ describe('queued messages flag', () => {
     expect(setQueuedMessages).not.toHaveBeenCalled();
 
     store.removeQueuedMessage(contextKey, 'q2');
-    expect(setQueuedMessages).toHaveBeenCalledWith({ operationId: 'server-gw', pending: false });
+    // Writes for one operation are ordered, so the clear follows the in-flight flag.
+    await vi.waitFor(() =>
+      expect(setQueuedMessages).toHaveBeenCalledWith({ operationId: 'server-gw', pending: false }),
+    );
+  });
+
+  // Regression: queue-then-delete sent both writes at once, so a delayed
+  // `pending: true` could land last and end the run with an empty queue.
+  it('sends a queue-then-delete in order, finishing on the latest value', async () => {
+    seedOperations([operation('gw')]);
+    let settleFirst!: () => void;
+    setQueuedMessages.mockImplementationOnce(
+      () => new Promise((resolve) => (settleFirst = () => resolve({ success: true }))),
+    );
+    const store = useChatStore.getState();
+
+    store.enqueueMessage(contextKey, queued('q1'), 'gw');
+    store.removeQueuedMessage(contextKey, 'q1');
+    expect(setQueuedMessages).toHaveBeenCalledTimes(1);
+
+    settleFirst();
+    await vi.waitFor(() => expect(setQueuedMessages).toHaveBeenCalledTimes(2));
+    expect(setQueuedMessages).toHaveBeenLastCalledWith({
+      operationId: 'server-gw',
+      pending: false,
+    });
+  });
+
+  it('skips the follow-up write when the queue ends where the in-flight write left it', async () => {
+    seedOperations([operation('gw')]);
+    let settleFirst!: () => void;
+    setQueuedMessages.mockImplementationOnce(
+      () => new Promise((resolve) => (settleFirst = () => resolve({ success: true }))),
+    );
+    const store = useChatStore.getState();
+
+    store.enqueueMessage(contextKey, queued('q1'), 'gw');
+    store.removeQueuedMessage(contextKey, 'q1');
+    store.enqueueMessage(contextKey, queued('q2'), 'gw');
+
+    settleFirst();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(setQueuedMessages).toHaveBeenCalledTimes(1);
   });
 
   it('does not flag a run executing in the browser', () => {
