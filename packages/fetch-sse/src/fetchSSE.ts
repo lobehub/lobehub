@@ -315,7 +315,11 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
     headers: options.headers as Record<string, string>,
     method: options.method,
     onerror: (error) => {
-      if (error === MESSAGE_CANCEL_FLAT || (error as TypeError).name === 'AbortError') {
+      const requestWasAborted = options.signal?.aborted === true;
+      if (
+        requestWasAborted &&
+        (error === MESSAGE_CANCEL_FLAT || (error as TypeError)?.name === 'AbortError')
+      ) {
         finishedType = 'abort';
         options?.onAbort?.(output);
         textController.stopAnimation();
@@ -331,16 +335,23 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
           networkStatus,
         };
 
+        const errorMessage =
+          typeof error === 'string'
+            ? error
+            : typeof error?.message === 'string'
+              ? error.message
+              : String(error);
+
         options.onErrorHandle?.(
-          error.type
+          error?.type
             ? error
             : {
                 body: {
-                  message: error.message,
-                  name: error.name,
+                  message: errorMessage,
+                  name: typeof error === 'object' ? error?.name : undefined,
                   ...contextBody,
                 },
-                message: error.message,
+                message: errorMessage,
                 type: ChatErrorType.UnknownChatFetchError,
               },
         );
