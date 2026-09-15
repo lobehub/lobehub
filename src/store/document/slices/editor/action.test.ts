@@ -859,6 +859,168 @@ name: skill-name
   });
 
   describe('performSave', () => {
+    it('persists the dirty local snapshot even if collaboration changes the live editor before debounce', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const localEditorData = {
+        root: {
+          children: [
+            {
+              $: { properties: { annotationIds: ['comment-1'] } },
+              children: [{ text: 'Keep local text', type: 'text' }],
+              type: 'paragraph',
+            },
+          ],
+          type: 'root',
+        },
+      };
+      const remoteEmptyData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      let liveMarkdown = 'Keep local text';
+      let liveEditorData: unknown = localEditorData;
+      const mockEditor = {
+        getDocument: vi.fn((type: string) =>
+          type === 'markdown' ? liveMarkdown : type === 'json' ? liveEditorData : null,
+        ),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          autoSave: false,
+          content: '',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData: EMPTY_EDITOR_STATE,
+          sourceType: 'page',
+          updatedAt: new Date('2026-08-29T00:00:00.000Z'),
+        });
+        result.current.handleContentChange();
+      });
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: 'Keep local text',
+        editorData: localEditorData,
+        isDirty: true,
+      });
+
+      // Simulate an empty collaboration snapshot arriving while the debounced local save waits.
+      liveMarkdown = '';
+      liveEditorData = remoteEmptyData;
+      await act(async () => {
+        await result.current.performSave('doc-1', undefined, { saveSource: 'autosave' });
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'Keep local text',
+          editorData: JSON.stringify(localEditorData),
+          expectedUpdatedAt: new Date('2026-08-29T00:00:00.000Z'),
+          id: 'doc-1',
+          saveSource: 'autosave',
+        }),
+      );
+      expect(result.current.documents['doc-1']).toMatchObject({
+        editorData: localEditorData,
+        isDirty: false,
+        lastSavedEditorData: localEditorData,
+      });
+    });
+
+    it('does not send legacy body autosave when a collaboration provider is active', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const nextEditorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      const mockEditor = {
+        getDocument: vi.fn((type: string) =>
+          type === 'markdown' ? 'Room-aware edit' : type === 'json' ? nextEditorData : null,
+        ),
+        requireService: vi.fn(() => ({
+          getState: () => ({ provider: { getStateVector: () => 'AQ==' } }),
+        })),
+        setDocument: vi.fn(),
+      } as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          autoSave: false,
+          content: 'Initial',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData: EMPTY_EDITOR_STATE,
+          sourceType: 'page',
+          updatedAt: new Date('2026-08-29T00:00:00.000Z'),
+        });
+        result.current.handleContentChange();
+      });
+      await act(async () => {
+        await result.current.performSave('doc-1', undefined, { saveSource: 'autosave' });
+      });
+
+      expect(documentService.updateDocument).not.toHaveBeenCalled();
+    });
+
+    it('keeps a newer local snapshot dirty when an older save finishes', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const firstData = {
+        root: {
+          children: [{ children: [{ text: 'first', type: 'text' }], type: 'paragraph' }],
+          type: 'root',
+        },
+      };
+      const secondData = {
+        root: {
+          children: [{ children: [{ text: 'second', type: 'text' }], type: 'paragraph' }],
+          type: 'root',
+        },
+      };
+      let liveMarkdown = 'first';
+      let liveEditorData: unknown = firstData;
+      let resolveSave!: (value: { historyAppended: false; id: string }) => void;
+      vi.mocked(documentService.updateDocument).mockImplementationOnce(
+        () => new Promise((resolve) => (resolveSave = resolve)),
+      );
+      const mockEditor = {
+        getDocument: vi.fn((type: string) =>
+          type === 'markdown' ? liveMarkdown : type === 'json' ? liveEditorData : null,
+        ),
+        setDocument: vi.fn(),
+      } as any;
+      act(() => {
+        result.current.initDocumentWithEditor({
+          autoSave: false,
+          content: '',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          editorData: EMPTY_EDITOR_STATE,
+          sourceType: 'page',
+        });
+        result.current.handleContentChange();
+      });
+
+      let pendingSave!: Promise<void>;
+      act(() => {
+        pendingSave = result.current.performSave('doc-1', undefined, { saveSource: 'autosave' });
+      });
+      act(() => {
+        liveMarkdown = 'second';
+        liveEditorData = secondData;
+        result.current.handleContentChange();
+      });
+      await act(async () => {
+        resolveSave({ historyAppended: false, id: 'doc-1' });
+        await pendingSave;
+      });
+
+      expect(result.current.documents['doc-1']).toMatchObject({
+        content: 'second',
+        editorData: secondData,
+        isDirty: true,
+        lastSavedContent: 'first',
+        lastSavedEditorData: firstData,
+      });
+    });
+
     it('should reject saving when editorData is an empty object', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = {
@@ -1419,6 +1581,39 @@ name: skill-name
         }),
       );
       expect(result.current.documents['doc-1'].isDirty).toBe(false);
+    });
+
+    it('does not include editor body data in an explicit metadata-only save', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Body must stay in Yjs',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+      });
+
+      await act(async () => {
+        await result.current.performSave(
+          'doc-1',
+          { title: 'Metadata only' },
+          { metadataOnly: true, saveSource: 'autosave' },
+        );
+      });
+
+      expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+      const [input] = vi.mocked(documentService.updateDocument).mock.calls[0];
+      expect(input).toMatchObject({
+        id: 'doc-1',
+        saveSource: 'autosave',
+        title: 'Metadata only',
+      });
+      expect(input).not.toHaveProperty('content');
+      expect(input).not.toHaveProperty('editorData');
+      expect(input.expectedCollaborationStateVector).toBeUndefined();
     });
 
     it('should save and persist raw editorData with diff nodes (pending human review)', async () => {

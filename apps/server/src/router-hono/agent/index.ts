@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
+import { documentRewrite, documentRewriteHealth } from './handlers/documentRewrite';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
@@ -37,6 +38,10 @@ app.post('/', qstashOrApiKeyAuth(), execAgent);
 // POST /api/agent/run — execute a single step (QStash signature)
 app.post('/run', qstashAuth(), runStep);
 app.get('/run', runStepHealth);
+
+// POST /api/agent/document-rewrite — durable targeted-rewrite delivery
+app.post('/document-rewrite', qstashAuth(), documentRewrite);
+app.get('/document-rewrite', documentRewriteHealth);
 
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);

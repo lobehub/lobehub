@@ -5,5 +5,6 @@ export const selectors = {
   editor: (s: Store) => s.editor,
   emoji: (s: Store) => s.emoji,
   rightPanelMode: (s: Store) => s.rightPanelMode,
+  rightPanelTab: (s: Store) => s.rightPanelTab,
   title: (s: Store) => s.title,
 };

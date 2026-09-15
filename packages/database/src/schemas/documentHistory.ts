@@ -1,4 +1,5 @@
-import { index, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { index, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { createNanoId } from '../utils/idGenerator';
 import { timestamptz, varchar255 } from './_helpers';
@@ -26,12 +27,18 @@ export const documentHistories = pgTable(
       enum: ['autosave', 'manual', 'restore', 'system', 'llm_call'],
     }).notNull(),
     savedAt: timestamptz('saved_at').notNull(),
+    /** Request/audit linkage for room persistence; never a provider secret. */
+    requestId: text('request_id'),
+    source: text('source'),
   },
   (table) => [
     index('document_histories_document_id_idx').on(table.documentId),
     index('document_histories_user_id_idx').on(table.userId),
     index('document_histories_workspace_id_idx').on(table.workspaceId),
     index('document_histories_saved_at_idx').on(table.savedAt),
+    uniqueIndex('document_histories_document_source_request_unique')
+      .on(table.documentId, table.source, table.requestId)
+      .where(sql`${table.requestId} IS NOT NULL`),
   ],
 );
 

@@ -1,0 +1,71 @@
+{
+  "entries": [
+    {
+      "idx": 149,
+      "tag": "0149_add_document_annotations",
+      "when": 1787715658273,
+      "sha256": "7348eb92f08790105222984b837015447728217201e6019447454a91fdee9c79"
+    },
+    {
+      "idx": 150,
+      "tag": "0150_document_rewrite_requests",
+      "when": 1787943185174,
+      "sha256": "463f385ba5c4fdfdb61249cf0a284c0932f8cc81860d172366775fea60a9f05c"
+    },
+    {
+      "idx": 151,
+      "tag": "0151_document_collaboration_states",
+      "when": 1787989549154,
+      "sha256": "8d40da7976d81a7f2e48413b09e33056c341ab45f16bd953b6f32d3f8cd83f6a"
+    },
+    {
+      "idx": 152,
+      "tag": "0152_document_collaboration_history_metadata",
+      "when": 1787990484290,
+      "sha256": "8e0e4d4e63535742e4395af404bcb2738fae30a8a231762311a67b3db6c94903"
+    },
+    {
+      "idx": 153,
+      "tag": "0153_document_rewrite_target_overlap",
+      "when": 1788221508419,
+      "sha256": "9f60319fb66c720093f91e4f735108ab3858fd57b99773e928f533bd0d2a858a"
+    },
+    {
+      "idx": 154,
+      "tag": "0154_document_rewrite_sessions",
+      "when": 1788230000000,
+      "sha256": "b227a7e7eb2236a2381635df0931501030126bfb1b80165fc21db2159be82cb1",
+      "variants": [
+        {
+          "file": "0154_document_rewrite_sessions.sql",
+          "sha256": "b227a7e7eb2236a2381635df0931501030126bfb1b80165fc21db2159be82cb1",
+          "provenance": "post-split source snapshot"
+        },
+        {
+          "file": "0154_document_rewrite_sessions.executed.sql",
+          "sha256": "0abee247c0b878356b1f169baeb693ebbaececbcff2e0c9a204e733cdd5fc2cc",
+          "provenance": "recovered deployed execution variant"
+        }
+      ]
+    },
+    {
+      "idx": 155,
+      "tag": "0155_document_rewrite_progress",
+      "when": 1788231000000,
+      "sha256": "c980b144b32fbb14e3698afc9604a53e60a98501c019aa866e6db15cf5da936e"
+    },
+    {
+      "idx": 156,
+      "tag": "0156_document_rewrite_requested_model",
+      "when": 1788232000000,
+      "sha256": "f14e14787c18b7313a7466237c9cd00d332b760001228df76352edcd29890cb1"
+    },
+    {
+      "idx": 157,
+      "tag": "0157_document_collaboration_snapshot_update",
+      "when": 1788575797078,
+      "sha256": "927501f3b29a9d7291de0a13b27a5eb0e2e54d3dec4b0a5c79894be30754434a"
+    }
+  ],
+  "sourceHead": "d9e7e0842651d5f65b582dc0e41b83a19d5f0fa2"
+}

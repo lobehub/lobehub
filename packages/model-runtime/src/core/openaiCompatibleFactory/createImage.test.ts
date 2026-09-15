@@ -599,6 +599,106 @@ describe('createOpenAICompatibleImage', () => {
   });
 
   describe('image mode - parameter mapping', () => {
+    it('forwards an abort signal to image generation', async () => {
+      const controller = new AbortController();
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'generatedWithSignal' }],
+      } as any);
+
+      await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'gpt-image-2',
+          params: { prompt: 'Generate with cancellation' },
+        },
+        'zenmux',
+        { signal: controller.signal },
+      );
+
+      expect(mockClient.images.generate).toHaveBeenCalledWith(expect.any(Object), {
+        signal: controller.signal,
+      });
+    });
+
+    it('forwards an explicit zero retry budget to image generation', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'generatedWithoutRetries' }],
+      } as any);
+
+      await createOpenAICompatibleImage(
+        mockClient,
+        { model: 'gpt-image-2', params: { prompt: 'Generate once' } },
+        'zenmux',
+        { maxRetries: 0 },
+      );
+
+      expect(mockClient.images.generate).toHaveBeenCalledWith(expect.any(Object), {
+        maxRetries: 0,
+      });
+    });
+
+    it('forwards an abort signal to image editing', async () => {
+      const controller = new AbortController();
+      vi.mocked(mockClient.images.edit).mockResolvedValue({
+        data: [{ b64_json: 'editedWithSignal' }],
+      } as any);
+
+      await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'gpt-image-2',
+          params: {
+            imageUrl: 'data:image/png;base64,ZmFrZQ==',
+            prompt: 'Edit with cancellation',
+          },
+        },
+        'zenmux',
+        { signal: controller.signal },
+      );
+
+      expect(mockClient.images.edit).toHaveBeenCalledWith(expect.any(Object), {
+        signal: controller.signal,
+      });
+    });
+
+    it('forwards an explicit zero retry budget to image editing', async () => {
+      vi.mocked(mockClient.images.edit).mockResolvedValue({
+        data: [{ b64_json: 'editedWithoutRetries' }],
+      } as any);
+
+      await createOpenAICompatibleImage(
+        mockClient,
+        {
+          model: 'gpt-image-2',
+          params: {
+            imageUrl: 'data:image/png;base64,ZmFrZQ==',
+            prompt: 'Edit once',
+          },
+        },
+        'zenmux',
+        { maxRetries: 0 },
+      );
+
+      expect(mockClient.images.edit).toHaveBeenCalledWith(expect.any(Object), {
+        maxRetries: 0,
+      });
+    });
+
+    it('leaves request options omitted when no retry override is provided', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue({
+        data: [{ b64_json: 'generatedWithSdkDefaultRetries' }],
+      } as any);
+
+      await createOpenAICompatibleImage(
+        mockClient,
+        { model: 'gpt-image-2', params: { prompt: 'Use SDK defaults' } },
+        'zenmux',
+      );
+
+      expect(mockClient.images.generate).toHaveBeenCalledWith(expect.any(Object));
+      expect(vi.mocked(mockClient.images.generate).mock.calls[0]).toHaveLength(1);
+    });
+
     it('should map single imageUrl string parameter to image array', async () => {
       const mockImageResponse = {
         data: [

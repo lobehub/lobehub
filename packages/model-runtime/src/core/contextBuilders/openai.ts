@@ -593,7 +593,8 @@ export const pruneReasoningPayload = (payload: ChatStreamPayload) => {
 /**
  * Convert image URL (data URL or HTTP URL) to File object for OpenAI API
  */
-export const convertImageUrlToFile = async (imageUrl: string) => {
+export const convertImageUrlToFile = async (imageUrl: string, signal?: AbortSignal) => {
+  if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
   let buffer: Buffer;
   let mimeType: string;
 
@@ -604,13 +605,15 @@ export const convertImageUrlToFile = async (imageUrl: string) => {
     buffer = Buffer.from(base64Data, 'base64');
   } else {
     // a http url
-    const response = await fetch(imageUrl);
+    const response = await fetch(imageUrl, signal ? { signal } : undefined);
     if (!response.ok) {
       throw new Error(`Failed to fetch image from ${imageUrl}: ${response.statusText}`);
     }
     buffer = Buffer.from(await response.arrayBuffer());
     mimeType = response.headers.get('content-type') || 'image/png';
   }
+
+  if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError');
 
   return toFile(buffer, `image.${mimeType.split('/')[1]}`, { type: mimeType });
 };

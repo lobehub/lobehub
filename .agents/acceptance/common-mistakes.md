@@ -276,9 +276,23 @@ replace.
 scroll container; headers disappear and intermediate flex sizing hides the
 intended inner scrollbars.
 
+**Correct approach:** bound the workspace, keep the frame overflow hidden, assign
+independent scroll regions to navigation and detail, and verify scroll ownership with
+DOM measurements as well as visual evidence. For sticky navigation inside a shared
+reader scrollport, size the sticky wrapper against the scrollport viewport (not the
+full document), then verify its geometry and affordances both at the top and after a
+mid-document scroll; a sticky element taller than the scrollport will silently stop
+sticking and make collapsed menus appear to disappear. When the navigation reserves a
+grid/flex track, also make the detail track a shrinkable inline-size container and test
+intrinsic-width content such as tables and code blocks. Otherwise container-query units
+can still resolve against the combined reader width and render the detail underneath the
+navigation even though the tracks themselves look correct.
 **Rule:** bound the workspace, keep the frame overflow hidden, give navigation and
-detail independent scroll regions, and verify ownership with DOM measurements as
-well as screenshots.
+detail independent scroll regions, and verify ownership with DOM measurements as well as screenshots.
+For sticky navigation inside a shared reader scrollport, size the sticky wrapper against
+the scrollport viewport rather than the full document; verify geometry at the top and after
+mid-document scrolling. Keep the detail grid track shrinkable and test intrinsic-width
+tables and code blocks so container-query units cannot render detail underneath navigation.
 
 ### L-D7 — Passing a section on its index route only
 

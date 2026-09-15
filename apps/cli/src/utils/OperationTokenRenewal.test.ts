@@ -90,7 +90,9 @@ describe('createOperationTokenRenewal', () => {
 
   it('does not poll a server that has no renewal endpoint', async () => {
     process.env.LOBEHUB_JWT = operationToken(NOW + 4 * HOUR);
-    const renew = vi.fn().mockRejectedValue({ data: { code: 'NOT_FOUND' }, message: 'No procedure' });
+    const renew = vi
+      .fn()
+      .mockRejectedValue({ data: { code: 'NOT_FOUND' }, message: 'No procedure' });
 
     const renewal = createOperationTokenRenewal({ operationId: 'op-1', renew });
     await vi.advanceTimersByTimeAsync(3 * HOUR);

@@ -19,8 +19,11 @@ import {
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import { selectors, usePageEditorStore } from '../store';
 import { usePageLockedByOther } from '../usePageLockedByOther';
+import AgentEditsPanel from './AgentEditsPanel';
 import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
+import AnnotationPanel from './AnnotationPanel';
 import CopilotModelSelect from './CopilotModelSelect';
 import CopilotToolbar from './Toolbar';
 import Welcome from './Welcome';
@@ -30,6 +33,8 @@ const Search = actionMap['search'];
 const EMPTY_LEFT_ACTIONS: [] = [];
 
 const Conversation = memo(() => {
+  const activeTab = usePageEditorStore(selectors.rightPanelTab);
+  const setActiveTab = usePageEditorStore((s) => s.setRightPanelTab);
   const [setActiveAgentId, useFetchAgentConfig] = useAgentStore((s) => [
     s.setActiveAgentId,
     s.useFetchAgentConfig,
@@ -76,20 +81,28 @@ const Conversation = memo(() => {
       onUploadFiles={handleUploadFiles}
     >
       <Flexbox flex={1} height={'100%'}>
-        <CopilotToolbar />
-        <Flexbox flex={1} style={{ overflow: 'hidden' }}>
-          <ChatList welcome={<Welcome />} />
-        </Flexbox>
-        <ChatInput
-          actionBarStyle={COMPACT_ACTION_BAR_STYLE}
-          allowExpand={false}
-          disableSend={lockedByOther}
-          leftActions={EMPTY_LEFT_ACTIONS}
-          leftContent={leftContent}
-          sendAreaPrefix={modelSelector}
-          sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
-          showControlBar={false}
-        />
+        <CopilotToolbar activeTab={activeTab} onTabChange={setActiveTab} />
+        {activeTab === 'annotations' ? (
+          <AnnotationPanel />
+        ) : activeTab === 'agent-edits' ? (
+          <AgentEditsPanel />
+        ) : (
+          <>
+            <Flexbox flex={1} style={{ overflow: 'hidden' }}>
+              <ChatList welcome={<Welcome />} />
+            </Flexbox>
+            <ChatInput
+              actionBarStyle={COMPACT_ACTION_BAR_STYLE}
+              allowExpand={false}
+              disableSend={lockedByOther}
+              leftActions={EMPTY_LEFT_ACTIONS}
+              leftContent={leftContent}
+              sendAreaPrefix={modelSelector}
+              sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
+              showControlBar={false}
+            />
+          </>
+        )}
       </Flexbox>
     </DragUploadZone>
   );

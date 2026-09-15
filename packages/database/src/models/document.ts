@@ -1,5 +1,18 @@
 import { AGENT_ARTIFACT_SOURCE_TYPES } from '@lobechat/const';
-import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+  sum,
+} from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import {
@@ -26,6 +39,11 @@ export interface QueryDocumentParams {
   fileTypes?: string[];
   pageSize?: number;
   sourceTypes?: string[];
+}
+
+export interface UpdateDocumentOptions {
+  /** Keep documents.updatedAt stable for metadata-only collaboration saves. */
+  touchUpdatedAt?: boolean;
 }
 
 export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
@@ -283,15 +301,24 @@ export class DocumentModel {
     });
   };
 
-  update = async (id: string, value: Partial<DocumentItem>) => {
+  update = async (
+    id: string,
+    value: Partial<DocumentItem>,
+    options: UpdateDocumentOptions = {},
+  ) => {
     // visibility is intentionally not updatable via this path. The only legal
     // transition is `private → public` via `publishToWorkspace`; strip any
     // incoming value so callers can't sneak around the one-way rule.
     const { visibility: _ignored, ...patch } = value;
 
+    const nextPatch =
+      options.touchUpdatedAt === false
+        ? { ...patch, updatedAt: sql`${documents.updatedAt}` }
+        : { ...patch, updatedAt: new Date() };
+
     return this.db
       .update(documents)
-      .set({ ...patch, updatedAt: new Date() })
+      .set(nextPatch)
       .where(and(this.ownership(), eq(documents.id, id)));
   };
 

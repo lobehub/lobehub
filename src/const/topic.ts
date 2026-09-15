@@ -10,6 +10,7 @@
 export const TopicTrigger = {
   Cron: 'cron',
   Document: 'document',
+  DocumentRewrite: 'document_rewrite',
   Eval: 'eval',
   RunTask: 'task',
 } as const;
@@ -22,6 +23,7 @@ export const TopicTrigger = {
 export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS: string[] = [
   TopicTrigger.Cron,
   TopicTrigger.Document,
+  TopicTrigger.DocumentRewrite,
   TopicTrigger.Eval,
   TopicTrigger.RunTask,
 ];

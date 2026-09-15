@@ -425,6 +425,21 @@ describe('DocumentModel', () => {
 
       expect(unchanged?.content).toBe('Original content');
     });
+
+    it('can update metadata without advancing the document body timestamp', async () => {
+      const { documentId } = await createTestDocument(documentModel, fileModel, 'Original content');
+      const before = await documentModel.findById(documentId);
+
+      await documentModel.update(
+        documentId,
+        { metadata: { updatedBy: 'collaboration-test' } },
+        { touchUpdatedAt: false },
+      );
+
+      const after = await documentModel.findById(documentId);
+      expect(after?.metadata).toEqual({ updatedBy: 'collaboration-test' });
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
   });
 
   describe('findBySlug', () => {

@@ -78,6 +78,11 @@ const normalizedEditorDataFromDiffNode = {
   },
 };
 
+const createForUpdateQuery = (rows: unknown[]) =>
+  Object.assign(Promise.resolve(rows), {
+    limit: vi.fn().mockResolvedValue(rows),
+  });
+
 describe('DocumentService', () => {
   let service: DocumentService;
   let mockDb: LobeChatDatabase;
@@ -774,7 +779,8 @@ describe('DocumentService', () => {
         }),
       );
       expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+      expect(result).toMatchObject({ historyAppended: false, id: 'doc-1' });
+      expect(result.savedAt).toBeInstanceOf(Date);
     });
 
     it('should append history when editorData changes', async () => {
@@ -847,9 +853,12 @@ describe('DocumentService', () => {
     it('rejects the save with CONFLICT when expectedUpdatedAt no longer matches the stored row', async () => {
       const storedUpdatedAt = new Date('2026-04-11T00:00:05.000Z');
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+      const forUpdateQuery = createForUpdateQuery([{ updatedAt: storedUpdatedAt }]);
       (mockDb as any).select = vi.fn(() => ({
         from: () => ({
-          where: () => ({ for: vi.fn().mockResolvedValue([{ updatedAt: storedUpdatedAt }]) }),
+          where: () => ({
+            for: () => forUpdateQuery,
+          }),
         }),
       }));
 
@@ -866,9 +875,12 @@ describe('DocumentService', () => {
       const storedUpdatedAt = new Date('2026-04-11T00:00:00.000Z');
       mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
       mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+      const forUpdateQuery = createForUpdateQuery([{ updatedAt: storedUpdatedAt }]);
       (mockDb as any).select = vi.fn(() => ({
         from: () => ({
-          where: () => ({ for: vi.fn().mockResolvedValue([{ updatedAt: storedUpdatedAt }]) }),
+          where: () => ({
+            for: () => forUpdateQuery,
+          }),
         }),
       }));
 
@@ -881,7 +893,11 @@ describe('DocumentService', () => {
         'doc-1',
         expect.objectContaining({ content: 'retry payload' }),
       );
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+      expect(result).toMatchObject({
+        historyAppended: false,
+        id: 'doc-1',
+        savedAt: storedUpdatedAt,
+      });
     });
 
     it('should skip history when editorData is unchanged', async () => {
@@ -896,7 +912,8 @@ describe('DocumentService', () => {
         expect.objectContaining({ editorData }),
       );
       expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
-      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+      expect(result).toMatchObject({ historyAppended: false, id: 'doc-1' });
+      expect(result.savedAt).toBeInstanceOf(Date);
     });
 
     it('should report members newly mentioned by this save on the accepted view', async () => {
@@ -964,6 +981,7 @@ describe('DocumentService', () => {
           title: 'New Title',
           filename: 'New Title',
         }),
+        { touchUpdatedAt: false },
       );
     });
 
@@ -1019,6 +1037,7 @@ describe('DocumentService', () => {
       expect(mockDocumentModel.update).toHaveBeenCalledWith(
         'doc-1',
         expect.objectContaining({ metadata }),
+        { touchUpdatedAt: false },
       );
     });
 

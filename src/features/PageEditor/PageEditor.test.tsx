@@ -2,7 +2,21 @@ import { renderHook } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { switchToPageRewriteDraft } from './pageRewriteDraft';
 import { getTitleTextAreaInteractionProps } from './TitleSection';
+
+describe('page rewrite draft conversation', () => {
+  it('switches to the page draft without deleting the previous topic', () => {
+    const switchTopic = vi.fn().mockResolvedValue(undefined);
+
+    switchToPageRewriteDraft(switchTopic);
+
+    expect(switchTopic).toHaveBeenCalledWith(null, {
+      scope: 'page',
+      skipRefreshMessage: true,
+    });
+  });
+});
 
 describe('PageEditor title interaction', () => {
   it('keeps a non-editable title visually enabled but read-only', () => {

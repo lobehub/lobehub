@@ -1,4 +1,9 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import {
+  gptImage2Schema,
+  nanoBanana2LiteParameters,
+  nanoBanana2Parameters,
+} from '../const/imageParameters';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 const zenmuxChatModels: AIChatModelCard[] = [
   {
@@ -1554,6 +1559,287 @@ const zenmuxChatModels: AIChatModelCard[] = [
   },
 ];
 
-export const allModels = [...zenmuxChatModels];
+// Keep the provider-qualified IDs from ZenMux's catalog in the static bank as
+// well as in the live model fetch. This gives the model menu complete
+// capabilities before the provider catalog has been fetched and lets the
+// runtime retain the correct Google image metadata for both Nano Banana models.
+const zenmuxCatalogChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description: "GPT-5.6 Sol is OpenAI's latest flagship model for coding and agentic work.",
+    displayName: 'GPT-5.6 Sol',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.6',
+    id: 'openai/gpt-5.6-sol',
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description: 'GPT-5.6 Terra balances frontier reasoning with everyday cost and latency.',
+    displayName: 'GPT-5.6 Terra',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.6',
+    id: 'openai/gpt-5.6-terra',
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description: 'GPT-5.6 Luna is optimized for cost-sensitive, high-volume workloads.',
+    displayName: 'GPT-5.6 Luna',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.6',
+    id: 'openai/gpt-5.6-luna',
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description: "GPT-5.5 is OpenAI's frontier model for complex professional work.",
+    displayName: 'GPT-5.5',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.5',
+    id: 'openai/gpt-5.5',
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_050_000,
+    description: 'GPT-5.4 is a frontier model for complex professional work.',
+    displayName: 'GPT-5.4',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
+    id: 'openai/gpt-5.4',
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 400_000,
+    description: 'GPT-5.4 mini brings GPT-5.4 reasoning to high-volume workloads.',
+    displayName: 'GPT-5.4 mini',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
+    id: 'openai/gpt-5.4-mini',
+    maxOutput: 128_000,
+    settings: {
+      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description: 'DeepSeek V4 Flash is the fast, cost-efficient V4 model with a 1M context window.',
+    displayName: 'DeepSeek V4 Flash',
+    enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
+    id: 'deepseek/deepseek-v4-flash',
+    maxOutput: 393_216,
+    settings: {
+      extendParams: ['deepseekV4GAReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4 Pro is the flagship V4 model for demanding reasoning and agentic work.',
+    displayName: 'DeepSeek V4 Pro',
+    enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
+    id: 'deepseek/deepseek-v4-pro',
+    maxOutput: 393_216,
+    settings: {
+      extendParams: ['deepseekV4GAReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576,
+    description: 'Gemini 3.1 Pro Preview is Google’s multimodal reasoning model for complex work.',
+    displayName: 'Gemini 3.1 Pro Preview',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
+    id: 'google/gemini-3.1-pro-preview',
+    maxOutput: 65_536,
+    settings: {
+      extendParams: ['thinkingLevel2', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 65_536,
+    description:
+      "Gemini 3.1 Flash Image (Nano Banana 2) is Google's native image generation and editing model.",
+    displayName: 'Nano Banana 2',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
+    id: 'google/gemini-3.1-flash-image',
+    maxOutput: 32_768,
+    settings: {
+      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      imageOutput: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 65_536,
+    description:
+      "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's cost-efficient image generation and editing model.",
+    displayName: 'Nano Banana 2 Lite',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
+    id: 'google/gemini-3.1-flash-lite-image',
+    maxOutput: 32_768,
+    settings: {
+      extendParams: ['imageAspectRatio2'],
+    },
+    type: 'chat',
+  },
+];
+
+const zenmuxImageModels: AIImageModelCard[] = [
+  {
+    description:
+      "OpenAI's next-generation multimodal image model with native reasoning, up to 4K resolution, near-perfect text rendering, and high-fidelity multilingual support.",
+    displayName: 'GPT Image 2',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-image-2',
+    id: 'openai/gpt-image-2',
+    organization: 'openai',
+    parameters: gptImage2Schema,
+    type: 'image',
+  },
+  {
+    description:
+      "Gemini 3.1 Flash Image (Nano Banana 2) is Google's native image generation and editing model.",
+    displayName: 'Nano Banana 2',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
+    id: 'google/gemini-3.1-flash-image:image',
+    parameters: nanoBanana2Parameters,
+    type: 'image',
+  },
+  {
+    description:
+      "Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) is Google's cost-efficient image generation and editing model.",
+    displayName: 'Nano Banana 2 Lite',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
+    id: 'google/gemini-3.1-flash-lite-image:image',
+    parameters: nanoBanana2LiteParameters,
+    type: 'image',
+  },
+];
+
+export const allModels = [...zenmuxChatModels, ...zenmuxCatalogChatModels, ...zenmuxImageModels];
 
 export default allModels;

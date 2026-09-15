@@ -58,6 +58,9 @@ export interface UpdateDocumentParams {
   breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: Record<string, any>;
+  /** Room state vector captured with a collaborative body autosave. */
+  expectedCollaborationStateVector?: string;
+  /** Optimistic CAS timestamp captured when a browser autosave became dirty. */
   /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */
   expectedUpdatedAt?: Date;
   fileType?: string;

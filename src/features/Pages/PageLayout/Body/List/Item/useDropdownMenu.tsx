@@ -18,6 +18,8 @@ import { pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { buildPagePath } from '../../../../navigation';
+
 interface ActionProps {
   pageId: string;
   toggleEditing: (visible?: boolean) => void;
@@ -138,7 +140,7 @@ export const useDropdownMenu = ({
                 key: 'openInNewTab',
                 label: t('pageList.actions.openInNewTab', { ns: 'file' }),
                 onClick: () => {
-                  const url = buildWorkspaceAwarePath(`/page/${pageId}`, activeWorkspaceSlug);
+                  const url = buildWorkspaceAwarePath(buildPagePath(pageId), activeWorkspaceSlug);
                   addTab(url);
                   navigate(url, { escape: true });
                 },

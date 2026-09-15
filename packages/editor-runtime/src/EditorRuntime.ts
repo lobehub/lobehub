@@ -1,5 +1,5 @@
 import type { PageContentContext } from '@lobechat/prompts';
-import type { IEditor } from '@lobehub/editor';
+import { type IEditor, IYjsService } from '@lobehub/editor';
 import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor/litexml-commands';
 import debug from 'debug';
 
@@ -27,6 +27,15 @@ interface InspectableEditor {
   pluginsInstances?: unknown[];
 }
 
+interface CollaborationSnapshotService {
+  applyExternalEditorData?: (editorData: Record<string, unknown>) => boolean;
+}
+
+interface CollaborationServiceLookup {
+  failed: boolean;
+  service: CollaborationSnapshotService | null;
+}
+
 interface LiteXMLNodeMatch {
   attributes: string;
   content: string;
@@ -51,6 +60,7 @@ export type LiteXMLBatchOperation =
   | { action: 'remove'; id: string };
 
 export interface EditorRuntimeDebugSnapshot {
+  collaborationRequired: boolean;
   currentDocId?: string;
   dataSourceTypes: string[];
   hasAfterMutateHandler: boolean;
@@ -88,6 +98,13 @@ const hasDataSource = (editor: InspectableEditor, type: string) =>
  */
 export class EditorRuntime {
   private editor: IEditor | null = null;
+  /**
+   * Page sets this before mounting the Yjs provider. Keep it separate from
+   * the provider's current state: `connecting`, `fatal`, and an empty service
+   * state are still collaboration mode, never permission to use legacy body
+   * import paths.
+   */
+  private collaborationRequired = false;
   private titleSetter: ((title: string) => void) | null = null;
   private titleGetter: (() => string) | null = null;
   private currentDocId: string | undefined = undefined;
@@ -110,6 +127,20 @@ export class EditorRuntime {
     log('Setting current doc ID:', docId);
     this.currentDocId = docId;
     log('[EditorRuntime] setCurrentDocId', this.getDebugSnapshot());
+  }
+
+  /**
+   * Declare whether the mounted host owns the document body through
+   * collaboration. Page calls this before the provider is initialized so an
+   * early server echo cannot fall through to `setDocument`.
+   */
+  setCollaborationRequired(required: boolean): void {
+    this.collaborationRequired = required;
+    log('[EditorRuntime] setCollaborationRequired', { required });
+  }
+
+  isCollaborationRequired(): boolean {
+    return this.collaborationRequired;
   }
 
   /**
@@ -163,6 +194,7 @@ export class EditorRuntime {
     })();
 
     return {
+      collaborationRequired: this.collaborationRequired,
       currentDocId: this.currentDocId,
       dataSourceTypes: inspectableEditor ? getDataSourceTypes(inspectableEditor) : [],
       hasAfterMutateHandler: !!this.afterMutateHandler,
@@ -187,11 +219,32 @@ export class EditorRuntime {
     }
   }
 
+  private lookupCollaborationService(): CollaborationServiceLookup {
+    if (!this.editor) return { failed: false, service: null };
+
+    try {
+      return {
+        failed: false,
+        service: this.editor.requireService(IYjsService) as CollaborationSnapshotService | null,
+      };
+    } catch (error) {
+      // An exception means the runtime cannot prove that this is a
+      // non-collaborative editor. Never reinterpret it as permission to import
+      // a complete JSON/Markdown tree.
+      log('[EditorRuntime] collaboration snapshot service unavailable', error);
+      return { failed: true, service: null };
+    }
+  }
+
   /**
    * Apply a snapshot produced by the server-side PageAgent execution runtime
-   * onto the currently mounted editor. Skips persistence side-effects: the
-   * server already wrote the row, so calling `afterMutateHandler` here would
-   * loop the save path back through `commitEditorMutation`.
+   * onto the currently mounted editor. In a collaborative Page the live room
+   * is the only body channel; server JSON/Markdown is treated as an echo and
+   * is never imported into the Yjs root. An explicitly non-collaborative editor
+   * with no Yjs service keeps the legacy import behavior. The server already
+   * wrote the row, so this method never calls
+   * `afterMutateHandler` and cannot loop the save path back through
+   * `commitEditorMutation`.
    *
    * `editorData` is the Lexical `SerializedEditorState` (or `null`/`undefined`
    * when the server only changed metadata such as the title).
@@ -202,8 +255,20 @@ export class EditorRuntime {
     title?: string;
   }): boolean {
     let applied = false;
+    const collaborationLookup = this.lookupCollaborationService();
+    const bodyImportBlocked =
+      this.collaborationRequired || collaborationLookup.failed || !!collaborationLookup.service;
 
-    if (this.editor && snapshot.editorData) {
+    if (this.editor && bodyImportBlocked) {
+      // A registered service is already a collaboration boundary, even while
+      // its provider state is connecting or fatal. The direct worker/Yjs room
+      // path owns the body; no service capability is invoked here.
+      log('[EditorRuntime] server body snapshot rejected by collaboration boundary', {
+        collaborationRequired: this.collaborationRequired,
+        lookupFailed: collaborationLookup.failed,
+        hasService: !!collaborationLookup.service,
+      });
+    } else if (this.editor && snapshot.editorData) {
       try {
         this.editor.setDocument('json', JSON.stringify(snapshot.editorData), { keepId: true });
         applied = true;

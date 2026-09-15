@@ -272,8 +272,7 @@ LinearFileCard.displayName = 'LinearFileCard';
 interface LinearFilePluginProps {
   handleUpload: EditorAttachmentUpload;
   /**
-   * Class applied to the outer Lexical `<span>` wrapper. Set to a block-level
-   * style so the file card claims its own line in the paragraph.
+   * Class applied to the block-file host so the file card keeps its own line.
    */
   theme?: { file?: string };
 }
@@ -307,6 +306,7 @@ const LinearFilePlugin: FC<LinearFilePluginProps> = ({ handleUpload, theme }) =>
     editor.registerPlugin(UploadPlugin);
     editor.registerPlugin(FilePlugin, {
       decorator: (node) => <LinearFileCard node={node} uploadTracker={uploadTracker} />,
+      defaultBlockFile: true,
       handleUpload: trackedHandleUpload,
       theme,
     });

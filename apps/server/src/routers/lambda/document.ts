@@ -508,6 +508,8 @@ export const documentRouter = router({
       const result = await ctx.documentService.updateDocument(id, {
         ...params,
         editorData,
+        expectedCollaborationStateVector: input.expectedCollaborationStateVector,
+        expectedUpdatedAt: input.expectedUpdatedAt ? new Date(input.expectedUpdatedAt) : undefined,
       });
 
       if (ctx.workspaceId && result?.addedMentionUserIds && result.savedAt) {

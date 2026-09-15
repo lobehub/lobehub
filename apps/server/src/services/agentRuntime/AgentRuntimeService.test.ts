@@ -22,6 +22,9 @@ vi.mock('@lobechat/model-runtime', () => ({
   applyModelExtendParams: vi.fn(function () {
     return {};
   }),
+  // The document-rewrite production generator is imported transitively, but
+  // this suite never exercises its model stream.
+  consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
   getModelPropertyWithFallback: vi.fn(),
   // `llmErrorClassification.ts` reads these at module-load time; an empty
   // spec map is fine here because this suite never exercises the runtime

@@ -51,8 +51,11 @@ import { configRouter } from './config';
 import { connectorRouter } from './connector';
 import { deviceRouter } from './device';
 import { documentRouter } from './document';
+import { documentAnnotationRouter } from './documentAnnotation';
+import { documentCollaborationRouter } from './documentCollaboration';
 import { documentCommentRouter } from './documentComment';
 import { documentLikeRouter } from './documentLike';
+import { documentRewriteRouter } from './documentRewrite';
 import { expertiseRouter } from './expertise';
 import { exporterRouter } from './exporter';
 import { fileRouter } from './file';
@@ -136,6 +139,9 @@ export const lambdaRouter = router({
   document: documentRouter,
   documentComment: documentCommentRouter,
   documentLike: documentLikeRouter,
+  documentAnnotation: documentAnnotationRouter,
+  documentCollaboration: documentCollaborationRouter,
+  documentRewrite: documentRewriteRouter,
   exporter: exporterRouter,
   file: fileRouter,
   followUpAction: followUpActionRouter,

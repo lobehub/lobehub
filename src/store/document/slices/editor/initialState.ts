@@ -19,6 +19,8 @@ export interface EditorContentState {
    * Defaults to true. Set to false if the consumer handles saving themselves.
    */
   autoSave?: boolean;
+  /** Room state vector captured with the local dirty snapshot, when present. */
+  collaborationStateVector?: string;
   /**
    * Document content (markdown)
    */
@@ -27,11 +29,11 @@ export interface EditorContentState {
    * Content format used by the editor persistence pipeline.
    */
   contentFormat?: DocumentContentFormat;
+
   /**
    * Editor JSON data (BlockNote format)
    */
   editorData: any;
-
   /**
    * Whether there are unsaved changes
    */

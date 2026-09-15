@@ -27,7 +27,14 @@ import type { FtsSearchCandidateSource } from '../ftsSearch';
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
 // so counting them here can leave a badge the regular agent topic list cannot clear.
-const HOME_UNREAD_EXCLUDE_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const HOME_UNREAD_EXCLUDE_TRIGGERS = [
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+  'document_rewrite',
+];
 
 // Re-export types for backward compatibility
 export type {

@@ -17,10 +17,12 @@ import { convertOpenAIImageUsage } from '../usageConverters/openai';
 const log = createDebug('lobe-image:openai-compatible');
 
 interface CreateOpenAICompatibleImageOptions {
+  maxRetries?: CreateImageMethodOptions['maxRetries'];
   pricingContext?: CreateImageMethodOptions['pricingContext'];
   pricingModel?: string;
   requestModel?: string;
   routingModel?: string;
+  signal?: CreateImageMethodOptions['signal'];
 }
 
 /**
@@ -62,7 +64,11 @@ async function generateByImageMode(
     try {
       // Convert all image URLs to File objects
       const imageFiles = await Promise.all(
-        userInput.image.map((url: string) => convertImageUrlToFile(url)),
+        userInput.image.map((url: string) =>
+          imageOptions?.signal
+            ? convertImageUrlToFile(url, imageOptions.signal)
+            : convertImageUrlToFile(url),
+        ),
       );
 
       // According to official docs, if there are multiple images, pass an array; if only one, pass a single File
@@ -101,9 +107,20 @@ async function generateByImageMode(
   log('options: %O', options);
 
   // Determine if it's an image editing operation
+  const requestOptions =
+    imageOptions?.signal || imageOptions?.maxRetries !== undefined
+      ? {
+          ...(imageOptions.maxRetries === undefined ? {} : { maxRetries: imageOptions.maxRetries }),
+          ...(imageOptions.signal ? { signal: imageOptions.signal } : {}),
+        }
+      : undefined;
   const img = isImageEdit
-    ? await client.images.edit(options as any)
-    : await client.images.generate(options as any);
+    ? requestOptions
+      ? await client.images.edit(options as any, requestOptions)
+      : await client.images.edit(options as any)
+    : requestOptions
+      ? await client.images.generate(options as any, requestOptions)
+      : await client.images.generate(options as any);
 
   // Check the integrity of response data
   if (!img || !img.data || !Array.isArray(img.data) || img.data.length === 0) {
@@ -180,6 +197,7 @@ async function generateByChatModel(
   client: OpenAI,
   payload: CreateImagePayload,
   requestModel?: string,
+  signal?: AbortSignal,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
   const actualModel = (requestModel ?? model).replace(':image', ''); // Remove :image suffix
@@ -212,16 +230,19 @@ async function generateByChatModel(
   }
 
   // Call chat completion API
-  const response = await client.chat.completions.create({
+  const chatOptions = {
     messages: [
       {
         content,
-        role: 'user',
+        role: 'user' as const,
       },
     ],
     model: actualModel,
-    stream: false,
-  });
+    stream: false as const,
+  };
+  const response = signal
+    ? await client.chat.completions.create(chatOptions, { signal })
+    : await client.chat.completions.create(chatOptions);
 
   log('Chat API response: %O', response);
 
@@ -261,7 +282,7 @@ export async function createOpenAICompatibleImage(
 
   // Check if it's a chat model for image generation (via :image suffix)
   if (routingModel.endsWith(':image')) {
-    return await generateByChatModel(client, payload, options?.requestModel);
+    return await generateByChatModel(client, payload, options?.requestModel, options?.signal);
   }
 
   // Default to traditional images API

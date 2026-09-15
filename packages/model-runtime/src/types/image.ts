@@ -9,10 +9,14 @@ export type CreateImagePayload = {
 };
 
 export interface CreateImageMethodOptions {
+  /** Override the OpenAI-compatible SDK retry count for this request. */
+  maxRetries?: number;
   /** Metadata passed to hooks (billing, tracing, etc.) */
   metadata?: Record<string, unknown>;
   /** Request-scoped pricing context for model-bank pricing lookups. */
   pricingContext?: ModelPricingContext;
+  /** Abort the provider request and any request-scoped image input download. */
+  signal?: AbortSignal;
 }
 
 /**

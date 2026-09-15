@@ -7,7 +7,11 @@ import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
 import { stripUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudePrefill';
-import { rejectsDisabledThinkingAtEffort } from '../../providers/anthropic/modelId';
+import {
+  isAlwaysThinkingClaudeModel,
+  parseClaudeModelId,
+  rejectsDisabledThinkingAtEffort,
+} from '../../providers/anthropic/modelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -158,6 +162,7 @@ export const buildDefaultAnthropicPayload = async (
     temperature,
     top_p,
     tools,
+    tool_choice,
     thinking,
     effort,
     enabledContextCaching = true,
@@ -204,11 +209,29 @@ export const buildDefaultAnthropicPayload = async (
     postTools = postTools?.length ? [...postTools, webSearchTool] : [webSearchTool];
   }
 
-  const resolvedThinking = resolveClaudeThinkingConfig({
-    maxTokens: resolvedMaxTokens,
-    model,
-    thinking,
-  });
+  // The shared chat payload uses OpenAI's string form. Anthropic expresses a
+  // required tool call as `any`; preserve the caller's intent at the wire
+  // boundary while leaving the default `auto` behavior unchanged.
+  const resolvedToolChoice =
+    tool_choice === 'required' && (postTools?.length ?? 0) > 0
+      ? ({ type: 'any' } as const)
+      : undefined;
+
+  const resolvedThinking =
+    resolveClaudeThinkingConfig({
+      maxTokens: resolvedMaxTokens,
+      model,
+      thinking,
+    }) ??
+    // Explicit disabled thinking needs an actual opt-out on non-Claude
+    // Anthropic-compatible models (for example DeepSeek served through a
+    // custom Anthropic endpoint). Keep the existing omission for Claude
+    // models that reject disabled thinking, such as Claude Fable/Mythos 5.
+    (thinking?.type === 'disabled' &&
+    !parseClaudeModelId(model) &&
+    !isAlwaysThinkingClaudeModel(model)
+      ? { type: 'disabled' as const }
+      : undefined);
 
   if (resolvedThinking && resolvedThinking.type !== 'disabled') {
     return {
@@ -218,6 +241,7 @@ export const buildDefaultAnthropicPayload = async (
       ...(effort ? { output_config: { effort } } : {}),
       system: systemPrompts,
       thinking: resolvedThinking as Anthropic.MessageCreateParams['thinking'],
+      ...(resolvedToolChoice ? { tool_choice: resolvedToolChoice } : {}),
       tools: postTools as Anthropic.MessageCreateParams['tools'],
     } as Anthropic.MessageCreateParams;
   }
@@ -243,6 +267,7 @@ export const buildDefaultAnthropicPayload = async (
     model,
     system: systemPrompts,
     temperature: resolvedSamplingParams.temperature,
+    ...(resolvedToolChoice ? { tool_choice: resolvedToolChoice } : {}),
     tools: postTools as Anthropic.MessageCreateParams['tools'],
     ...(resolvedThinking
       ? { thinking: resolvedThinking as Anthropic.MessageCreateParams['thinking'] }

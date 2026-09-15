@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -49,6 +50,11 @@ export default defineConfig({
     environment: 'node',
     isolate: false,
     maxWorkers: 1,
+    server: {
+      deps: {
+        inline: [/@lobehub\/editor/],
+      },
+    },
     setupFiles: './tests/setup-db.ts',
   },
 });

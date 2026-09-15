@@ -213,9 +213,14 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   config: 'open',
   connector: 'blocked',
   device: 'blocked',
+  // annotations are document-owned content, so they follow the document ACL
+  documentAnnotation: rw('knowledge:read', 'knowledge:write'),
+  // issuing this ticket grants direct writable access to the collaboration room
+  documentCollaboration: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
   documentLike: rw('knowledge:read', 'knowledge:write'),
+  documentRewrite: rw('knowledge:read', 'knowledge:write'),
   expertise: rw('agent:read', 'agent:write'),
   // whole-account backup dump (settings incl. market tokens, providers, agents)
   exporter: 'blocked',
@@ -313,6 +318,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
  * own scope (e.g. `model:embed`) is still an open product decision.
  */
 const AGENT_RUN_SCOPES: ApiKeyScope[] = ['chat:write', 'model:invoke'];
+// A rewrite worker creates the rewrite topic turn and invokes the selected
+// model, so its request-producing mutations need both side-effect scopes.
+const DOCUMENT_REWRITE_RUN_SCOPES: ApiKeyScope[] = ['chat:write', 'model:invoke'];
 
 export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   // agent-run execution paths schedule model runs and write chat/topic state,
@@ -348,6 +356,11 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiProvider.checkProviderConnectivity': ['model:invoke'],
   // runs a ComfyUI image-generation workflow, not a config write
   'comfyui.createImage': ['model:invoke'],
+  // rewrite creation/continuation/retry enqueue a model-backed worker run and
+  // materialize the corresponding chat topic turn
+  'documentRewrite.create': DOCUMENT_REWRITE_RUN_SCOPES,
+  'documentRewrite.continue': DOCUMENT_REWRITE_RUN_SCOPES,
+  'documentRewrite.retry': DOCUMENT_REWRITE_RUN_SCOPES,
   // extracts follow-up actions via `AiGenerationService.generateObject`
   'followUpAction.extract': ['model:invoke'],
   // asset cleanup/organization is file management, not model invocation —

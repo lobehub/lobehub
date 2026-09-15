@@ -105,6 +105,37 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it('scopes page annotations, rewrites, and collaboration capabilities', () => {
+    expect(requiredApiKeyScopeForTrpc('documentAnnotation.listByDocument', 'query')).toEqual({
+      scopes: ['knowledge:read'],
+    });
+    expect(requiredApiKeyScopeForTrpc('documentAnnotation.upsert', 'mutation')).toEqual({
+      scopes: ['knowledge:write'],
+    });
+
+    // A browser ticket is a separate writable room capability; the API key
+    // scope must not be exchanged for an unscoped direct collaboration write.
+    expect(
+      requiredApiKeyScopeForTrpc('documentCollaboration.issueBrowserTicket', 'mutation'),
+    ).toEqual({ blocked: true });
+
+    expect(requiredApiKeyScopeForTrpc('documentRewrite.list', 'query')).toEqual({
+      scopes: ['knowledge:read'],
+    });
+    expect(requiredApiKeyScopeForTrpc('documentRewrite.create', 'mutation')).toEqual({
+      scopes: ['knowledge:write', 'chat:write', 'model:invoke'],
+    });
+    expect(requiredApiKeyScopeForTrpc('documentRewrite.continue', 'mutation')).toEqual({
+      scopes: ['knowledge:write', 'chat:write', 'model:invoke'],
+    });
+    expect(requiredApiKeyScopeForTrpc('documentRewrite.retry', 'mutation')).toEqual({
+      scopes: ['knowledge:write', 'chat:write', 'model:invoke'],
+    });
+    expect(requiredApiKeyScopeForTrpc('documentRewrite.review', 'mutation')).toEqual({
+      scopes: ['knowledge:write'],
+    });
+  });
+
   it('stacks procedure-level extra scopes on the namespace rule', () => {
     expect(requiredApiKeyScopeForTrpc('agentDocument.generateSkillMeta', 'mutation')).toEqual({
       scopes: ['knowledge:write', 'model:invoke'],

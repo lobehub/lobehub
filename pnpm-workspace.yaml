@@ -40,6 +40,7 @@ childConcurrency: 1
 allowBuilds:
   '@google/genai': true
   '@lobehub/editor': true
+  '@lobehub/editor@https://pkg.pr.new/%40lobehub/editor%409a12300': true
   '@sentry/cli': true
   '@vercel/speed-insights': true
   core-js: false
@@ -53,6 +54,7 @@ allowBuilds:
 
 overrides:
   '@ant-design/icons': 6.3.2
+  '@lobehub/editor': https://pkg.pr.new/%40lobehub/editor%409a12300
   '@react-pdf/image': 3.0.4
   '@types/react': 19.2.13
   '@vitest/coverage-v8': 5.0.0

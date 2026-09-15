@@ -39,14 +39,9 @@ export const updateDocumentInputSchema = z.object({
   breakAutosaveWindow: z.boolean().optional(),
   content: z.string().optional(),
   editorData: z.string().optional(),
-  /**
-   * Optimistic-concurrency predicate: when set, the save succeeds only if the
-   * stored row's `updatedAt` still equals this value (compared atomically
-   * inside the update transaction), otherwise it fails with CONFLICT. Used by
-   * the client's CONFLICT recovery so a retried payload can never overwrite a
-   * version it has not seen.
-   */
-  expectedUpdatedAt: z.date().optional(),
+  expectedCollaborationStateVector: z.string().trim().min(1).max(16_384).optional(),
+  /** Accept both superjson Dates and the ISO form used by browser autosave. */
+  expectedUpdatedAt: z.union([z.date(), z.string().datetime({ offset: true })]).optional(),
   fileType: z.string().optional(),
   id: z.string(),
   lockOwnerId: z.string().optional(),
@@ -140,8 +135,9 @@ export interface UpdateDocumentInput {
   breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: string;
+  expectedCollaborationStateVector?: string;
   /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */
-  expectedUpdatedAt?: Date;
+  expectedUpdatedAt?: Date | string;
   fileType?: string;
   id: string;
   lockOwnerId?: string;

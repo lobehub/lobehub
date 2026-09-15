@@ -16,6 +16,8 @@ import type {
   InitDocumentState,
   ModifyNodesState,
   ReplaceTextState,
+  RewriteSelectionArgs,
+  RewriteSelectionState,
 } from '../../types';
 import { PageAgentIdentifier } from '../../types';
 
@@ -40,6 +42,9 @@ const PageAgentApiName = {
 
   // Text Operations
   replaceText: 'replaceText',
+
+  // Collaborative targeted rewrite
+  rewriteSelection: 'rewriteSelection',
 } as const;
 
 const summarizeError = (error: unknown) => {
@@ -54,6 +59,17 @@ const summarizeError = (error: unknown) => {
   return { message: String(error) };
 };
 
+const consumeRewriteSelectionState = (state: unknown): void => {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return;
+  const candidate = state as Partial<RewriteSelectionState>;
+  if (typeof candidate.requestId !== 'string' || typeof candidate.status !== 'string') return;
+  log(
+    '[PageAgentExecutor] rewriteSelection status=%s requestId=%s',
+    candidate.status,
+    candidate.requestId,
+  );
+};
+
 const getRuntimeDebugSnapshot = (runtime: EditorRuntime) => {
   const candidate = runtime as EditorRuntime & {
     getDebugSnapshot?: () => unknown;
@@ -62,10 +78,21 @@ const getRuntimeDebugSnapshot = (runtime: EditorRuntime) => {
   return candidate.getDebugSnapshot?.();
 };
 
+const isRuntimeCollaborationRequired = (runtime: EditorRuntime): boolean => {
+  const candidate = runtime as EditorRuntime & {
+    isCollaborationRequired?: () => boolean;
+  };
+
+  return candidate.isCollaborationRequired?.() ?? false;
+};
+
 const PAGE_EDITOR_NOT_MOUNTED_MESSAGE =
   'Page editor is not currently mounted. This topic was started in the page editor, but the editor is not active in the current view. ' +
   'Do not retry initPage / editTitle / modifyNodes / replaceText / getPageContent here — they require a mounted editor. ' +
   'To read or modify the topic document, use lobe-agent-documents (readDocument / replaceDocumentContent / modifyNodes).';
+
+const COLLABORATIVE_BODY_OWNED_MESSAGE =
+  'The Page body is owned by the live collaboration room. Use the existing rewriteSelection request bridge for collaborative body changes.';
 
 const buildEditorNotMountedResult = (
   runtime: EditorRuntime,
@@ -81,6 +108,16 @@ const buildEditorNotMountedResult = (
     },
     message: PAGE_EDITOR_NOT_MOUNTED_MESSAGE,
     type: 'PageEditorNotMounted',
+  },
+  success: false,
+});
+
+const buildCollaborativeBodyOwnedResult = (apiName: string): BuiltinToolResult => ({
+  content: COLLABORATIVE_BODY_OWNED_MESSAGE,
+  error: {
+    body: { apiName },
+    message: COLLABORATIVE_BODY_OWNED_MESSAGE,
+    type: 'PageAgentCollaborationBodyOwned',
   },
   success: false,
 });
@@ -113,7 +150,19 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
     // the LLM can still call page-agent APIs against a stale editor ref.
     const baseInvoke = this.invoke;
     this.invoke = async (apiName, params, ctx) => {
-      if (this.hasApi(apiName) && !this.runtime.isReady()) {
+      if (
+        this.hasApi(apiName) &&
+        isRuntimeCollaborationRequired(this.runtime) &&
+        ['initPage', 'modifyNodes', 'replaceText'].includes(apiName)
+      ) {
+        return buildCollaborativeBodyOwnedResult(apiName);
+      }
+
+      if (
+        this.hasApi(apiName) &&
+        apiName !== PageAgentApiName.rewriteSelection &&
+        !this.runtime.isReady()
+      ) {
         console.warn('[PageAgentToolCall] blocked: editor not mounted', {
           apiName,
           runtime: getRuntimeDebugSnapshot(this.runtime),
@@ -132,15 +181,27 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
    * but the renderer still owns the live Lexical instance and the in-memory
    * document store. When the agent stream delivers `tool_end`, the gateway
    * event handler routes here so we can:
-   *   1. Push the new `editorData`/`title` into the mounted editor via
-   *      `EditorRuntime.applyServerSnapshot` (which skips the auto-save loop).
-   *   2. Mark `useDocumentStore` clean and update `lastSaved*` so the renderer
+   *   1. Push legacy non-collaborative `editorData`/content and title into the
+   *      mounted editor via `EditorRuntime.applyServerSnapshot`.
+   *   2. In Page collaboration mode, keep the body out of this echo path and
+   *      synchronize only title metadata; the room/worker owns the body.
+   *   3. Mark the applicable `useDocumentStore` fields clean so the renderer
    *      does not re-save what the server just wrote.
    *
    * If the editor for this `documentId` is not currently mounted (e.g. user
    * navigated away), we skip — next open will hydrate from the row directly.
    */
-  onAfterCall = async ({ result }: ToolAfterCallContext): Promise<void> => {
+  onAfterCall = async ({ apiName, result }: ToolAfterCallContext): Promise<void> => {
+    // Targeted rewrite is a server-side queue/status bridge. Its result must
+    // never be interpreted as a document snapshot: the worker publishes the
+    // command/diff through the live Yjs room and the browser receives it via
+    // collaboration. Keep this branch before the generic snapshot handling so
+    // even a malformed or future state envelope cannot reach applyServerSnapshot.
+    if (apiName === PageAgentApiName.rewriteSelection) {
+      consumeRewriteSelectionState(result.state);
+      return;
+    }
+
     if (!result.success) return;
 
     const state = result.state as
@@ -168,11 +229,23 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
 
     if (!hasDocumentSnapshot) return;
 
+    const collaborationRequired = isRuntimeCollaborationRequired(this.runtime);
+    const metadataSnapshot = typeof title === 'string' ? { title } : undefined;
+
     // Only push into the live editor when this runtime is bound to the same
     // document the server just wrote. Otherwise the snapshot would overwrite
     // a different page's editor — store-level sync still runs below.
-    if (this.runtime.isReady() && this.runtime.getCurrentDocId() === documentId) {
-      this.runtime.applyServerSnapshot({ content, editorData, title });
+    if (
+      this.runtime.isReady() &&
+      this.runtime.getCurrentDocId() === documentId &&
+      (!collaborationRequired || metadataSnapshot)
+    ) {
+      // In Page collaboration mode the room/worker is the only body channel.
+      // Keep metadata synchronization, but never feed a normal server JSON or
+      // Markdown echo back into the mounted Yjs editor.
+      this.runtime.applyServerSnapshot(
+        collaborationRequired ? metadataSnapshot! : { content, editorData, title },
+      );
     }
 
     // Always reconcile the document store: even if the editor isn't mounted,
@@ -182,7 +255,13 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
     // unit tests of `executor/server.ts` don't have to load it.
     try {
       const { getDocumentStoreState } = await import('@/store/document');
-      getDocumentStoreState().applyServerSnapshot(documentId, { content, editorData, title });
+      if (collaborationRequired) {
+        if (metadataSnapshot) {
+          getDocumentStoreState().applyServerSnapshot(documentId, metadataSnapshot);
+        }
+      } else {
+        getDocumentStoreState().applyServerSnapshot(documentId, { content, editorData, title });
+      }
     } catch (error) {
       log('[PageAgentExecutor] applyServerSnapshot store sync failed', error);
     }
@@ -458,6 +537,21 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
       };
     }
   };
+
+  /**
+   * Targeted rewrites are executed by the server request/room worker. The
+   * renderer executor only exists as a defensive surface for older clients;
+   * it must not attempt to mutate the mounted editor or accept a snapshot.
+   */
+  rewriteSelection = async (_params: RewriteSelectionArgs): Promise<BuiltinToolResult> => ({
+    content:
+      'Targeted collaborative rewrites are queued by the server and applied directly after durable room persistence. Follow the request status in the Page Agent panel.',
+    error: {
+      message: 'rewriteSelection is server-only',
+      type: 'PageAgentServerOnly',
+    },
+    success: false,
+  });
 }
 
 // Export the executor class and a factory function

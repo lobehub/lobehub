@@ -11,6 +11,7 @@ interface CustomNextConfig {
   outputFileTracingIncludes?: NextConfig['outputFileTracingIncludes'];
   redirects?: Redirect[];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
+  transpilePackages?: NextConfig['transpilePackages'];
   turbopack?: NextConfig['turbopack'];
 }
 
@@ -360,10 +361,12 @@ export function defineConfig(config: CustomNextConfig) {
       },
       ...(config.redirects ?? []),
     ],
-    // when external packages in dev mode with turbopack, this config will lead to bundle error
+    // Keep the editor in Turbopack's server bundle. Its ESM entry imports @lobehub/ui,
+    // whose EmojiPicker reaches @emoji-mart/data (a JSON package main). Externalizing
+    // the editor makes Node load that JSON without an import attribute and breaks every
+    // tRPC route while the server module graph is initialized.
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
-      '@lobehub/editor',
       'discord.js',
       'ffmpeg-static',
       'pdfjs-dist',
@@ -371,7 +374,14 @@ export function defineConfig(config: CustomNextConfig) {
       'oidc-provider',
     ],
 
-    transpilePackages: ['mermaid'],
+    transpilePackages: [
+      'mermaid',
+      '@lobehub/editor',
+      '@lobehub/ui',
+      '@emoji-mart/data',
+      '@emoji-mart/react',
+      ...(config.transpilePackages ?? []),
+    ],
     turbopack: {
       rules: {
         ...(isTest
