@@ -139,6 +139,7 @@ interface RouteAttemptMetadata {
 interface RouteAttemptContext {
   allowedApiTypes?: ReadonlySet<ApiType>;
   metadata?: Record<string, unknown>;
+  method: RouterRuntimeMethod;
   pricingContext?: ModelPricingContext;
   toolsCount?: number;
   user?: string;
@@ -161,6 +162,7 @@ interface RouteAttemptContextValidationParams extends RouteAttemptContext {
 
 export interface SortRouterOptionsParams {
   metadata?: Record<string, unknown>;
+  method: RouterRuntimeMethod;
   model: string;
   options: RouterOptionItem[];
   routerId?: string;
@@ -170,11 +172,21 @@ export interface SortRouterOptionsParams {
 export interface RouteSuccessParams {
   channelId?: string;
   firstChannelId?: string;
+  method: RouterRuntimeMethod;
   model: string;
   routerId?: string;
   userId?: string;
   weighted: boolean;
 }
+
+export type RouterRuntimeMethod =
+  | 'chat'
+  | 'createImage'
+  | 'createVideo'
+  | 'embeddings'
+  | 'generateObject'
+  | 'textToSpeech'
+  | 'transcribe';
 
 export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any> {
   apiKey?: string;
@@ -482,6 +494,7 @@ export const createRouterRuntime = ({
         // after mutations like `options.pop()`.
         const sorted = await params.sortRouterOptions({
           metadata: routeContext.metadata,
+          method: routeContext.method,
           model,
           options: [...routerOptions],
           routerId: router.id,
@@ -624,7 +637,7 @@ export const createRouterRuntime = ({
     private async runWithFallback<T>(
       model: string,
       requestHandler: (runtime: LobeRuntimeAI) => Promise<T>,
-      routeContext: RouteAttemptContext = {},
+      routeContext: RouteAttemptContext,
     ): Promise<T> {
       const totalStartedAt = Date.now();
       const { allowedApiTypes, metadata, pricingContext, toolsCount, user } = routeContext;
@@ -679,6 +692,7 @@ export const createRouterRuntime = ({
           apiType: resolvedApiType,
           channelId,
           metadata,
+          method: routeContext.method,
           model,
           routerId: matchedRouter.id,
           toolsCount,
@@ -739,6 +753,7 @@ export const createRouterRuntime = ({
               await params.onRouteSuccess({
                 channelId,
                 firstChannelId,
+                method: routeContext.method,
                 model,
                 routerId: matchedRouter.id,
                 userId: routeAttemptUserId,
@@ -937,6 +952,7 @@ export const createRouterRuntime = ({
           {
             allowedApiTypes: containsRawAudio ? RAW_AUDIO_API_TYPES : undefined,
             metadata: options?.metadata,
+            method: 'chat',
             pricingContext: options?.pricingContext,
             toolsCount: payload.tools?.length ?? 0,
             user: options?.user,
@@ -959,7 +975,11 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.createImage!(payload, options),
-        { metadata: options?.metadata, pricingContext: options?.pricingContext },
+        {
+          metadata: options?.metadata,
+          method: 'createImage',
+          pricingContext: options?.pricingContext,
+        },
       );
     }
 
@@ -967,7 +987,11 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.createVideo!(payload, options),
-        { metadata: options?.metadata, pricingContext: options?.pricingContext },
+        {
+          metadata: options?.metadata,
+          method: 'createVideo',
+          pricingContext: options?.pricingContext,
+        },
       );
     }
 
@@ -1001,6 +1025,7 @@ export const createRouterRuntime = ({
         (runtime) => runtime.generateObject!(payload, options),
         {
           metadata: options?.metadata,
+          method: 'generateObject',
           pricingContext: options?.pricingContext,
           toolsCount: payload.tools?.length ?? 0,
           user: options?.user,
@@ -1014,6 +1039,7 @@ export const createRouterRuntime = ({
         (runtime) => runtime.embeddings!(payload, options),
         {
           metadata: options?.metadata,
+          method: 'embeddings',
           pricingContext: options?.pricingContext,
           user: options?.user,
         },
@@ -1026,6 +1052,7 @@ export const createRouterRuntime = ({
         (runtime) => runtime.textToSpeech!(payload, options),
         {
           metadata: options?.metadata,
+          method: 'textToSpeech',
           pricingContext: options?.pricingContext,
           user: options?.user,
         },
@@ -1036,7 +1063,7 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.transcribe!(payload, options),
-        { user: options?.user },
+        { method: 'transcribe', user: options?.user },
       );
     }
   };

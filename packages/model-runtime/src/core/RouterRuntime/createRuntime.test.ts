@@ -1676,6 +1676,35 @@ describe('createRouterRuntime', () => {
       expect(mockCreateVideo).toHaveBeenCalledWith(payload, undefined);
     });
 
+    it('should identify video requests when sorting router options', async () => {
+      const mockCreateVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
+      const sortRouterOptions = vi.fn(({ options }) => options);
+
+      class MockRuntime implements LobeRuntimeAI {
+        createVideo = mockCreateVideo;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['sora-1'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: MockRuntime as any,
+          },
+        ],
+        sortRouterOptions,
+      });
+
+      const runtime = new Runtime();
+      await runtime.createVideo({ model: 'sora-1', params: { prompt: 'a cat' } } as any);
+
+      expect(sortRouterOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'createVideo', model: 'sora-1' }),
+      );
+    });
+
     it('should forward options.metadata to onRouteAttempt', async () => {
       const mockCreateVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
       const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
@@ -1954,6 +1983,7 @@ describe('createRouterRuntime', () => {
 
       expect(sortRouterOptions).toHaveBeenCalledWith(
         expect.objectContaining({
+          method: 'chat',
           model: 'gpt-4',
           options: [
             expect.objectContaining({ id: 'channel-a' }),
@@ -2041,6 +2071,7 @@ describe('createRouterRuntime', () => {
         expect.objectContaining({
           channelId: 'channel-b',
           firstChannelId: 'channel-a',
+          method: 'chat',
           model: 'gpt-4',
           routerId: 'router-a',
           userId: 'owner-1',
