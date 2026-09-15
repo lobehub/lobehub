@@ -117,8 +117,8 @@ const IdleState = memo<IdleStateProps>(({ run }) => {
         try {
           setStarting(true);
           await startRun(run.id, run.status !== 'idle');
-        } catch (error: any) {
-          toast.error(error?.message || 'Failed to start run');
+        } catch (error) {
+          toast.error((error as Error)?.message || 'Failed to start run');
         } finally {
           setStarting(false);
         }
