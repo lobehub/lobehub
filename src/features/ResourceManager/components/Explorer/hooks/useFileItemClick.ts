@@ -10,6 +10,13 @@ export interface UseFileItemClickOptions {
   isPage: boolean;
   libraryId?: string | null;
   onOpen?: (id: string) => void;
+  /**
+   * Explorer rows (list / masonry) preview files and pages in the inline right
+   * detail panel. The library sidebar tree is navigation and also stays mounted
+   * where no explorer (and so no panel) exists, e.g. the Permissions page, so it
+   * keeps opening the fullscreen editor.
+   */
+  openInPanel?: boolean;
   slug?: string | null;
 }
 
@@ -23,6 +30,7 @@ export const useFileItemClick = ({
   isFolder,
   isPage,
   onOpen,
+  openInPanel = false,
 }: UseFileItemClickOptions) => {
   const navigate = useWorkspaceAwareNavigate();
   // Read/write the URL through the active-tab facade rather than
@@ -64,21 +72,23 @@ export const useFileItemClick = ({
         const basePath = `/resource/library/${libraryId}/${folderSlug}`;
         navigate(queryString ? `${basePath}?${queryString}` : basePath);
       }
-    } else if (isPage) {
-      // Switch to page view mode
-      setCurrentViewItemId(id);
-      setMode('page');
-      // Update URL query parameter for shareable links
-      selectFile();
-    } else {
-      // Open the in-context detail panel instead of leaving the list. A plain
-      // click is a "look at this" gesture — the promise of this surface is to
-      // keep the working list visible. Fullscreen focus stays available as the
-      // explicit double click (see `openFileEditor`).
-      openDetailPanel(id);
-      // Call onOpen if provided for backwards compatibility
-      onOpen?.(id);
+      return;
     }
+
+    if (openInPanel) {
+      // A plain click is a "look at this" gesture — the promise of the explorer
+      // is to keep the working list visible. Fullscreen focus stays available as
+      // the explicit double click (see `useFileItemDoubleClick`).
+      openDetailPanel(id, isPage);
+      onOpen?.(id);
+      return;
+    }
+
+    setCurrentViewItemId(id);
+    setMode(isPage ? 'page' : 'editor');
+    // Update URL query parameter for shareable links
+    selectFile();
+    onOpen?.(id);
   }, [
     isFolder,
     slug,
@@ -86,6 +96,7 @@ export const useFileItemClick = ({
     libraryId,
     isPage,
     navigate,
+    openInPanel,
     pathname,
     search,
     setMode,
@@ -98,11 +109,11 @@ export const useFileItemClick = ({
 };
 
 /**
- * Double click = the committed "open this file" gesture: leave the list into
- * the fullscreen editor, exactly what a single click used to do. Keeps the
- * `?file=` deep-link write so a restored tab still lands on this file.
+ * Double click = the committed "open this item" gesture: leave the list into
+ * the fullscreen page editor or file editor. Keeps the `?file=` deep-link write
+ * so a restored tab still lands on this item.
  */
-export const useFileItemDoubleClick = ({ id }: { id: string }) => {
+export const useFileItemDoubleClick = ({ id, isPage }: { id: string; isPage: boolean }) => {
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
   const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
@@ -112,10 +123,10 @@ export const useFileItemDoubleClick = ({ id }: { id: string }) => {
   return useCallback(() => {
     closeDetailPanel();
     setCurrentViewItemId(id);
-    setMode('editor');
+    setMode(isPage ? 'page' : 'editor');
 
     const newParams = new URLSearchParams(search);
     newParams.set('file', id);
     navigate({ search: `?${newParams.toString()}` }, { replace: true });
-  }, [closeDetailPanel, id, setCurrentViewItemId, setMode, navigate, search]);
+  }, [closeDetailPanel, id, isPage, setCurrentViewItemId, setMode, navigate, search]);
 };

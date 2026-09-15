@@ -43,6 +43,11 @@ export interface State {
    */
   detailPanelId?: string;
   /**
+   * Whether the detail panel item is a page (文稿). Pages have no file URL, so
+   * the panel previews their document content instead of the file viewer.
+   */
+  detailPanelIsPage: boolean;
+  /**
    * Current library ID
    */
   libraryId?: string;
@@ -118,6 +123,7 @@ export const initialState: State = {
   category: FilesTabs.All,
   currentViewItemId: undefined,
   detailPanelId: undefined,
+  detailPanelIsPage: false,
   libraryId: undefined,
   librarySearchQuery: '',
   // Personal mode keeps the historical neutral value; workspace mode hydrates

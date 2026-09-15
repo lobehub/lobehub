@@ -240,9 +240,10 @@ const FileListItem = ({
     isFolder,
     isPage,
     libraryId: resourceManagerState.libraryId,
+    openInPanel: true,
     slug,
   });
-  const handleItemDoubleClick = useFileItemDoubleClick({ id });
+  const handleItemDoubleClick = useFileItemDoubleClick({ id, isPage });
   const { menuItems } = useFileItemDropdown({
     fileId,
     fileType,

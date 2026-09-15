@@ -196,11 +196,11 @@ export class ResourceManagerStoreActionImpl {
   };
 
   closeDetailPanel = (): void => {
-    this.#set({ detailPanelId: undefined });
+    this.#set({ detailPanelId: undefined, detailPanelIsPage: false });
   };
 
-  openDetailPanel = (detailPanelId: string): void => {
-    this.#set({ detailPanelId });
+  openDetailPanel = (detailPanelId: string, isPage = false): void => {
+    this.#set({ detailPanelId, detailPanelIsPage: isPage });
   };
 
   setLibraryId = (libraryId?: string): void => {

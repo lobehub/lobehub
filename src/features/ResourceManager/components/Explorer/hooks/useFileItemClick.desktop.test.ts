@@ -75,6 +75,7 @@ describe('useFileItemClick (desktop shell)', () => {
       isFolder: false,
       isPage: false,
       libraryId: 'kb_1',
+      openInPanel: true,
     });
 
     await act(async () => {
@@ -86,6 +87,60 @@ describe('useFileItemClick (desktop shell)', () => {
     expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid');
     expect(screen.getByTestId('shell-search').textContent).toBe('');
     expect(useResourceManagerStore.getState().detailPanelId).toBe('file_1');
+    expect(useResourceManagerStore.getState().detailPanelIsPage).toBe(false);
+  });
+
+  it('opens a page in the inline detail panel instead of the page editor', async () => {
+    useResourceManagerStore.setState({ mode: 'explorer' });
+    const { result } = renderFileClick({
+      id: 'page_1',
+      isFolder: false,
+      isPage: true,
+      libraryId: 'kb_1',
+      openInPanel: true,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid');
+    expect(useResourceManagerStore.getState().mode).toBe('explorer');
+    expect(useResourceManagerStore.getState().detailPanelId).toBe('page_1');
+    expect(useResourceManagerStore.getState().detailPanelIsPage).toBe(true);
+  });
+
+  it('opens the page editor on double click of a page', async () => {
+    const { useFileItemDoubleClick } = await import('./useFileItemClick');
+    const { result } = renderHook(() => useFileItemDoubleClick({ id: 'page_1', isPage: true }), {
+      wrapper: shellWrapper,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=page_1');
+    expect(useResourceManagerStore.getState().mode).toBe('page');
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
+  });
+
+  it('keeps the sidebar tree click opening the fullscreen file editor', async () => {
+    useResourceManagerStore.setState({ detailPanelId: undefined, mode: 'explorer' });
+    const { result } = renderFileClick({
+      id: 'file_2',
+      isFolder: false,
+      isPage: false,
+      libraryId: 'kb_1',
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=file_2');
+    expect(useResourceManagerStore.getState().mode).toBe('editor');
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
   });
 
   it('fullscreen editor on double click writes ?file= to the tab router', async () => {
@@ -94,13 +149,14 @@ describe('useFileItemClick (desktop shell)', () => {
       isFolder: false,
       isPage: false,
       libraryId: 'kb_1',
+      openInPanel: true,
     });
     await act(async () => {
       clickResult.current();
     });
 
     const { useFileItemDoubleClick } = await import('./useFileItemClick');
-    const { result } = renderHook(() => useFileItemDoubleClick({ id: 'file_1' }), {
+    const { result } = renderHook(() => useFileItemDoubleClick({ id: 'file_1', isPage: false }), {
       wrapper: shellWrapper,
     });
 

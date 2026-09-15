@@ -12,6 +12,7 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import FilePreview from './FilePreview';
+import PagePreview from './PagePreview';
 import { useDetailPanelFile } from './useDetailPanelFile';
 
 /**
@@ -24,6 +25,7 @@ import { useDetailPanelFile } from './useDetailPanelFile';
 const FileDetailPanel = memo(() => {
   const theme = useTheme();
   const detailPanelId = useResourceManagerStore((s) => s.detailPanelId);
+  const detailPanelIsPage = useResourceManagerStore((s) => s.detailPanelIsPage);
   const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
   const [showProperties, setShowProperties] = useState(false);
 
@@ -95,7 +97,11 @@ const FileDetailPanel = memo(() => {
           </Flexbox>
           <Flexbox horizontal flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
             <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0, overflow: 'auto' }}>
-              <FilePreview file={fileDetail} />
+              {detailPanelIsPage && detailPanelId ? (
+                <PagePreview id={detailPanelId} />
+              ) : (
+                <FilePreview file={fileDetail} />
+              )}
             </Flexbox>
             {showProperties && (
               <Flexbox
