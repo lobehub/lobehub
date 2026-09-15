@@ -6,12 +6,10 @@ CREATE TABLE IF NOT EXISTS "environments" (
 	"description" text,
 	"enabled" boolean DEFAULT true NOT NULL,
 	"configuration" jsonb NOT NULL,
-	"configuration_version" integer DEFAULT 1 NOT NULL,
 	"accessed_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "environments_name_not_empty" CHECK (length(btrim("environments"."name")) > 0),
-	CONSTRAINT "environments_configuration_version_positive" CHECK ("environments"."configuration_version" > 0),
 	CONSTRAINT "environments_configuration_object" CHECK (jsonb_typeof("environments"."configuration") = 'object')
 );
 --> statement-breakpoint
@@ -25,7 +23,6 @@ CREATE TABLE IF NOT EXISTS "environment_instances" (
 	"provider_scope" text,
 	"provider_resource_id" text,
 	"working_directory" text NOT NULL,
-	"configuration_version" integer NOT NULL,
 	"configuration_snapshot" jsonb NOT NULL,
 	"configuration" jsonb,
 	"enabled" boolean DEFAULT true NOT NULL,
@@ -35,7 +32,6 @@ CREATE TABLE IF NOT EXISTS "environment_instances" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "environment_instances_name_not_empty" CHECK (length(btrim("environment_instances"."name")) > 0),
 	CONSTRAINT "environment_instances_directory_not_empty" CHECK (length(btrim("environment_instances"."working_directory")) > 0),
-	CONSTRAINT "environment_instances_version_positive" CHECK ("environment_instances"."configuration_version" > 0),
 	CONSTRAINT "environment_instances_snapshot_object" CHECK (jsonb_typeof("environment_instances"."configuration_snapshot") = 'object'),
 	CONSTRAINT "environment_instances_configuration_object" CHECK ("environment_instances"."configuration" IS NULL OR jsonb_typeof("environment_instances"."configuration") = 'object'),
 	CONSTRAINT "environment_instances_binding" CHECK ((

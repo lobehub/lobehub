@@ -1348,7 +1348,6 @@ table environments {
   description text
   enabled boolean [not null, default: true]
   configuration jsonb [not null]
-  configuration_version integer [not null, default: 1]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1356,7 +1355,6 @@ table environments {
   indexes {
     user_id [name: 'environments_user_id_idx']
     workspace_id [name: 'environments_workspace_id_idx']
-
 
 
   }
@@ -1372,7 +1370,6 @@ table environment_instances {
   provider_scope text
   provider_resource_id text
   working_directory text [not null]
-  configuration_version integer [not null]
   configuration_snapshot jsonb [not null]
   configuration jsonb
   enabled boolean [not null, default: true]
@@ -1386,7 +1383,6 @@ table environment_instances {
     (device_id, working_directory) [name: 'environment_instances_device_path_unique', unique]
     (kind, provider, provider_scope, provider_resource_id, working_directory) [name: 'environment_instances_provider_path_unique', unique]
     environment_id [name: 'environment_instances_environment_id_idx']
-
 
 
 

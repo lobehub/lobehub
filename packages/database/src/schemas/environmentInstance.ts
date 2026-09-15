@@ -9,7 +9,6 @@ import {
   boolean,
   check,
   index,
-  integer,
   jsonb,
   pgTable,
   text,
@@ -43,8 +42,7 @@ export const environmentInstances = pgTable(
     providerResourceId: text('provider_resource_id'),
     /** Physical working path in this instance, not a repository URL. */
     workingDirectory: text('working_directory').notNull(),
-    /** Definition version and snapshot used to materialize this instance; not implicitly refreshed. */
-    configurationVersion: integer('configuration_version').notNull(),
+    /** Definition snapshot used to materialize this instance; not implicitly refreshed. */
     configurationSnapshot: jsonb('configuration_snapshot')
       .$type<EnvironmentConfiguration>()
       .notNull(),
@@ -68,7 +66,6 @@ export const environmentInstances = pgTable(
       'environment_instances_directory_not_empty',
       sql`length(btrim(${t.workingDirectory})) > 0`,
     ),
-    check('environment_instances_version_positive', sql`${t.configurationVersion} > 0`),
     check(
       'environment_instances_snapshot_object',
       sql`jsonb_typeof(${t.configurationSnapshot}) = 'object'`,

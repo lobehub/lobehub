@@ -113,18 +113,14 @@ describe('Environment registration schema', () => {
       .returning();
     expect(row).toMatchObject({
       configuration: value,
-      configurationVersion: 1,
       enabled: true,
       workspaceId: null,
     });
   });
 
-  it('rejects empty names and nonpositive configuration versions', async () => {
+  it('rejects empty names', async () => {
     const values = { configuration, name: 'Development', userId };
     await expect(db.insert(environments).values({ ...values, name: '  ' })).rejects.toThrow();
-    await expect(
-      db.insert(environments).values({ ...values, configurationVersion: 0 }),
-    ).rejects.toThrow();
   });
 
   it('retains environment records until explicit cleanup on owner or workspace deletion', async () => {
@@ -221,7 +217,6 @@ describe('Environment registration schema', () => {
 
 const instanceValues = (environmentId: string) => ({
   configurationSnapshot: configuration,
-  configurationVersion: 1,
   environmentId,
   name: 'Instance',
   workingDirectory: '/workspace/lobehub',
@@ -261,9 +256,7 @@ describe('Environment instances', () => {
       ])
       .returning();
     expect(rows.map((row) => row.kind).sort()).toEqual(['cluster', 'device', 'sandbox']);
-    expect(rows.every((row) => row.configurationVersion === 1 && row.status === 'pending')).toBe(
-      true,
-    );
+    expect(rows.every((row) => row.status === 'pending')).toBe(true);
     const a = await createProject('AAA');
     const b = await createProject('BBB');
     await db.insert(projectEnvironments).values([
@@ -381,13 +374,13 @@ describe('Environment instances', () => {
       .returning();
     await db
       .update(environments)
-      .set({ configuration: { bootstrapCommand: 'pnpm install' }, configurationVersion: 2 })
+      .set({ configuration: { bootstrapCommand: 'pnpm install' } })
       .where(eq(environments.id, environment.id));
     const [saved] = await db
       .select()
       .from(environmentInstances)
       .where(eq(environmentInstances.id, instance.id));
-    expect(saved).toMatchObject({ configurationSnapshot: configuration, configurationVersion: 1 });
+    expect(saved).toMatchObject({ configurationSnapshot: configuration });
     await expect(db.delete(devices).where(eq(devices.id, device.id))).rejects.toThrow();
     await expect(
       db.delete(environments).where(eq(environments.id, environment.id)),

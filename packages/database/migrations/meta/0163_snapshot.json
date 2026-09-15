@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "43b25228-f1bc-4ac7-a6e3-a5f814cc7e2c",
+  "id": "6f3f5ea0-bcd3-481c-8181-3013d9b72636",
   "policies": {},
   "prevId": "d8e70660-8cee-4c41-a638-39e7de0dffa2",
   "roles": {},
@@ -11384,13 +11384,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "configuration_version": {
-          "name": "configuration_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
         "accessed_at": {
           "name": "accessed_at",
           "type": "timestamp with time zone",
@@ -11473,10 +11466,6 @@
           "name": "environments_name_not_empty",
           "value": "length(btrim(\"environments\".\"name\")) > 0"
         },
-        "environments_configuration_version_positive": {
-          "name": "environments_configuration_version_positive",
-          "value": "\"environments\".\"configuration_version\" > 0"
-        },
         "environments_configuration_object": {
           "name": "environments_configuration_object",
           "value": "jsonb_typeof(\"environments\".\"configuration\") = 'object'"
@@ -11540,12 +11529,6 @@
         "working_directory": {
           "name": "working_directory",
           "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "configuration_version": {
-          "name": "configuration_version",
-          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -11728,10 +11711,6 @@
         "environment_instances_directory_not_empty": {
           "name": "environment_instances_directory_not_empty",
           "value": "length(btrim(\"environment_instances\".\"working_directory\")) > 0"
-        },
-        "environment_instances_version_positive": {
-          "name": "environment_instances_version_positive",
-          "value": "\"environment_instances\".\"configuration_version\" > 0"
         },
         "environment_instances_snapshot_object": {
           "name": "environment_instances_snapshot_object",

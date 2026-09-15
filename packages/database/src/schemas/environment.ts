@@ -1,16 +1,6 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  check,
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  text,
-  uuid,
-  varchar,
-} from 'drizzle-orm/pg-core';
+import { boolean, check, index, jsonb, pgTable, text, uuid, varchar } from 'drizzle-orm/pg-core';
 
 import { timestamps } from './_helpers';
 import { users } from './user';
@@ -34,15 +24,12 @@ export const environments = pgTable(
     /** Registration availability, not the running/stopped state of an instance. */
     enabled: boolean('enabled').notNull().default(true),
     configuration: jsonb('configuration').$type<EnvironmentConfiguration>().notNull(),
-    /** Increment when changing configuration; executions can snapshot the version they consumed. */
-    configurationVersion: integer('configuration_version').notNull().default(1),
     ...timestamps,
   },
   (t) => [
     index('environments_user_id_idx').on(t.userId),
     index('environments_workspace_id_idx').on(t.workspaceId),
     check('environments_name_not_empty', sql`length(btrim(${t.name})) > 0`),
-    check('environments_configuration_version_positive', sql`${t.configurationVersion} > 0`),
     check('environments_configuration_object', sql`jsonb_typeof(${t.configuration}) = 'object'`),
   ],
 );
