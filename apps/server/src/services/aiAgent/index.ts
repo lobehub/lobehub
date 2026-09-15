@@ -690,6 +690,7 @@ export class AiAgentService {
       provider: providerOverride,
       stream,
       title,
+      steer,
       trigger,
       cronJobId,
       taskId,
@@ -1004,6 +1005,7 @@ export class AiAgentService {
         resume,
         runFromHistory,
         shareGate,
+        steer,
         throwIfExecutionAborted,
         title,
         trigger,
@@ -1072,7 +1074,7 @@ export class AiAgentService {
           parentOperationId,
           pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
           requestTrigger: requestTriggerMetadata.trigger,
-          requestedDeviceId: turn.effectiveRequestedDeviceId,
+          requestedDeviceId,
           runAttachments,
           selfMessageIds,
           topicStartOwnerOperationId: params.topicStartOwnerOperationId,
@@ -1195,7 +1197,7 @@ export class AiAgentService {
         loadHistoryMessages,
         localDeviceId,
         requestTrigger: requestTriggerMetadata.trigger,
-        requestedDeviceId: turn.effectiveRequestedDeviceId,
+        requestedDeviceId,
         selectedToolIds,
         throwIfExecutionAborted,
         topicBoundDeviceId: turn.topicBoundDeviceId,
@@ -1575,6 +1577,17 @@ export class AiAgentService {
     threadId?: string;
   }> {
     return this.interventionController.interruptTask(params);
+  }
+
+  /**
+   * Flags whether the composer still holds user messages queued behind a run.
+   * Delegates to {@link InterventionController}.
+   */
+  async setQueuedMessages(params: {
+    operationId: string;
+    pending: boolean;
+  }): Promise<{ success: boolean }> {
+    return this.interventionController.setQueuedMessages(params);
   }
 
   /** Settle a parked approval batch and terminate its operation. */

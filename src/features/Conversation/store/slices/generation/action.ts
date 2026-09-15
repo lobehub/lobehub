@@ -23,7 +23,6 @@ import {
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
-import { getTopicAgencyConfig, getTopicWorkspaceScoped } from '@/helpers/topicExecutionConfig';
 import { messageService } from '@/services/message';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -123,7 +122,7 @@ const ensureEffectiveAgencyAccess = async (agentId: string) => {
   });
 };
 
-const getEffectiveAgencyConfig = (agentId: string, topicId?: string | null) => {
+const getEffectiveAgencyConfig = (agentId: string) => {
   const agentState = getAgentStoreState();
   const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
@@ -147,21 +146,14 @@ const getEffectiveAgencyConfig = (agentId: string, topicId?: string | null) => {
     : undefined;
 
   return {
-    agencyConfig: getTopicAgencyConfig(
-      resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
-        canManage,
-        visibility: agent?.visibility,
-        workspaceId: agent?.workspaceId,
-      }),
-      topicId,
-    ),
+    agencyConfig: resolveAgentAgencyConfig(sharedAgencyConfig, deviceOverride, {
+      canManage,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    }),
     /** True workspace membership — stays true for the author, unlike `workspaceScoped`. */
     isWorkspaceAgent: !!agent?.workspaceId,
-    workspaceScoped: getTopicWorkspaceScoped(
-      sharedAgencyConfig,
-      topicId,
-      resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
-    ),
+    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
   };
 };
 
@@ -193,7 +185,7 @@ const resolveHeteroRunContext = (
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
   const agentState = getAgentStoreState();
   const desktopContext = globalAgentContextManager.getContext();
-  const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(agentId, context.topicId);
+  const { agencyConfig, workspaceScoped } = getEffectiveAgencyConfig(agentId);
   const agentWorkingDirectory = resolveAgentWorkingDirectory({
     agencyConfig,
     currentDeviceId,
@@ -429,7 +421,6 @@ const regenerateUserMessageFromSource = async (
     await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
-      context.topicId,
     );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
@@ -820,7 +811,6 @@ export const generationSlice: StateCreator<
     await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
-      context.topicId,
     );
     const runtimeType = selectRuntimeType({
       boundDeviceId: agencyConfig?.boundDeviceId,
@@ -912,7 +902,6 @@ export const generationSlice: StateCreator<
     await ensureEffectiveAgencyAccess(context.agentId);
     const { agencyConfig, isWorkspaceAgent, workspaceScoped } = getEffectiveAgencyConfig(
       context.agentId,
-      context.topicId,
     );
     const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({

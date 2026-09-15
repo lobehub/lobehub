@@ -157,6 +157,47 @@ const toVisitorSafeStartupError = (
   });
 };
 
+/**
+ * Authorize a visitor to act on a share run. It is not enough that the topic
+ * belongs to this visitor: `operationId` must also match the operation
+ * CURRENTLY recorded as running on that topic. Without that check a visitor
+ * could pass an arbitrary operationId (topics/operations are creator-owned
+ * rows) and reach an unrelated run on the creator's account.
+ *
+ * Returns the creator-scoped service, same as `execAgent`: the run's operation
+ * / thread rows were written under the creator's identity.
+ */
+const authorizeVisitorRunningOperation = async (
+  db: LobeChatDatabase,
+  visitorUserId: string,
+  input: { operationId: string; shareId: string; topicId: string },
+) => {
+  const share = await resolveLinkShareOrThrow(db, input.shareId, visitorUserId);
+
+  const topicModel = new TopicModel(db, share.ownerId, undefined, undefined, {
+    includeShareVisitor: true,
+  });
+  const topic = await findVisitorTopicOrThrow(topicModel, {
+    agentId: share.agentId,
+    topicId: input.topicId,
+    visitorUserId,
+  });
+
+  const runningOperationId = topic.metadata?.runningOperation?.operationId;
+  if (!runningOperationId || runningOperationId !== input.operationId) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'No matching running operation found on this topic',
+    });
+  }
+
+  const aiAgentService = new AiAgentService(db, share.ownerId, {
+    includeShareVisitor: true,
+  });
+
+  return { aiAgentService, share };
+};
+
 export const shareChatRouter = router({
   /**
    * Execute a shared agent as a visitor — the gateway-transport mirror of
@@ -177,6 +218,8 @@ export const shareChatRouter = router({
         /** See `SHARE_VISITOR_PROMPT_MAX_LENGTH`'s JSDoc for the size-bound rationale. */
         prompt: z.string().max(SHARE_VISITOR_PROMPT_MAX_LENGTH),
         shareId: z.string(),
+        /** Queued behind a running turn; see `aiAgent.execAgent`'s `steer`. */
+        steer: z.boolean().optional(),
         /** Absent → the run creates a new visitor topic (counted against the topic cap). */
         topicId: z.string().nullish(),
       }),
@@ -318,6 +361,7 @@ export const shareChatRouter = router({
           interactiveStart: false,
           prompt: input.prompt,
           shareGate,
+          steer: input.steer,
           // Not `RequestTrigger.Chat`: a share run is billed to the CREATOR,
           // so its spend rows must be separable from the creator's own chat
           // spend (they land on the same account). The trigger rides
@@ -422,41 +466,17 @@ export const shareChatRouter = router({
    * visitor's Stop / tab-close cannot reach the server: the run keeps streaming
    * and consuming the creator's budget until it finishes on its own.
    *
-   * Authorization is intentionally stricter than `execAgent`/`getMessages`: it
-   * is not enough that the topic belongs to this visitor — the `operationId`
-   * must also match the operation CURRENTLY recorded as running on that topic.
-   * Without that check a visitor could pass an arbitrary operationId
-   * (topics/operations are creator-owned rows) and interrupt an unrelated run
-   * on the creator's account.
+   * Authorization is intentionally stricter than `execAgent`/`getMessages`;
+   * see {@link authorizeVisitorRunningOperation}.
    */
   interruptTask: shareChatProcedure
     .input(ShareTopicScopeSchema.extend({ operationId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
-
-      const topicModel = new TopicModel(ctx.serverDB, share.ownerId, undefined, undefined, {
-        includeShareVisitor: true,
-      });
-      const topic = await findVisitorTopicOrThrow(topicModel, {
-        agentId: share.agentId,
-        topicId: input.topicId,
-        visitorUserId: ctx.userId,
-      });
-
-      const runningOperationId = topic.metadata?.runningOperation?.operationId;
-      if (!runningOperationId || runningOperationId !== input.operationId) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'No matching running operation found on this topic',
-        });
-      }
-
-      // Creator-scoped service, same as `execAgent` — the run's operation /
-      // thread rows were written under the creator's identity, so the
-      // underlying `interruptTask` implementation must resolve them there.
-      const aiAgentService = new AiAgentService(ctx.serverDB, share.ownerId, {
-        includeShareVisitor: true,
-      });
+      const { aiAgentService, share } = await authorizeVisitorRunningOperation(
+        ctx.serverDB,
+        ctx.userId,
+        input,
+      );
 
       log(
         'interruptTask: share=%s visitor=%s topic=%s operation=%s',
@@ -475,6 +495,43 @@ export const shareChatRouter = router({
         if (error instanceof TRPCError) throw error;
 
         throw toVisitorSafeStartupError('interruptTask', error, {
+          showErrorDetails: share.shareConfig.showErrorDetails,
+        });
+      }
+    }),
+
+  /**
+   * The visitor counterpart of `aiAgent.setQueuedMessages`: a visitor can queue
+   * follow-ups behind a share run too, and needs the same early hand-back.
+   * Authorized exactly like `interruptTask`.
+   */
+  setQueuedMessages: shareChatProcedure
+    .input(ShareTopicScopeSchema.extend({ operationId: z.string(), pending: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const { aiAgentService, share } = await authorizeVisitorRunningOperation(
+        ctx.serverDB,
+        ctx.userId,
+        input,
+      );
+
+      log(
+        'setQueuedMessages: share=%s visitor=%s topic=%s operation=%s pending=%s',
+        input.shareId,
+        ctx.userId,
+        input.topicId,
+        input.operationId,
+        input.pending,
+      );
+
+      try {
+        return await aiAgentService.setQueuedMessages({
+          operationId: input.operationId,
+          pending: input.pending,
+        });
+      } catch (error: any) {
+        if (error instanceof TRPCError) throw error;
+
+        throw toVisitorSafeStartupError('setQueuedMessages', error, {
           showErrorDetails: share.shareConfig.showErrorDetails,
         });
       }

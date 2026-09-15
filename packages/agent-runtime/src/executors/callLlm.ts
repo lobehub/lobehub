@@ -391,6 +391,7 @@ export const callLlm =
       assertPreparedCallContext(prepared, operation.stepIndex);
       const trace = llm.createTrace?.({
         assistantMessageId: assistantMessage.id,
+        context,
         conversationId: state.origin?.topicId,
         model,
         provider,

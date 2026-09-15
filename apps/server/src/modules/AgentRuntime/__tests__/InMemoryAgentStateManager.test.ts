@@ -297,6 +297,25 @@ describe('InMemoryAgentStateManager', () => {
     });
   });
 
+  describe('queued messages flag', () => {
+    it('should follow the latest setQueuedMessages value', async () => {
+      expect(await manager.hasQueuedMessages('op-q')).toBe(false);
+
+      await manager.setQueuedMessages('op-q', true);
+      expect(await manager.hasQueuedMessages('op-q')).toBe(true);
+
+      await manager.setQueuedMessages('op-q', false);
+      expect(await manager.hasQueuedMessages('op-q')).toBe(false);
+    });
+
+    it('should clear the flag when the operation is deleted', async () => {
+      await manager.setQueuedMessages('op-q', true);
+      await manager.deleteAgentOperation('op-q');
+
+      expect(await manager.hasQueuedMessages('op-q')).toBe(false);
+    });
+  });
+
   describe('deleteAgentOperation', () => {
     it('should remove all data for an operation', async () => {
       await manager.createOperationMetadata('op-del', { userId: 'u1' });

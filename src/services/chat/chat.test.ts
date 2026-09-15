@@ -215,7 +215,7 @@ describe('ChatService', () => {
       );
     });
 
-    it('should pass chat mode to context engineering when the selected model lacks function calling', async () => {
+    it('should keep the stored agent mode when the selected model lacks function calling', async () => {
       const contextEngineeringSpy = vi
         .spyOn(mechaModule, 'contextEngineering')
         .mockResolvedValue([]);
@@ -235,10 +235,12 @@ describe('ChatService', () => {
         }),
       });
 
-      expect(isCanUseFC).toHaveBeenCalledWith('gemini-3.1-flash-lite-image', ModelProvider.LobeHub);
+      // The stored mode passes through untouched, as on the server runtime: a
+      // model without function calling is handled by the tools engine, not by
+      // demoting the whole turn to chat mode.
       expect(contextEngineeringSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          enableAgentMode: false,
+          enableAgentMode: true,
         }),
       );
     });

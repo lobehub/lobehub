@@ -485,6 +485,12 @@ export interface GoalGraphSnapshot {
    * finished without saying whether it held up.
    */
   acceptances?: Record<string, GoalNodeAcceptance>;
+  /**
+   * The agent each dispatched task node is assigned to, keyed by node id. A
+   * goal can route its tasks to an executor other than the supervising agent,
+   * and a task title alone never says who is doing the work.
+   */
+  assignees?: Record<string, string>;
   decisions: GoalGraphDecision[];
   /**
    * When an active task node's newest run delivered, present only while that

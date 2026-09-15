@@ -497,8 +497,8 @@ export const topicRouter = router({
           favorite: z.boolean().optional(),
           groupId: z.string().nullish(),
           messages: z.array(z.string()).optional(),
-          // Execution routing and reasoning snapshots belong to this Topic;
-          // other metadata keys are server-owned.
+          // The pinned reasoning snapshot taken next to the pinned model
+          // (`snapshotAgentReasoning`); other metadata keys are server-owned.
           metadata: chatTopicCreateMetadataSchema.optional(),
           // The topic's pinned model snapshot, persisted to the top-level
           // `topics.model`/`provider` columns (config source of truth).

@@ -796,6 +796,23 @@ describe('GoalService', () => {
     await expect(service.updateRequirement('goal_missing', 'x')).rejects.toThrow();
   });
 
+  it('names the agent each dispatched task node is assigned to', async () => {
+    await serverDB.insert(agents).values([{ id: 'agt_exec', slug: 'agt-exec', userId }]);
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      agentId: 'agt_exec',
+      tasks: ['Dispatched', 'Not yet'],
+      title: 'Who is on it',
+    });
+    const created = await service.tick(graph.goal.id);
+
+    const read = await service.graph(graph.goal.id);
+    const dispatched = read.nodes.find((node) => node.taskId === created.taskId)!;
+
+    // Only a node with a Task row has an assignee; the undispatched one has none.
+    expect(read.assignees).toEqual({ [dispatched.id]: 'agt_exec' });
+  });
+
   it('hands the goal and its unfinished tasks to a new agent', async () => {
     await serverDB.insert(agents).values([
       { id: 'agt_old', slug: 'agt-old', userId },

@@ -20,6 +20,7 @@ export * from './document';
 export * from './documentComment';
 export * from './documentLike';
 export * from './entityId';
+export * from './environment';
 export * from './eval';
 export * from './expertise';
 export * from './export';

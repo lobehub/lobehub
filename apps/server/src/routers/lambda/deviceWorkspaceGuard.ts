@@ -4,6 +4,25 @@ import type { DeviceModel } from '@/database/models/device';
 import { isPathWithinRoot } from '@/server/services/deviceGateway';
 
 /**
+ * In-memory cache of device-scoped skill preview roots, populated by
+ * `listProjectSkills` and consumed by `assertWorkspaceRootApproved` to
+ * authorize read-only file previews without persisting skill paths into
+ * the DB (which would leak into the UI's working-directory list).
+ */
+const deviceSkillRoots = new Map<string, Set<string>>();
+
+export const registerDeviceSkillRoots = (deviceId: string, roots: string[]) => {
+  if (roots.length === 0) return;
+  deviceSkillRoots.set(deviceId, new Set(roots));
+};
+
+const isWithinSkillRoots = (deviceId: string, workingDirectory: string): boolean => {
+  const roots = deviceSkillRoots.get(deviceId);
+  if (!roots) return false;
+  return [...roots].some((root) => isPathWithinRoot(root, workingDirectory));
+};
+
+/**
  * Validate that a client-supplied workspace root is actually one the user has
  * bound to this device.
  *
@@ -36,12 +55,14 @@ export const assertWorkspaceRootApproved = async (
 
   const device = await deviceModel.findByDeviceId(deviceId);
 
-  const approvedRoots = [
-    ...(device?.workingDirs ?? []).map((dir) => dir.path),
-    ...(device?.defaultCwd ? [device.defaultCwd] : []),
-  ].filter((root): root is string => Boolean(root));
+  const approvedRoots = (device?.workingDirs ?? [])
+    .flatMap((dir) => [dir.path, dir.git?.activeWorktree])
+    .concat(device?.defaultCwd ? [device.defaultCwd] : [])
+    .filter((root): root is string => Boolean(root));
 
-  const approved = approvedRoots.some((root) => isPathWithinRoot(root, workingDirectory));
+  const approved =
+    approvedRoots.some((root) => isPathWithinRoot(root, workingDirectory)) ||
+    isWithinSkillRoots(deviceId, workingDirectory);
 
   if (!approved) {
     throw new TRPCError({

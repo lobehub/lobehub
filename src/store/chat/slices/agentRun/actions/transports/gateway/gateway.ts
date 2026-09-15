@@ -27,7 +27,6 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
-import { getTopicAgencyConfig, getTopicWorkspaceScoped } from '@/helpers/topicExecutionConfig';
 import {
   aiAgentService,
   type ResumeApprovalParam,
@@ -45,6 +44,7 @@ import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getFileStoreState } from '@/store/file/store';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import {
@@ -63,6 +63,12 @@ import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEvent
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
 import { type GatewayMuxIdentity, getGatewayMux } from './muxRegistry';
+import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMessagesFlag';
+
+const getGatewayServerConfig = () =>
+  (typeof window !== 'undefined'
+    ? window.global_serverConfigStore?.getState()?.serverConfig
+    : undefined) ?? getServerConfigStoreState()?.serverConfig;
 
 /**
  * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
@@ -105,7 +111,6 @@ const interruptGatewayTaskOrThrow = async (
  */
 const resolveDesktopDeviceHints = async (
   agentId?: string,
-  topicId?: string | null,
 ): Promise<{ deviceId?: string; localDeviceId?: string }> => {
   if (!isDesktop || !agentId) return {};
 
@@ -145,27 +150,20 @@ const resolveDesktopDeviceHints = async (
   const deviceOverride = agent?.workspaceId
     ? userState.workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
-  const agencyConfig = getTopicAgencyConfig(
-    resolveAgentAgencyConfig(
-      agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
-      deviceOverride,
-      {
-        canManage,
-        visibility: agent?.visibility,
-        workspaceId: agent?.workspaceId,
-      },
-    ),
-    topicId,
+  const agencyConfig = resolveAgentAgencyConfig(
+    agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
+    deviceOverride,
+    {
+      canManage,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    },
   );
   const isPlatformTask = isRemoteHeterogeneousType(agencyConfig?.heterogeneousProvider?.type ?? '');
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: true,
     isHetero: !!agencyConfig?.heterogeneousProvider,
-    workspaceScoped: getTopicWorkspaceScoped(
-      agencyConfig,
-      topicId,
-      resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
-    ),
+    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
   });
   // Platform hints are capability claims, not routing overrides. Always send
   // this desktop best-effort and let the server's authoritative execution plan
@@ -177,7 +175,7 @@ const resolveDesktopDeviceHints = async (
     if (!info?.deviceId) return {};
     return isPlatformTask
       ? { localDeviceId: info.deviceId }
-      : { deviceId: agencyConfig?.boundDeviceId ?? info.deviceId, localDeviceId: info.deviceId };
+      : { deviceId: info.deviceId, localDeviceId: info.deviceId };
   } catch {
     return {};
   }
@@ -546,6 +544,14 @@ export class GatewayActionImpl {
   };
 
   /**
+   * Mirror whether a conversation still has messages queued behind its running
+   * Gateway run. See {@link syncQueuedMessagesFlag}.
+   */
+  internal_syncQueuedMessagesFlag = (contextKey: string): void => {
+    syncQueuedMessagesFlag(this.#get, contextKey);
+  };
+
+  /**
    * Get the connection status for a specific operation.
    */
   getGatewayConnectionStatus = (operationId: string): ConnectionStatus | undefined => {
@@ -566,7 +572,7 @@ export class GatewayActionImpl {
    */
   warmupGatewayMux = (): void => {
     if (!labPreferSelectors.enableGatewayMux(useUserStore.getState())) return;
-    const serverConfig = window.global_serverConfigStore?.getState()?.serverConfig;
+    const serverConfig = getGatewayServerConfig();
     if (!serverConfig?.agentGatewayUrl || !serverConfig.enableGatewayMode) return;
 
     const mux = this.resolveGatewayMux({ gatewayUrl: serverConfig.agentGatewayUrl });
@@ -578,7 +584,7 @@ export class GatewayActionImpl {
   };
 
   isGatewayModeEnabled = (agentId?: string): boolean => {
-    const serverConfig = window.global_serverConfigStore?.getState()?.serverConfig;
+    const serverConfig = getGatewayServerConfig();
     const agentState = getAgentStoreState();
     const resolvedAgentId = agentId ?? agentState.activeAgentId;
     const agentDisableGatewayMode = resolvedAgentId
@@ -597,7 +603,7 @@ export class GatewayActionImpl {
 
   /**
    * Execute agent task via Gateway WebSocket.
-   * Call isGatewayModeEnabled() first to check availability.
+   * The dispatcher can select this transport for device execution even when Gateway mode is off.
    */
   /**
    * Execute agent task via Gateway WebSocket.
@@ -628,7 +634,7 @@ export class GatewayActionImpl {
      */
     messageContext?: ConversationContext;
     /** Request metadata carried from the originating user message. */
-    metadata?: Pick<MessageMetadata, 'trigger'>;
+    metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
     /** Called when the gateway session completes (agent finished running) */
@@ -721,8 +727,10 @@ export class GatewayActionImpl {
       tempMessageIds,
     } = params;
 
-    const agentGatewayUrl =
-      window.global_serverConfigStore!.getState().serverConfig.agentGatewayUrl!;
+    const agentGatewayUrl = getGatewayServerConfig()?.agentGatewayUrl;
+    if (!agentGatewayUrl) {
+      throw new Error('[Gateway] Cannot execute agent: serverConfig.agentGatewayUrl is missing');
+    }
 
     // The EXECUTION context decides whether the server creates a topic. The
     // message context can already carry the client-minted topic id (the send
@@ -778,10 +786,7 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const desktopDeviceHints = await resolveDesktopDeviceHints(
-      executionContext.agentId,
-      executionContext.topicId,
-    );
+    const desktopDeviceHints = await resolveDesktopDeviceHints(executionContext.agentId);
     const userInterventionConfig = {
       approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
       allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
@@ -805,6 +810,7 @@ export class GatewayActionImpl {
               clientIds,
               prompt: message,
               shareId: agentShareId,
+              steer: metadata?.steer,
               topicId: executionContext.topicId,
             },
             { signal: abortSignal },
@@ -870,6 +876,9 @@ export class GatewayActionImpl {
               resumeApprovals,
               resumeToolResult,
               selectedToolIds,
+              // A queued follow-up keeps its continuation mark on the row the
+              // server persists, which replaces the optimistic one.
+              steer: metadata?.steer,
               trigger: metadata?.trigger,
               userInterventionConfig,
             },
@@ -1048,6 +1057,10 @@ export class GatewayActionImpl {
       parentOperationId,
       type: 'execServerAgentRuntime',
     });
+
+    // A follow-up may have been queued while execAgentTask was still in flight,
+    // before this run had a server operation id to flag.
+    flagQueuedMessagesOnRunStart(this.#get, messageMapKey(resolvedMessageContext));
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
@@ -1254,8 +1267,7 @@ export class GatewayActionImpl {
     const { agentShareId, assistantMessageId, heteroType, operationId, topicId, scope, threadId } =
       params;
 
-    const agentGatewayUrl =
-      window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
+    const agentGatewayUrl = getGatewayServerConfig()?.agentGatewayUrl;
     if (!agentGatewayUrl) return;
 
     // Skip reconnect if the gateway action already established (or is establishing)

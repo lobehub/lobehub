@@ -583,13 +583,39 @@ export class GoalService {
 
   graph = async (goalId: string) => {
     const graph = await this.requireGraph(goalId);
-    const [runHeartbeats, deliveredAt, acceptances, spend] = await Promise.all([
+    const [runHeartbeats, deliveredAt, acceptances, assignees, spend] = await Promise.all([
       this.collectRunHeartbeats(graph),
       this.collectDeliveredAt(graph),
       this.collectAcceptances(graph),
+      this.collectAssignees(graph),
       this.resolveSpend(graph),
     ]);
-    return { ...graph, acceptances, deliveredAt, runHeartbeats, spend };
+    return { ...graph, acceptances, assignees, deliveredAt, runHeartbeats, spend };
+  };
+
+  /**
+   * The agent each dispatched task node is assigned to. Read from the Task row
+   * rather than the goal config: a task can be reassigned on its own, and the
+   * row is what the runner actually dispatches to.
+   */
+  private collectAssignees = async (
+    graph: GoalGraphSnapshot,
+  ): Promise<Record<string, string> | undefined> => {
+    const taskNodes = graph.nodes.filter(
+      (node): node is GoalGraphNode & { taskId: string } => node.kind === 'task' && !!node.taskId,
+    );
+    if (taskNodes.length === 0) return undefined;
+
+    const nodeByTaskId = new Map(taskNodes.map((node) => [node.taskId, node.id]));
+    // Runs on every graph poll: read the one column, not whole task rows.
+    const tasks = await this.taskModel.findAssigneesByIds(taskNodes.map((node) => node.taskId));
+
+    const result: Record<string, string> = {};
+    for (const task of tasks) {
+      const nodeId = nodeByTaskId.get(task.id);
+      if (nodeId && task.assigneeAgentId) result[nodeId] = task.assigneeAgentId;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
   };
 
   /**

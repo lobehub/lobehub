@@ -159,6 +159,7 @@ const spyOnClientLLMStream = (
     async (params, options) => ({
       options: options ?? {},
       params: { ...params, messages: params.messages as any } as any,
+      replayAssistantReasoning: false,
     }),
   );
 

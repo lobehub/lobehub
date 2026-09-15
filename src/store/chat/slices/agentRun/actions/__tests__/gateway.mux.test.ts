@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
+import * as serverConfigStore from '@/store/serverConfig';
 
 import { GatewayActionImpl } from '../transports/gateway/gateway';
 import { getGatewayMux, resetGatewayMuxRegistry } from '../transports/gateway/muxRegistry';
@@ -361,6 +362,27 @@ describe('GatewayActionImpl (enableGatewayMux lab)', () => {
       });
       expect(Object.keys(state.gatewayFeed)).toEqual(['op-feed']);
     });
+
+    it.each([true, false])(
+      'warms up from module config when mode is %s without window',
+      (enabled) => {
+        const { action, mux } = createTestAction();
+        Reflect.deleteProperty(globalThis, 'window');
+        vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+          serverConfig: { agentGatewayUrl: GATEWAY_URL, enableGatewayMode: enabled },
+        } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+
+        action.warmupGatewayMux();
+
+        if (enabled) {
+          expect(action.resolveGatewayMux).toHaveBeenCalledWith({ gatewayUrl: GATEWAY_URL });
+          expect(mux.connect).toHaveBeenCalledOnce();
+        } else {
+          expect(action.resolveGatewayMux).not.toHaveBeenCalled();
+          expect(mux.connect).not.toHaveBeenCalled();
+        }
+      },
+    );
 
     it('is a no-op when the lab flag is off or gateway mode is unavailable', () => {
       withServerConfig({ agentGatewayUrl: GATEWAY_URL, enableGatewayMode: true });

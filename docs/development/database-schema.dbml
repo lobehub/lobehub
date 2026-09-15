@@ -1274,6 +1274,7 @@ table document_comments {
   workspace_id text [not null]
   content text [not null]
   editor_data jsonb
+  selection_anchor jsonb
   client_id text [not null]
   deleted_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1286,6 +1287,7 @@ table document_comments {
     (document_id, created_at, id) [name: 'document_comments_document_id_created_at_id_idx']
     author_user_id [name: 'document_comments_author_user_id_idx']
     workspace_id [name: 'document_comments_workspace_id_idx']
+    
   }
 }
 
@@ -1337,6 +1339,57 @@ table document_shares {
     document_id [name: 'document_shares_document_id_unique', unique]
     user_id [name: 'document_shares_user_id_idx']
     workspace_id [name: 'document_shares_workspace_id_idx']
+  }
+}
+
+table environments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  name varchar(255) [not null]
+  description text
+  enabled boolean [not null, default: true]
+  configuration jsonb [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'environments_user_id_idx']
+    workspace_id [name: 'environments_workspace_id_idx']
+    
+    
+  }
+}
+
+table environment_instances {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  environment_id uuid [not null]
+  name varchar(255) [not null]
+  kind text [not null]
+  device_id uuid
+  provider text
+  provider_scope text
+  provider_resource_id text
+  working_directory text [not null]
+  configuration_snapshot jsonb [not null]
+  configuration jsonb
+  enabled boolean [not null, default: true]
+  status text [not null, default: 'pending']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (environment_id, id) [name: 'environment_instances_environment_id_id_unique', unique]
+    (device_id, working_directory) [name: 'environment_instances_device_path_unique', unique]
+    (kind, provider, provider_scope, provider_resource_id, working_directory) [name: 'environment_instances_provider_path_unique', unique]
+    environment_id [name: 'environment_instances_environment_id_idx']
+    
+    
+    
+    
+    
   }
 }
 
@@ -2752,6 +2805,33 @@ table projects {
     (workspace_id, visibility, user_id) [name: 'projects_workspace_visibility_idx']
     (status, updated_at) [name: 'projects_status_updated_at_idx']
     coordinator_agent_id [name: 'projects_coordinator_agent_id_unique', unique]
+    
+  }
+}
+
+table project_environments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  environment_id uuid [not null]
+  workspace_id text
+  added_by_user_id text
+  default_instance_id uuid
+  enabled boolean [not null, default: true]
+  is_default boolean [not null, default: false]
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    
+    default_instance_id [name: 'project_environments_default_instance_id_idx']
+    (project_id, environment_id) [name: 'project_environments_project_environment_unique', unique]
+    project_id [name: 'project_environments_project_default_unique', unique]
+    (project_id, sort_order) [name: 'project_environments_project_sort_order_idx']
+    environment_id [name: 'project_environments_environment_id_idx']
+    workspace_id [name: 'project_environments_workspace_id_idx']
+    added_by_user_id [name: 'project_environments_added_by_user_id_idx']
     
   }
 }

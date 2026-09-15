@@ -1899,7 +1899,6 @@ describe('ConversationLifecycle actions', () => {
             model: expect.any(String),
             provider: expect.any(String),
             metadata: {
-              executionConfig: { inheritWorkspaceScope: true },
               repos: [selectedRepo],
               workingDirectory: selectedRepo,
               workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
@@ -1912,7 +1911,6 @@ describe('ConversationLifecycle actions', () => {
               model: expect.any(String),
               provider: expect.any(String),
               metadata: {
-                executionConfig: { inheritWorkspaceScope: true },
                 repos: [selectedRepo],
                 workingDirectory: selectedRepo,
                 workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
@@ -2002,11 +2000,6 @@ describe('ConversationLifecycle actions', () => {
         // run executes in); the config keeps the SOURCE repo, which is what
         // By-Project groups on.
         const expectedMetadata = {
-          executionConfig: {
-            boundDeviceId: deviceId,
-            executionTarget: 'local',
-            inheritWorkspaceScope: true,
-          },
           workingDirectory: worktreePath,
           workingDirectoryConfig: {
             git: { activeWorktree: worktreePath },
@@ -2073,11 +2066,6 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             optimisticTopic: expect.objectContaining({
               metadata: {
-                executionConfig: {
-                  boundDeviceId: deviceId,
-                  executionTarget: 'device',
-                  inheritWorkspaceScope: true,
-                },
                 workingDirectory: '/repo/default',
                 workingDirectoryConfig: { path: '/repo/default' },
               },
@@ -2131,11 +2119,6 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             newTopic: expect.objectContaining({
               metadata: {
-                executionConfig: {
-                  boundDeviceId: deviceId,
-                  executionTarget: 'local',
-                  inheritWorkspaceScope: true,
-                },
                 workingDirectory: '/repo/lobehub',
                 workingDirectoryConfig: { path: '/repo/lobehub' },
               },
@@ -2188,15 +2171,7 @@ describe('ConversationLifecycle actions', () => {
 
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
           expect.objectContaining({
-            optimisticTopic: expect.objectContaining({
-              metadata: {
-                executionConfig: {
-                  boundDeviceId: deviceId,
-                  executionTarget: 'local',
-                  inheritWorkspaceScope: true,
-                },
-              },
-            }),
+            optimisticTopic: expect.not.objectContaining({ metadata: expect.anything() }),
           }),
         );
       });
@@ -2291,11 +2266,6 @@ describe('ConversationLifecycle actions', () => {
             expect.objectContaining({
               newTopic: expect.objectContaining({
                 metadata: {
-                  executionConfig: {
-                    boundDeviceId: HETERO_DEVICE_ID,
-                    executionTarget: 'local',
-                    inheritWorkspaceScope: true,
-                  },
                   workingDirectory: '/repo/device-default',
                   workingDirectoryConfig: { path: '/repo/device-default' },
                 },
@@ -3767,6 +3737,92 @@ describe('ConversationLifecycle actions', () => {
           useChatStore.setState({
             executeGatewayAgent,
             isGatewayModeEnabled: () => true,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+      });
+
+      it('routes Android Codex device execution to the gateway instead of the Provider API', async () => {
+        // Regression: Android (isDesktop=false) selected a remote macOS device
+        // for a Codex agent whose agencyConfig only carried the legacy
+        // `model: 'codex'` identity. Without recovering the hetero provider,
+        // selectRuntimeType fell through to `client` and POST /webapi/chat/codex
+        // returned InvalidProviderAPIKey.
+        mockConstEnv.isDesktop = false;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'macos-device',
+              executionTarget: 'device',
+            },
+            model: 'codex',
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId: 'gateway-operation',
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => false,
+          });
+        });
+
+        const { result } = renderHook(() => useChatStore());
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: createTestContext(),
+          });
+        });
+
+        expect(executeGatewayAgent).toHaveBeenCalledTimes(1);
+        expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
+        expect(result.current.executeClientAgent).not.toHaveBeenCalled();
+      });
+
+      it('routes Android Codex with a configured heterogeneousProvider to the gateway', async () => {
+        mockConstEnv.isDesktop = false;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'macos-device',
+              executionTarget: 'device',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+            model: 'codex',
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            operationId: 'gateway-operation',
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        act(() => {
+          useChatStore.setState({
+            executeGatewayAgent,
+            isGatewayModeEnabled: () => false,
           });
         });
 

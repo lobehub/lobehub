@@ -3578,20 +3578,18 @@ describe('topic action', () => {
   });
 });
 
-describe('Topic execution save failures', () => {
-  const key = topicMapKey({ agentId: 'agent-execution' });
-  const previous = {
-    executionConfig: { executionTarget: 'device' as const, boundDeviceId: 'device-a' },
-  };
-  const selected = { executionConfig: { executionTarget: 'sandbox' as const } };
+describe('Topic metadata save failures', () => {
+  const key = topicMapKey({ agentId: 'agent-metadata' });
+  const previous = { heteroSessionId: 'session-a' };
+  const selected = { heteroSessionId: 'session-b' };
   const setup = () => {
     useChatStore.setState({
-      activeAgentId: 'agent-execution',
+      activeAgentId: 'agent-metadata',
       topicDataMap: {
         [key]: {
           items: [
             {
-              id: 'topic-execution',
+              id: 'topic-metadata',
               title: 'A',
               createdAt: 1,
               updatedAt: 1,
@@ -3608,18 +3606,20 @@ describe('Topic execution save failures', () => {
     });
     vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(new Error('offline'));
   };
-  it('restores the saved target if the mutation fails while offline', async () => {
+
+  it('restores the previous metadata if the mutation fails while offline', async () => {
     setup();
     vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValueOnce(new Error('offline'));
     await expect(
-      useChatStore.getState().updateTopicMetadata('topic-execution', selected),
+      useChatStore.getState().updateTopicMetadata('topic-metadata', selected),
     ).rejects.toThrow('offline');
     expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(previous);
   });
-  it('keeps the saved selection if only revalidation fails', async () => {
+
+  it('keeps the saved metadata if only revalidation fails', async () => {
     setup();
     vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValueOnce([]);
-    await useChatStore.getState().updateTopicMetadata('topic-execution', selected);
+    await useChatStore.getState().updateTopicMetadata('topic-metadata', selected);
     expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(selected);
   });
 });

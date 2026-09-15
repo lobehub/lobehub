@@ -15,7 +15,6 @@ import {
 } from '@/server/modules/Mecha/ContextEngineering/providers';
 
 import type { RuntimeExecutorContext } from '../context';
-import { resolveRuntimeHistoryCount } from '../executorHelpers';
 import {
   resolveServerCallLlmContextHints,
   type ServerCallLlmContextHints,
@@ -36,6 +35,8 @@ export interface ServerCallLlmContextBuildResult {
   processedMessages: ChatStreamPayload['messages'];
   resolvedExtendParams?: ServerCallLlmContextHints['resolvedExtendParams'];
   shouldReplayAssistantReasoning: boolean;
+  /** An explicit operation-level `stream` wins; otherwise the agent's chat config. */
+  stream?: boolean;
 }
 
 export const buildServerCallLlmContext = async ({
@@ -66,6 +67,8 @@ export const buildServerCallLlmContext = async ({
   });
   const {
     capabilities,
+    enableAgentMode,
+    historyCount,
     messagesForContext,
     modelDisplayName,
     modelKnowledgeCutoff,
@@ -132,7 +135,7 @@ export const buildServerCallLlmContext = async ({
     ...(facts.step.groupAgentBuilderContext && {
       groupAgentBuilderContext: facts.step.groupAgentBuilderContext,
     }),
-    historyCount: resolveRuntimeHistoryCount(agentConfig.chatConfig?.historyCount),
+    historyCount,
     initialContext: (state as any).initialContext?.initialContext,
     knowledge: {
       fileContents: agentConfig.files
@@ -167,7 +170,7 @@ export const buildServerCallLlmContext = async ({
     ...(resolvedSkills?.enabledSkills?.length && {
       skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
     }),
-    enableAgentMode: agentConfig.chatConfig?.enableAgentMode,
+    enableAgentMode,
     ...(facts.step.topicReferences && { topicReferences: facts.step.topicReferences }),
     ...(facts.step.onboardingContext && { onboardingContext: facts.step.onboardingContext }),
   };
@@ -235,5 +238,6 @@ export const buildServerCallLlmContext = async ({
     processedMessages,
     resolvedExtendParams,
     shouldReplayAssistantReasoning,
+    stream: ctx.stream ?? contextHints.stream,
   };
 };

@@ -3,7 +3,7 @@ import type { LobeAgentAgencyConfig } from '@lobechat/types';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
@@ -76,7 +76,7 @@ export const useWorkspaceSurface = (
   alwaysShowWorkspace = false,
 ): WorkspaceSurface => {
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
 
   return resolveWorkspaceSurface({

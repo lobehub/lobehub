@@ -1,4 +1,5 @@
 export * from './contextEngineering';
+export * from './modelParams';
 export type {
   AgentConfigResolverContext,
   AgentConfigSnapshot,

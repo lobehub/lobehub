@@ -21,7 +21,6 @@ import {
   getWorkingDirEffectivePath,
   getWorkingDirSourcePath,
   resolveAgentAgencyConfig,
-  snapshotTopicExecutionConfig,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
@@ -43,7 +42,6 @@ import {
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
-import { getTopicAgencyConfig, getTopicWorkspaceScoped } from '@/helpers/topicExecutionConfig';
 import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -441,30 +439,23 @@ export class ConversationLifecycleActionImpl {
     const deviceOverride = agent?.workspaceId
       ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
       : undefined;
-    const workspaceScoped = getTopicWorkspaceScoped(
-      agentConfig?.agencyConfig,
-      context.topicId,
-      resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
-    );
+    const workspaceScoped = resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride);
     // Runtime selection must use the same per-user device override as the
     // switcher. A workspace-local pick is intentionally private to this member
     // and is therefore safe to execute in-process on their desktop.
-    const agencyConfig = getTopicAgencyConfig(
-      resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-        canManage,
-        visibility: agent?.visibility,
-        workspaceId: agent?.workspaceId,
-      }),
-      context.topicId,
-    );
+    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+      canManage,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    });
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
-    // unchanged when it is available, but recover the provider before the
-    // desktop-only local fallback so both runtime selection and the executor
-    // receive the same heterogeneous identity.
+    // unchanged when it is available. Recover the provider when gateway mode is
+    // off so desktop can still spawn locally and non-desktop (Android/web) still
+    // routes through Gateway instead of the Provider API.
     const heterogeneousProvider =
       agencyConfig?.heterogeneousProvider ??
-      (isDesktop && !isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
+      (!isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
         ? { type: agentConfig.model }
         : undefined);
     const runtimeType = selectRuntimeType({
@@ -1220,11 +1211,9 @@ export class ConversationLifecycleActionImpl {
             }
           : undefined;
     /** First-send persistence bypasses turnSetup, so both runtime paths must carry the effort snapshot. */
-    const optimisticTopicMetadata: ChatTopicMetadata = {
-      ...workingDirectoryMetadata,
-      ...newTopicReasoningSnapshot,
-      executionConfig: snapshotTopicExecutionConfig(agencyConfig),
-    };
+    const optimisticTopicMetadata = newTopicReasoningSnapshot
+      ? { ...workingDirectoryMetadata, ...newTopicReasoningSnapshot }
+      : workingDirectoryMetadata;
 
     // The sidebar row was already inserted (title + model) before the awaits
     // above; the cwd/repos metadata only resolves here, so patch it on now.
@@ -1721,7 +1710,11 @@ export class ConversationLifecycleActionImpl {
           messageContext: operationContext,
           fileIds: fileIdList,
           message,
-          metadata: requestMetadata,
+          // The server persists the user row on this path, so a queued
+          // follow-up's steer mark must travel with the request.
+          metadata: (metadata as Pick<MessageMetadata, 'steer'> | undefined)?.steer
+            ? { ...requestMetadata, steer: true }
+            : requestMetadata,
           onMessageAccepted: notifyMessageAccepted,
           parentOperationId: operationId,
           replacesOperationId: replaceableGatewayOperationId,

@@ -458,7 +458,6 @@
   "run": "Run",
   "save": "Save",
   "saveAgentConfigFail": "Failed to save agent settings. Your change was not applied.",
-  "saveTopicExecutionConfigFail": "Failed to save the topic execution environment. Your change was not applied.",
   "send": "Send",
   "serverVersionOutdated.desc": "Your client version (v{{version}}) requires a newer server version.",
   "serverVersionOutdated.dismiss": "Continue Anyway",

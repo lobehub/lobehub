@@ -100,6 +100,7 @@ export class AgentStateManager {
   private readonly STEPS_PREFIX = 'agent_runtime_steps';
   private readonly METADATA_PREFIX = 'agent_runtime_meta';
   private readonly INTERRUPT_PREFIX = 'agent_runtime_interrupt';
+  private readonly QUEUED_MESSAGES_PREFIX = 'agent_runtime_queued_messages';
   private readonly INLINE_RESUME_PREFIX = 'agent_runtime_inline_resume';
   private readonly DEFAULT_TTL = 2 * 3600; // 2h
 
@@ -209,6 +210,22 @@ export class AgentStateManager {
    */
   async isInterrupted(operationId: string): Promise<boolean> {
     const exists = await this.redis.exists(`${this.INTERRUPT_PREFIX}:${operationId}`);
+    return exists === 1;
+  }
+
+  /**
+   * Mirror the client's queued-messages flag into a tiny key beside the state,
+   * for the same reason as the interrupt sentinel: the step boundary reads it
+   * without loading the state blob. Clearing deletes the key.
+   */
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<void> {
+    const key = `${this.QUEUED_MESSAGES_PREFIX}:${operationId}`;
+    if (pending) await this.redis.setex(key, this.DEFAULT_TTL, '1');
+    else await this.redis.del(key);
+  }
+
+  async hasQueuedMessages(operationId: string): Promise<boolean> {
+    const exists = await this.redis.exists(`${this.QUEUED_MESSAGES_PREFIX}:${operationId}`);
     return exists === 1;
   }
 
@@ -422,6 +439,7 @@ export class AgentStateManager {
       `${this.STEPS_PREFIX}:${operationId}`,
       `${this.METADATA_PREFIX}:${operationId}`,
       `${this.INTERRUPT_PREFIX}:${operationId}`,
+      `${this.QUEUED_MESSAGES_PREFIX}:${operationId}`,
       `${this.INLINE_RESUME_PREFIX}:${operationId}`,
     ];
 

@@ -1930,11 +1930,7 @@ export class TopicModel {
    * Update topic metadata with merge logic
    * This method merges new metadata with existing metadata instead of replacing it
    */
-  updateMetadata = async (
-    id: string,
-    metadata: TopicMetadataPatch,
-    options?: { executionConfigIfAbsent?: boolean },
-  ) => {
+  updateMetadata = async (id: string, metadata: TopicMetadataPatch) => {
     // Merge into the existing metadata under a row lock so concurrent writers
     // can't lose each other's keys. The old read-then-write was a non-atomic
     // read-modify-write: a hetero run seeds `metadata.runningOperation` while
@@ -1966,9 +1962,6 @@ export class TopicModel {
       const mergedMetadata = {
         ...existing.metadata,
         ...metadata,
-        ...(options?.executionConfigIfAbsent && existing.metadata?.executionConfig
-          ? { executionConfig: existing.metadata.executionConfig }
-          : {}),
         ...(mergedOnboardingSession && { onboardingSession: mergedOnboardingSession }),
       } as ChatTopicMetadata;
 

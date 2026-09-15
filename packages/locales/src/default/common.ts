@@ -331,8 +331,6 @@ export default {
   'copySuccess': 'Copied',
   'createdAt': 'Created at {{time}}',
   'saveAgentConfigFail': 'Failed to save agent settings. Your change was not applied.',
-  'saveTopicExecutionConfigFail':
-    'Failed to save the topic execution environment. Your change was not applied.',
   'promptTransform.action': 'Refine Idea',
   'promptTransform.actions.rewrite': 'Expand Details',
   'promptTransform.actions.translate': 'Translate',

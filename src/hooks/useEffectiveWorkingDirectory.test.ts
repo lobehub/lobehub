@@ -25,8 +25,8 @@ const effectiveAgencyConfig = vi.hoisted(() => ({
   workspaceScoped: false,
 }));
 
-vi.mock('@/hooks/useTopicAgencyConfig', () => ({
-  useTopicAgencyConfig: () => effectiveAgencyConfig,
+vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
+  useEffectiveAgencyConfig: () => effectiveAgencyConfig,
 }));
 
 vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));

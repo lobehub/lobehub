@@ -1980,6 +1980,33 @@ describe('AgentRuntimeService', () => {
     });
   });
 
+  describe('setQueuedMessages', () => {
+    it('writes the flag for an operation owned by the caller', async () => {
+      mockCoordinator.getOperationMetadata.mockResolvedValue({ userId: mockUserId });
+      mockCoordinator.setQueuedMessages.mockResolvedValue(undefined);
+
+      await expect(service.setQueuedMessages('op-1', true)).resolves.toBe(true);
+
+      expect(mockCoordinator.setQueuedMessages).toHaveBeenCalledWith('op-1', true);
+    });
+
+    it("refuses another user's operation", async () => {
+      mockCoordinator.getOperationMetadata.mockResolvedValue({ userId: 'someone-else' });
+
+      await expect(service.setQueuedMessages('op-1', true)).resolves.toBe(false);
+
+      expect(mockCoordinator.setQueuedMessages).not.toHaveBeenCalled();
+    });
+
+    it('refuses an unknown operation', async () => {
+      mockCoordinator.getOperationMetadata.mockResolvedValue(null);
+
+      await expect(service.setQueuedMessages('op-missing', false)).resolves.toBe(false);
+
+      expect(mockCoordinator.setQueuedMessages).not.toHaveBeenCalled();
+    });
+  });
+
   describe('interruptOperation', () => {
     it('should interrupt a running operation', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({

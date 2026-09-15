@@ -76,6 +76,8 @@ export interface GoalNodeView {
   answers: GoalGraphNode[];
   /** Deliverables this node produced, newest first. */
   artifacts: GoalArtifactView[];
+  /** Agent the dispatched Task is assigned to — who is doing the work. */
+  assigneeAgentId?: string;
   attempts: GoalAttempt[];
   /** Unresolved `depends_on` targets — why this node cannot start. */
   blockers: GoalGraphNode[];
@@ -277,6 +279,7 @@ export const buildGoalGraphView = (
 ): GoalGraphView => {
   const {
     acceptances,
+    assignees,
     decisions,
     deliveredAt,
     edges,
@@ -384,6 +387,7 @@ export const buildGoalGraphView = (
           ? [...members].flatMap((id) => artifactsByNode.get(id) ?? [])
           : (artifactsByNode.get(node.id) ?? []),
       ...(acceptances?.[node.id] ? { acceptance: acceptances[node.id] } : {}),
+      ...(assignees?.[node.id] ? { assigneeAgentId: assignees[node.id] } : {}),
       attempts,
       blockers: (dependsOn.get(node.id) ?? [])
         .map((id) => nodeById.get(id))

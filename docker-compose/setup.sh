@@ -25,7 +25,7 @@ fi
 
 # Arg: --url
 # Determine the source URL to download files
-SOURCE_URL="https://raw.githubusercontent.com/lobehub/lobe-chat/main"
+SOURCE_URL="https://raw.githubusercontent.com/lobehub/lobehub/main"
 
 # Arg: --host
 # Determine the server host
@@ -410,13 +410,32 @@ show_message() {
 }
 
 # Function to download files
+# curl is preinstalled on macOS and already needed to fetch this script; wget is the fallback
 download_file() {
-    wget "$1" -O "$2"
+    if command -v curl &> /dev/null ; then
+        curl -fsSL "$1" -o "$2"
+    else
+        wget "$1" -O "$2"
+    fi
     # If run failed, exit
     if [ $? -ne 0 ]; then
         show_message "tips_download_failed" "$2"
         exit 1
     fi
+}
+
+# Detect the primary IPv4 address of this machine
+# `hostname -I` only exists on Linux; macOS falls back to the default route's interface
+detect_host_ip() {
+    local ip=""
+    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    if [ -z "$ip" ] && command -v ip &> /dev/null ; then
+        ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") { print $(i + 1); exit }}')
+    fi
+    if [ -z "$ip" ] && command -v ipconfig &> /dev/null ; then
+        ip=$(ipconfig getifaddr "$(route -n get default 2>/dev/null | awk '/interface:/ {print $2}')" 2>/dev/null)
+    fi
+    echo "$ip"
 }
 
 print_centered() {
@@ -519,8 +538,8 @@ fi
 
 section_download_files(){
     # Download files asynchronously
-    if ! command -v wget &> /dev/null ; then
-        echo "wget" $(show_message "tips_no_executable")
+    if ! command -v curl &> /dev/null && ! command -v wget &> /dev/null ; then
+        echo "curl / wget" $(show_message "tips_no_executable")
         exit 1
     fi
     
@@ -577,7 +596,7 @@ section_configurate_host() {
     
     # If user not specify host, try to get the server ip
     if [ -z "$HOST" ]; then
-        HOST=$(hostname -I | awk '{print $1}')
+        HOST=$(detect_host_ip)
         # If the host is a private ip and the deploy mode is port mode
         if [[ "$DEPLOY_MODE" == "1" ]] && ([[ "$HOST" == "192.168."* ]] || [[ "$HOST" == "172."* ]] || [[ "$HOST" == "10."* ]]); then
             echo $(show_message "tips_private_ip_detected")
