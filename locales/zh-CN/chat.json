@@ -38,6 +38,8 @@
   "agentProfile.files_other": "{{count}} 个文件",
   "agentProfile.knowledgeBases_one": "{{count}} 个知识库",
   "agentProfile.knowledgeBases_other": "{{count}} 个知识库",
+  "agentProfile.runtime": "运行时：{{name}}",
+  "agentProfile.runtimeBuiltin": "内置 Agent",
   "agentProfile.skills_one": "{{count}} 项技能",
   "agentProfile.skills_other": "{{count}} 项技能",
   "agentSignal.receipts.agentSignalLabel": "代理信号",

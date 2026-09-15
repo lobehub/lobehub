@@ -100,6 +100,8 @@ export default {
   'agentProfile.files_other': '{{count}} files',
   'agentProfile.knowledgeBases_one': '{{count}} library',
   'agentProfile.knowledgeBases_other': '{{count}} libraries',
+  'agentProfile.runtime': 'Runs on {{name}}',
+  'agentProfile.runtimeBuiltin': 'Built-in agent',
   'agentProfile.skills_one': '{{count}} skill',
   'agentProfile.skills_other': '{{count}} skills',
   'agentSignal.receipts.agentSignalLabel': 'Agent Signal',
