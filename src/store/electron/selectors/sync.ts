@@ -1,8 +1,8 @@
-import { OFFICIAL_URL } from '@lobechat/const';
+import { isOfficialCloudServer, OFFICIAL_URL } from '@lobechat/const';
 
 import { type ElectronState } from '../initialState';
 
-const isSyncActive = (s: ElectronState) => s.dataSyncConfig.active;
+const isSyncActive = (s: ElectronState) => s.dataSyncConfig.active ?? false;
 
 const storageMode = (s: ElectronState) => s.dataSyncConfig.storageMode;
 
@@ -20,7 +20,10 @@ const remoteServerUrl = (s: ElectronState) =>
  */
 const rawRemoteServerUrl = (s: ElectronState) => s.dataSyncConfig.remoteServerUrl || '';
 
+const isOfficialServer = (s: ElectronState) => isOfficialCloudServer(remoteServerUrl(s));
+
 export const electronSyncSelectors = {
+  isOfficialServer,
   isSyncActive,
   rawRemoteServerUrl,
   remoteServerUrl,

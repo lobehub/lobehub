@@ -2,7 +2,12 @@
   "name": "@lobechat/types",
   "version": "1.0.0",
   "private": true,
+  "sideEffects": false,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./agent/graph": "./src/agent/graph.ts"
+  },
   "main": "./src/index.ts",
   "scripts": {
     "test": "vitest",
@@ -10,7 +15,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
-    "@lobehub/market-sdk": "0.39.2",
+    "@lobehub/market-sdk": "0.41.0",
     "@lobehub/market-types": "^1.17.1",
     "ajv": "^8.20.0",
     "model-bank": "workspace:*",

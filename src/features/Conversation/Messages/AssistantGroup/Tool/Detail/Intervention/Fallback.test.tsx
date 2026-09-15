@@ -1,30 +1,22 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import type { BuiltinInterventionProps } from '@lobechat/types';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import FallbackIntervention from './Fallback';
+import Intervention from './index';
+
+const { submitHeteroIntervention } = vi.hoisted(() => ({
+  submitHeteroIntervention: vi.fn(),
+}));
 
 const metaMap: Record<string, { avatar?: string; title?: string }> = {
   'calculator': { title: 'Calculator' },
   'lobe-activator': { avatar: '🛠', title: 'Tools & Skills Activator' },
   'search': { title: 'Web Search' },
 };
-
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <button {...props}>{children}</button>
-  ),
-  Avatar: ({ avatar, title }: { avatar?: string; title?: string }) => (
-    <img alt={title} src={avatar} />
-  ),
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
-  Icon: () => <span>icon</span>,
-}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -40,6 +32,31 @@ vi.mock('react-i18next', () => ({
         ? `View parameters (${options?.count ?? 0})`
         : options?.defaultValue || key),
   }),
+}));
+
+vi.mock('@lobechat/builtin-tools/interventions', () => ({
+  getBuiltinIntervention: (identifier?: string, apiName?: string) => {
+    if (identifier !== 'devin' || apiName !== 'askUserQuestion') return;
+
+    return ({ onInteractionAction }: BuiltinInterventionProps) => (
+      <button
+        data-testid="devin-permission-option"
+        type="button"
+        onClick={() =>
+          void onInteractionAction?.({
+            payload: { 'Allow Devin to continue?': 'allow-once' },
+            type: 'submit',
+          })
+        }
+      >
+        Allow once
+      </button>
+    );
+  },
+}));
+
+vi.mock('../../../../../hooks/useConversationResourceAccess', () => ({
+  useConversationResourceAccess: () => ({ canUseResource: true }),
 }));
 
 vi.mock('@/store/tool/selectors', () => ({
@@ -66,9 +83,25 @@ vi.mock('@/store/user/selectors', () => ({
 }));
 
 vi.mock('../../../../../store', () => ({
+  dataSelectors: {
+    getDbMessageById: () => () => undefined,
+  },
   useConversationStore: (
-    selector: (state: { updatePluginArguments: ReturnType<typeof vi.fn> }) => unknown,
-  ) => selector({ updatePluginArguments: vi.fn() }),
+    selector: (state: {
+      cancelToolInteraction: ReturnType<typeof vi.fn>;
+      skipToolInteraction: ReturnType<typeof vi.fn>;
+      submitHeteroIntervention: typeof submitHeteroIntervention;
+      submitToolInteraction: ReturnType<typeof vi.fn>;
+      updatePluginArguments: ReturnType<typeof vi.fn>;
+    }) => unknown,
+  ) =>
+    selector({
+      cancelToolInteraction: vi.fn(),
+      skipToolInteraction: vi.fn(),
+      submitHeteroIntervention,
+      submitToolInteraction: vi.fn(),
+      updatePluginArguments: vi.fn(),
+    }),
 }));
 
 vi.mock('../Arguments', () => ({
@@ -135,5 +168,27 @@ describe('FallbackIntervention', () => {
 
     expect(screen.queryByText(iconUrl)).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Web Search' })).toHaveAttribute('src', iconUrl);
+  });
+});
+
+describe('heterogeneous custom intervention', () => {
+  it('routes a Devin permission option ID through submitHeteroIntervention', async () => {
+    render(
+      <Intervention
+        apiName="askUserQuestion"
+        id="message-devin-permission"
+        identifier="devin"
+        requestArgs='{"questions":[{"question":"Allow Devin to continue?","options":[{"id":"allow-once","label":"Allow once"}]}]}'
+        toolCallId="devin-permission-1"
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('devin-permission-option'));
+
+    await waitFor(() => {
+      expect(submitHeteroIntervention).toHaveBeenCalledWith('message-devin-permission', 'submit', {
+        'Allow Devin to continue?': 'allow-once',
+      });
+    });
   });
 });

@@ -8,8 +8,8 @@ import { memo } from 'react';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getConfigRepoType, getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
@@ -38,7 +38,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // Effective config (shared row + this member's device override)
   // so GitStatus probes the same device `useEffectiveWorkingDirectory` resolved
   // the cwd from — raw shared config could point them at different machines.
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,
@@ -52,7 +52,10 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // path that was never registered as a device working dir — so fall back to the
   // repoType persisted on the topic (the same snapshot the meta hover card reads).
   // Without this the whole GitStatus is gated out and branch/worktree/PR chips
-  // vanish even though the topic clearly carries git context.
+  // vanish even though the topic clearly carries git context. The same snapshot
+  // also feeds GitStatus's `fallbackGit`, which covers the harder case: the
+  // recorded worktree directory was DELETED, so the live branch probe reads
+  // nothing and the chips would vanish even with repoType resolved.
   const topicWorkingDirectoryConfig = useChatStore(
     (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
@@ -96,6 +99,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
         <GitStatus
           agentId={agentId}
           deviceId={isLocalDevice ? undefined : targetDeviceId}
+          fallbackGit={persistedConfig?.git}
           isGithub={repoType === 'github'}
           path={effectiveWorkingDirectory}
           sourcePath={sourceWorkingDirectory}

@@ -1,17 +1,19 @@
 import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
-import { memo, Suspense, useCallback, useMemo, useState } from 'react';
+import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useSingleton } from '@/hooks/useSingleton';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
+import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { dataSelectors, useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import {
+  isAgentMarketplaceCall,
   isCustomInteractionIdentifier,
   isHeteroInteractionIdentifier,
   prepareCustomInteractionSubmit,
@@ -36,8 +38,17 @@ interface InterventionProps {
 const Intervention = memo<InterventionProps>(
   ({ requestArgs, id, identifier, apiName, toolCallId, assistantGroupId, actionsPortalTarget }) => {
     const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
+    const { canUseResource } = useConversationResourceAccess();
     const [isEditing, setIsEditing] = useState(false);
     const updatePluginArguments = useConversationStore((s) => s.updatePluginArguments);
+    const message = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s));
+    const usesDurableServerClaim = Boolean(
+      message?.pluginIntervention?.operationId && message.pluginIntervention.batchId,
+    );
+    const [pendingEditedArguments, setPendingEditedArguments] = useState<
+      Record<string, unknown> | undefined
+    >();
+    const pendingEditedArgumentsRef = useRef<Record<string, unknown> | undefined>(undefined);
 
     const beforeApproveCallbacks = useSingleton(
       () => new Map<string, () => void | Promise<void>>(),
@@ -56,7 +67,8 @@ const Intervention = memo<InterventionProps>(
     const handleBeforeApprove = useCallback(async () => {
       const callbacks = Array.from(beforeApproveCallbacks.values());
       await Promise.all(callbacks.map((cb) => cb()));
-    }, [beforeApproveCallbacks]);
+      return usesDurableServerClaim ? pendingEditedArgumentsRef.current : undefined;
+    }, [beforeApproveCallbacks, usesDurableServerClaim]);
 
     const handleCancel = useCallback(() => {
       setIsEditing(false);
@@ -70,30 +82,45 @@ const Intervention = memo<InterventionProps>(
           const newArgsString = JSON.stringify(editedObject, null, 2);
 
           if (newArgsString !== requestArgs) {
-            await updatePluginArguments(toolCallId, editedObject, true);
+            if (usesDurableServerClaim) {
+              pendingEditedArgumentsRef.current = editedObject;
+              setPendingEditedArguments(editedObject);
+            } else {
+              await updatePluginArguments(toolCallId, editedObject, true);
+            }
           }
           setIsEditing(false);
         } catch (error) {
           console.error('Error stringifying arguments:', error);
         }
       },
-      [requestArgs, toolCallId, updatePluginArguments],
+      [requestArgs, toolCallId, updatePluginArguments, usesDurableServerClaim],
     );
 
     // Callback for builtin intervention components to update arguments
     const handleArgsChange = useCallback(
       async (newArgs: unknown) => {
-        if (!toolCallId) return;
+        if (!toolCallId || !canUseResource) return;
+        if (usesDurableServerClaim && newArgs && typeof newArgs === 'object') {
+          const editedArguments = newArgs as Record<string, unknown>;
+          pendingEditedArgumentsRef.current = editedArguments;
+          setPendingEditedArguments(editedArguments);
+          return;
+        }
         await updatePluginArguments(toolCallId, newArgs, true);
       },
-      [toolCallId, updatePluginArguments],
+      [canUseResource, toolCallId, updatePluginArguments, usesDurableServerClaim],
     );
 
-    const parsedArgs = useMemo(() => safeParseJSON(requestArgs || '') ?? {}, [requestArgs]);
+    const parsedArgs = useMemo(
+      () => pendingEditedArguments ?? safeParseJSON(requestArgs || '') ?? {},
+      [pendingEditedArguments, requestArgs],
+    );
 
     const isCustomInteraction = isCustomInteractionIdentifier(identifier, apiName);
 
-    const topicId = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s)?.topicId);
+    const topicId = message?.topicId;
+    const interventionResolving = message?.pluginIntervention?.resolving === true;
     const submitToolInteraction = useConversationStore((s) => s.submitToolInteraction);
     const skipToolInteraction = useConversationStore((s) => s.skipToolInteraction);
     const cancelToolInteraction = useConversationStore((s) => s.cancelToolInteraction);
@@ -112,12 +139,37 @@ const Intervention = memo<InterventionProps>(
           | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
           | { type: 'cancel'; payload?: Record<string, unknown> },
       ) => {
+        if (!canUseResource || interventionResolving) return;
         if (isHeteroInteractionIdentifier(identifier)) {
           await submitHeteroIntervention(id, action.type, action.payload);
           return;
         }
         switch (action.type) {
           case 'submit': {
+            if (usesDurableServerClaim && isAgentMarketplaceCall(identifier, apiName)) {
+              const selectedTemplateIds = action.payload.selectedTemplateIds;
+              if (
+                Array.isArray(selectedTemplateIds) &&
+                selectedTemplateIds.length > 0 &&
+                selectedTemplateIds.every((templateId) => typeof templateId === 'string')
+              ) {
+                await submitToolInteraction(id, action.payload, {
+                  agentInterventionAction: {
+                    result: { kind: 'agent_marketplace', selectedTemplateIds },
+                    type: 'submit_custom',
+                  },
+                  prepareLegacyFallback: async () => {
+                    const prepared = await prepareCustomInteractionSubmit(
+                      identifier,
+                      action.payload,
+                      { apiName, requestArgs: parsedArgs, topicId },
+                    );
+                    return { response: prepared.payload, ...prepared.options };
+                  },
+                });
+                break;
+              }
+            }
             const { payload, options } = await prepareCustomInteractionSubmit(
               identifier,
               action.payload,
@@ -131,41 +183,51 @@ const Intervention = memo<InterventionProps>(
             break;
           }
           case 'skip': {
-            await recordCustomInteractionResolution(
-              identifier,
-              'skipped',
-              action.payload,
-              {
-                apiName,
-                requestArgs: parsedArgs,
-                topicId,
-              },
+            const recordSkipped = () =>
+              recordCustomInteractionResolution(
+                identifier,
+                'skipped',
+                action.payload,
+                { apiName, requestArgs: parsedArgs, topicId },
+                action.reason,
+              );
+            if (!usesDurableServerClaim) await recordSkipped();
+            await skipToolInteraction(
+              id,
               action.reason,
+              usesDurableServerClaim ? { onLegacyFallback: recordSkipped } : undefined,
             );
-            await skipToolInteraction(id, action.reason);
             break;
           }
           case 'cancel': {
-            await recordCustomInteractionResolution(identifier, 'cancelled', action.payload, {
-              apiName,
-              requestArgs: parsedArgs,
-              topicId,
-            });
-            await cancelToolInteraction(id);
+            const recordCancelled = () =>
+              recordCustomInteractionResolution(identifier, 'cancelled', action.payload, {
+                apiName,
+                requestArgs: parsedArgs,
+                topicId,
+              });
+            if (!usesDurableServerClaim) await recordCancelled();
+            await cancelToolInteraction(
+              id,
+              usesDurableServerClaim ? { onLegacyFallback: recordCancelled } : undefined,
+            );
             break;
           }
         }
       },
       [
         apiName,
+        canUseResource,
         cancelToolInteraction,
         id,
         identifier,
+        interventionResolving,
         parsedArgs,
         skipToolInteraction,
         submitHeteroIntervention,
         submitToolInteraction,
         topicId,
+        usesDurableServerClaim,
       ],
     );
 
@@ -190,6 +252,7 @@ const Intervention = memo<InterventionProps>(
               actionsPortalTarget={actionsPortalTarget}
               apiName={apiName}
               args={parsedArgs}
+              disabled={interventionResolving || !canUseResource}
               identifier={identifier}
               interactionMode="custom"
               messageId={id}

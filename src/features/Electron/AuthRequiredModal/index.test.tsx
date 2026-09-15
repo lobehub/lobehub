@@ -42,46 +42,13 @@ vi.mock('@lobechat/electron-client-ipc', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span data-testid="modal-icon" />,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    loading,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled || loading} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createModal: (props: ModalProps) => {
     createModalMock(props);
 
     return modalInstance;
   },
-  ModalFooter: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock('react-i18next', () => ({

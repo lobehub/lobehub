@@ -58,7 +58,8 @@ const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest })
   const { data: { messages, messagesToday } = {}, isLoading: messagesLoading } = useClientDataSWR(
     statsKeys.countMessages(),
     async () => ({
-      messages: await messageService.countMessages(),
+      messages: await messageService.countMessages({ approximate: true }),
+      // today's delta stays exact — it is small, cheap, and shown as "+N"
       messagesToday: await messageService.countMessages({
         startDate: today().format('YYYY-MM-DD'),
       }),

@@ -6,16 +6,16 @@ import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
+import AppsSkeleton from '@/components/Skeleton/Apps';
+import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
+import { delayed } from '@/components/Skeleton/Delayed';
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
+import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
-import {
-  acceptanceRouteMeta,
-  verifyReportsRouteMeta,
-  verifyRouteMeta,
-} from '@/features/Verify/routeMeta';
+import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
-import { sharePageRouteMeta } from '@/routes/share/page/[id]/routeMeta';
-import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 const mobileChatElement = dynamicElement(
@@ -139,6 +139,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 ),
               'Mobile > Discover > List > Workspace',
             ),
+            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('detail') }) },
             path: 'workspace',
           },
         ],
@@ -147,6 +148,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           'Mobile > Discover > List > Layout',
           { preloadId: 'mobile-community' },
         ),
+        handle: { meta: routeMeta({ Skeleton: CommunityListSkeleton }) },
       },
       // Detail routes (with DetailLayout)
       {
@@ -211,6 +213,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           () => import('@/routes/(mobile)/community/(detail)/_layout'),
           'Mobile > Discover > Detail > Layout',
         ),
+        handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('detail') }) },
       },
     ],
     element: dynamicElement(
@@ -258,7 +261,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/task/[taskId]'),
               'Mobile > Task Detail',
             ),
-            path: ':taskId',
+            // Optional readable title tail; `:taskId` alone resolves the task.
+            path: ':taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,
@@ -271,7 +275,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/agent/task/[taskId]'),
               'Mobile > Agent Task Detail',
             ),
-            path: ':aid/task/:taskId',
+            path: ':aid/task/:taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,
@@ -293,6 +297,15 @@ export const mobileRoutes: RouteObject[] = [
   {
     children: [
       ...sharedMainAreaChildren,
+
+      // Apps page (personal-only — never mirrored under /:workspaceSlug)
+      {
+        element: dynamicElement(() => import('@/routes/(main)/apps'), 'Mobile > Apps', {
+          fallback: delayed(<AppsSkeleton />),
+        }),
+        errorElement: <ErrorBoundary />,
+        path: 'apps',
+      },
 
       // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
@@ -451,6 +464,64 @@ export const mobileRoutes: RouteObject[] = [
                 ),
                 path: 'general',
               },
+              // Account-level tabs mirrored inside the workspace (see the
+              // desktop router); the pages are the personal settings pages.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/profile'),
+                  'Mobile > Workspace > Settings > Profile',
+                ),
+                path: 'profile',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/appearance'),
+                  'Mobile > Workspace > Settings > Appearance',
+                ),
+                path: 'appearance',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/hotkey'),
+                  'Mobile > Workspace > Settings > Hotkey',
+                ),
+                path: 'hotkey',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
+                  'Mobile > Workspace > Settings > Messenger',
+                ),
+                path: 'messenger',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
+                  'Mobile > Workspace > Settings > Messenger > Platform',
+                ),
+                path: 'messenger/:sub',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/advanced'),
+                  'Mobile > Workspace > Settings > Advanced',
+                ),
+                path: 'advanced',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labs'),
+                  'Mobile > Workspace > Settings > Labs',
+                ),
+                path: 'labs',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/about'),
+                  'Mobile > Workspace > Settings > About',
+                ),
+                path: 'about',
+              },
               {
                 element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/members'),
@@ -480,6 +551,25 @@ export const mobileRoutes: RouteObject[] = [
                   'Mobile > Workspace > Settings > Labels',
                 ),
                 path: 'labels',
+              },
+              {
+                element: dynamicElement(
+                  () =>
+                    import('@/routes/(main)/[workspaceSlug]/settings/provider').then(
+                      (m) => m.WorkspaceProviderSettingMobile,
+                    ),
+                  'Mobile > Workspace > Settings > Provider',
+                ),
+                path: 'provider',
+              },
+              // Path-shaped provider deep-links (`/:slug/settings/provider/:id`)
+              // redirect to the query form the workspace provider page uses, so
+              // they don't fall through to the catch-all and leave the workspace.
+              // Static element: the redirect is tiny and lazy-loading it would
+              // flash the generic brand loader before redirecting.
+              {
+                element: <WorkspaceProviderRedirect />,
+                path: 'provider/:providerId',
               },
               {
                 element: dynamicElement(
@@ -582,37 +672,6 @@ export const mobileRoutes: RouteObject[] = [
   },
   ...BusinessMobileRoutesWithoutMainLayout,
 
-  // Share topic route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/share/t/[id]')),
-          'Mobile > Share > Topic',
-        ),
-        handle: { meta: shareTopicRouteMeta },
-        path: ':id',
-      },
-    ],
-    element: dynamicElement(
-      () => import('@/routes/share/t/[id]/_layout'),
-      'Mobile > Share > Topic > Layout',
-    ),
-    path: '/share/t',
-  },
-
-  // Share page route (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(() => import('@/routes/share/page/[id]'), 'Mobile > Share > Page'),
-        handle: { meta: sharePageRouteMeta },
-        path: ':id',
-      },
-    ],
-    path: '/share/page',
-  },
-
   // Messenger verify route (outside main layout)
   {
     element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > VerifyIm'),
@@ -620,27 +679,6 @@ export const mobileRoutes: RouteObject[] = [
     path: '/verify-im',
   },
 
-  // Verify report workspace — standalone master-detail (outside main layout)
-  {
-    children: [
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/verify/empty'),
-          'Mobile > Verify Empty',
-        ),
-        index: true,
-      },
-      {
-        element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Mobile > VerifyReport'),
-        handle: { meta: verifyRouteMeta },
-        path: ':runId',
-      },
-    ],
-    element: dynamicElement(() => import('@/routes/(main)/verify'), 'Mobile > Verify'),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: verifyReportsRouteMeta },
-    path: '/verify',
-  },
   {
     element: dynamicElement(
       () => import('@/routes/acceptance/[acceptanceId]'),

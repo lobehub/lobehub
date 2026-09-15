@@ -1,7 +1,7 @@
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { deviceService } from '@/services/device';
 
 export type RemoteAgentDeviceStatus =
@@ -31,7 +31,7 @@ export const useRemoteAgentDeviceGuard = ({
   //. Checking the raw shared `boundDeviceId` would probe whichever
   // machine landed on the shared row (usually the creator's, often offline)
   // instead of the device THIS member picked — a false "device offline".
-  const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, isPreferenceLoading } = useTopicAgencyConfig(agentId);
 
   const boundDeviceId = agencyConfig?.boundDeviceId;
   const providerType = agencyConfig?.heterogeneousProvider?.type;

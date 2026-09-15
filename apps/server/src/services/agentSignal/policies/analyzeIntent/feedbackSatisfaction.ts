@@ -1,8 +1,12 @@
 import type { RuntimeProcessorResult } from '@lobechat/agent-signal';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
-import { DEFAULT_MINI_SYSTEM_AGENT_ITEM } from '@lobechat/const';
-import type { GenerateObjectPayload, GenerateObjectSchema } from '@lobechat/model-runtime';
-import { chainAgentSignalAnalyzeIntentFeedbackSatisfaction } from '@lobechat/prompts';
+import { DEFAULT_MINI_SYSTEM_AGENT_ITEM, TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  AGENT_SIGNAL_FEEDBACK_SATISFACTION_JSON_SCHEMA,
+  AGENT_SIGNAL_FEEDBACK_SATISFACTION_PROMPT_VERSION,
+  chainAgentSignalAnalyzeIntentFeedbackSatisfaction,
+} from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -28,81 +32,6 @@ const FeedbackSatisfactionStagePayloadSchema = z.object({
   reason: z.string(),
   result: z.enum(['neutral', 'not_satisfied', 'satisfied']),
 });
-
-const FeedbackSatisfactionGenerateObjectSchema = {
-  name: 'agent_signal_feedback_satisfaction',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      confidence: { maximum: 1, minimum: 0, type: 'number' },
-      evidence: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            cue: { type: 'string' },
-            excerpt: { type: 'string' },
-          },
-          required: ['cue', 'excerpt'],
-          type: 'object',
-        },
-        type: 'array',
-      },
-      reason: { type: 'string' },
-      result: { enum: ['neutral', 'not_satisfied', 'satisfied'], type: 'string' },
-    },
-    required: ['confidence', 'evidence', 'reason', 'result'],
-    type: 'object',
-  },
-  strict: true,
-} satisfies GenerateObjectSchema;
-
-const generateObjectRoles = ['assistant', 'system', 'user'] as const;
-
-const isGenerateObjectRole = (
-  role: string,
-): role is GenerateObjectPayload['messages'][number]['role'] => {
-  return generateObjectRoles.includes(role as (typeof generateObjectRoles)[number]);
-};
-
-/**
- * Normalizes prompt-chain messages for generateObject.
- *
- * Before:
- * - `{ role: "system", content: "Judge feedback" }`
- * - `{ role: "tool", content: "Unsupported role" }`
- *
- * After:
- * - `{ role: "system", content: "Judge feedback" }`
- * - Throws `TypeError` for roles or content shapes generateObject cannot consume
- */
-const normalizeGenerateObjectMessages = (
-  messages: NonNullable<
-    ReturnType<typeof chainAgentSignalAnalyzeIntentFeedbackSatisfaction>['messages']
-  >,
-): GenerateObjectPayload['messages'] => {
-  return messages.map((message) => {
-    if (!isGenerateObjectRole(message.role)) {
-      throw new TypeError(`Unsupported feedback satisfaction message role: ${message.role}`);
-    }
-
-    if (typeof message.content !== 'string') {
-      throw new TypeError('Feedback satisfaction message content must be a string.');
-    }
-
-    if (message.name) {
-      return {
-        content: message.content,
-        name: message.name,
-        role: message.role,
-      };
-    }
-
-    return {
-      content: message.content,
-      role: message.role,
-    };
-  });
-};
 
 /**
  * One normalized satisfaction-judge input.
@@ -221,11 +150,18 @@ export class FeedbackSatisfactionJudgeAgentService implements FeedbackSatisfacti
 
     const result = await modelRuntime.generateObject(
       {
-        messages: normalizeGenerateObjectMessages(payload.messages ?? []),
+        messages: payload.messages,
         model: this.modelConfig.model,
-        schema: FeedbackSatisfactionGenerateObjectSchema,
+        schema: AGENT_SIGNAL_FEEDBACK_SATISFACTION_JSON_SCHEMA,
       },
-      { metadata: { trigger: RequestTrigger.AgentSignal } },
+      {
+        metadata: { trigger: RequestTrigger.AgentSignal },
+        tracing: {
+          promptVersion: AGENT_SIGNAL_FEEDBACK_SATISFACTION_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.SignalFeedbackSatisfaction,
+          schemaName: AGENT_SIGNAL_FEEDBACK_SATISFACTION_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
     );
 
     return FeedbackSatisfactionStagePayloadSchema.parse(result);

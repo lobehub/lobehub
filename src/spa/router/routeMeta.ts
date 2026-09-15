@@ -21,8 +21,15 @@ export interface DynamicRouteMetaProps {
   params: RouteMetaParams;
 }
 
+export type RouteSkeletonChrome = 'page' | 'body';
+
+export interface RouteSkeletonProps {
+  chrome?: RouteSkeletonChrome;
+}
+
 export interface RouteMeta extends StaticRouteMeta {
   DynamicMeta?: ComponentType<DynamicRouteMetaProps>;
+  Skeleton?: ComponentType<RouteSkeletonProps>;
 }
 
 export interface RouteHandle {
@@ -35,6 +42,14 @@ export interface ResolvedRouteMeta {
   icon?: LucideIcon;
   title: string;
 }
+
+/**
+ * For a route whose surface is mounted outside the router outlet, or that
+ * paints fast enough that any placeholder is pure flicker. Declared rather than
+ * omitted: an absent `Skeleton` makes `RouteLoading` render nothing, so the
+ * chunk wait is a blank pane.
+ */
+export const NoRouteSkeleton = () => null;
 
 export const routeMeta = (meta: RouteMeta): RouteMeta => meta;
 

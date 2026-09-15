@@ -65,6 +65,7 @@ const ResourceExplorer = memo(() => {
       // Only use category filter when NOT in a specific library
       // When viewing a library, show all items regardless of category
       category: libraryId ? undefined : category,
+      includeContentPreview: viewMode === 'masonry',
       libraryId,
       parentId: currentFolderSlug || null,
       showFilesInKnowledgeBase: false,
@@ -76,7 +77,16 @@ const ResourceExplorer = memo(() => {
       // user's last home filter.
       visibility: getResourceQueryVisibility(libraryId, listVisibility),
     }),
-    [category, libraryId, currentFolderSlug, sortType, sorter, listVisibility, sourceFilter],
+    [
+      category,
+      libraryId,
+      currentFolderSlug,
+      sortType,
+      sorter,
+      listVisibility,
+      sourceFilter,
+      viewMode,
+    ],
   );
 
   // Use SWR for data fetching with automatic caching and revalidation.

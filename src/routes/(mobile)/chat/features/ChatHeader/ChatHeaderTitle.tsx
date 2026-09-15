@@ -1,10 +1,12 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { cssVar } from 'antd-style';
 import { ChevronDown } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -20,6 +22,10 @@ const ChatHeaderTitle = memo(() => {
   ]);
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const title = useAgentStore(agentSelectors.currentAgentDisplayName);
+
+  // Archived topics fall out of the sidebar list fetch — pull their detail by
+  // id so the title doesn't degrade to the "new topic" placeholder.
+  useFetchActiveTopicDetail();
 
   const displayTitle = isInbox ? 'Lobe AI' : title;
 

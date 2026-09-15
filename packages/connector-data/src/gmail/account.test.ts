@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ConnectorDataError } from '../errors';
+import type { GmailComposioConnectedAccounts } from './account';
 import { loadGmailAccount } from './account';
 
-const loadAccount = (list: ReturnType<typeof vi.fn>, get = vi.fn()) =>
+const loadAccount = (list: GmailComposioConnectedAccounts['list'], get = vi.fn()) =>
   loadGmailAccount({
     connectedAccountId: 'account-1',
     connectedAccounts: { get, list },
@@ -175,6 +176,8 @@ describe('loadGmailAccount', () => {
       operation: 'getAccount',
       provider: 'gmail',
     });
+    /** @example expect(error.cause).toBe(account); */
+    expect(error.cause).toBe(account);
     expect(error.message).not.toMatch(/account-1|EXPIRED|github/);
   });
 });

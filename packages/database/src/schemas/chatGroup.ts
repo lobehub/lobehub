@@ -11,7 +11,7 @@ import {
 
 import type { ChatGroupConfig } from '../types/chatGroup';
 import { idGenerator } from '../utils/idGenerator';
-import { timestamps } from './_helpers';
+import { softDeleteColumns, timestamps } from './_helpers';
 import { agents } from './agent';
 import { sessionGroups } from './session';
 import { users } from './user';
@@ -58,6 +58,8 @@ export const chatGroups = pgTable(
       .default('public')
       .notNull(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [

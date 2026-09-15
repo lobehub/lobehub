@@ -46,6 +46,17 @@ describe('resolveClaudeCodeTranscriptPath', () => {
     const dir = path.basename(path.dirname(p!));
     expect(dir).toMatch(/^[\dA-Z-]+$/i);
   });
+
+  it('uses CLAUDE_CONFIG_DIR as the profile root when provided', async () => {
+    const configDir = path.join(home, 'managed-claude-profile');
+    const p = await resolveClaudeCodeTranscriptPath({
+      configDir,
+      cwd,
+      sessionId: SESSION_ID,
+    });
+    expect(p!.startsWith(path.join(configDir, 'projects'))).toBe(true);
+    expect(p).not.toContain(path.join(home, '.claude'));
+  });
 });
 
 describe('ensureClaudeCodeResumeTranscript', () => {

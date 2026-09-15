@@ -15,6 +15,27 @@ export function timeAgo(date: Date | string): string {
   return `${seconds}s ago`;
 }
 
+/**
+ * Counterpart to `timeAgo` for deadlines. `timeAgo` only formats the past, so
+ * feeding it a future timestamp (an invitation expiry, a lease) renders a
+ * negative "-604800s ago".
+ */
+export function timeUntil(date: Date | string): string {
+  const diff = new Date(date).getTime() - Date.now();
+  if (Number.isNaN(diff)) return '-';
+  if (diff <= 0) return 'expired';
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `in ${days}d`;
+  if (hours > 0) return `in ${hours}h`;
+  if (minutes > 0) return `in ${minutes}m`;
+  return `in ${seconds}s`;
+}
+
 export function truncate(str: string, maxWidth: number): string {
   let width = 0;
   let i = 0;

@@ -1,8 +1,9 @@
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
-import { messages, topics } from '@/database/schemas';
+import { agentEvalTestCases, messages, topics } from '@/database/schemas';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import type * as AgentEvalRunWorkflowModule from '@/server/workflows/agentEvalRun';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
@@ -12,9 +13,11 @@ import { cleanupDB, serverDB, setupEvalChain, userId } from './_setup';
 const mockExecAgent = vi.fn();
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+    };
+  }),
 }));
 
 vi.mock('@/server/workflows/agentEvalRun', async (importOriginal) => {
@@ -35,9 +38,11 @@ vi.mock('@/envs/app', () => ({
 }));
 
 vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    interruptOperation: vi.fn().mockResolvedValue(true),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      interruptOperation: vi.fn().mockResolvedValue(true),
+    };
+  }),
 }));
 
 const markTopicTimeout = async (params: { runId: string; testCaseId: string; topicId: string }) => {
@@ -294,6 +299,11 @@ describe('AgentEvalRunService', () => {
     it('should only trigger workflow for a timed-out pass@1 trajectory without mutating state', async () => {
       const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
 
+      await serverDB
+        .update(agentEvalTestCases)
+        .set({ metadata: { caseId: 'case-42' } })
+        .where(eq(agentEvalTestCases.id, testCase.id));
+
       const [userMessage] = await serverDB
         .insert(messages)
         .values({
@@ -344,6 +354,7 @@ describe('AgentEvalRunService', () => {
       expect(AgentEvalRunWorkflow.triggerResumeAgentTrajectory).toHaveBeenCalledWith(
         expect.objectContaining({
           appContext: { topicId: topic.id },
+          caseId: 'case-42',
           envPrompt: undefined,
           maxSteps: undefined,
           parentMessageId: userMessage.id,

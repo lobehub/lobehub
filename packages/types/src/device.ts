@@ -1,5 +1,19 @@
 import { z } from 'zod';
 
+/** Structured context for an unavailable logical device. */
+export interface DeviceUnavailableErrorData {
+  /** Stable machine-readable availability code. */
+  code: 'DEVICE_NOT_FOUND';
+  /** Logical device requested by the failed dispatch. */
+  deviceId: string;
+  /** Availability failures are safe for an outer caller to reconsider. */
+  retryable: true;
+  /** Principal pool in which presence was checked. */
+  scope: 'personal' | 'workspace';
+  /** Workspace principal, present only for workspace-scoped dispatch. */
+  workspaceId?: string;
+}
+
 export type ProjectSkillScope = 'device' | 'project';
 export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
 
@@ -383,6 +397,25 @@ export interface DeviceListItem {
   workingDirs: WorkingDirEntry[];
 }
 
+export interface DeviceDirectoryBrowseEntry {
+  isSymlink: boolean;
+  name: string;
+  /** Canonical absolute path on the execution device. */
+  path: string;
+  readable: boolean;
+}
+
+export interface DeviceDirectoryBrowseResult {
+  entries: DeviceDirectoryBrowseEntry[];
+  nextCursor?: string;
+  parentPath: string | null;
+  /** Canonical absolute directory currently being browsed. */
+  path: string;
+  pathSeparator: '/' | '\\';
+  roots: string[];
+  truncated: boolean;
+}
+
 /**
  * Branch name + detached-HEAD flag for a working directory, returned by the
  * `getGitBranch` device RPC. Mirrors the desktop `GitBranchInfo`.
@@ -604,6 +637,8 @@ export interface DeviceGitWorkingTreeFiles {
 
 /** One entry in a device's project file index. Mirrors `ProjectFileIndexEntry`. */
 export interface DeviceProjectFileIndexEntry {
+  /** Directory the index left unexpanded; children come from `listProjectDirectory`. */
+  collapsed?: boolean;
   /** Whether Git ignore rules match this file or directory. */
   gitIgnored?: boolean;
   isDirectory: boolean;
@@ -624,6 +659,15 @@ export interface DeviceProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
+}
+
+/**
+ * Children of one directory on a remote device, returned by the
+ * `listProjectDirectory` device RPC. Fills in a subtree the index collapsed.
+ */
+export interface DeviceProjectDirectoryListResult {
+  entries: DeviceProjectFileIndexEntry[];
+  truncated: boolean;
 }
 
 export interface DeviceProjectFileSearchResult {
@@ -675,6 +719,18 @@ export type DeviceLocalFilePreview =
 export interface DeviceLocalFilePreviewResult {
   error?: string;
   preview?: DeviceLocalFilePreview;
+  success: boolean;
+}
+
+export interface DeviceCopyAssetForPublishResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface DeviceExternalAssetForPublishResult {
+  base64?: string;
+  contentType?: string;
+  error?: string;
   success: boolean;
 }
 

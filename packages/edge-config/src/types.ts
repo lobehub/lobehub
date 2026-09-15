@@ -19,8 +19,9 @@ export interface BillboardItem {
    * recognizes, the CTA runs the corresponding in-app logic instead of opening
    * `linkUrl`. Allowed values (defined app-side in `src/features/Billboard/actions.ts`):
    * `openChangelog` (open the changelog modal), `openFeedback` (open the feedback modal),
-   * `resetOnboarding` (web only — reset onboarding progress and re-enter the flow;
-   * desktop clients ignore it and fall back to `linkUrl`).
+   * `resetOnboarding` (reset onboarding and re-enter the flow; only resolved
+   * on official cloud — desktop must be synced to official cloud, web must be
+   * served from the official origin — otherwise the CTA falls back to `linkUrl`).
    * Unrecognized values are ignored by the client and fall back to `linkUrl`.
    */
   action?: string | null;

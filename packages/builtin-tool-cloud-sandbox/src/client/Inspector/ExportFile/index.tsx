@@ -23,8 +23,8 @@ export const ExportFileInspector = memo<BuiltinInspectorProps<ExportFileArgs, Ex
     const showShiny = isArgumentsStreaming || isLoading;
 
     return (
-      <div className={cx(inspectorTextStyles.root, showShiny && shinyTextStyles.shinyText)}>
-        <span style={{ marginInlineEnd: 6 }}>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(showShiny && shinyTextStyles.shinyText)} style={{ marginInlineEnd: 6 }}>
           {t('builtins.lobe-cloud-sandbox.apiName.exportFile')}:
         </span>
         {filePath && <FilePathDisplay filePath={filePath} />}

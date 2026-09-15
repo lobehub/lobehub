@@ -92,22 +92,17 @@ export const loadGmailAccount = async ({
 }: LoadGmailAccountOptions): Promise<GmailAccount> => {
   try {
     let cursor: string | undefined;
+    let matchedAccountResponse: unknown;
     let ownedAccount: GmailAccount | undefined;
 
     for (let page = 0; page < MAX_ACCOUNT_PAGES; page += 1) {
-      const response = await withConnectorRetry(
-        () =>
-          connectedAccounts.list({
-            ...(cursor ? { cursor } : {}),
-            limit: MAX_ACCOUNTS_PER_PAGE,
-            toolkitSlugs: ['gmail'],
-            userIds: [userId],
-          }),
-        {
-          code: 'gmail_account_unavailable',
-          operation: 'getAccount',
-          provider: 'gmail',
-        },
+      const response = await withConnectorRetry(() =>
+        connectedAccounts.list({
+          ...(cursor ? { cursor } : {}),
+          limit: MAX_ACCOUNTS_PER_PAGE,
+          toolkitSlugs: ['gmail'],
+          userIds: [userId],
+        }),
       );
       const responseRecord = toRecord(response);
       const items = responseRecord?.items;
@@ -122,6 +117,7 @@ export const loadGmailAccount = async ({
         }
       }
       if (match) {
+        matchedAccountResponse = match;
         ownedAccount = parseAccount(match);
         break;
       }
@@ -136,6 +132,7 @@ export const loadGmailAccount = async ({
 
     if (!ownedAccount) {
       throw new ConnectorDataError({
+        cause: matchedAccountResponse,
         code: 'gmail_account_unavailable',
         operation: 'getAccount',
         provider: 'gmail',
@@ -144,15 +141,13 @@ export const loadGmailAccount = async ({
     }
     if (ownedAccount.email && ownedAccount.scopes.length > 0) return ownedAccount;
 
-    const detail = parseAccount(
-      await withConnectorRetry(() => connectedAccounts.get(connectedAccountId), {
-        code: 'gmail_account_unavailable',
-        operation: 'getAccount',
-        provider: 'gmail',
-      }),
+    const detailResponse = await withConnectorRetry(() =>
+      connectedAccounts.get(connectedAccountId),
     );
+    const detail = parseAccount(detailResponse);
     if (!detail || detail.externalAccountId !== connectedAccountId) {
       throw new ConnectorDataError({
+        cause: detailResponse,
         code: 'gmail_account_unavailable',
         operation: 'getAccount',
         provider: 'gmail',
@@ -166,11 +161,6 @@ export const loadGmailAccount = async ({
     };
   } catch (error) {
     if (error instanceof ConnectorDataError) throw error;
-    throw new ConnectorDataError({
-      code: 'gmail_account_unavailable',
-      operation: 'getAccount',
-      provider: 'gmail',
-      retryable: false,
-    });
+    throw error;
   }
 };

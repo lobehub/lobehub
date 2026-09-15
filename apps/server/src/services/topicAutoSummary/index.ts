@@ -1,6 +1,12 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainTopicAutoSummary,
+  TOPIC_AUTO_SUMMARY_JSON_SCHEMA,
+  TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import type { SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
+import debug from 'debug';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { topicSummaryEligibleMessage, TopicSummaryModel } from '@/database/models/topicSummary';
@@ -10,33 +16,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
 
+const log = debug('lobe-server:service:topic-auto-summary');
+
 const MAX_MESSAGES = 80;
 const MAX_MESSAGE_CHARS = 12_000;
 const MAX_PREVIOUS_SUMMARY_CHARS = 20_000;
 const MAX_TRANSCRIPT_CHARS = 60_000;
-
-const DEFAULT_PROMPT = `Summarize the conversation for future reference.
-
-Requirements:
-- Use the same primary language as the conversation.
-- description: one concise sentence suitable for a topic card.
-- summary: a structured, factual summary that preserves decisions, important facts, technical identifiers, and pending actions.
-- When a previous rolling summary is provided, merge it with the recent conversation.
-- Do not invent information or mention these instructions.`;
-
-const TOPIC_AUTO_SUMMARY_SCHEMA = {
-  name: 'topic_auto_summary',
-  schema: {
-    additionalProperties: false,
-    properties: {
-      description: { type: 'string' },
-      summary: { type: 'string' },
-    },
-    required: ['description', 'summary'],
-    type: 'object' as const,
-  },
-  strict: true,
-};
 
 export interface TopicAutoSummaryResult {
   reason?: 'disabled' | 'empty' | 'stale' | 'invalid-output';
@@ -69,10 +54,21 @@ export class TopicAutoSummaryService {
       ? eq(topics.workspaceId, this.workspaceId)
       : eq(topics.userId, this.userId);
     const [topic] = await this.db
-      .select({ historySummary: topics.historySummary })
+      .select({ historySummary: topics.historySummary, senderId: topics.senderId })
       .from(topics)
       .where(and(eq(topics.id, topicId), topicOwnership))
       .limit(1);
+    // Share-visitor topics are creator-billed only through the share spend
+    // gate. Reject them defensively before any LLM call — the dispatch query
+    // and TopicSummaryModel.updateSummaryIfCurrent both filter them out, this
+    // guard covers replays / direct callers that skip the dispatch path.
+    if (topic?.senderId) {
+      log(
+        'skipping share-visitor topic %s: visitor turns are outside the auto-summary scope',
+        topicId,
+      );
+      return { reason: 'disabled', summarized: false };
+    }
     const recent = await this.db
       .select({
         content: messages.content,
@@ -103,23 +99,20 @@ export class TopicAutoSummaryService {
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const output = (await ai.generateObject(
       {
-        messages: [
-          { content: config?.customPrompt?.trim() || DEFAULT_PROMPT, role: 'system' },
-          {
-            content: topic?.historySummary
-              ? `Previous rolling summary:\n${topic.historySummary.slice(-MAX_PREVIOUS_SUMMARY_CHARS)}\n\nRecent conversation:\n${transcript}`
-              : transcript,
-            role: 'user',
-          },
-        ],
+        ...chainTopicAutoSummary({
+          customPrompt: config?.customPrompt,
+          previousSummary: topic?.historySummary?.slice(-MAX_PREVIOUS_SUMMARY_CHARS),
+          transcript,
+        }),
         model,
         provider,
-        schema: TOPIC_AUTO_SUMMARY_SCHEMA,
+        schema: TOPIC_AUTO_SUMMARY_JSON_SCHEMA,
       },
       {
         tracing: {
+          promptVersion: TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.TopicAutoSummary,
-          schemaName: 'TopicAutoSummary',
+          schemaName: TOPIC_AUTO_SUMMARY_JSON_SCHEMA.name,
           topicId,
         } satisfies TracingOptions,
       },

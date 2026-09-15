@@ -1,17 +1,34 @@
+import { isRecord } from '@lobechat/utils/object';
+
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
+  StepCompleteData,
   StreamChunkData,
   ToolCallPayload,
   ToolResultData,
   ToolStateChunkData,
+  UsageData,
 } from '../types';
+import { AcpStreamLifecycle } from './acpCommon';
 
-const PROVIDER = 'trae';
+const DEFAULT_PROVIDER = 'trae';
 
-interface TraeAcpPayload {
+/**
+ * Parameterization for reusing this adapter across standard-ACP agents:
+ * `provider` stamps stream/tool events, `eventPrefix` selects the synthetic
+ * session-lifecycle payloads (`{prefix}_session` / `{prefix}_prompt_completed`
+ * / `{prefix}_error`) the owning session emits.
+ */
+export interface AcpSessionAdapterOptions {
+  eventPrefix?: string;
+  provider?: string;
+}
+
+export interface TraeAcpPayload {
   [key: string]: unknown;
   content?: unknown;
+  cost?: unknown;
   input?: unknown;
   kind?: unknown;
   message?: unknown;
@@ -23,11 +40,14 @@ interface TraeAcpPayload {
   rawOutput?: unknown;
   sessionId?: unknown;
   sessionUpdate?: unknown;
+  size?: unknown;
   status?: unknown;
   stopReason?: unknown;
   title?: unknown;
   toolCallId?: unknown;
   type?: unknown;
+  usage?: unknown;
+  used?: unknown;
 }
 
 interface TraeAcpToolContent {
@@ -44,6 +64,15 @@ interface TraeAcpToolResultState {
   output?: unknown;
   rawOutput?: unknown;
 }
+
+const toFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return;
+};
 
 const stringify = (value: unknown): string => {
   if (typeof value === 'string') return value;
@@ -76,19 +105,35 @@ const toolContent = (content: unknown, fallback: unknown): string => {
   return result || stringify(fallback);
 };
 
+/**
+ * Maps the standard ACP `sessionUpdate` vocabulary into the shared event
+ * contract. TRAE is the default provider; other standard-ACP agents reuse it
+ * via {@link AcpSessionAdapterOptions}.
+ */
 export class TraeAcpAdapter implements AgentEventAdapter {
   sessionId?: string;
 
+  private readonly eventPrefix: string;
+  private readonly provider: string;
   private completedTools = new Set<string>();
+  protected lastCostUsd?: number;
+  protected lastUsage?: UsageData;
   private model?: string;
-  private pendingStepBoundary = false;
   private pendingTools = new Set<string>();
   private snapshotSeq = new Map<string, number>();
-  private stepIndex = 0;
-  private streamOpen = false;
+  protected readonly stream = new AcpStreamLifecycle((stepIndex) => ({
+    ...(this.model ? { model: this.model } : {}),
+    ...(stepIndex > 0 ? { newStep: true } : {}),
+    provider: this.provider,
+    sessionId: this.sessionId,
+  }));
   private terminal = false;
   private toolResultStateById = new Map<string, TraeAcpToolResultState>();
-  private tools: ToolCallPayload[] = [];
+
+  constructor(options: AcpSessionAdapterOptions = {}) {
+    this.provider = options.provider ?? DEFAULT_PROVIDER;
+    this.eventPrefix = options.eventPrefix ?? this.provider;
+  }
 
   adapt(value: unknown): HeterogeneousAgentEvent[] {
     if (!value || typeof value !== 'object' || this.terminal) return [];
@@ -97,21 +142,34 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       if (typeof raw.model === 'string') this.model = raw.model;
       return [];
     }
-    if (raw.type === 'trae_session') {
+    if (raw.type === `${this.eventPrefix}_session`) {
       if (typeof raw.sessionId === 'string') this.sessionId = raw.sessionId;
       if (typeof raw.model === 'string') this.model = raw.model;
       return [];
     }
-    if (raw.type === 'trae_prompt_completed') return this.complete(raw.stopReason);
-    if (raw.type === 'trae_error') return this.fail(stringify(raw.message) || 'TRAE ACP failed');
+    if (raw.type === `${this.eventPrefix}_prompt_completed`) {
+      const usage = this.toUsageData(raw.usage) ?? this.lastUsage;
+      const costUsd = this.toCostUsd(raw.cost) ?? this.lastCostUsd;
+      return this.complete(raw.stopReason, usage, costUsd);
+    }
+    if (raw.type === `${this.eventPrefix}_error`) {
+      return this.fail(stringify(raw.message) || `${this.provider} ACP failed`);
+    }
 
     switch (raw.sessionUpdate) {
+      case 'usage_update': {
+        const usage = this.extractUsageFromUsageUpdate(raw);
+        if (usage) this.lastUsage = usage;
+        const costUsd = this.toCostUsd(raw.cost);
+        if (costUsd !== undefined) this.lastCostUsd = costUsd;
+        return [];
+      }
       case 'agent_message_chunk': {
         const text = (raw.content as { text?: unknown } | null)?.text;
         return typeof text === 'string' && text
           ? [
-              ...this.ensureStream(true),
-              this.event('stream_chunk', {
+              ...this.stream.ensureStream(true),
+              this.stream.event('stream_chunk', {
                 chunkType: 'text',
                 content: text,
               } satisfies StreamChunkData),
@@ -122,8 +180,8 @@ export class TraeAcpAdapter implements AgentEventAdapter {
         const reasoning = (raw.content as { text?: unknown } | null)?.text;
         return typeof reasoning === 'string' && reasoning
           ? [
-              ...this.ensureStream(true),
-              this.event('stream_chunk', {
+              ...this.stream.ensureStream(true),
+              this.stream.event('stream_chunk', {
                 chunkType: 'reasoning',
                 reasoning,
               } satisfies StreamChunkData),
@@ -144,7 +202,7 @@ export class TraeAcpAdapter implements AgentEventAdapter {
 
   flush(): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
-    return this.complete('end_turn');
+    return this.complete('end_turn', this.lastUsage, this.lastCostUsd);
   }
 
   private updateTool(raw: TraeAcpPayload): HeterogeneousAgentEvent[] {
@@ -157,7 +215,7 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       this.snapshotSeq.set(id, snapshotSeq);
       return [
         ...startEvents,
-        this.event('stream_chunk', {
+        this.stream.event('stream_chunk', {
           chunkType: 'tool_state',
           pluginState: { ...raw },
           snapshotMode: 'replace',
@@ -178,14 +236,14 @@ export class TraeAcpAdapter implements AgentEventAdapter {
           );
     const events = [
       ...startEvents,
-      this.event('tool_result', {
+      this.stream.event('tool_result', {
         content: result,
         isError: !isSuccess,
         toolCallId: id,
       } satisfies ToolResultData),
-      this.event('tool_end', { isSuccess, toolCallId: id }),
+      this.stream.event('tool_end', { isSuccess, toolCallId: id }),
     ];
-    if (this.pendingTools.size === 0) this.pendingStepBoundary = true;
+    if (this.pendingTools.size === 0) this.stream.pendingStepBoundary = true;
     return events;
   }
 
@@ -202,20 +260,21 @@ export class TraeAcpAdapter implements AgentEventAdapter {
       apiName: apiName ?? 'unknown',
       arguments: stringify(raw.rawInput ?? raw.input ?? raw.parameters ?? {}),
       id,
-      identifier: PROVIDER,
+      identifier:
+        typeof raw.identifier === 'string' && raw.identifier ? raw.identifier : this.provider,
       type: 'default',
     };
-    const streamEvents = this.ensureStream(true);
+    const streamEvents = this.stream.ensureStream(true);
     this.pendingTools.add(id);
-    this.tools.push(payload);
+    this.stream.stepTools.push(payload);
 
     return [
       ...streamEvents,
-      this.event('stream_chunk', {
+      this.stream.event('stream_chunk', {
         chunkType: 'tools_calling',
-        toolsCalling: [...this.tools],
+        toolsCalling: [...this.stream.stepTools],
       } satisfies StreamChunkData),
-      this.event('tool_start', { toolCalling: payload, toolCallId: id }),
+      this.stream.event('tool_start', { toolCalling: payload, toolCallId: id }),
     ];
   }
 
@@ -231,53 +290,109 @@ export class TraeAcpAdapter implements AgentEventAdapter {
     return state;
   }
 
-  private ensureStream(consumeStepBoundary: boolean): HeterogeneousAgentEvent[] {
-    const events: HeterogeneousAgentEvent[] = [];
-    if (consumeStepBoundary && this.pendingStepBoundary) {
-      events.push(...this.closeStream());
-      this.pendingStepBoundary = false;
-      this.stepIndex += 1;
-      this.tools = [];
-    }
-    if (this.streamOpen) return events;
-
-    this.streamOpen = true;
-    events.push(
-      this.event('stream_start', {
-        ...(this.model ? { model: this.model } : {}),
-        ...(this.stepIndex > 0 ? { newStep: true } : {}),
-        provider: PROVIDER,
-        sessionId: this.sessionId,
-      }),
-    );
-    return events;
-  }
-
-  private closeStream(data: unknown = {}): HeterogeneousAgentEvent[] {
-    if (!this.streamOpen) return [];
-    this.streamOpen = false;
-    return [this.event('stream_end', data)];
-  }
-
   private closePending(): HeterogeneousAgentEvent[] {
     const events = [...this.pendingTools].map((toolCallId) =>
-      this.event('tool_end', { isSuccess: false, toolCallId }),
+      this.stream.event('tool_end', { isSuccess: false, toolCallId }),
     );
     this.pendingTools.clear();
     return events;
   }
 
-  private complete(stopReason: unknown): HeterogeneousAgentEvent[] {
+  protected complete(
+    stopReason: unknown,
+    usage?: UsageData,
+    costUsd?: number,
+  ): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
     this.terminal = true;
     const runtimeEndData =
       stopReason === 'cancelled' ? { reason: 'interrupted', stopReason } : { stopReason };
-    return [
+
+    const result: HeterogeneousAgentEvent[] = [
       ...this.closePending(),
-      ...this.closeStream({ stopReason }),
-      this.event('visible_output_end', {}),
-      this.event('agent_runtime_end', runtimeEndData),
+      ...this.stream.closeStream({ stopReason }),
+      this.stream.event('visible_output_end', {}),
     ];
+
+    if (usage) {
+      if (costUsd !== undefined) usage.cost = costUsd;
+      const stepCompleteData: StepCompleteData = {
+        model: this.model,
+        phase: 'turn_metadata',
+        provider: this.provider,
+        usage,
+      };
+      result.push(this.stream.event('step_complete', stepCompleteData));
+    }
+
+    result.push(this.stream.event('agent_runtime_end', runtimeEndData));
+    return result;
+  }
+
+  /**
+   * Convert an ACP experimental `Usage` shape into the shared `UsageData`.
+   * Returns `undefined` when required fields are missing or invalid.
+   */
+  protected toUsageData(usage: unknown): UsageData | undefined {
+    if (!isRecord(usage)) return;
+
+    const total = toFiniteNumber(usage.totalTokens) ?? toFiniteNumber(usage.total_tokens);
+    const input = toFiniteNumber(usage.inputTokens) ?? toFiniteNumber(usage.input_tokens);
+    const output = toFiniteNumber(usage.outputTokens) ?? toFiniteNumber(usage.output_tokens);
+    if (typeof input !== 'number' || typeof output !== 'number' || input < 0 || output < 0) return;
+
+    const cachedRead =
+      toFiniteNumber(usage.cachedReadTokens) ??
+      toFiniteNumber(usage.cached_read_tokens) ??
+      toFiniteNumber(usage.cacheReadTokens) ??
+      toFiniteNumber(usage.cache_read_tokens) ??
+      0;
+    const cachedWrite =
+      toFiniteNumber(usage.cachedWriteTokens) ??
+      toFiniteNumber(usage.cached_write_tokens) ??
+      toFiniteNumber(usage.cacheWriteTokens) ??
+      toFiniteNumber(usage.cache_write_tokens) ??
+      0;
+    const thought =
+      toFiniteNumber(usage.thoughtTokens) ??
+      toFiniteNumber(usage.thought_tokens) ??
+      toFiniteNumber(usage.reasoningTokens) ??
+      toFiniteNumber(usage.reasoning_tokens) ??
+      0;
+
+    const inputCacheMiss = Math.max(0, input - cachedRead);
+    const outputText = Math.max(0, output - thought);
+    const totalTokens = total ?? input + output + cachedWrite;
+
+    return {
+      inputCachedTokens: cachedRead || undefined,
+      inputCacheMissTokens: inputCacheMiss,
+      inputWriteCacheTokens: cachedWrite || undefined,
+      outputReasoningTokens: thought || undefined,
+      outputTextTokens: outputText,
+      totalInputTokens: input + cachedWrite,
+      totalOutputTokens: output,
+      totalTokens,
+    };
+  }
+
+  /**
+   * Extract token usage from a `usage_update` notification.
+   * The ACP spec only requires `used`/`size`/`cost`; per-turn token breakdown
+   * lives in `_meta` as vendor extensions. Subclasses may override this to
+   * parse provider-specific `_meta` keys (e.g. `cognition.ai/*Tokens`).
+   */
+  protected extractUsageFromUsageUpdate(_raw: TraeAcpPayload): UsageData | undefined {
+    return;
+  }
+
+  /** Extract a USD cost amount from an ACP `cost` object. */
+  private toCostUsd(cost: unknown): number | undefined {
+    if (!isRecord(cost)) return;
+    if (cost.currency !== 'USD') return;
+    const amount = toFiniteNumber(cost.amount);
+    if (amount === undefined || amount <= 0) return;
+    return amount;
   }
 
   private fail(message: string): HeterogeneousAgentEvent[] {
@@ -285,13 +400,9 @@ export class TraeAcpAdapter implements AgentEventAdapter {
     this.terminal = true;
     return [
       ...this.closePending(),
-      ...this.closeStream(),
-      this.event('visible_output_end', {}),
-      this.event('error', { agentType: PROVIDER, error: message, message }),
+      ...this.stream.closeStream(),
+      this.stream.event('visible_output_end', {}),
+      this.stream.event('error', { agentType: this.provider, error: message, message }),
     ];
-  }
-
-  private event(type: HeterogeneousAgentEvent['type'], data: unknown): HeterogeneousAgentEvent {
-    return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type };
   }
 }

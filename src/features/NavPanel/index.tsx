@@ -18,19 +18,25 @@ const NavPanelFallback = memo<{ navKey: string }>(({ navKey }) => (
 
 const NavPanel = memo(() => {
   const activeNavKey = useActiveNavKey();
-  const registry = useSyncExternalStore(
+  const getActiveContent = () => getNavPanelRegistrySnapshot().get(activeNavKey);
+  const registeredContent = useSyncExternalStore(
     subscribeNavPanelRegistry,
-    getNavPanelRegistrySnapshot,
-    getNavPanelRegistrySnapshot,
+    getActiveContent,
+    getActiveContent,
   );
-  const registeredContent = registry.get(activeNavKey);
   const activeContent = registeredContent
     ? { key: activeNavKey, node: registeredContent.node }
     : { key: `pending:${activeNavKey}`, node: <NavPanelFallback navKey={activeNavKey} /> };
+  const getHomeContent = () => getNavPanelRegistrySnapshot().get('home')?.node;
+  const homeContent = useSyncExternalStore(
+    subscribeNavPanelRegistry,
+    getHomeContent,
+    getHomeContent,
+  );
 
   return (
     <>
-      <NavPanelDraggable activeContent={activeContent} />
+      <NavPanelDraggable activeContent={activeContent} homeContent={homeContent} />
       <div
         id={NAV_PANEL_RIGHT_DRAWER_ID}
         style={{

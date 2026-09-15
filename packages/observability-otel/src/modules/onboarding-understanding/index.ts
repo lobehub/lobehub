@@ -26,10 +26,13 @@ export const ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_SOURCE_COUNT =
 /** Number of successful provider sub-operations in one collection attempt. */
 export const ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_SUCCEEDED_COUNT =
   'onboarding.understanding.provider.succeeded_count' as const;
-/** Sanitized failure code attached to provider collection diagnostics. */
+/** Failure code attached to provider collection diagnostics. */
 export const ATTR_ONBOARDING_UNDERSTANDING_FAILURE_CODE =
   'onboarding.understanding.failure.code' as const;
-/** Sanitized provider sub-operation attached to collection diagnostics. */
+/** Original provider error message attached only to trace events. */
+export const ATTR_ONBOARDING_UNDERSTANDING_FAILURE_MESSAGE =
+  'onboarding.understanding.failure.message' as const;
+/** Provider sub-operation attached to collection diagnostics. */
 export const ATTR_ONBOARDING_UNDERSTANDING_FAILURE_OPERATION =
   'onboarding.understanding.failure.operation' as const;
 /** Whether a provider collection diagnostic is safe to retry. */
@@ -78,17 +81,19 @@ export type OnboardingUnderstandingOperation =
   | 'writer.resolve-agent';
 
 /** Outcome attached to aggregate operation metrics. */
-export type OnboardingUnderstandingOperationStatus = 'error' | 'success';
+export type OnboardingUnderstandingOperationStatus = 'error' | 'failed' | 'success';
 
 /** Business outcome of one provider collection attempt. */
 export type OnboardingUnderstandingProviderCollectionOutcome =
   'completed' | 'error' | 'failed' | 'partial';
 
-/** Low-cardinality diagnostic attached to a provider collection attempt. */
+/** Provider diagnostic attached to a collection attempt. */
 export interface OnboardingUnderstandingProviderCollectionDiagnostic {
-  /** Sanitized, bounded failure code owned by the provider integration. */
+  /** Failure code owned by the provider integration. */
   code: string;
-  /** Sanitized, bounded provider sub-operation. */
+  /** Original error message retained for persistence and trace inspection. */
+  message: string;
+  /** Provider sub-operation. */
   operation: string;
   /** Whether retrying the failed sub-operation can succeed without user action. */
   retryable: boolean;
@@ -96,7 +101,7 @@ export interface OnboardingUnderstandingProviderCollectionDiagnostic {
 
 /** Result and telemetry summary returned by an observed provider collection callback. */
 export interface OnboardingUnderstandingProviderCollectionResult<Result> {
-  /** Sanitized diagnostics produced by the provider collection attempt. */
+  /** Diagnostics produced by the provider collection attempt. */
   diagnostics: readonly OnboardingUnderstandingProviderCollectionDiagnostic[];
   /** Number of evidence items retained by the collection attempt. */
   evidenceCount: number;
@@ -170,7 +175,7 @@ export const providerCollectionDurationHistogram = meter.createHistogram(
   },
 );
 
-/** Count of sanitized provider collection diagnostics grouped by failure reason. */
+/** Count of provider collection diagnostics grouped by failure reason. */
 export const providerCollectionFailureCounter = meter.createCounter(
   'onboarding_understanding_provider_collection_failures_total',
   {
@@ -258,13 +263,29 @@ export const buildOnboardingUnderstandingProviderCollectionMetricAttributes = (
 });
 
 /**
- * Builds low-cardinality attributes for one sanitized provider diagnostic.
+ * Maps a returned provider collection outcome to its aggregate operation status.
+ *
+ * Use when:
+ * - Separating business failures from thrown errors in provider collect metrics
+ *
+ * Expects:
+ * - A provider collection outcome returned without throwing
+ *
+ * Returns:
+ * - `success` only for complete collection; `failed` for partial or unusable results
+ */
+export const getOnboardingUnderstandingProviderCollectionStatus = (
+  outcome: Exclude<OnboardingUnderstandingProviderCollectionOutcome, 'error'>,
+): OnboardingUnderstandingOperationStatus => (outcome === 'completed' ? 'success' : 'failed');
+
+/**
+ * Builds low-cardinality metric attributes for one provider diagnostic.
  *
  * Use when:
  * - Recording the reason and sub-operation for a provider collection failure
  *
  * Expects:
- * - The service has removed untrusted messages and bounded diagnostic identifiers
+ * - Provider, code, operation, and retryability are suitable for metric labels
  *
  * Returns:
  * - Metric-safe provider, failure code, operation, and retryability attributes
@@ -279,17 +300,40 @@ export const buildOnboardingUnderstandingProviderFailureMetricAttributes = (
   [ATTR_ONBOARDING_UNDERSTANDING_PROVIDER]: providerId,
 });
 
+/**
+ * Builds trace-event attributes for one provider diagnostic.
+ *
+ * Use when:
+ * - Recording provider failures on a correlated Understanding span
+ *
+ * Expects:
+ * - The diagnostic contains the original provider error message
+ *
+ * Returns:
+ * - Correlation attributes plus the original message for production debugging
+ */
+export const buildOnboardingUnderstandingProviderFailureTraceAttributes = (
+  providerId: string,
+  diagnostic: OnboardingUnderstandingProviderCollectionDiagnostic,
+): Attributes => ({
+  ...buildOnboardingUnderstandingProviderFailureMetricAttributes(providerId, diagnostic),
+  [ATTR_ONBOARDING_UNDERSTANDING_FAILURE_MESSAGE]: diagnostic.message,
+});
+
 const recordProviderCollectionDiagnostic = (
   providerId: string,
   diagnostic: OnboardingUnderstandingProviderCollectionDiagnostic,
   span: Span,
 ) => {
-  const attributes = buildOnboardingUnderstandingProviderFailureMetricAttributes(
+  const metricAttributes = buildOnboardingUnderstandingProviderFailureMetricAttributes(
     providerId,
     diagnostic,
   );
-  providerCollectionFailureCounter.add(1, attributes);
-  span.addEvent('onboarding.understanding.provider.failure', attributes);
+  providerCollectionFailureCounter.add(1, metricAttributes);
+  span.addEvent(
+    'onboarding.understanding.provider.failure',
+    buildOnboardingUnderstandingProviderFailureTraceAttributes(providerId, diagnostic),
+  );
 };
 
 /**
@@ -297,11 +341,11 @@ const recordProviderCollectionDiagnostic = (
  *
  * Use when:
  * - A provider can return an unusable or partially usable result without throwing
- * - Provider outcome, duration, counts, and sanitized failure reasons must be queryable
+ * - Provider outcome, duration, counts, and failure reasons must be queryable
  *
  * Expects:
- * - The callback returns sanitized diagnostics and a business outcome
- * - The optional error classifier returns only bounded, non-sensitive diagnostics
+ * - The callback returns diagnostics and a business outcome
+ * - The optional error classifier retains the original failure message
  *
  * Returns:
  * - The callback result while recording both generic operation and provider-specific telemetry
@@ -323,23 +367,25 @@ export const observeOnboardingUnderstandingProviderCollection = async <Result>(
     { attributes: buildOnboardingUnderstandingTraceAttributes(operationAttributes) },
     async (span) => {
       const startedAt = Date.now();
-      let operationStatus: OnboardingUnderstandingOperationStatus = 'success';
+      let operationStatus: OnboardingUnderstandingOperationStatus | undefined;
       let outcome: OnboardingUnderstandingProviderCollectionOutcome = 'error';
 
       try {
         const observed = await operation();
         outcome = observed.outcome;
+        operationStatus = getOnboardingUnderstandingProviderCollectionStatus(outcome);
         span.setAttributes({
           [ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_EVIDENCE_COUNT]: observed.evidenceCount,
           [ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_FAILED_COUNT]: observed.failedCount,
           [ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_OUTCOME]: outcome,
           [ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_SOURCE_COUNT]: observed.sourceCount,
           [ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_SUCCEEDED_COUNT]: observed.succeededCount,
+          [ATTR_ONBOARDING_UNDERSTANDING_STATUS]: operationStatus,
         });
 
         const distinctDiagnostics = new Map(
           observed.diagnostics.map((diagnostic) => [
-            `${diagnostic.code}\u0000${diagnostic.operation}\u0000${diagnostic.retryable}`,
+            `${diagnostic.code}\u0000${diagnostic.operation}\u0000${diagnostic.retryable}\u0000${diagnostic.message}`,
             diagnostic,
           ]),
         );
@@ -347,11 +393,7 @@ export const observeOnboardingUnderstandingProviderCollection = async <Result>(
           recordProviderCollectionDiagnostic(attributes.providerId ?? 'provider', diagnostic, span);
         }
 
-        if (outcome === 'failed') {
-          span.setStatus({ code: SpanStatusCode.ERROR, message: 'provider collection failed' });
-        } else {
-          span.setStatus({ code: SpanStatusCode.OK });
-        }
+        span.setStatus({ code: SpanStatusCode.OK });
         return observed.result;
       } catch (error) {
         operationStatus = 'error';
@@ -362,6 +404,7 @@ export const observeOnboardingUnderstandingProviderCollection = async <Result>(
         const errorType = error instanceof Error ? error.name : typeof error;
         span.setAttributes({
           [ATTR_ONBOARDING_UNDERSTANDING_PROVIDER_OUTCOME]: outcome,
+          [ATTR_ONBOARDING_UNDERSTANDING_STATUS]: operationStatus,
           'error.type': errorType,
         });
         span.setStatus({ code: SpanStatusCode.ERROR, message: errorType });
@@ -372,7 +415,7 @@ export const observeOnboardingUnderstandingProviderCollection = async <Result>(
         const providerId = attributes.providerId ?? 'provider';
         const metricAttributes = buildOnboardingUnderstandingMetricAttributes(
           operationAttributes,
-          operationStatus,
+          operationStatus ?? 'error',
         );
         const providerMetricAttributes =
           buildOnboardingUnderstandingProviderCollectionMetricAttributes(providerId, outcome);

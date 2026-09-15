@@ -5,6 +5,7 @@ import {
   GROUP_CHAT_URL,
   isDesktop,
 } from '@lobechat/const';
+import type { DesktopNotificationSender } from '@lobechat/electron-client-ipc';
 import type { ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import { t } from 'i18next';
@@ -14,6 +15,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+import { renderAvatarToDataUrl } from './notificationAvatar';
 import { topicMapKey } from './topicMapKey';
 
 export interface DesktopNotificationContext {
@@ -89,6 +91,34 @@ export const resolveNotificationTitle = (
   return fallbackTitle;
 };
 
+/**
+ * Build the communication-notification sender (agent name + avatar) for the
+ * conversation context. Returns undefined outside agent conversations so the
+ * notification stays a plain banner.
+ */
+export const buildNotificationSender = async (
+  context: DesktopNotificationContext,
+): Promise<DesktopNotificationSender | undefined> => {
+  if (!context.agentId) return undefined;
+
+  const agentMeta = agentSelectors.getAgentMetaById(context.agentId)(getAgentStoreState());
+  const name = agentDisplayName(agentMeta);
+  if (!name) return undefined;
+
+  const conversationId = [context.groupId ?? context.agentId, context.topicId]
+    .filter(Boolean)
+    .join(':');
+
+  let avatarDataUrl: string | undefined;
+  try {
+    avatarDataUrl = await renderAvatarToDataUrl(context.agentId, agentMeta);
+  } catch (error) {
+    console.error('Notification avatar render failed:', error);
+  }
+
+  return { avatarDataUrl, conversationId, name };
+};
+
 /** Convert the assistant's markdown reply to a length-capped plain-text body. */
 export const buildNotificationBody = (
   content: string | undefined,
@@ -116,6 +146,7 @@ export const notifyDesktopHumanApprovalRequired = async (
     );
 
     const navigate = resolveNotificationNavigate(context);
+    const sender = await buildNotificationSender(context);
 
     await Promise.allSettled([
       desktopNotificationService.setBadgeCount(1),
@@ -124,6 +155,7 @@ export const notifyDesktopHumanApprovalRequired = async (
         force: true,
         navigate,
         requestAttention: true,
+        sender,
         title,
       }),
     ]);
@@ -160,19 +192,35 @@ export const notifyDesktopAgentCompleted = async (
 
   try {
     const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
+    const { completionSoundService } = await import('@/services/electron/completionSound');
     const fallback = t('notification.finishChatGeneration', { ns: 'electron' });
     const navigate = resolveNotificationNavigate(context);
+    const [sender, soundName] = await Promise.all([
+      buildNotificationSender(context),
+      completionSoundService.getNotificationSoundFile(),
+    ]);
 
-    const tasks: Promise<unknown>[] = [
-      desktopNotificationService.showNotification({
-        body: buildNotificationBody(content, fallback),
-        navigate,
-        title: resolveNotificationTitle(get, context, fallback),
-      }),
-    ];
-    if (badge) tasks.push(desktopNotificationService.setBadgeCount(1));
+    if (badge) void desktopNotificationService.setBadgeCount(1);
 
-    await Promise.allSettled(tasks);
+    // The main process owns the window-focus decision, so it also decides which of the two
+    // sounds fires: a delivered banner carries the system sound, and only a banner that was
+    // skipped (or failed) hands the completion chime back to the renderer. Asking here
+    // instead of checking focus twice is what keeps them from doubling up.
+    const result = await desktopNotificationService.showNotification({
+      body: buildNotificationBody(content, fallback),
+      navigate,
+      sender,
+      soundName,
+      title: resolveNotificationTitle(get, context, fallback),
+    });
+
+    if (result?.success && !result.skipped) return;
+
+    try {
+      await completionSoundService.play();
+    } catch (error) {
+      console.error('Completion sound playback failed:', error);
+    }
   } catch (error) {
     console.error('Agent completion desktop notification failed:', error);
   }

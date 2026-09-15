@@ -6,12 +6,14 @@ import { type CSSProperties, useMemo } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import type { ComposerTarget } from '@/features/Conversation/types';
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 
 import { usePageEditorStore } from '../store';
 import { usePageEditable } from '../usePageEditable';
 import { useAskCopilotItem } from './useAskCopilotItem';
+import { useDocumentMentionOption } from './useDocumentMentionOption';
 import { useSlashItems } from './useSlashItems';
 
 interface EditorCanvasProps {
@@ -29,6 +31,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
 
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
+  const mentionOption = useDocumentMentionOption();
 
   const extraPlugins = useMemo(
     () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 })],
@@ -37,10 +40,12 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
 
   return (
     <SharedEditorCanvas
+      className={mentionFilledClassName}
       documentId={documentId}
       editable={editable}
       editor={editor}
       extraPlugins={extraPlugins}
+      mentionOption={mentionOption}
       placeholder={placeholder || t('pageEditor.editorPlaceholder')}
       slashItems={slashItems}
       style={style}

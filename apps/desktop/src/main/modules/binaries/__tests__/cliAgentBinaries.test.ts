@@ -50,6 +50,11 @@ const npmShim = (packagePath: string) =>
   `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
+const DROID_ACP_HELP = `Usage: droid exec [options]
+  --output-format <format>  Output format (ACP modes)`;
+const TRAE_ACP_HELP = `Start the ACP server
+Usage: trae-cli acp serve [flags]
+  -y, --yolo   Enable YOLO mode`;
 const callExecFile = (stdout: string, stderr = '') => {
   execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
     // promisify-wrapped: the callback is always the last positional arg.
@@ -260,20 +265,21 @@ describe('cliAgentBinaries', () => {
     });
 
     it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {
-      callExecFile(
-        [
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude',
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.ps1',
-        ].join('\r\n'),
-      );
+      const unrunnableMatches = [
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude',
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.ps1',
+      ];
+      callExecFile(unrunnableMatches.join('\r\n'));
 
       const { claudeCodeBinary } = await import('../cliAgentBinaries');
       const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(false);
-      // Must not attempt to invoke the unrunnable matches.
+      // PATH recovery may issue registry queries and retry `where`, but must
+      // never attempt to invoke either unrunnable result.
       expect(execMock).not.toHaveBeenCalled();
-      expect(execFileMock).toHaveBeenCalledTimes(1); // just `where`
+      const invokedFiles = execFileMock.mock.calls.map(([file]) => file);
+      for (const match of unrunnableMatches) expect(invokedFiles).not.toContain(match);
     });
   });
 
@@ -324,20 +330,42 @@ describe('cliAgentBinaries', () => {
       });
     });
 
-    it('detects TRAE Enterprise and rejects the unrelated trae-cli binary', async () => {
+    it('detects Factory Droid by its ACP capability', async () => {
+      callExecFile('/Users/test/.local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile(DROID_ACP_HELP);
+
+      const { droidBinary } = await import('../cliAgentBinaries');
+      await expect(droidBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/droid',
+        version: '0.206.0',
+      });
+    });
+
+    it('detects Devin through the shared version probe', async () => {
+      callExecFile('/Users/test/.local/bin/devin\n');
+      callExecFile('devin 3000.4.25 (7e8e528a)');
+
+      const { devinBinary } = await import('../cliAgentBinaries');
+      await expect(devinBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/devin',
+        version: '3000.4.25',
+      });
+    });
+
+    it('detects the official TRAE CLI by its ACP capability', async () => {
       callExecFile('/Users/test/.local/bin/traecli\n');
-      callExecFile('TraeCode CLI 1.4.0');
+      callExecFile('trae-cli version 0.120.52');
+      callExecFile(TRAE_ACP_HELP);
 
       const { traeBinary } = await import('../cliAgentBinaries');
       await expect(traeBinary.detect()).resolves.toMatchObject({
         available: true,
         path: '/Users/test/.local/bin/traecli',
-        version: '1.4.0',
+        version: '0.120.52',
       });
-
-      callExecFile('/Users/test/.local/bin/traecli\n');
-      callExecFile('trae-cli 0.1.0');
-      await expect(traeBinary.detect()).resolves.toEqual({ available: false });
     });
 
     it('runs the binary directly via execFile (no shell)', async () => {
@@ -475,8 +503,14 @@ describe('cliAgentBinaries', () => {
       const status = await detectHeterogeneousCliCommand('codex', '/custom/bin/codex');
 
       expect(status.available).toBe(false);
-      // Only the explicit path's --version attempt — no fallback probing.
-      expect(execFileMock).toHaveBeenCalledTimes(1);
+      // PATH recovery may retry the explicit launcher in a second environment,
+      // but every version probe must keep that launcher rather than switching
+      // to a built-in Codex fallback.
+      const versionProbeFiles = execFileMock.mock.calls
+        .filter(([, args]) => Array.isArray(args) && args.includes('--version'))
+        .map(([file]) => file);
+      expect(versionProbeFiles.length).toBeGreaterThan(0);
+      expect(versionProbeFiles).toEqual(versionProbeFiles.map(() => '/custom/bin/codex'));
     });
 
     it('falls back to the login shell PATH for tools installed by shell setup', async () => {

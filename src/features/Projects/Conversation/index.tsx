@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Flexbox, Text } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -24,6 +25,7 @@ const ProjectConversation = memo(() => {
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const coordinatorAgentId = detail?.project.coordinatorAgentId;
+  const projectSlug = detail?.project.slug ?? projectId;
   const topicTitle = useChatStore((s) =>
     topicId ? topicSelectors.getTopicById(topicId)(s)?.title : undefined,
   );
@@ -46,12 +48,12 @@ const ProjectConversation = memo(() => {
   }, [coordinatorAgentId]);
 
   const getConversationPath = useCallback(
-    () => getProjectConversationPath(projectId!),
-    [projectId],
+    () => getProjectConversationPath(projectSlug!),
+    [projectSlug],
   );
   const getTopicPath = useCallback(
-    (_agentId: string, topicId: string) => getProjectConversationPath(projectId!, topicId),
-    [projectId],
+    (_agentId: string, topicId: string) => getProjectConversationPath(projectSlug!, topicId),
+    [projectSlug],
   );
 
   if (detailSWR.error) {

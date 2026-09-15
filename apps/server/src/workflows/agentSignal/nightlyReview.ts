@@ -3,9 +3,20 @@ import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
-import { workflowClient } from '@/libs/qstash';
+import { qstashClient, workflowClient } from '@/libs/qstash';
 
 const log = debug('lobe-server:workflows:agent-signal:nightly-review');
+
+/**
+ * Hard ceiling for every outbound publish in the nightly review chain.
+ *
+ * The QStash SDK retries five times with `exp(n) * 50ms` backoff and the underlying `fetch` has
+ * no timeout of its own, so a stalled outbound connection keeps the cron handler open until
+ * Cloudflare cuts the origin off at 100s — which surfaces as a 524 with an empty body and no
+ * server-side log at all. Failing fast here turns that silent black hole into a 500 whose error
+ * message reaches the QStash DLQ.
+ */
+export const NIGHTLY_REVIEW_PUBLISH_TIMEOUT_MS = 10_000;
 
 const WORKFLOW_PATHS = {
   executeUser: '/api/workflows/agent-signal/execute-nightly-review-user',
@@ -106,6 +117,34 @@ const getTriggerHeaders = (): Record<string, string> => {
 };
 
 /**
+ * Races an outbound publish against {@link NIGHTLY_REVIEW_PUBLISH_TIMEOUT_MS}.
+ *
+ * The abandoned publish keeps running — `Promise.race` cannot cancel it — so it gets its own
+ * no-op rejection handler: without one, a late failure on the orphaned promise surfaces as an
+ * unhandled rejection and can take the worker down.
+ */
+const withPublishTimeout = async <T>(publish: Promise<T>, label: string): Promise<T> => {
+  publish.catch(() => undefined);
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      publish,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(new Error(`${label} timed out after ${NIGHTLY_REVIEW_PUBLISH_TIMEOUT_MS}ms`)),
+          NIGHTLY_REVIEW_PUBLISH_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/**
  * Triggers the cursor-pagination and single-user layers of nightly review scheduling.
  *
  * Use when:
@@ -128,6 +167,34 @@ const getTriggerHeaders = (): Record<string, string> => {
  *         -> executeNightlyReviewUser
  */
 export class AgentSignalNightlyReviewWorkflow {
+  /**
+   * Starts the pagination tree from the hourly cron entry.
+   *
+   * Publishes through `@upstash/qstash` rather than the workflow client's `trigger()`: `serve()`
+   * treats a plain POST as a first invocation, and this is the publish path the task crons have
+   * been running in production without ever landing in the DLQ. The timeout keeps the cron
+   * handler inside Cloudflare's 100s origin budget no matter how the outbound call behaves.
+   */
+  static publishPaginateUsersEntry(payload: PaginateNightlyReviewUsersPayload) {
+    log('Publishing nightly review cron entry payload=%O', {
+      pageSize: payload.pageSize,
+      whitelist: payload.whitelist?.length ?? 0,
+    });
+
+    return withPublishTimeout(
+      qstashClient.publishJSON({
+        body: payload,
+        flowControl: {
+          key: NIGHTLY_REVIEW_PAGINATE_FLOW_CONTROL_KEY,
+          parallelism: 1,
+        } satisfies FlowControl,
+        headers: getTriggerHeaders(),
+        url: getWorkflowUrl(WORKFLOW_PATHS.paginateUsers),
+      }),
+      'nightly review cron publish',
+    );
+  }
+
   /** Triggers one database page or one bounded fan-out chunk. */
   static triggerPaginateUsers(payload: PaginateNightlyReviewUsersPayload) {
     log('Triggering nightly review user pagination payload=%O', {
@@ -136,29 +203,35 @@ export class AgentSignalNightlyReviewWorkflow {
       users: payload.users?.length ?? 0,
     });
 
-    return workflowClient.trigger({
-      body: payload,
-      flowControl: {
-        key: NIGHTLY_REVIEW_PAGINATE_FLOW_CONTROL_KEY,
-        parallelism: 1,
-      } satisfies FlowControl,
-      headers: getTriggerHeaders(),
-      url: getWorkflowUrl(WORKFLOW_PATHS.paginateUsers),
-    });
+    return withPublishTimeout(
+      workflowClient.trigger({
+        body: payload,
+        flowControl: {
+          key: NIGHTLY_REVIEW_PAGINATE_FLOW_CONTROL_KEY,
+          parallelism: 1,
+        } satisfies FlowControl,
+        headers: getTriggerHeaders(),
+        url: getWorkflowUrl(WORKFLOW_PATHS.paginateUsers),
+      }),
+      'nightly review pagination trigger',
+    );
   }
 
   /** Triggers one workflow that processes exactly one user. */
   static triggerExecuteUser(payload: ExecuteNightlyReviewUserPayload) {
     log('Triggering nightly review execution userId=%s', payload.user.id);
 
-    return workflowClient.trigger({
-      body: payload,
-      flowControl: {
-        key: NIGHTLY_REVIEW_EXECUTE_FLOW_CONTROL_KEY,
-        parallelism: 5,
-      } satisfies FlowControl,
-      headers: getTriggerHeaders(),
-      url: getWorkflowUrl(WORKFLOW_PATHS.executeUser),
-    });
+    return withPublishTimeout(
+      workflowClient.trigger({
+        body: payload,
+        flowControl: {
+          key: NIGHTLY_REVIEW_EXECUTE_FLOW_CONTROL_KEY,
+          parallelism: 5,
+        } satisfies FlowControl,
+        headers: getTriggerHeaders(),
+        url: getWorkflowUrl(WORKFLOW_PATHS.executeUser),
+      }),
+      'nightly review execution trigger',
+    );
   }
 }

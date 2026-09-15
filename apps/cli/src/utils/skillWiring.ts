@@ -1,13 +1,4 @@
-import { execFileSync } from 'node:child_process';
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readlinkSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readlinkSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 
 export const AGENTS_SKILLS_DIR = path.join('.agents', 'skills');
@@ -18,11 +9,6 @@ export type LinkResult =
   | { kind: 'linked-single'; link: string; target: string }
   | { kind: 'none' }
   | { kind: 'skipped'; link: string; reason: string };
-
-export type IgnoreResult =
-  | { kind: 'added'; entry: string; file: string }
-  | { kind: 'present'; entry: string; file: string }
-  | { kind: 'skipped'; reason: string };
 
 export function detectClaudeHarness(baseDir: string): boolean {
   return existsSync(path.join(baseDir, 'CLAUDE.md')) || existsSync(path.join(baseDir, '.claude'));
@@ -82,67 +68,4 @@ export function linkHarnessSkills(baseDir: string, skillId: string): LinkResult 
     return { kind: 'skipped', link: rel, reason: (error as Error).message };
   }
   return { kind: 'linked', link: rel, target };
-}
-
-function findGitRoot(startDir: string): string | undefined {
-  let dir = startDir;
-  while (true) {
-    if (existsSync(path.join(dir, '.git'))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return undefined;
-    dir = parent;
-  }
-}
-
-function isIgnoredByGit(baseDir: string, relPath: string): boolean {
-  try {
-    execFileSync('git', ['check-ignore', '-q', '--', relPath], { cwd: baseDir, stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function appendIgnoreEntry(file: string, entry: string): IgnoreResult {
-  const existing = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  if (existing.split('\n').some((line) => line.trim() === entry)) {
-    return { entry, file, kind: 'present' };
-  }
-  const prefix = existing.length > 0 && !existing.endsWith('\n') ? '\n' : '';
-  writeFileSync(file, `${existing}${prefix}${entry}\n`, 'utf8');
-  return { entry, file, kind: 'added' };
-}
-
-/**
- * Nested `.agents/skills/.gitignore` owns the list of materialized skills, so the
- * project's root file stays untouched — it only gains a line when we created the
- * `.claude/skills` symlink and git isn't ignoring it already.
- */
-export function ensureSkillIgnored(
-  baseDir: string,
-  skillId: string,
-  createdRootLink: boolean,
-): IgnoreResult[] {
-  if (!findGitRoot(baseDir)) return [{ kind: 'skipped', reason: 'not a git repository' }];
-
-  const results: IgnoreResult[] = [];
-  const skillsDir = path.join(baseDir, AGENTS_SKILLS_DIR);
-  mkdirSync(skillsDir, { recursive: true });
-
-  // A file we generate must not itself become untracked noise. Git still reads an
-  // ignore file that ignores itself, so seeding this line keeps `git status`
-  // clean. Only when we create it — an existing file is the project's own.
-  const nested = path.join(skillsDir, '.gitignore');
-  if (!existsSync(nested)) appendIgnoreEntry(nested, '/.gitignore');
-
-  results.push(appendIgnoreEntry(nested, `/${skillId}/`));
-
-  if (createdRootLink) {
-    const rel = '.claude/skills';
-    if (!isIgnoredByGit(baseDir, rel)) {
-      results.push(appendIgnoreEntry(path.join(baseDir, '.gitignore'), `/${rel}`));
-    }
-  }
-
-  return results;
 }

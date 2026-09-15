@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "Die Konversation konnte für diese Anfrage nicht korrekt zusammengeführt werden. Bitte versuchen Sie es erneut; falls das Problem weiterhin besteht, wenden Sie sich an den Support.",
   "DatabasePersistError": "Ein Datenbankvorgang ist beim Speichern oder Laden dieser Konversation fehlgeschlagen. Bitte versuchen Sie es erneut; falls das Problem weiterhin besteht, wenden Sie sich an den Support.",
   "ExceededContextWindow": "Der aktuelle Anfrageinhalt überschreitet die Länge, die das Modell verarbeiten kann. Bitte reduzieren Sie die Menge des Inhalts und versuchen Sie es erneut.",
+  "HarnessJsonParseError": "Ein interner Payload konnte nicht zurückgelesen werden, daher wurde dieser Vorgang abgebrochen. Das erneute Senden derselben Anfrage führt zum gleichen Fehler — bitte starten Sie eine neue Nachricht; falls das Problem weiterhin besteht, kontaktieren Sie den Support.",
   "InsufficientQuota": "Entschuldigung, das Kontingent für diesen Schlüssel wurde erreicht. Bitte überprüfen Sie, ob Ihr Kontostand ausreicht, oder versuchen Sie es erneut, nachdem Sie das Kontingent des Schlüssels erhöht haben.",
   "InvalidBedrockCredentials": "Bedrock-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie AccessKeyId/SecretAccessKey und versuchen Sie es erneut.",
   "InvalidComfyUIArgs": "Ungültige ComfyUI-Konfiguration. Bitte überprüfen Sie die Einstellungen und versuchen Sie es erneut.",

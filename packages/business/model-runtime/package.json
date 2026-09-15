@@ -5,5 +5,8 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "main": "./src/index.ts"
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
 }

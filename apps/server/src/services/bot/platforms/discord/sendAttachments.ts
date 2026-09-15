@@ -1,6 +1,7 @@
 import type { RawFile } from '@discordjs/rest';
 import debug from 'debug';
 
+import { loadAttachmentBuffer } from '../loadAttachmentBuffer';
 import type { BotMessageAttachment } from '../types';
 
 const log = debug('bot-platform:discord:send-attachments');
@@ -12,37 +13,6 @@ const log = debug('bot-platform:discord:send-attachments');
  * See: https://discord.com/developers/docs/resources/channel#create-message
  */
 export const DISCORD_MAX_ATTACHMENTS_PER_MESSAGE = 10;
-
-/**
- * Materialize an attachment's bytes from `data` (base64) or `fetchUrl` (HTTP
- * GET, 15s timeout). Returns undefined if neither source resolves so the
- * caller can skip the failing item without aborting the whole batch.
- */
-const loadAttachmentBuffer = async (
-  attachment: BotMessageAttachment,
-): Promise<Buffer | undefined> => {
-  if (attachment.data) {
-    try {
-      return Buffer.from(attachment.data, 'base64');
-    } catch (error) {
-      log('loadAttachmentBuffer: failed to decode base64: %O', error);
-    }
-  }
-  if (attachment.fetchUrl) {
-    try {
-      const response = await fetch(attachment.fetchUrl, {
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (response.ok) {
-        return Buffer.from(await response.arrayBuffer());
-      }
-      log('loadAttachmentBuffer: HTTP %d for %s', response.status, attachment.fetchUrl);
-    } catch (error) {
-      log('loadAttachmentBuffer: fetch failed for %s: %O', attachment.fetchUrl, error);
-    }
-  }
-  return undefined;
-};
 
 /**
  * Pick a filename for the Discord upload. Falls back to a generic name with

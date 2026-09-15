@@ -1,7 +1,11 @@
 import type { OpenAIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { chainSummaryTitle } from '../summaryTitle';
+import {
+  chainSummaryTitle,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
+} from '../summaryTitle';
 
 describe('chainSummaryTitle', () => {
   it('should use the default model if the token count is below the GPT-3.5 limit', async () => {
@@ -17,5 +21,7 @@ describe('chainSummaryTitle', () => {
 
     // Assert
     expect(result).toMatchSnapshot();
+    expect(TOPIC_TITLE_PROMPT_VERSION).toBe('v1');
+    expect(TOPIC_TITLE_JSON_SCHEMA.name).toBe('topic_title');
   });
 });

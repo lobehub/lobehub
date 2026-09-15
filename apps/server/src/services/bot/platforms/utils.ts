@@ -1,3 +1,4 @@
+import { DEFAULT_BOT_DEBOUNCE_MS } from '@lobechat/const';
 import { merge } from '@lobechat/utils';
 
 import type {
@@ -54,6 +55,85 @@ export function mergeWithDefaults(
   const defaults = extractDefaults(settingsSchema);
   if (!userSettings) return defaults;
   return merge(defaults, userSettings) as Record<string, unknown>;
+}
+
+// --------------- Concurrency resolution ---------------
+
+export type BotConcurrencyStrategy = 'burst' | 'debounce' | 'queue';
+
+export interface ResolvedBotConcurrency {
+  /** Collection window, in ms. Ignored by `queue`, which dispatches at once. */
+  debounceMs: number;
+  strategy: BotConcurrencyStrategy;
+}
+
+/**
+ * Platforms that deliver one logical turn as several messages. WeChat sends an
+ * image and the sentence about it as two webhooks a few hundred ms apart, so
+ * there is no useful immediate-dispatch mode: `queue` answers the picture
+ * before the question has arrived, which starts an incomplete turn. Their
+ * schema offers `burst` and `debounce` only.
+ */
+const TURN_COLLECTING_PLATFORMS = new Set(['wechat']);
+
+/**
+ * Decide how the Chat SDK should handle overlapping messages for one channel.
+ *
+ * A channel created before `burst` existed has `concurrency: 'queue'` baked
+ * into its stored settings by `mergeBotSettingsForPersist`, so a schema default
+ * alone would never reach it. Resolving it here fixes every existing channel
+ * without rewriting anyone's saved settings, and reverts with the code.
+ *
+ * The stored window is deliberately dropped along with it: `debounceMs` is
+ * hidden in the form while a channel sits on `queue` and is never read at
+ * runtime, so whatever it holds is a stale default rather than a choice. Under
+ * `burst` that window delays every single reply, and the value these rows carry
+ * is the old 5s one.
+ *
+ * An explicit `debounce` is left exactly as the operator set it.
+ */
+export function resolveBotConcurrency(
+  platform: string,
+  settings: Record<string, unknown> | null | undefined,
+): ResolvedBotConcurrency {
+  const stored = typeof settings?.concurrency === 'string' ? settings.concurrency : undefined;
+  const storedWindow =
+    typeof settings?.debounceMs === 'number' && settings.debounceMs > 0
+      ? settings.debounceMs
+      : undefined;
+
+  if (TURN_COLLECTING_PLATFORMS.has(platform) && (stored === undefined || stored === 'queue')) {
+    return { debounceMs: DEFAULT_BOT_DEBOUNCE_MS, strategy: 'burst' };
+  }
+
+  const strategy: BotConcurrencyStrategy =
+    stored === 'burst' || stored === 'debounce' ? stored : 'queue';
+
+  return { debounceMs: storedWindow ?? DEFAULT_BOT_DEBOUNCE_MS, strategy };
+}
+
+/**
+ * Project a provider's stored settings onto what the runtime will actually do,
+ * for the settings form to render.
+ *
+ * A channel created before `burst` existed stores `concurrency: 'queue'`, which
+ * its platform no longer offers. Handing that to the form renders a bare
+ * `queue` in the picker, and — worse — saving the untouched form would persist
+ * the stale window next to a strategy that DOES read it, putting the old 5s
+ * wait in front of every reply. Only rows the runtime actually overrides are
+ * rewritten; every other channel is passed through untouched.
+ */
+export function withResolvedConcurrencySettings(
+  platform: string,
+  settings: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null | undefined {
+  const stored = settings?.concurrency;
+  if (typeof stored !== 'string') return settings;
+
+  const resolved = resolveBotConcurrency(platform, settings);
+  if (resolved.strategy === stored) return settings;
+
+  return { ...settings, concurrency: resolved.strategy, debounceMs: resolved.debounceMs };
 }
 
 // --------------- Connection mode resolution ---------------
@@ -199,4 +279,19 @@ export function formatUsageStats(stats: UsageStats): string {
       ? ` | llm×${llmCalls ?? 0} | tools×${toolCalls ?? 0}`
       : '';
   return `${formatTokens(totalTokens)} tokens · $${totalCost.toFixed(4)}${time}${calls}`;
+}
+
+/**
+ * The platform a `platformThreadId` belongs to.
+ *
+ * Thread ids are platform-prefixed (`wechat:…`, `discord:…`), which is the
+ * only thing tying a live conversation back to its platform once it is in
+ * flight — and therefore what routes gateway calls to the host that owns the
+ * connection. Passes `undefined` through so optional bot contexts can hand
+ * their thread id over without a guard at every call site.
+ */
+export function platformFromThreadId(platformThreadId: string): string;
+export function platformFromThreadId(platformThreadId: string | undefined): string | undefined;
+export function platformFromThreadId(platformThreadId?: string): string | undefined {
+  return platformThreadId?.split(':')[0];
 }

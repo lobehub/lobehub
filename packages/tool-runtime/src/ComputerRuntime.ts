@@ -10,6 +10,7 @@ import {
   formatKillResult,
   formatMoveResults,
   formatRenameResult,
+  formatSandboxRecreation,
   formatWriteResult,
 } from '@lobechat/prompts/fileSystem';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
@@ -69,7 +70,7 @@ export abstract class ComputerRuntime {
       const result = await this.callService('listLocalFiles', args);
 
       if (!result.success) {
-        return this.errorOutput(result, { files: [], totalCount: 0 });
+        return this.errorOutput(result, { files: [], totalCount: 0 }, true);
       }
 
       const files = result.result?.files || [];
@@ -90,7 +91,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -99,12 +100,16 @@ export abstract class ComputerRuntime {
       const result = await this.callService('readLocalFile', args);
 
       if (!result.success) {
-        return this.errorOutput(result, {
-          content: '',
-          endLine: args.endLine,
-          path: args.path,
-          startLine: args.startLine,
-        });
+        return this.errorOutput(
+          result,
+          {
+            content: '',
+            endLine: args.endLine,
+            path: args.path,
+            startLine: args.startLine,
+          },
+          true,
+        );
       }
 
       const r = result.result || {};
@@ -162,7 +167,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -222,7 +227,7 @@ export abstract class ComputerRuntime {
       const result = await this.callService('searchLocalFiles', args);
 
       if (!result.success) {
-        return this.errorOutput(result, { results: [], totalCount: 0 });
+        return this.errorOutput(result, { results: [], totalCount: 0 }, true);
       }
 
       const rawResults = result.result?.results || result.result;
@@ -238,7 +243,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -322,9 +327,13 @@ export abstract class ComputerRuntime {
   async runCommand(args: RunCommandParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callService('runCommand', args);
+      const sessionState = result.sessionExpiredAndRecreated
+        ? { sessionExpiredAndRecreated: true }
+        : {};
 
       if (!result.success) {
-        return this.errorOutput(result, {
+        const output = this.errorOutput(result, {
+          ...sessionState,
           error: result.error?.message,
           exitCode: result.result?.exitCode ?? result.result?.exit_code,
           isBackground: args.background || false,
@@ -332,6 +341,10 @@ export abstract class ComputerRuntime {
           stdout: result.result?.stdout,
           success: false,
         });
+        return {
+          ...output,
+          content: formatSandboxRecreation(output.content, result.sessionExpiredAndRecreated),
+        };
       }
 
       const r = result.result || {};
@@ -339,6 +352,7 @@ export abstract class ComputerRuntime {
       const outputFiles = r.outputFiles ?? r.output_files;
 
       const state: RunCommandState = {
+        ...sessionState,
         commandId: r.commandId || r.shell_id,
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
@@ -361,7 +375,11 @@ export abstract class ComputerRuntime {
         success: commandSuccess,
       });
 
-      return { content, state, success: true };
+      return {
+        content: formatSandboxRecreation(content, result.sessionExpiredAndRecreated),
+        state,
+        success: true,
+      };
     } catch (error) {
       return this.handleError(error);
     }
@@ -370,12 +388,24 @@ export abstract class ComputerRuntime {
   async getCommandOutput(args: GetCommandOutputParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callService('getCommandOutput', args);
+      const sessionState = result.sessionExpiredAndRecreated
+        ? { sessionExpiredAndRecreated: true }
+        : {};
 
       if (!result.success) {
-        return this.errorOutput(result, {
-          error: result.error?.message,
-          success: false,
-        });
+        const output = this.errorOutput(
+          result,
+          {
+            ...sessionState,
+            error: result.error?.message,
+            success: false,
+          },
+          true,
+        );
+        return {
+          ...output,
+          content: formatSandboxRecreation(output.content, result.sessionExpiredAndRecreated),
+        };
       }
 
       const r = result.result || {};
@@ -383,6 +413,7 @@ export abstract class ComputerRuntime {
       const outputFiles = r.outputFiles ?? r.output_files;
 
       const state: GetCommandOutputState = {
+        ...sessionState,
         durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
@@ -404,9 +435,13 @@ export abstract class ComputerRuntime {
         success: outputSuccess,
       });
 
-      return { content, state, success: true };
+      return {
+        content: formatSandboxRecreation(content, result.sessionExpiredAndRecreated),
+        state,
+        success: true,
+      };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -450,11 +485,15 @@ export abstract class ComputerRuntime {
       const result = await this.callService('grepContent', args);
 
       if (!result.success) {
-        return this.errorOutput(result, {
-          matches: [],
-          pattern: args.pattern,
-          totalMatches: 0,
-        });
+        return this.errorOutput(
+          result,
+          {
+            matches: [],
+            pattern: args.pattern,
+            totalMatches: 0,
+          },
+          true,
+        );
       }
 
       const r = result.result || {};
@@ -471,7 +510,7 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
@@ -487,11 +526,15 @@ export abstract class ComputerRuntime {
       });
 
       if (!result.success) {
-        return this.errorOutput(result, {
-          files: [],
-          pattern: args.pattern,
-          totalCount: 0,
-        });
+        return this.errorOutput(
+          result,
+          {
+            files: [],
+            pattern: args.pattern,
+            totalCount: 0,
+          },
+          true,
+        );
       }
 
       const files = result.result?.files || [];
@@ -507,18 +550,38 @@ export abstract class ComputerRuntime {
 
       return { content, state, success: true };
     } catch (error) {
-      return this.handleError(error);
+      return this.handleError(error, true);
     }
   }
 
   // ==================== Helpers ====================
 
-  protected handleError(error: unknown): BuiltinServerRuntimeOutput {
+  protected handleError(error: unknown, retrySafe = false): BuiltinServerRuntimeOutput {
+    const diagnostics =
+      error && typeof error === 'object' ? (error as ServiceResult['error']) : undefined;
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return { content: errorMessage, error, success: false };
+    // Side-effecting operations may complete before a transport error. Reads
+    // can use the normal error classifier to retry a transient failure.
+    return {
+      content: errorMessage,
+      error: {
+        code: diagnostics?.code,
+        doc_url: diagnostics?.doc_url,
+        hint: diagnostics?.hint,
+        kind: retrySafe ? undefined : 'stop',
+        message: errorMessage,
+        name: diagnostics?.name,
+        status: diagnostics?.status,
+      },
+      success: false,
+    };
   }
 
-  private errorOutput(result: ServiceResult, state: any): BuiltinServerRuntimeOutput {
+  private errorOutput(
+    result: ServiceResult,
+    state: any,
+    retrySafe = false,
+  ): BuiltinServerRuntimeOutput {
     // Defensive fallback: when a service reports success: false without an
     // error object, JSON.stringify(undefined) returns the value `undefined`
     // (not the string "undefined"), which collapsed downstream into an empty
@@ -536,10 +599,39 @@ export abstract class ComputerRuntime {
       (typeof state?.stderr === 'string' ? state.stderr : undefined) ||
       (typeof state?.error === 'string' ? state.error : undefined) ||
       '[UNKNOWN_EXEC_ERROR] Tool execution failed';
+
     return {
       content: errorText,
+      // `success` is what the tool_end event reports as `isSuccess`, what
+      // `UsageCounter.accumulateTool` counts into `usage.tools.byTool[].errors`,
+      // and what the trace inspector prints as ✓/✗. Reporting `true` on this
+      // path made every computer-tool failure — an old_string that isn't in the
+      // file, a shell that never spawned, an unreadable path — indistinguishable
+      // from a success in both the UI and the metrics: `errors` was
+      // structurally pinned at 0 for the whole family. (A command that spawns
+      // and exits non-zero does not come through here: `runCommand` reports it
+      // on the success path via `state.success` / `exitCode`, since plenty of
+      // tools exit non-zero by design.)
+      //
+      // `error` is what reaches `pluginError`. The Render components already
+      // branch on it (EditLocalFile shows an "Edit Failed" alert); with it
+      // unset a failed edit had neither a diff nor an error to draw and
+      // rendered as an empty card.
+      //
+      // Preserve service diagnostics for the common tool-result formatter.
+      // Only read-only callers may use its retry classification; a service's
+      // `kind: 'retry'` must not replay an operation with possible side effects.
+      error: {
+        code: result.error?.code,
+        doc_url: result.error?.doc_url,
+        hint: result.error?.hint,
+        kind: retrySafe ? undefined : 'stop',
+        message: errorText,
+        name: result.error?.name,
+        status: result.error?.status,
+      },
       state,
-      success: true,
+      success: false,
     };
   }
 }

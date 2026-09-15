@@ -1,8 +1,8 @@
 'use client';
 
-import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import { Avatar, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
+import { type BuiltinSkillManifest, type SkillListItem } from '@lobechat/types';
+import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Avatar, Button, confirmModal, createModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
 import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
@@ -22,13 +22,14 @@ import { styles } from './style';
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
 
-const isBuiltinSkill = (skill: BuiltinSkill | SkillListItem): skill is BuiltinSkill =>
-  !('id' in skill);
+const isBuiltinSkill = (
+  skill: BuiltinSkillManifest | SkillListItem,
+): skill is BuiltinSkillManifest => !('id' in skill);
 
 interface AgentSkillItemProps {
   isSelected?: boolean;
   onSelect?: () => void;
-  skill: BuiltinSkill | SkillListItem;
+  skill: BuiltinSkillManifest | SkillListItem;
 }
 
 const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {

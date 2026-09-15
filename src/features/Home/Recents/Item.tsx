@@ -1,15 +1,17 @@
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import type { RecentItem } from '@lobechat/types';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FileTextIcon, HashIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 
 import InlineRename from '@/components/InlineRename';
 import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
+import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { usePrefetchPage } from '@/hooks/usePrefetchPage';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
-import { type RecentItem } from '@/server/routers/lambda/recent';
 
 import { useRecentItemDropdownMenu } from './useDropdownMenu';
 
@@ -52,12 +54,15 @@ const RecentListItem = memo<RecentItem>((item) => {
         disabled={editing}
         title={title}
         actions={
-          <DropdownMenu items={dropdownMenu()} nativeButton={false}>
+          <DropdownMenu items={dropdownMenu()}>
             <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
           </DropdownMenu>
         }
         icon={(() => {
           if (type === 'task') {
+            // Same liveness signal as running topics: an executing task wears
+            // the animated running mark, not the static status glyph.
+            if (status === 'running') return <RunningGlyph size={16} />;
             return <TaskStatusIcon size={16} status={status ?? 'backlog'} />;
           }
 

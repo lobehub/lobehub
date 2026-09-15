@@ -1,13 +1,29 @@
-import type { ChatTopicMetadata, DeviceGitLinkedPullRequest } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  DeviceGitLinkedPullRequest,
+  DeviceGitPullRequestCiStatus,
+} from '@lobechat/types';
 import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
 import { cssVar } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { GitMerge, GitPullRequestArrow, GitPullRequestClosed } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleSlash,
+  CircleX,
+  GitMerge,
+  GitPullRequestArrow,
+  GitPullRequestClosed,
+  LoaderCircle,
+} from 'lucide-react';
 
-import { getConfigRepoType, getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
+import {
+  getConfigRepoType,
+  getWorkingDirectoryName,
+  isWorktreeCheckout,
+} from '@/helpers/workingDirectoryPath';
 
 export type PullRequestState = 'open' | 'merged' | 'closed';
 
@@ -37,6 +53,30 @@ export const PR_STATE_VISUAL: Record<PullRequestState, PullRequestStateVisual> =
   open: { color: cssVar.colorSuccess, icon: GitPullRequestArrow, labelKey: 'metaCard.pr.open' },
 };
 
+export interface CiVisual {
+  color: string;
+  icon: LucideIcon;
+  labelKey:
+    'metaCard.ci.failure' | 'metaCard.ci.none' | 'metaCard.ci.pending' | 'metaCard.ci.success';
+}
+
+export const getCiVisual = (status?: DeviceGitPullRequestCiStatus): CiVisual => {
+  switch (status) {
+    case 'success': {
+      return { color: cssVar.colorSuccess, icon: CircleCheck, labelKey: 'metaCard.ci.success' };
+    }
+    case 'failure': {
+      return { color: cssVar.colorError, icon: CircleX, labelKey: 'metaCard.ci.failure' };
+    }
+    case 'pending': {
+      return { color: cssVar.colorWarning, icon: LoaderCircle, labelKey: 'metaCard.ci.pending' };
+    }
+    default: {
+      return { color: cssVar.colorTextTertiary, icon: CircleSlash, labelKey: 'metaCard.ci.none' };
+    }
+  }
+};
+
 /**
  * Read the git / worktree / linked-PR context off a topic's persisted
  * `workingDirectoryConfig`. Returns `undefined` when the topic carries no git
@@ -49,8 +89,7 @@ export const getTopicMetaCard = (metadata: ChatTopicMetadata | undefined) => {
 
   const sourcePath = getTopicMetadataWorkingDirectorySourcePath(metadata);
   const effectivePath = getTopicMetadataWorkingDirectoryEffectivePath(metadata);
-  const isWorktree =
-    !!git.isWorktree || (!!git.activeWorktree && git.activeWorktree !== sourcePath);
+  const isWorktree = isWorktreeCheckout({ effectivePath, git, sourcePath });
 
   return {
     branch: git.branch,

@@ -9,7 +9,11 @@ import { taskRouter } from '../../task';
 import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
-vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
+}));
 
 describe('Project Router Integration', () => {
   let serverDB: LobeChatDatabase;
@@ -92,5 +96,41 @@ describe('Project Router Integration', () => {
     await expect(caller.create({ identifier: 'not-valid!', name: 'Invalid' })).rejects.toThrow(
       'Invalid project identifier',
     );
+  });
+
+  it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(
+    'rejects the route-unsafe slug %s when creating a project',
+    async (slug) => {
+      await expect(
+        caller.create({ identifier: 'VALID', name: 'Invalid slug', slug }),
+      ).rejects.toThrow('Invalid project slug');
+    },
+  );
+
+  it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(
+    'rejects the route-unsafe slug %s when updating a project',
+    async (slug) => {
+      const project = await caller.create({
+        identifier: 'VALID',
+        name: 'Valid project',
+        slug: 'valid-project',
+      });
+
+      await expect(caller.update({ id: project.data.id, slug })).rejects.toThrow(
+        'Invalid project slug',
+      );
+    },
+  );
+
+  it('accepts underscores in project slugs', async () => {
+    const project = await caller.create({
+      identifier: 'VALID',
+      name: 'Valid project',
+      slug: 'team_launch',
+    });
+    expect(project.data.slug).toBe('team_launch');
+
+    const updated = await caller.update({ id: project.data.id, slug: 'team_launch_v2' });
+    expect(updated.data.slug).toBe('team_launch_v2');
   });
 });

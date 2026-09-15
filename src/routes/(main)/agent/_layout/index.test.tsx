@@ -2,17 +2,9 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import Layout from './index';
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
-  ShikiLobeTheme: {},
-}));
 
 vi.mock('react-router', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -24,7 +16,10 @@ vi.mock('react-router', async () => {
   };
 });
 
-vi.mock('@/const/version', () => ({ isDesktop: false }));
+vi.mock(import('@/const/version'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  isDesktop: false,
+}));
 vi.mock('@/hooks/useInitAgentConfig', () => ({ useInitAgentConfig: vi.fn() }));
 vi.mock('@/features/ProtocolUrlHandler', () => ({ default: () => null }));
 vi.mock('./RegisterHotkeys', () => ({ default: () => null }));

@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DocumentBody from './Body';
@@ -20,20 +19,6 @@ vi.mock('antd-style', async (importOriginal) => {
     },
   };
 });
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => null,
-  Button: ({ children }: { children: ReactNode }) => <button>{children}</button>,
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  TextArea: () => <textarea />,
-}));
 
 vi.mock('@/components/CodeEditorPane', () => ({
   default: ({

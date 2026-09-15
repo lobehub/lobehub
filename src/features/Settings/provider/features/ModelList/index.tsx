@@ -128,7 +128,7 @@ const Content = memo<ContentProps>(({ id }) => {
   const availableTabKeys = tabs.map((tab) => tab.key);
   const currentActiveTab = availableTabKeys.includes(activeTab) ? activeTab : 'all';
 
-  if (isLoading) return <SkeletonList />;
+  if (isLoading && isEmpty) return <SkeletonList />;
 
   // Error before empty: a failed model-list fetch must not render as
   // "no models yet" (EmptyModels) — surface the reason + Retry (ux Read §1.1).

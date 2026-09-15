@@ -1,8 +1,9 @@
 import type { AgentHookType, AnyHookEvent, ToolCallHookEvent } from '../types';
+import type { ToolRunResult } from './tool';
 
 export interface ToolCallMockResult {
-  content: string;
   isMocked: true;
+  result: ToolRunResult;
 }
 
 export interface LifecycleDispatchParams {
@@ -10,7 +11,7 @@ export interface LifecycleDispatchParams {
   event: AnyHookEvent;
   /**
    * Per-operation webhook configs (the server keeps them on
-   * `state.metadata._hooks` for production/queue mode). Opaque to the package
+   * `state.host.hooks` for production/queue mode). Opaque to the package
    * and forwarded verbatim to the adapter.
    */
   serializedHooks?: unknown;

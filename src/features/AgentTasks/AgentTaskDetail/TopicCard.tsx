@@ -1,17 +1,13 @@
 import type { TaskDetailActivity } from '@lobechat/types';
 import {
-  ActionIcon,
-  Avatar,
   Block,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
   Markdown,
   stopPropagation,
-  Tag,
-  Text,
 } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { ActionIcon, Avatar, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import {
   ChevronDown,
@@ -21,7 +17,9 @@ import {
   Copy,
   ExternalLink,
   MessageCircle,
+  MessagesSquare,
   MoreHorizontal,
+  Trash,
 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -34,6 +32,7 @@ import { useActivityTime } from '@/hooks/useActivityTime';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { styles } from '../shared/style';
 import RunReplyEditor from './RunReplyEditor';
@@ -64,13 +63,23 @@ const formatDuration = (ms: number): string => {
 // to. Anything added here that swallows clicks has to earn it again.
 const RUN_CONTENT_MAX_HEIGHT = 160;
 
-const RunContent = memo<{ content: string }>(({ content }) => (
-  <CollapsibleContent key={content} maxHeight={RUN_CONTENT_MAX_HEIGHT}>
+const RunContent = memo<{ content: string; unclamped?: boolean }>(({ content, unclamped }) =>
+  // The delivery is the reason the result panel exists. Clamping it a second
+  // time — the card already collapses — meant opening a task and meeting five
+  // lines behind a "show all", which is no way to review anything. Older runs
+  // keep the clamp: there the list is the point.
+  unclamped ? (
     <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
       {content}
     </Markdown>
-  </CollapsibleContent>
-));
+  ) : (
+    <CollapsibleContent key={content} maxHeight={RUN_CONTENT_MAX_HEIGHT}>
+      <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
+        {content}
+      </Markdown>
+    </CollapsibleContent>
+  ),
+);
 
 interface TopicCardProps {
   activity: TaskDetailActivity;
@@ -80,13 +89,16 @@ interface TopicCardProps {
    * opens only the latest and collapses the rest.
    */
   defaultExpanded?: boolean;
+  /** The run the reader came to read: its delivery renders in full. */
+  primary?: boolean;
 }
 
-const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) => {
+const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true, primary }) => {
   const { t } = useTranslation('chat');
   const [bodyExpanded, setBodyExpanded] = useState(defaultExpanded);
   const openTopicDrawer = useTaskStore((s) => s.openTopicDrawer);
   const cancelTopic = useTaskStore((s) => s.cancelTopic);
+  const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const addComment = useTaskStore((s) => s.addComment);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const { allowed: canEditTask } = usePermission('create_content');
@@ -166,6 +178,36 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
     });
   }, [activity.id, cancelTopic, t]);
 
+  // The server gates `task.deleteTopic` behind the same edit permission as
+  // every other task mutation — a workspace viewer's confirm would only ever
+  // come back FORBIDDEN. Route that through the shared toast instead of
+  // letting the mutation reject silently into the confirm modal.
+  const handleDelete = useCallback(() => {
+    if (!canEditTask || !activity.id) return;
+    const topicId = activity.id;
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('taskDetail.topicMenu.deleteConfirm.content', {
+        defaultValue:
+          'This run and its messages will be permanently deleted. This action cannot be undone.',
+      }),
+      okButtonProps: { danger: true },
+      okText: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onOk: async () => {
+        try {
+          await deleteTopic(topicId);
+        } catch (error) {
+          toast.error(
+            isForbiddenError(error)
+              ? t('manageOnlyCreator', { ns: 'common' })
+              : t('operationFailed', { ns: 'common' }),
+          );
+        }
+      },
+      title: t('taskDetail.topicMenu.deleteConfirm.title', { defaultValue: 'Delete Run?' }),
+    });
+  }, [activity.id, canEditTask, deleteTopic, t]);
+
   const { text: startedAt, title: startedAtTitle } = useActivityTime(activity.time);
   const durationText = isRunning
     ? formatDuration(elapsed)
@@ -206,6 +248,20 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
       label: t('taskDetail.topicMenu.copyOperationId', { defaultValue: 'Copy Operation ID' }),
       onClick: handleCopyOperationId,
     },
+    { type: 'divider' as const },
+    {
+      danger: true,
+      // A running topic is deleted server-side via interrupt-then-remove, but
+      // the row already offers an explicit Stop for that case — keep delete
+      // scoped to finished runs so this menu doesn't offer two destructive
+      // exits for the same in-flight state. Also gated on edit permission,
+      // matching the server's `task.deleteTopic` authorization.
+      disabled: !activity.id || isRunning || !canEditTask,
+      icon: Trash,
+      key: 'delete',
+      label: t('taskDetail.topicMenu.delete', { defaultValue: 'Delete Run' }),
+      onClick: handleDelete,
+    },
   ];
 
   const isAgent = activity.author?.type === 'agent';
@@ -223,12 +279,17 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
     );
 
   return (
+    // The primary result is not one card among many — it is the agent reporting
+    // what this task produced, and it should read like a document rather than a
+    // boxed activity row. The outline, the inner padding and the duplicated
+    // summary line all belong to the list presentation; a report drops them and
+    // lets the delivery own the surface.
     <Block
-      gap={8}
-      paddingBlock={8}
-      paddingInline={8}
-      style={{ borderRadius: cssVar.borderRadiusLG }}
-      variant={'outlined'}
+      gap={primary ? 12 : 8}
+      paddingBlock={primary ? 0 : 8}
+      paddingInline={primary ? 0 : 8}
+      style={primary ? undefined : { borderRadius: cssVar.borderRadiusLG }}
+      variant={primary ? 'borderless' : 'outlined'}
     >
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -316,8 +377,8 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
       </Flexbox>
 
       {hasBody && bodyExpanded && (
-        <Flexbox gap={8} paddingInline={4}>
-          {activity.summary && (
+        <Flexbox gap={primary ? 12 : 8} paddingInline={primary ? 0 : 4}>
+          {activity.summary && !(primary && activity.content) && (
             <Text
               fontSize={13}
               style={{ color: cssVar.colorTextDescription, whiteSpace: 'pre-wrap' }}
@@ -325,7 +386,7 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
               {activity.summary}
             </Text>
           )}
-          {activity.content && <RunContent content={activity.content} />}
+          {activity.content && <RunContent content={activity.content} unclamped={primary} />}
           {/* The verdict's evidence, next to the delivery it judged — reading
               one should never require leaving for the acceptance page. */}
           {activity.verify && (
@@ -348,7 +409,17 @@ const TopicCard = memo<TopicCardProps>(({ activity, defaultExpanded = true }) =>
                 />
               </Flexbox>
             ) : (
-              <Flexbox horizontal justify={'flex-end'} onClick={stopPropagation}>
+              <Flexbox horizontal gap={4} justify={'flex-end'} onClick={stopPropagation}>
+                {/* The run's own conversation was reachable only by clicking the
+                    title, which said nothing about being a door. Asking the
+                    agent a follow-up is the natural next move after reading a
+                    delivery, so it gets a real affordance. */}
+                <ActionIcon
+                  icon={MessagesSquare}
+                  size={'small'}
+                  title={t('taskDetail.openRunChat')}
+                  onClick={handleOpen}
+                />
                 <ActionIcon
                   icon={MessageCircle}
                   size={'small'}

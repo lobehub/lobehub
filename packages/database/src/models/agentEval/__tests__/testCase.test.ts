@@ -552,15 +552,17 @@ describe('AgentEvalTestCaseModel', () => {
       expect(result).toBeUndefined();
     });
 
-    it('should update content partially', async () => {
+    it('should preserve existing content when updating the environment', async () => {
       const [testCase] = await serverDB
         .insert(agentEvalTestCases)
         .values({
           userId,
           datasetId,
           content: {
-            input: 'Original Input',
+            category: 'memory',
+            choices: ['A', 'B'],
             expected: 'Original Expected',
+            input: 'Original Input',
           },
           sortOrder: 1,
         })
@@ -568,13 +570,23 @@ describe('AgentEvalTestCaseModel', () => {
 
       const result = await testCaseModel.update(testCase.id, {
         content: {
-          input: 'Original Input',
-          expected: 'Updated Expected',
+          environment: {
+            toolForwarding: {
+              memory: { endpoint: 'https://mock.test/tool-calls' },
+            },
+          },
         },
       });
 
-      expect(result?.content.expected).toBe('Updated Expected');
       expect(result?.content.input).toBe('Original Input');
+      expect(result?.content.expected).toBe('Original Expected');
+      expect(result?.content.choices).toEqual(['A', 'B']);
+      expect(result?.content.category).toBe('memory');
+      expect(result?.content.environment).toEqual({
+        toolForwarding: {
+          memory: { endpoint: 'https://mock.test/tool-calls' },
+        },
+      });
     });
   });
 });

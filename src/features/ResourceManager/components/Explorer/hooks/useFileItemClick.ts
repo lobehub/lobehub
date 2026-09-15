@@ -28,7 +28,7 @@ export const useFileItemClick = ({
   // Read/write the URL through the active-tab facade rather than
   // `useSearchParams`: this hook also runs in the library sidebar, which Electron
   // portals into the shell's frozen root router.
-  const { search } = useActiveLocation();
+  const { pathname, search } = useActiveLocation();
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
 
@@ -36,6 +36,16 @@ export const useFileItemClick = ({
     const selectFile = () => {
       const newParams = new URLSearchParams(search);
       newParams.set('file', id);
+
+      // The library sidebar stays mounted on the standalone Permissions page.
+      // A search-only navigation there would keep the tab on `/permission`, so
+      // selecting a page/file appeared to do nothing. Return to the library
+      // surface first, then let its `file` query restore the selected content.
+      if (libraryId && pathname.endsWith(`/resource/library/${libraryId}/permission`)) {
+        navigate(`/resource/library/${libraryId}?${newParams.toString()}`);
+        return;
+      }
+
       navigate({ search: `?${newParams.toString()}` }, { replace: true });
     };
 
@@ -75,6 +85,7 @@ export const useFileItemClick = ({
     libraryId,
     isPage,
     navigate,
+    pathname,
     search,
     setMode,
     setCurrentViewItemId,

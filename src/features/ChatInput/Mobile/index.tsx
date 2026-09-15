@@ -6,6 +6,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
+import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import dynamic from '@/libs/next/dynamic';
 
@@ -74,8 +75,11 @@ const DesktopChatInput = memo(() => {
             <ChatInputActionBar
               left={
                 <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
-                  <Flexbox horizontal align={'center'} className={styles.leftActions}>
-                    <ActionBar disableCollapse />
+                  <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+                    <Flexbox horizontal align={'center'} className={styles.leftActions}>
+                      <ActionBar disableCollapse />
+                    </Flexbox>
+                    <ComposerExpandButton />
                   </Flexbox>
                   <ChatInputNotice />
                 </Flexbox>

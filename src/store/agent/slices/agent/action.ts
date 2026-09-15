@@ -1,11 +1,11 @@
 import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
+import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
   pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -13,9 +13,12 @@ import { produce } from 'immer';
 import type { SWRResponse } from 'swr';
 import type { PartialDeep } from 'type-fest';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
-import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { agentConfigKeys } from '@/libs/swr/keys';
+import { analyticsClient } from '@/libs/analytics/client';
+import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import { agentConfigKeys, builtinAgentKeys } from '@/libs/swr/keys';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import {
@@ -24,6 +27,7 @@ import {
   agentDocumentSWRKeys,
   resolveAgentDocumentsContext,
 } from '@/services/agentDocument';
+import { aiAgentService } from '@/services/aiAgent';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
@@ -38,13 +42,23 @@ import type {
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
+import { heteroAgentDefaultName } from '../../utils/heteroAgentDefaultName';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
   >
 >;
 type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
@@ -142,36 +156,44 @@ export class AgentSliceActionImpl {
   };
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
-    // Seed a personal name so a new agent has an identity before the Agent
+    // Seed a default name so a new agent has an identity before the Agent
     // Builder conversation produces one; the builder may replace it later. This
     // lives here rather than in the create endpoint because the language only
     // resolves on the client (`auto` follows the browser). A caller that already
     // carries a name — e.g. a market agent — keeps it.
+    //
+    // A heterogeneous agent never draws a random personal name. In personal or
+    // workspace-private scope its name is the product title; a shared workspace
+    // agent adds the creator so members can distinguish identical tools.
+    const heteroProvider = params.config?.agencyConfig?.heterogeneousProvider;
     const locale = globalGeneralSelectors.currentLanguage(useGlobalStore.getState());
     const config = {
       ...params.config,
-      name: params.config?.name || randomAgentName(locale),
+      name:
+        params.config?.name ||
+        (heteroProvider
+          ? heteroAgentDefaultName({
+              productTitle: params.config?.title || getHeterogeneousTypeLabel(heteroProvider.type),
+              visibility: params.visibility,
+              workspaceId: getActiveWorkspaceId(),
+            })
+          : randomAgentName(locale)),
     };
 
     const result = await agentService.createAgent({ ...params, config });
     this.#get().invalidateAvailableAgents();
 
-    // Track new agent creation analytics
-    const analytics = getSingletonAnalyticsOptional();
-    if (analytics) {
-      const userStore = getUserStoreState();
-      const userId = userProfileSelectors.userId(userStore);
+    const userId = userProfileSelectors.userId(getUserStoreState());
 
-      analytics.track({
-        name: 'new_agent_created',
-        properties: {
-          agent_id: result.agentId,
-          assistant_name: params.config?.title || 'Untitled Agent',
-          assistant_tags: params.config?.tags || [],
-          user_id: userId || 'anonymous',
-        },
-      });
-    }
+    void analyticsClient.track({
+      name: 'new_agent_created',
+      properties: {
+        agent_id: result.agentId,
+        assistant_name: params.config?.title || 'Untitled Agent',
+        assistant_tags: params.config?.tags || [],
+        user_id: userId || 'anonymous',
+      },
+    });
 
     return result;
   };
@@ -449,6 +471,11 @@ export class AgentSliceActionImpl {
     );
   };
 
+  useFetchServerDefaultHeterogeneousCapability = (enabled: boolean) =>
+    useClientDataSWR(enabled ? agentConfigKeys.serverDefaultHeterogeneousCapability() : null, () =>
+      aiAgentService.getServerDefaultHeterogeneousCapability(),
+    );
+
   /**
    * Re-trigger the agent config fetch after a failure. Clears the recorded
    * error first so consumers fall back to the loading skeleton, then
@@ -605,6 +632,10 @@ export class AgentSliceActionImpl {
         draft[id] = config;
       } else {
         draft[id] = merge(draft[id], config);
+        // The character sheet is authored as one document — `AgentModel`
+        // replaces it rather than merging — so mirror that here, or a trait the
+        // user just cleared reappears until the next full fetch.
+        if (Object.hasOwn(config, 'profile')) draft[id].profile = config.profile;
         // merge() can't drop keys; honor `undefined` as a per-device delete so
         // clearing a working directory takes effect optimistically.
         pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);
@@ -691,6 +722,7 @@ export class AgentSliceActionImpl {
     signal?: AbortSignal,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
+    const scope = getCacheScope();
 
     // 1. Optimistic update - meta fields are at the top level of agent config
     internal_dispatchAgentMap(id, meta as PartialDeep<LobeAgentConfig>);
@@ -699,10 +731,12 @@ export class AgentSliceActionImpl {
     try {
       // 2. API call returns updated agent data
       const result = await agentService.updateAgentMeta(id, meta, signal);
+      if (scope !== getCacheScope()) return;
 
-      // 3. Use returned data directly (no refetch needed!)
+      // 3. Apply returned data, then seed related caches for later subscribers.
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        await this.#get().internal_refreshAgentConfig(id, result.agent);
         this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
@@ -716,8 +750,33 @@ export class AgentSliceActionImpl {
     }
   };
 
-  internal_refreshAgentConfig = async (id: string): Promise<void> => {
-    await mutate(agentConfigKeys.config(id));
+  internal_refreshAgentConfig = async (
+    id: string,
+    updatedAgent?: LobeAgentConfig,
+  ): Promise<void> => {
+    /** Keep related agent and builtin-agent snapshots current after a successful edit. */
+    const slugs = Object.entries(this.#get().builtinAgentIdMap)
+      .filter(([, agentId]) => agentId === id)
+      .map(([slug]) => slug);
+
+    /** Reuse the authoritative update response; other mutations still need a network refresh. */
+    if (updatedAgent) {
+      const scope = getCacheScope();
+      await Promise.all([
+        mutate(agentConfigKeys.config(id), updatedAgent, { revalidate: false }),
+        ...slugs.map((slug) =>
+          mutate(builtinAgentKeys.init(slug, scope), updatedAgent as AgentItem, {
+            revalidate: false,
+          }),
+        ),
+      ]);
+      return;
+    }
+
+    await Promise.all([
+      mutate(agentConfigKeys.config(id)),
+      ...slugs.map((slug) => this.#get().refreshBuiltinAgent(slug)),
+    ]);
   };
 
   internal_createAbortController = (key: keyof AgentSliceState): AbortController => {

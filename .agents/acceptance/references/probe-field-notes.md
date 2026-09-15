@@ -731,12 +731,30 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   Run it with `eval "$(init-dev-env.sh env)" && bunx tsx ./scripts/<probe>.mts`, then read the outcome from **DB side effects**, not the HTTP body — QStash swallows the response. (A claim/lease row, a status transition, or new message rows are all observable; the handler's JSON return is not.)
 - **Time-travel a schedule instead of waiting**: for a "runs at T" feature, `UPDATE ... SET metadata = jsonb_set(metadata, '{...,runAt}', '"<past ISO>"')` and then fire the dispatcher. Cheaper and more deterministic than sleeping until the real due time.
 
-### E22. Local dev env has no `JWKS_KEY` — every hetero agent run dies at `signOperationJwt`
+### E22. Local dev env has no `JWKS_KEY` — every hetero agent run dies at `signHeteroOperationJWT`
 
 - **Situation**: a real Claude Code / Codex run in the local no-`.env` env fails immediately with `Failed to sign operation JWT for hetero agent` (`apps/server/src/services/aiAgent/index.ts`). Nothing in the UI explains it; the topic just fails.
-- **Cause**: `signOperationJwt` → `getSigningKey()` → `getJwksKey()` needs the `JWKS_KEY` RSA JWK, and `init-dev-env.sh` does not export one.
-- **Works**: the repo ships a generator — `JWKS_KEY="$(node scripts/generate-oidc-jwk.mjs)" ./.agents/acceptance/scripts/init-dev-env.sh dev`. Must be present at dev-server **start** (it is read from `process.env`), so a running server has to be restarted.
+- **Cause**: `signHeteroOperationJWT` → `getSigningKey()` → `getJwksKey()` needs the `JWKS_KEY` RSA JWK.
+- **Fixed in the bootstrap**: `init-dev-env.sh` now generates one on first use and persists it at `.records/env/agent-testing-jwks.json`, then exports `JWKS_KEY` from `apply_env`. A server started any other way still needs it explicitly — `JWKS_KEY="$(node scripts/generate-oidc-jwk.mjs)" …` — and it must be present at dev-server **start** (read from `process.env`), so a running server has to be restarted.
 - **Note the failure is downstream-honest**: with `JWKS_KEY` set, the run proceeds and then fails at the hetero _sandbox_ (`Hetero sandbox spawn failed / unauthorized`) unless the agent has a real Claude Code token. Those are two different walls — don't read the second as the first.
+- **Same wall, other feature**: any async-task dispatch needs it too. Image generation (`lambda/image.createImage` → `createAsyncCaller`) records the task as `error` with `start async task error: JWKS_KEY environment variable is not set`, which surfaces in the UI only as a generic 「暂时无法生成图片，请重试」 — read `async_tasks.error` rather than the toast.
+
+### E23b. Local image generation needs three env pieces, and each fails as the same generic toast
+
+- **Situation**: driving a real image generation from the app (avatar / artwork studio, `lambda/image.createImage`) against the local no-`.env` backend. The UI only ever says 「暂时无法生成图片，请重试」.
+- **Read the cause from `async_tasks.error`, not the toast**: `docker exec <pg> psql -U postgres -d postgres -c "select status, error from async_tasks order by created_at desc limit 3;"`.
+- **Three separate walls, in the order you hit them**:
+  1. `start async task error: JWKS_KEY environment variable is not set` → see E22. The bootstrap now exports a persisted `JWKS_KEY`; you only hit this on a server started outside `init-dev-env.sh`.
+  2. `InvalidProviderAPIKey` → the seeded user's stored `ai_providers.key_vaults` may hold a key encrypted with a different `KEY_VAULTS_SECRET`. Clear it (`update ai_providers set key_vaults = null where id = '<provider>'`) so the server env key is used; provide `<PROVIDER>_API_KEY` plus, for a relay endpoint, `<PROVIDER>_PROXY_URL` (`apps/server/src/modules/ModelRuntime/index.ts` reads `process.env[`${UPPER}\_PROXY\_URL`]`).
+  3. `SSRF blocked: ... is not allowed. Because, It is private IP address.` → any reference image living in the local s3rver is fetched **server-side**. The bootstrap now exports `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1`; set it yourself on a server started another way.
+- **Then note which model the product actually picked** before attributing quality or format to a model: read the product's own selector rather than assuming (`selectAgentArtworkModel(enabledImageModelList(...))` over CDP). Disabling a provider row is enough to change the pick.
+- **Style presets that attach reference images can still fail after all three**: local presigned URLs may return an S3 XML error body, which reaches the model as `Unsupported MIME type: application/xml`. Pick a preset with no reference images to test generation itself.
+
+### E23c. A green desktop surface can be talking to another worktree's dev server
+
+- **Situation**: verifying a schema-backed field from the Electron app. Writes landed, but reads came back without the new column, and the app looked healthy throughout.
+- **Cause**: the desktop client proxies to whatever `dataSyncConfig.remoteServerUrl` says (E-note above). Any worktree can occupy that port — here the port was taken by a dev server started from the _main_ repo, whose branch has no such column. `init-dev-env.sh dev-next` then dies with `EADDRINUSE` in a log you are not watching, and the app keeps serving the other branch's code.
+- **Works**: confirm the owner before trusting a read — `lsof -p "$(lsof -ti tcp:<port> -sTCP:LISTEN | head -1)" | grep cwd` must print the worktree under test. Do not kill a server you did not start; run yours on a free port (and repoint the app) or wait for the port. To separate a server-code problem from a client one, exercise the service directly with `bun` against the same `DATABASE_URL` — it uses the worktree's own schema.
 
 ### E25. Electron `will-attach-webview` params carry NO custom attributes — identity via data-\* never arrives
 
@@ -891,13 +909,23 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   (`packages/trpc/src/lambda/middleware/heteroOperationAuth.ts`) — an API key never populates it, so
   `heteroFinish` 401s. Also note the local no-`.env` env has no `JWKS_KEY` (E22), so the server
   cannot even validate a JWT until restarted with one.
-- **Works** — production-shape auth in three steps:
+- **Works** — production-shape auth in four steps:
   1. `node scripts/generate-oidc-jwk.mjs > /tmp/jwks.json`
   2. restart the dev server with `JWKS_KEY="$(cat /tmp/jwks.json)"` (must be present at start)
-  3. sign a 4h `hetero-operation` JWT with the SAME key via `signOperationJwt(<userId>)`
-     (`packages/trpc/src/utils/internalJwt.ts`; run a small `.mts` inside the repo with `bunx tsx`),
-     then run the CLI with `LOBEHUB_JWT=<token> LOBEHUB_SERVER=<app-url>` — the CLI forwards it as
-     the `Oidc-Auth` header.
+  3. create a real `agent_operations` row with the exact operation id, user id, workspace id (if
+     scoped), and `status = 'running'`; the strict callback principal validates this durable row.
+  4. sign a 4h `hetero-operation` JWT with the SAME key via `signHeteroOperationJWT`
+     (`packages/trpc/src/utils/internalJwt.ts`; run a small `.mts` inside the repo with `bunx tsx`):
+     ```ts
+     signHeteroOperationJWT({
+       capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+       operationId,
+       userId,
+       workspaceId,
+     });
+     ```
+     The JWT's operation/user/workspace values must match the row from step 3. Then run the CLI with
+     `LOBEHUB_JWT=<token> LOBEHUB_SERVER=<app-url>` — the CLI forwards it as the `Oidc-Auth` header.
      The fixture side needs `topics.metadata.runningOperation = { operationId, assistantMessageId }`
      seeded, and the operationId must embed real ids (`op_<ts>_agt_<id>_tpc_<id>_<suffix>`).
 - **Bonus trap**: under bun, a spawn failure reads `ENOENT: no such file or directory,
@@ -1308,3 +1336,14 @@ active: true, remoteServerUrl: 'http://localhost:<port>', storageMode: 'selfHost
   gives assertable output; reuse `-t` to keep multi-step cases in one topic.
   Root cause (local JWKS mismatch) is worth a separate investigation, not a test-run fix.
   The CLI-as-run-driver methodology this enables lives in PROJECT.md §4 CLI.
+
+### E44. Task SPA routes can show a debug fallback before the real route is ready
+
+- **Situation**: opening the Task UI in local SPA development can briefly show the dynamic-route
+  debug fallback, while an `agent-browser` screenshot may keep an older frame even after the DOM
+  has advanced to the real Task page.
+- **Doesn't work**: treating `/task` as the Task list, or declaring the renderer blank solely from
+  one screenshot when `innerText` and element geometry already show mounted Task content.
+- **Works**: use `/tasks` for the list and `/task/<identifier>` for detail, wait for a route-specific
+  heading or control, and compare DOM text plus target geometry with a raw CDP screenshot. If only
+  `agent-browser` remains stale, reset that browser session and reseed its auth state before retrying.

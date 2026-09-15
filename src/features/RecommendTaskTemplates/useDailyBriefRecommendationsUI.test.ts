@@ -36,7 +36,8 @@ vi.mock('ahooks', () => ({
   useSessionStorageState: () => ['', mockSetRefreshSeed],
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({ message: { error: vi.fn() } }),
   },

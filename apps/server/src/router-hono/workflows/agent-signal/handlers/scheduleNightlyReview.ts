@@ -127,16 +127,20 @@ export async function scheduleNightlyReview(c: Context) {
           : {}),
       });
 
-      const result = await AgentSignalNightlyReviewWorkflow.triggerPaginateUsers(options);
+      const startedAt = Date.now();
+      const result = await AgentSignalNightlyReviewWorkflow.publishPaginateUsersEntry(options);
 
       span.setAttributes({
+        'agent.signal.cron.publish_duration_ms': Date.now() - startedAt,
         'agent.signal.cron.success': true,
-        'agent.signal.cron.workflow_run_id': result.workflowRunId,
+        'agent.signal.cron.message_id': result.messageId,
       });
       span.setStatus({ code: SpanStatusCode.OK });
 
-      return c.json({ scheduled: true, success: true, workflowRunId: result.workflowRunId }, 202);
+      return c.json({ messageId: result.messageId, scheduled: true, success: true }, 202);
     } catch (error) {
+      // This log is the only trace a failed tick leaves behind: a stalled publish used to be
+      // killed by Cloudflare at 100s, which produced a 524 with no body and nothing on the server.
       console.error('[agent-signal/cron-hourly-nightly-self-review] Error:', error);
       span.setAttribute('agent.signal.cron.success', false);
       span.setStatus({

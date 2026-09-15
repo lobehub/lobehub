@@ -22,6 +22,7 @@
 import { findNewComponentTestAdvisories } from './advisories';
 import { collectAutofixDiffs, snapshot, writeFullDiff } from './autofix';
 import { collectFromGit, normalizeArgs } from './collect';
+import { assertCheckRoot } from './delegate';
 import { run } from './exec';
 import { lintGroup } from './lint';
 import { existsInRepo, setConfig } from './paths';
@@ -59,6 +60,11 @@ export const runCli = async (config: CheckConfig) => {
     console.error(`✗ unknown flag: ${unknownFlags.join(' ')}\n${USAGE}`);
     process.exit(2);
   }
+
+  await assertCheckRoot(
+    config.rootDir,
+    config.repos.map((repo) => repo.dir),
+  );
 
   const wantLint = rawArgs.includes('--lint');
   const wantTest = rawArgs.includes('--test');

@@ -72,6 +72,10 @@ Connect a Feishu custom app bot to your agent.
 2. Search and add:
    - \`im:message\` — receive and send messages
    - \`im:message.group_at_msg\` — receive @bot messages in groups (if needed)
+   - \`im:message:readonly\` — read chat history (needed for \`readMessages\`)
+   - \`im:message.group_msg\` — 「获取群组中所有消息」, read **group** chat history; required *in addition to* \`im:message:readonly\`, otherwise history reads in groups fail with \`230027 权限不足\`. Search 权限管理 by the Chinese name — the console does not match on the code. It is 免审, but the app must be re-published (创建版本 → 发布) before it takes effect. Do NOT confuse it with \`im:message.group_msg.include_bot:read\`（获取群组中用户和机器人发送的消息）, which governs the receive-message event, not history reads
+   - \`docx:document:readonly\` — 「查看新版文档」, lets \`readDocument\` pull the text of docx documents (智能纪要 / meeting minutes, specs) shared into the chat. The document must ALSO be visible to the app: sharing it into a group the bot is in is not enough — the owner adds the app as a collaborator (文档「分享」→ 添加协作者 → 搜索应用名), or the knowledge space grants the app access
+   - \`wiki:wiki:readonly\` — only if users share \`/wiki/\` links; resolves a wiki page to the docx behind it
 3. Publish the app (see Step 7) for permissions to take effect
 
 ### Step 7: Publish the App

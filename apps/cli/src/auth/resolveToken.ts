@@ -1,4 +1,5 @@
-import { CLI_API_KEY_ENV } from '../constants/auth';
+import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
+import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { getUserIdFromApiKey } from './apiKey';
@@ -70,7 +71,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
     };
   }
 
-  const envApiKey = process.env[CLI_API_KEY_ENV];
+  const envApiKey = readCliApiKeyEnv();
   if (envApiKey) {
     try {
       const serverUrl = resolveServerUrl();
@@ -93,7 +94,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
 
     const userId = parseJwtSub(credentials.accessToken);
     if (!userId) {
-      log.error("Stored token is invalid. Run 'lh login' again.");
+      log.error(`Stored token is invalid. Run '${CLI_PRIMARY_BIN} login' again.`);
       process.exit(1);
     }
 
@@ -101,7 +102,7 @@ export async function resolveToken(options: ResolveTokenOptions): Promise<Resolv
   }
 
   log.error(
-    `No authentication found. Run 'lh login' first, or set ${CLI_API_KEY_ENV}, or provide --token.`,
+    `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}, or provide --token.`,
   );
   process.exit(1);
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, Text } from '@lobehub/ui';
+import { Block } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import React, { memo } from 'react';

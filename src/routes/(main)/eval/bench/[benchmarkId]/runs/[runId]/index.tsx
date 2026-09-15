@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Play, RotateCcw } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import { createBatchResumeModal } from './features/BatchResumeModal';
@@ -110,6 +111,7 @@ const RunDetail = memo(() => {
       errorVariant={'page'}
       isEmpty={!runDetail}
       isLoading={isLoading}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {runDetail && (

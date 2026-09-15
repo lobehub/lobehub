@@ -11,8 +11,9 @@ import {
 } from './public-fields';
 
 describe('public response field projections', () => {
-  it('keeps the Agent contract at the documented 12-field allowlist', () => {
+  it('keeps the Agent contract at the documented allowlist including plugin modes', () => {
     const projected = projectPublicAgent({
+      agencyConfig: null,
       avatar: null,
       chatConfig: null,
       clientId: 'internal-client',
@@ -31,7 +32,7 @@ describe('public response field projections', () => {
       workspaceId: 'workspace-1',
     } as unknown as AgentItem);
 
-    expect(Object.keys(projected).sort()).toEqual([...PUBLIC_AGENT_FIELDS].sort());
+    expect(Object.keys(projected).sort()).toEqual([...PUBLIC_AGENT_FIELDS, 'plugins'].sort());
     expect(projected).not.toHaveProperty('clientId');
     expect(projected).not.toHaveProperty('marketIdentifier');
     expect(projected).not.toHaveProperty('userId');

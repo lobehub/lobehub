@@ -5,9 +5,13 @@ import { FileModel } from '@/database/models/file';
 import { S3StaticFileImpl } from './s3';
 
 const redisMocks = vi.hoisted(() => ({
-  getRedisConfig: vi.fn(() => ({ enabled: false, prefix: 'lobechat', tls: false, url: '' })),
+  getRedisConfig: vi.fn(function () {
+    return { enabled: false, prefix: 'lobechat', tls: false, url: '' };
+  }),
   initializeRedis: vi.fn(),
-  isRedisEnabled: vi.fn(() => false),
+  isRedisEnabled: vi.fn(function () {
+    return false;
+  }),
   redis: {
     get: vi.fn(),
     set: vi.fn(),
@@ -40,23 +44,28 @@ vi.mock('@/libs/redis', () => ({
 
 // 模拟 S3 类
 vi.mock('@/server/modules/S3', () => ({
-  FileS3: vi.fn().mockImplementation(() => ({
-    createPreSignedUrlForPreview: vi
-      .fn()
-      .mockResolvedValue('https://presigned.example.com/test.jpg'),
-    getFileContent: vi.fn().mockResolvedValue('file content'),
-    getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
-    getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 1024, contentType: 'image/png' }),
-    deleteFile: vi.fn().mockResolvedValue({}),
-    deleteFiles: vi.fn().mockResolvedValue({}),
-    createPreSignedUpload: vi.fn().mockResolvedValue({
-      headers: { 'x-amz-acl': 'public-read' },
-      url: 'https://upload.example.com/test.jpg',
-    }),
-    createPreSignedUrl: vi.fn().mockResolvedValue('https://upload.example.com/test.jpg'),
-    uploadContent: vi.fn().mockResolvedValue({}),
-    uploadMedia: vi.fn().mockResolvedValue({}),
-  })),
+  FileS3: vi.fn().mockImplementation(function () {
+    return {
+      createPreSignedUrlForDownload: vi
+        .fn()
+        .mockResolvedValue('https://presigned.example.com/download'),
+      createPreSignedUrlForPreview: vi
+        .fn()
+        .mockResolvedValue('https://presigned.example.com/test.jpg'),
+      getFileContent: vi.fn().mockResolvedValue('file content'),
+      getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+      getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 1024, contentType: 'image/png' }),
+      deleteFile: vi.fn().mockResolvedValue({}),
+      deleteFiles: vi.fn().mockResolvedValue({}),
+      createPreSignedUpload: vi.fn().mockResolvedValue({
+        headers: { 'x-amz-acl': 'public-read' },
+        url: 'https://upload.example.com/test.jpg',
+      }),
+      createPreSignedUrl: vi.fn().mockResolvedValue('https://upload.example.com/test.jpg'),
+      uploadContent: vi.fn().mockResolvedValue({}),
+      uploadMedia: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 // Mock db
@@ -81,6 +90,23 @@ describe('S3StaticFileImpl', () => {
     redisMocks.redis.get.mockResolvedValue(null);
     redisMocks.redis.set.mockResolvedValue('OK');
     fileService = new S3StaticFileImpl(mockDb);
+  });
+
+  describe('createDownloadUrl', () => {
+    it('should normalize the storage key and request attachment delivery', async () => {
+      const createPreSignedUrlForDownload = fileService['s3'].createPreSignedUrlForDownload;
+      vi.spyOn(fileService, 'getKeyFromFullUrl').mockResolvedValue('path/to/video.mp4');
+
+      await expect(
+        fileService.createDownloadUrl('https://cdn.example.com/video.mp4', 'Collageanimation.mp4'),
+      ).resolves.toBe('https://presigned.example.com/download');
+
+      expect(createPreSignedUrlForDownload).toHaveBeenCalledWith(
+        'path/to/video.mp4',
+        'Collageanimation.mp4',
+        undefined,
+      );
+    });
   });
 
   describe('getFullFileUrl', () => {

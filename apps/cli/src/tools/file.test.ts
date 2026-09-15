@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   editLocalFile,
@@ -14,15 +14,6 @@ import {
   searchLocalFiles,
   writeLocalFile,
 } from './file';
-
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
 
 describe('file tools (integration wrapper)', () => {
   const tmpDir = path.join(os.tmpdir(), 'cli-file-test-' + process.pid);

@@ -33,6 +33,7 @@ const AskUserQuestion = memo<
         noAnswer: t('plugin:builtins.lobe-claude-code.askUserQuestion.noAnswer'),
         notAnswered: t('plugin:builtins.lobe-claude-code.askUserQuestion.notAnswered'),
         recommendedTag: t('tool:claudeCode.askUserQuestion.recommendedTag'),
+        supplement: t('tool:claudeCode.askUserQuestion.supplement.enter'),
       }}
     />
   );

@@ -11,61 +11,8 @@ import WorkflowCollapse from './WorkflowCollapse';
 
 let mockIsGenerating = true;
 
-vi.mock('@lobehub/ui', () => ({
-  Accordion: ({
-    children,
-    expandedKeys,
-    onExpandedChange,
-  }: {
-    children?: ReactNode;
-    expandedKeys?: string[];
-    onExpandedChange?: (keys: string[]) => void;
-  }) => {
-    const isExpanded = (expandedKeys ?? []).includes('workflow');
-    return (
-      <div data-expanded-keys={JSON.stringify(expandedKeys ?? [])} data-testid="workflow-accordion">
-        <button
-          aria-label="toggle-accordion-header"
-          type="button"
-          onClick={() => onExpandedChange?.(isExpanded ? [] : ['workflow'])}
-        />
-        {children}
-      </div>
-    );
-  },
-  AccordionItem: ({
-    action,
-    children,
-    title,
-  }: {
-    action?: ReactNode;
-    children?: ReactNode;
-    title?: ReactNode;
-  }) => (
-    <div>
-      <div>{title}</div>
-      <div>{action}</div>
-      <div>{children}</div>
-    </div>
-  ),
-  // Needs to resolve to a `button` with an accessible name that matches the
-  // `title` prop so the tests' `getByRole('button', { name: 'Expand fully' })`
-  // assertions can find the expand toggle.
-  ActionIcon: ({
-    icon: IconComponent,
-    onClick,
-    title,
-  }: {
-    icon?: ComponentType;
-    onClick?: (e: unknown) => void;
-    title?: string;
-  }) => (
-    <button aria-label={title} type="button" onClick={onClick}>
-      {IconComponent ? <IconComponent /> : null}
-    </button>
-  ),
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
     IconComponent ? (
       <div
@@ -77,20 +24,51 @@ vi.mock('@lobehub/ui', () => ({
     ) : (
       <div />
     ),
-  ShikiLobeTheme: {},
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+  Accordion: ({
+    items,
+    onValueChange,
+    value,
+  }: {
+    items?: { action?: ReactNode; children?: ReactNode; key: string; title?: ReactNode }[];
+    onValueChange?: (keys: string[]) => void;
+    value?: string[];
+  }) => {
+    const isExpanded = (value ?? []).includes('workflow');
+    return (
+      <div data-expanded-keys={JSON.stringify(value ?? [])} data-testid="workflow-accordion">
+        <button
+          aria-label="toggle-accordion-header"
+          type="button"
+          onClick={() => onValueChange?.(isExpanded ? [] : ['workflow'])}
+        />
+        {items?.map((item) => (
+          <div key={item.key}>
+            <div>{item.title}</div>
+            <div>{item.action}</div>
+            <div>{item.children}</div>
+          </div>
+        ))}
+      </div>
+    );
+  },
 }));
 
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  m: {
-    div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <div {...props}>{children}</div>
-    ),
-    span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-      <span {...props}>{children}</span>
-    ),
-  },
+}));
+
+vi.mock('motion/react-m', () => ({
+  div: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <div {...props}>{children}</div>
+  ),
+  span: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
+    <span {...props}>{children}</span>
+  ),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -455,7 +433,7 @@ describe('WorkflowCollapse', () => {
     expect(icon).toHaveAttribute('data-icon', 'Check');
   });
 
-  it('shows check with a warning badge when some tools fail after completion', () => {
+  it('shows only a check when some tools fail after completion', () => {
     mockIsGenerating = false;
     const blocks: AssistantContentBlock[] = [
       {
@@ -486,7 +464,7 @@ describe('WorkflowCollapse', () => {
     const icons = screen.getAllByTestId('icon');
     const iconNames = icons.map((node) => node.getAttribute('data-icon'));
     expect(iconNames).toContain('Check');
-    expect(iconNames).toContain('TriangleAlert');
+    expect(iconNames).not.toContain('TriangleAlert');
   });
 
   it('shows red x when all tools fail after completion', () => {

@@ -6,6 +6,10 @@ import { WechatApiClient, WechatUploadMediaType } from './api';
 import type { WechatRawMessage } from './types';
 import { MessageItemType, MessageState, MessageType } from './types';
 
+const { mockDecodeWechatVoice } = vi.hoisted(() => ({ mockDecodeWechatVoice: vi.fn() }));
+
+vi.mock('./voice', () => ({ decodeWechatVoice: mockDecodeWechatVoice }));
+
 // ---- helpers ----
 
 function makeRawMessage(overrides: Partial<WechatRawMessage> = {}): WechatRawMessage {
@@ -460,7 +464,9 @@ describe('WechatAdapter', () => {
       const message = await factory?.();
 
       expect(downloadSpy).not.toHaveBeenCalled();
-      expect(message?.attachments).toEqual([{ mimeType: 'audio/silk', type: 'audio', url: '' }]);
+      expect(message?.attachments).toEqual([
+        { mimeType: 'audio/wav', name: 'voice.wav', type: 'audio', url: '' },
+      ]);
       // The transcription text should still flow into message.text via extractText
       expect(message?.text).toBe('transcribed');
     });
@@ -653,6 +659,34 @@ describe('WechatAdapter', () => {
       expect(Buffer.from(uploadedBytes).equals(remoteBytes)).toBe(true);
     });
 
+    it('normalizes a fetchData() result that resolves to an ArrayBuffer', async () => {
+      const bytes = Buffer.from([9, 8, 7, 6]);
+      const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+
+      // chat 4.38.x types `fetchData` as `() => Promise<Buffer>`; 4.39 widens it to
+      // `Buffer | ArrayBuffer`. The adapter normalizes both at runtime, so keep
+      // exercising the ArrayBuffer path whichever version the range resolves to.
+      const fetchData = (async () => arrayBuffer) as unknown as () => Promise<Buffer>;
+
+      await adapter.postMessage(threadId, {
+        attachments: [
+          {
+            fetchData,
+            mimeType: 'image/png',
+            name: 'lazy.png',
+            type: 'image',
+            url: '',
+          },
+        ],
+        raw: '',
+      });
+
+      expect(uploadSpy).toHaveBeenCalledTimes(1);
+      const uploadedBytes = uploadSpy.mock.calls[0][2];
+      expect(Buffer.isBuffer(uploadedBytes)).toBe(true);
+      expect(Buffer.from(uploadedBytes).equals(bytes)).toBe(true);
+    });
+
     it('promotes a FileUpload (no type field) to FILE based on mimeType', async () => {
       const bytes = Buffer.from('arbitrary bytes');
 
@@ -835,9 +869,48 @@ describe('downloadMediaFromRawMessage', () => {
     ]);
   });
 
-  it('downloads voice as audio/silk', async () => {
-    const voiceBytes = Buffer.from([0x46]);
-    downloadSpy.mockResolvedValueOnce(voiceBytes);
+  it('downloads voice and decodes SILK into a playable WAV', async () => {
+    const silkBytes = Buffer.from([0x02, ...Buffer.from('#!SILK_V3'), 0x01]);
+    const wavBytes = Buffer.from('RIFF....WAVE');
+    downloadSpy.mockResolvedValueOnce(silkBytes);
+    mockDecodeWechatVoice.mockResolvedValueOnce({
+      buffer: wavBytes,
+      durationMs: 1200,
+      mimeType: 'audio/wav',
+      name: 'voice.wav',
+    });
+
+    const voiceItem = {
+      encode_type: 6,
+      media: { aes_key: 'k', encrypt_query_param: 'q' },
+      sample_rate: 24_000,
+    };
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeRawMessage({ item_list: [{ type: MessageItemType.VOICE, voice_item: voiceItem }] }),
+    );
+
+    expect(mockDecodeWechatVoice).toHaveBeenCalledWith(silkBytes, voiceItem, expect.any(Function));
+    expect(result).toEqual([
+      {
+        buffer: wavBytes,
+        mimeType: 'audio/wav',
+        name: 'voice.wav',
+        size: wavBytes.length,
+        type: 'audio',
+        url: '',
+      },
+    ]);
+  });
+
+  it('keeps raw bytes when voice decoding falls back', async () => {
+    const rawBytes = Buffer.from([0x46]);
+    downloadSpy.mockResolvedValueOnce(rawBytes);
+    mockDecodeWechatVoice.mockResolvedValueOnce({
+      buffer: rawBytes,
+      mimeType: 'audio/silk',
+      name: 'voice.silk',
+    });
 
     const result = await downloadMediaFromRawMessage(
       api,
@@ -845,16 +918,21 @@ describe('downloadMediaFromRawMessage', () => {
         item_list: [
           {
             type: MessageItemType.VOICE,
-            voice_item: {
-              media: { aes_key: 'k', encrypt_query_param: 'q' },
-            },
+            voice_item: { media: { aes_key: 'k', encrypt_query_param: 'q' } },
           },
         ],
       }),
     );
 
     expect(result).toEqual([
-      { buffer: voiceBytes, mimeType: 'audio/silk', type: 'audio', url: '' },
+      {
+        buffer: rawBytes,
+        mimeType: 'audio/silk',
+        name: 'voice.silk',
+        size: 1,
+        type: 'audio',
+        url: '',
+      },
     ]);
   });
 

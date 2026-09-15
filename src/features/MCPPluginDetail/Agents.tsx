@@ -1,12 +1,14 @@
 'use client';
 
-import { Center, Grid, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Center, Grid, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { InboxIcon, ServerCrash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import AgentItem from '@/features/SkillStore/SkillDetail/AgentItem';
 import { agentListStyles as styles } from '@/features/SkillStore/SkillDetail/style';
 import VirtuosoLoading from '@/features/SkillStore/SkillList/VirtuosoLoading';
@@ -72,12 +74,7 @@ const Agents = memo<AgentsProps>(({ inModal }) => {
     return (
       <Grid gap={12} rows={2} width={'100%'}>
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton
-            active
-            avatar={{ shape: 'square', size: 40 }}
-            key={index}
-            paragraph={{ rows: 1 }}
-          />
+          <ArticleSkeleton avatar={40} key={index} rows={1} />
         ))}
       </Grid>
     );

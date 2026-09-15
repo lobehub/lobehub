@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { copySpaBuild } from './copySpaBuildCore';
+import { copySpaBuild, spaPublicDirNames } from './copySpaBuildCore';
 
 const testRoots: string[] = [];
 
@@ -65,6 +65,16 @@ describe('copySpaBuild', () => {
     });
 
     expect(existsSync(path.join(root, 'public/_spa/model-bank/catalog.js'))).toBe(true);
+  });
+
+  // The desktop renderer build copies the repo `public/` wholesale and prunes
+  // these directories afterwards; a target whose publicDir escapes this list
+  // ships its whole SPA inside the Electron asar.
+  it('derives a public dir name for every copy target', () => {
+    expect(spaPublicDirNames.sort()).toEqual(['_spa', '_spa-auth', '_spa-share', '_spa-workbench']);
+    for (const name of spaPublicDirNames) {
+      expect(name).toMatch(/^_spa/);
+    }
   });
 
   it('publishes Workbench chunks under an isolated public asset root', () => {

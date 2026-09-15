@@ -5,6 +5,8 @@ import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import * as AgentModelModule from '@/database/models/agent';
 import * as ChatGroupModelModule from '@/database/models/chatGroup';
 import * as ResourcePermissionModelModule from '@/database/models/resourcePermission';
+import * as ResourceTransferRequestModelModule from '@/database/models/resourceTransferRequest';
+import { TRANSFER_REQUEST_ALREADY_PENDING } from '@/database/models/resourceTransferRequest';
 import * as UserModelModule from '@/database/models/user';
 import * as AgentGroupRepoModule from '@/database/repositories/agentGroup';
 import * as ChatGroupServiceModule from '@/server/services/agentGroup';
@@ -33,18 +35,29 @@ vi.mock('../_helpers/workspaceAgentGuard', () => ({
   getWorkspaceGroupVirtualAgentIds: vi.fn().mockResolvedValue([]),
 }));
 
+// The recipient check reads workspace membership from the DB; `mockCtx.serverDB`
+// is a bare object, so stub the whole check and assert on its inputs instead.
+vi.mock('@/server/services/resourceTransferRequest', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return { ...actual, assertTransferRecipientValid: vi.fn() };
+});
+
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanEditResource: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
-  buildResourcePermissionState: vi.fn((params: any) => ({
-    ...params,
-    generalAccess: params.accessLevel === 'edit' ? 'editor' : 'viewer',
-  })),
+  buildResourcePermissionState: vi.fn(function (params: any) {
+    return {
+      ...params,
+      generalAccess: params.accessLevel === 'edit' ? 'editor' : 'viewer',
+    };
+  }),
   canPerformResourceAction: vi.fn(),
   getResourceMeta: vi.fn(),
   // `resourceConfigGuard` classifies collaborative builtins to exempt them from the
   // parent-group cap; without this export the guard throws before any assertion.
-  isCollaborativeBuiltinAgent: vi.fn(() => false),
+  isCollaborativeBuiltinAgent: vi.fn(function () {
+    return false;
+  }),
 }));
 
 const publishResourceEventMock = vi.mocked(publishResourceEvent);
@@ -58,6 +71,7 @@ describe('agentGroupRouter', () => {
   let userModelMock: any;
   let chatGroupServiceMock: any;
   let resourcePermissionModelMock: any;
+  let transferRequestModelMock: any;
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -99,10 +113,12 @@ describe('agentGroupRouter', () => {
       deleteGroup: vi.fn(),
       getGroupDetail: vi.fn(),
       getGroups: vi.fn(),
-      mergeAgentsDefaultConfig: vi.fn((_, agents) => agents),
-      normalizeGroupConfig: vi.fn((config) =>
-        config ? { ...DEFAULT_CHAT_GROUP_CHAT_CONFIG, ...config } : undefined,
-      ),
+      mergeAgentsDefaultConfig: vi.fn(function (_, agents) {
+        return agents;
+      }),
+      normalizeGroupConfig: vi.fn(function (config) {
+        return config ? { ...DEFAULT_CHAT_GROUP_CHAT_CONFIG, ...config } : undefined;
+      }),
     };
 
     resourcePermissionModelMock = {
@@ -111,21 +127,37 @@ describe('agentGroupRouter', () => {
       setAccessLevel: vi.fn(),
     };
 
+    transferRequestModelMock = {
+      create: vi.fn(),
+      invalidateForResources: vi.fn(),
+    };
+
     // Use vi.spyOn to mock the class constructors to return our mock instances
-    vi.spyOn(AgentModelModule, 'AgentModel').mockImplementation(() => agentModelMock as any);
+    vi.spyOn(AgentModelModule, 'AgentModel').mockImplementation(function () {
+      return agentModelMock as any;
+    });
     vi.spyOn(ResourcePermissionModelModule, 'ResourcePermissionModel').mockImplementation(
-      () => resourcePermissionModelMock as any,
+      function () {
+        return resourcePermissionModelMock as any;
+      },
     );
-    vi.spyOn(ChatGroupModelModule, 'ChatGroupModel').mockImplementation(
-      () => chatGroupModelMock as any,
+    vi.spyOn(ChatGroupModelModule, 'ChatGroupModel').mockImplementation(function () {
+      return chatGroupModelMock as any;
+    });
+    vi.spyOn(AgentGroupRepoModule, 'AgentGroupRepository').mockImplementation(function () {
+      return agentGroupRepoMock as any;
+    });
+    vi.spyOn(UserModelModule, 'UserModel').mockImplementation(function () {
+      return userModelMock as any;
+    });
+    vi.spyOn(ResourceTransferRequestModelModule, 'ResourceTransferRequestModel').mockImplementation(
+      function () {
+        return transferRequestModelMock as any;
+      },
     );
-    vi.spyOn(AgentGroupRepoModule, 'AgentGroupRepository').mockImplementation(
-      () => agentGroupRepoMock as any,
-    );
-    vi.spyOn(UserModelModule, 'UserModel').mockImplementation(() => userModelMock as any);
-    vi.spyOn(ChatGroupServiceModule, 'AgentGroupService').mockImplementation(
-      () => chatGroupServiceMock as any,
-    );
+    vi.spyOn(ChatGroupServiceModule, 'AgentGroupService').mockImplementation(function () {
+      return chatGroupServiceMock as any;
+    });
 
     mockCtx = {
       serverDB: {},
@@ -248,6 +280,76 @@ describe('agentGroupRouter', () => {
       await caller.deleteGroup({ id: 'group-1' });
 
       expect(chatGroupServiceMock.deleteGroup).toHaveBeenCalledWith('group-1');
+    });
+  });
+
+  describe('transferGroup to a workspace member', () => {
+    const wsCtx = () => ({ serverDB: {}, userId, workspaceId: 'ws-1' });
+
+    it('creates a pending request instead of moving the group', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'cg_1', userId: 'creator-1' });
+      transferRequestModelMock.create.mockResolvedValue({ id: 'req-9' });
+
+      const result = await agentGroupRouter.createCaller(wsCtx() as any).transferGroup({
+        groupId: 'cg_1',
+        targetMemberId: 'member-2',
+        targetWorkspaceId: null,
+      });
+
+      expect(result).toEqual({ requestId: 'req-9', status: 'pending' });
+      expect(transferRequestModelMock.create).toHaveBeenCalledWith({
+        initiatorId: userId,
+        previousOwnerId: 'creator-1',
+        recipientId: 'member-2',
+        resourceId: 'cg_1',
+        resourceType: 'agentGroup',
+      });
+      // The pending handshake moves nothing yet.
+      expect(agentGroupRepoMock.transferToWorkspace).not.toHaveBeenCalled();
+    });
+
+    it('rejects an empty targetMemberId instead of falling through to scope transfer', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'cg_1', userId });
+
+      await expect(
+        agentGroupRouter.createCaller(wsCtx() as any).transferGroup({
+          groupId: 'cg_1',
+          targetMemberId: '',
+          targetWorkspaceId: null,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      // Schema-level rejection: neither the pending-request path nor the
+      // legacy scope-transfer path may run.
+      expect(transferRequestModelMock.create).not.toHaveBeenCalled();
+      expect(agentGroupRepoMock.transferToWorkspace).not.toHaveBeenCalled();
+    });
+
+    it('rejects member transfer outside a workspace', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'cg_1', userId });
+
+      await expect(
+        agentGroupRouter.createCaller(mockCtx).transferGroup({
+          groupId: 'cg_1',
+          targetMemberId: 'member-2',
+          targetWorkspaceId: null,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('maps an existing pending request to CONFLICT', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'cg_1', userId });
+      transferRequestModelMock.create.mockRejectedValue(
+        new Error(TRANSFER_REQUEST_ALREADY_PENDING),
+      );
+
+      await expect(
+        agentGroupRouter.createCaller(wsCtx() as any).transferGroup({
+          groupId: 'cg_1',
+          targetMemberId: 'member-2',
+          targetWorkspaceId: null,
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
     });
   });
 

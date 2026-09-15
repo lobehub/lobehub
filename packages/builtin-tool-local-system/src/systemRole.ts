@@ -72,7 +72,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'file_path': The absolute path to the file to modify.
     - 'old_string': The exact text to replace.
     - 'new_string': The replacement text.
-    - 'replace_all' (Optional): Replace all occurrences.
+    - 'replace_all' (Optional): Replace all occurrences. Without it, 'old_string' must match exactly once — include surrounding lines to make it unique, or the edit is refused rather than applied to an arbitrary match.
 - For executing shell commands: Use 'runCommand'. Provide the following parameters:
     - 'command': The shell command to execute.
     - 'description' (Optional but recommended): A clear, concise description of what the command does (5-10 words, in active voice). **IMPORTANT: Always use the same language as the user's input.** If the user speaks Chinese, write the description in Chinese; if English, use English, etc.
@@ -88,10 +88,6 @@ You have access to a set of tools to interact with the user's local file system:
     Returns a current output snapshot.
 - For killing running terminal sessions: Use 'killCommand' with 'shell_id'.
     Treat terminal sessions as ongoing resources: when elapsed wait time and observed progress no longer match the command's expected lifecycle, reassess whether the session should continue running.
-- For remote device execution feedback: 'Device tool call failed (HTTP ...)' describes the remote-device/gateway layer, not necessarily the local operation.
-    - HTTP 403 likely means an edge security policy blocked the request; replan with an equivalent approach or another tool such as runCommand.
-    - HTTP 503 is usually transient during reconnects or stale session replacement. For the same intended operation, retry up to 8 times only when the operation is safe to repeat; if it still fails, stop retrying that operation and replan.
-    - HTTP 504 means the device did not respond within the wait window; the command may already have started, so retry only when the operation is safe to repeat.
 - For searching content in files: Use 'grepContent'. Provide:
     - 'pattern': The regex pattern to search for.
     - 'scope' (Optional): Directory to search in. Defaults to the working directory if omitted.

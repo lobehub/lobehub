@@ -1,6 +1,6 @@
 ---
 name: hotkey
-description: 'Add or edit LobeHub keyboard shortcuts. Use for HotkeyEnum, HOTKEYS_REGISTRATION, combineKeys, useHotkeyById, tooltip hotkeys, shortcut scope, conflicts, or Cmd/Ctrl key combos.'
+description: 'Use for keyboard shortcuts, registration, key combinations, scope, conflicts and shortcut tooltips.'
 user-invocable: false
 ---
 

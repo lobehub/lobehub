@@ -114,6 +114,67 @@ describe('AcpStdioClient', () => {
     client.close();
   });
 
+  it('delivers later notifications while a server request is still waiting on the host', async () => {
+    const { child, stdout, writes } = createProcess();
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    let releaseServerRequest: ((result: unknown) => void) | undefined;
+    const messages: unknown[] = [];
+    const client = new AcpStdioClient({
+      args: ['agent', 'stdio'],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onMessage: (message) => {
+        messages.push(message);
+      },
+      onRawMessage: vi.fn(),
+      onServerRequest: () =>
+        new Promise((resolve) => {
+          releaseServerRequest = resolve;
+        }),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+
+    stdout.write(
+      `${JSON.stringify({
+        id: 'ask-1',
+        jsonrpc: '2.0',
+        method: 'cursor/ask_question',
+        params: { toolCallId: 'q1' },
+      })}\n`,
+    );
+    await vi.waitFor(() => expect(releaseServerRequest).toBeTypeOf('function'));
+
+    stdout.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          update: {
+            content: { text: 'still streaming', type: 'text' },
+            sessionUpdate: 'agent_message_chunk',
+          },
+        },
+      })}\n`,
+    );
+    await vi.waitFor(() =>
+      expect(messages).toContainEqual(expect.objectContaining({ method: 'session/update' })),
+    );
+
+    releaseServerRequest!({ outcome: { outcome: 'cancelled' } });
+    await vi.waitFor(() =>
+      expect(writes).toContainEqual(
+        expect.objectContaining({
+          id: 'ask-1',
+          result: { outcome: { outcome: 'cancelled' } },
+        }),
+      ),
+    );
+    client.close();
+  });
+
   it('does not dispatch queued or subsequent stdout messages after host close', async () => {
     const { child, stdout } = createProcess();
     spawnMock.mockReturnValue(child);
@@ -147,6 +208,33 @@ describe('AcpStdioClient', () => {
 
     expect(onMessage).toHaveBeenCalledOnce();
     expect(onMessage).toHaveBeenCalledWith({ method: 'first' });
+  });
+
+  it('inherits an outer wrapper process group and signals the child directly', async () => {
+    const { child } = createProcess();
+    spawnMock.mockReturnValue(child);
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = new AcpStdioClient({
+      args: ['agent', 'stdio'],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      detached: false,
+      env: { ...process.env },
+      onMessage: vi.fn(),
+      onRawMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'agent',
+      ['agent', 'stdio'],
+      expect.objectContaining({ detached: false }),
+    );
+    client.close('SIGKILL');
+
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(processKill).not.toHaveBeenCalled();
   });
 
   it('terminates the child process tree with taskkill on Windows', async () => {

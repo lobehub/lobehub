@@ -22,15 +22,6 @@ vi.mock('@/modules/cliEmbedding', () => ({
   resolveCliScript: () => '/app/resources/bin/lobe-cli.js',
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 const mockRemoteServerConfigCtr = {
   getAccessToken: vi.fn(),
   getRemoteServerUrl: vi.fn(),

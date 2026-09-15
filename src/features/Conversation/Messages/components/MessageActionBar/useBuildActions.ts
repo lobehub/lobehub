@@ -1,16 +1,19 @@
 import { useConversationResourceAccess } from '../../../hooks/useConversationResourceAccess';
 import { type MessageActionItem } from '../../../types';
+import { advancedAction } from './actions/advanced';
 import { branchingAction } from './actions/branching';
 import { collapseAction } from './actions/collapse';
 import { commentsAction } from './actions/comments';
 import { continueGenerationAction } from './actions/continueGeneration';
 import { copyAction } from './actions/copy';
+import { copyMessageIdAction } from './actions/copyMessageId';
 import { copyOperationIdAction } from './actions/copyOperationId';
 import { delAction } from './actions/del';
 import { delAndRegenerateAction } from './actions/delAndRegenerate';
 import { editAction } from './actions/edit';
 import { regenerateAction } from './actions/regenerate';
 import { restoreToInputAction } from './actions/restoreToInput';
+import { saveAsEvalCaseAction } from './actions/saveAsEvalCase';
 import { selectAction } from './actions/select';
 import { shareAction } from './actions/share';
 import { translateAction } from './actions/translate';
@@ -35,17 +38,20 @@ export const useBuildActions = (
   const { canUseResource } = useConversationResourceAccess();
 
   const actions: Record<string, MessageActionItem | null> = {
+    advanced: advancedAction.useBuild(ctx),
     branching: branchingAction.useBuild(ctx),
     collapse: collapseAction.useBuild(ctx),
     comments: commentsAction.useBuild(ctx),
     continueGeneration: continueGenerationAction.useBuild(ctx),
     copy: copyAction.useBuild(ctx),
+    copyMessageId: copyMessageIdAction.useBuild(ctx),
     copyOperationId: copyOperationIdAction.useBuild(ctx),
     del: delAction.useBuild(ctx),
     delAndRegenerate: delAndRegenerateAction.useBuild(ctx),
     edit: editAction.useBuild(ctx),
     regenerate: regenerateAction.useBuild(ctx),
     restoreToInput: restoreToInputAction.useBuild(ctx),
+    saveAsEvalCase: saveAsEvalCaseAction.useBuild(ctx),
     select: selectAction.useBuild(ctx),
     share: shareAction.useBuild(ctx),
     translate: translateAction.useBuild(ctx),

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import type { KnowledgeBaseItem } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -132,6 +133,33 @@ describe('KnowledgeBaseModel', () => {
         id,
         name: 'Updated Test Group',
         userId,
+      });
+    });
+
+    // Regression: a shared knowledge base is editable by any member holding
+    // `edit` access, so the generic update must not be a back door into the
+    // identity and scope columns that transfer / publish own.
+    it('ignores identity and scope columns', async () => {
+      const { id } = await knowledgeBaseModel.create({ name: 'Test Group' });
+
+      await knowledgeBaseModel.update(id, {
+        id: 'hijacked-id',
+        name: 'Renamed',
+        userId: 'user2',
+        visibility: 'private',
+        // Not on `KnowledgeBaseItem`, but a JSON payload can carry it in.
+        workspaceId: 'some-other-workspace',
+      } as Partial<KnowledgeBaseItem>);
+
+      const updated = await serverDB.query.knowledgeBases.findFirst({
+        where: eq(knowledgeBases.id, id),
+      });
+      expect(updated).toMatchObject({
+        id,
+        name: 'Renamed',
+        userId,
+        visibility: 'public',
+        workspaceId: null,
       });
     });
   });

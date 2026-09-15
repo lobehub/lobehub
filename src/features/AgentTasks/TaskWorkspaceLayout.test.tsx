@@ -2,19 +2,12 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TaskWorkspaceLayout from './TaskWorkspaceLayout';
 
 const mocks = vi.hoisted(() => ({
   isMobile: false,
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
 }));
 
 vi.mock('react-router', async () => {

@@ -1,4 +1,4 @@
-import { AgentBrowserIdentifier } from '@lobechat/builtin-skills';
+import { AgentBrowserIdentifier } from '@lobechat/builtin-skills/manifests';
 import { isDesktop } from '@lobechat/const';
 import { type BuiltinSkill } from '@lobechat/types';
 
@@ -38,10 +38,10 @@ export const shouldEnableBuiltinSkill = (
   return true;
 };
 
-export const filterBuiltinSkills = (
-  skills: BuiltinSkill[],
+export const filterBuiltinSkills = <T extends Pick<BuiltinSkill, 'identifier'>>(
+  skills: T[],
   context: BuiltinSkillFilterContext = DEFAULT_CONTEXT,
-): BuiltinSkill[] => {
+): T[] => {
   return skills.filter((skill) => shouldEnableBuiltinSkill(skill.identifier, context));
 };
 

@@ -32,7 +32,9 @@ const mockGitHubInstance = {
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
-  GitHub: vi.fn().mockImplementation(() => mockGitHubInstance),
+  GitHub: vi.fn(function () {
+    return mockGitHubInstance;
+  }),
   GitHubNotFoundError: class GitHubNotFoundError extends Error {
     constructor(message: string) {
       super(message);
@@ -52,7 +54,9 @@ const mockParserInstance = {
   parseZipPackage: vi.fn(),
 };
 vi.mock('./parser', () => ({
-  SkillParser: vi.fn().mockImplementation(() => mockParserInstance),
+  SkillParser: vi.fn(function () {
+    return mockParserInstance;
+  }),
 }));
 
 // User-supplied URLs must be fetched through ssrfSafeFetch (SSRF guard), never raw global

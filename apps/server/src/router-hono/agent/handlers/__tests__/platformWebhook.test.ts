@@ -71,6 +71,9 @@ describe('platformWebhook handler', () => {
     // so the handler must receive `c.req.raw` verbatim.
     expect(innerHandler).toHaveBeenCalledTimes(1);
     expect(innerHandler.mock.calls[0][0]).toBe(rawRequest);
+    expect(innerHandler.mock.calls[0][1]).toEqual({
+      waitUntil: expect.any(Function),
+    });
   });
 
   it('passes appId=undefined when only platform is provided', async () => {

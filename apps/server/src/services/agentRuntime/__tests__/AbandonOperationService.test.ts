@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
+
 import { AbandonOperationService } from '../AbandonOperationService';
+import { CompletionLifecycle } from '../CompletionLifecycle';
 
 const buildStore = () => ({
   get: vi.fn(),
@@ -27,44 +31,56 @@ const buildCoordinator = (
 
 const messageUpdateMock = vi.fn().mockResolvedValue({ success: true });
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({ update: messageUpdateMock })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return { update: messageUpdateMock };
+  }),
 }));
 
 const findOperationMock = vi.fn().mockResolvedValue(null);
 const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn().mockImplementation(() => ({
-    findById: findOperationMock,
-    recordCompletion: recordCompletionMock,
-  })),
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: findOperationMock,
+      recordCompletion: recordCompletionMock,
+    };
+  }),
 }));
 
 const dispatchHooksMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('../CompletionLifecycle', () => ({
-  CompletionLifecycle: vi.fn().mockImplementation(() => ({
-    dispatchHooks: dispatchHooksMock,
-  })),
+  CompletionLifecycle: vi.fn().mockImplementation(function () {
+    return {
+      dispatchHooks: dispatchHooksMock,
+    };
+  }),
 }));
 
 const findThreadMock = vi.fn().mockResolvedValue(null);
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({ findById: findThreadMock })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return { findById: findThreadMock };
+  }),
 }));
 
-const topicFindByIdMock = vi.fn().mockResolvedValue(null);
-const topicUpdateMetadataMock = vi.fn().mockResolvedValue(undefined);
+const topicSettleRunningOperationMock = vi
+  .fn()
+  .mockResolvedValue({ assistantMessageId: undefined, status: 'missing' });
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    findById: topicFindByIdMock,
-    updateMetadata: topicUpdateMetadataMock,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      settleRunningOperation: topicSettleRunningOperationMock,
+    };
+  }),
 }));
 
 const stateWith = (overrides: Record<string, any> = {}) => ({
   cost: { total: 0.1 },
   metadata: {
-    agentId: 'agt_x',
     assistantMessageId: 'msg_assist_1',
+  },
+  origin: {
+    agentId: 'agt_x',
     topicId: 'tpc_x',
     userId: 'user_x',
   },
@@ -93,8 +109,9 @@ describe('AbandonOperationService', () => {
     findOperationMock.mockReset().mockResolvedValue(null);
     recordCompletionMock.mockClear();
     findThreadMock.mockReset().mockResolvedValue(null);
-    topicFindByIdMock.mockReset().mockResolvedValue(null);
-    topicUpdateMetadataMock.mockReset().mockResolvedValue(undefined);
+    topicSettleRunningOperationMock
+      .mockReset()
+      .mockResolvedValue({ assistantMessageId: undefined, status: 'missing' });
   });
 
   it('returns found:false when coordinator has no state', async () => {
@@ -131,13 +148,9 @@ describe('AbandonOperationService', () => {
         workspaceId: 'ws_x',
       },
     });
-    topicFindByIdMock.mockResolvedValue({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'msg_assist_1',
-          operationId: 'op_x',
-        },
-      },
+    topicSettleRunningOperationMock.mockResolvedValue({
+      assistantMessageId: 'msg_assist_1',
+      status: 'settled',
     });
 
     const svc = new AbandonOperationService(db, {
@@ -162,7 +175,7 @@ describe('AbandonOperationService', () => {
         toolCalls: 0,
       }),
     );
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(messageUpdateMock).toHaveBeenCalledWith('msg_assist_1', {
       content: '',
       error: expect.objectContaining({
@@ -210,15 +223,6 @@ describe('AbandonOperationService', () => {
         userId: 'user_x',
       },
     });
-    topicFindByIdMock.mockResolvedValue({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'msg_new_placeholder',
-          operationId: 'op_new',
-        },
-      },
-    });
-
     const svc = new AbandonOperationService(db, {
       coordinator: coord as any,
       snapshotStore: store as any,
@@ -228,8 +232,65 @@ describe('AbandonOperationService', () => {
 
     expect(result.abandoned).toBe(true);
     expect(recordCompletionMock).toHaveBeenCalled();
-    expect(topicUpdateMetadataMock).not.toHaveBeenCalled();
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_old');
     expect(messageUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not settle a running topic when operation ownership is no longer provable', async () => {
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const store = buildStore();
+    const db = buildDb({
+      assistantRow: { id: 'msg_assist_1' },
+      operationRow: {
+        agentId: 'agt_x',
+        id: 'op_x',
+        provider: 'grok-build',
+        startedAt: new Date('2026-08-18T08:51:32.466Z'),
+        status: 'running',
+        topicId: 'tpc_x',
+        userId: 'user_x',
+        workspaceId: 'ws_x',
+      },
+    });
+    const svc = new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    });
+
+    await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
+    expect(messageUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('cleans up a no-state child marker and errors its own placeholder', async () => {
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const db = buildDb({
+      operationRow: {
+        id: 'op_child',
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'running',
+        topicId: 'tpc_x',
+        userId: 'user_x',
+      },
+    });
+    topicSettleRunningOperationMock.mockResolvedValue({
+      assistantMessageId: 'msg_child',
+      orchestrationRole: 'member',
+      status: 'settled',
+    });
+
+    const result = await new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: buildStore() as any,
+    }).finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+    expect(result.assistantMessageUpdated).toBe(true);
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_child');
+    expect(messageUpdateMock).toHaveBeenCalledWith(
+      'msg_child',
+      expect.objectContaining({ error: expect.anything() }),
+    );
   });
 
   it('finalizes snapshot and marks assistant message errored when state + partial exist', async () => {
@@ -246,15 +307,6 @@ describe('AbandonOperationService', () => {
         { stepIndex: 1, stepType: 'call_tool' },
       ],
     });
-    topicFindByIdMock.mockResolvedValue({
-      metadata: {
-        runningOperation: {
-          assistantMessageId: 'msg_assist_1',
-          operationId: 'op_x',
-        },
-      },
-    });
-
     const svc = new AbandonOperationService({} as any, {
       coordinator: coord as any,
       snapshotStore: store as any,
@@ -289,7 +341,7 @@ describe('AbandonOperationService', () => {
         type: 'AgentRuntimeError',
       }),
     });
-    expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
     expect(dispatchHooksMock).toHaveBeenCalledWith(
       'op_x',
       expect.objectContaining({
@@ -315,15 +367,6 @@ describe('AbandonOperationService', () => {
       });
       const store = buildStore();
       store.loadPartial.mockResolvedValue(null);
-      topicFindByIdMock.mockResolvedValue({
-        metadata: {
-          runningOperation: {
-            assistantMessageId: 'msg_assist_1',
-            operationId: 'op_x',
-          },
-        },
-      });
-
       const svc = new AbandonOperationService({} as any, {
         coordinator: coord as any,
         snapshotStore: store as any,
@@ -332,7 +375,7 @@ describe('AbandonOperationService', () => {
       const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
       expect(result.found).toBe(true);
-      expect(topicUpdateMetadataMock).toHaveBeenCalledWith('tpc_x', { runningOperation: null });
+      expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_x');
       expect(dispatchHooksMock).not.toHaveBeenCalled();
     },
   );
@@ -379,7 +422,9 @@ describe('AbandonOperationService', () => {
 
   it('does not crash when state has no metadata.assistantMessageId', async () => {
     const coord = buildCoordinator({
-      loadAgentState: vi.fn().mockResolvedValue(stateWith({ metadata: { userId: 'user_x' } })),
+      loadAgentState: vi
+        .fn()
+        .mockResolvedValue(stateWith({ metadata: {}, origin: { userId: 'user_x' } })),
     });
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }], startedAt: 1 });
@@ -431,10 +476,12 @@ describe('AbandonOperationService', () => {
         stateWith({
           metadata: {
             assistantMessageId: 'msg_assist_1',
-            isSubAgent: true,
+          },
+          origin: {
             threadId: 'thread_1',
             userId: 'user_x',
             workspaceId: 'ws_1',
+            lineage: { isSubAgent: true },
           },
         }),
       ),
@@ -474,11 +521,13 @@ describe('AbandonOperationService', () => {
         stateWith({
           metadata: {
             assistantMessageId: 'msg_assist_1',
-            isSubAgent: true,
-            orchestrationRole: 'member',
+          },
+          origin: {
             threadId: 'thread_g',
+            topicId: 'tpc_x',
             userId: 'user_x',
             workspaceId: 'ws_1',
+            lineage: { isSubAgent: true, orchestrationRole: 'member' },
           },
         }),
       ),
@@ -498,7 +547,120 @@ describe('AbandonOperationService', () => {
     // coordinator state is cleaned up normally.
     expect(result.subAgentResume).toBeUndefined();
     expect(findOperationMock).not.toHaveBeenCalled();
+    expect(topicSettleRunningOperationMock).toHaveBeenCalledWith('tpc_x', 'op_member');
     expect(coord.deleteAgentOperation).toHaveBeenCalledWith('op_member');
+  });
+
+  it('opts message/topic/lifecycle models into visitor rows for a visitor run (streamOwnerUserId present)', async () => {
+    // Shared-agent visitor run: op executes as the creator (`user_owner`)
+    // but the visitor (`visitor_1`) owns the stream. The abandon cleanup
+    // touches rows on `topics.senderId <> NULL`, so MessageModel /
+    // TopicModel / CompletionLifecycle must be constructed with
+    // `includeShareVisitor: true` — otherwise the cleanup silently no-ops.
+    (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (CompletionLifecycle as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(
+        stateWith({
+          metadata: {
+            assistantMessageId: 'msg_assist_1',
+            streamOwnerUserId: 'visitor_1',
+          },
+          origin: {
+            agentId: 'agt_x',
+            topicId: 'tpc_x',
+            userId: 'user_owner',
+            workspaceId: 'ws_1',
+          },
+        }),
+      ),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    await new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_visitor', 'inactivity_5m');
+
+    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
+    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
+    expect(CompletionLifecycle).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', {
+      includeShareVisitor: true,
+    });
+  });
+
+  it('keeps the visitor exclusion for an ordinary creator run (no streamOwnerUserId)', async () => {
+    (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (CompletionLifecycle as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const coord = buildCoordinator({
+      loadAgentState: vi.fn().mockResolvedValue(stateWith()),
+    });
+    const store = buildStore();
+    store.loadPartial.mockResolvedValue(null);
+
+    await new AbandonOperationService({} as any, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_x', 'inactivity_5m');
+
+    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, undefined, {
+      includeShareVisitor: false,
+    });
+    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, undefined, {
+      includeShareVisitor: false,
+    });
+    expect(CompletionLifecycle).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, {
+      includeShareVisitor: false,
+    });
+  });
+
+  it('opts the no-state cleanup path into visitor rows unconditionally', async () => {
+    // No-state path only has the persisted `agentOperations` row; the op may
+    // belong to a visitor topic whose rows the default gate would hide.
+    // The service opts in unconditionally so the placeholder can still be
+    // errored / topic settled.
+    (MessageModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+    (TopicModel as unknown as ReturnType<typeof vi.fn>).mockClear();
+
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const store = buildStore();
+    const db = buildDb({
+      operationRow: {
+        agentId: 'agt_x',
+        id: 'op_ns',
+        provider: 'claude-code',
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'running',
+        topicId: 'tpc_x',
+        userId: 'user_x',
+        workspaceId: 'ws_1',
+      },
+    });
+    topicSettleRunningOperationMock.mockResolvedValue({
+      assistantMessageId: 'msg_ns',
+      status: 'settled',
+    });
+
+    await new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: store as any,
+    }).finalizeAbandoned('op_ns', 'inactivity_watchdog');
+
+    expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_x', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
+    expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_x', 'ws_1', undefined, {
+      includeShareVisitor: true,
+    });
   });
 
   it('omits subAgentResume for a non-sub-agent abandoned op', async () => {

@@ -24,6 +24,12 @@ export default {
   'features.desktopSplitView.title': 'Split Tab View',
   'features.heteroSessionImport.desc':
     'Add an "Import Local Agent Sessions" entry to the topic list menu: scan local Claude Code / Codex CLI transcripts and import them as topics, with incremental sync on re-import.',
+  'features.evalCapture.desc':
+    'Adds a message action that captures a conversation turn — its prior context, input and the answer it produced — as an evaluation test case.',
+  'features.evalCapture.title': 'Save a turn as an eval case',
+  'features.gatewayMux.desc':
+    'Route every agent run in this tab over one shared gateway WebSocket instead of opening a socket per run. Reconnects and event replay are handled per run on the shared connection.',
+  'features.gatewayMux.title': 'Single-connection Gateway (experimental)',
   'features.heteroSessionImport.title': 'Local Agent Session Import',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
@@ -46,8 +52,11 @@ export default {
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',
   'features.taskVerify.desc':
-    'Add a delivery-acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
-  'features.taskVerify.title': 'Task Delivery Acceptance',
+    'Add an Acceptance section to the task detail: describe acceptance in one sentence and let AI generate editable verify criteria.',
+  'features.taskVerify.title': 'Acceptance',
+  'features.selfLearning.desc':
+    'Show what each agent has learned from real practice — its rule base, which rules actually get used, and which layers are still blank.',
+  'features.selfLearning.title': 'Self-evolving',
   'features.topicAcceptance.desc':
     'Author a delivery checklist for the current topic right above the composer, so the conversation is held to standards you can edit any time.',
   'features.topicAcceptance.title': 'Topic Acceptance',

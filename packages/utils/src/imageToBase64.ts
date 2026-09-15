@@ -48,7 +48,7 @@ export interface ImageUrlToBase64Options {
 const sizeLimitError = (maxBytes: number) =>
   new RangeError(`Remote binary exceeds the ${maxBytes}-byte download limit`);
 
-const readBlobWithLimit = async (response: Response, maxBytes: number): Promise<Blob> => {
+export const readBlobWithLimit = async (response: Response, maxBytes: number): Promise<Blob> => {
   const declaredLength = Number(response.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
     await response.body?.cancel().catch(() => {});

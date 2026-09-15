@@ -1,15 +1,23 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { FileTextIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AsyncError from '@/components/AsyncError';
+import {
+  RESOURCE_HOME_SECTIONS,
+  ResourceSectionSkeleton,
+} from '@/components/Skeleton/ResourceHome';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { getResourceQueryVisibility } from '@/features/ResourceManager/store/selectors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useClientDataSWR } from '@/libs/swr';
+import { resourceKeys } from '@/libs/swr/keys';
 import { fileService } from '@/services/file';
 
 import SectionTitle from './SectionTitle';
@@ -68,25 +76,29 @@ const formatTime = (date: Date | string) =>
 const RecentPages = memo(() => {
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
+  const workspaceId = useActiveWorkspaceId();
+  const listVisibility = useResourceManagerStore((s) => s.listVisibility);
+  const visibility = workspaceId
+    ? getResourceQueryVisibility(undefined, listVisibility)
+    : undefined;
 
-  const { data, isLoading } = useClientDataSWR('resource-home-recent-pages', () =>
-    fileService.getRecentPages(6),
+  const { data, error, isLoading, mutate } = useClientDataSWR(
+    resourceKeys.recentPages(workspaceId ?? null, visibility),
+    () => fileService.getRecentPages(6, visibility),
   );
 
-  if (!isLoading && !data?.length) return null;
+  if (!isLoading && !error && !data?.length) return null;
 
   return (
     <Flexbox gap={12}>
       <SectionTitle title={t('home.recentPages')} viewAllUrl={'/resource/page'} />
-      {isLoading ? (
-        <div className={styles.grid}>
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton.Node active key={index} style={{ height: 64, width: '100%' }} />
-          ))}
-        </div>
+      {error && !data?.length ? (
+        <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+      ) : isLoading ? (
+        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.pages} />
       ) : (
         <div className={styles.grid}>
-          {data!.map((item) => {
+          {data?.map((item) => {
             const emoji = (item.metadata as { emoji?: string } | null)?.emoji;
             return (
               <button

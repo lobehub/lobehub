@@ -1,6 +1,6 @@
 ---
 name: agent-runtime-hooks
-description: 'Agent runtime lifecycle hooks. Use for before/after tool or step hooks, tool mocks, human intervention, sub-agent calls, context compression, evals, tracing, callAgent, or lifecycle events.'
+description: 'Use for agent lifecycle hooks, tool mocks, intervention, sub-agent calls and context compression.'
 user-invocable: false
 ---
 
@@ -57,7 +57,7 @@ execAgent({ hooks })
 | `apps/server/src/services/agentRuntime/hooks/HookDispatcher.ts` | Registration, dispatch, dispatchBeforeToolCall         |
 | `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`      | Tool/Compact/HumanIntervention hook dispatch           |
 | `apps/server/src/services/agentRuntime/AgentRuntimeService.ts`  | Step hooks + HumanIntervention resume/reject           |
-| `apps/server/src/services/aiAgent/index.ts`                     | CallAgent hook dispatch                                |
+| `apps/server/src/services/aiAgent/subAgentRuns.ts`              | CallAgent hook dispatch                                |
 
 ## Registration Flow
 
@@ -76,7 +76,7 @@ await aiAgentService.execAgent({ agentId, prompt, hooks });
 
 **`beforeStep`** — Before each step. `event: AgentHookEvent`
 **`afterStep`** — After each step. `event: AgentHookEvent` (content, toolsCalling, totalCost, etc.)
-**`onComplete`** — Terminal state. `event: AgentHookEvent` (reason: done/error/interrupted/max_steps/cost_limit)
+**`onComplete`** — Terminal state. `event: AgentHookEvent` (reason: done/error/interrupted/max\_steps/cost\_limit)
 **`onError`** — Error occurred. `event: AgentHookEvent` (errorMessage, errorDetail)
 
 ### Tool Call Level

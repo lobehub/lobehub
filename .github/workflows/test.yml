@@ -146,14 +146,14 @@ jobs:
         run: pnpm install
 
       - name: Run tests
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2 --exclude '**/apps/server/**'
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --project app --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
           name: blob-report-${{ matrix.shard }}
-          path: .vitest-reports
+          path: .vitest/blob
           include-hidden-files: true
           retention-days: 1
 
@@ -183,7 +183,7 @@ jobs:
       - name: Download blob reports
         uses: actions/download-artifact@v7
         with:
-          path: .vitest-reports
+          path: .vitest/blob
           pattern: blob-report-*
           merge-multiple: true
 
@@ -249,6 +249,14 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
+      # pnpm 12 writes broken relative symlinks for workspace members outside the desktop
+      # workspace root (../../packages/*). Installing the root workspace relinks them so
+      # tsgo can resolve sibling packages from source.
+      - name: Relink root workspace members
+        run: pnpm install --ignore-scripts
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
       - name: Typecheck Desktop
         run: pnpm type-check
         working-directory: apps/desktop
@@ -292,14 +300,14 @@ jobs:
         run: pnpm install
 
       - name: Test Server Coverage
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --coverage.reportsDirectory=./apps/server/coverage --dir apps/server --shard=${{ matrix.shard }}/2
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
           name: server-blob-report-${{ matrix.shard }}
-          path: .vitest-reports
+          path: .vitest/blob
           include-hidden-files: true
           retention-days: 1
 
@@ -329,7 +337,7 @@ jobs:
       - name: Download blob reports
         uses: actions/download-artifact@v7
         with:
-          path: .vitest-reports
+          path: .vitest/blob
           pattern: server-blob-report-*
           merge-multiple: true
 
@@ -357,7 +365,6 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
-
 
         ports:
           - 5432:5432

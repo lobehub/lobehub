@@ -215,6 +215,7 @@ async function createActivityPair(opts?: {
 async function createContextPair(opts?: {
   associatedObjectName?: string;
   associatedSubjectName?: string;
+  currentStatus?: string;
   description?: string;
   tags?: string[];
   title?: string;
@@ -245,6 +246,7 @@ async function createContextPair(opts?: {
       associatedSubjects: opts?.associatedSubjectName
         ? [{ name: opts.associatedSubjectName, type: 'person' }]
         : [],
+      currentStatus: opts?.currentStatus,
       description: opts?.description ?? 'A context description',
       tags: opts?.tags,
       title: opts?.title ?? 'A context',
@@ -540,6 +542,63 @@ describe('UserMemoryModel', () => {
         const result = await memoryModel.queryMemories({ layer: LayersEnum.Context });
         expect(result.total).toBe(1);
       });
+
+      it('applies exact context status filters without an external candidate provider', async () => {
+        const { context: active } = await createContextPair({ currentStatus: 'active' });
+        await createContextPair({ currentStatus: 'archived' });
+
+        const result = await memoryModel.queryMemories({
+          layer: LayersEnum.Context,
+          status: ['active'],
+        });
+
+        expect(result.items).toEqual([
+          expect.objectContaining({ context: expect.objectContaining({ id: active.id }) }),
+        ]);
+        expect(result.total).toBe(1);
+      });
+
+      it('hydrates external candidates through current user and context status filters', async () => {
+        const { context: matching } = await createContextPair({ currentStatus: 'active' });
+        const { context: wrongStatus } = await createContextPair({ currentStatus: 'archived' });
+        const { context: otherUser } = await createContextPair({
+          currentStatus: 'active',
+          user: otherUserId,
+        });
+        const ftsSearchCandidates = vi.fn().mockResolvedValue({
+          candidates: [
+            { id: otherUser.id, score: 12 },
+            { id: 'deleted-context', score: 10 },
+            { id: wrongStatus.id, score: 8 },
+            { id: matching.id, score: 6 },
+          ],
+          total: 4,
+        });
+        const model = new UserMemoryModel(serverDB, userId, {
+          ftsSearchCandidateEnabled: true,
+          ftsSearchCandidates,
+        });
+
+        const result = await model.queryMemories({
+          layer: LayersEnum.Context,
+          q: 'candidate',
+          status: ['active'],
+        });
+
+        expect(result.items).toEqual([
+          expect.objectContaining({ context: expect.objectContaining({ id: matching.id }) }),
+        ]);
+        expect(result.total).toBe(1);
+        expect(ftsSearchCandidates).toHaveBeenCalledWith({
+          entity: 'memoryContexts',
+          filters: { memoryStatus: ['active'] },
+          pagination: {},
+          query: {
+            fields: ['parent_text', 'title', 'description', 'current_status'],
+            text: 'candidate',
+          },
+        });
+      });
     });
 
     describe('activity layer', () => {
@@ -550,6 +609,40 @@ describe('UserMemoryModel', () => {
 
         expect(result.items.length).toBe(1);
         expect(result.total).toBe(1);
+      });
+
+      it('preserves parent memory fields and any-tag semantics for external candidates', async () => {
+        const ftsSearchCandidates = vi.fn().mockResolvedValue({ candidates: [], total: 0 });
+        const model = new UserMemoryModel(serverDB, userId, {
+          ftsSearchCandidateEnabled: true,
+          ftsSearchCandidates,
+        });
+
+        await model.queryMemories({
+          layer: LayersEnum.Activity,
+          q: 'candidate',
+          tags: ['typescript', 'search'],
+        });
+
+        expect(ftsSearchCandidates).toHaveBeenCalledWith({
+          entity: 'memoryActivities',
+          filters: {
+            memoryTagMatch: 'any',
+            memoryTags: ['typescript', 'search'],
+          },
+          pagination: {},
+          query: {
+            fields: [
+              'parent_title',
+              'parent_summary',
+              'parent_details',
+              'narrative',
+              'notes',
+              'feedback',
+            ],
+            text: 'candidate',
+          },
+        });
       });
     });
 
@@ -619,6 +712,52 @@ describe('UserMemoryModel', () => {
   });
 
   describe('searchMemory', () => {
+    it('routes each hybrid lexical layer through external candidates', async () => {
+      const { activity } = await createActivityPair({ title: 'Candidate activity' });
+      const { context } = await createContextPair({ title: 'Candidate context' });
+      const { experience } = await createExperiencePair({});
+      const { identity } = await createIdentityPair({});
+      const { preference } = await createPreferencePair({});
+      const candidateIds = {
+        memoryActivities: activity.id,
+        memoryContexts: context.id,
+        memoryExperiences: experience.id,
+        memoryIdentities: identity.id,
+        memoryPreferences: preference.id,
+      };
+      const ftsSearchCandidates = vi
+        .fn()
+        .mockImplementation((request: { entity: keyof typeof candidateIds }) =>
+          Promise.resolve({
+            candidates: [{ id: candidateIds[request.entity], score: 8 }],
+            total: 1,
+          }),
+        );
+      const model = new UserMemoryModel(serverDB, userId, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.searchMemory({
+        layers: [
+          LayersEnum.Activity,
+          LayersEnum.Context,
+          LayersEnum.Experience,
+          LayersEnum.Identity,
+          LayersEnum.Preference,
+        ],
+        queries: ['candidate'],
+        topK: { activities: 1, contexts: 1, experiences: 1, identities: 1, preferences: 1 },
+      });
+
+      expect(result.activities.map(({ id }) => id)).toEqual([activity.id]);
+      expect(result.contexts.map(({ id }) => id)).toEqual([context.id]);
+      expect(result.experiences.map(({ id }) => id)).toEqual([experience.id]);
+      expect(result.identities.map(({ id }) => id)).toEqual([identity.id]);
+      expect(result.preferences.map(({ id }) => id)).toEqual([preference.id]);
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(5);
+    });
+
     it('boosts short-term related memories with matching tags and category during hybrid ranking', async () => {
       const seedTime = new Date('2024-01-10T10:00:00.000Z');
       const boostedTime = new Date('2024-01-10T16:00:00.000Z');

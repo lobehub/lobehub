@@ -1388,6 +1388,57 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(asst.content).toBe('final answer');
     });
 
+    /**
+     * @example A finish request on a stale replica preserves the final snapshot written elsewhere.
+     */
+    it('does not let a stale finish overwrite a newer assistant snapshot', async () => {
+      // ROOT CAUSE:
+      //
+      // A warm serverless replica can retain an older per-operation accumulator
+      // while another replica persists a newer text snapshot to the shared DB.
+      // Before the fix, heteroFinish flushed the stale accumulator and replaced
+      // the final answer with the preceding progress message.
+      //
+      // We fixed this by making heteroIngest the only content/reasoning writer;
+      // a successful finish now releases operation state without rewriting text.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_chunk', 0, {
+            chunkType: 'text',
+            content: 'progress',
+            snapshotMode: 'replace',
+            snapshotSeq: 4,
+          }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Simulate a newer snapshot committed by another Lambda replica.
+      h.messages.set('asst-1', {
+        ...h.messages.get('asst-1')!,
+        content: 'progress\n\nfinal answer',
+        metadata: { heteroTextSnapshotSeq: 5 },
+      });
+
+      await h.handler.finish({
+        operationId: 'op-1',
+        result: 'success',
+        topicId: 'topic-1',
+      });
+
+      expect(h.messages.get('asst-1')).toMatchObject({
+        content: 'progress\n\nfinal answer',
+        metadata: { heteroTextSnapshotSeq: 5 },
+      });
+    });
+
     it('writes error onto the assistant when terminal event is error', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -1760,6 +1811,29 @@ describe('HeterogeneousPersistenceHandler', () => {
   });
 
   describe('warm replica step resync', () => {
+    it('reports a late advanced batch as stale after its operation was removed', async () => {
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'step1' })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      h.topicModel.findById.mockResolvedValue({ agentId: null, id: 'topic-1', metadata: {} });
+
+      await expect(
+        h.handler.ingest({
+          events: [buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'late' })],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow('Stale hetero operation op-1');
+    });
+
     it('switches to the DB-persisted step assistant when a later-step batch lands on a stale warm replica', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',

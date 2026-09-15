@@ -129,6 +129,12 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableStorageOverage).toBe(true);
   });
 
+  it('should keep realtime voice dictation disabled by default', () => {
+    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
+
+    expect(mappedState.enableVoiceDictation).toBe(false);
+  });
+
   it('should keep onboarding v2 off by default outside development', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 
@@ -165,6 +171,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableDevDock).toBe(false);
   });
 
+  it('should keep agent share publishing off by default and enable it for listed creators', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_share).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentShare).toBe(false);
+
+    const config = { agent_share: ['creator-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'creator-123').enableAgentShare).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShare).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,
@@ -181,6 +198,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       auth_captcha: true,
       market: true,
       speech_to_text: true,
+      voice_dictation: true,
       changelog: false,
       api_key_manage: false,
       cloud_promotion: true,
@@ -209,6 +227,7 @@ describe('mapFeatureFlagsEnvToState', () => {
       enableStorageOverage: false,
       showMarket: true,
       enableSTT: true,
+      enableVoiceDictation: true,
       showCloudPromotion: true,
       hideGitHub: false,
       hideDocs: true,

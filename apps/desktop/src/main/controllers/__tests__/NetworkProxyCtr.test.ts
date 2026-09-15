@@ -9,16 +9,6 @@ const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock undici - create mocks directly using vi.fn()
 vi.mock('undici', () => ({
   fetch: vi.fn(),
@@ -66,8 +56,14 @@ describe('NetworkProxyCtr', () => {
     networkProxyCtr = new NetworkProxyCtr(mockApp);
 
     // Set default return values for undici mocks
-    vi.mocked(mockUndici.Agent).mockReturnValue({});
-    vi.mocked(mockUndici.ProxyAgent).mockReturnValue({});
+    // `Agent`/`ProxyAgent` are constructed with `new`, so their implementations must
+    // be constructable (vitest 5 rejects arrow functions / `mockReturnValue` here).
+    vi.mocked(mockUndici.Agent).mockImplementation(function () {
+      return {};
+    });
+    vi.mocked(mockUndici.ProxyAgent).mockImplementation(function () {
+      return {};
+    });
     vi.mocked(mockUndici.getGlobalDispatcher).mockReturnValue({
       destroy: vi.fn().mockResolvedValue(undefined),
     });

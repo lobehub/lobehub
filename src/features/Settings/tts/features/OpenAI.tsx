@@ -1,8 +1,8 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { Form, Icon } from '@lobehub/ui';
+import { Select, Skeleton } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -25,7 +25,7 @@ const OpenAI = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  if (!isUserStateInit) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!isUserStateInit) return <Skeleton.Text rows={5} />;
 
   const openai: FormGroupItemType = {
     children: [

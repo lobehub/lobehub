@@ -16,10 +16,6 @@ vi.mock('@/store/home', () => ({
     selector({ refreshAgentList: mocks.refreshAgentList }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/services/agent', () => ({
   agentService: {
     updateAgentSlug: (...args: unknown[]) => mocks.updateAgentSlug(...args),

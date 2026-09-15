@@ -1,15 +1,13 @@
 import { type AgentState } from '@lobechat/agent-runtime';
-import { type BotPlatformContext } from '@lobechat/context-engine';
 import {
+  type AgentShareVisitorContext,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
 } from '@lobechat/types';
-import type { SearchDecision } from 'model-bank';
 
 import { type MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
-import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
 import type {
   ExecGroupMemberParams,
@@ -20,7 +18,21 @@ import { type ToolExecutionService } from '@/server/services/toolExecution';
 import { type IStreamEventManager } from './types';
 
 export interface RuntimeExecutorContext {
-  agentConfig?: any;
+  /**
+   * Cancels tool work that is still in flight for this step. Driven by the
+   * persisted interruption flag (the step runs in its own invocation, so there
+   * is no in-process controller to share with whoever requested the stop).
+   */
+  abortSignal?: AbortSignal;
+  /**
+   * Shared-agent visitor marker, read back from
+   * `state.principal.actor.shareVisitor`. Present ONLY for a share-visitor run;
+   * its presence alone is the signal every per-step consumer keys off. Forwarded
+   * into `ToolExecutionContext.agentShareVisitor` so
+   * `BuiltinToolsExecutor.execute` can re-check the visitor's grants right
+   * before dispatch — see `isShareBlockedDataToolCall` in `shareGate.ts`.
+   */
+  agentShareVisitor?: AgentShareVisitorContext;
   /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool
    * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result
@@ -29,9 +41,6 @@ export interface RuntimeExecutorContext {
    */
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
-  botPlatformContext?: BotPlatformContext;
-  discordContext?: any;
-  evalContext?: EvalContext;
   /**
    * Callback to fork a group member ("call agent member") under a
    * `lobe-group-management` tool call. Injected by AiAgentService; powers the
@@ -53,8 +62,8 @@ export interface RuntimeExecutorContext {
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
+  modelRuntimeConfig?: AgentState['modelRuntimeConfig'];
   operationId: string;
-  searchDecision?: SearchDecision;
   serverDB: LobeChatDatabase;
   stepIndex: number;
   stream?: boolean;
@@ -74,7 +83,6 @@ export interface RuntimeExecutorContext {
    */
   tracingContextEngine?: (input: unknown, output: unknown) => void;
   userId?: string;
-  userTimezone?: string;
   /**
    * Workspace scoping for ownership filters on models/services constructed
    * inside the agent runtime. Threaded down from the originating request

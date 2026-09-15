@@ -57,8 +57,8 @@ describe('gmailUnderstandingProvider', () => {
     });
   });
 
-  /** @example A sanitized connector failure remains identifiable in partial diagnostics. */
-  it('preserves the connector failure code for failed Gmail searches', async () => {
+  /** @example A connector failure remains identifiable in partial diagnostics. */
+  it('preserves the connector failure code and message for failed Gmail searches', async () => {
     const searchMessages = vi
       .fn()
       .mockResolvedValueOnce([
@@ -73,6 +73,7 @@ describe('gmailUnderstandingProvider', () => {
       .mockRejectedValue(
         new ConnectorDataError({
           code: 'gmail_tool_version_unavailable',
+          message: 'Composio could not resolve Gmail tool version 20260814',
           operation: 'searchMessages',
           provider: 'gmail',
           retryable: false,
@@ -99,8 +100,41 @@ describe('gmailUnderstandingProvider', () => {
     /** @example expect(result.diagnostics.errors[0].code).toBe('gmail_tool_version_unavailable'); */
     expect(result.diagnostics.errors[0]).toMatchObject({
       code: 'gmail_tool_version_unavailable',
+      message: 'Composio could not resolve Gmail tool version 20260814',
       operation: 'receipts',
       retryable: false,
     });
+  });
+
+  /** @example expect(error.cause).toBe(upstreamError); */
+  it('retains the original retryable error when Gmail evidence collection fails', async () => {
+    const upstreamError = new ConnectorDataError({
+      code: 'gmail_search_failed',
+      message: 'Composio Gmail search timed out',
+      operation: 'searchMessages',
+      provider: 'gmail',
+      retryable: true,
+    });
+    const searchMessages = vi.fn().mockRejectedValueOnce(upstreamError).mockResolvedValue([]);
+
+    const error = await gmailUnderstandingProvider
+      .collect({
+        connectorData: {
+          getGmailClient: vi.fn(async () => ({
+            getAccount: vi.fn(async () => ({
+              externalAccountId: 'gmail-account',
+              scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+            })),
+            searchMessages,
+          })),
+        } as never,
+        userId: 'user-id',
+      })
+      .catch((reason) => reason);
+
+    /** @example expect(error).toBeInstanceOf(ConnectorDataError); */
+    expect(error).toBeInstanceOf(ConnectorDataError);
+    /** @example expect(error.cause).toBe(upstreamError); */
+    expect(error.cause).toBe(upstreamError);
   });
 });

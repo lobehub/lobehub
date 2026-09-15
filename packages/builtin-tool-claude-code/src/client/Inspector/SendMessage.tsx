@@ -16,7 +16,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 70%;
     margin-inline-start: 6px;
     padding-block: 1px;
     padding-inline: 8px;
@@ -50,8 +49,10 @@ export const SendMessageInspector = memo<BuiltinInspectorProps<SendMessageArgs>>
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{recap ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {recap ? `${label}:` : label}
+        </span>
         {recap && <span className={styles.chip}>{recap}</span>}
       </div>
     );

@@ -1,8 +1,8 @@
 import { type ChatMessageError } from '@lobechat/types';
 import { type AudioPlayerProps } from '@lobehub/tts/react';
 import { AudioPlayer } from '@lobehub/tts/react';
-import { ActionIcon, Flexbox, Highlighter } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
+import { ActionIcon, Alert, Button } from '@lobehub/ui/base-ui';
 import { TrashIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

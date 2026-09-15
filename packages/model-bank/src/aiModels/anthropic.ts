@@ -11,6 +11,43 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      "Claude Fable 5.1 is Anthropic's most capable generally available model. It outperforms Fable 5 on long-running coding and research at the same base price, with cache reads at a quarter of the cost.",
+    displayName: 'Claude Fable 5.1',
+    enabled: true,
+    family: 'claude-mythos',
+    generation: 'mythos-5.1',
+    id: 'claude-fable-5-1',
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 50, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 12.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-01',
+    // Adaptive thinking is always on and cannot be disabled (400 on `thinking.type: disabled`),
+    // so the `enableAdaptiveThinking` toggle from Fable 5 is intentionally omitted.
+    // https://platform.claude.com/docs/en/models/fable-5-1/migration-guide
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'opus47Effort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       "Claude Fable 5 is Anthropic's strongest model — a new tier above Opus for the most demanding reasoning, agentic work, and coding, at a premium price.",
     displayName: 'Claude Fable 5',
     enabled: true,
@@ -354,42 +391,6 @@ const anthropicChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-10-16',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Opus 4.1 is Anthropic’s newest and most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
-    displayName: 'Claude Opus 4.1',
-    family: 'claude-opus',
-    generation: 'claude-4.1',
-    id: 'claude-opus-4-1-20250805',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 32_000,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 75, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 30, '5m': 18.75 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-08-05',
     settings: {
       extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
       searchImpl: 'params',

@@ -1,3 +1,5 @@
+import { isDesktop } from '@lobechat/const';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   AppWindowIcon,
@@ -9,11 +11,17 @@ import {
   Coins,
   CreditCard,
   Database,
+  EllipsisIcon,
+  FlaskConical,
   HandCoins,
+  Info,
+  KeyboardIcon,
   KeyIcon,
   KeyRound,
   Map,
+  MessageCircleIcon,
   MonitorSmartphoneIcon,
+  PaletteIcon,
   ScrollText,
   Sparkles,
   TagIcon,
@@ -23,16 +31,21 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { useElectronStore } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
+  Account = 'account',
   Admin = 'admin',
   Agent = 'agent',
   Developer = 'developer',
   General = 'general',
   Subscription = 'subscription',
+  System = 'system',
 }
 
 export interface WorkspaceSettingCategoryItem {
@@ -50,6 +63,7 @@ export interface WorkspaceSettingCategoryGroup {
 export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
+  const { t: tLabs } = useTranslation('labs');
   const { t: tSubscription } = useTranslation('subscription');
   const { allowed: canManageWorkspace } = usePermission('manage_settings');
   const { allowed: canViewBilling } = usePermission('view_billing');
@@ -59,10 +73,61 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   // immediately 403s.
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
+  const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
+  const [avatar, username] = useUserStore((s) => [
+    userProfileSelectors.userAvatar(s),
+    userProfileSelectors.nickName(s),
+  ]);
+  const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
+
+  const avatarUrl = useMemo(() => {
+    if (!avatar) return undefined;
+    if (isDesktop && avatar.startsWith('/') && remoteServerUrl) {
+      return remoteServerUrl + avatar;
+    }
+    return avatar;
+  }, [avatar, remoteServerUrl]);
 
   return useMemo(
     () =>
       [
+        // Account-level settings (profile / appearance / hotkeys / messenger)
+        // follow the user, not the workspace. They are mirrored here so members
+        // can reach them without leaving the workspace; the pages are the
+        // personal ones.
+        // Leads the sidebar so the user's own identity stays on top, like the
+        // personal settings sidebar.
+        {
+          items: [
+            {
+              icon: avatarUrl ? (
+                <Avatar avatar={avatarUrl} shape={'square'} size={26} />
+              ) : undefined,
+              key: WorkspaceSettingsTabs.Profile,
+              label: username || tAuth('tab.profile'),
+            },
+            {
+              icon: PaletteIcon,
+              key: WorkspaceSettingsTabs.Appearance,
+              label: t('tab.appearance'),
+            },
+            {
+              icon: KeyboardIcon,
+              key: WorkspaceSettingsTabs.Hotkey,
+              label: t('tab.hotkey'),
+            },
+            // The System Bot binding is a per-user identity (owned by userId,
+            // not the workspace); reaching a workspace's agents happens via the
+            // scope selector on the page itself.
+            {
+              icon: MessageCircleIcon,
+              key: WorkspaceSettingsTabs.Messenger,
+              label: t('tab.messenger'),
+            },
+          ],
+          key: WorkspaceSettingsGroupKey.Account,
+          title: t('group.profile'),
+        },
         {
           items: [
             {
@@ -92,7 +157,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
           ],
           key: WorkspaceSettingsGroupKey.General,
-          title: t('workspaceSetting.group.general'),
+          title: t('workspaceSetting.group.workspace'),
         },
         {
           items: [
@@ -168,30 +233,11 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Creds,
               label: t('tab.creds'),
             },
-            // Messenger (chat platform) is intentionally omitted from workspace
-            // settings: the System Bot binding is a per-user/personal identity
-            // (the link is owned by `userId`, not the workspace), and reaching a
-            // workspace's agents happens via the scope selector on the *personal*
-            // Messenger page. There is nothing workspace-level to configure here.
+            // Messenger lives in the Account group above — it is a per-user
+            // binding, not workspace configuration.
           ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
-        },
-        (canCreateContent || enableOAuthApps) && {
-          items: [
-            canCreateContent && {
-              icon: KeyIcon,
-              key: WorkspaceSettingsTabs.APIKey,
-              label: tAuth('tab.apikey'),
-            },
-            enableOAuthApps && {
-              icon: AppWindowIcon,
-              key: WorkspaceSettingsTabs.OAuthApps,
-              label: tAuth('tab.oauthApps'),
-            },
-          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
-          key: WorkspaceSettingsGroupKey.Developer,
-          title: t('group.developer'),
         },
         // The Admin group is available to Admin and Owner.
         canManageWorkspace && {
@@ -210,15 +256,61 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Admin,
           title: t('workspaceSetting.group.admin'),
         },
+        // System group: Storage stays in Admin because it is workspace-scoped
+        // there; About is informational and visible to every role.
+        !hideDocs && {
+          items: [
+            {
+              icon: Info,
+              key: WorkspaceSettingsTabs.About,
+              label: t('tab.about'),
+            },
+          ],
+          key: WorkspaceSettingsGroupKey.System,
+          title: t('group.system'),
+        },
+        // Developer group sits last, mirroring the personal sidebar: Advanced
+        // and Labs are user preferences (always shown), API Key / OAuth apps
+        // keep their gates.
+        {
+          items: [
+            {
+              icon: EllipsisIcon,
+              key: WorkspaceSettingsTabs.Advanced,
+              label: t('tab.advanced'),
+            },
+            canCreateContent && {
+              icon: KeyIcon,
+              key: WorkspaceSettingsTabs.APIKey,
+              label: tAuth('tab.apikey'),
+            },
+            enableOAuthApps && {
+              icon: AppWindowIcon,
+              key: WorkspaceSettingsTabs.OAuthApps,
+              label: tAuth('tab.oauthApps'),
+            },
+            {
+              icon: FlaskConical,
+              key: WorkspaceSettingsTabs.Labs,
+              label: tLabs('title'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Developer,
+          title: t('group.developer'),
+        },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
     [
       t,
       tAuth,
+      tLabs,
       tSubscription,
       enableOAuthApps,
       canManageWorkspace,
       canViewBilling,
       canCreateContent,
+      hideDocs,
+      avatarUrl,
+      username,
     ],
   );
 };

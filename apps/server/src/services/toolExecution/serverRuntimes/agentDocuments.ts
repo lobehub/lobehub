@@ -146,7 +146,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           );
           return doc;
         },
-        createDocument: async ({ agentId, content, hintIsSkill, title }) => {
+        createDocument: async ({ agentId, content, hintIsSkill, parentId, title }) => {
           const doc = await pinToTask(
             await withDocumentOutcome(
               {
@@ -158,12 +158,19 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 summary: 'Agent documents created a document.',
                 toolAction: 'create',
               },
-              () => service.createDocument(agentId, title, content, { hintIsSkill }),
+              () => service.createDocument(agentId, title, content, { hintIsSkill, parentId }),
             ),
           );
           return doc;
         },
-        createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) => {
+        createTopicDocument: async ({
+          agentId,
+          content,
+          hintIsSkill,
+          parentId,
+          title,
+          topicId,
+        }) => {
           const doc = await pinToTask(
             await withDocumentOutcome(
               {
@@ -175,7 +182,11 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
                 summary: 'Agent documents created a topic document.',
                 toolAction: 'create',
               },
-              () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
+              () =>
+                service.createForTopic(agentId, title, content, topicId, {
+                  hintIsSkill,
+                  parentId,
+                }),
             ),
           );
           return doc;

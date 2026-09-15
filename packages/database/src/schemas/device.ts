@@ -11,9 +11,9 @@ import { workspaces } from './workspace';
  *
  * `deviceId` is derived from a machine-level identifier
  * (`sha256(machineUUID + userId + salt)`), so it survives LobeHub reinstalls
- * and desktop upgrades. Online status is NOT stored here — it lives in the
- * DeviceGatewayDO in-memory WS attachments; this table only records "ever
- * seen" so offline devices stay visible and bindable.
+ * and desktop upgrades. Online status is NOT stored here — it belongs to the
+ * device gateway's live connection state; this table only records "ever seen"
+ * so offline devices stay visible and bindable.
  */
 export const devices = pgTable(
   'devices',

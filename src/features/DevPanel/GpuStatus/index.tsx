@@ -5,12 +5,14 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Fragment, memo, useEffect, useState } from 'react';
 
+import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 import { electronDevtoolsService } from '@/services/electron/devtools';
 
 const styles = createStaticStyles(({ css }) => ({
   device: css`
     display: grid;
     grid-template-columns: 96px 1fr;
+    flex-shrink: 0;
     gap: 4px 8px;
 
     padding-block: 10px;
@@ -34,8 +36,11 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextQuaternary};
   `,
   legend: css`
+    flex-shrink: 0;
+
     padding-block: 8px 12px;
     padding-inline: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 10px;
     line-height: 1.6;
@@ -46,6 +51,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   ok: css`
     color: ${cssVar.colorSuccess};
+  `,
+  rows: css`
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
   `,
   row: css`
     display: grid;
@@ -103,13 +113,18 @@ const GpuStatusPanel = memo(() => {
     };
   }, []);
 
-  if (failed) return <div className={styles.empty}>GPU status unavailable over ipc.</div>;
+  if (failed)
+    return (
+      <div className={devDockPanelStyles.root}>
+        <div className={styles.empty}>GPU status unavailable over ipc.</div>
+      </div>
+    );
   if (!status) return null;
 
   const features = Object.entries(status.featureStatus).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <Flexbox height={'100%'}>
+    <Flexbox className={devDockPanelStyles.root}>
       <div className={styles.device}>
         {DEVICE_LABELS.map(([label, key]) => (
           <Fragment key={key}>
@@ -120,12 +135,14 @@ const GpuStatusPanel = memo(() => {
           </Fragment>
         ))}
       </div>
-      {features.map(([feature, value]) => (
-        <div className={styles.row} key={feature}>
-          <span className={styles.muted}>{feature}</span>
-          <span className={statusClass(value)}>{value}</span>
-        </div>
-      ))}
+      <div className={styles.rows}>
+        {features.map(([feature, value]) => (
+          <div className={styles.row} key={feature}>
+            <span className={styles.muted}>{feature}</span>
+            <span className={statusClass(value)}>{value}</span>
+          </div>
+        ))}
+      </div>
       <div className={styles.legend}>
         `enabled_*` runs on the GPU, `*_software` fell back to the CPU renderer, `*_off_ok` is
         switched off by design, and anything else is a hard disable worth investigating on

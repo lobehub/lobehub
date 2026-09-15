@@ -13,10 +13,11 @@ export const labPreferSelectors = {
   enableCodexAppServer: (s: UserState): boolean => s.preference.lab?.enableCodexAppServer ?? false,
   enableDesktopSplitView: (s: UserState): boolean =>
     s.preference.lab?.enableDesktopSplitView ?? false,
+  enableEvalCapture: (s: UserState): boolean => s.preference.lab?.enableEvalCapture ?? false,
+  enableGatewayMux: (s: UserState): boolean => s.preference.lab?.enableGatewayMux ?? false,
   enableHeteroSessionImport: (s: UserState): boolean =>
     s.preference.lab?.enableHeteroSessionImport ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
-  enableInAppBrowser: (s: UserState): boolean => s.preference.lab?.enableInAppBrowser ?? false,
   enableInputMarkdown: (s: UserState): boolean =>
     s.preference.lab?.enableInputMarkdown ?? DEFAULT_PREFERENCE.lab?.enableInputMarkdown ?? true,
   enableMessageTextSelectionActions: (s: UserState): boolean =>
@@ -24,6 +25,7 @@ export const labPreferSelectors = {
     DEFAULT_PREFERENCE.lab?.enableMessageTextSelectionActions ??
     false,
   enableOAuthApps: (s: UserState): boolean => s.preference.lab?.enableOAuthApps ?? false,
+  enableSelfLearning: (s: UserState): boolean => s.preference.lab?.enableSelfLearning ?? false,
   enableProjects: (s: UserState): boolean => s.preference.lab?.enableProjects ?? false,
   enableTaskVerify: (s: UserState): boolean => s.preference.lab?.enableTaskVerify ?? false,
   enableTopicAcceptance: (s: UserState): boolean =>

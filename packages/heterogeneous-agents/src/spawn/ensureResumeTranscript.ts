@@ -39,6 +39,8 @@ export const isValidClaudeSessionId = (sessionId: string): boolean =>
  * Returns `null` for a session id that could not be a real CC session.
  */
 export const resolveClaudeCodeTranscriptPath = async (params: {
+  /** Claude profile root selected through CLAUDE_CONFIG_DIR. */
+  configDir?: string;
   cwd: string;
   home?: string;
   sessionId: string;
@@ -53,7 +55,11 @@ export const resolveClaudeCodeTranscriptPath = async (params: {
   } catch {
     // cwd may not exist yet — fall back to the literal path, same as the CLI
   }
-  const projectDir = path.join(home, '.claude', 'projects', encodeClaudeProjectDir(realCwd));
+  const projectDir = path.join(
+    params.configDir ?? path.join(home, '.claude'),
+    'projects',
+    encodeClaudeProjectDir(realCwd),
+  );
   const filePath = path.join(projectDir, `${sessionId}.jsonl`);
 
   // Belt-and-braces: the regex already forbids separators, but assert the
@@ -96,6 +102,7 @@ export interface EnsureResumeTranscriptResult {
  * filesystem path.
  */
 export const ensureClaudeCodeResumeTranscript = async (params: {
+  configDir?: string;
   cwd: string;
   home?: string;
   messages: HeteroSessionImportMessage[];
@@ -103,7 +110,12 @@ export const ensureClaudeCodeResumeTranscript = async (params: {
   transcriptOptions?: Partial<Omit<BuildClaudeCodeTranscriptOptions, 'cwd' | 'sessionId'>>;
 }): Promise<EnsureResumeTranscriptResult> => {
   const { cwd, messages, sessionId } = params;
-  const filePath = await resolveClaudeCodeTranscriptPath({ cwd, home: params.home, sessionId });
+  const filePath = await resolveClaudeCodeTranscriptPath({
+    configDir: params.configDir,
+    cwd,
+    home: params.home,
+    sessionId,
+  });
   if (!filePath) return { path: null, reason: 'invalid-session-id', written: false };
 
   if (await fileExists(filePath)) return { path: filePath, reason: 'exists', written: false };

@@ -102,6 +102,35 @@ describe('LobeQiniuAI - custom features', () => {
       expect(models).toEqual([]);
     });
 
+    it('should map upstream context_length/max_tokens onto the processed card', async () => {
+      const mockClient = {
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [
+              {
+                context_length: 256000,
+                created: 1770370439,
+                id: 'meituan/longcat-flash-lite',
+                max_tokens: 320000,
+                object: 'model',
+                owned_by: 'system',
+              },
+            ],
+          }),
+        },
+      };
+
+      const models = await params.models!({ client: mockClient as any });
+
+      expect(models).toEqual([
+        expect.objectContaining({
+          contextWindowTokens: 256000,
+          id: 'meituan/longcat-flash-lite',
+          maxOutput: 320000,
+        }),
+      ]);
+    });
+
     it('should handle API errors gracefully', async () => {
       const mockClient = {
         models: {

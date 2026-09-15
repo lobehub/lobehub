@@ -1,4 +1,8 @@
-import { type CallLLMPayload, stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
+import {
+  type AgentWorldSnapshot,
+  type CallLLMPayload,
+  stripAssistantReasoningForReplay,
+} from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   applyModelExtendParams,
@@ -12,20 +16,24 @@ import type { LobeAgentChatConfig, UIChatMessage } from '@lobechat/types';
 import {
   type AiModelReasoningConfig,
   type ExtendParamsType,
+  type LobeDefaultAiModelListItem,
   MODEL_REASONING_EXTEND_PARAMS,
   ModelProvider,
 } from 'model-bank';
 
 import { AiModelModel } from '@/database/models/aiModel';
+import { TopicModel } from '@/database/models/topic';
 
 import type { RuntimeExecutorContext } from '../context';
 import { log } from '../executorHelpers';
+import { resolveModelMediaCapabilities } from '../resolveModelMediaCapabilities';
 
 interface ResolveServerCallLlmContextHintsInput {
   ctx: RuntimeExecutorContext;
   llmPayload: CallLLMPayload;
   model: string;
   provider: string;
+  world?: AgentWorldSnapshot;
 }
 
 export interface ServerCallLlmContextHints {
@@ -43,25 +51,41 @@ export interface ServerCallLlmContextHints {
   shouldReplayAssistantReasoning: boolean;
 }
 
-export const resolveServerCallLlmContextHints = async ({
-  ctx,
-  llmPayload,
+export interface ResolvedModelExtendParams {
+  /** Bundled card matched by id across any provider (aggregation fallback). */
+  canonicalModelCard?: LobeDefaultAiModelListItem;
+  /** Bundled card for exactly `provider`/`model`. */
+  modelCard?: LobeDefaultAiModelListItem;
+  /** Effective extend params: user row → provider card → canonical card. */
+  modelExtendParams?: string[];
+  /** True when any effort-family / reasoningMode param is among `modelExtendParams`. */
+  modelHasReasoningExtendParams: boolean;
+  userModelRow?: Awaited<ReturnType<AiModelModel['findByIdAndProvider']>>;
+}
+
+/**
+ * Resolve which extend params a model can consume for this user, matching the
+ * client's `getEnabledModels` merge. Shared by the per-attempt LLM hints and
+ * the topic-creation reasoning snapshot (`turnSetup`), so both agree on
+ * whether a model is governed by the reasoning extend-params family.
+ */
+export const resolveModelExtendParamsForUser = async ({
+  aiModelModel,
+  builtinModels: preloadedModels,
   model,
   provider,
-}: ResolveServerCallLlmContextHintsInput): Promise<ServerCallLlmContextHints> => {
-  const agentConfig = ctx.agentConfig;
-  const { loadModels } = await import('@/business/client/model-bank/loadModels');
-  const builtinModels = await loadModels();
+}: {
+  aiModelModel: AiModelModel | undefined;
+  /** Already-loaded model bank; callers on a hot path pass it to avoid a second load. */
+  builtinModels?: LobeDefaultAiModelListItem[];
+  model: string;
+  provider: string;
+}): Promise<ResolvedModelExtendParams> => {
+  const builtinModels =
+    preloadedModels ??
+    (await (await import('@/business/client/model-bank/loadModels')).loadModels());
 
-  const preserveThinkingConfigured =
-    typeof agentConfig?.chatConfig?.preserveThinking === 'boolean'
-      ? agentConfig.chatConfig.preserveThinking
-      : undefined;
-  const preserveThinkingRequested = preserveThinkingConfigured === true;
-
-  const readExtendParams = (
-    card: (typeof builtinModels)[number] | undefined,
-  ): string[] | undefined =>
+  const readExtendParams = (card: LobeDefaultAiModelListItem | undefined): string[] | undefined =>
     card &&
     'settings' in card &&
     card.settings &&
@@ -77,17 +101,6 @@ export const resolveServerCallLlmContextHints = async ({
   const canonicalModelCard = builtinModels.find(
     (item) => item.id === model || item.config?.deploymentName === model,
   );
-  const modelKnowledgeCutoff =
-    modelCard?.knowledgeCutoff ??
-    (provider === ModelProvider.LobeHub ? canonicalModelCard?.knowledgeCutoff : undefined);
-  let modelDisplayName =
-    modelCard?.displayName ??
-    (provider === ModelProvider.LobeHub ? canonicalModelCard?.displayName : undefined);
-
-  const aiModelModel =
-    ctx.serverDB && ctx.userId
-      ? new AiModelModel(ctx.serverDB, ctx.userId, ctx.workspaceId)
-      : undefined;
 
   // The user's own AI model row serves two purposes: custom/remote models miss
   // both bundled cards entirely (displayName + extendParams live only on the
@@ -102,8 +115,6 @@ export const resolveServerCallLlmContextHints = async ({
       log('Failed to resolve user model row for %s: %O', model, error);
     }
   }
-  // User-set displayName wins, matching the client list merge
-  modelDisplayName = userModelRow?.displayName ?? modelDisplayName;
 
   // User-edited settings win over the bundled card, matching the client's
   // `getEnabledModels` settings merge (arrays replace wholesale there, so an
@@ -124,22 +135,99 @@ export const resolveServerCallLlmContextHints = async ({
     }
   }
 
-  // Reasoning fields (effort family + reasoningMode) are user-level
-  // model-instance settings (personal scope, cross-workspace): same-named
-  // agent chatConfig values are ignored and the saved per-model config applies
-  // instead — except explicit sub-agent overrides, which stay honored.
-  // Only read the saved config when the model can actually consume it
-  // (applyModelExtendParams ignores it otherwise) — this runs on every server
-  // LLM attempt, so non-reasoning models must not pay the extra DB read.
   const modelHasReasoningExtendParams = (modelExtendParams ?? []).some((param) =>
     (MODEL_REASONING_EXTEND_PARAMS as readonly string[]).includes(param),
   );
+
+  return {
+    canonicalModelCard,
+    modelCard,
+    modelExtendParams,
+    modelHasReasoningExtendParams,
+    userModelRow,
+  };
+};
+
+export const resolveServerCallLlmContextHints = async ({
+  ctx,
+  llmPayload,
+  model,
+  provider,
+  world,
+}: ResolveServerCallLlmContextHintsInput): Promise<ServerCallLlmContextHints> => {
+  const agentConfig = world?.agent;
+  const { loadModels } = await import('@/business/client/model-bank/loadModels');
+  const builtinModels = await loadModels();
+
+  const preserveThinkingConfigured =
+    typeof agentConfig?.chatConfig?.preserveThinking === 'boolean'
+      ? agentConfig.chatConfig.preserveThinking
+      : undefined;
+  const preserveThinkingRequested = preserveThinkingConfigured === true;
+
+  const aiModelModel =
+    ctx.serverDB && ctx.userId
+      ? new AiModelModel(ctx.serverDB, ctx.userId, ctx.workspaceId)
+      : undefined;
+
+  const {
+    canonicalModelCard,
+    modelCard,
+    modelExtendParams,
+    modelHasReasoningExtendParams,
+    userModelRow,
+  } = await resolveModelExtendParamsForUser({ aiModelModel, builtinModels, model, provider });
+
+  const modelKnowledgeCutoff =
+    modelCard?.knowledgeCutoff ??
+    (provider === ModelProvider.LobeHub ? canonicalModelCard?.knowledgeCutoff : undefined);
+  // User-set displayName wins, matching the client list merge
+  const modelDisplayName =
+    userModelRow?.displayName ??
+    modelCard?.displayName ??
+    (provider === ModelProvider.LobeHub ? canonicalModelCard?.displayName : undefined);
+
+  // Reasoning fields (effort family + reasoningMode) resolve as: topic pin →
+  // user-level model-instance config (personal scope, cross-workspace).
+  // Same-named agent chatConfig values are ignored — except explicit sub-agent
+  // overrides, which stay honored.
+  //
+  // The topic pin (`topics.metadata.reasoningConfig`, snapshotted on creation
+  // and rewritten when the user changes effort / switches model while the
+  // topic is active) only counts when the topic's pinned model IS the model of
+  // this attempt: a sub-agent `modelOverride` or a stale snapshot must not
+  // leak another model's effort. Mirrors the client `modelParamsResolver`.
+  //
+  // Only read either source when the model can actually consume it
+  // (applyModelExtendParams ignores it otherwise) — this runs on every server
+  // LLM attempt, so non-reasoning models must not pay the extra DB reads.
   let modelReasoningConfig: AiModelReasoningConfig | undefined;
   if (aiModelModel && modelHasReasoningExtendParams) {
-    try {
-      modelReasoningConfig = await aiModelModel.getModelReasoningConfig(model, provider);
-    } catch (error) {
-      log('Failed to resolve model reasoning config for %s: %O', model, error);
+    if (ctx.topicId && ctx.serverDB && ctx.userId) {
+      try {
+        // Share-visitor runs execute in the owner's context against topics that
+        // carry a `senderId`; `findById` skips those rows unless opted in, and
+        // the fallback would silently drop the visitor topic's pin.
+        const topic = await new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId, undefined, {
+          includeShareVisitor: true,
+        }).findById(ctx.topicId);
+        if (
+          topic?.model === model &&
+          topic.provider === provider &&
+          (!topic.groupId || topic.agentId === agentConfig?.id)
+        ) {
+          modelReasoningConfig = topic.metadata?.reasoningConfig;
+        }
+      } catch (error) {
+        log('Failed to resolve topic reasoning pin for %s: %O', ctx.topicId, error);
+      }
+    }
+    if (!modelReasoningConfig) {
+      try {
+        modelReasoningConfig = await aiModelModel.getModelReasoningConfig(model, provider);
+      } catch (error) {
+        log('Failed to resolve model reasoning config for %s: %O', model, error);
+      }
     }
   }
 
@@ -183,7 +271,16 @@ export const resolveServerCallLlmContextHints = async ({
       effectiveChatConfig?.deepseekV4ReasoningEffort === 'none');
   const deepseekForcesPreserveThinking =
     isDeepSeekThinkingEligibleModel(model) && !deepseekV4ThinkingDisabled;
-  const modelForcesPreserveThinking = kimiForcesPreserveThinking || deepseekForcesPreserveThinking;
+  /**
+   * Meta always uses Responses with stateless encrypted reasoning replay. This
+   * opaque continuation state must survive history building and agent tool loops,
+   * independently of the user's optional visible-thinking preservation setting.
+   * The model runtime still validates the replay scope before sending the state.
+   * @see https://dev.meta.ai/docs/features/responses#reasoning-items
+   */
+  const metaForcesPreserveThinking = provider === ModelProvider.Meta;
+  const modelForcesPreserveThinking =
+    kimiForcesPreserveThinking || deepseekForcesPreserveThinking || metaForcesPreserveThinking;
   const providerSupportsPreserveThinkingFallback =
     provider === 'qwen' || provider === 'zhipu' || provider === 'moonshot';
   const modelSupportsPreserveThinking =
@@ -206,7 +303,7 @@ export const resolveServerCallLlmContextHints = async ({
         model,
       })
     : undefined;
-  const searchDecision = ctx.searchDecision;
+  const searchDecision = world?.searchDecision;
   const enabledSearch =
     searchDecision?.enabledSearch && searchDecision.useModelSearch ? true : undefined;
   const resolvedExtendParams =
@@ -221,21 +318,40 @@ export const resolveServerCallLlmContextHints = async ({
     ? (llmPayload.messages as UIChatMessage[])
     : stripAssistantReasoningForReplay(llmPayload.messages as UIChatMessage[]);
 
-  const findModelInfo = (targetModel: string, targetProvider: string) =>
-    builtinModels.find((item) => item.id === targetModel && item.providerId === targetProvider) ??
-    builtinModels.find((item) => item.id === targetModel);
+  const findMediaCapabilities = (targetModel: string, targetProvider: string) => {
+    const snapshot = ctx.modelRuntimeConfig;
+    // Tool discovery is fixed for the operation; keep native inputs on the same
+    // snapshot across retries, settings edits, and subsequent worker invocations.
+    if (
+      snapshot?.model === targetModel &&
+      snapshot.provider === targetProvider &&
+      snapshot.mediaCapabilities
+    ) {
+      return snapshot.mediaCapabilities;
+    }
+
+    // Older operations have no snapshot. Preserve their existing lookup path.
+    return resolveModelMediaCapabilities({
+      builtinModels,
+      model: targetModel,
+      provider: targetProvider,
+      // This row belongs only to the active attempt, never to another model/provider.
+      userAbilities:
+        targetModel === model && targetProvider === provider ? userModelRow?.abilities : undefined,
+    });
+  };
 
   return {
     capabilities: {
       isCanUseAudio: (targetModel, targetProvider) =>
-        findModelInfo(targetModel, targetProvider)?.abilities?.audio ?? false,
+        findMediaCapabilities(targetModel, targetProvider)?.audio ?? false,
       isCanUseFC: (targetModel, targetProvider) =>
         builtinModels.find((item) => item.id === targetModel && item.providerId === targetProvider)
           ?.abilities?.functionCall ?? true,
       isCanUseVideo: (targetModel, targetProvider) =>
-        findModelInfo(targetModel, targetProvider)?.abilities?.video ?? false,
+        findMediaCapabilities(targetModel, targetProvider)?.video ?? false,
       isCanUseVision: (targetModel, targetProvider) =>
-        findModelInfo(targetModel, targetProvider)?.abilities?.vision ?? false,
+        findMediaCapabilities(targetModel, targetProvider)?.vision ?? false,
     },
     messagesForContext,
     modelDisplayName,

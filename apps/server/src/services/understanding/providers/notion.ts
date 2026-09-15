@@ -1,4 +1,4 @@
-import { ConnectorDataError } from '@lobechat/connector-data';
+import { getConnectorErrorMessage, isConnectorErrorRetryable } from '@lobechat/connector-data';
 import type { NotionItem, NotionItemContent } from '@lobechat/connector-data/notion';
 
 import type { UnderstandingProvider } from '../types';
@@ -70,10 +70,11 @@ export const notionUnderstandingProvider: UnderstandingProvider = {
       return [
         {
           code: 'NOTION_PAGE_CONTENT_FAILED',
-          message: 'Notion page content enrichment failed',
+          message:
+            getConnectorErrorMessage(result.reason) ?? 'Notion page content enrichment failed',
           operation: 'page_content',
           provider: 'notion',
-          retryable: result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
+          retryable: isConnectorErrorRetryable(result.reason),
         },
       ];
     });

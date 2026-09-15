@@ -2,10 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { xtermManager } from './xtermManager';
 
-const { fitAddonFit, ipcOn, resizeSession, webglInstances, webglShouldThrow } = vi.hoisted(() => ({
+const {
+  fitAddonFit,
+  ipcOn,
+  keyHandlers,
+  resizeSession,
+  termInput,
+  webglInstances,
+  webglShouldThrow,
+} = vi.hoisted(() => ({
   fitAddonFit: vi.fn(),
   ipcOn: vi.fn(),
+  keyHandlers: [] as ((event: KeyboardEvent) => boolean)[],
   resizeSession: vi.fn().mockResolvedValue(undefined),
+  termInput: vi.fn(),
   webglInstances: [] as { contextLoss: () => void; dispose: ReturnType<typeof vi.fn> }[],
   webglShouldThrow: { value: false },
 }));
@@ -35,12 +45,19 @@ vi.mock('@xterm/addon-webgl', () => ({
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
+    attachCustomKeyEventHandler = (handler: (event: KeyboardEvent) => boolean) => {
+      keyHandlers.push(handler);
+    };
     cols = 80;
+    input = termInput;
     loadAddon = vi.fn();
     onData = vi.fn();
     open = vi.fn();
     options = {};
     rows = 24;
+    scrollPages = vi.fn();
+    scrollToBottom = vi.fn();
+    scrollToTop = vi.fn();
     write = vi.fn();
   },
 }));
@@ -151,5 +168,45 @@ describe('xtermManager', () => {
     webglShouldThrow.value = false;
     xtermManager.attach('webgl_after_broken', host);
     expect(webglInstances).toHaveLength(0);
+  });
+});
+
+describe('xtermManager keybindings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const press = (init: Partial<KeyboardEvent> & { key: string }) => {
+    const preventDefault = vi.fn();
+    const handled = keyHandlers.at(-1)!({
+      ctrlKey: false,
+      metaKey: false,
+      preventDefault,
+      shiftKey: false,
+      type: 'keydown',
+      ...init,
+    } as unknown as KeyboardEvent);
+    return { handled, preventDefault };
+  };
+
+  it('turns \u2318\u2190 into the readline line-start code and swallows the event', () => {
+    xtermManager.ensure('keys_home');
+
+    const { handled, preventDefault } = press({ key: 'ArrowLeft', metaKey: true });
+
+    expect(termInput).toHaveBeenCalledWith('\u0001');
+    // Swallowed so Chromium does not treat it as history-back.
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(handled).toBe(false);
+  });
+
+  it('leaves unclaimed keys to xterm so normal typing still reaches the PTY', () => {
+    xtermManager.ensure('keys_plain');
+
+    const { handled, preventDefault } = press({ key: 'ArrowLeft' });
+
+    expect(termInput).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(handled).toBe(true);
   });
 });

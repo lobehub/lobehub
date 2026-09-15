@@ -440,6 +440,50 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
+    describe('qwen38ReasoningEffort param', () => {
+      beforeEach(() => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+          () => true,
+        );
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'qwen38ReasoningEffort',
+        ]);
+      });
+
+      it('should enable thinking and set reasoning_effort for Qwen3.8 Max', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            qwen38ReasoningEffort: 'xhigh',
+          } as any,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+        });
+
+        expect(result).toEqual({
+          reasoning_effort: 'xhigh',
+          thinking: {
+            type: 'enabled',
+          },
+        });
+      });
+
+      it('should disable thinking and omit reasoning_effort for Qwen3.8 Max when configured as none', () => {
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            qwen38ReasoningEffort: 'none',
+          } as any,
+          model: 'qwen3.8-max',
+          provider: 'qwen',
+        });
+
+        expect(result).toEqual({
+          thinking: {
+            type: 'disabled',
+          },
+        });
+      });
+    });
+
     describe('gpt5ReasoningEffort param', () => {
       beforeEach(() => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
@@ -727,6 +771,7 @@ describe('thinking configuration', () => {
     });
 
     it('should set thinkingLevel when supported and configured', () => {
+      mockModelReasoningConfig({ thinkingLevel: 'high' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel: 'high',
@@ -749,6 +794,7 @@ describe('thinking configuration', () => {
     });
 
     it('should set thinkingLevel from thinkingLevel config key for gemini-3.5-flash', () => {
+      mockModelReasoningConfig({ thinkingLevel: 'low' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel: 'low',
@@ -773,6 +819,7 @@ describe('thinking configuration', () => {
     it.each(['minimal', 'low', 'medium', 'high'] as const)(
       'should forward the %s thinkingLevel for Gemini 3.6 Flash',
       (thinkingLevel) => {
+        mockModelReasoningConfig({ thinkingLevel });
         const result = resolveModelExtendParams({
           chatConfig: { thinkingLevel } as any,
           model: 'gemini-3.6-flash',
@@ -808,6 +855,7 @@ describe('thinking configuration', () => {
     });
 
     it('should reuse thinkingLevel for Gemini 3.1 Flash-Lite models', () => {
+      mockModelReasoningConfig({ thinkingLevel: 'medium' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel: 'medium',
@@ -820,6 +868,7 @@ describe('thinking configuration', () => {
     });
 
     it('should reuse thinkingLevel for Gemini 3.5 Flash-Lite', () => {
+      mockModelReasoningConfig({ thinkingLevel: 'high' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel: 'high',
@@ -863,6 +912,7 @@ describe('thinking configuration', () => {
     });
 
     it('should set thinkingLevel from thinkingLevel2 config key', () => {
+      mockModelReasoningConfig({ thinkingLevel2: 'low' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel2: 'low',
@@ -896,6 +946,7 @@ describe('thinking configuration', () => {
     });
 
     it('should set thinkingLevel from thinkingLevel3 config key', () => {
+      mockModelReasoningConfig({ thinkingLevel3: 'medium' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel3: 'medium',
@@ -918,6 +969,7 @@ describe('thinking configuration', () => {
     });
 
     it('should set thinkingLevel from thinkingLevel3 config key for gemini-3.7-flash', () => {
+      mockModelReasoningConfig({ thinkingLevel3: 'high' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel3: 'high',
@@ -951,6 +1003,7 @@ describe('thinking configuration', () => {
     });
 
     it('should set thinkingLevel from thinkingLevel4 config key', () => {
+      mockModelReasoningConfig({ thinkingLevel4: 'minimal' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel4: 'minimal',
@@ -983,6 +1036,7 @@ describe('thinking configuration', () => {
         'thinkingLevel3',
       ]);
 
+      mockModelReasoningConfig({ thinkingLevel: 'high', thinkingLevel3: 'medium' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel: 'high',
@@ -1004,6 +1058,7 @@ describe('thinking configuration', () => {
         'thinkingLevel3',
       ]);
 
+      mockModelReasoningConfig({ thinkingLevel3: 'medium' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinkingLevel3: 'medium',
@@ -1246,11 +1301,12 @@ describe('multiple params combination', () => {
       'thinkingLevel',
     ]);
 
+    mockModelReasoningConfig({ thinkingLevel: 'high' });
     const result = resolveModelExtendParams({
       chatConfig: {
         thinking: 'enabled',
         thinkingBudget: 8000,
-        thinkingLevel: 'expert',
+        thinkingLevel: 'high',
       } as any,
       model: 'deepseek',
       provider: 'deepseek',
@@ -1261,7 +1317,7 @@ describe('multiple params combination', () => {
         type: 'enabled',
       },
       thinkingBudget: 8000,
-      thinkingLevel: 'expert',
+      thinkingLevel: 'high',
     });
   });
 });
@@ -1561,11 +1617,12 @@ describe('parameter precedence and conflicts', () => {
         'thinkingLevel',
       ]);
 
+      mockModelReasoningConfig({ thinkingLevel: 'medium' });
       const result = resolveModelExtendParams({
         chatConfig: {
           thinking: 'enabled',
           thinkingBudget: 5000,
-          thinkingLevel: 'advanced',
+          thinkingLevel: 'medium',
         } as any,
         model: 'model',
         provider: 'provider',
@@ -1574,7 +1631,7 @@ describe('parameter precedence and conflicts', () => {
       // These are independent params and should all be set
       expect(result.thinking).toEqual({ type: 'enabled' });
       expect(result.thinkingBudget).toBe(5000);
-      expect(result.thinkingLevel).toBe('advanced');
+      expect(result.thinkingLevel).toBe('medium');
     });
   });
 
@@ -1738,6 +1795,44 @@ describe('model-instance reasoning config migration', () => {
     expect(result.verbosity).toBe('concise');
   });
 
+  it('should let the topic pin win over the model-instance config', () => {
+    mockModelReasoningConfig({ reasoningEffort: 'low' });
+
+    const result = resolveModelExtendParams({
+      chatConfig: { reasoningEffort: 'medium' } as any,
+      model: 'gpt-4',
+      provider: 'openai',
+      topicReasoningConfig: { reasoningEffort: 'high' },
+    });
+
+    expect(result.reasoning_effort).toBe('high');
+  });
+
+  it('should treat an empty topic pin as "model defaults", not as a missing pin', () => {
+    mockModelReasoningConfig({ reasoningEffort: 'low' });
+
+    const result = resolveModelExtendParams({
+      chatConfig: {} as any,
+      model: 'gpt-4',
+      provider: 'openai',
+      topicReasoningConfig: {},
+    });
+
+    expect(result.reasoning_effort).toBeUndefined();
+  });
+
+  it('should let explicit sub-agent overrides win over the topic pin', () => {
+    const result = resolveModelExtendParams({
+      chatConfig: {} as any,
+      model: 'gpt-4',
+      provider: 'openai',
+      subAgentChatConfigOverride: { reasoningEffort: 'medium' },
+      topicReasoningConfig: { reasoningEffort: 'high' },
+    });
+
+    expect(result.reasoning_effort).toBe('medium');
+  });
+
   it('should let explicit sub-agent overrides win over model-instance config', () => {
     mockModelReasoningConfig({ reasoningEffort: 'low' });
 
@@ -1775,5 +1870,37 @@ describe('model-instance reasoning config migration', () => {
     // textVerbosity is not a reasoning field, so the override is ignored here
     // (it is merged into agent chatConfig upstream by resolveSubAgentChatConfig)
     expect(result.verbosity).toBe('concise');
+  });
+});
+
+describe('Gemini topic thinking levels', () => {
+  it('uses the saved user level, then the topic pin, and ignores legacy agent values', () => {
+    vi.spyOn(aiInfraStore, 'getAiInfraStoreState').mockReturnValue(
+      {} as ReturnType<typeof aiInfraStore.getAiInfraStoreState>,
+    );
+    vi.spyOn(aiModelSelectors.aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(
+      () => true,
+    );
+    vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+      'thinkingLevel3',
+    ]);
+    mockModelReasoningConfig({ thinkingLevel3: 'low' });
+    const context = {
+      chatConfig: { thinkingLevel3: 'medium' as const },
+      model: 'gemini-3.1-pro-preview',
+      provider: 'google',
+    };
+    expect(resolveModelExtendParams(context).thinkingLevel).toBe('low');
+    expect(
+      resolveModelExtendParams({ ...context, topicReasoningConfig: { thinkingLevel3: 'high' } })
+        .thinkingLevel,
+    ).toBe('high');
+    expect(
+      resolveModelExtendParams({
+        ...context,
+        topicReasoningConfig: {},
+        subAgentChatConfigOverride: { thinkingLevel3: 'medium' },
+      }).thinkingLevel,
+    ).toBe('medium');
   });
 });

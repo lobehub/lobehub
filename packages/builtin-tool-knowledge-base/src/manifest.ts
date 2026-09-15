@@ -245,7 +245,7 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
   meta: {
     avatar: '📚',
     description:
-      'Search uploaded documents and domain knowledge via semantic vector search — for persistent, reusable reference',
+      "Find, browse, and read the user's uploaded files (resource library), and search organized knowledge bases via semantic vector search — the tool for any request about the user's own files or uploads",
     title: 'Knowledge Base',
   },
   systemRole: systemPrompt,

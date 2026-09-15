@@ -2,7 +2,8 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { resolveWorkspaceId } from '../api/workspace';
+import { resolveWorkspaceScope } from '../api/workspace';
+import { CLI_PRODUCT_NAME } from '../constants/identity';
 import {
   type BoxTableRow,
   formatCost,
@@ -26,7 +27,8 @@ export function registerConfigCommand(program: Command) {
       // Every command resolves its scope the same way, so reporting it here is
       // what lets a caller (usually an agent editing its own config) tell a
       // genuine "not found" from "I'm looking in the wrong workspace".
-      const workspaceId = resolveWorkspaceId();
+      const scope = resolveWorkspaceScope();
+      const workspaceId = scope.workspaceId;
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -34,6 +36,7 @@ export function registerConfigCommand(program: Command) {
           {
             ...(state as any),
             scope: workspaceId ? 'workspace' : 'personal',
+            scopeSource: scope.source,
             workspaceId: workspaceId ?? null,
           },
           fields,
@@ -49,7 +52,7 @@ export function registerConfigCommand(program: Command) {
       if (s.userId) console.log(`  User ID:  ${s.userId}`);
       if (s.subscriptionPlan) console.log(`  Plan:     ${s.subscriptionPlan}`);
       console.log(
-        `  Scope:    ${workspaceId ? `workspace ${workspaceId}` : pc.dim('personal (no workspace scope)')}`,
+        `  Scope:    ${workspaceId ? `workspace ${workspaceId} ${pc.dim(`(from ${scope.source})`)}` : pc.dim('personal (no workspace scope)')}`,
       );
     });
 
@@ -177,7 +180,11 @@ export function registerConfigCommand(program: Command) {
 
         const monthLabel = options.month || new Date().toISOString().slice(0, 7);
         const mode = options.daily ? 'Daily' : 'Monthly';
-        printBoxTable(columns, rows, `LobeHub Token Usage Report - ${mode} (${monthLabel})`);
+        printBoxTable(
+          columns,
+          rows,
+          `${CLI_PRODUCT_NAME} Token Usage Report - ${mode} (${monthLabel})`,
+        );
 
         // Calendar heatmap - fetch past 12 months
         const now = new Date();

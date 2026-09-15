@@ -1,4 +1,4 @@
-import { and, eq, getTableColumns, type SQL } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, isNull, type SQL } from 'drizzle-orm';
 
 import type { MessengerAccountLinkItem, NewMessengerAccountLink } from '../schemas';
 import { messengerAccountLinks } from '../schemas';
@@ -401,6 +401,35 @@ export class MessengerAccountLinkModel {
    * Telegram-only callers keep working without code changes; Slack callers in
    * the multi-tenant router pass the resolved `team_id` / `enterprise_id`.
    */
+  /**
+   * IM identities of a set of users that are active under the given scope —
+   * `workspaceId` for a workspace, `null` for personal use. Powers
+   * cross-platform person resolution (e.g. mapping a Discord `@handle` or
+   * `<@platformUserId>` mention in a digest to the workspace member to assign a
+   * task to). The scope filter is deliberate: a member's identities linked for
+   * another workspace or for personal use are not this workspace's business
+   * and must never reach coworkers' model-visible output. Safe projection only
+   * — never exposes credentials.
+   */
+  static findByUserIds = async (
+    db: LobeChatDatabase,
+    userIds: string[],
+    scope: { workspaceId: string | null },
+  ): Promise<SafeMessengerAccountLink[]> => {
+    if (userIds.length === 0) return [];
+    return db
+      .select(safeLinkColumns)
+      .from(messengerAccountLinks)
+      .where(
+        and(
+          inArray(messengerAccountLinks.userId, userIds),
+          scope.workspaceId
+            ? eq(messengerAccountLinks.workspaceId, scope.workspaceId)
+            : isNull(messengerAccountLinks.workspaceId),
+        ),
+      );
+  };
+
   static findByPlatformUser = async (
     db: LobeChatDatabase,
     platform: string,
@@ -448,6 +477,24 @@ export class MessengerAccountLinkModel {
       .where(and(...conditions))
       .limit(1);
     return result ? decryptRow(result, gateKeeper) : undefined;
+  };
+
+  /**
+   * All account links for a platform, credentials decrypted. Powers the
+   * gateway reconcile for polling platforms (WeChat), whose per-user
+   * connections must be re-pushed to the owning gateway host after restarts
+   * or host migrations — server-only, never expose through TRPC.
+   */
+  static findAllByPlatformWithCredentials = async (
+    db: LobeChatDatabase,
+    platform: string,
+    gateKeeper?: GateKeeper,
+  ): Promise<DecryptedMessengerAccountLink[]> => {
+    const rows = await db
+      .select()
+      .from(messengerAccountLinks)
+      .where(eq(messengerAccountLinks.platform, platform));
+    return Promise.all(rows.map((row) => decryptRow(row, gateKeeper)));
   };
 
   /** Static setter used by IM `/switch` (no user-scope context, but trusted by sender match). */

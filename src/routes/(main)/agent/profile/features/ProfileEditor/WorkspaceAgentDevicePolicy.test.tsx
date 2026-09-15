@@ -1,4 +1,6 @@
+import type * as BaseUI from '@lobehub/ui/base-ui';
 import { act, render, screen } from '@testing-library/react';
+import type { ComponentType } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
@@ -20,27 +22,19 @@ const testState = vi.hoisted(() => ({
   mutateDevices: vi.fn(),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+const selectPropsSpy = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Select: ({
-    disabled,
-    loading,
-    popupMatchSelectWidth,
-  }: {
-    disabled?: boolean;
-    loading?: boolean;
-    popupMatchSelectWidth?: boolean | number;
-  }) => (
-    <button
-      data-popup-match-select-width={String(popupMatchSelectWidth)}
-      disabled={disabled || loading}
-      role="combobox"
-    />
-  ),
-}));
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof BaseUI>();
+  const ActualSelect = actual.Select as ComponentType<Record<string, unknown>>;
+  return {
+    ...actual,
+    Select: (props: Record<string, unknown>) => {
+      selectPropsSpy(props);
+      return <ActualSelect {...props} />;
+    },
+  };
+});
 
 vi.mock('@/features/DeviceManager/useDeviceList', () => ({
   useDeviceList: () => ({
@@ -61,6 +55,7 @@ describe('WorkspaceAgentDevicePolicy', () => {
     testState.agent.agentMap['agent-1'].visibility = 'public';
     testState.agent.updateAgentConfigById.mockReset();
     testState.mutateDevices.mockReset();
+    selectPropsSpy.mockClear();
   });
 
   it('renders the environment picker without a member-switch control', () => {
@@ -91,9 +86,10 @@ describe('WorkspaceAgentDevicePolicy', () => {
     expect(screen.queryByText('settingAgent.devicePolicy.defaultTarget')).toBeNull();
     expect(screen.queryByRole('switch')).toBeNull();
 
-    const select = screen.getByRole('combobox') as HTMLButtonElement;
-    expect(select.disabled).toBe(false);
-    expect(select.dataset.popupMatchSelectWidth).toBe('true');
+    const selectProps = selectPropsSpy.mock.lastCall?.[0] as Record<string, unknown>;
+    expect(selectProps.popupMatchSelectWidth).toBe(true);
+    expect(selectProps.disabled).toBeFalsy();
+    expect(selectProps.loading).toBeFalsy();
 
     await act(async () => finishSave?.());
   });

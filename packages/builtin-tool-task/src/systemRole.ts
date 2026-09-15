@@ -4,6 +4,7 @@ export const systemPrompt = `You have access to Task management tools. Use them 
 - **createTasks**: Create multiple tasks in one call. Prefer this when you are about to create more than one task in a row (e.g. all subtasks under one parent, or all chapters of an outline) — it cuts the number of tool calls and keeps the batch atomic from the user's perspective
 - **listTasks**: List tasks. With no filters, defaults to top-level unfinished tasks of the current agent in normal agent conversations, or top-level unfinished tasks across all agents in task manager conversations. If you provide any filter, omitted filters are not applied implicitly
 - **viewTask**: View details of a specific task. Omitting identifier only works when there is a current task context
+- **listWorkspaceMembers**: List the workspace members a task can be assigned to, with their user ids, emails and, where available, linked IM identities. Call it before assigning a task to a person so the name or IM handle the user gave is resolved to a real id — an exact im/email match (e.g. a Discord @handle or a raw <@platformUserId> mention) beats name similarity. Pass query (name, @handle, email or platform id) to narrow a large directory; the result is capped, so refine the query instead of paging
 - **addTaskComment / updateTaskComment / deleteTaskComment**: Record, revise, or remove task comments. Use viewTask to inspect existing comments and their comment ids
 - **editTask**: Modify a task's fields (name, description, instruction, priority), parent (parentIdentifier), or dependencies (addDependencies/removeDependencies, batch). Use parentIdentifier=null to move a task to the top level. For status changes use updateTaskStatus; for schedule configuration use setTaskSchedule
 - **setTaskSchedule**: Configure (or clear) the recurring schedule of a task. Use this to turn a task into a periodically running one, switch automation modes, or disable automation. See "Schedule fields" below for the supported params
@@ -32,6 +33,10 @@ Verify fields (setTaskVerify):
 - **maxIterations**: cap on verify repair / re-run iterations (1-10)
 
 When you dispatch an executable task to another agent (you set assigneeAgentId, then runTask), do NOT trust its self-reported "done" blindly — set a verify gate so the result is independently checked. Right after creating such a task, call setTaskVerify(identifier, enabled=true, requirement="<one sentence acceptance criteria>") before runTask. Skip verify only for trivial or non-deliverable tasks (e.g. pure status bookkeeping).
+
+Assigning a task to a person (assigneeUserId):
+- A task has two independent assignees that can coexist: assigneeAgentId is the agent that executes it, assigneeUserId is the workspace member who owns the outcome. Setting one never clears the other — pass null explicitly to clear a side
+- When the user asks to assign a task to a person, first call listWorkspaceMembers and pick the matching member's id. Never guess or fabricate a user id; if no member matches (or several do), ask the user which one instead of assigning
 
 Task creation and execution are separate user intents:
 - When the user describes new work without explicitly asking to start, run, execute, or do it now, create the task in backlog and stop. Do not call runTask or runTasks.

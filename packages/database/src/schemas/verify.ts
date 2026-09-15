@@ -24,8 +24,10 @@ import type {
   AcceptanceVisualRender,
   ToulminVerdict,
   VerifyCheckDecisionDetail,
+  VerifyCheckDefinition,
   VerifyCheckItem,
   VerifyCheckResultMetadata,
+  VerifyFlowSnapshot,
   VerifyRubricConfig,
   VerifyRunContext,
   VerifyRunDecisionDetail,
@@ -52,6 +54,7 @@ import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agentOperations } from './agentOperations';
 import { documents, files } from './file';
 import { llmGenerationTracing } from './llmGenerationTracing';
+import { projects } from './project';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -76,6 +79,10 @@ export const verifyCriteria = pgTable(
 
     /** One-sentence summary of what this criterion verifies. */
     description: text('description'),
+
+    definition: jsonb('definition').$type<VerifyCheckDefinition>(),
+    tags: text('tags').array().notNull().default([]),
+    archivedAt: timestamptz('archived_at'),
 
     /** Default blocking behaviour; a snapshot item may override it. */
     required: boolean('required').default(true).notNull(),
@@ -217,6 +224,9 @@ export const verifyCheckResults = pgTable(
 
     /** Stable relation key → verify_runs.plan.items[].id (never the array index). */
     checkItemId: text('check_item_id').notNull(),
+    sourceCriterionId: uuid('source_criterion_id').references(() => verifyCriteria.id, {
+      onDelete: 'set null',
+    }),
 
     // ---- Flattened item snapshot (denormalized for analytics) ----
     checkItemTitle: text('check_item_title'),
@@ -275,6 +285,7 @@ export const verifyCheckResults = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
+    index('verify_check_results_criterion_created_idx').on(t.sourceCriterionId, t.createdAt),
     index('verify_check_results_verify_run_id_idx').on(t.verifyRunId),
     index('verify_check_results_operation_id_idx').on(t.operationId),
     index('verify_check_results_user_id_idx').on(t.userId),
@@ -318,9 +329,12 @@ export const verifyEvidence = pgTable(
     /** Medium of the artifact (screenshot / gif / video / text / dom_snapshot / transcript). */
     type: text('type', { enum: verifyEvidenceTypes }).notNull(),
 
-    // ---- Payload: exactly one of `content` (inline text) or `fileId` (stored artifact) ----
+    // ---- Payload: exactly one of inline content, document, or stored file ----
     /** Inline payload for small text evidence (dom snapshot / console log / transcript). */
     content: text('content'),
+
+    /** LobeHub document used as evidence. Agent-document binding ids are never stored here. */
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
 
     /**
      * Stored artifact (screenshot / gif / video, or large text persisted to storage).
@@ -349,6 +363,7 @@ export const verifyEvidence = pgTable(
   },
   (t) => [
     index('verify_evidence_check_result_id_idx').on(t.checkResultId),
+    index('verify_evidence_document_id_idx').on(t.documentId),
     index('verify_evidence_file_id_idx').on(t.fileId),
     index('verify_evidence_user_id_idx').on(t.userId),
     index('verify_evidence_workspace_id_idx').on(t.workspaceId),
@@ -370,6 +385,9 @@ export const acceptances = pgTable(
 
     /** Workspace this acceptance belongs to — scopes listing and cascades on workspace delete. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Project grouping captured from the accepted task/topic; deleted projects become ungrouped. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
 
     /**
      * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
@@ -420,6 +438,7 @@ export const acceptances = pgTable(
   (t) => [
     index('acceptances_user_id_idx').on(t.userId),
     index('acceptances_workspace_id_idx').on(t.workspaceId),
+    index('acceptances_project_id_idx').on(t.projectId),
     index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
     index('acceptances_status_idx').on(t.status),
     index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
@@ -595,6 +614,8 @@ export const verifyRuns = pgTable(
      * check_item_id. Moved here off `agent_operations.verify_plan`.
      */
     plan: jsonb('plan').$type<VerifyCheckItem[]>(),
+    /** Frozen graphs for this round; historical views never resolve current graph rows. */
+    flowSnapshots: jsonb('flow_snapshots').$type<VerifyFlowSnapshot[]>(),
     /** When the plan was confirmed (frozen). */
     planConfirmedAt: timestamptz('plan_confirmed_at'),
 
@@ -708,7 +729,13 @@ export const verifyReviewPredictions = pgTable(
      */
     action: text('action', { enum: reviewPredictionActions }),
 
-    /** Why a `skipped` / `errored` attempt produced no verdict. */
+    /**
+     * Why a `skipped` / `errored` attempt produced no verdict — and, on a
+     * `judged` row, which artifacts the request had to withhold from the model
+     * (frames past the cap, unreadable media, unresolved payloads). A verdict
+     * reached while part of the evidence was invisible is not comparable to one
+     * reached on the whole check, so the caveat travels with the row.
+     */
     statusReason: text('status_reason'),
 
     /**

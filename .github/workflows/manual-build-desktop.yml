@@ -104,11 +104,22 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
+
+      - name: Prepare macOS provisioning profile
+        if: runner.os == 'macOS'
+        env:
+          MAC_PROVISIONING_PROFILE_BASE64: ${{ secrets.MAC_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$MAC_PROVISIONING_PROFILE_BASE64" ]; then
+            printf '%s' "$MAC_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/lobehub.provisionprofile"
+            echo "MAC_PROVISIONING_PROFILE=$RUNNER_TEMP/lobehub.provisionprofile" >> "$GITHUB_ENV"
+          fi
 
       - name: Build artifact on macOS
         run: npm run desktop:package:app
@@ -173,6 +184,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
@@ -218,6 +230,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 

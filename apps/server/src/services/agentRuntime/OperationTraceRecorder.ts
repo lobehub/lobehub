@@ -160,9 +160,10 @@ export class OperationTraceRecorder {
       }
 
       const metadata = (params.state?.metadata ?? {}) as any;
+      const origin = params.state?.origin ?? {};
       const finalizedSteps = (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex);
       const snapshot = {
-        agentId: metadata?.agentId,
+        agentId: origin.agentId,
         completedAt: Date.now(),
         completionReason: params.completionReason,
         error: params.error,
@@ -173,11 +174,10 @@ export class OperationTraceRecorder {
         model: partial.model,
         operationId,
         provider: partial.provider,
-        retryDelayExpression:
-          typeof metadata?.queueRetryDelay === 'string' ? metadata.queueRetryDelay : undefined,
+        retryDelayExpression: params.state?.host?.queue?.retryDelay,
         startedAt: partial.startedAt ?? Date.now(),
         steps: finalizedSteps,
-        topicId: metadata?.topicId,
+        topicId: origin.topicId,
         totalCost: params.state?.cost?.total ?? 0,
         // Trust the finalized step array over `state.stepCount`: on the error
         // path stepCount comes from Redis and reflects the last completed
@@ -185,7 +185,7 @@ export class OperationTraceRecorder {
         totalSteps: finalizedSteps.length || (params.state?.stepCount ?? 0),
         totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
         traceId: operationId,
-        userId: metadata?.userId,
+        userId: origin.userId,
       };
 
       await this.store.save(snapshot as any);
@@ -232,11 +232,9 @@ export class OperationTraceRecorder {
   private initPartialHeader(partial: any, agentState: any): void {
     if (partial.startedAt) return;
     partial.startedAt = Date.now();
-    partial.model =
-      (agentState?.metadata as any)?.agentConfig?.model ?? agentState?.modelRuntimeConfig?.model;
+    partial.model = agentState?.world?.agent?.model ?? agentState?.modelRuntimeConfig?.model;
     partial.provider =
-      (agentState?.metadata as any)?.agentConfig?.provider ??
-      agentState?.modelRuntimeConfig?.provider;
+      agentState?.world?.agent?.provider ?? agentState?.modelRuntimeConfig?.provider;
   }
 
   private buildStepSnapshot(params: AppendStepParams): StepSnapshot {
@@ -282,7 +280,9 @@ export class OperationTraceRecorder {
             // - messages: from messagesBaseline + messagesDelta chain
             // - operationToolSet: from toolsetBaseline (step 0)
             // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
+            // - expertise: immutable operation-level snapshot retained in working state
             const {
+              expertise: _expertise,
               messages: _msgs,
               operationToolSet: _ots,
               toolManifestMap: _tmm,

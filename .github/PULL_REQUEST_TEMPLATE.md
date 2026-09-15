@@ -16,6 +16,10 @@
 - [ ] Added/updated tests
 - [ ] No tests needed
 
+<!-- Acceptance round for user-visible changes (AGENTS.md → Acceptance); or state why none is needed -->
+
+- Acceptance: ...
+
 #### 🔗 Related Issue
 
 <!-- Link to the issue that is fixed by this PR -->

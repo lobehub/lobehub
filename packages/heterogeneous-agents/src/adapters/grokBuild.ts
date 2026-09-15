@@ -1,3 +1,5 @@
+import { isRecord } from '@lobechat/utils/object';
+
 import {
   buildHeterogeneousAgentAuthRequiredError,
   getHeterogeneousAgentConfigOrThrow,
@@ -8,11 +10,16 @@ import type {
   HeterogeneousAgentEvent,
   StepCompleteData,
   StreamChunkData,
-  StreamStartData,
   ToolCallPayload,
   ToolResultData,
   UsageData,
 } from '../types';
+import {
+  acpContentBlockText,
+  acpEventIdOf,
+  AcpStreamLifecycle,
+  isAcpReplayMessage,
+} from './acpCommon';
 
 const GROK_BUILD_IDENTIFIER = 'grok-build';
 const GROK_BUILD_AUTH_DOCS_URL =
@@ -39,9 +46,6 @@ interface GrokToolResultState {
   content?: unknown;
   rawOutput?: unknown;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const finiteNumber = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : 0;
@@ -91,36 +95,11 @@ const stringifyUnknown = (value: unknown): string => {
   }
 };
 
-const contentBlockText = (value: unknown): string => {
-  if (typeof value === 'string') return value;
-  if (!isRecord(value)) return '';
-  if (value.type === 'text' && typeof value.text === 'string') return value.text;
-  if (typeof value.content === 'string') return value.content;
-  if (isRecord(value.content)) return contentBlockText(value.content);
-  if (typeof value.diff === 'string') return value.diff;
-  if (typeof value.output === 'string') return value.output;
-  return '';
-};
-
 const toolResultContent = (update: GrokToolResultState): string => {
   const content = Array.isArray(update.content)
-    ? update.content.map(contentBlockText).filter(Boolean).join('\n\n')
-    : contentBlockText(update.content);
+    ? update.content.map(acpContentBlockText).filter(Boolean).join('\n\n')
+    : acpContentBlockText(update.content);
   return content || stringifyUnknown(update.rawOutput);
-};
-
-const isReplay = (raw: Record<string, unknown>): boolean => {
-  const params = isRecord(raw.params) ? raw.params : undefined;
-  const update = isRecord(params?.update) ? params.update : undefined;
-  const paramsMeta = isRecord(params?._meta) ? params._meta : undefined;
-  const updateMeta = isRecord(update?._meta) ? update._meta : undefined;
-  return paramsMeta?.isReplay === true || updateMeta?.isReplay === true;
-};
-
-const eventIdOf = (raw: Record<string, unknown>): string | undefined => {
-  const params = isRecord(raw.params) ? raw.params : undefined;
-  const meta = isRecord(params?._meta) ? params._meta : undefined;
-  return typeof meta?.eventId === 'string' ? meta.eventId : undefined;
 };
 
 /** Maps ACP v1 JSON-RPC messages from Grok Build into the shared event contract. */
@@ -128,21 +107,21 @@ export class GrokBuildAdapter implements AgentEventAdapter {
   sessionId?: string;
 
   private completedToolCallIds = new Set<string>();
-  private pendingStepBoundary = false;
   private seenEventIds = new Set<string>();
   private settled = false;
   private lastTurnUsage?: { stepIndex: number; usage: UsageData };
-  private started = false;
-  private stepIndex = 0;
-  private stepToolCalls: ToolCallPayload[] = [];
-  private streamOpen = false;
+  private readonly stream = new AcpStreamLifecycle((stepIndex) => ({
+    provider: GROK_BUILD_IDENTIFIER,
+    sessionId: this.sessionId,
+    ...(stepIndex > 0 ? { newStep: true } : {}),
+  }));
   private toolPayloadById = new Map<string, ToolCallPayload>();
   private toolResultStateById = new Map<string, GrokToolResultState>();
 
   adapt(raw: unknown): HeterogeneousAgentEvent[] {
-    if (!isRecord(raw) || isReplay(raw)) return [];
+    if (!isRecord(raw) || isAcpReplayMessage(raw)) return [];
 
-    const eventId = eventIdOf(raw);
+    const eventId = acpEventIdOf(raw);
     if (eventId) {
       if (this.seenEventIds.has(eventId)) return [];
       this.seenEventIds.add(eventId);
@@ -176,7 +155,7 @@ export class GrokBuildAdapter implements AgentEventAdapter {
 
   flush(): HeterogeneousAgentEvent[] {
     if (this.settled) return [];
-    return this.closeStream();
+    return this.stream.closeStream();
   }
 
   private handleNotification(paramsValue: unknown): HeterogeneousAgentEvent[] {
@@ -188,22 +167,22 @@ export class GrokBuildAdapter implements AgentEventAdapter {
 
     switch (update.sessionUpdate) {
       case 'agent_message_chunk': {
-        const text = contentBlockText(update.content);
+        const text = acpContentBlockText(update.content);
         if (!text) return [];
         return [
-          ...this.ensureStream(true),
-          this.makeEvent('stream_chunk', {
+          ...this.stream.ensureStream(true),
+          this.stream.event('stream_chunk', {
             chunkType: 'text',
             content: text,
           } satisfies StreamChunkData),
         ];
       }
       case 'agent_thought_chunk': {
-        const reasoning = contentBlockText(update.content);
+        const reasoning = acpContentBlockText(update.content);
         if (!reasoning) return [];
         return [
-          ...this.ensureStream(true),
-          this.makeEvent('stream_chunk', {
+          ...this.stream.ensureStream(true),
+          this.stream.event('stream_chunk', {
             chunkType: 'reasoning',
             reasoning,
           } satisfies StreamChunkData),
@@ -248,15 +227,15 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     };
     this.toolPayloadById.set(toolCallId, tool);
     this.mergeToolResultState(toolCallId, update);
-    this.stepToolCalls.push(tool);
+    this.stream.stepTools.push(tool);
 
     return [
-      ...this.ensureStream(false),
-      this.makeEvent('stream_chunk', {
+      ...this.stream.ensureStream(false),
+      this.stream.event('stream_chunk', {
         chunkType: 'tools_calling',
-        toolsCalling: [...this.stepToolCalls],
+        toolsCalling: [...this.stream.stepTools],
       } satisfies StreamChunkData),
-      this.makeEvent('tool_start', { toolCalling: tool, toolCallId }),
+      this.stream.event('tool_start', { toolCalling: tool, toolCallId }),
     ];
   }
 
@@ -275,15 +254,15 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     // necessarily belongs to the next model round, so keep that boundary here
     // as well. `ensureStream(false)` leaves it pending through the remaining
     // parallel tool updates; the next text/thought chunk consumes it.
-    this.pendingStepBoundary = true;
+    this.stream.pendingStepBoundary = true;
     const isError = update.status === 'failed';
     const content = toolResultContent(resultState);
     const result: ToolResultData = { content, isError, toolCallId };
 
     return [
-      ...this.ensureStream(false),
-      this.makeEvent('tool_result', result),
-      this.makeEvent('tool_end', {
+      ...this.stream.ensureStream(false),
+      this.stream.event('tool_result', result),
+      this.stream.event('tool_end', {
         isSuccess: !isError,
         payload: { toolCalling: tool },
         result: { content, success: !isError },
@@ -317,16 +296,16 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     // A pending boundary belongs after the tools requested by the previous
     // model response. Reaching the next response completion proves that the
     // next model round exists even when it emitted no text/thought chunks.
-    const events = this.ensureStream(true);
+    const events = this.stream.ensureStream(true);
     const usage = toUsageData(update.usage);
-    this.lastTurnUsage = usage ? { stepIndex: this.stepIndex, usage } : undefined;
+    this.lastTurnUsage = usage ? { stepIndex: this.stream.stepIndex, usage } : undefined;
     const data: StepCompleteData = {
       phase: 'turn_metadata',
       provider: GROK_BUILD_IDENTIFIER,
       ...(usage ? { usage } : {}),
     };
-    this.pendingStepBoundary = (update.stopReason ?? update.stop_reason) === 'tool_use';
-    return [...events, this.makeEvent('step_complete', data)];
+    this.stream.pendingStepBoundary = (update.stopReason ?? update.stop_reason) === 'tool_use';
+    return [...events, this.stream.event('step_complete', data)];
   }
 
   private handlePromptResult(result: Record<string, unknown>): HeterogeneousAgentEvent[] {
@@ -337,7 +316,9 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     const usage = toUsageData(meta?.usage ?? meta);
     const model = typeof meta?.modelId === 'string' ? meta.modelId : undefined;
     const turnUsage =
-      this.lastTurnUsage?.stepIndex === this.stepIndex ? this.lastTurnUsage.usage : undefined;
+      this.lastTurnUsage?.stepIndex === this.stream.stepIndex
+        ? this.lastTurnUsage.usage
+        : undefined;
     const resultUsage: StepCompleteData = {
       phase: 'result_usage',
       provider: GROK_BUILD_IDENTIFIER,
@@ -345,10 +326,10 @@ export class GrokBuildAdapter implements AgentEventAdapter {
     };
 
     return [
-      ...this.ensureStream(false),
+      ...this.stream.ensureStream(false),
       ...(model
         ? [
-            this.makeEvent('step_complete', {
+            this.stream.event('step_complete', {
               model,
               phase: 'turn_metadata',
               provider: GROK_BUILD_IDENTIFIER,
@@ -356,10 +337,10 @@ export class GrokBuildAdapter implements AgentEventAdapter {
             } satisfies StepCompleteData),
           ]
         : []),
-      this.makeEvent('step_complete', resultUsage),
-      ...this.closeStream(),
-      this.makeEvent('visible_output_end', {}),
-      this.makeEvent('agent_runtime_end', {
+      this.stream.event('step_complete', resultUsage),
+      ...this.stream.closeStream(),
+      this.stream.event('visible_output_end', {}),
+      this.stream.event('agent_runtime_end', {
         reason: result.stopReason === 'cancelled' ? 'cancelled' : 'complete',
         transport: 'acp-stdio',
       }),
@@ -394,37 +375,6 @@ export class GrokBuildAdapter implements AgentEventAdapter {
           stderr: detail,
         };
 
-    return [...this.closeStream(), this.makeEvent('error', data)];
-  }
-
-  private ensureStream(consumeStepBoundary: boolean): HeterogeneousAgentEvent[] {
-    const events: HeterogeneousAgentEvent[] = [];
-    if (consumeStepBoundary && this.pendingStepBoundary) {
-      events.push(...this.closeStream());
-      this.pendingStepBoundary = false;
-      this.stepIndex += 1;
-      this.stepToolCalls = [];
-    }
-    if (this.streamOpen) return events;
-
-    this.started = true;
-    this.streamOpen = true;
-    const data: StreamStartData & { newStep?: boolean } = {
-      provider: GROK_BUILD_IDENTIFIER,
-      sessionId: this.sessionId,
-      ...(this.stepIndex > 0 ? { newStep: true } : {}),
-    };
-    events.push(this.makeEvent('stream_start', data));
-    return events;
-  }
-
-  private closeStream(): HeterogeneousAgentEvent[] {
-    if (!this.started || !this.streamOpen) return [];
-    this.streamOpen = false;
-    return [this.makeEvent('stream_end', {})];
-  }
-
-  private makeEvent(type: HeterogeneousAgentEvent['type'], data: unknown): HeterogeneousAgentEvent {
-    return { data, stepIndex: this.stepIndex, timestamp: Date.now(), type };
+    return [...this.stream.closeStream(), this.stream.event('error', data)];
   }
 }

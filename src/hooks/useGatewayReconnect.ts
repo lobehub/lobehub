@@ -7,6 +7,7 @@ import { isTrpcErrorCode } from '@/utils/trpcError';
 
 interface RunningOperation {
   assistantMessageId: string;
+  heteroType?: string | null;
   operationId: string;
   scope?: string;
   threadId?: string | null;
@@ -35,6 +36,13 @@ export const useGatewayReconnect = (
    * unset — see `reconnectToGatewayOperation`.
    */
   agentId?: string,
+  /**
+   * Present on the agent-share visitor surface. Routes the reconnect's token
+   * refresh and cancellation through the share-authorized `shareChat`
+   * procedures instead of the owner-scoped ones — see
+   * `reconnectToGatewayOperation`'s param JSDoc.
+   */
+  agentShareId?: string,
 ) => {
   const agentGatewayUrl = useServerConfigStore((s) => s.serverConfig.agentGatewayUrl);
 
@@ -47,7 +55,9 @@ export const useGatewayReconnect = (
 
       await useChatStore.getState().reconnectToGatewayOperation({
         agentId,
+        agentShareId,
         assistantMessageId: runningOperation.assistantMessageId,
+        heteroType: runningOperation.heteroType,
         operationId: runningOperation.operationId,
         scope: runningOperation.scope,
         threadId: runningOperation.threadId,

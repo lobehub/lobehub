@@ -62,6 +62,35 @@ describe('resolveSelectorShape', () => {
 });
 
 describe('dimensions per provider', () => {
+  it('offers Astra before older Codex models with five reasoning levels through max', () => {
+    const options = viewOf({ type: 'codex' }).dimensions[0].options;
+    expect(options[1]).toEqual({ label: 'GPT-6 Astra', value: 'gpt-6-astra' });
+
+    const view = viewOf({ effort: 'max', model: 'gpt-6-astra', type: 'codex' });
+    expect(view.dimensions[1].options.map((option) => option.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
+    expect(view.triggerLabel).toEqual({
+      secondaryText: 'heteroAgent.modelSelector.reasoning.max',
+      text: 'GPT-6 Astra',
+    });
+  });
+
+  it('labels Claude aliases without claiming a fixed model version', () => {
+    const options = viewOf({ type: 'claude-code' }).dimensions[0].options;
+    expect(options.slice(1)).toEqual([
+      { label: 'Fable', value: 'fable' },
+      { label: 'Opus', value: 'opus' },
+      { label: 'Sonnet', value: 'sonnet' },
+      { label: 'Haiku', value: 'haiku' },
+    ]);
+  });
+
   it('offers Amp mode without inventing a model dimension', () => {
     const dimensions = viewOf({ type: 'amp' }).dimensions;
 
@@ -132,24 +161,26 @@ describe('current value surfaced on each dimension', () => {
     expect(view.dimensions[0].current).toBe('ultra');
     expect(view.dimensions[0].valueLabel).toBe('heteroAgent.modelSelector.mode.ultra');
     expect(view.ariaLabel).toBe('heteroAgent.modelSelector.mode.ariaLabel');
-    expect(view.triggerText).toBe('heteroAgent.modelSelector.mode.ultra');
+    expect(view.triggerLabel).toEqual({ text: 'heteroAgent.modelSelector.mode.ultra' });
   });
 
   it('shows Default config when Amp does not override its native mode', () => {
-    expect(viewOf({ type: 'amp' }).triggerText).toBe('heteroAgent.modelSelector.defaultConfig');
+    expect(viewOf({ type: 'amp' }).triggerLabel).toEqual({
+      text: 'heteroAgent.modelSelector.defaultConfig',
+    });
   });
 
   it('shows the resolved model and effort labels', () => {
     const view = viewOf({ effort: 'high', model: 'opus', type: 'claude-code' });
 
-    expect(view.dimensions[0].valueLabel).toBe('Opus 4.8');
+    expect(view.dimensions[0].valueLabel).toBe('Opus');
     expect(view.dimensions[1].valueLabel).toBe('heteroAgent.modelSelector.reasoning.high');
   });
 
   it('prefers a contradicting arg over the persisted field, matching spawn behaviour', () => {
     const view = viewOf({ args: ['--model', 'haiku'], model: 'opus', type: 'claude-code' });
 
-    expect(view.dimensions[0].valueLabel).toBe('Haiku 4.5');
+    expect(view.dimensions[0].valueLabel).toBe('Haiku');
   });
 
   it('renames codex low effort to Light', () => {
@@ -176,19 +207,40 @@ describe('current value surfaced on each dimension', () => {
   });
 
   it('collapses the trigger to one label when nothing is overridden', () => {
-    expect(viewOf({ type: 'claude-code' }).triggerText).toBe(
-      'heteroAgent.modelSelector.defaultConfig',
-    );
+    expect(viewOf({ type: 'claude-code' }).triggerLabel).toEqual({
+      text: 'heteroAgent.modelSelector.defaultConfig',
+    });
   });
 
   it('names both halves in the trigger once either is overridden', () => {
-    expect(viewOf({ model: 'opus', type: 'claude-code' }).triggerText).toBe(
-      'Opus 4.8 heteroAgent.modelSelector.defaultReasoning',
-    );
+    expect(viewOf({ model: 'opus', type: 'claude-code' }).triggerLabel).toEqual({
+      secondaryText: 'heteroAgent.modelSelector.defaultReasoning',
+      text: 'Opus',
+    });
+  });
+
+  it('keeps the effort in its own half so a long model name cannot truncate it', () => {
+    expect(viewOf({ effort: 'xhigh', model: 'gpt-5.6-sol', type: 'codex' }).triggerLabel).toEqual({
+      secondaryText: 'heteroAgent.modelSelector.reasoning.xhigh',
+      text: 'GPT-5.6 Sol',
+    });
   });
 });
 
 describe('resolveModelSwitchSelection', () => {
+  it.each(['max', 'ultra'] as const)('handles %s when switching to Astra', (effort) => {
+    expect(
+      resolveModelSwitchSelection({
+        capability: capabilityOf('codex'),
+        effort,
+        isFastSpeed: false,
+        value: 'gpt-6-astra',
+      }),
+    ).toEqual(
+      effort === 'max' ? { model: 'gpt-6-astra' } : { effort: 'default', model: 'gpt-6-astra' },
+    );
+  });
+
   it('resets a fast speed the newly picked codex model cannot serve', () => {
     expect(
       resolveModelSwitchSelection({

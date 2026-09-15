@@ -1,4 +1,4 @@
-import { type AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
@@ -14,8 +14,9 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
   private states: Map<string, AgentState> = new Map();
   private steps: Map<string, any[]> = new Map();
   private metadata: Map<string, AgentOperationMetadata> = new Map();
-  private events: Map<string, any[][]> = new Map();
   private stepLocks: Map<string, { expiresAt: number; ownerId: string }> = new Map();
+  private inlineResumes: Map<string, string> = new Map();
+  private interrupted: Set<string> = new Set();
 
   private executionLockKey(operationId: string): string {
     return `agent_runtime_operation_lock:${operationId}`;
@@ -45,7 +46,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
 
     log('[%s] Loaded state (step %d)', operationId, state.stepCount);
     // Return deep clone to prevent external modifications from affecting internal state
-    return structuredClone(state);
+    return normalizeAgentState(structuredClone(state));
   }
 
   async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
@@ -77,19 +78,6 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       stepHistory.length = 200;
     }
 
-    // Save step event sequence
-    if (stepResult.events && stepResult.events.length > 0) {
-      let eventHistory = this.events.get(operationId);
-      if (!eventHistory) {
-        eventHistory = [];
-        this.events.set(operationId, eventHistory);
-      }
-      eventHistory.unshift(stepResult.events);
-      if (eventHistory.length > 200) {
-        eventHistory.length = 200;
-      }
-    }
-
     // Update operation metadata
     const existingMeta = this.metadata.get(operationId);
     if (existingMeta) {
@@ -99,12 +87,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       existingMeta.totalSteps = stepResult.newState.stepCount;
     }
 
-    log(
-      '[%s:%d] Saved step result with %d events',
-      operationId,
-      stepResult.stepIndex,
-      stepResult.events?.length || 0,
-    );
+    log('[%s:%d] Saved step result', operationId, stepResult.stepIndex);
   }
 
   async getExecutionHistory(operationId: string, limit: number = 50): Promise<any[]> {
@@ -125,19 +108,23 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     operationId: string,
     data: {
       agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
       mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
   ): Promise<void> {
     const metadata: AgentOperationMetadata = {
       agentConfig: data.agentConfig,
+      visitorRedaction: data.visitorRedaction,
       createdAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
       mirrorToOperationId: data.mirrorToOperationId,
       modelRuntimeConfig: data.modelRuntimeConfig,
       status: 'idle',
+      streamOwnerUserId: data.streamOwnerUserId,
       totalCost: 0,
       totalSteps: 0,
       userId: data.userId,
@@ -148,11 +135,20 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     log('[%s] Created operation metadata', operationId);
   }
 
+  async markInterrupted(operationId: string): Promise<void> {
+    this.interrupted.add(operationId);
+  }
+
+  async isInterrupted(operationId: string): Promise<boolean> {
+    return this.interrupted.has(operationId);
+  }
+
   async deleteAgentOperation(operationId: string): Promise<void> {
     this.states.delete(operationId);
     this.steps.delete(operationId);
     this.metadata.delete(operationId);
-    this.events.delete(operationId);
+    this.interrupted.delete(operationId);
+    this.inlineResumes.delete(operationId);
     log('Deleted operation %s', operationId);
   }
 
@@ -224,6 +220,25 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     return stats;
   }
 
+  async saveInlineResume(operationId: string, serialized: string): Promise<boolean> {
+    this.inlineResumes.set(operationId, serialized);
+    return true;
+  }
+
+  async loadInlineResume(operationId: string): Promise<null | string> {
+    return this.inlineResumes.get(operationId) ?? null;
+  }
+
+  async clearInlineResume(operationId: string, ownerId: string): Promise<void> {
+    // Mirrors CLEAR_OWNED_INLINE_RESUME_SCRIPT: only the current lock owner may
+    // drop the envelope, so a worker that lost the race cannot delete a live
+    // worker's recovery pointer.
+    const lock = this.stepLocks.get(this.executionLockKey(operationId));
+    if (lock?.ownerId !== ownerId) return;
+
+    this.inlineResumes.delete(operationId);
+  }
+
   async tryClaimStep(
     operationId: string,
     _stepIndex: number,
@@ -234,7 +249,10 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     const now = Date.now();
     const existing = this.stepLocks.get(key);
 
-    if (existing && existing.expiresAt > now) {
+    // Re-entrant for the owner that already holds it, so an inline step loop can
+    // run several steps without dropping the lock between them. Mirrors
+    // CLAIM_OR_REENTER_LOCK_SCRIPT in the Redis-backed manager.
+    if (existing && existing.expiresAt > now && existing.ownerId !== ownerId) {
       return false;
     }
 
@@ -282,16 +300,8 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     this.states.clear();
     this.steps.clear();
     this.metadata.clear();
-    this.events.clear();
     this.stepLocks.clear();
     log('All data cleared');
-  }
-
-  /**
-   * Get event history (for test verification)
-   */
-  getEventHistory(operationId: string): any[][] {
-    return this.events.get(operationId) ?? [];
   }
 }
 

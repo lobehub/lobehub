@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import type { ModalInstance } from '@lobehub/ui/base-ui';
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal, Text } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import type { DiscoverUserInfo } from '@/types/discover';

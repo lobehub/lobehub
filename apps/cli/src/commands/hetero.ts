@@ -11,8 +11,9 @@ import {
   LOCAL_HETEROGENEOUS_AGENT_TYPES,
   type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
-import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import { createPiRpcAgentHandle, toPiRpcPrompt } from '@lobechat/heterogeneous-agents/rpc';
 import type {
@@ -33,7 +34,11 @@ import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
+import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
+import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
+import { createOperationTokenRenewal } from '../utils/OperationTokenRenewal';
+import { createLocalTraceStore } from '../utils/traceStore';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
@@ -176,7 +181,7 @@ const buildExtraArgs = (
   const selectorArgs =
     options.type === 'amp'
       ? [...(options.mode ? ['--mode', options.mode] : [])]
-      : options.type === 'trae'
+      : options.type === 'droid' || options.type === 'trae'
         ? []
         : options.type === 'codex'
           ? [
@@ -188,12 +193,15 @@ const buildExtraArgs = (
                 ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
                 : []),
             ]
-          : options.type === 'claude-code' || options.type === 'codebuddy'
+          : options.type === 'claude-code' ||
+              options.type === 'codebuddy' ||
+              options.type === 'grok-build'
             ? [
                 ...(options.model ? ['--model', options.model] : []),
                 ...(options.effort ? ['--effort', options.effort] : []),
               ]
             : options.type === 'cursor' ||
+                options.type === 'devin' ||
                 options.type === 'kimi-code' ||
                 options.type === 'opencode' ||
                 options.type === 'pi'
@@ -253,16 +261,28 @@ const parseImageArg = (value: string): AgentImageSource => {
  * Accepts:
  *   - `'plain text'` → single text block
  *   - `[{ type: 'text', text }, { type: 'image', source }]` → content blocks
- *   - `{ content: [...] }` (Anthropic message shape) → unwraps `content`
+ *   - `{ content: [...], resumeFallback?: [...] }` → unwraps the primary prompt
+ *     and reserves the fallback for a retry without native resume
  *   - `{ type: 'text', ... } | { type: 'image', ... }` → single block
  */
-const coerceJsonPrompt = (parsed: unknown): AgentPromptInput => {
-  if (typeof parsed === 'string') return parsed;
-  if (Array.isArray(parsed)) return parsed as AgentContentBlock[];
+const coerceJsonPrompt = (
+  parsed: unknown,
+): Pick<ResolvedPrompt, 'prompt' | 'resumeFallbackPrompt'> => {
+  if (typeof parsed === 'string') return { prompt: parsed };
+  if (Array.isArray(parsed)) return { prompt: parsed as AgentContentBlock[] };
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj.content)) return obj.content as AgentContentBlock[];
-    if (obj.type === 'text' || obj.type === 'image') return [obj as AgentContentBlock];
+    if (Array.isArray(obj.content)) {
+      return {
+        prompt: obj.content as AgentContentBlock[],
+        ...(Array.isArray(obj.resumeFallback)
+          ? { resumeFallbackPrompt: obj.resumeFallback as AgentContentBlock[] }
+          : {}),
+      };
+    }
+    if (obj.type === 'text' || obj.type === 'image') {
+      return { prompt: [obj as unknown as AgentContentBlock] };
+    }
   }
   throw new Error(
     'Invalid --input-json shape: expected a string, array of content blocks, ' +
@@ -274,6 +294,8 @@ interface ResolvedPrompt {
   /** Human-readable description for the empty-input check. */
   describe: () => string;
   prompt: AgentPromptInput;
+  /** Full prompt used only when native resume fails and the CLI retries fresh. */
+  resumeFallbackPrompt?: AgentPromptInput;
 }
 
 const buildPromptFromText = (text: string, images: string[]): ResolvedPrompt => {
@@ -315,7 +337,7 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
       throw new Error('--image cannot be combined with --input-json (put images in the JSON).');
     }
     const raw = await readInputJson(options.inputJson);
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
 
   if (options.prompt !== undefined && options.prompt !== '-') {
@@ -325,7 +347,7 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
   // No --prompt or --prompt -: read stdin and auto-detect.
   const raw = await readStdin();
   if (looksLikeJsonInput(raw)) {
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
   return buildPromptFromText(raw, images);
 };
@@ -446,6 +468,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
+  // Local execution trace. Recorded for EVERY run, not just server-ingest ones:
+  // a standalone `lh hetero exec` is exactly the case where nothing else keeps
+  // a record of what the agent did, and it is the same snapshot format a native
+  // agent run produces, so `lh trace op inspect` reads both.
+  const traceRecorder = new HeteroTraceRecorder({
+    agentType: options.type,
+    operationId,
+    onError: (message) => log.warn(`Trace: ${message}`),
+    store: createLocalTraceStore(),
+    topicId: options.topic,
+  });
+
   // Determine JSONL output mode.
   // Explicit --render flag always wins. Otherwise: emit JSONL in standalone
   // mode; suppress in server-ingest mode (sink handles the data path).
@@ -478,12 +512,33 @@ const exec = async (options: ExecOptions): Promise<void> => {
     uploadImage = createFileStoreImageUploader(async () => {
       const lambda = await getTrpcClient();
       return {
+        abortS3Upload: (input) => lambda.upload.abortS3Upload.mutate(input),
         checkFileHash: (input) => lambda.file.checkFileHash.mutate(input),
         createFile: (input) => lambda.file.createFile.mutate(input),
         createS3PreSignedUrl: (input) => lambda.upload.createS3PreSignedUrl.mutate(input),
       };
     });
   }
+
+  const operationHeartbeat =
+    serverIngester && operationId
+      ? createOperationHeartbeat({
+          operationId,
+          push: (event) => serverIngester.push(event),
+        })
+      : undefined;
+
+  // The heartbeat only renews the lease while the token under it is valid. The
+  // server signs that token for four hours; a longer run renews it in place, or
+  // every ingest after that point is rejected and the operation is reclaimed.
+  const operationTokenRenewal =
+    serverIngester && operationId
+      ? createOperationTokenRenewal({
+          operationId,
+          renew: async (id) =>
+            (await getTrpcClient()).aiAgent.refreshHeteroOperationToken.mutate({ operationId: id }),
+        })
+      : undefined;
 
   // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
   //
@@ -501,36 +556,56 @@ const exec = async (options: ExecOptions): Promise<void> => {
   let askBridge: AskUserBridge | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
-  if (serverIngest && (agentType === 'claude-code' || agentType === 'qoder') && serverIngester) {
-    askServer = new LobeBuiltinMcpServer();
-    await askServer.start();
-    askBridge = askServer.registerOperation(operationId);
-    askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
-    await writeFile(
-      askMcpConfigPath,
-      JSON.stringify({
-        mcpServers: {
-          lobe_cc: {
-            alwaysLoad: true,
-            type: 'http',
-            url: askServer.urlForOperation(operationId),
+  if (
+    serverIngest &&
+    (agentType === 'claude-code' ||
+      agentType === 'cursor' ||
+      agentType === 'droid' ||
+      agentType === 'devin' ||
+      agentType === 'qoder') &&
+    serverIngester
+  ) {
+    if (agentType === 'cursor' || agentType === 'droid') {
+      askBridge = new AskUserBridge(operationId, {
+        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
+        provider: agentType,
+      });
+    } else if (agentType === 'devin') {
+      askBridge = new AskUserBridge(operationId, {
+        identifier: 'devin',
+        provider: 'devin',
+      });
+    } else {
+      askServer = new LobeBuiltinMcpServer();
+      await askServer.start();
+      askBridge = askServer.registerOperation(
+        operationId,
+        new AskUserBridge(operationId, { identifier: agentType, provider: agentType }),
+      );
+      askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+      await writeFile(
+        askMcpConfigPath,
+        JSON.stringify({
+          mcpServers: {
+            lobe_cc: {
+              alwaysLoad: true,
+              type: 'http',
+              url: askServer.urlForOperation(operationId),
+            },
           },
-        },
-      }),
-      'utf8',
-    );
+        }),
+        'utf8',
+      );
+    }
 
-    // (i) Forward bridge events into the same ordered ingest path as CC's. The
-    // request always goes out. For responses, only forward the ones the browser
-    // can't have published itself — producer-side timeout / session_ended — so
-    // the renderer's card un-sticks; browser-originated answers (success /
-    // user_cancelled) are already on the stream via `submitHeteroIntervention`.
+    // (i) Forward every bridge event into the same ordered durable ingest path
+    // as CC's. Browser submit already XADDed a response for producer delivery,
+    // but that is only transport acceptance. The bridge echo after resolve is
+    // the producer ACK (producerAck=true + resolutionRequestId) that transitions
+    // Cloud from `resolving` to terminal. Persistence de-dupes transitions by
+    // (operationId, toolCallId, transition).
     void (async () => {
       for await (const event of askBridge!.events()) {
-        if (event.type === 'agent_intervention_response') {
-          const reason = (event.data as { cancelReason?: string })?.cancelReason;
-          if (reason !== 'timeout' && reason !== 'session_ended') continue;
-        }
         serverIngester!.push(event as AgentStreamEvent);
       }
     })();
@@ -539,7 +614,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // actually pending, so an idle run holds no server invocation.
     void (async () => {
       const client = await getTrpcClient();
-      let lastEventId = '$';
+      // Start at the beginning of this operation stream. A response can be
+      // published after `pendingCount` flips but before the first XREAD; `$`
+      // would skip that already-present response and strand the CLI until the
+      // bridge timeout. Unknown/stale tool ids are harmless (`resolve` no-ops).
+      let lastEventId = '0-0';
       while (!askPollAbort.signal.aborted) {
         if (askBridge!.pendingCount === 0) {
           await sleep(200);
@@ -556,6 +635,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
               cancelReason?: 'session_ended' | 'timeout' | 'user_cancelled';
               cancelled?: boolean;
               result?: unknown;
+              resolutionRequestId?: string;
               toolCallId: string;
             };
             // Idempotent: resolve() no-ops on an unknown / already-settled id.
@@ -563,11 +643,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
               cancelReason: data.cancelReason,
               cancelled: data.cancelled,
               result: data.result,
+              resolutionRequestId: data.resolutionRequestId,
             });
           }
         } catch {
           // Transient (server hiccup / token refresh) — back off and retry.
-          // The bridge's 5-min timeout still bounds the overall wait.
+          // The bridge's 10-min timeout still bounds the overall wait.
           await sleep(1000);
         }
       }
@@ -668,6 +749,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
           ? err.code
           : undefined;
       log.error('Failed to start agent:', message);
+      await traceRecorder.finalize({
+        error: buildFinishError(message, 'AgentRuntimeError', errnoCode),
+        result: 'error',
+      });
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
@@ -705,10 +790,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 
-    // Ctrl-C → SIGINT to the child's process group.
-    // Repeated Ctrl-C escalates to SIGKILL.
+    // Direct CLI runs own a detached child group and forward terminal signals.
+    // Device-dispatched wrappers share their outer detached group, so the
+    // gateway cancellation owner signals that group directly instead.
+    const inheritsWrapperProcessGroup =
+      process.platform !== 'win32' && process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] === '1';
     let interrupted = false;
     const onSigint = () => {
+      if (inheritsWrapperProcessGroup) {
+        interrupted = true;
+        return;
+      }
       if (interrupted) {
         handle.kill('SIGKILL');
         return;
@@ -718,7 +810,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     };
     const onSigterm = () => {
       interrupted = true;
-      handle.kill('SIGTERM');
+      if (!inheritsWrapperProcessGroup) handle.kill('SIGTERM');
     };
     process.on('SIGINT', onSigint);
     process.on('SIGTERM', onSigterm);
@@ -740,7 +832,10 @@ const exec = async (options: ExecOptions): Promise<void> => {
             resumeNotFound = true;
             // Emit to JSONL for observability but do NOT push to ingester —
             // we are about to retry; the server must not see a terminal error.
+            // The local trace still records it: "attempt 1 could not resume" is
+            // the whole reason someone reads the trace back.
             if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+            traceRecorder.observe(event);
             continue;
           }
         }
@@ -760,6 +855,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
           terminalErrorData = isHeteroStatusGuideErrorData(data) ? data : undefined;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+        operationHeartbeat?.observe(event);
+        traceRecorder.observe(event);
         serverIngester?.push(event);
       }
     } catch (err) {
@@ -767,6 +864,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
         'Stream error from agent process:',
         err instanceof Error ? err.message : String(err),
       );
+      await traceRecorder.finalize({
+        error: buildFinishError(
+          String(err),
+          'stream_error',
+          (err as NodeJS.ErrnoException | null)?.code,
+        ),
+        result: 'error',
+      });
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
@@ -837,20 +942,30 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // ENOENT on a stale global install. Custom commands are used verbatim.
   const resolvedCommand = await resolveHeteroSpawnCommand(agentType, options.command);
   const commandEnv = resolvedCommand.pathEnv ? { PATH: resolvedCommand.pathEnv } : undefined;
+  // Devin ACP's `--permission-mode` is a global flag; default to bypass so
+  // headless connected-device runs do not block on permission prompts. The mode
+  // response must not overwrite the model selected by `initialModel`.
+  const permissionMode = options.type === 'devin' ? 'bypass' : undefined;
 
   const first = await runOneAgent(
     {
       agentType: options.type,
+      askUserBridge: askBridge,
       command: resolvedCommand.command,
       cwd: options.cwd || process.cwd(),
+      detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
       env: commandEnv,
       extraArgs,
+      permissionMode,
       // Device and sandbox executions are observed through the same gateway
       // stream as native server agents. Ask Claude Code for content-block
       // deltas so the current conversation receives text while the process is
       // running instead of seeing only the terminal assistant snapshot.
       includePartialMessages: options.type === 'claude-code',
-      initialModel: options.type === 'trae' ? options.model : undefined,
+      initialModel:
+        options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
+          ? options.model
+          : undefined,
       operationId,
       prompt: resolved.prompt,
       resumeSessionId: options.resume,
@@ -879,14 +994,20 @@ const exec = async (options: ExecOptions): Promise<void> => {
     result = await runOneAgent(
       {
         agentType: options.type,
+        askUserBridge: askBridge,
         command: resolvedCommand.command,
         cwd: options.cwd || process.cwd(),
+        detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
         env: commandEnv,
         extraArgs,
         includePartialMessages: options.type === 'claude-code',
-        initialModel: options.type === 'trae' ? options.model : undefined,
+        initialModel:
+          options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
+            ? options.model
+            : undefined,
         operationId,
-        prompt: resolved.prompt,
+        permissionMode,
+        prompt: resolved.resumeFallbackPrompt ?? resolved.prompt,
         uploadImage,
         // No resumeSessionId — start fresh
       },
@@ -900,6 +1021,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const { code, signal, sessionId } = result;
 
   if (serverIngester && sink) {
+    operationHeartbeat?.stop();
     try {
       await serverIngester.drain();
     } catch (err) {
@@ -909,52 +1031,68 @@ const exec = async (options: ExecOptions): Promise<void> => {
       );
       result = { ...result, ingestError: true };
     }
+  }
 
-    // CC relays API/rate-limit errors as an in-stream terminal `error` event but
-    // still exits 0, so the exit code alone would report `success`. Treat any
-    // pushed terminal error as a failed run so the topic/task is marked failed.
-    const exitedClean =
-      !result.cancelled &&
-      !result.ingestError &&
-      !result.sawTerminalError &&
-      (code === 0 || signal === 'SIGTERM');
+  // CC relays API/rate-limit errors as an in-stream terminal `error` event but
+  // still exits 0, so the exit code alone would report `success`. Treat any
+  // pushed terminal error as a failed run so the topic/task is marked failed.
+  const exitedClean =
+    !result.cancelled &&
+    !result.ingestError &&
+    !result.sawTerminalError &&
+    (code === 0 || signal === 'SIGTERM');
 
-    // When the run failed, pass an error detail so the server surfaces a useful
-    // message instead of the generic "Agent execution failed" fallback. Prefer
-    // the in-stream terminal error (CC relays API/rate-limit errors here while
-    // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
-    // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
-    // payload small.
-    const stderrTail = result.stderrContent.trim();
-    const errorDetail = result.terminalErrorMessage || stderrTail;
-    // The adapter's in-stream classification (overloaded / rate_limit) already
-    // carries the structured status-guide body — forward it verbatim instead of
-    // re-deriving from the flattened message via the process-only classifier,
-    // which would drop `agentType`/`code` and demote the client UI to the
-    // generic error card.
-    const finishError =
-      result.cancelled || exitedClean
-        ? undefined
-        : result.terminalErrorData
-          ? {
-              body: { ...result.terminalErrorData },
-              message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
-              type: 'AgentRuntimeError',
-            }
-          : errorDetail
-            ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
-            : undefined;
+  // When the run failed, pass an error detail so the server surfaces a useful
+  // message instead of the generic "Agent execution failed" fallback. Prefer
+  // the in-stream terminal error (CC relays API/rate-limit errors here while
+  // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
+  // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
+  // payload small.
+  const stderrTail = result.stderrContent.trim();
+  const errorDetail = result.terminalErrorMessage || stderrTail;
+  // The adapter's in-stream classification (overloaded / rate_limit) already
+  // carries the structured status-guide body — forward it verbatim instead of
+  // re-deriving from the flattened message via the process-only classifier,
+  // which would drop `agentType`/`code` and demote the client UI to the
+  // generic error card.
+  const finishError =
+    result.cancelled || exitedClean
+      ? undefined
+      : result.terminalErrorData
+        ? {
+            body: { ...result.terminalErrorData },
+            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+            type: 'AgentRuntimeError',
+          }
+        : errorDetail
+          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+          : undefined;
 
+  const runResult = result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error';
+
+  // Close the local trace for EVERY run — the outcome is derived above from the
+  // same signals the server finish uses, so a standalone run records the same
+  // completion reason a server-ingest one does. Runs before the sink so a
+  // failing server call still leaves a complete snapshot on disk.
+  await traceRecorder.finalize({ error: finishError, result: runResult });
+  let finishDeliveryFailed = false;
+
+  if (serverIngester && sink) {
     try {
       await sink.finish({
         error: finishError,
-        result: result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error',
+        resumeSessionInvalidated: first.resumeNotFound || undefined,
+        result: runResult,
         sessionId,
       });
     } catch (err) {
+      finishDeliveryFailed = true;
       log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }
   }
+  // Only now: the drain and the finish receipt above both authenticate with the
+  // operation token, and either can sit in retries long enough for it to expire.
+  operationTokenRenewal?.stop();
 
   // Tear down the AskUserQuestion MCP: stop polling, cancel any in-flight
   // pending (→ CC's tool returns cleanly), close the server, drop the temp
@@ -963,11 +1101,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
   if (askServer) {
     askServer.unregisterOperation(operationId);
     await askServer.stop().catch(() => {});
-  }
+  } else askBridge?.cancelAll('session_ended');
   if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
 
   if (code !== null) {
-    const hasRunError = result.ingestError || (!result.cancelled && result.sawTerminalError);
+    const hasRunError =
+      finishDeliveryFailed || result.ingestError || (!result.cancelled && result.sawTerminalError);
     process.exit(hasRunError ? 1 : code);
   }
   if (signal === 'SIGINT') process.exit(130);

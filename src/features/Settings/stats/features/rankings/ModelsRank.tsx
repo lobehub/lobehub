@@ -1,13 +1,13 @@
 import { type ModelRankItem } from '@lobechat/types';
 import { BarList } from '@lobehub/charts';
-import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { MaximizeIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
+import { ModelIcon } from '@/components/LobeIcons';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';

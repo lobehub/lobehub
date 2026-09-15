@@ -25,6 +25,7 @@ import { getModelPricing } from '../../utils/getModelPricing';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { ContextExceededPreFlightError } from '../../utils/resolveSafeMaxTokens';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
 import {
@@ -306,7 +307,12 @@ export const createDefaultAnthropicClient = <T extends Record<string, any> = any
 export const handleDefaultAnthropicError = <T extends Record<string, any> = any>(
   error: any,
   options: ConstructorOptions<T>,
+  errorType?: AnthropicCompatibleFactoryOptions<T>['errorType'],
 ): Omit<ChatCompletionErrorPayload, 'provider'> => {
+  const ErrorType = {
+    bizError: errorType?.bizError || AgentRuntimeErrorType.ProviderBizError,
+    invalidAPIKey: errorType?.invalidAPIKey || AgentRuntimeErrorType.InvalidProviderAPIKey,
+  };
   const baseURL =
     typeof options.baseURL === 'string' && options.baseURL
       ? options.baseURL
@@ -320,7 +326,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
         return {
           endpoint: desensitizedEndpoint,
           error: error as any,
-          errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          errorType: ErrorType.invalidAPIKey,
         };
       }
       case 403: {
@@ -328,6 +334,13 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
           endpoint: desensitizedEndpoint,
           error: error as any,
           errorType: AgentRuntimeErrorType.LocationNotSupportError,
+        };
+      }
+      case 413: {
+        return {
+          endpoint: desensitizedEndpoint,
+          error: error as any,
+          errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
         };
       }
       default: {
@@ -345,6 +358,15 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
       endpoint: desensitizedEndpoint,
       error: errorResult,
       errorType: AgentRuntimeErrorType.AccountDeactivated,
+      message,
+    };
+  }
+
+  if (ErrorClassifier.isInsufficientQuota(errorMsg)) {
+    return {
+      endpoint: desensitizedEndpoint,
+      error: errorResult,
+      errorType: AgentRuntimeErrorType.InsufficientQuota,
       message,
     };
   }
@@ -370,7 +392,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
   return {
     endpoint: desensitizedEndpoint,
     error: errorResult,
-    errorType: AgentRuntimeErrorType.ProviderBizError,
+    errorType: ErrorType.bizError,
     message,
   };
 };
@@ -438,7 +460,6 @@ export const createAnthropicCompatibleParams = <T extends Record<string, any> = 
     baseURL,
     chatCompletion: {
       getPricingOptions: resolveDefaultAnthropicPricingOptions,
-      handleError: handleDefaultAnthropicError,
       handlePayload: buildDefaultAnthropicPayload,
       ...chatCompletion,
     },
@@ -786,6 +807,16 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         desensitizedEndpoint = desensitizeUrl(this.baseURL);
       }
 
+      if (error instanceof ContextExceededPreFlightError) {
+        return AgentRuntimeError.chat({
+          endpoint: desensitizedEndpoint,
+          error: error.toPayload(),
+          errorType: AgentRuntimeErrorType.ExceededContextWindow,
+          message: error.message,
+          provider: this.id,
+        });
+      }
+
       if (chatCompletion?.handleError) {
         const errorResult = chatCompletion.handleError(error, this._options);
         if (errorResult)
@@ -795,71 +826,11 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           } as ChatCompletionErrorPayload);
       }
 
-      if ('status' in (error as any)) {
-        switch ((error as Response).status) {
-          case 401: {
-            return AgentRuntimeError.chat({
-              endpoint: desensitizedEndpoint,
-              error: error as any,
-              errorType: ErrorType.invalidAPIKey,
-              provider: this.id,
-            });
-          }
-          case 403: {
-            return AgentRuntimeError.chat({
-              endpoint: desensitizedEndpoint,
-              error: error as any,
-              errorType: AgentRuntimeErrorType.LocationNotSupportError,
-              provider: this.id,
-            });
-          }
-          default: {
-            break;
-          }
-        }
-      }
-
-      const { errorResult, message } = handleAnthropicError(error);
-
-      const errorMsg = errorResult.message || errorResult.error?.message;
-
-      if (ErrorClassifier.isAccountDeactivated(errorMsg)) {
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.AccountDeactivated,
-          message,
-          provider: this.id,
-        });
-      }
-
-      if (ErrorClassifier.isExceededContextWindow(errorMsg)) {
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.ExceededContextWindow,
-          message,
-          provider: this.id,
-        });
-      }
-
-      if (ErrorClassifier.isRateLimitExceeded(errorMsg)) {
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.QuotaLimitReached,
-          message,
-          provider: this.id,
-        });
-      }
-
+      const errorResult = handleDefaultAnthropicError(error, this._options, errorType);
       return AgentRuntimeError.chat({
-        endpoint: desensitizedEndpoint,
-        error: errorResult,
-        errorType: ErrorType.bizError,
-        message,
+        ...errorResult,
         provider: this.id,
-      });
+      } as ChatCompletionErrorPayload);
     }
   };
 };

@@ -3,8 +3,8 @@ import { useCallback } from 'react';
 import { isDesktop } from '@/const/version';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -157,7 +157,7 @@ export const useOpenEditedFile = () => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(activeAgentId);
+  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(activeAgentId);
   const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
 
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {

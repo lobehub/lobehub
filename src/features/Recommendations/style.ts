@@ -23,7 +23,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
     transition: background ${cssVar.motionDurationFast};
 
-    &:hover {
+    /* the selector mirrors base-ui's variantText hover rule so the row tint
+       can outrank its brighter fill */
+    &:hover:not(:disabled, [aria-disabled='true']) {
       background: ${cssVar.colorFillQuaternary};
     }
   `,

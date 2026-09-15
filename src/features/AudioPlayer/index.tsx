@@ -6,7 +6,7 @@ import { DownloadIcon, PauseIcon, PlayIcon, RotateCcwIcon, XIcon } from 'lucide-
 import { memo, type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useChatStore } from '@/store/chat';
+import type { VoiceMessageUploadState } from '@/store/chat/slices/voiceMessage/initialState';
 
 import { useAudioElementSource } from './useAudioElementSource';
 import { useWaveform } from './useWaveform';
@@ -225,18 +225,24 @@ interface AudioPlayerProps {
    * surfaces render the player as a block, not an inline attachment.
    */
   fullWidth?: boolean;
-  messageId?: string;
+  onCancelUpload?: () => void;
+  onRetryUpload?: () => void;
+  uploadState?: VoiceMessageUploadState;
   url: string;
 }
 
 const AudioPlayer = memo<AudioPlayerProps>(
-  ({ url, alt, downloadFileName, durationMs, fullWidth, messageId }) => {
+  ({
+    url,
+    alt,
+    downloadFileName,
+    durationMs,
+    fullWidth,
+    onCancelUpload,
+    onRetryUpload,
+    uploadState,
+  }) => {
     const { t } = useTranslation('chat');
-    const [uploadState, cancelVoiceMessage, retryVoiceMessage] = useChatStore((s) => [
-      messageId ? s.voiceMessageUploadMap[messageId] : undefined,
-      s.cancelVoiceMessage,
-      s.retryVoiceMessage,
-    ]);
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -375,7 +381,7 @@ const AudioPlayer = memo<AudioPlayerProps>(
             <Icon icon={DownloadIcon} size={15} />
           </button>
         )}
-        {uploadState && messageId && (
+        {uploadState && (
           <div className={styles.actionGroup}>
             {isFailed && (
               <button
@@ -383,7 +389,7 @@ const AudioPlayer = memo<AudioPlayerProps>(
                 className={styles.miniButton}
                 title={t('voiceMessage.retry')}
                 type="button"
-                onClick={() => retryVoiceMessage(messageId)}
+                onClick={() => onRetryUpload?.()}
               >
                 <Icon icon={RotateCcwIcon} size={14} />
               </button>
@@ -394,7 +400,7 @@ const AudioPlayer = memo<AudioPlayerProps>(
                 className={styles.miniButton}
                 title={t(isFailed ? 'voiceMessage.delete' : 'voiceMessage.cancelUpload')}
                 type="button"
-                onClick={() => void cancelVoiceMessage(messageId)}
+                onClick={() => onCancelUpload?.()}
               >
                 <Icon icon={XIcon} size={14} />
               </button>

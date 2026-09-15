@@ -1,3 +1,4 @@
+import type { VerifyCheckDefinition } from './acceptanceFlow';
 /**
  * Verify (delivery checker) domain types — the shared vocabulary, frozen-item
  * shape, Toulmin narrative, and rubric run-policy config. Kept here (not in the
@@ -90,9 +91,9 @@ export interface AcceptanceVisualRender {
 }
 
 /**
- * Acceptance policy/config snapshot. The source may be a task's `config.verify`,
- * a topic-level override, or a document acceptance rule, so it lives with the
- * generic aggregate rather than only in task types.
+ * Acceptance policy/config snapshot. This is the authoritative policy for the
+ * subject's verification lifecycle; legacy task `config.verify` values are
+ * migrated here on first read.
  */
 /**
  * One user-authored acceptance criterion in a subject's standing checklist
@@ -157,9 +158,17 @@ export interface AcceptanceGroupFeedback {
 /** One group-scoped feedback entry as stored on a round's decision detail. */
 export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIndex'>;
 
+/** A presentation group of stable acceptance-union check IDs, independent of execution flows. */
+export interface AcceptanceCheckGroup {
+  checkItemIds: string[];
+  title: string;
+}
+
 /** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 export interface AcceptanceMetadata {
   [key: string]: unknown;
+  /** Current checklist organization; frozen plans, results and reviews keep their original IDs. */
+  checkGrouping?: { groups: AcceptanceCheckGroup[]; version: number };
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
 }
@@ -183,8 +192,10 @@ export type AcceptanceCheckReviewAction = 'accept' | 'ignore' | 'reject';
 export type AcceptanceRejectIntent = 'unmet' | 'new-idea' | 'no-evidence';
 
 /** What an automated reviewer proposes for a check — never `ignore`, which is a
- *  statement about the reviewer's priorities rather than about the delivery. */
-export type ReviewPredictionAction = 'accept' | 'reject';
+ *  statement about the reviewer's priorities rather than about the delivery.
+ *  `unjudgeable` means no capture could settle the criterion from the reviewer's
+ *  side; see `reviewPredictionActions` in `@lobechat/const/verify`. */
+export type ReviewPredictionAction = 'accept' | 'reject' | 'unjudgeable';
 
 /**
  * How a review attempt ended — see `@lobechat/const/verify` for why this is
@@ -305,6 +316,7 @@ export interface VerifyCheckDecisionDetail {
 export type VerifyRunStatus =
   | 'unverified'
   | 'planned'
+  | 'collecting_evidence'
   | 'verifying'
   | 'passed'
   | 'failed'
@@ -353,7 +365,8 @@ export type VerifyEvidenceType =
   'screenshot' | 'gif' | 'video' | 'audio' | 'text' | 'markdown' | 'dom_snapshot' | 'transcript';
 
 /** Who / what captured an evidence artifact (provenance). */
-export type VerifyEvidenceCapturedBy = 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
+export type VerifyEvidenceCapturedBy =
+  'agent' | 'agent-browser' | 'cdp' | 'cli' | 'program' | 'llm_judge';
 
 /**
  * Provenance of a user's acceptance decision on a verify round
@@ -505,6 +518,8 @@ export interface VerifyInteractionCostOperators {
 export interface VerifyInteractionCostPhase {
   actionCount?: number;
   activeSeconds?: number;
+  /** Wall-clock the agent actually spent here — not the user-equivalent price. */
+  actualAgentSeconds?: number;
   checkItemId?: string;
   id: string;
   label?: string;
@@ -550,6 +565,18 @@ export interface VerifyRubricConfig {
  */
 export interface VerifyRunMetadata {
   [key: string]: unknown;
+  /** Autonomous Goal review, kept separate from human decisions and verifier verdicts. */
+  goalReview?: {
+    feedback: string;
+    predictionIds: string[];
+    /**
+     * `unjudgeable` is separate from `rejected` on purpose: it means the review
+     * could not decide from evidence, not that the delivery fell short. Folding
+     * it into `rejected` both sent the builder off to fix nothing and made the
+     * two indistinguishable in the agreement statistics.
+     */
+    status: 'passed' | 'rejected' | 'errored' | 'unjudgeable';
+  };
   interactionCost?: VerifyInteractionCost;
   /**
    * Per-run override for the repair-round cap, taking precedence over the
@@ -570,6 +597,12 @@ export interface VerifyRunMetadata {
    * run that *authored* the report — and is many-to-one.
    */
   origin?: VerifyRunOrigin;
+  /**
+   * The round this one replays (`flow plan --from-run`). A replay is pinned to
+   * the source round's frozen definition, so it never follows later graph edits
+   * and never absorbs another flow, even while it holds no results yet.
+   */
+  replayOfRunId?: string;
 }
 
 export type VerifyVisualizationValue = boolean | null | number | string;
@@ -696,6 +729,7 @@ export interface VerifyCheckItem {
    * checks without one fall back to surface grouping.
    */
   category?: string;
+  definition?: VerifyCheckDefinition;
   /** One-sentence summary of what this check verifies. */
   description?: string;
   /** The document holding the detailed judging instruction / rule body, if any. */
@@ -708,8 +742,14 @@ export interface VerifyCheckItem {
   onFail: VerifyOnFailStrategy;
   /** Whether failing this item blocks delivery (snapshot may override the source default). */
   required: boolean;
+  resourceSnapshot?: {
+    documentContent?: string;
+    fixtures: { fixtureId: string; content?: string; fileHash?: string; url?: string }[];
+  };
   /** Provenance: the criterion this item was instantiated from, or null when agent-generated. */
   sourceCriterionId?: string | null;
+  /** Immutable reusable flow definition instantiated for this verification round. */
+  sourceFlowNode?: { flowId: string; nodeId: string; incomingEdgeId?: string };
   /** Provenance: the rubric (group) this item came in through, or null. */
   sourceRubricId?: string | null;
   /**
@@ -796,10 +836,8 @@ export interface RequiredEvidenceSpec {
  * provenance only — no verdict logic. Verifying an evidence is itself a new
  * check (related through `verify_check_results`), so this table stays flat.
  *
- * The payload lives in exactly one of two places: `content` for small inline
- * text (dom snapshot / console log / transcript), or `fileId` for a stored
- * artifact (screenshot / gif / video, or large text). The `files` table already
- * owns mime / size / hash / url, so none of that metadata is duplicated here.
+ * The payload lives in exactly one of three places: `content` for small inline
+ * text, `documentId` for a LobeHub document, or `fileId` for a stored artifact.
  */
 export interface VerifyEvidence {
   capturedAt?: Date | null;
@@ -812,6 +850,8 @@ export interface VerifyEvidence {
   createdAt: Date;
   /** Human-readable caption, e.g. "首页首屏完整渲染". */
   description?: string | null;
+  /** LobeHub document evidence — FK to `documents`. */
+  documentId?: string | null;
   /** Stored artifact — FK to `files`, which owns mime / size / hash / url. */
   fileId?: string | null;
   id: string;

@@ -1,6 +1,10 @@
 import type { TFunction } from 'i18next';
 
+import type { MessengerPushResult } from '@/server/services/messenger/push';
+
 type MessengerT = TFunction<'messenger'>;
+/** Why a push had to be queued — kept in sync with the server by derivation. */
+type MessengerPushQueueReason = NonNullable<MessengerPushResult['reason']>;
 export type MessengerTranslationKey = `messenger.${string}` | `verify.${string}`;
 
 const SLACK_INSTALL_ERROR_REASON_KEYS = {
@@ -35,6 +39,28 @@ const getMessengerTranslationKey = (error: unknown): MessengerTranslationKey | u
     return message as MessengerTranslationKey;
   }
 };
+
+const QUEUED_TOAST_KEYS = {
+  delivery_in_progress: 'messenger.push.queuedBusyToast',
+  quota_exhausted: 'messenger.push.queuedQuotaToast',
+  send_failed: 'messenger.push.queuedRetryToast',
+  window_closed: 'messenger.push.queuedToast',
+} as const satisfies Record<MessengerPushQueueReason, MessengerTranslationKey>;
+
+/**
+ * Toast key for a `queued` push result. The server distinguishes WHY the
+ * message had to queue (`reason`); the default key claims "the send window is
+ * closed", which is a lie for the quota / partial-failure paths and confused
+ * users whose window was visibly open.
+ *
+ * `reason` is optional because a platform without a send window never sets one
+ * — those fall back to the plain "window closed" copy.
+ */
+export const getMessengerQueuedToast = (
+  t: MessengerT,
+  platform: string,
+  reason?: MessengerPushQueueReason,
+): string => t(QUEUED_TOAST_KEYS[reason ?? 'window_closed'], { platform });
 
 export const getMessengerErrorMessage = (
   error: unknown,

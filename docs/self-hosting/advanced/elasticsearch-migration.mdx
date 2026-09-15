@@ -1,0 +1,158 @@
+---
+title: Migrate from pg_search to Elasticsearch
+description: Migrate search for a LobeHub deployment using Docker and Neon.
+tags:
+  - Elasticsearch
+  - Search
+  - Migration
+  - Self-hosting
+---
+
+# Migrate from pg\_search to Elasticsearch
+
+If you deploy LobeHub with Docker, use Neon for your database, and currently rely on `pg_search`, follow this guide to move search to Elasticsearch. Complete the migration before Neon disables `pg_search` for your instance.
+
+If your database continues to support `pg_search`, you can keep using it without migrating. This migration only changes the search service. Your chat history and other source data stay in the existing database.
+
+## 1. Prepare the configuration
+
+Back up your Neon database, then set up Elasticsearch using the [full-text search guide](/docs/self-hosting/advanced/full-text-search).
+
+On your server, prepare an `.env` file for the migration with the following settings. Do not commit this file to your repository.
+
+| Variable                  | Setting                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`            | Your existing Neon database's direct connection URL, without `-pooler` in the hostname         |
+| `DATABASE_DRIVER`         | Set to `node` to use the direct connection above                                               |
+| `ES_REINDEX_STATE_DIR`    | Set to `/app/.elasticsearch-reindex` and mount the progress volume as shown below              |
+| `KEY_VAULTS_SECRET`       | Reuse the value from your existing LobeHub application; do not generate a new one              |
+| `ES_URL`                  | Elasticsearch URL, reachable from the Docker containers                                        |
+| `ES_API_KEY`              | An API key with permission to create indexes and read and write data                           |
+| `ES_INDEX_NAMESPACE`      | An index prefix, such as `lobehub`; use the same value for the application and migration tools |
+| `FTS_SEARCH_PROVIDER`     | Keep set to `pg_search` for now                                                                |
+| `FTS_SEARCH_SYNC_ENABLED` | Keep set to `false` for now                                                                    |
+
+Use HTTPS and an API key for an external Elasticsearch service. The bundled Elasticsearch node on the official Compose private network uses `ES_ALLOW_INSECURE_HTTP=true` and does not require an API key. When using that node, add `--network <elasticsearch-network-name>` to each `docker run` command below. Inside a container, `localhost` does not refer to the host machine.
+
+These commands use the official image and connect to the database specified in this configuration, independently of Compose's bundled PostgreSQL service. Run them in the same terminal, replacing the image tag with the version you are deploying:
+
+```bash
+export LOBE_MIGRATION_IMAGE='lobehub/lobehub:<deployment-version-tag>'
+docker pull "$LOBE_MIGRATION_IMAGE"
+docker volume create lobehub-search-state
+```
+
+Pause use of the application and run that version's database migrations. Continue only after they succeed:
+
+```bash
+docker run --rm --env-file .env \
+  "$LOBE_MIGRATION_IMAGE" /app/docker.cjs
+```
+
+## 2. Import existing data
+
+Create the search indexes and import your existing data:
+
+```bash
+docker run --rm --env-file .env \
+  -e ES_REINDEX_STATE_DIR=/app/.elasticsearch-reindex \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-elasticsearch-reindex.cjs \
+  --apply --fresh-run --yes
+```
+
+Migration progress is saved in the `lobehub-search-state` volume. Keep this volume. Use `--fresh-run` only for the initial import; omit it when resuming after an interruption.
+
+Check the migration status:
+
+```bash
+docker run --rm --env-file .env \
+  -e ES_REINDEX_STATE_DIR=/app/.elasticsearch-reindex \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-elasticsearch-reindex.cjs --status
+```
+
+Continue when the status is `ready_for_incremental_sync` and there are no failed records.
+
+## 3. Start continuous sync
+
+Start the sync container so that new, updated, and deleted data are reflected in search results:
+
+```bash
+docker run -d --name lobe-fts-search-sync --restart unless-stopped \
+  --env-file .env \
+  -e FTS_SEARCH_SYNC_ENABLED=true \
+  -e MIGRATION_DB=1 \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-elasticsearch-sync.cjs \
+  --max-steps=8 --interval-seconds=15 --yes
+```
+
+Check the logs for errors:
+
+```bash
+docker logs --tail 50 lobe-fts-search-sync
+```
+
+Run the status command from the previous step again. Wait until the queue's `pending`, `ready`, `retrying`, `inFlight`, `dead`, and `revisionLag` values are all `0` before switching search.
+
+Keep this container running after the switch. Otherwise, subsequent data changes will not appear in search results.
+
+## 4. Switch search
+
+Mount the same progress volume on your LobeHub application container with `-v lobehub-search-state:/app/.elasticsearch-reindex` and set `ES_REINDEX_STATE_DIR=/app/.elasticsearch-reindex`. In the application's deployment configuration, set the same Elasticsearch connection details and index prefix, and change `FTS_SEARCH_PROVIDER` to `elasticsearch`. Recreate the application container using the same image version. Editing only the migration's `.env` file does not update the running application.
+
+Search for an existing chat message, then create a new message and confirm that it becomes searchable. Once both checks succeed and the sync container has no errors, resume normal use.
+
+If you encounter problems after switching, you can change the application's `FTS_SEARCH_PROVIDER` back to `pg_search` and recreate the application container, provided Neon still supports the extension and you have not removed the old search indexes.
+
+## 5. Remove the old search indexes
+
+Once Elasticsearch search and continuous sync are working, also change `FTS_SEARCH_PROVIDER` to `elasticsearch` in the migration's `.env` file. Inspect and remove the old search indexes and extension:
+
+```bash
+docker run --rm --env-file .env \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-pg-search-cleanup.cjs --status
+docker run --rm --env-file .env \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-pg-search-cleanup.cjs --apply --yes
+```
+
+This does not delete chat history or other source data, but you cannot switch directly back to `pg_search` afterward. Complete this step before Neon's deadline for disabling the extension.
+
+## Updating LobeHub later
+
+Keep the application container's progress volume mount, then recreate the application and continuous sync containers using the same new image version. At startup, the application runs PostgreSQL migrations, updates any Elasticsearch indexes that need upgrading, and switches search automatically. Completed indexes are not imported again. The application starts only after migration succeeds and is unavailable during this maintenance.
+
+The official Compose configuration shares the progress volume between the application and migration tools. With a custom Docker configuration, mount the same volume on both. If your initial migration used an existing progress directory, keep mounting that directory instead of switching to an empty volume, and ensure the application container can read and write it.
+
+If migration fails, the application will not start. Check the application container logs and follow the recovery instructions below. Keep the continuous sync container running; a startup migration does not replace it.
+
+The optional search capture installer records its schema version in PostgreSQL. Database migrations must run before capture installation. An older application version must not install over newer capture definitions; if the installer reports an unknown or partial definition, keep the current version running and resolve the mismatch before retrying. The capture upgrade holds source-table writes while replacing definitions, so it does not create a missed-change window or require a full reindex by itself. Existing indexed tool messages require a separate, version-aware cleanup after all sync workers use the new eligibility rule.
+
+For an existing Elasticsearch installation, first upgrade every application and continuous-sync worker to the version that excludes tool and blank messages. Then preview the ineligible PostgreSQL source count and separately record the Elasticsearch `messages` alias's live `role=tool` count:
+
+```bash
+docker run --rm --env-file .env \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-ineligible-message-cleanup.cjs --status
+```
+
+Schedule the separate cleanup only after every sync worker is upgraded. Run bounded batches with the same volume mounted for the private checkpoint:
+
+```bash
+docker run --rm --env-file .env \
+  -v lobehub-search-state:/app/.elasticsearch-reindex \
+  "$LOBE_MIGRATION_IMAGE" /app/fts-search-ineligible-message-cleanup.cjs \
+  --apply --yes --all-workers-upgraded \
+  --state-file=/app/.elasticsearch-reindex/ineligible-messages.json \
+  --batch-size=250 --max-batches=10 --delay-ms=1000
+```
+
+Keep the checkpoint volume for resume and do not delete it between runs. A repeated batch is safe: it allocates a newer Outbox revision, and the normal sync worker writes a fenced soft tombstone or the message's current eligible projection. Wait for the Outbox to drain without dead letters, then confirm the Elasticsearch count has decreased toward zero. The command does not change PostgreSQL messages or run Elasticsearch writes itself.
+
+## If the migration is interrupted
+
+Keep the `lobehub-search-state` volume. For an interrupted initial manual import, resolve the error and run the import command again without `--fresh-run`. If automatic migration fails during application startup, resolve the error and any retained lock, then restart the application container. It will continue the backfill, catch-up, and switch.
+
+If the migration lock is still held, first confirm that the previous migration process has exited and its Elasticsearch requests have finished. Run the status command to find the lock owner. Replace the import command's final arguments with `--release-lock=<owner-uuid> --yes` to release the lock, then retry the import.
+
+Do not run multiple migration tasks at the same time, delete the progress volume, or skip failed records to bypass an error. If you need help, share the error output with sensitive information removed.

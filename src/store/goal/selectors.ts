@@ -2,6 +2,12 @@ import type { GoalStore } from './action';
 
 const EMPTY_GOALS: GoalStore['goalListByAgentId'][string] = [];
 
+const goalGraph = (goalId?: string | null) => (s: GoalStore) =>
+  goalId ? s.goalGraphById[goalId] : undefined;
+
+const goalMetricSeries = (goalId?: string | null) => (s: GoalStore) =>
+  goalId ? s.goalMetricSeriesById[goalId] : undefined;
+
 const goalList = (agentId: string) => (s: GoalStore) => s.goalListByAgentId[agentId] ?? EMPTY_GOALS;
 
 const isGoalListInitialized = (agentId: string) => (s: GoalStore) =>
@@ -13,6 +19,8 @@ const isHomeGoalsInitialized = (scope: string) => (s: GoalStore) =>
   s.homeGoalsInitializedScopes.includes(scope);
 
 export const goalSelectors = {
+  goalMetricSeries,
+  goalGraph,
   goalList,
   homeGoals,
   isGoalListInitialized,

@@ -7,11 +7,24 @@ const mocks = vi.hoisted(() => ({
   access: undefined as { accessLevel: string; canManage: boolean } | undefined,
   accessError: undefined as unknown,
   agentMap: {} as Record<string, object>,
-  canEditContent: true,
   devices: [] as unknown[],
+  isWorkspaceOwner: false,
   permissionResourceId: undefined as string | undefined,
   setAccessLevel: vi.fn(),
   updateAgentConfigById: vi.fn(),
+  viewerId: 'admin' as string | undefined,
+}));
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: (action: string) =>
+    action === 'edit_others_content'
+      ? { allowed: mocks.isWorkspaceOwner, reason: 'requires owner' }
+      : { allowed: true, reason: undefined },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) =>
+    selector({ user: { id: mocks.viewerId } }),
 }));
 
 vi.mock('@/features/DeviceManager/useDeviceList', () => ({
@@ -33,10 +46,6 @@ vi.mock('@/features/ResourcePermission/useResourcePermission', () => ({
   },
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: mocks.canEditContent }),
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -47,6 +56,7 @@ vi.mock('@/store/agent', () => ({
 
 const workspaceAgent = (overrides: Record<string, unknown> = {}) => ({
   agencyConfig: {},
+  userId: 'author',
   visibility: 'public',
   workspaceId: 'workspace-1',
   ...overrides,
@@ -66,10 +76,41 @@ describe('useAgentPermission', () => {
     vi.clearAllMocks();
     mocks.access = { accessLevel: 'use', canManage: true };
     mocks.accessError = undefined;
-    mocks.canEditContent = true;
     mocks.devices = [];
+    mocks.isWorkspaceOwner = false;
+    mocks.viewerId = 'admin';
     mocks.permissionResourceId = undefined;
     mocks.agentMap = { 'agent-1': workspaceAgent() };
+  });
+
+  describe('policy write authority', () => {
+    // The server accepts the policy keys only from the agent's creator or the
+    // workspace owner, and strips them from anyone else's *successful* save —
+    // so a control the page leaves enabled would discard the choice in silence.
+    it('denies a workspace Admin who can otherwise edit the agent', () => {
+      const { result } = setup();
+
+      expect(result.current.canEditConfig).toBe(true);
+      expect(result.current.canEditPolicies).toBe(false);
+    });
+
+    it('allows the agent creator', () => {
+      mocks.viewerId = 'author';
+
+      expect(setup().result.current.canEditPolicies).toBe(true);
+    });
+
+    it('allows the workspace owner who did not create the agent', () => {
+      mocks.isWorkspaceOwner = true;
+
+      expect(setup().result.current.canEditPolicies).toBe(true);
+    });
+
+    it('stays denied while the agent row has not loaded', () => {
+      mocks.agentMap = {};
+
+      expect(setup().result.current.canEditPolicies).toBe(false);
+    });
   });
 
   it('exposes member access for a shared workspace agent', () => {
@@ -78,6 +119,7 @@ describe('useAgentPermission', () => {
     expect(result.current.isWorkspaceAgent).toBe(true);
     expect(mocks.permissionResourceId).toBe('agent-1');
     expect(result.current.accessLevel).toBe('use');
+    expect(result.current.canEditConfig).toBe(true);
     expect(result.current.canManageAccess).toBe(true);
   });
 
@@ -107,6 +149,27 @@ describe('useAgentPermission', () => {
 
     expect(result.current.modelPolicy).toBe('member');
     expect(result.current.executionTargetPolicy).toBe('member');
+  });
+
+  it('defaults topic sharing to member, so legacy agents keep sharing', () => {
+    const { result } = setup();
+
+    expect(result.current.topicSharePolicy).toBe('member');
+  });
+
+  it('reads and saves the topic-share policy through the agent config', () => {
+    mocks.agentMap = {
+      'agent-1': workspaceAgent({ agencyConfig: { topicSharePolicy: 'restricted' } }),
+    };
+
+    const { result } = setup();
+    expect(result.current.topicSharePolicy).toBe('restricted');
+
+    result.current.setTopicSharePolicy('member');
+
+    expect(mocks.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
+      agencyConfig: { topicSharePolicy: 'member' },
+    });
   });
 
   it('reads the stored intent on a private agent instead of the run-time resolution', () => {
@@ -197,14 +260,7 @@ describe('useAgentPermission', () => {
 
     const { result } = setup();
 
-    expect(result.current.canManageAccess).toBe(false);
-  });
-
-  it('withholds the config policies from a role that cannot edit content', () => {
-    mocks.canEditContent = false;
-
-    const { result } = setup();
-
     expect(result.current.canEditConfig).toBe(false);
+    expect(result.current.canManageAccess).toBe(false);
   });
 });

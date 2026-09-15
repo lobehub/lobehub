@@ -13,16 +13,18 @@ export const barButtonStyles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: inline-flex;
+    flex-shrink: 0;
     gap: 4px;
     align-items: center;
 
     height: 20px;
-    padding-inline: 6px;
+    padding-inline: 4px;
     border: none;
     border-radius: 4px;
 
     font-size: 11px;
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
 
     background: transparent;
 

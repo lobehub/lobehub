@@ -1,15 +1,20 @@
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
+import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate } from '@/libs/swr';
+import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -18,6 +23,11 @@ import { useUserStore } from '@/store/user';
 import { type ChatTopic } from '@/types/topic';
 
 import { useChatStore } from '../../store';
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+  const actual = await importOriginal<{ toast: Record<string, unknown> }>();
+  return { ...actual, toast: { ...actual.toast, error: vi.fn() } };
+});
 
 // Mock @/libs/swr mutate
 vi.mock('@/libs/swr', async () => {
@@ -28,7 +38,14 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
-vi.mock('zustand/traditional');
+vi.mock('swr', async () => {
+  const actual = await vi.importActual('swr');
+  return {
+    ...(actual as any),
+    mutate: vi.fn(),
+  };
+});
+
 // Mock topicService 和 messageService
 vi.mock('@/services/topic', () => ({
   topicService: {
@@ -41,6 +58,7 @@ vi.mock('@/services/topic', () => ({
     createTopic: vi.fn(),
     updateTopicFavorite: vi.fn(),
     updateTopicMetadata: vi.fn(),
+    updateTopicModel: vi.fn(),
     updateTopicTitle: vi.fn(),
     updateTopic: vi.fn(),
     batchRemoveTopics: vi.fn(),
@@ -59,14 +77,6 @@ vi.mock('@/services/message', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: vi.fn(),
-    loading: vi.fn(() => ({ close: vi.fn() })),
-    success: vi.fn(),
-  },
-}));
-
 vi.mock('i18next', () => ({
   t: vi.fn((key, params) => (params.title ? key + '_' + params.title : key)),
 }));
@@ -82,6 +92,7 @@ beforeEach(() => {
       agentTopicsViewMap: {},
       searchTopics: [],
       topicDataMap: {},
+      topicDetailMap: {},
       // ... initial state
     },
     false,
@@ -240,15 +251,6 @@ describe('topic action', () => {
     });
   });
   describe('refreshTopic', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
     afterEach(() => {
       // 在每个测试用例开始前恢复到实际的 SWR 实现
       vi.resetAllMocks();
@@ -343,7 +345,7 @@ describe('topic action', () => {
 
     it('applies the switch to the bucket that owns the topic', async () => {
       const { result } = renderHook(() => useChatStore());
-      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       seedBuilderTopic();
 
       await act(async () => {
@@ -361,7 +363,7 @@ describe('topic action', () => {
 
     it('revalidates the owning bucket instead of the active agent bucket', async () => {
       const { result } = renderHook(() => useChatStore());
-      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       (mutate as Mock).mockClear();
       seedBuilderTopic();
 
@@ -375,6 +377,399 @@ describe('topic action', () => {
       const matcherFn = (mutate as Mock).mock.calls[0][0];
       expect(matcherFn(['topic:list', BUILDER_KEY, { pageSize: 20 }])).toBe(true);
       expect(matcherFn(['topic:list', topicMapKey({ agentId: 'edited-agent' }), {}])).toBe(false);
+    });
+
+    it('writes model and the re-pinned reasoning config in one request', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
+      seedBuilderTopic();
+      act(() => {
+        useChatStore.setState({
+          internal_resolveTopicReasoningSnapshot: vi
+            .fn()
+            .mockResolvedValue({ deepseekV4GAReasoningEffort: 'high' }),
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        });
+      });
+
+      expect(spy).toHaveBeenCalledWith('builder-topic', {
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      });
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0]).toMatchObject({
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    it('drops the previous pin when the new model has no reasoning params', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
+      seedBuilderTopic();
+      act(() => {
+        const key = BUILDER_KEY;
+        const state = useChatStore.getState();
+        useChatStore.setState({
+          internal_resolveTopicReasoningSnapshot: vi.fn().mockResolvedValue(undefined),
+          topicDataMap: {
+            [key]: {
+              ...state.topicDataMap[key],
+              items: [
+                {
+                  ...state.topicDataMap[key].items[0],
+                  metadata: {
+                    reasoningConfig: { glm5_2ReasoningEffort: 'max' },
+                    workingDirectory: '/w',
+                  },
+                },
+              ],
+            },
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'plain-model',
+          provider: 'lobehub',
+        });
+      });
+
+      expect(spy).toHaveBeenCalledWith('builder-topic', {
+        metadata: undefined,
+        model: 'plain-model',
+        provider: 'lobehub',
+      });
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0].metadata).toEqual({
+        workingDirectory: '/w',
+      });
+    });
+  });
+
+  describe('updateTopicHeteroPin', () => {
+    const KEY = topicMapKey({ agentId: 'hetero-agent' });
+    const seed = () => {
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'hetero-agent',
+          activeTopicId: 'hetero-topic',
+          topicDataMap: {
+            [KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'hetero-topic',
+                  metadata: { heteroEffort: 'high' },
+                  model: 'old-model',
+                  provider: 'codex',
+                  title: 'Hetero',
+                } as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('writes model and effort reset in one request', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          effort: 'default',
+          model: 'new-model',
+          provider: 'codex',
+        });
+      });
+
+      expect(spy).toHaveBeenCalledWith('hetero-topic', {
+        metadata: { heteroEffort: 'default' },
+        model: 'new-model',
+        provider: 'codex',
+      });
+    });
+
+    it.each(['heterogeneous', 'api'] as const)(
+      'preserves the latest effort when a %s model write finishes later',
+      async (kind) => {
+        seed();
+        let finishModel!: () => void;
+        const modelPending = new Promise<void>((resolve) => {
+          finishModel = resolve;
+        });
+        let persistedEffort = 'high';
+        const modelSpy = vi.spyOn(topicService, 'updateTopicModel').mockImplementation(async () => {
+          await modelPending;
+          persistedEffort = 'default';
+          return [];
+        });
+        vi.spyOn(topicService, 'updateTopicMetadata').mockImplementation(async () => {
+          persistedEffort = 'low';
+          return [];
+        });
+        vi.spyOn(
+          useChatStore.getState(),
+          'internal_resolveTopicReasoningSnapshot',
+        ).mockResolvedValue({ reasoningEffort: 'high' });
+        let modelWrite!: Promise<void>;
+        act(() => {
+          modelWrite =
+            kind === 'heterogeneous'
+              ? useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+                  model: 'new-model',
+                  provider: 'codex',
+                  effort: 'default',
+                })
+              : useChatStore
+                  .getState()
+                  .updateTopicModel('hetero-topic', { model: 'new-model', provider: 'openai' });
+        });
+        await waitFor(() => expect(modelSpy).toHaveBeenCalledTimes(1));
+        let effortWrite!: Promise<void>;
+        act(() => {
+          effortWrite =
+            kind === 'heterogeneous'
+              ? useChatStore.getState().updateTopicHeteroEffort('hetero-topic', 'low')
+              : useChatStore
+                  .getState()
+                  .updateTopicReasoningConfig('hetero-topic', { reasoningEffort: 'low' });
+        });
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        await act(async () => {
+          finishModel();
+          await Promise.all([modelWrite, effortWrite]);
+        });
+        expect(persistedEffort).toBe('low');
+        expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('hetero-topic');
+      },
+    );
+
+    it('restores the persisted topic after a model pin fails', async () => {
+      seed();
+      const saved = useChatStore.getState().topicDataMap[KEY];
+      vi.spyOn(topicService, 'updateTopicModel').mockRejectedValue(new Error('offline'));
+      const refresh = vi
+        .spyOn(useChatStore.getState(), 'refreshTopic')
+        .mockImplementation(async () => {
+          useChatStore.setState({ topicDataMap: { [KEY]: saved } });
+        });
+      await act(async () => {
+        await expect(
+          useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+            model: 'new-model',
+            provider: 'codex',
+            effort: 'low',
+          }),
+        ).rejects.toThrow('offline');
+      });
+      expect(refresh).toHaveBeenCalledWith(KEY);
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].model).toBe('old-model');
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it.each(['model', 'effort'])(
+      'rolls back a failed %s pin even when revalidation fails',
+      async (kind) => {
+        seed();
+        const previous = useChatStore.getState().topicDataMap[KEY]?.items[0];
+        vi.spyOn(topicService, 'updateTopicModel').mockRejectedValue(new Error('write failed'));
+        vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('write failed'));
+        vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(
+          new Error('refresh failed'),
+        );
+        await act(async () => {
+          await expect(
+            useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+              ...(kind === 'model' ? { model: 'new-model' } : {}),
+              provider: 'codex',
+              effort: 'low',
+            }),
+          ).rejects.toThrow('write failed');
+        });
+        const restored = useChatStore.getState().topicDataMap[KEY]?.items[0];
+        expect(restored?.model).toEqual(previous?.model);
+        expect(restored?.metadata).toEqual(previous?.metadata);
+        expect(toast.error).toHaveBeenCalled();
+      },
+    );
+
+    it('writes only the effort when no model is selected', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+      const metadataSpy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as any);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          effort: 'low',
+          provider: 'codex',
+        });
+      });
+
+      expect(updateTopicSpy).not.toHaveBeenCalled();
+      expect(metadataSpy).toHaveBeenCalledWith('hetero-topic', { heteroEffort: 'low' });
+    });
+  });
+
+  describe('updateTopicReasoningConfig', () => {
+    const KEY = topicMapKey({ agentId: 'agent-1' });
+    const seedTopic = () => {
+      const timestamp = Date.now();
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-1',
+          topicDataMap: {
+            [KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'topic-1',
+                  metadata: {
+                    reasoningConfig: { reasoningEffort: 'low', reasoningMode: 'standard' },
+                  },
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+                  title: 'Topic',
+                } satisfies ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('keeps a persisted effort when only the follow-up refresh fails', async () => {
+      seedTopic();
+      vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue([]);
+      vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(
+        new Error('refresh failed'),
+      );
+      await act(async () => {
+        await expect(
+          useChatStore
+            .getState()
+            .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+        ).rejects.toThrow('refresh failed');
+      });
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].metadata?.reasoningConfig).toEqual(
+        {
+          reasoningEffort: 'high',
+          reasoningMode: 'standard',
+        },
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('serializes consecutive selections through persistence and refresh', async () => {
+      seedTopic();
+      let finishFirst!: () => void;
+      const firstWrite = new Promise<void>((resolve) => {
+        finishFirst = resolve;
+      });
+      const spy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockImplementationOnce(async () => {
+          await firstWrite;
+          return [];
+        })
+        .mockResolvedValue([]);
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' });
+        second = useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningMode: 'pro' });
+      });
+      await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      expect(useChatStore.getState().topicEffortUpdatingIds).toContain('topic-1');
+      await act(async () => {
+        finishFirst();
+        await Promise.all([first, second]);
+      });
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenLastCalledWith('topic-1', {
+        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'pro' },
+      });
+      expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('topic-1');
+    });
+
+    it('releases the updating state after failure and accepts another selection', async () => {
+      seedTopic();
+      const spy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockRejectedValueOnce(new Error('failed'))
+        .mockResolvedValue([]);
+      await act(async () => {
+        await expect(
+          useChatStore
+            .getState()
+            .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+        ).rejects.toThrow('failed');
+      });
+      expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('topic-1');
+      await act(async () => {
+        await useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'medium' });
+      });
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
+    it('merges the patch over the current topic pin', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue(undefined as any);
+      seedTopic();
+
+      await act(async () => {
+        await result.current.updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' });
+      });
+
+      expect(spy).toHaveBeenCalledWith('topic-1', {
+        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'standard' },
+      });
+    });
+
+    it('revalidates and toasts when the pin cannot be saved', async () => {
+      const { result } = renderHook(() => useChatStore());
+      vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('offline'));
+      seedTopic();
+      const refreshTopic = vi.fn();
+      act(() => {
+        useChatStore.setState({ refreshTopic });
+      });
+
+      await expect(
+        result.current.updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+      ).rejects.toThrow('offline');
+
+      expect(refreshTopic).toHaveBeenCalledWith(KEY);
+      expect(toast.error).toHaveBeenCalled();
     });
   });
 
@@ -624,6 +1019,29 @@ describe('topic action', () => {
       expect(updateSpy).toHaveBeenCalledWith(topicId, { status: 'running' });
     });
   });
+  describe('useFetchTopicDetail', () => {
+    // Regression: an archived (completed) topic is excluded from the sidebar
+    // list fetch, so the active topic vanished from topicDataMap and the
+    // header degraded to the "new topic" placeholder. The by-id detail fetch
+    // caches the row in topicDetailMap, which currentActiveTopic falls back to.
+    it('caches the fetched topic in topicDetailMap', async () => {
+      const archived = { id: 'archived-topic', status: 'completed', title: 'Archived Topic' };
+      (topicService.getTopicDetail as Mock).mockResolvedValue(archived);
+
+      const { result } = renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
+
+      await waitFor(() => {
+        expect(result.current.data).toEqual(archived);
+      });
+      expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
+    });
+
+    it('does not fetch when no topic id is given', () => {
+      renderHook(() => useChatStore().useFetchTopicDetail(undefined));
+      expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+    });
+  });
+
   describe('useFetchTopics', () => {
     it('should fetch topics for a given session id', async () => {
       const sessionId = 'test-session-id';
@@ -1065,6 +1483,30 @@ describe('topic action', () => {
       // Verify that the refreshTopic was called to update the state
       expect(refreshTopicSpy).toHaveBeenCalled();
     });
+
+    it('should update the detail cache when the topic is absent from list buckets', async () => {
+      const topicId = 'archived-topic';
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {},
+          topicDetailMap: {
+            [topicId]: { id: topicId, status: 'completed', title: 'Old title' } as ChatTopic,
+          },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.updateTopicTitle(topicId, 'New title');
+      });
+
+      expect(useChatStore.getState().topicDetailMap[topicId]).toMatchObject({
+        status: 'completed',
+        title: 'New title',
+      });
+    });
   });
   describe('switchTopic', () => {
     it('should update activeTopicId and softly revalidate messages', async () => {
@@ -1407,6 +1849,28 @@ describe('topic action', () => {
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });
+
+    it('should evict a detail-only topic after deletion', async () => {
+      const topicId = 'archived-topic';
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'test-session-id',
+          topicDataMap: {},
+          topicDetailMap: {
+            [topicId]: { id: topicId, status: 'completed', title: 'Archived' } as ChatTopic,
+          },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.removeTopic(topicId);
+      });
+
+      expect(useChatStore.getState().topicDetailMap[topicId]).toBeUndefined();
+    });
     it('should forward removeFiles so the topic attachments are deleted', async () => {
       const topicId = 'topic-1';
       const { result } = renderHook(() => useChatStore());
@@ -1553,6 +2017,86 @@ describe('topic action', () => {
       expect(topicData.items).toHaveLength(1);
       expect(topicData.total).toBe(1);
       expect(topicData.hasMore).toBe(false);
+    });
+  });
+  describe('persisted topic-list cache write-through', () => {
+    const setupBucket = (agentId: string) => {
+      const containerKey = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [containerKey]: {
+              currentPage: 0,
+              hasMore: false,
+              isLoadingMore: false,
+              items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+      vi.mocked(mutate).mockClear();
+
+      return { containerKey, result };
+    };
+
+    it('mirrors a run-end status patch into the cached topic list', () => {
+      const { containerKey, result } = setupBucket('agent-write-through');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          id: 'topic-1',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [matcher, updater, options] = vi.mocked(mutate).mock.calls[0] as [
+        (key: unknown) => boolean,
+        (cached?: { items: ChatTopic[]; total: number }) => unknown,
+        unknown,
+      ];
+
+      expect(options).toEqual({ revalidate: false });
+      // Only this container's list keys — the agent-view key and other
+      // containers keep their own cached pages.
+      expect(matcher(['topic:list', containerKey, { pageSize: 20 }])).toBe(true);
+      expect(matcher(['topic:list', topicMapKey({ agentId: 'other-agent' }), {}])).toBe(false);
+      expect(matcher(['topic:agentView', containerKey, {}])).toBe(false);
+
+      const cached = {
+        items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
+        total: 1,
+      };
+      expect(updater(cached)).toMatchObject({
+        items: [{ id: 'topic-1', status: 'unread' }],
+        total: 1,
+      });
+
+      // A cached page without the patched row (or no entry at all) stays as-is,
+      // so the mutate cannot create a bogus entry.
+      const otherPage = { items: [{ id: 'topic-2', status: 'active' }] as ChatTopic[], total: 1 };
+      expect(updater(otherPage)).toBe(otherPage);
+      expect(updater(undefined)).toBeUndefined();
+    });
+
+    it('does not mirror client-only optimistic rows', () => {
+      const { result } = setupBucket('agent-write-through-add');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          optimistic: true,
+          type: 'addTopic',
+          value: { id: 'topic-optimistic', title: 'New' },
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
     });
   });
   describe('loadMoreAgentTopicsView', () => {
@@ -2493,6 +3037,189 @@ describe('topic action', () => {
     });
   });
   describe('summaryTopicTitle', () => {
+    it('should wait for assistant text before summarizing an audio-only conversation', async () => {
+      const topicId = 'topic-1';
+      const messages = [
+        {
+          audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+          content: '',
+          id: 'message-1',
+          role: 'user',
+        },
+        { content: LOADING_FLAT, id: 'message-2', role: 'assistant' },
+      ] as UIChatMessage[];
+      const topics = [{ id: topicId, title: '' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+      const generateSpy = vi.spyOn(aiChatService, 'generateJSON');
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(updateTitleSpy).not.toHaveBeenCalled();
+      expect(generateSpy).not.toHaveBeenCalled();
+    });
+
+    it('should preserve the existing summary behavior for a non-audio attachment-only conversation', async () => {
+      const topicId = 'topic-1';
+      const messages = [
+        {
+          content: '',
+          id: 'message-1',
+          imageList: [{ alt: 'photo.png', id: 'image-1', url: 'https://example.com/photo.png' }],
+          role: 'user',
+        },
+        { content: LOADING_FLAT, id: 'message-2', role: 'assistant' },
+      ] as UIChatMessage[];
+      const topics = [{ id: topicId, title: '' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+      const generateSpy = vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Shared Image' },
+        tracingId: 'tracing-1',
+      } as any);
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(updateTitleSpy).toHaveBeenCalledWith(topicId, LOADING_FLAT);
+      expect(generateSpy).toHaveBeenCalledOnce();
+      expect(generateSpy.mock.calls[0][0].metadata).toEqual({ topicId });
+    });
+
+    it('should summarize the final answer inside an assistant group for an audio-only conversation', async () => {
+      const topicId = 'topic-1';
+      const finalAnswer = 'The recording asks how to list files in the current directory.';
+      const messages = [
+        {
+          audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+          content: '',
+          id: 'message-1',
+          role: 'user',
+        },
+        {
+          children: [
+            {
+              content: 'Analyzing the recording.',
+              id: 'message-2-tool',
+              tools: [{ apiName: 'analyzeMedia', id: 'tool-1' }],
+            },
+            { content: finalAnswer, id: 'message-2-answer' },
+          ],
+          content: '',
+          id: 'message-2',
+          role: 'assistantGroup',
+        },
+      ] as UIChatMessage[];
+      const topics = [{ id: topicId, title: '' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      const generateSpy = vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'List Current Directory Files' },
+        tracingId: 'tracing-1',
+      } as any);
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      const promptMessages = generateSpy.mock.calls[0][0].messages;
+      expect(promptMessages.at(-1)?.content).toContain(finalAnswer);
+    });
+
+    it('should deduplicate concurrent title requests for the same topic', async () => {
+      const topicId = 'topic-1';
+      const messages = [{ content: 'Hello', id: 'message-1', role: 'user' }] as UIChatMessage[];
+      const topics = [{ id: topicId, title: 'Default Topic' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      let resolveGeneration!: (value: unknown) => void;
+      const generation = new Promise((resolve) => {
+        resolveGeneration = resolve;
+      });
+      const generateSpy = vi
+        .spyOn(aiChatService, 'generateJSON')
+        .mockReturnValue(generation as any);
+
+      let firstRequest!: Promise<void>;
+      let secondRequest!: Promise<void>;
+      act(() => {
+        firstRequest = result.current.summaryTopicTitle(topicId, messages);
+        secondRequest = result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(generateSpy).toHaveBeenCalledOnce();
+
+      await act(async () => {
+        resolveGeneration({ data: { title: '  ' }, tracingId: 'tracing-1' });
+        await Promise.all([firstRequest, secondRequest]);
+      });
+    });
+
     it('should show a loading placeholder when auto-summarizing a topic without a title', async () => {
       const topicId = 'topic-1';
       const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
@@ -2520,13 +3247,10 @@ describe('topic action', () => {
       );
       const refreshTopicSpy = vi.spyOn(result.current, 'refreshTopic');
 
-      // Mock the `chatService.fetchPresetTaskResult` to simulate the AI response
-      vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation((params) => {
-        if (params) {
-          params.onFinish?.('Summarized Title', { type: 'done' });
-        }
-        return Promise.resolve(undefined);
-      });
+      vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Summarized Title' },
+        tracingId: 'tracing-1',
+      } as any);
 
       await act(async () => {
         await result.current.summaryTopicTitle(topicId, messages);
@@ -2535,8 +3259,6 @@ describe('topic action', () => {
       // Verify that the title was updated and the topic was refreshed
       expect(updateTopicTitleInSummarySpy).toHaveBeenCalledWith(topicId, LOADING_FLAT);
       expect(refreshTopicSpy).toHaveBeenCalled();
-
-      // TODO: need to test with fetchPresetTaskResult
     });
 
     it('should keep an optimistic title visible until the summarized title is ready', async () => {
@@ -2566,21 +3288,162 @@ describe('topic action', () => {
       );
       const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
 
-      vi.spyOn(chatService, 'fetchPresetTaskResult').mockImplementation(async (params) => {
-        params?.onMessageHandle?.({ type: 'text', text: 'Partial Title' } as any);
-        await params?.onFinish?.('Summarized Title', { type: 'done' });
-      });
+      vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Summarized Title' },
+        tracingId: 'tracing-1',
+      } as any);
 
       await act(async () => {
         await result.current.summaryTopicTitle(topicId, messages);
       });
 
       expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, LOADING_FLAT);
-      expect(updateTopicTitleInSummarySpy).not.toHaveBeenCalledWith(topicId, 'Partial Title');
       expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: 'Summarized Title' });
+    });
+
+    describe('structured generation', () => {
+      const topicId = 'topic-1';
+      const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
+
+      const seedTopic = async (title: string) => {
+        const topics = [{ id: topicId, title }] as ChatTopic[];
+        const { result } = renderHook(() => useChatStore());
+
+        await act(async () => {
+          useChatStore.setState({
+            topicDataMap: {
+              [topicMapKey({ agentId: 'test' })]: {
+                items: topics,
+                total: topics.length,
+                currentPage: 0,
+                hasMore: false,
+                pageSize: 20,
+              },
+            },
+            activeAgentId: 'test',
+          });
+        });
+
+        return result;
+      };
+
+      it('generates against the topic-title schema instead of a chat completion', async () => {
+        const result = await seedTopic('');
+        const generateSpy = vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+          data: { title: '简单问候' },
+          tracingId: 'tracing-1',
+        } as any);
+        const completionSpy = vi.spyOn(chatService, 'fetchPresetTaskResult');
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(completionSpy).not.toHaveBeenCalled();
+        expect(generateSpy.mock.calls[0][0]).toMatchObject({
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: { scenario: 'topic_title', topicId },
+        });
+      });
+
+      it('reads the title off the parsed object', async () => {
+        const result = await seedTopic('');
+        const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+
+        vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+          data: { title: '简单问候' },
+          tracingId: 'tracing-1',
+        } as any);
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(updateTopicSpy).toHaveBeenCalledWith(topicId, { title: '简单问候' });
+      });
+
+      it('restores the previous title when generation returns nothing', async () => {
+        const result = await seedTopic('');
+        const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+        const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+
+        vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+          data: { title: '  ' },
+          tracingId: 'tracing-1',
+        } as any);
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(updateTopicSpy).not.toHaveBeenCalled();
+        expect(updateTitleSpy).toHaveBeenLastCalledWith(topicId, '');
+      });
+
+      it('restores the previous title when generation throws', async () => {
+        const result = await seedTopic('');
+        const updateTopicSpy = vi.spyOn(result.current, 'internal_updateTopic');
+        const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+
+        vi.spyOn(aiChatService, 'generateJSON').mockRejectedValue(new Error('provider down'));
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await act(async () => {
+          await result.current.summaryTopicTitle(topicId, messages);
+        });
+
+        expect(updateTopicSpy).not.toHaveBeenCalled();
+        expect(updateTitleSpy).toHaveBeenLastCalledWith(topicId, '');
+      });
     });
   });
   describe('createTopic', () => {
+    it.each(['createTopic', 'saveToTopic'] as const)(
+      '%s waits for saved reasoning before persisting',
+      async (method) => {
+        const agentId = 'test-session-id';
+        useChatStore.setState({
+          activeAgentId: agentId,
+          messagesMap: { [messageMapKey({ agentId })]: [{ id: 'message-1' } as UIChatMessage] },
+          summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+        });
+        let loaded = false;
+        let finishLoad!: () => void;
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'high',
+        }));
+        const ensure = vi
+          .spyOn(useAiInfraStore.getState(), 'ensureModelReasoningConfig')
+          .mockImplementation(
+            () =>
+              new Promise<void>((resolve) => {
+                finishLoad = () => {
+                  loaded = true;
+                  resolve();
+                };
+              }),
+          );
+        const persist = vi.spyOn(topicService, 'createTopic').mockResolvedValue('loaded-topic');
+        let pending!: Promise<string | undefined>;
+        act(() => {
+          pending = useChatStore.getState()[method]();
+        });
+        await waitFor(() => expect(ensure).toHaveBeenCalled());
+        expect(persist).not.toHaveBeenCalled();
+        await act(async () => {
+          finishLoad();
+          await pending;
+        });
+        expect(persist).toHaveBeenCalledWith(
+          expect.objectContaining({
+            metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+          }),
+        );
+      },
+    );
+
     it('should create a new topic and update the store', async () => {
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = 'test-session-id';
@@ -2712,5 +3575,51 @@ describe('topic action', () => {
       expect(next.excludeTriggers).toEqual(['cron', 'eval']);
       expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
     });
+  });
+});
+
+describe('Topic execution save failures', () => {
+  const key = topicMapKey({ agentId: 'agent-execution' });
+  const previous = {
+    executionConfig: { executionTarget: 'device' as const, boundDeviceId: 'device-a' },
+  };
+  const selected = { executionConfig: { executionTarget: 'sandbox' as const } };
+  const setup = () => {
+    useChatStore.setState({
+      activeAgentId: 'agent-execution',
+      topicDataMap: {
+        [key]: {
+          items: [
+            {
+              id: 'topic-execution',
+              title: 'A',
+              createdAt: 1,
+              updatedAt: 1,
+              favorite: false,
+              metadata: previous,
+            },
+          ],
+          currentPage: 1,
+          hasMore: false,
+          pageSize: 20,
+          total: 1,
+        },
+      },
+    });
+    vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(new Error('offline'));
+  };
+  it('restores the saved target if the mutation fails while offline', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValueOnce(new Error('offline'));
+    await expect(
+      useChatStore.getState().updateTopicMetadata('topic-execution', selected),
+    ).rejects.toThrow('offline');
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(previous);
+  });
+  it('keeps the saved selection if only revalidation fails', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValueOnce([]);
+    await useChatStore.getState().updateTopicMetadata('topic-execution', selected);
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(selected);
   });
 });

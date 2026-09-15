@@ -897,6 +897,94 @@ describe('ToolNameResolver', () => {
         expect(result).toEqual([]);
       });
 
+      it('should drop an explicitly namespaced API missing from its manifest', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____submitEvidence' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-acceptance-evidence': {
+            api: [{ description: '', name: 'submitEvidence', parameters: {} }],
+            identifier: 'lobe-acceptance-evidence',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-local-system': {
+            api: [{ description: '', name: 'runCommand', parameters: {} }],
+            identifier: 'lobe-local-system',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, [
+          'lobe-acceptance-evidence____submitEvidence',
+        ]);
+
+        expect(result).toEqual([]);
+      });
+
+      it('should preserve a manifest-backed stale dynamic tool for downstream scope rejection', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'lobe-remote-device____listOnlineDevices' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-activator': {
+            api: [{ description: '', name: 'activateTools', parameters: {} }],
+            identifier: 'lobe-activator',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-remote-device': {
+            api: [{ description: '', name: 'listOnlineDevices', parameters: {} }],
+            identifier: 'lobe-remote-device',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, ['lobe-activator____activateTools']);
+
+        expect(result).toEqual([
+          {
+            apiName: 'listOnlineDevices',
+            arguments: '{}',
+            id: 'call_1',
+            identifier: 'lobe-remote-device',
+            type: 'builtin',
+          },
+        ]);
+      });
+
+      it('should accept an explicitly offered tool when no prompt manifest is available', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'workspace____search' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const result = resolver.resolve(toolCalls, {}, ['workspace____search']);
+
+        expect(result).toEqual([
+          expect.objectContaining({
+            apiName: 'search',
+            id: 'call_1',
+            identifier: 'workspace',
+          }),
+        ]);
+      });
+
       it('should treat an enabled call as unique when a disabled duplicate would have made it ambiguous', () => {
         const toolCalls = [
           {
@@ -1009,6 +1097,127 @@ describe('ToolNameResolver', () => {
       expect(result[0].type).toBe('builtin');
       expect(result[1].type).toBe('standalone');
       expect(result[2].type).toBe('mcp');
+    });
+  });
+
+  describe('resolve - malformed separator repair', () => {
+    const localSystem = {
+      'lobe-local-system': {
+        api: [
+          { description: 'Run a shell command', name: 'runCommand', parameters: {} },
+          { description: 'Read a file', name: 'readFile', parameters: {} },
+        ],
+        identifier: 'lobe-local-system',
+        meta: {},
+        type: 'builtin' as const,
+      },
+    };
+
+    // Production case: mid-operation the model emitted `~~__` where it had
+    // written `____` correctly two steps earlier. Dropping the call finished
+    // the operation with an empty assistant message.
+    it('should recover a tool name whose separator the model garbled', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{"command":"ls"}', name: 'lobe-local-system~~__runCommand' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+        ['lobe-local-system____runCommand', 'lobe-local-system____readFile'],
+      );
+
+      expect(result).toEqual([
+        {
+          apiName: 'runCommand',
+          arguments: '{"command":"ls"}',
+          id: 'call_1',
+          identifier: 'lobe-local-system',
+          type: 'builtin',
+        },
+      ]);
+    });
+
+    it('should repair against manifests when no offered list is given', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system..readFile' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].identifier).toBe('lobe-local-system');
+      expect(result[0].apiName).toBe('readFile');
+    });
+
+    it('should leave a well-formed call untouched', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____readFile' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+        ['lobe-local-system____readFile'],
+      );
+
+      expect(result[0].apiName).toBe('readFile');
+    });
+
+    it('should refuse to guess when two tools collapse to the same key', () => {
+      const manifests = {
+        'a': {
+          api: [{ description: '', name: 'bc', parameters: {} }],
+          identifier: 'a',
+          meta: {},
+          type: 'builtin' as const,
+        },
+        'a-b': {
+          api: [{ description: '', name: 'c', parameters: {} }],
+          identifier: 'a-b',
+          meta: {},
+          type: 'builtin' as const,
+        },
+      };
+
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'a~b__c' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        manifests,
+        ['a____bc', 'a-b____c'],
+      );
+
+      expect(result).toEqual([]);
+    });
+
+    it('should still drop a name that matches no tool at all', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'totally~~__madeUp' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+        ['lobe-local-system____runCommand'],
+      );
+
+      expect(result).toEqual([]);
     });
   });
 

@@ -57,6 +57,8 @@ export interface HeterogeneousFinishParams {
   error?: { body?: Record<string, unknown>; message: string; type: string };
   operationId: string;
   result: HeterogeneousFinishResult;
+  /** True only when the producer proved the requested native session unusable. */
+  resumeSessionInvalidated?: boolean;
   /**
    * Native CLI session id (e.g. CC's per-cwd session). Used in phase 2c to
    * persist on `topic.metadata` so a subsequent `lh hetero exec` run can
@@ -100,6 +102,8 @@ export const normalizeHeterogeneousFinishError = (
 };
 
 export interface HeterogeneousAgentServiceOptions {
+  /** Inject a pre-built operation model (used by tests). */
+  agentOperationModel?: AgentOperationModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
@@ -128,6 +132,7 @@ export interface HeterogeneousAgentServiceOptions {
  * `topic.metadata.heterogeneousSessions`.
  */
 export class HeterogeneousAgentService {
+  private readonly agentOperationModel: AgentOperationModel;
   private readonly db: LobeChatDatabase;
   private readonly messageModel: MessageModel;
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
@@ -146,6 +151,8 @@ export class HeterogeneousAgentService {
     this.userId = userId;
     const workspaceId = options.workspaceId;
     this.workspaceId = workspaceId;
+    this.agentOperationModel =
+      options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
@@ -158,6 +165,8 @@ export class HeterogeneousAgentService {
         messageModel: this.messageModel,
         threadModel: new ThreadModel(db, userId, workspaceId),
         topicModel: this.topicModel,
+        userId,
+        workspaceId,
       });
   }
 
@@ -172,6 +181,12 @@ export class HeterogeneousAgentService {
       agentType,
       events.length,
     );
+
+    const leaseRefreshed = await this.agentOperationModel.touchRunning(operationId);
+    if (!leaseRefreshed) {
+      log('heteroIngest: ignore terminal or missing operation op=%s', operationId);
+      return;
+    }
 
     // Persist FIRST, then publish — the renderer's gateway handler triggers
     // `fetchAndReplaceMessages` on stream_start / tool_end / step_complete,
@@ -239,6 +254,7 @@ export class HeterogeneousAgentService {
       assistantMessageId: seedAssistantMessageId,
       operationId,
       result,
+      resumeSessionInvalidated,
       sessionId,
       topicId,
     } = params;
@@ -265,27 +281,112 @@ export class HeterogeneousAgentService {
       );
     }
 
-    // Drain any pending state in the persistence handler — flushes trailing
-    // accumulated content / reasoning that the in-stream `agent_runtime_end`
-    // already wrote (no-op when state is clean), persists the CLI's native
-    // session id for next-turn resume, and frees the per-operation memory.
-    // `topicId` lets finish() bootstrap state for a run that failed before
-    // producing any stream event (spawn ENOENT / auth-on-stderr): the terminal
-    // error must be written HERE, before the `agent_runtime_end` publish below
-    // triggers the client's message refetch.
+    // Flush operation-scoped message state before clearing the topic marker.
+    // Zero-event failures bootstrap their assistant message from that marker,
+    // so settlement must happen afterwards. Topic-level session binding is
+    // deferred until ownership has been checked below.
     await this.persistenceHandler.finish({
       assistantMessageId: seedAssistantMessageId,
       error,
       operationId,
       result,
-      sessionId,
       topicId,
     });
 
-    // Always emit a terminal `agent_runtime_end` so renderer subscribers shut
-    // down even if the CLI stream missed it (process killed mid-flight,
-    // network drop on last batch). Idempotent on the renderer side: the
-    // gateway event handler latches `terminalState` on first end-event.
+    let serializedHooks: SerializedHook[] | undefined;
+    let assistantMessageId = seedAssistantMessageId;
+    let isolationThreadId: string | undefined;
+    let orchestrationRole: 'member' | 'supervisor' | undefined;
+    let staleActiveOperationId: string | undefined;
+
+    // The operation row is the durable lifecycle owner. The frontend may have
+    // already consumed the in-stream terminal event and cleared the topic's
+    // runningOperation marker before this explicit finish callback arrives.
+    try {
+      const operation = await this.agentOperationModel.findById(operationId);
+      const metadata = operation?.metadata as Record<string, unknown> | null | undefined;
+      const operationHooks = metadata?._hooks;
+      if (Array.isArray(operationHooks)) serializedHooks = operationHooks as SerializedHook[];
+      if (typeof metadata?.assistantMessageId === 'string') {
+        assistantMessageId = metadata.assistantMessageId;
+      }
+      isolationThreadId = operation?.threadId ?? undefined;
+    } catch (err) {
+      log('heteroFinish: failed to load operation lifecycle metadata (non-fatal): %O', err);
+    }
+
+    // `cancelled` is only an intermediate process signal. Keep the marker for
+    // the following success/error terminal callback, which owns completion.
+    if (result !== 'cancelled') {
+      try {
+        const settled = await this.topicModel.settleRunningOperation(topicId, operationId);
+        if (settled.status === 'conflict') {
+          staleActiveOperationId = settled.activeOperationId;
+        } else {
+          assistantMessageId = settled.assistantMessageId ?? assistantMessageId;
+          if (settled.status === 'settled') {
+            serializedHooks ??= settled.hooks as SerializedHook[] | undefined;
+            isolationThreadId = settled.threadId ?? isolationThreadId;
+            orchestrationRole = settled.orchestrationRole;
+          }
+        }
+      } catch (err) {
+        log('heteroFinish: failed to settle runningOperation (non-fatal): %O', err);
+      }
+    }
+
+    if (staleActiveOperationId) {
+      log(
+        'heteroFinish: settle stale finish topic=%s op=%s; current operation is %s',
+        topicId,
+        operationId,
+        staleActiveOperationId,
+      );
+
+      // The topic marker belongs to the replacement and must remain intact,
+      // but this operation still owns its durable row and stream. Settle those
+      // independent resources instead of leaving the old row `running`.
+      try {
+        await this.agentOperationModel.settleRunning(
+          operationId,
+          result === 'success' ? 'done' : 'error',
+        );
+      } catch (err) {
+        log('heteroFinish: failed to settle stale operation row (non-fatal): %O', err);
+      }
+      await this.streamEventManager.publishStreamEvent(operationId, {
+        data: {
+          agentType,
+          error,
+          operationId,
+          reason: result,
+          sessionId,
+        },
+        stepIndex: 0,
+        type: 'agent_runtime_end',
+      });
+      return;
+    }
+
+    const resumeBindingUpdate = sessionId
+      ? { heteroSessionId: sessionId }
+      : result === 'error' && resumeSessionInvalidated
+        ? { heteroSessionId: undefined }
+        : undefined;
+    if (resumeBindingUpdate) {
+      try {
+        // Only the producer can distinguish a missing native session from a
+        // transient pre-init error such as Codex's "already has an active writer".
+        // Clearing every error without a new id would fork the next turn empty.
+        await this.topicModel.updateMetadata(topicId, resumeBindingUpdate);
+      } catch (err) {
+        log('heteroFinish: update resume session binding failed (non-fatal): %O', err);
+      }
+    }
+
+    // Emit a terminal `agent_runtime_end` so renderer subscribers shut down even
+    // if the CLI stream missed it. A stale callback that belongs to neither the
+    // root operation nor one of its children returns above.
     await this.streamEventManager.publishStreamEvent(operationId, {
       data: {
         agentType,
@@ -313,33 +414,6 @@ export class HeterogeneousAgentService {
     // branch — and suppresses a spurious bot "stopped" message before the real
     // result lands.)
     if (result === 'cancelled') return;
-
-    let serializedHooks: SerializedHook[] | undefined;
-    let assistantMessageId: string | undefined;
-    let isolationThreadId: string | undefined;
-    try {
-      const topic = await this.topicModel.findById(topicId);
-      serializedHooks = topic?.metadata?.runningOperation?.hooks as SerializedHook[] | undefined;
-      isolationThreadId = topic?.metadata?.runningOperation?.threadId ?? undefined;
-      // Prefer heteroCurrentMsgId — the persistence handler updates this pointer
-      // on every step boundary, so it refers to the LAST assistant message with
-      // the complete final content.  Fall back to the initial placeholder id
-      // recorded in runningOperation if the pointer is absent or belongs to a
-      // different operation (shouldn't happen, but defensive).
-      const currentMsgRef = topic?.metadata?.heteroCurrentMsgId;
-      assistantMessageId =
-        currentMsgRef?.operationId === operationId
-          ? currentMsgRef.msgId
-          : topic?.metadata?.runningOperation?.assistantMessageId;
-      await this.topicModel.updateMetadata(topicId, { runningOperation: null });
-      // Settle `status: 'running'` for runs with no renderer attached (e.g. a
-      // cron-dispatched scheduled resume) — otherwise nothing ever moves the
-      // topic off `running`. Guarded in the model: an attached client's own
-      // terminal write ('active'/'unread') is never clobbered.
-      await this.topicModel.settleRunningStatus(topicId);
-    } catch (err) {
-      log('heteroFinish: failed to clear runningOperation (non-fatal): %O', err);
-    }
 
     // The owning agentId is authoritatively encoded in the operationId
     // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved
@@ -476,6 +550,7 @@ export class HeterogeneousAgentService {
         // Backfilled executed model/provider — the verify gate bails when absent.
         model: totals?.model,
         operationId,
+        orchestrationRole,
         provider: totals?.provider,
         serializedHooks,
         stepCount: totals?.stepCount ?? null,

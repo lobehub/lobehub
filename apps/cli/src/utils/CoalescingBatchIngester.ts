@@ -43,10 +43,8 @@ export class CoalescingBatchIngester {
   }
 
   push(event: AgentStreamEvent): void {
-    // Mirror the previous serial ingester's fatal short-circuit: once the
-    // batcher has exhausted its retries nothing can ever be delivered, so
-    // drop later events — including text/reasoning deltas — instead of
-    // retaining an undeliverable response in memory until the process exits.
+    // An overflow permanently invalidates the stream. Ordinary transport
+    // failures retain snapshots and retry in order when the server recovers.
     if (this.batcher.failed) {
       this.accumulatedReasoning = '';
       this.accumulatedText = '';
@@ -112,8 +110,7 @@ export class CoalescingBatchIngester {
     this.batcher.push(event);
   }
 
-  /** Flush any pending snapshots + buffered batches; rethrows the batcher's
-   *  fatal error after its retries are exhausted. Call before `sink.finish`. */
+  /** Flush pending snapshots and retry queued batches before `sink.finish`. */
   async drain(): Promise<void> {
     this.flushPendingReasoningSnapshot();
     this.flushPendingTextSnapshot();

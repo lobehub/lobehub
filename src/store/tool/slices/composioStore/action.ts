@@ -208,6 +208,8 @@ export class ComposioStoreActionImpl {
           if (serverIndex >= 0) {
             draft.composioServers[serverIndex].tools = tools;
             draft.composioServers[serverIndex].status = ComposioServerStatus.ACTIVE;
+            draft.composioServers[serverIndex].gmailReadPermission =
+              connectionStatus.gmailReadPermission;
             draft.composioServers[serverIndex].redirectUrl = undefined;
             draft.composioServers[serverIndex].errorMessage = undefined;
           }

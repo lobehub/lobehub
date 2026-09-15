@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   canCreate: true,
   canEdit: true,
   canEditResource: false,
+  canManageResource: false,
   canManage: false,
   confirmModal: vi.fn(),
   toastError: vi.fn(),
@@ -40,11 +41,8 @@ vi.mock('antd', async (importOriginal) => {
   };
 });
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
   toast: { error: mocks.toastError, success: vi.fn() },
 }));
@@ -62,6 +60,7 @@ vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({
     canEditResource: mocks.canEditResource,
+    canManageResource: mocks.canManageResource,
     isAccessResolved: true,
   }),
 }));
@@ -146,6 +145,7 @@ describe('useAgentDropdownMenu', () => {
     mocks.canCreate = true;
     mocks.canEdit = true;
     mocks.canEditResource = false;
+    mocks.canManageResource = false;
     mocks.canManage = false;
     mocks.transferMenuItems = null;
   });
@@ -341,6 +341,7 @@ describe('useAgentDropdownMenu', () => {
   it('groups display, organization, access, and destructive actions by intent', () => {
     mocks.canEditResource = true;
     mocks.canManage = true;
+    mocks.canManageResource = true;
     mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
 
     const { result } = renderHook(() =>
@@ -373,8 +374,28 @@ describe('useAgentDropdownMenu', () => {
     ]);
   });
 
-  it('offers the Permission shortcut to a member who can configure the agent', () => {
+  it('hides the Permission shortcut from a non-author member who can configure the agent', () => {
     mocks.canEditResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        anchor: null,
+        group: undefined,
+        id: 'agent-1',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Public Agent',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    expect(getMenuKeys(result.current())).not.toContain('permission');
+  });
+
+  it('offers the Permission shortcut to the creator or a workspace owner', () => {
+    mocks.canEditResource = true;
+    mocks.canManageResource = true;
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({

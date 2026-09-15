@@ -1,11 +1,13 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Markdown, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Avatar from '@/components/Avatar';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
 import { useAgentStore } from '@/store/agent';
@@ -43,10 +45,10 @@ const AgentInfo = memo(() => {
   if (isLoading) {
     return (
       <Flexbox gap={12}>
-        <Skeleton.Avatar active shape={'square'} size={64} />
-        <Skeleton.Button active style={{ height: 32, width: 200 }} />
+        <Skeleton.Avatar shape={'square'} size={64} />
+        <Skeleton height={32} width={200} />
         <Flexbox width={'min(100%, 640px)'}>
-          <Skeleton active paragraph={{ rows: 2 }} title={false} />
+          <Skeleton.Text rows={2} />
         </Flexbox>
       </Flexbox>
     );
@@ -57,6 +59,7 @@ const AgentInfo = memo(() => {
       <Avatar
         avatar={isInbox ? meta.avatar || DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
         background={meta.backgroundColor}
+        name={displayTitle}
         shape={'square'}
         size={64}
       />

@@ -25,6 +25,7 @@ import {
 } from '../hooks/useConversationScroll';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
 import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
+import type { ResolvedMessageDeepLink } from '../utils/messageDeepLink';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
@@ -42,6 +43,7 @@ interface VirtualizedListProps {
   footerSlot?: ReactNode;
   headerSlot?: ReactNode;
   itemContent: (index: number, data: string) => ReactNode;
+  messageDeepLink?: ResolvedMessageDeepLink;
 }
 
 /**
@@ -50,8 +52,9 @@ interface VirtualizedListProps {
  * Based on ConversationStore data flow, no dependency on global ChatStore.
  */
 const VirtualizedList = memo<VirtualizedListProps>(
-  ({ dataSource, footerSlot, headerSlot, itemContent }) => {
+  ({ dataSource, footerSlot, headerSlot, itemContent, messageDeepLink }) => {
     const virtuaRef = useRef<VListHandle>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastUserScrollIntentAtRef = useRef(0);
 
@@ -69,8 +72,10 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const contextKey = useConversationStore((s) => messageMapKey(s.context));
     const { recordScroll } = useTopicScrollPersist({
       contextKey,
+      containerRef,
       dataSourceLength: dataSource.length,
       headerOffset,
+      messageDeepLink,
       virtuaRef,
     });
 
@@ -243,7 +248,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
         for (let i = 0; i < dataSource.length; i++) {
           const id = dataSource[i];
           if (!id) continue;
-          if (messageStateSelectors.isMessageGenerating(id)(s)) indices.push(i);
+          if (messageStateSelectors.isRowGenerating(id)(s)) indices.push(i);
         }
         return indices;
       }),
@@ -251,7 +256,10 @@ const VirtualizedList = memo<VirtualizedListProps>(
 
     // Also keep items that host the active text selection — unmounting a node
     // containing a Selection endpoint would silently drop the user's highlight.
-    const selectionMessageIds = useSelectionMessageIds();
+    const selectedNodeIds = useSelectionMessageIds();
+    const selectionMessageIds = useConversationStore(
+      useShallow((s) => new Set([...selectedNodeIds].map((id) => dataSelectors.hostRowOf(id)(s)))),
+    );
 
     const keepMountedIndices = useMemo(() => {
       if (selectionMessageIds.size === 0) return streamingIndices;
@@ -300,6 +308,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
 
     return (
       <div
+        ref={containerRef}
         style={{ height: '100%', position: 'relative' }}
         onKeyDownCapture={handleKeyDown}
         onPointerDownCapture={markUserScrollIntent}

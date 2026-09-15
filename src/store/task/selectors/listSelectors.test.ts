@@ -126,10 +126,6 @@ describe('taskListSelectors', () => {
   });
 
   describe('basic selectors', () => {
-    it('should return viewMode', () => {
-      expect(taskListSelectors.viewMode(createState({ viewMode: 'kanban' }))).toBe('kanban');
-    });
-
     it('should return isTaskListInit', () => {
       expect(taskListSelectors.isTaskListInit(createState({ isTaskListInit: true }))).toBe(true);
     });

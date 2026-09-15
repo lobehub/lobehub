@@ -38,6 +38,8 @@ export type UIMessageRoleType =
 
 export interface ChatFileItem {
   content?: string;
+  /** Stable application proxy URL used for browser-native downloads. */
+  downloadUrl?: string;
   fileType: string;
   id: string;
   /**
@@ -208,6 +210,8 @@ export interface UIChatMessage {
    */
   children?: AssistantContentBlock[];
   chunksList?: ChatFileChunk[];
+  /** Parallel response columns created by conversation-flow for virtual compare messages. */
+  columns?: UIChatMessage[][];
   /**
    * All messages within a compression group (role: 'compressedGroup')
    * Used for rendering expanded view with conversation-flow parsing

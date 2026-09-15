@@ -1,6 +1,6 @@
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 
 const PROJECT_PAGE_SIZE = 100;
 
@@ -28,14 +28,22 @@ class ProjectService {
 
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
 
-  create = async (params: {
-    avatar?: string;
-    description?: string;
-    identifier: string;
-    name: string;
-    slug?: string;
-    visibility?: ProjectVisibility;
-  }) => lambdaClient.project.create.mutate(params);
+  delete = async (id: string) => lambdaClient.project.delete.mutate({ id });
+
+  create = async (
+    params: {
+      avatar?: string;
+      description?: string;
+      identifier: string;
+      name: string;
+      slug?: string;
+      visibility?: ProjectVisibility;
+    },
+    workspaceId?: string | null,
+  ) =>
+    (workspaceId ? createWorkspaceLambdaClient(workspaceId) : lambdaClient).project.create.mutate(
+      params,
+    );
 
   rejectCompletion = async (id: string, comment: string) =>
     lambdaClient.project.rejectCompletion.mutate({ comment, id });
@@ -43,6 +51,9 @@ class ProjectService {
   reopen = async (id: string) => lambdaClient.project.reopen.mutate({ id });
 
   requestCompletion = async (id: string) => lambdaClient.project.requestCompletion.mutate({ id });
+
+  update = async (id: string, input: { name?: string }) =>
+    lambdaClient.project.update.mutate({ id, ...input });
 
   updateStatus = async (id: string, status: 'active' | 'archived' | 'backlog' | 'paused') =>
     lambdaClient.project.updateStatus.mutate({ id, status });

@@ -176,15 +176,6 @@ _each_ against the full set, not just the search input.
 > can occur here. (This is why the surface's only read-side gap is failure handling, not
 > query correctness.)
 
-> ❌ The Pages "all pages" drawer filters `displayDocuments` with a client-side
-> `title/content.includes(keyword)` over the loaded set **and disables load-more while
-> searching**, so searching for a page past the loaded window returns "no results" though it
-> exists (`AllPagesDrawer/Content.tsx`). ✅ Send the keyword to the server query and page
-> through matches.
-> ✅ **Memory** (记忆) does it right: each list tab passes `q` straight into the paginated
-> `queryMemories` server call (`memory/contexts/index.tsx:57-62`, mirrored per tab), so search spans
-> the whole set — no false "no results" for unfetched rows.
-
 **Checklist**
 
 - [ ] List designed across 1 → 10k rows (plain → pagination → virtual scroll). _(Certainty)_
@@ -283,6 +274,16 @@ resolved-empty. Once the user manually picks a tab, that choice wins and sticks 
 them off it. Pairs with §1.1: the empty state is the fallback _within_ a view; this rule
 is about not landing on that empty view when a better one exists.
 
+A data-aware shortcut must not erase the stable **hub** behind it. Auto-opening the only
+record can save one click, but if every visit to the collection URL redirects into that record,
+the user loses collection-level actions (create the second item, compare, search, manage) and a
+breadcrumb back becomes a loop. Keep the hub reachable, or preserve every collection-level
+action in the detail surface.
+
+> ❌ **Self-evolving expertise** redirects `/self-learning` to the sole expertise on every
+> visit, while Create exists only on the empty hub. After the first expertise is created, the
+> user cannot return to the hub or create a second one (`SelfLearning/index.tsx`).
+
 > ✅ Opening a document page by clicking a **skill** lands the right panel on the **Skills** tab; a plain document lands on **Documents**.
 > ✅ An agent with only skills (no documents) opens the panel on **Skills** instead of an empty **Documents** tab.
 
@@ -292,6 +293,7 @@ is about not landing on that empty view when a better one exists.
 - [ ] Falls back to a populated view when the default would be empty. _(Certainty)_
 - [ ] Default decided from resolved state, not mid-load. _(Certainty)_
 - [ ] A manual pick is tracked separately and sticks. _(Natural)_
+- [ ] A data-aware shortcut never makes the collection hub or its collection-level actions unreachable. _(Meaningful・Growth)_
 
 ## 1.7 Live / polling streams・Certainty・Natural
 
@@ -446,7 +448,7 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 > inside `Accordion` groups via one shared `GroupedAccordion` engine (by-project / by-status /
 > by-time), `Block variant='filled'` for the active row, and spacing as `Flexbox` / `Block`
 > props — every row aligns to its highlight and matches every other panel in the app.
-> ❌ **Verify report sidebar** (`features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
+> ❌ **Verify report sidebar** (the since-removed `features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
 > entire panel: a raw grid `<div className={styles.item}>` row with `data-active` +
 > `colorFillSecondary` (instead of `NavItem` / `Block variant`), a bordered `<label>` + `<input>`
 > search box, a raw `<input>` inline-rename, an `opacity`-toggled action reveal re-implemented in

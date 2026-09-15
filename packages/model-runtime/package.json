@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./errors": "./src/errors/index.ts",
+    "./errors/specs": "./src/errors/specs.ts",
     "./getModelPropertyWithFallback": "./src/utils/getFallbackModelProperty.ts",
     "./helpers/parseToolCalls": "./src/helpers/parseToolCalls.ts",
     "./providers/anthropic/modelId": "./src/providers/anthropic/modelId.ts",

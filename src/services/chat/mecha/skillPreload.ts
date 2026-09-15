@@ -9,6 +9,7 @@ import type { RuntimeSelectedSkill, UserCredSummary } from '@lobechat/types';
 
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
+import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 
 interface PreloadedSkill {
   content: string;
@@ -97,9 +98,7 @@ const loadSkillContent = async (
 ): Promise<PreloadedSkill | undefined> => {
   const toolState = getToolStoreState();
 
-  const builtinSkill = (toolState.builtinSkills || []).find(
-    (skill) => skill.identifier === selectedSkill.identifier,
-  );
+  const builtinSkill = await loadBuiltinSkill(selectedSkill.identifier);
 
   if (builtinSkill) {
     let content = builtinSkill.content;

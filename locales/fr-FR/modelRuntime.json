@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "Échec de l'assemblage du contexte de la conversation pour cette requête. Veuillez réessayer ; si le problème persiste, contactez le support.",
   "DatabasePersistError": "Une opération de base de données a échoué lors de la sauvegarde ou du chargement de cette conversation. Veuillez réessayer ; si le problème persiste, contactez le support.",
   "ExceededContextWindow": "Le contenu de la requête actuelle dépasse la longueur que le modèle peut gérer. Veuillez réduire la quantité de contenu et réessayer.",
+  "HarnessJsonParseError": "Un problème interne a empêché la lecture du contenu, ce qui a interrompu cette opération. Réessayer la même requête entraînera le même échec — veuillez commencer un nouveau message ; si le problème persiste, contactez le support.",
   "InsufficientQuota": "Désolé, le quota pour cette clé a été atteint. Veuillez vérifier si le solde de votre compte est suffisant ou réessayer après avoir augmenté le quota de la clé.",
   "InvalidBedrockCredentials": "Échec de l'authentification Bedrock. Veuillez vérifier l'AccessKeyId/SecretAccessKey et réessayer.",
   "InvalidComfyUIArgs": "Configuration ComfyUI invalide. Veuillez vérifier les paramètres et réessayer.",

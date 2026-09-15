@@ -32,8 +32,22 @@ type ConvertMessageContentOptions = {
   thoughtSignatureScope?: SignatureScope;
 };
 
-const isDeepSeekModel = (model: string | undefined) =>
-  typeof model === 'string' && model.toLowerCase().includes('deepseek');
+/**
+ * Model families whose thinking mode requires the historical `reasoning_content`
+ * to be echoed back when the assistant turn also carries `tool_calls`. Upstream
+ * rejects the request outright otherwise:
+ *
+ * > If thinking mode and tool_calls, `reasoning_content` must be passed back to the API.
+ *
+ * Matched on the model id rather than the provider because these models are
+ * mostly reached through OpenAI-compatible aggregators and user-configured
+ * proxies, where the provider key says nothing about the underlying family.
+ */
+const REASONING_PASSBACK_MODEL_KEYWORDS = ['deepseek', 'glm', 'kimi'] as const;
+
+const requiresReasoningPassback = (model: string | undefined) =>
+  typeof model === 'string' &&
+  REASONING_PASSBACK_MODEL_KEYWORDS.some((keyword) => model.toLowerCase().includes(keyword));
 
 type OpenAICompatibleContentPart =
   ExtendedChatCompletionContentPart | OpenAI.ChatCompletionContentPart | UserMessageContentPart;
@@ -253,15 +267,17 @@ export const convertOpenAIMessages = async (
       // MiniMax uses reasoning_details for historical thinking, so forward it unchanged
       if (msg.reasoning_details !== undefined) result.reasoning_details = msg.reasoning_details;
 
-      // For DeepSeek-family models routed via any OpenAI-compatible runtime
-      // (including custom user providers that bypass the dedicated DeepSeek
-      // handlePayload), derive reasoning_content from the structured reasoning
-      // field on assistant messages and force a placeholder when the model is
-      // thinking-mode eligible.
-      if (msg.role === 'assistant' && isDeepSeekModel(options?.model)) {
+      // For passback-requiring families routed via any OpenAI-compatible runtime
+      // (including custom user providers that bypass a dedicated handlePayload),
+      // derive reasoning_content from the structured reasoning field on assistant
+      // messages.
+      if (msg.role === 'assistant' && requiresReasoningPassback(options?.model)) {
         if (result.reasoning_content === undefined && typeof msg.reasoning?.content === 'string') {
           result.reasoning_content = msg.reasoning.content;
         }
+        // The empty placeholder stays DeepSeek-scoped. Echoing reasoning we
+        // actually have is what upstream asks for; fabricating an empty thinking
+        // block for a family we have not validated is a different, riskier change.
         if (
           result.reasoning_content === undefined &&
           isDeepSeekThinkingEligibleModel(options?.model)

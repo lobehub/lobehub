@@ -12,6 +12,11 @@ export interface FileServiceImpl {
   createCachedPreSignedUrlForPreview: (url?: string | null, expiresIn?: number) => Promise<string>;
 
   /**
+   * Resolve a stored file URL to a pre-signed browser download URL.
+   */
+  createDownloadUrl: (url: string, fileName: string, expiresIn?: number) => Promise<string>;
+
+  /**
    * Create pre-signed upload descriptor
    */
   createPreSignedUpload: (key: string) => Promise<PreSignedUpload>;
@@ -20,6 +25,15 @@ export interface FileServiceImpl {
    * Create pre-signed upload URL
    */
   createPreSignedUrl: (key: string) => Promise<string>;
+
+  /**
+   * Create a pre-signed URL that asks the browser to download the file.
+   */
+  createPreSignedUrlForDownload: (
+    key: string,
+    fileName: string,
+    expiresIn?: number,
+  ) => Promise<string>;
 
   /**
    * Create pre-signed preview URL
@@ -44,7 +58,7 @@ export interface FileServiceImpl {
   /**
    * Get file content
    */
-  getFileContent: (key: string) => Promise<string>;
+  getFileContent: (key: string, byteLength?: number) => Promise<string>;
 
   /**
    * Get file metadata from storage

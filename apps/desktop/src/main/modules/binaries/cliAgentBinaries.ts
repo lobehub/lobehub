@@ -13,7 +13,10 @@ import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 // agents` package so the desktop manager path and the `lh hetero exec` CLI /
 // sandbox path resolve binaries identically. This module only adapts it into
 // the desktop `BinarySpec` shape.
-export { detectHeterogeneousCliCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+export {
+  detectHeterogeneousCliCommand,
+  invalidateLoginShellPathCache,
+} from '@lobechat/heterogeneous-agents/resolveCliCommand';
 
 interface ValidatedBinaryOptions {
   candidates: string[];
@@ -93,6 +96,21 @@ export const cursorBinary: BinarySpec = {
   priority: 3,
 };
 
+/** Factory Droid CLI @see https://docs.factory.ai/cli/getting-started/quickstart */
+export const droidBinary: BinarySpec = {
+  description: 'Factory Droid - Factory agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('droid', 'droid'),
+  name: 'droid',
+  priority: 3,
+};
+
+export const devinBinary: BinarySpec = {
+  description: 'Devin - Cognition agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('devin', 'devin'),
+  name: 'devin',
+  priority: 3,
+};
+
 /** xAI Grok Build CLI @see https://docs.x.ai/build/overview */
 export const grokBuildBinary: BinarySpec = {
   description: 'Grok Build - xAI agentic coding CLI',
@@ -142,7 +160,7 @@ export const qoderBinary: BinarySpec = {
   priority: 6,
 };
 
-/** TRAE Enterprise CLI (TraeCode CLI), not the unrelated open-source `trae-cli`. */
+/** TRAE Enterprise CLI, capability-checked against its ACP runtime. */
 export const traeBinary: BinarySpec = {
   description: 'TRAE CLI - ByteDance enterprise agentic coding CLI',
   detect: () => detectHeterogeneousCliCommand('trae', 'traecli'),
@@ -204,6 +222,8 @@ export const heterogeneousCliAgentBinaries = {
   'codebuddy': codeBuddyBinary,
   'codex': codexBinary,
   'cursor': cursorBinary,
+  'droid': droidBinary,
+  'devin': devinBinary,
   'grok-build': grokBuildBinary,
   'kimi-code': kimiCliBinary,
   'opencode': opencodeBinary,

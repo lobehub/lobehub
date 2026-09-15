@@ -60,5 +60,14 @@ export const formatCommandResult = ({
   if (stdout) parts.push(`Stdout:\n${stdout}`);
   if (stderr) parts.push(`Stderr:\n${stderr}`);
 
+  // A command that ran but wrote nothing to either stream has to say so. Without
+  // the marker, "wrote nothing" and "wrote to stderr, which `2>/dev/null` threw
+  // away" render as the same lone header line, and the caller reads that silence
+  // as a clean run. Only for a command that actually finished — `exitCode`
+  // undefined is the still-running branch, where empty output means nothing yet.
+  const hasOutput =
+    !!stdout || !!stderr || !!outputFiles?.stdout?.path || !!outputFiles?.stderr?.path;
+  if (!hasOutput && exitCode !== undefined) parts.push('(no output)');
+
   return parts.join('\n\n');
 };

@@ -1,7 +1,7 @@
+import type { JudgeEvidence } from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
 
 import { readRequiredEvidence } from './evidenceCoverage';
-import type { JudgeEvidence } from './prompts';
 
 export type JudgeRoute = 'agent' | 'llm_multimodal' | 'llm_text';
 

@@ -11,6 +11,7 @@ import {
   getExternalRuntimeModulesFilesConfig,
 } from './external-runtime-deps.config.mjs';
 import {
+  buildFirstPartyNativeAddons,
   copyNativeModulesToSource,
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
@@ -26,6 +27,46 @@ const packageJSON = JSON.parse(await fs.readFile(path.join(__dirname, 'package.j
 const channel = process.env.UPDATE_CHANNEL;
 const arch = os.arch();
 const hasAppleCertificate = Boolean(process.env.CSC_LINK);
+
+const macAppId = 'com.lobehub.lobehub-desktop';
+// Communication notifications need the restricted
+// `com.apple.developer.usernotifications.communication` entitlement, and
+// macOS refuses to launch an app carrying it without a provisioning profile
+// that authorizes it — so both must be applied together, and only when a
+// profile is provided.
+const macProvisioningProfile = process.env.MAC_PROVISIONING_PROFILE;
+const macTeamId = process.env.APPLE_TEAM_ID;
+const macCommunicationEntitlements =
+  macProvisioningProfile && macTeamId
+    ? path.join(__dirname, 'build', 'entitlements.mac.comm.generated.plist')
+    : undefined;
+
+if (macProvisioningProfile && !macTeamId) {
+  console.warn(
+    '⚠️ MAC_PROVISIONING_PROFILE is set but APPLE_TEAM_ID is missing — building without communication notification entitlements',
+  );
+}
+
+if (macCommunicationEntitlements) {
+  const baseEntitlements = await fs.readFile(
+    path.join(__dirname, 'build', 'entitlements.mac.plist'),
+    'utf8',
+  );
+  const communicationKeys = [
+    '    <key>com.apple.application-identifier</key>',
+    `    <string>${macTeamId}.${macAppId}</string>`,
+    '    <key>com.apple.developer.team-identifier</key>',
+    `    <string>${macTeamId}</string>`,
+    '    <key>com.apple.developer.usernotifications.communication</key>',
+    '    <true/>',
+    '  </dict>',
+  ].join('\n');
+  await fs.writeFile(
+    macCommunicationEntitlements,
+    baseEntitlements.replace('</dict>', communicationKeys),
+  );
+  console.info('🔔 Communication notification entitlements + provisioning profile enabled');
+}
 
 // 自定义更新服务器 URL (用于 stable 频道)
 const updateServerUrl = process.env.UPDATE_SERVER_URL;
@@ -105,8 +146,21 @@ const config = {
    * This ensures native modules are properly included in the asar archive.
    */
   beforePack: async () => {
+    buildFirstPartyNativeAddons();
+
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
+
+    // Keep the AUV daemon version locked to @auv-js/sdk. The CLI package
+    // resolves the platform-specific executable without running postinstall,
+    // then we stage that real file outside app.asar for child_process.spawn().
+    const { binaryPath: resolveAuvBinaryPath } = await import('@auv-js/cli/binary');
+    const auvSource = resolveAuvBinaryPath();
+    const auvExecutable = process.platform === 'win32' ? 'auv.exe' : 'auv';
+    const auvDestination = path.resolve(__dirname, 'resources/bin', auvExecutable);
+    await fs.mkdir(path.dirname(auvDestination), { recursive: true });
+    await fs.copyFile(auvSource, auvDestination);
+    if (process.platform !== 'win32') await fs.chmod(auvDestination, 0o755);
 
     // agent-browser is no longer bundled in the installer — BinaryManager
     // lazily downloads it on first use into the per-user cache dir. See
@@ -167,7 +221,7 @@ const config = {
     }
   },
   afterSign: verifyFontListSignature,
-  appId: 'com.lobehub.lobehub-desktop',
+  appId: macAppId,
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
@@ -214,6 +268,13 @@ const config = {
     'dist/renderer/**/*',
     '!resources/locales',
     '!resources/dmg.png',
+    // NOTICE:
+    // AUV must execute from the external bin directory, so its ASAR copy is unnecessary.
+    // The resources glob otherwise duplicates the binary copied by extraResources below.
+    // Source: PR #19051 ASAR Size Gate; resources/bin is staged in beforePack above.
+    // Remove these exclusions only if AUV no longer ships through extraResources.
+    '!resources/bin/auv',
+    '!resources/bin/auv.exe',
     // Exclude all node_modules first
     '!node_modules',
     // Then explicitly include native modules using object form (handles pnpm symlinks)
@@ -229,9 +290,18 @@ const config = {
     target: ['AppImage', 'snap', 'deb', 'rpm', 'tar.gz'],
   },
   mac: {
-    binaries: ['Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist'],
+    binaries: [
+      'Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist',
+      'Contents/Resources/bin/auv',
+    ],
     compression: 'maximum',
     entitlementsInherit: 'build/entitlements.mac.plist',
+    ...(macCommunicationEntitlements
+      ? {
+          entitlements: macCommunicationEntitlements,
+          provisioningProfile: macProvisioningProfile,
+        }
+      : {}),
     extendInfo: {
       CFBundleIconName: 'AppIcon',
       CFBundleURLTypes: [
@@ -250,6 +320,7 @@ const config = {
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
       NSScreenCaptureUsageDescription:
         'Application requests access to record and analyze screen content for AI assistance.',
+      NSUserActivityTypes: ['INSendMessageIntent'],
     },
     gatekeeperAssess: false,
     hardenedRuntime: hasAppleCertificate,

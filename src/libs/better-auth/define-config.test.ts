@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => {
     authHandler,
     betterAuth: vi.fn((options) => ({ ...options, handler: authHandler })),
     clearMismatchedOIDCSession: vi.fn(),
-    EnvHttpProxyAgent: vi.fn((options) => ({ options })),
+    EnvHttpProxyAgent: vi.fn(function (options) {
+      return { options };
+    }),
     serverDB: {},
     setGlobalDispatcher: vi.fn(),
   };
@@ -227,6 +229,15 @@ describe('defineConfig', () => {
     const [options] = mocks.betterAuth.mock.lastCall!;
 
     expect(options.advanced.crossSubDomainCookies).toBeUndefined();
+  });
+
+  it('should namespace every Better Auth cookie with the configured prefix', async () => {
+    const { defineConfig } = await import('./define-config');
+
+    defineConfig({ cookiePrefix: 'example-app', plugins: [] });
+    const [options] = mocks.betterAuth.mock.lastCall!;
+
+    expect(options.advanced.cookiePrefix).toBe('example-app');
   });
 
   it.each([['https://app.example.com'], ['https://example.com']])(

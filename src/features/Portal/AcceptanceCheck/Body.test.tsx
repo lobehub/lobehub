@@ -9,9 +9,8 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Empty: () => <div />,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Flexbox: ({
     children,
     className,
@@ -29,24 +28,6 @@ vi.mock('@lobehub/ui', () => ({
     </div>
   ),
   Icon: () => <span data-testid={'check-state-icon'} />,
-  Tag: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-}));
-
-vi.mock('antd', () => ({
-  App: { useApp: () => ({ message: { error: vi.fn() } }) },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -64,7 +45,7 @@ vi.mock('@/store/chat/selectors', () => ({
   },
 }));
 
-vi.mock('@/features/Verify', () => ({
+vi.mock('@/features/Acceptance', () => ({
   checkHeadMeta: () => ({ color: 'green', icon: () => null }),
   FocusedCheckDetails: () => <div data-testid={'check-details'} />,
   useAcceptanceBundle: () => ({
@@ -118,7 +99,7 @@ describe('AcceptanceCheck Portal Body', () => {
     render(<Body />);
 
     expect(screen.getByText('taskDetail.acceptance.verifier')).toBeInTheDocument();
-    expect(screen.getByText('verifyConfig.verifierType.agent')).toBeInTheDocument();
+    expect(screen.getByText('criterion.verifierType.agent')).toBeInTheDocument();
     expect(screen.getByText('taskDetail.acceptance.multimodalLlm')).toBeInTheDocument();
     expect(screen.getByText('taskDetail.acceptance.requiredEvidence')).toBeInTheDocument();
     expect(screen.getByText('report.evidence.medium.markdown')).toBeInTheDocument();

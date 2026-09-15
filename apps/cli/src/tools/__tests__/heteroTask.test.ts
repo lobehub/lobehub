@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTrpcClient } from '../../api/client';
 import { removeTask, saveTask } from '../../daemon/taskRegistry';
-import { runHeteroTask } from '../heteroTask';
+import { cancelHeteroTask, runHeteroTask } from '../heteroTask';
 
 // ─── Mocks ───
 
@@ -10,10 +10,16 @@ const spawnMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const fsState = vi.hoisted(() => ({ content: undefined as string | undefined }));
 const notifyMutateMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const prepareSpawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', () => ({
   execFileSync: execFileSyncMock,
   spawn: spawnMock,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
 }));
 
 vi.mock('node:fs', () => ({
@@ -55,6 +61,26 @@ const getTrpcClientMock = vi.mocked(getTrpcClient);
 vi.mock('../../utils/logger', () => ({
   log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
+
+beforeEach(() => {
+  resolveRemotePlatformRuntimeMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv) => ({
+      available: true,
+      execute: vi.fn(),
+      prepareSpawn: (args: string[]) => prepareSpawnMock(type, args, baseEnv),
+    }),
+  );
+  prepareSpawnMock.mockImplementation(
+    async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+      args,
+      command: `/resolved/bin/${type}`,
+      env: {
+        ...baseEnv,
+        PATH: '/resolved/bin:/runtime/bin:/usr/bin',
+      },
+    }),
+  );
+});
 
 // ─── Helpers ───
 
@@ -227,6 +253,37 @@ describe('runHeteroTask (openclaw)', () => {
     expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 
+  it('isolates concurrent group members that share a topic', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-child-1',
+      parentOperationId: 'op-parent',
+      prompt: 'member one',
+      taskId: 'task-child-1',
+      topicId: 'topic-shared',
+    });
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-child-2',
+      parentOperationId: 'op-parent',
+      prompt: 'member two',
+      taskId: 'task-child-2',
+      topicId: 'topic-shared',
+    });
+
+    expect(killSpy).not.toHaveBeenCalled();
+    const firstArgs = spawnMock.mock.calls[0][1] as string[];
+    const secondArgs = spawnMock.mock.calls[1][1] as string[];
+    expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+    expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+    expect(saveTask).toHaveBeenLastCalledWith(
+      expect.objectContaining({ parentOperationId: 'op-parent', taskId: 'task-child-2' }),
+    );
+  });
+
   it('does not kill processes for a different topicId', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
@@ -295,6 +352,36 @@ describe('runHeteroTask (openclaw)', () => {
     expect(spawnArgs).toContain('--local');
   });
 
+  it('spawns the resolved OpenClaw executable with its recovered PATH', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-resolved',
+      prompt: 'hello',
+      taskId: 'task-resolved',
+      topicId: 'topic-resolved',
+    });
+
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'openclaw',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'openclaw',
+      expect.any(Array),
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/resolved/bin/openclaw',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      }),
+    );
+  });
+
   it('removes task and ignores already-exited process when killing concurrent task', async () => {
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw new Error('No such process');
@@ -348,6 +435,7 @@ describe('runHeteroTask (openclaw)', () => {
       string[],
       { env: NodeJS.ProcessEnv },
     ];
+    expect(spawnOpts.env.LOBEHUB_OPERATION_ID).toBe('op-ws');
     expect(spawnOpts.env.LOBEHUB_WORKSPACE_ID).toBe('ws-42');
   });
 
@@ -378,6 +466,81 @@ describe('runHeteroTask (openclaw)', () => {
       expect(call[0]).toBe('ws-99');
     }
   });
+
+  it('reports a signal exit as a cancelled terminal signal', async () => {
+    const child = makeMockChild(7788);
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'openclaw',
+      operationId: 'op-cancelled',
+      prompt: 'cancel me',
+      taskId: 'task-cancelled',
+      topicId: 'topic-cancelled',
+    });
+
+    child._emit('close', null, 'SIGINT');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(notifyMutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cancelled: true,
+        done: true,
+        operationId: 'op-cancelled',
+        role: 'assistant',
+        topicId: 'topic-cancelled',
+      }),
+    );
+  });
+});
+
+describe('runHeteroTask retry ownership', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fsState.content = undefined;
+    for (const key of Object.keys(taskStore)) delete taskStore[key];
+    execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
+    resetTrpcClientMock();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(['openclaw', 'hermes'] as const)(
+    'ignores the stale %s close callback after an exact task retry',
+    async (agentType) => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const oldChild = makeMockChild(1111);
+      const replacementChild = makeMockChild(2222);
+      spawnMock.mockReturnValueOnce(oldChild).mockReturnValueOnce(replacementChild);
+
+      await runHeteroTask({
+        agentType,
+        operationId: 'op-old',
+        prompt: 'first attempt',
+        taskId: 'task-retry',
+        topicId: 'topic-retry',
+      });
+      await runHeteroTask({
+        agentType,
+        operationId: 'op-replacement',
+        prompt: 'retry',
+        taskId: 'task-retry',
+        topicId: 'topic-retry',
+      });
+
+      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(taskStore['task-retry']).toEqual(expect.objectContaining({ pid: 2222 }));
+
+      oldChild._emit('close', null, 'SIGTERM');
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(taskStore['task-retry']).toEqual(expect.objectContaining({ pid: 2222 }));
+      expect(getTrpcClientMock).not.toHaveBeenCalled();
+      expect(notifyMutateMock).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('runHeteroTask (hermes)', () => {
@@ -425,6 +588,36 @@ describe('runHeteroTask (hermes)', () => {
     expect(JSON.parse(fsState.content!)).toEqual({
       'topic-hermes': 'session-continuation',
     });
+  });
+
+  it('spawns the resolved Hermes executable with its recovered PATH', async () => {
+    const child = makeMockChild();
+    spawnMock.mockReturnValue(child);
+
+    await runHeteroTask({
+      agentType: 'hermes',
+      operationId: 'op-resolved',
+      prompt: 'hello',
+      taskId: 'task-resolved',
+      topicId: 'topic-resolved',
+    });
+
+    expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith(
+      'hermes',
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(prepareSpawnMock).toHaveBeenCalledWith(
+      'hermes',
+      ['chat', '--query', 'hello', '--quiet', '--accept-hooks'],
+      expect.objectContaining({ LOBEHUB_OPERATION_ID: 'op-resolved' }),
+    );
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/resolved/bin/hermes',
+      expect.any(Array),
+      expect.objectContaining({
+        env: expect.objectContaining({ PATH: '/resolved/bin:/runtime/bin:/usr/bin' }),
+      }),
+    );
   });
 
   it('resumes the saved session and replaces it with a continuation id', async () => {
@@ -496,5 +689,190 @@ describe('runHeteroTask (hermes)', () => {
       expect.objectContaining({ content: 'Successful response' }),
     );
     expect(fsState.content).toBeUndefined();
+  });
+});
+
+// ─── cancelHeteroTask: process-group kill regression ───
+// When a local CLI agent (devin/claude-code/codex/…) is dispatched through
+// `lh connect`, the spawned child runs in its own process group. The cancel
+// handler must signal the whole group (negative PID) so the CLI wrapper, the
+// ACP client, and any agent subprocesses all receive the signal — not just
+// the top-level node wrapper.
+
+describe('cancelHeteroTask (process-group kill)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const key of Object.keys(taskStore)) delete taskStore[key];
+    resetTrpcClientMock();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('signals the whole process group via negative PID on Unix', async () => {
+    let groupAlive = true;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGINT') groupAlive = false;
+      if (signal === 0 && !groupAlive) {
+        throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+      }
+      return true;
+    });
+    // Simulate a registered local CLI agent task.
+    taskStore['op-cli-cancel'] = {
+      agentType: 'devin',
+      operationId: 'op-cli-cancel',
+      pid: 4242,
+      startedAt: new Date().toISOString(),
+      taskId: 'op-cli-cancel',
+      topicId: 'tpc-cli',
+    };
+
+    const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-cli-cancel' });
+
+    expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGINT');
+    expect(result).toEqual({
+      exited: true,
+      pid: 4242,
+      signal: 'SIGINT',
+      taskId: 'op-cli-cancel',
+    });
+    killSpy.mockRestore();
+  });
+
+  it('kills the persisted process tree with taskkill on Windows', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+    let exitHandler: ((code: number) => void) | undefined;
+    spawnMock.mockReturnValue({
+      once: vi.fn((event: string, handler: (code: number) => void) => {
+        if (event === 'exit') exitHandler = handler;
+      }),
+    });
+    taskStore['op-windows-cancel'] = {
+      agentType: 'codex',
+      operationId: 'op-windows-cancel',
+      pid: 4242,
+      startedAt: new Date().toISOString(),
+      taskId: 'op-windows-cancel',
+      topicId: 'tpc-cli',
+    };
+
+    const cancellation = cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-windows-cancel' });
+    await vi.waitFor(() => expect(exitHandler).toBeDefined());
+    exitHandler?.(0);
+
+    await expect(cancellation).resolves.toEqual({
+      exited: true,
+      pid: 4242,
+      signal: 'SIGINT',
+      taskId: 'op-windows-cancel',
+    });
+    expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '4242', '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+  });
+
+  it('still escalates after the wrapper exits and removes its registry entry', async () => {
+    vi.useFakeTimers();
+    let groupAlive = true;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGKILL') groupAlive = false;
+      if (signal === 0 && !groupAlive) {
+        throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+      }
+      return true;
+    });
+    taskStore['op-cli-orphan'] = {
+      agentType: 'devin',
+      operationId: 'op-cli-orphan',
+      pid: 4343,
+      startedAt: new Date().toISOString(),
+      taskId: 'op-cli-orphan',
+      topicId: 'tpc-cli',
+    };
+
+    try {
+      const cancellation = cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-cli-orphan' });
+      await Promise.resolve();
+      removeTask('op-cli-orphan');
+      await vi.advanceTimersByTimeAsync(2_000);
+      const result = await cancellation;
+
+      expect(killSpy).toHaveBeenCalledWith(-4343, 'SIGINT');
+      expect(killSpy).toHaveBeenCalledWith(-4343, 'SIGKILL');
+      expect(result).toEqual({
+        exited: true,
+        pid: 4343,
+        signal: 'SIGINT',
+        taskId: 'op-cli-orphan',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports an unconfirmed cancellation when the group survives SIGKILL', async () => {
+    vi.useFakeTimers();
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    taskStore['op-cli-stuck'] = {
+      agentType: 'codex',
+      operationId: 'op-cli-stuck',
+      pid: 4444,
+      startedAt: new Date().toISOString(),
+      taskId: 'op-cli-stuck',
+      topicId: 'tpc-cli',
+    };
+
+    try {
+      const cancellation = cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-cli-stuck' });
+      await vi.advanceTimersByTimeAsync(5_100);
+
+      await expect(cancellation).resolves.toEqual({
+        exited: false,
+        pid: 4444,
+        signal: 'SIGINT',
+        taskId: 'op-cli-stuck',
+      });
+      expect(killSpy).toHaveBeenCalledWith(-4444, 'SIGKILL');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns No task found when the task is not registered', async () => {
+    const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-missing' });
+
+    expect(result).toEqual({
+      message: 'No task found with taskId: op-missing',
+      success: false,
+    });
+  });
+
+  it('cleans up the registry and notifies when the process already exited', async () => {
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+    });
+    taskStore['op-gone'] = {
+      agentType: 'claude-code',
+      operationId: 'op-gone',
+      pid: 5555,
+      startedAt: new Date().toISOString(),
+      taskId: 'op-gone',
+      topicId: 'tpc-gone',
+    };
+
+    const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-gone' });
+
+    expect(removeTask).toHaveBeenCalledWith('op-gone');
+    expect(notifyMutateMock).toHaveBeenCalledWith(expect.objectContaining({ topicId: 'tpc-gone' }));
+    expect(result).toEqual({
+      exited: true,
+      pid: 5555,
+      signal: 'SIGINT',
+      taskId: 'op-gone',
+    });
+    killSpy.mockRestore();
   });
 });

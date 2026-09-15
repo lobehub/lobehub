@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { registerAgentCommand } from './commands/agent';
 import { registerAgentGroupCommand } from './commands/agent-group';
 import { registerAgentSignalCommand } from './commands/agent-signal';
+import { registerArtifactCommand } from './commands/artifact';
 import { registerBotCommand } from './commands/bot';
 import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
@@ -12,6 +13,7 @@ import { registerDocCommand } from './commands/doc';
 import { registerEvalCommand } from './commands/eval';
 import { registerFileCommand } from './commands/file';
 import { registerGenerateCommand } from './commands/generate';
+import { registerGoalCommand } from './commands/goal';
 import { registerHeteroCommand } from './commands/hetero';
 import { registerKbCommand } from './commands/kb';
 import { registerLoginCommand } from './commands/login';
@@ -32,10 +34,13 @@ import { registerStatusCommand } from './commands/status';
 import { registerTaskCommand } from './commands/task';
 import { registerThreadCommand } from './commands/thread';
 import { registerTopicCommand } from './commands/topic';
+import { registerTraceCommand } from './commands/trace';
 import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
 import { registerAcceptanceCommands } from './commands/verifyAcceptance';
+import { registerWorkspaceCommand } from './commands/workspace';
+import { CLI_DISPLAY_NAME, CLI_PRIMARY_BIN, CLI_PRODUCT_NAME } from './constants/identity';
 import { cliVersion } from './pkg';
 import { executeToolCall } from './tools';
 
@@ -43,8 +48,8 @@ export function createProgram() {
   const program = new Command();
 
   program
-    .name('lh')
-    .description('LobeHub CLI - manage and connect to LobeHub services')
+    .name(CLI_PRIMARY_BIN)
+    .description(`${CLI_DISPLAY_NAME} - manage and connect to ${CLI_PRODUCT_NAME} services`)
     .version(cliVersion);
 
   const internalToolWorker = program
@@ -84,19 +89,23 @@ export function createProgram() {
   registerAgentSignalCommand(program);
   registerBotCommand(program);
   registerGenerateCommand(program);
+  registerGoalCommand(program);
   registerFileCommand(program);
+  registerArtifactCommand(program);
   registerHeteroCommand(program);
   registerSkillCommand(program);
   registerSessionGroupCommand(program);
   registerTaskCommand(program);
   registerThreadCommand(program);
   registerTopicCommand(program);
+  registerTraceCommand(program);
   registerMessageCommand(program);
   registerModelCommand(program);
   registerNotifyCommand(program);
   registerProviderCommand(program);
   registerProjectCommand(program);
   registerPluginCommand(program);
+  registerWorkspaceCommand(program);
   registerUserCommand(program);
   registerVerifyCommand(program);
   // First-class review-loop entry: `lh acceptance list|view|feedback|accept|reject`.

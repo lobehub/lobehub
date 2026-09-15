@@ -30,7 +30,16 @@ type MarketAgentModel =
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
-    'avatar' | 'backgroundColor' | 'description' | 'marketIdentifier' | 'name' | 'tags' | 'title'
+    | 'avatar'
+    | 'backgroundColor'
+    | 'description'
+    | 'marketIdentifier'
+    | 'metadata'
+    | 'name'
+    | 'profile'
+    | 'societyId'
+    | 'tags'
+    | 'title'
   >
 >;
 
@@ -368,11 +377,29 @@ class AgentService {
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
-    return lambdaClient.agent.transferAgent.mutate({
+    const result = await lambdaClient.agent.transferAgent.mutate({
       agentId,
       targetVisibility,
       targetWorkspaceId,
     });
+    // Without `targetMemberId` the endpoint always takes the scope-move path.
+    return result as { agentId: string; slug: string | null; transferJobId: string | null };
+  };
+
+  /**
+   * Hand ownership to another member of the current workspace. Creates a
+   * pending transfer request the recipient must accept — nothing moves yet.
+   */
+  requestAgentTransferToMember = async (params: {
+    agentId: string;
+    targetMemberId: string;
+  }): Promise<{ requestId: string; status: 'pending' }> => {
+    const result = await lambdaClient.agent.transferAgent.mutate({
+      agentId: params.agentId,
+      targetMemberId: params.targetMemberId,
+      targetWorkspaceId: null,
+    });
+    return result as { requestId: string; status: 'pending' };
   };
 
   /**

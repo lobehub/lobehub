@@ -43,7 +43,14 @@ export function buildStepPresentation(
   let reasoning: string | undefined;
   let toolsCalling: Array<{ apiName: string; arguments?: string; identifier: string }> | undefined;
   let toolsResult:
-    | Array<{ apiName: string; identifier: string; isSuccess?: boolean; output?: string }>
+    | Array<{
+        apiName: string;
+        deviceExecutionTimeMs?: number;
+        executionTimeMs?: number;
+        identifier: string;
+        isSuccess?: boolean;
+        output?: string;
+      }>
     | undefined;
   let summary: string;
 
@@ -56,6 +63,8 @@ export function buildStepPresentation(
     toolsResult = [
       {
         apiName,
+        deviceExecutionTimeMs: toolPayload?.deviceExecutionTime,
+        executionTimeMs: toolPayload?.executionTime,
         identifier,
         isSuccess: toolPayload?.isSuccess !== false,
         output: serializeToolOutput(output),
@@ -68,6 +77,8 @@ export function buildStepPresentation(
     const rawToolResults = nextPayload?.toolResults || [];
     toolsResult = rawToolResults.map((r: any) => ({
       apiName: r.toolCall?.apiName || 'unknown',
+      deviceExecutionTimeMs: r.data?.deviceExecutionTime,
+      executionTimeMs: r.executionTime,
       identifier: r.toolCall?.identifier || 'unknown',
       isSuccess: r?.isSuccess !== false,
       output: serializeToolOutput(r.data),
@@ -77,8 +88,7 @@ export function buildStepPresentation(
   } else {
     // Check for done event first (finish step with no next context).
     const doneEvent = stepResult.events?.find((e) => e.type === 'done') as
-      | { reason?: string; reasonDetail?: string; type: 'done' }
-      | undefined;
+      { reason?: string; reasonDetail?: string; type: 'done' } | undefined;
 
     if (doneEvent) {
       summary = `[done] reason=${doneEvent.reason ?? 'unknown'}`;
@@ -90,8 +100,7 @@ export function buildStepPresentation(
 
       // Use parsed ChatToolPayload from payload (has identifier + apiName).
       const payloadToolsCalling = (stepResult.nextContext?.payload as any)?.toolsCalling as
-        | Array<{ apiName: string; arguments: string; identifier: string }>
-        | undefined;
+        Array<{ apiName: string; arguments: string; identifier: string }> | undefined;
       const hasToolCalls = Array.isArray(payloadToolsCalling) && payloadToolsCalling.length > 0;
 
       if (hasToolCalls) {

@@ -1,0 +1,101 @@
+name: Deploy Workbench
+
+on:
+  push:
+    branches: [canary]
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: deploy-workbench
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve last successful deploy
+        id: base
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read -r sha run_id < <(gh run list --repo "${{ github.repository }}" \
+            --workflow deploy-workbench.yml --branch "${{ github.ref_name }}" \
+            --status success --limit 1 --json headSha,databaseId \
+            --jq '.[0] | "\(.headSha) \(.databaseId)"' || true)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download last deployed build-inputs manifest
+        id: manifest
+        if: github.event_name == 'push' && steps.base.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh run download "${{ steps.base.outputs.run_id }}" --repo "${{ github.repository }}" \
+            -n workbench-build-inputs -D /tmp/workbench-manifest; then
+            echo "path=/tmp/workbench-manifest/build-inputs.txt" >> "$GITHUB_OUTPUT"
+          else
+            echo "no manifest artifact on last successful run"
+          fi
+
+      - name: Detect workbench input changes
+        id: detect
+        env:
+          WORKBENCH_MANIFEST: ${{ steps.manifest.outputs.path }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "manual dispatch — building"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$WORKBENCH_MANIFEST" ]; then
+            echo "no previous deploy manifest — building"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            node apps/workbench/scripts/should-build.mjs "${{ steps.base.outputs.sha }}" "${{ github.sha }}"
+          fi
+
+      - name: Setup environment
+        if: steps.detect.outputs.should_build == 'true'
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        if: steps.detect.outputs.should_build == 'true'
+        run: pnpm install
+
+      - name: Deploy workbench
+        if: steps.detect.outputs.should_build == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ASSET_S3_ACCESS_KEY_ID: ${{ secrets.ASSET_S3_ACCESS_KEY_ID }}
+          ASSET_S3_BUCKET: ${{ secrets.ASSET_S3_BUCKET }}
+          ASSET_S3_ENDPOINT: ${{ secrets.ASSET_S3_ENDPOINT }}
+          ASSET_S3_PUBLIC_DOMAIN: ${{ secrets.ASSET_S3_PUBLIC_DOMAIN }}
+          ASSET_S3_REGION: ${{ secrets.ASSET_S3_REGION }}
+          ASSET_S3_SECRET_ACCESS_KEY: ${{ secrets.ASSET_S3_SECRET_ACCESS_KEY }}
+        run: bun run deploy
+        working-directory: apps/workbench
+
+      - name: Upload build-inputs manifest
+        if: steps.detect.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-build-inputs
+          path: apps/workbench/build-inputs.txt
+          retention-days: 90
+
+      - name: Carry forward previous manifest
+        if: steps.detect.outputs.should_build != 'true' && steps.manifest.outputs.path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-build-inputs
+          path: ${{ steps.manifest.outputs.path }}
+          retention-days: 90

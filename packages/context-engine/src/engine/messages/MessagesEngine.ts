@@ -34,12 +34,16 @@ import {
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
   AgentDocumentSystemReplaceInjector,
+  AgentIdentityInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
+  ConnectorOwnershipInjector,
   ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
+  ExpertiseContextInjector,
   ForceFinishSummaryInjector,
+  GoalContextSyntheticInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
   HistorySummaryProvider,
@@ -52,11 +56,14 @@ import {
   PageEditorContextInjector,
   PageSelectionsInjector,
   PlanInjector,
+  ProjectInstructionsInjector,
   RuntimeAdditionalContextProvider,
   selectActivatedSkills,
   SelectedSkillInjector,
   selectToolPromptManifests,
+  SKILL_STORE_TOOL_ID,
   SkillContextProvider,
+  SkillImportRouteInjector,
   SystemDateProvider,
   SystemRoleInjector,
   TaskManagerContextInjector,
@@ -65,6 +72,7 @@ import {
   ToolSystemRoleProvider,
   TopicReferenceContextInjector,
   UserMemoryInjector,
+  WorkspaceContextInjector,
 } from '../../providers';
 import { SelectedToolInjector } from '../../providers/SelectedToolInjector';
 import type { ContextProcessor } from '../../types';
@@ -148,6 +156,7 @@ export class MessagesEngine {
       modelKnowledgeCutoff,
       provider,
       systemRole,
+      agentIdentity,
       inputTemplate,
       enableAgentMode,
       enableHistoryCount,
@@ -167,8 +176,11 @@ export class MessagesEngine {
       messages,
       agentBuilderContext,
       botPlatformContext,
+      workspaceContext,
       discordContext,
+      connectorOwnershipNote,
       evalContext,
+      projectInstructions,
       onboardingContext,
       agentManagementContext,
       groupAgentBuilderContext,
@@ -242,6 +254,12 @@ export class MessagesEngine {
         ? selectToolPromptManifests(toolsConfig?.manifests)
         : [];
 
+    // The skill-import route is only actionable when the Skill Store is reachable this
+    // run — either already enabled, or listed for the activator to turn on.
+    const isSkillStoreReachable =
+      (toolsConfig?.manifests ?? []).some((m) => m.identifier === SKILL_STORE_TOOL_ID) ||
+      (toolDiscoveryConfig?.availableTools ?? []).some((t) => t.identifier === SKILL_STORE_TOOL_ID);
+
     // Shared config for all agent document injectors
     const agentDocConfig = {
       currentUserMessage,
@@ -275,6 +293,24 @@ export class MessagesEngine {
       new AgentDocumentBeforeSystemInjector(agentDocConfig),
       // Agent's system role (creates the initial system message)
       new SystemRoleInjector({ systemRole }),
+      // Both sit directly after the persona because that is exactly where they
+      // used to be: the server concatenated them onto `agentConfig.systemRole`
+      // several pipeline stages before the engine ran. Moving them later would
+      // push them behind every other Phase 2 provider.
+      //
+      // Connector attribution precedes the project instructions because
+      // `discoverTools` runs before `prepareOperation` in the agent pipeline,
+      // so that is the order the appends produced. Reversing these two changes
+      // which block the model reads last.
+      new ConnectorOwnershipInjector({ note: connectorOwnershipNote }),
+      new ProjectInstructionsInjector({ instructions: projectInstructions }),
+      // Agent identity (name/title) — lets the model answer "who are you?"
+      // with the user-given name. Group chat establishes identity through
+      // GroupContextInjector instead, so it is suppressed there.
+      new AgentIdentityInjector({
+        enabled: !isGroupContextEnabled,
+        identity: agentIdentity,
+      }),
       // Eval context (appends envPrompt)
       new EvalContextSystemInjector({ enabled: !!evalContext?.envPrompt, evalContext }),
       // Bot platform context (formatting instructions for non-Markdown platforms)
@@ -294,6 +330,13 @@ export class MessagesEngine {
           video: capabilities?.isCanUseVideo?.(model, provider),
           vision: capabilities?.isCanUseVision?.(model, provider),
         },
+      }),
+      // Workspace context (app origin + workspace slug → correct in-app links).
+      // Sits with the other environment facts (date / model) after the
+      // persona-level injectors.
+      new WorkspaceContextInjector({
+        context: workspaceContext,
+        enabled: !!workspaceContext,
       }),
       // Skill context (available skills list + activated skill content).
       // Disabled in chat mode — pairs with the tools-engine gate so the LLM
@@ -326,6 +369,11 @@ export class MessagesEngine {
 
       // User memory
       new UserMemoryInjector({ ...userMemory, enabled: isUserMemoryEnabled }),
+      // Operation-scoped learned expertise (captured once and reused verbatim across steps)
+      new ExpertiseContextInjector({
+        enabled: this.params.enableExpertise,
+        expertise: this.params.expertise,
+      }),
       // Group context (agent identity and group info for multi-agent chat)
       new GroupContextInjector({
         currentAgentId: agentGroup?.currentAgentId,
@@ -386,6 +434,9 @@ export class MessagesEngine {
         activeTopicDocument: initialContext?.activeTopicDocument,
         enabled: hasActiveTopicDocument && !isPageEditorEnabled,
       }),
+      // LobeHub skill URLs in the current message → route them to the Skill Store
+      // instead of letting the model crawl the page and follow its CLI steps.
+      new SkillImportRouteInjector({ enabled: isSkillStoreReachable }),
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)
@@ -431,6 +482,13 @@ export class MessagesEngine {
       // Inject high-churn runtime guidance at the tail to preserve stable prefix caching
       // =============================================
 
+      // Goal progress overview (goal detail page conversation) — a synthetic
+      // getGoalContext tool pair after the last user message: environment
+      // state arrives as machine-provided tool output, not as user words.
+      new GoalContextSyntheticInjector({
+        enabled: !!initialContext?.goalOverview,
+        overview: initialContext?.goalOverview,
+      }),
       // Onboarding synthetic state (fake getOnboardingState tool call pair to drive action loop)
       new OnboardingSyntheticStateInjector({
         enabled: !!onboardingContext?.phaseGuidance,

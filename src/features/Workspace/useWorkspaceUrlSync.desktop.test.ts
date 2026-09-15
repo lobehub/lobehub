@@ -119,4 +119,13 @@ describe('useWorkspaceUrlSync (desktop)', () => {
 
     expect(switchToPersonal).toHaveBeenCalled();
   });
+
+  it('treats the unqualified projects route as personal context', () => {
+    vi.spyOn(useActiveWorkspaceIdModule, 'useActiveWorkspaceId').mockReturnValue('ws-1');
+    setTabs([{ id: 'a', url: '/projects' }], 'a');
+
+    renderHook(() => useWorkspaceUrlSync(), { wrapper });
+
+    expect(switchToPersonal).toHaveBeenCalled();
+  });
 });

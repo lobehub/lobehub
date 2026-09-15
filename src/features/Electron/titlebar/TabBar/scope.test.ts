@@ -5,6 +5,7 @@ import { isSameTabTarget, normalizeTabScope, resolveTabScope, tabTargetId } from
 describe('desktop tab scope', () => {
   it('marks known top-level desktop routes as personal scope', () => {
     expect(resolveTabScope('/agent/personal-agent')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/apps')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/settings/profile')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/verify/run_1')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/invite/abc')).toEqual({ type: 'personal' });

@@ -266,6 +266,12 @@ describe('StreamEventManager', () => {
       const finalState = {
         cost: { total: 42 },
         error: { message: 'boom', type: 'BoomError' },
+        expertise: {
+          contentHash: 'hash',
+          domains: [{ id: 'product-design', lessonIds: ['lesson-1'] }],
+          renderedContext: '<expertise>heavy learned context</expertise>',
+          schemaVersion: 1,
+        },
         messages,
         operationToolSet: { enabledToolIds: ['x'] },
         status: 'error',
@@ -291,6 +297,7 @@ describe('StreamEventManager', () => {
       const parsed = JSON.parse(dataArg);
 
       // Stripped: heavy / reconstructible fields gone
+      expect(parsed.finalState.expertise).toBeUndefined();
       expect(parsed.finalState.messages).toBeUndefined();
       expect(parsed.finalState.operationToolSet).toBeUndefined();
       expect(parsed.finalState.toolManifestMap).toBeUndefined();
@@ -475,6 +482,12 @@ describe('StreamEventManager', () => {
       const result = stripFinalStateInEventData({
         finalState: {
           cost: { total: 1 },
+          expertise: {
+            contentHash: 'hash',
+            domains: [],
+            renderedContext: '<expertise>heavy learned context</expertise>',
+            schemaVersion: 1,
+          },
           messages: [{ role: 'user' }],
           operationToolSet: {},
           status: 'done',

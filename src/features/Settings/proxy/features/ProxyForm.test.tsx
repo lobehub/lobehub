@@ -3,15 +3,9 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { FormInstance } from 'antd';
-import type { ComponentProps, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ProxyForm from './ProxyForm';
-
-interface MockFormValues {
-  [key: string]: unknown;
-}
 
 const setProxySettingsMock = vi.hoisted(() => vi.fn());
 const testProxyConfigMock = vi.hoisted(() => vi.fn());
@@ -26,12 +20,6 @@ const defaultProxySettings = {
   proxyServer: '',
   proxyType: 'http',
 } as const;
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
 
 vi.mock('@/services/electron/settings', () => ({
   desktopSettingsService: {
@@ -74,137 +62,13 @@ vi.mock('./SaveBar', () => ({
     ) : null,
 }));
 
-// Stub the base-ui Button (test-connection) to a native button — it needs a
-// MotionProvider the app sets up globally but the unit env doesn't. Keep
-// type="button" to match the real Button's default htmlType and avoid
-// implicitly submitting the surrounding form.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  RadioGroup: ({
-    disabled,
-    onChange,
-    options,
-    value,
-  }: {
-    disabled?: boolean;
-    onChange?: (value: string) => void;
-    options?: Array<string | { disabled?: boolean; label?: ReactNode; value: string }>;
-    value?: string;
-  }) => (
-    <div role="radiogroup">
-      {options?.map((option) => {
-        const item = typeof option === 'string' ? { label: option, value: option } : option;
-        return (
-          <label key={item.value}>
-            <input
-              checked={value === item.value}
-              disabled={disabled || item.disabled}
-              type="radio"
-              value={item.value}
-              onChange={() => onChange?.(item.value)}
-            />
-            {item.label}
-          </label>
-        );
-      })}
-    </div>
-  ),
-  Switch: ({
-    checked,
-    disabled,
-    onChange,
-  }: {
-    checked?: boolean;
-    disabled?: boolean;
-    onChange?: (checked: boolean) => void;
-  }) => (
-    <button
-      aria-checked={!!checked}
-      disabled={disabled}
-      role="switch"
-      type="button"
-      onClick={() => onChange?.(!checked)}
-    />
-  ),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: {
     error: toastErrorMock,
     success: toastSuccessMock,
   },
 }));
-
-vi.mock('@lobehub/ui', async () => {
-  const { Form: AntdForm } = await import('antd');
-
-  const GroupedForm = Object.assign(
-    ({
-      form,
-      initialValues,
-      items,
-      onValuesChange,
-    }: {
-      form?: FormInstance<MockFormValues>;
-      initialValues?: MockFormValues;
-      items: Array<{
-        children: Array<{
-          children: ReactNode;
-          label?: ReactNode;
-          name?: string;
-          rules?: ComponentProps<typeof AntdForm.Item>['rules'];
-          valuePropName?: string;
-        }>;
-      }>;
-      onValuesChange?: (changedValues: MockFormValues, values: MockFormValues) => void;
-    }) => (
-      <AntdForm form={form} initialValues={initialValues} onValuesChange={onValuesChange}>
-        {items.map((group, groupIndex) => (
-          <div key={groupIndex}>
-            {group.children.map((item, itemIndex) =>
-              item.name ? (
-                <AntdForm.Item
-                  key={`${groupIndex}-${item.name}-${itemIndex}`}
-                  label={item.label}
-                  name={item.name}
-                  rules={item.rules}
-                  valuePropName={item.valuePropName}
-                >
-                  {item.children}
-                </AntdForm.Item>
-              ) : (
-                <div key={`${groupIndex}-${itemIndex}`}>
-                  {item.label ? <div>{item.label}</div> : null}
-                  {item.children}
-                </div>
-              ),
-            )}
-          </div>
-        ))}
-      </AntdForm>
-    ),
-    { useForm: AntdForm.useForm },
-  );
-
-  return {
-    Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-    Form: GroupedForm,
-    Skeleton: () => <div>loading</div>,
-    toast: {
-      error: toastErrorMock,
-      success: toastSuccessMock,
-    },
-  };
-});
 
 describe('ProxyForm', () => {
   beforeEach(() => {
@@ -265,14 +129,14 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.resetButton' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: 'proxy.resetButton' })).not.toBeInTheDocument();
-      expect(screen.getByRole('textbox', { name: 'proxy.server' })).toHaveValue('');
-      expect(screen.getByRole('textbox', { name: 'proxy.port' })).toHaveValue('');
+      expect(screen.getByPlaceholderText('127.0.0.1')).toHaveValue('');
+      expect(screen.getByPlaceholderText('7890')).toHaveValue('');
     });
   });
 
@@ -282,8 +146,8 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '7890');
     await user.click(screen.getAllByRole('switch')[1]);
 
     expect(screen.getByPlaceholderText('proxy.username_placeholder')).toBeInTheDocument();
@@ -304,8 +168,8 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '70000');
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '70000');
     await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
 
     await waitFor(() => {
@@ -320,8 +184,8 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.saveButton' }));
 
     await waitFor(() => {
@@ -342,8 +206,8 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '7890');
 
     setProxySettingsMock.mockRejectedValueOnce(new Error('boom'));
 
@@ -363,8 +227,8 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {
@@ -389,8 +253,8 @@ describe('ProxyForm', () => {
     render(<ProxyForm />);
 
     await user.click(screen.getAllByRole('switch')[0]);
-    await user.type(screen.getByRole('textbox', { name: 'proxy.server' }), '127.0.0.1');
-    await user.type(screen.getByRole('textbox', { name: 'proxy.port' }), '7890');
+    await user.type(screen.getByPlaceholderText('127.0.0.1'), '127.0.0.1');
+    await user.type(screen.getByPlaceholderText('7890'), '7890');
     await user.click(screen.getByRole('button', { name: 'proxy.testButton' }));
 
     await waitFor(() => {

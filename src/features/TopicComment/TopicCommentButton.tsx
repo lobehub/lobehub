@@ -1,4 +1,4 @@
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Badge } from 'antd';
 import { MessageCircle } from 'lucide-react';
 import { memo } from 'react';

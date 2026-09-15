@@ -16,6 +16,15 @@ export interface MediaSourceMessage {
   audioList?: ChatAudioItem[];
   id?: string;
   imageList?: ChatImageItem[];
+  pluginState?: {
+    filename?: string;
+    images?: Array<{
+      fileId?: string;
+      mediaType?: string;
+      name?: string;
+      url?: string;
+    }>;
+  };
   role?: string;
   videoList?: ChatVideoItem[];
 }
@@ -156,6 +165,37 @@ export const hasUserMediaFiles = (message: unknown): message is MediaSourceMessa
   (message as MediaSourceMessage).role === 'user' &&
   hasMediaFiles(message);
 
+const createToolResultImageItems = (message: MediaSourceMessage): MediaFileItem[] => {
+  if (message.role !== 'tool' || !Array.isArray(message.pluginState?.images)) return [];
+
+  const { filename, images } = message.pluginState;
+
+  return images.flatMap((image, index) => {
+    if (typeof image.url !== 'string') return [];
+
+    try {
+      if (!ALLOWED_REMOTE_MEDIA_URL_PROTOCOLS.has(new URL(image.url).protocol)) return [];
+    } catch {
+      return [];
+    }
+
+    const name = image.name || filename || image.fileId || `Image ${index + 1}`;
+
+    return [
+      {
+        description: name,
+        id: image.fileId,
+        localRef: createMediaLocalRef('image', index),
+        messageId: message.id,
+        name,
+        ref: createMediaFileRef({ index, messageId: message.id, type: 'image' }),
+        type: 'image' as const,
+        uri: image.url,
+      },
+    ];
+  });
+};
+
 export const createMediaFileItems = (
   message: MediaSourceMessage | undefined,
   images: ChatImageItem[] = [],
@@ -205,6 +245,27 @@ export const createMediaFileItems = (
     };
   }),
 ];
+
+export const createMediaFileItemsFromMessage = (message: MediaSourceMessage): MediaFileItem[] => {
+  const toolResultImages = createToolResultImageItems(message);
+  // Tool result images and imageList entries share the same message/index ref
+  // namespace. Prefer the durable tool result to avoid duplicate refs where
+  // selectMediaFileItems would otherwise resolve the attachment first.
+  const attachmentImages = toolResultImages.length > 0 ? [] : message.imageList;
+
+  return [
+    ...createMediaFileItems(message, attachmentImages, message.videoList, message.audioList),
+    ...toolResultImages,
+  ];
+};
+
+export const hasAnalyzableMediaFiles = (message: unknown): message is MediaSourceMessage => {
+  if (!message || typeof message !== 'object') return false;
+
+  const mediaMessage = message as MediaSourceMessage;
+
+  return hasUserMediaFiles(mediaMessage) || createToolResultImageItems(mediaMessage).length > 0;
+};
 
 export const inferMediaTypeFromUrl = (url: string): MediaFileItem['type'] => {
   if (/^data:audio\//i.test(url)) return 'audio';

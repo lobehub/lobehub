@@ -1,8 +1,20 @@
-import { constants } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { constants, createReadStream } from 'node:fs';
 import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { SkillDirectoryDeps } from '@lobechat/device-control';
+import type {
+  CopyAssetForPublishParams,
+  CopyAssetForPublishResult,
+  ExternalAssetForPublishParams,
+  ExternalAssetForPublishResult,
+  SkillDirectoryDeps,
+} from '@lobechat/device-control';
+import {
+  defaultGetProjectFileIndex,
+  defaultListProjectDirectory,
+  defaultSearchProjectFiles,
+} from '@lobechat/device-control/project-file-index';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -12,6 +24,7 @@ import {
   type GlobFilesResult,
   type GrepContentParams,
   type GrepContentResult,
+  type HashLocalFileParams,
   type ListLocalFileParams,
   type LocalFilePreviewResult,
   type LocalFilePreviewUrlParams,
@@ -28,7 +41,8 @@ import {
   type PickFileResult,
   type PrepareSkillDirectoryParams,
   type PrepareSkillDirectoryResult,
-  type ProjectFileIndexEntry,
+  type ProjectDirectoryListParams,
+  type ProjectDirectoryListResult,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
   type ProjectFileSearchParams,
@@ -40,6 +54,9 @@ import {
   type ShowOpenDialogResult,
   type ShowSaveDialogParams,
   type ShowSaveDialogResult,
+  type TrashLocalFilesParams,
+  type TrashLocalFilesResult,
+  type TrashLocalFilesResultItem,
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import {
@@ -68,20 +85,20 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:LocalFileCtr');
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
-const PROJECT_FILE_GLOB_LIMIT = 5000;
 
 /**
  * Image extensions `readFile` uploads to file storage instead of refusing as
- * binary. The agent then sees the image (vision) via an `image_url` part,
+ * binary. The runtime can then route the image to downstream media analysis
  * rather than hitting "Unsupported binary file".
  *
- * Limited to the formats vision providers accept (Anthropic/OpenAI:
- * png/jpeg/gif/webp) — anything else would be silently dropped by the
- * model-runtime builders, which is worse than the binary refusal. SVG is
- * intentionally absent: it's text, and reading the source is more useful to
- * the model than a rasterization we can't produce here.
+ * AVIF is included for Analyze Media, whose request-boundary normalization
+ * converts unsupported image formats for its fallback vision model. This does
+ * not imply native AVIF support across providers. SVG is intentionally absent:
+ * it's text, and reading the source is more useful to the model than a
+ * rasterization we can't produce here.
  */
 const LOCAL_IMAGE_EXT_TO_MIME: Record<string, string> = {
+  avif: 'image/avif',
   gif: 'image/gif',
   jpeg: 'image/jpeg',
   jpg: 'image/jpeg',
@@ -128,8 +145,6 @@ const resolveNearestExistingRealPath = async (targetPath: string): Promise<strin
     }
   }
 };
-
-const toPosixRelativePath = (filePath: string) => filePath.split(path.sep).join('/');
 
 const normalizeContentType = (contentType: string): string =>
   contentType.split(';')[0].trim().toLowerCase();
@@ -213,50 +228,6 @@ const serializePreviewFile = ({
   return { contentType: normalizedContentType, type: 'binary' };
 };
 
-const createProjectFileEntry = (
-  root: string,
-  absolutePath: string,
-  isDirectory: boolean,
-  gitIgnored?: boolean,
-): ProjectFileIndexEntry => {
-  const relativePath = toPosixRelativePath(path.relative(root, absolutePath));
-
-  return {
-    ...(gitIgnored ? { gitIgnored: true } : {}),
-    isDirectory,
-    name: path.basename(absolutePath),
-    path: absolutePath,
-    relativePath: isDirectory ? `${relativePath}/` : relativePath,
-  };
-};
-
-const collectProjectDirectories = (files: string[], root: string): ProjectFileIndexEntry[] => {
-  const directories = new Set<string>();
-
-  for (const filePath of files) {
-    let current = path.dirname(filePath);
-    while (current && current !== root && current.startsWith(`${root}${path.sep}`)) {
-      if (directories.has(current)) break;
-      directories.add(current);
-      current = path.dirname(current);
-    }
-  }
-
-  return [...directories].map((directory) => createProjectFileEntry(root, directory, true));
-};
-
-const createDetectedProjectFileEntry = async (
-  root: string,
-  absolutePath: string,
-): Promise<ProjectFileIndexEntry> => {
-  try {
-    const stats = await stat(absolutePath);
-    return createProjectFileEntry(root, absolutePath, stats.isDirectory());
-  } catch {
-    return createProjectFileEntry(root, absolutePath, false);
-  }
-};
-
 const resolveSafePathRealPrefixes = async (): Promise<string[]> => {
   const prefixes = new Set<string>(SAFE_PATH_PREFIXES);
 
@@ -333,19 +304,18 @@ export default class LocalFileCtr extends ControllerModule {
     success: boolean;
   }> {
     const resolvedTarget = expandTilde(targetPath) ?? targetPath;
-    const folderPath = isDirectory ? resolvedTarget : path.dirname(resolvedTarget);
-    logger.debug('Attempting to open folder:', {
-      folderPath,
-      isDirectory,
-      targetPath: resolvedTarget,
-    });
+    logger.debug('Attempting to open folder:', { isDirectory, targetPath: resolvedTarget });
 
     try {
-      await shell.openPath(folderPath);
-      logger.debug('Folder opened successfully:', { folderPath });
+      if (isDirectory) {
+        await shell.openPath(resolvedTarget);
+      } else {
+        shell.showItemInFolder(resolvedTarget);
+      }
+      logger.debug('Folder opened successfully:', { targetPath: resolvedTarget });
       return { success: true };
     } catch (error) {
-      logger.error(`Failed to open folder ${folderPath}:`, error);
+      logger.error(`Failed to open folder for ${resolvedTarget}:`, error);
       return { error: (error as Error).message, success: false };
     }
   }
@@ -437,6 +407,13 @@ export default class LocalFileCtr extends ControllerModule {
 
     logger.debug('Batch file reading completed', { count: results.length });
     return results;
+  }
+
+  @IpcMethod()
+  async hashLocalFile({ path: filePath }: HashLocalFileParams): Promise<string> {
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(filePath)) hash.update(chunk);
+    return hash.digest('hex');
   }
 
   @IpcMethod()
@@ -595,6 +572,70 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async getExternalAssetForPublishUrl({
+    path: filePath,
+    workingDirectory,
+  }: ExternalAssetForPublishParams): Promise<LocalFilePreviewUrlResult> {
+    try {
+      const url = await this.app.localFileProtocolManager.createPreviewUrl({
+        allowExternalFile: true,
+        filePath,
+        persistExternalApproval: false,
+        workspaceRoot: workingDirectory,
+      });
+      return url
+        ? { success: true, url }
+        : { error: 'Failed to approve external publish asset', success: false };
+    } catch (error) {
+      logger.error('Failed to create external publish asset URL:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  async readExternalAssetForPublish({
+    path: filePath,
+    workingDirectory,
+  }: ExternalAssetForPublishParams): Promise<ExternalAssetForPublishResult> {
+    try {
+      const asset = await this.app.localFileProtocolManager.readExternalFileForPublish({
+        filePath,
+        workspaceRoot: workingDirectory,
+      });
+      if (!asset) return { error: 'Failed to approve external publish asset', success: false };
+
+      return {
+        base64: asset.buffer.toString('base64'),
+        contentType: asset.contentType,
+        success: true,
+      };
+    } catch (error) {
+      logger.error('Failed to read external publish asset:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
+  async copyAssetForPublish({
+    from,
+    to,
+    workingDirectory,
+  }: CopyAssetForPublishParams): Promise<CopyAssetForPublishResult> {
+    try {
+      const copied = await this.app.localFileProtocolManager.copyExternalFileForPublish({
+        filePath: from,
+        targetPath: to,
+        workspaceRoot: workingDirectory,
+      });
+      return copied
+        ? { success: true }
+        : { error: 'Failed to copy publish asset into the workspace', success: false };
+    } catch (error) {
+      logger.error('Failed to copy publish asset:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
   async getLocalFilePreview({
     accept,
     allowExternalFile,
@@ -677,166 +718,24 @@ export default class LocalFileCtr extends ControllerModule {
 
   @IpcMethod()
   async getProjectFileIndex(params: ProjectFileIndexParams = {}): Promise<ProjectFileIndexResult> {
-    const { execa } = await import('execa');
-    const requestedScope = params.scope || process.cwd();
     const startedAt = Date.now();
+    const result = await defaultGetProjectFileIndex(params);
 
-    try {
-      const rootResult = await execa(
-        'git',
-        ['-C', requestedScope, 'rev-parse', '--show-toplevel'],
-        {
-          reject: false,
-          timeout: 5000,
-        },
-      );
-      const root = rootResult.exitCode === 0 ? rootResult.stdout.trim() : requestedScope;
-
-      if (rootResult.exitCode === 0) {
-        const [trackedResult, untrackedResult, ignoredResult] = await Promise.all([
-          execa(
-            'git',
-            ['-C', root, '-c', 'core.quotepath=false', 'ls-files', '--recurse-submodules'],
-            {
-              reject: false,
-              timeout: 10_000,
-            },
-          ),
-          execa(
-            'git',
-            [
-              '-C',
-              root,
-              '-c',
-              'core.quotepath=false',
-              'ls-files',
-              '--others',
-              '--exclude-standard',
-            ],
-            { reject: false, timeout: 10_000 },
-          ),
-          execa(
-            'git',
-            [
-              '-C',
-              root,
-              '-c',
-              'core.quotepath=false',
-              'ls-files',
-              '--others',
-              '--ignored',
-              '--exclude-standard',
-              '--directory',
-            ],
-            { reject: false, timeout: 10_000 },
-          ),
-        ]);
-
-        if (trackedResult.exitCode !== 0) {
-          throw new Error(trackedResult.stderr || 'git ls-files failed');
-        }
-
-        const files = [
-          ...trackedResult.stdout.split('\n'),
-          ...(untrackedResult.exitCode === 0 ? untrackedResult.stdout.split('\n') : []),
-        ]
-          .map((item) => item.trim())
-          .filter(Boolean)
-          .map((relativePath) => path.resolve(root, relativePath));
-
-        const ignoredEntries =
-          ignoredResult.exitCode === 0
-            ? ignoredResult.stdout
-                .split('\n')
-                .map((item) => item.trim())
-                .filter(Boolean)
-                .map((relativePath) => {
-                  const isDirectory = relativePath.endsWith('/');
-                  const normalizedPath = isDirectory ? relativePath.slice(0, -1) : relativePath;
-                  return createProjectFileEntry(
-                    root,
-                    path.resolve(root, normalizedPath),
-                    isDirectory,
-                    true,
-                  );
-                })
-            : [];
-
-        const seen = new Set<string>();
-        const fileEntries = files
-          .filter((filePath) => {
-            if (seen.has(filePath)) return false;
-            seen.add(filePath);
-            return true;
-          })
-          .map((filePath) => createProjectFileEntry(root, filePath, false));
-
-        const uniqueIgnoredEntries = ignoredEntries.filter((entry) => {
-          if (seen.has(entry.path)) return false;
-          seen.add(entry.path);
-          return true;
-        });
-        const indexedPaths = [...fileEntries, ...uniqueIgnoredEntries].map((entry) => entry.path);
-        const entries = [
-          ...collectProjectDirectories(indexedPaths, root),
-          ...fileEntries,
-          ...uniqueIgnoredEntries,
-        ];
-        logger.debug('Project file index built from git', {
-          duration: Date.now() - startedAt,
-          entries: entries.length,
-          files: fileEntries.length,
-          ignored: uniqueIgnoredEntries.length,
-          requestedScope,
-          root,
-        });
-        await this.approveProjectRootForPreview(root);
-
-        return {
-          entries,
-          indexedAt: new Date().toISOString(),
-          root,
-          source: 'git',
-        };
-      }
-    } catch (error) {
-      logger.debug('Git project file index failed, falling back to glob', {
-        error,
-        requestedScope,
-      });
-    }
-
-    const fallback = await this.searchService.glob({
-      limit: PROJECT_FILE_GLOB_LIMIT,
-      pattern: '**/*',
-      scope: requestedScope,
-    });
-    const files = fallback.files.map((filePath) => path.resolve(filePath));
-    const entries = await Promise.all(
-      files.map((filePath) => createDetectedProjectFileEntry(requestedScope, filePath)),
-    );
-
-    logger.debug('Project file index built from glob', {
+    logger.debug('Project file index completed', {
       duration: Date.now() - startedAt,
-      entries: entries.length,
-      engine: fallback.engine,
-      requestedScope,
+      entries: result.entries.length,
+      requestedScope: params.scope,
+      root: result.root,
+      source: result.source,
     });
-    await this.approveProjectRootForPreview(requestedScope);
+    await this.approveProjectRootForPreview(result.root);
 
-    return {
-      entries,
-      indexedAt: new Date().toISOString(),
-      root: requestedScope,
-      source: 'glob',
-    };
+    return result;
   }
 
   @IpcMethod()
   async searchProjectFiles(params: ProjectFileSearchParams): Promise<ProjectFileSearchResult> {
     const startedAt = Date.now();
-    const { defaultSearchProjectFiles } =
-      await import('@lobechat/device-control/project-file-index');
     const result = await defaultSearchProjectFiles(params);
 
     logger.debug('Project file search completed', {
@@ -850,6 +749,51 @@ export default class LocalFileCtr extends ControllerModule {
     await this.approveProjectRootForPreview(result.root);
 
     return result;
+  }
+
+  /**
+   * Children of one directory inside an already-indexed project. The file tree
+   * calls this when the user expands a directory the index collapsed, so an
+   * ignored subtree costs a read only when someone opens it.
+   */
+  @IpcMethod()
+  async listProjectDirectory(
+    params: ProjectDirectoryListParams,
+  ): Promise<ProjectDirectoryListResult> {
+    logger.debug('Listing project directory', {
+      relativePath: params.relativePath,
+      root: params.root,
+    });
+
+    return defaultListProjectDirectory(params);
+  }
+
+  /**
+   * Move files/folders to the OS trash. Recoverable by design — the file tree
+   * never hard-deletes, so a misclick can be undone from Finder / Explorer.
+   */
+  @IpcMethod()
+  async trashLocalFiles({ paths }: TrashLocalFilesParams): Promise<TrashLocalFilesResult> {
+    if (paths.length === 0) return { items: [], success: false };
+
+    logger.debug('Trashing local files', { count: paths.length });
+
+    // Every path is attempted and reported. Stopping at the first failure would
+    // leave the caller unable to tell which earlier paths are already in the
+    // trash, so it could neither refresh its tree nor safely retry the batch.
+    const items: TrashLocalFilesResultItem[] = [];
+    for (const rawPath of paths) {
+      const targetPath = expandTilde(rawPath) ?? rawPath;
+      try {
+        await shell.trashItem(targetPath);
+        items.push({ path: rawPath, success: true });
+      } catch (error) {
+        logger.error('Failed to trash local file:', error);
+        items.push({ error: (error as Error).message, path: rawPath, success: false });
+      }
+    }
+
+    return { items, success: items.every((item) => item.success) };
   }
 
   /**

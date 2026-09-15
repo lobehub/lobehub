@@ -17,9 +17,9 @@ const mocks = vi.hoisted(() => ({
         | undefined
       >
     >(),
-    runWithDocumentLock: vi.fn(<T>(_id: string, fn: (lockOwnerId?: string) => Promise<T>) =>
-      fn('server:lock-owner'),
-    ),
+    runWithDocumentLock: vi.fn(function <T>(_id: string, fn: (lockOwnerId?: string) => Promise<T>) {
+      return fn('server:lock-owner');
+    }),
     updateDocument: vi.fn<(id: string, params: Record<string, unknown>) => Promise<unknown>>(),
   },
   receiptService: {
@@ -31,7 +31,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/document', () => ({
-  DocumentService: vi.fn(() => mocks.documentService),
+  DocumentService: vi.fn(function () {
+    return mocks.documentService;
+  }),
 }));
 
 vi.mock('@/server/services/agentSignal/services/receiptService', () => ({
@@ -50,9 +52,12 @@ const baseInput = {
 describe('rollbackAgentSignalReceipt', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.documentService.runWithDocumentLock.mockImplementation(
-      <T>(_id: string, fn: (lockOwnerId?: string) => Promise<T>) => fn('server:lock-owner'),
-    );
+    mocks.documentService.runWithDocumentLock.mockImplementation(function <T>(
+      _id: string,
+      fn: (lockOwnerId?: string) => Promise<T>,
+    ) {
+      return fn('server:lock-owner');
+    });
     mocks.receiptService.getAgentSignalReceipt.mockResolvedValue({
       id: 'receipt-1',
       metadata: {

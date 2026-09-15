@@ -14,6 +14,7 @@ const Header = memo(() => {
   return (
     <>
       <SideBarHeaderLayout
+        right={<ResourceModeToggle />}
         breadcrumb={[
           {
             href: '/resource',
@@ -21,7 +22,6 @@ const Header = memo(() => {
           },
         ]}
       />
-      <ResourceModeToggle />
       <CategoryMenu />
     </>
   );

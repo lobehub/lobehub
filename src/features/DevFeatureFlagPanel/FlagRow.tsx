@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { Segmented, Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { snakeCase } from 'es-toolkit/compat';
 import { memo, useMemo } from 'react';
 
@@ -32,12 +32,10 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    margin-block: 2px;
-    margin-inline: 4px;
     padding-block: 6px;
-    padding-inline: 8px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-inline-start: 2px solid transparent;
-    border-radius: 6px;
 
     transition: background 120ms ease;
 
@@ -89,7 +87,7 @@ const FlagRow = memo<FlagRowProps>(({ flagKey }) => {
   };
 
   return (
-    <div className={`${styles.row} ${isOverridden ? styles.rowOverridden : ''}`}>
+    <div className={cx(styles.row, isOverridden && styles.rowOverridden)}>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text ellipsis className={styles.name}>
           {snakeCase(flagKey as string)}

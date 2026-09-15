@@ -5,12 +5,14 @@ import {
   verifySurfaces,
   verifyVisibilities,
 } from '@lobechat/const/verify';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type {
   VerifyCheckItem,
   VerifyCheckResultMetadata,
   VerifyRunContext,
   VerifyRunScenario,
 } from '@lobechat/types';
+import { verifyCheckDefinitionSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -20,6 +22,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { DocumentModel } from '@/database/models/document';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
@@ -37,10 +40,14 @@ import {
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
+import { FileService } from '@/server/services/file';
+import { GoalCriteriaGeneratorService } from '@/server/services/goal/criteriaGenerator';
 import {
   AcceptanceService,
   createEvidenceFileResolver,
   finalizeVerifyRun,
+  purgeVerifyRun,
   VerifyExecutorService,
   VerifyFeedbackService,
   VerifyPlanGeneratorService,
@@ -107,6 +114,7 @@ const rubricConfigSchema = z.object({
 });
 
 const checkItemSchema = z.object({
+  definition: verifyCheckDefinitionSchema.optional(),
   category: z.string().optional(),
   description: z.string().optional(),
   id: z.string(),
@@ -267,10 +275,16 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       criterionModel: new VerifyCriterionModel(ctx.serverDB, ctx.userId, workspaceId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, workspaceId),
       evidenceModel: new VerifyEvidenceModel(ctx.serverDB, ctx.userId, workspaceId),
       executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId, workspaceId),
       tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId, workspaceId),
       feedbackService: new VerifyFeedbackService(ctx.serverDB, ctx.userId, workspaceId),
+      goalCriteriaGenerator: new GoalCriteriaGeneratorService(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+      ),
       operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId),
       planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId, workspaceId),
       reportModel: new VerifyReportModel(ctx.serverDB, ctx.userId, workspaceId),
@@ -328,6 +342,9 @@ export const verifyRouter = router({
   createCriterion: verifyWriteProcedure
     .input(
       z.object({
+        definition: verifyCheckDefinitionSchema.optional(),
+        tags: z.array(z.string()).max(50).optional(),
+        description: z.string().optional(),
         documentId: z.string().optional(),
         onFail: onFailSchema.optional(),
         required: z.boolean().optional(),
@@ -352,13 +369,64 @@ export const verifyRouter = router({
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
 
-  listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
+  /**
+   * Resolve a specific criteria id list (e.g. the ones bound to a goal), in
+   * input order. Each row carries `instruction` resolved from its linked
+   * document — the judge rule must be inspectable and editable where the
+   * criteria are shown, not an invisible value edits would silently replace.
+   */
+  getCriteria: verifyProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.ids.length === 0) return [];
+      const rows = await ctx.criterionModel.findByIds(input.ids);
+      const documentIds = [
+        ...new Set(rows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+      ];
+      const documents = await Promise.all(documentIds.map((id) => ctx.documentModel.findById(id)));
+      const contentByDocId = new Map(
+        documents.flatMap((doc) => (doc ? [[doc.id, doc.content ?? undefined] as const] : [])),
+      );
+      const byId = new Map(
+        rows.map((row) => [
+          row.id,
+          {
+            ...row,
+            instruction: row.documentId ? contentByDocId.get(row.documentId) : undefined,
+          },
+        ]),
+      );
+      return input.ids.map((id) => byId.get(id)).filter(Boolean);
+    }),
+
+  listCriteria: verifyProcedure
+    .input(
+      z
+        .object({
+          search: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          includeArchived: z.boolean().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => ctx.criterionModel.query(input)),
+
+  getCriterionResults: verifyProcedure
+    .input(z.object({ id: z.string().uuid(), limit: z.number().int().min(1).max(100).optional() }))
+    .query(async ({ ctx, input }) => {
+      if (!(await ctx.criterionModel.findById(input.id)))
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Check asset not found' });
+      return ctx.resultModel.listByCriterion(input.id, input.limit);
+    }),
 
   updateCriterion: verifyWriteProcedure
     .input(
       z.object({
         id: z.string(),
         value: z.object({
+          definition: verifyCheckDefinitionSchema.nullish(),
+          tags: z.array(z.string()).max(50).optional(),
+          archivedAt: z.coerce.date().nullish(),
           description: z.string().nullish(),
           documentId: z.string().nullish(),
           onFail: onFailSchema.optional(),
@@ -477,7 +545,7 @@ export const verifyRouter = router({
 
   /**
    * Config-time: turn a one-sentence acceptance requirement into proposed
-   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.VerifyPlanGen),
+   * criteria for the user to review/edit. Traced (TRACING_SCENARIOS.GoalCriteriaGen),
    * returns drafts only — nothing persisted, no operation needed.
    */
   generateCriteria: verifyWriteProcedure
@@ -489,7 +557,82 @@ export const verifyRouter = router({
         modelConfig: modelConfigSchema,
       }),
     )
-    .mutation(async ({ ctx, input }) => ctx.planGenerator.generateCriteria(input)),
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.planGenerator.generateCriteria(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          // Runtime errors are plain payloads, so tRPC normalizes them into an Error cause.
+          // Mark the normalized cause that the shared handler actually receives.
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
+  /** Draft the standing acceptance contract for the create-goal flow. */
+  generateGoalCriteria: verifyWriteProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.goalCriteriaGenerator.generate(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
+  /** Draft the generated goal title, instruction, and standing acceptance contract. */
+  generateGoalPlan: verifyWriteProcedure
+    .input(
+      z.object({
+        context: z.string().optional(),
+        goal: z.string().min(1),
+        maxCriteria: z.number().int().min(1).max(8).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.goalCriteriaGenerator.generatePlan(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
 
   /** Persist (user-edited) drafts as standalone criteria; returns their ids in order. */
   createCriteria: verifyWriteProcedure
@@ -559,6 +702,9 @@ export const verifyRouter = router({
       ),
       identifier: skill.identifier,
       name: skill.name,
+      // The skill's own declared version, so an installer can compare a copy
+      // already on disk against the latest bundle.
+      version: skill.version,
     };
   }),
 
@@ -679,14 +825,21 @@ export const verifyRouter = router({
     .query(async ({ ctx, input }) => ctx.runModel.findById(input.verifyRunId)),
 
   // Delete a whole verification session: the run row cascades to its check
-  // results (→ their evidence) and its report via the schema FKs, so one delete
-  // tears down the published bundle. Ownership-scoped: resolveVerifyRun 404s a
-  // run that isn't the caller's before we touch it.
+  // results (→ their evidence) and its report via the schema FKs, and the
+  // evidence files only this run referenced are purged from storage.
+  // Ownership-scoped: resolveVerifyRun 404s a run that isn't the caller's
+  // before we touch it.
   deleteRun: verifyWriteProcedure.input(verifyRunIdInputSchema).mutation(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
     assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
 
-    await ctx.runModel.delete(run.id);
+    await purgeVerifyRun(
+      ctx.serverDB,
+      new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+      run.userId,
+      run.workspaceId ?? undefined,
+      run.id,
+    );
     return { id: run.id, success: true };
   }),
 

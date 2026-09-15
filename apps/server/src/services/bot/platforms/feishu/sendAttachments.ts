@@ -1,6 +1,7 @@
 import type { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import debug from 'debug';
 
+import { loadAttachmentBuffer } from '../loadAttachmentBuffer';
 import type { BotMessageAttachment } from '../types';
 
 const log = debug('bot-platform:feishu:send-attachments');
@@ -40,32 +41,6 @@ const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
     }
   }
   return `attachment-${index + 1}`;
-};
-
-const loadAttachmentBuffer = async (
-  attachment: BotMessageAttachment,
-): Promise<Buffer | undefined> => {
-  if (attachment.data) {
-    try {
-      return Buffer.from(attachment.data, 'base64');
-    } catch (error) {
-      log('loadAttachmentBuffer: failed to decode base64: %O', error);
-    }
-  }
-  if (attachment.fetchUrl) {
-    try {
-      const response = await fetch(attachment.fetchUrl, {
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (response.ok) {
-        return Buffer.from(await response.arrayBuffer());
-      }
-      log('loadAttachmentBuffer: HTTP %d for %s', response.status, attachment.fetchUrl);
-    } catch (error) {
-      log('loadAttachmentBuffer: fetch failed for %s: %O', attachment.fetchUrl, error);
-    }
-  }
-  return undefined;
 };
 
 /**

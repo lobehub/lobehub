@@ -4,19 +4,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ToolExecutionContext } from '../../types';
 
 // Mock database models
-const mockTopicModelFindById = vi.fn();
+const mockTopicModelFindOwnTopicById = vi.fn();
 const mockMessageModelQuery = vi.fn();
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    findById: (...args: any[]) => mockTopicModelFindById(...args),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      findOwnTopicById: (...args: any[]) => mockTopicModelFindOwnTopicById(...args),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    query: (...args: any[]) => mockMessageModelQuery(...args),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      query: (...args: any[]) => mockMessageModelQuery(...args),
+    };
+  }),
 }));
 
 // Import after mock setup
@@ -74,7 +78,7 @@ describe('topicReferenceRuntime', () => {
         workspaceId: 'workspace-1',
       });
 
-      mockTopicModelFindById.mockResolvedValue({ id: 'topic-1', title: 'Topic' });
+      mockTopicModelFindOwnTopicById.mockResolvedValue({ id: 'topic-1', title: 'Topic' });
       mockMessageModelQuery.mockResolvedValue([]);
 
       await runtime.getTopicContext({ topicId: 'topic-1' });
@@ -112,7 +116,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should return error when topic is not found', async () => {
-      mockTopicModelFindById.mockResolvedValue(null);
+      mockTopicModelFindOwnTopicById.mockResolvedValue(null);
 
       const result = await runtime.getTopicContext({ topicId: 'topic-123' });
 
@@ -120,11 +124,11 @@ describe('topicReferenceRuntime', () => {
         content: 'Topic not found: topic-123',
         success: false,
       });
-      expect(mockTopicModelFindById).toHaveBeenCalledWith('topic-123');
+      expect(mockTopicModelFindOwnTopicById).toHaveBeenCalledWith('topic-123');
     });
 
     it('should return historySummary when topic has one', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         historySummary: 'This is a summary of the conversation.',
         id: 'topic-123',
         title: 'My Topic',
@@ -141,7 +145,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should use "Untitled" when topic has no title and has historySummary', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         historySummary: 'Summary content',
         id: 'topic-123',
         title: null,
@@ -154,7 +158,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should fallback to messages when topic has no historySummary', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         agentId: 'agent-1',
         groupId: 'group-1',
         id: 'topic-123',
@@ -182,7 +186,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should pass undefined agentId/groupId when topic has none', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         id: 'topic-123',
         title: 'Simple Topic',
       });
@@ -199,7 +203,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should limit messages to last 30', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         id: 'topic-123',
         title: 'Long Chat',
       });
@@ -222,7 +226,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should skip messages with empty content', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         id: 'topic-123',
         title: 'Topic',
       });
@@ -245,7 +249,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should handle non-user and non-assistant roles', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         id: 'topic-123',
         title: 'Topic',
       });
@@ -264,7 +268,7 @@ describe('topicReferenceRuntime', () => {
 
     it('should return error when topic model throws', async () => {
       const error = new Error('Database connection failed');
-      mockTopicModelFindById.mockRejectedValue(error);
+      mockTopicModelFindOwnTopicById.mockRejectedValue(error);
 
       const result = await runtime.getTopicContext({ topicId: 'topic-123' });
 
@@ -274,7 +278,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should return error when message model throws', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         id: 'topic-123',
         title: 'Topic',
       });
@@ -290,7 +294,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should handle non-Error exceptions', async () => {
-      mockTopicModelFindById.mockRejectedValue('string error');
+      mockTopicModelFindOwnTopicById.mockRejectedValue('string error');
 
       const result = await runtime.getTopicContext({ topicId: 'topic-123' });
 
@@ -299,7 +303,7 @@ describe('topicReferenceRuntime', () => {
     });
 
     it('should handle null message content', async () => {
-      mockTopicModelFindById.mockResolvedValue({
+      mockTopicModelFindOwnTopicById.mockResolvedValue({
         id: 'topic-123',
         title: 'Topic',
       });

@@ -1,6 +1,6 @@
+import type { AiFullModelCard } from 'model-bank';
 import type { PartialDeep } from 'type-fest';
 
-import type { ChatModelCard } from './llm';
 import type {
   GlobalLLMProviderKey,
   UserDefaultAgent,
@@ -20,6 +20,11 @@ import type {
 export type IFeatureFlagsState = {
   enableAgentOnboarding: boolean | undefined;
   enableAgentSelfIteration: boolean | undefined;
+  /**
+   * Agent Share capability: may this user publish an Agent as a shared link AND
+   * open/chat on an already-live shared agent. One allowlist gates both sides.
+   */
+  enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   enableDevDock: boolean | undefined;
@@ -28,6 +33,7 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;
   hideGitHub: boolean | undefined;
@@ -79,7 +85,7 @@ export interface ServerModelProviderConfig {
   /**
    * the model lists defined in server
    */
-  serverModelLists?: ChatModelCard[];
+  serverModelLists?: AiFullModelCard[];
 }
 
 export type ServerLanguageModel = Partial<Record<GlobalLLMProviderKey, ServerModelProviderConfig>>;

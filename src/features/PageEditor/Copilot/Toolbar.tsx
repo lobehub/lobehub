@@ -1,4 +1,5 @@
-import { ActionIcon, Flexbox, Popover, Text } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,26 +7,33 @@ import { useTranslation } from 'react-i18next';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
 import NavHeader from '@/features/NavHeader';
+import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { usePageAgentPanelControl, usePageAgentPanelOverride } from '../RightPanel/OverrideContext';
 import TopicItem from './TopicSelector/TopicItem';
 
-const CopilotToolbar = memo(() => {
+interface CopilotToolbarProps {
+  onTopicChange?: (topicId: string | null) => void;
+  topicId?: string | null;
+}
+
+const CopilotToolbar = memo<CopilotToolbarProps>(({ onTopicChange, topicId }) => {
   const { t } = useTranslation('topic');
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
   const agentId = useConversationStore(conversationSelectors.agentId);
 
-  useChatStore((s) => s.useFetchTopics)(true, { agentId });
+  useFetchAgentChatTopics(agentId);
 
-  const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
+  const [globalActiveTopicId, switchTopic, topics] = useChatStore((s) => [
     s.activeTopicId,
     s.switchTopic,
-    topicSelectors.currentTopics(s),
+    topicSelectors.getTopicsByAgentId(agentId)(s),
   ]);
 
-  const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
+  const activeTopicId = topicId === undefined ? globalActiveTopicId : topicId;
+  const currentTopic = topics?.find((topic) => topic.id === activeTopicId);
 
   const { toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const hasOverride = !!usePageAgentPanelOverride();
@@ -55,7 +63,9 @@ const CopilotToolbar = memo(() => {
             icon={PlusIcon}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('actions.addNewTopic')}
-            onClick={() => switchTopic(null, { scope: 'page' })}
+            onClick={() =>
+              onTopicChange ? onTopicChange(null) : switchTopic(null, { scope: 'page' })
+            }
           />
           {!hideHistory && (
             <Popover
@@ -82,7 +92,7 @@ const CopilotToolbar = memo(() => {
                       topicId={topic.id}
                       topicTitle={topic.title}
                       onClose={() => setTopicPopoverOpen(false)}
-                      onTopicChange={(id) => switchTopic(id)}
+                      onTopicChange={(id) => (onTopicChange ? onTopicChange(id) : switchTopic(id))}
                     />
                   ))}
                 </Flexbox>

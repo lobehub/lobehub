@@ -1,6 +1,6 @@
 import { type FormItemProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox, Form, Icon, Popover } from '@lobehub/ui';
-import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Form, Icon, Popover } from '@lobehub/ui';
+import { ActionIcon, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowDownWideNarrow,
@@ -13,13 +13,23 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { useGlobalStore } from '@/store/global';
+import type { TaskViewMode } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import type { TaskGroupBy, TaskListViewOptions, TaskOrderBy } from './listViewOptions';
 
+/** A display control the active collection fixes, so it has nothing to change. */
+export type TaskListPinnedOption = 'ordering' | 'showSubTasks';
+
 interface TasksHeaderProps {
   options: TaskListViewOptions;
+  /**
+   * Controls the active collection overrides (see
+   * `PAGINATED_COLLECTION_PINNED_OPTIONS`). They are left out of the panel
+   * rather than rendered as switches that silently do nothing.
+   */
+  pinnedOptions?: readonly TaskListPinnedOption[];
   setOptions: (updater: (prev: TaskListViewOptions) => TaskListViewOptions) => void;
 }
 
@@ -34,19 +44,25 @@ const styles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 
-const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
+const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOptions }) => {
   const [isViewConfigOpen, setIsViewConfigOpen] = useState(false);
+  const isPinned = (option: TaskListPinnedOption) => !!pinnedOptions?.includes(option);
   const { t } = useTranslation('chat');
-  const viewMode = useTaskStore(taskListSelectors.viewMode);
-  const setViewMode = useTaskStore((s) => s.setViewMode);
+  const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const groupingOptions = useMemo<Array<{ label: string; value: TaskGroupBy }>>(
     () => [
       { label: t('taskList.groupBy.none'), value: 'none' },
       { label: t('taskList.groupBy.status'), value: 'status' },
       { label: t('taskList.groupBy.assignee'), value: 'assignee' },
+      { label: t('taskList.groupBy.member'), value: 'member' },
       { label: t('taskList.groupBy.priority'), value: 'priority' },
     ],
     [t],
+  );
+  const boardGroupingOptions = useMemo(
+    () => groupingOptions.filter((item) => item.value !== 'none'),
+    [groupingOptions],
   );
   const orderOptions = useMemo<Array<{ label: string; value: TaskOrderBy }>>(
     () => [
@@ -65,26 +81,45 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
     [groupingOptions, options.groupBy],
   );
   const isSubGroupingEnabled = options.groupBy !== 'none';
+  const groupingSelectOptions = viewMode === 'kanban' ? boardGroupingOptions : groupingOptions;
+  const groupingValue =
+    viewMode === 'kanban' && options.groupBy === 'none' ? 'status' : options.groupBy;
+
+  const groupingFormItem = {
+    children: (
+      <Select
+        options={groupingSelectOptions}
+        size={'small'}
+        style={{ width: 150 }}
+        value={groupingValue}
+        onChange={(value: TaskGroupBy) => {
+          setOptions((prev) => ({
+            ...prev,
+            groupBy: value,
+            subGroupBy: prev.subGroupBy === value ? 'none' : prev.subGroupBy,
+          }));
+        }}
+      />
+    ),
+    label: viewMode === 'kanban' ? t('taskList.form.columns') : t('taskList.form.grouping'),
+  } satisfies FormItemProps;
+
+  const showCompletedFormItem = {
+    children: (
+      <Switch
+        checked={!options.hideCompleted}
+        size={'small'}
+        onChange={(checked) => {
+          setOptions((prev) => ({ ...prev, hideCompleted: !checked }));
+        }}
+      />
+    ),
+    minWidth: undefined,
+    label: t('taskList.form.showCompleted'),
+  } satisfies FormItemProps;
 
   const formItems: FormItemProps[] = [
-    {
-      children: (
-        <Select
-          options={groupingOptions}
-          size={'small'}
-          style={{ width: 150 }}
-          value={options.groupBy}
-          onChange={(value: TaskGroupBy) => {
-            setOptions((prev) => ({
-              ...prev,
-              groupBy: value,
-              subGroupBy: prev.subGroupBy === value ? 'none' : prev.subGroupBy,
-            }));
-          }}
-        />
-      ),
-      label: t('taskList.form.grouping'),
-    },
+    groupingFormItem,
     ...(isSubGroupingEnabled
       ? [
           {
@@ -103,32 +138,36 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           } satisfies FormItemProps,
         ]
       : []),
-    {
-      children: (
-        <Flexbox horizontal align={'center'} gap={8}>
-          <ActionIcon
-            icon={options.orderDirection === 'asc' ? ArrowDownWideNarrow : ArrowUpNarrowWide}
-            size={'small'}
-            onClick={() => {
-              setOptions((prev) => ({
-                ...prev,
-                orderDirection: prev.orderDirection === 'asc' ? 'desc' : 'asc',
-              }));
-            }}
-          />
-          <Select
-            options={orderOptions}
-            size={'small'}
-            style={{ width: 112 }}
-            value={options.orderBy}
-            onChange={(value: TaskOrderBy) => {
-              setOptions((prev) => ({ ...prev, orderBy: value }));
-            }}
-          />
-        </Flexbox>
-      ),
-      label: t('taskList.form.ordering'),
-    },
+    ...(isPinned('ordering')
+      ? []
+      : [
+          {
+            children: (
+              <Flexbox horizontal align={'center'} gap={8}>
+                <ActionIcon
+                  icon={options.orderDirection === 'asc' ? ArrowDownWideNarrow : ArrowUpNarrowWide}
+                  size={'small'}
+                  onClick={() => {
+                    setOptions((prev) => ({
+                      ...prev,
+                      orderDirection: prev.orderDirection === 'asc' ? 'desc' : 'asc',
+                    }));
+                  }}
+                />
+                <Select
+                  options={orderOptions}
+                  size={'small'}
+                  style={{ width: 112 }}
+                  value={options.orderBy}
+                  onChange={(value: TaskOrderBy) => {
+                    setOptions((prev) => ({ ...prev, orderBy: value }));
+                  }}
+                />
+              </Flexbox>
+            ),
+            label: t('taskList.form.ordering'),
+          } satisfies FormItemProps,
+        ]),
     {
       children: (
         <Switch
@@ -142,20 +181,45 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
       minWidth: undefined,
       label: t('taskList.form.orderCompletedByRecency'),
     },
-    {
-      children: (
-        <Switch
-          checked={!options.hideCompleted}
-          size={'small'}
-          onChange={(checked) => {
-            setOptions((prev) => ({ ...prev, hideCompleted: !checked }));
-          }}
-        />
-      ),
-      minWidth: undefined,
-      label: t('taskList.form.showCompleted'),
-    },
+    showCompletedFormItem,
+    ...(isPinned('showSubTasks')
+      ? []
+      : [
+          {
+            children: (
+              <Switch
+                checked={options.showSubTasks}
+                size={'small'}
+                onChange={(checked) => {
+                  setOptions((prev) => ({ ...prev, showSubTasks: checked }));
+                }}
+              />
+            ),
+            minWidth: undefined,
+            label: t('taskList.form.showSubTasks'),
+          } satisfies FormItemProps,
+        ]),
+    // Only meaningful once sub-tasks are on the list — otherwise the toggle
+    // would sit there controlling nothing.
+    ...(options.showSubTasks || isPinned('showSubTasks')
+      ? [
+          {
+            children: (
+              <Switch
+                checked={options.nestedSubTasks}
+                size={'small'}
+                onChange={(checked) => {
+                  setOptions((prev) => ({ ...prev, nestedSubTasks: checked }));
+                }}
+              />
+            ),
+            minWidth: undefined,
+            label: t('taskList.form.nestedSubTasks'),
+          } satisfies FormItemProps,
+        ]
+      : []),
   ];
+  const boardFormItems = [groupingFormItem, showCompletedFormItem];
 
   const panelContent = (
     <Flexbox gap={12} width={280}>
@@ -173,20 +237,20 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, setOptions }) => {
           list: { display: 'flex', width: '100%' },
           tab: { flex: 1 },
         }}
-        onChange={(key) => setViewMode(key as 'kanban' | 'list')}
+        onChange={(key) =>
+          updateSystemStatus({ taskListViewMode: key as TaskViewMode }, 'updateTaskListViewMode')
+        }
       />
-      {viewMode === 'list' && (
-        <Form
-          className={styles.form}
-          items={formItems}
-          itemsType={'flat'}
-          size={'small'}
-          variant={'borderless'}
-          styles={{
-            item: { padding: 0 },
-          }}
-        />
-      )}
+      <Form
+        className={styles.form}
+        items={viewMode === 'kanban' ? boardFormItems : formItems}
+        itemsType={'flat'}
+        size={'small'}
+        variant={'borderless'}
+        styles={{
+          item: { padding: 0 },
+        }}
+      />
     </Flexbox>
   );
 

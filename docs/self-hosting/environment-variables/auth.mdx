@@ -25,6 +25,13 @@ LobeHub provides a complete authentication service capability when deployed. The
 - Default: `-`
 - Example: `Tfhi2t2pelSMEA8eaV61KaqPNEndFFdMIxDaJnS1CUI=`
 
+#### `AUTH_COOKIE_PREFIX`
+
+- Type: Optional
+- Description: Prefix applied to every Better Auth cookie name. Configure a unique value when multiple deployments can write cookies on the same parent domain. Changing this value invalidates existing sessions for this deployment unless they are migrated separately.
+- Default: `better-auth`
+- Example: `my-lobehub`
+
 #### `AUTH_EMAIL_VERIFICATION`
 
 - Type: Optional
@@ -38,6 +45,20 @@ LobeHub provides a complete authentication service capability when deployed. The
 - Description: Comma-separated list of enabled SSO providers. The order determines the display order of providers on the login page.
 - Default: `-`
 - Example: `google,github,microsoft,cognito`
+
+#### `AUTH_TRUSTED_ORIGINS`
+
+- Type: Optional
+- Description: Replaces Better Auth's automatically generated trusted-origin list with a comma-separated list. Use this only when you need full control and include every required web origin and mobile custom scheme. URL paths are reduced to their origin. Prefer exact origins instead of wildcards.
+- Default: Generated from `APP_URL`, Vercel deployment URLs, the mobile app scheme, the Expo development scheme, and the Apple origin when Apple SSO is enabled.
+- Example: `https://lobe.example.com,com.example.app://`
+
+#### `AUTH_ADDITIONAL_TRUSTED_ORIGINS`
+
+- Type: Optional
+- Description: Comma-separated list of origins to add to the resolved Better Auth trusted-origin list. Use this when an extra callback or redirect origin is required without replacing the application, Vercel, mobile, or provider defaults. URL paths are reduced to their origin, duplicate origins are removed, and custom schemes are preserved. Prefer exact origins instead of wildcards.
+- Default: `-`
+- Example: `https://gateway.example.com`
 
 #### `AUTH_ALLOWED_EMAILS`
 

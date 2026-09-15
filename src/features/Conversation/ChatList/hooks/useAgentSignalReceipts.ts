@@ -5,6 +5,8 @@ import useSWR from 'swr';
 import { agentSignalKeys } from '@/libs/swr/keys';
 import { agentSignalService } from '@/services/agentSignal';
 
+import { collectSteerChains } from '../../store/slices/data/steerChains';
+
 /** Poll cadence for the active conversation's Agent Signal receipt surface. */
 const AGENT_SIGNAL_RECEIPT_INITIAL_REFRESH_INTERVAL_MS = 3000;
 
@@ -139,13 +141,19 @@ const resolveDisplayedAnchorMessageId = (
   anchorMessageId: string,
   displayMessages: UIChatMessage[],
 ) => {
-  if (displayMessages.some((message) => message.id === anchorMessageId)) return anchorMessageId;
+  const { hostOf } = collectSteerChains(displayMessages);
 
-  return displayMessages.find(
+  if (displayMessages.some((message) => message.id === anchorMessageId)) {
+    return hostOf.get(anchorMessageId) ?? anchorMessageId;
+  }
+
+  const assistantGroupId = displayMessages.find(
     (message) =>
       message.role === 'assistantGroup' &&
       message.children?.some((block) => block.id === anchorMessageId),
   )?.id;
+
+  return assistantGroupId ? (hostOf.get(assistantGroupId) ?? assistantGroupId) : undefined;
 };
 
 const resolveEffectiveAnchorMessageId = (
@@ -161,7 +169,7 @@ const resolveEffectiveAnchorMessageId = (
     receipt.triggerMessageId,
     displayMessages,
   );
-  if (assistantReplyId) return assistantReplyId;
+  if (assistantReplyId) return resolveDisplayedAnchorMessageId(assistantReplyId, displayMessages);
 
   // Display fallback belongs here, not in the persisted receipt. A trigger-only
   // receipt tells us why the signal fired; the UI can attach it to the assistant

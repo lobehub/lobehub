@@ -1,3 +1,5 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type {
   OnboardingTaskRecommendationProviderGuide,
   OnboardingTaskRecommendationProviderId,
@@ -6,6 +8,7 @@ import type {
 import {
   chainOnboardingTaskRecommendation,
   ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA,
+  ONBOARDING_TASK_RECOMMENDATION_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
@@ -78,7 +81,14 @@ export class TaskRecommendationWriter {
         schema: ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA,
         thinking: { type: 'disabled' },
       },
-      { metadata: { trigger: RequestTrigger.Onboarding } },
+      {
+        metadata: { trigger: RequestTrigger.Onboarding },
+        tracing: {
+          promptVersion: ONBOARDING_TASK_RECOMMENDATION_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.OnboardingTaskRecommendation,
+          schemaName: ONBOARDING_TASK_RECOMMENDATION_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
     );
 
     return recommendationOutputSchema.parse(output).recommendations;

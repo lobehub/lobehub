@@ -2,6 +2,7 @@ import debug from 'debug';
 import type { Context } from 'hono';
 
 import { getMessengerRouter } from '@/server/services/messenger';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const log = debug('lobe-server:messenger:webhook-route');
 
@@ -26,5 +27,5 @@ export async function messengerWebhook(c: Context): Promise<Response> {
 
   const router = getMessengerRouter();
   const handler = router.getWebhookHandler(platform);
-  return handler(c.req.raw);
+  return handler(c.req.raw, { waitUntil: (task) => after(() => task) });
 }

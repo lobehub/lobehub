@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunner';
+import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
@@ -13,6 +14,10 @@ import {
 } from '@/database/models/agentTransferJob';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import {
+  ResourceTransferRequestModel,
+  TRANSFER_REQUEST_ALREADY_PENDING,
+} from '@/database/models/resourceTransferRequest';
 import { TOPIC_COMMENT_TRANSFER_HAS_FOREIGN_AUTHORS } from '@/database/models/topicComment';
 import { UserModel } from '@/database/models/user';
 import {
@@ -38,10 +43,12 @@ import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
+import { assertTransferRecipientValid } from '@/server/services/resourceTransferRequest';
 import {
   hasWorkspaceScopedPermission,
   isWorkspacePrimaryOwner,
 } from '@/server/services/workspacePermission';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -546,6 +553,11 @@ export const agentGroupRouter = router({
           'agentGroup',
           input.id,
         );
+        // A deleted group can no longer be handed over — void any live request.
+        await new ResourceTransferRequestModel(
+          ctx.serverDB,
+          ctx.workspaceId,
+        ).invalidateForResources('agentGroup', [input.id]);
       }
       return result;
     }),
@@ -747,6 +759,12 @@ export const agentGroupRouter = router({
         targetAccessLevel: z.enum(RESOURCE_ACCESS_LEVELS_BY_TYPE.agentGroup).optional(),
         /** @deprecated Compatibility for released clients. */
         targetGeneralAccess: z.enum(['editor', 'viewer']).optional(),
+        /**
+         * Hand ownership to another member of the CURRENT workspace. Mutually
+         * exclusive with `targetWorkspaceId`; creates a pending transfer
+         * request the recipient must accept instead of moving anything now.
+         */
+        targetMemberId: z.string().min(1).optional(),
         targetVisibility: z.enum(['private', 'public']).optional(),
         targetWorkspaceId: z.string().nullable(),
       }),
@@ -770,6 +788,66 @@ export const agentGroupRouter = router({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
+      }
+
+      // Member transfer: initiate a pending request instead of moving the
+      // group. Nothing changes until the recipient accepts.
+      if (input.targetMemberId) {
+        if (!ctx.workspaceId || input.targetWorkspaceId) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TransferNotSupported } },
+            code: 'BAD_REQUEST',
+            message: 'Member transfer happens inside the current workspace',
+          });
+        }
+        await assertTransferRecipientValid({
+          currentOwnerId: group.userId,
+          db: ctx.serverDB,
+          initiatorId: ctx.userId,
+          recipientId: input.targetMemberId,
+          workspaceId: ctx.workspaceId,
+        });
+
+        try {
+          const request = await new ResourceTransferRequestModel(
+            ctx.serverDB,
+            ctx.workspaceId,
+          ).create({
+            initiatorId: ctx.userId,
+            previousOwnerId: group.userId,
+            recipientId: input.targetMemberId,
+            resourceId: input.groupId,
+            resourceType: 'agentGroup',
+          });
+          // Best-effort: a notification failure must not fail the request.
+          // Scheduled with after() so serverless runtimes keep it alive past
+          // the response.
+          const notifyParams = {
+            event: 'requested' as const,
+            initiatorId: ctx.userId,
+            previousOwnerId: group.userId,
+            recipientId: input.targetMemberId,
+            requestId: request.id,
+            resourceId: input.groupId,
+            resourceType: 'agentGroup' as const,
+            workspaceId: ctx.workspaceId,
+          };
+          after(() =>
+            notifyResourceTransfer(notifyParams).catch((error) =>
+              console.error('[agentGroup:transferGroup] notify failed', error),
+            ),
+          );
+          return { requestId: request.id, status: 'pending' as const };
+        } catch (error) {
+          if (error instanceof Error && error.message === TRANSFER_REQUEST_ALREADY_PENDING) {
+            throw new TRPCError({
+              cause: { data: { code: TransferErrorCode.TransferRequestPending } },
+              code: 'CONFLICT',
+              message: 'This group already has a pending transfer request',
+            });
+          }
+          throw error;
+        }
       }
 
       if (input.targetWorkspaceId) {
@@ -877,6 +955,12 @@ export const agentGroupRouter = router({
           'agentGroup',
           input.groupId,
         );
+        // The group left this workspace — a pending member transfer request
+        // for it can never complete here, so void it.
+        await new ResourceTransferRequestModel(
+          ctx.serverDB,
+          ctx.workspaceId,
+        ).invalidateForResources('agentGroup', [input.groupId]);
       }
       if (input.targetWorkspaceId && input.targetVisibility === 'public') {
         // A released client's two-valued `viewer` is an explicit "less than

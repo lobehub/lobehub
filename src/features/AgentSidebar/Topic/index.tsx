@@ -1,6 +1,15 @@
 'use client';
 
-import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  Text,
+} from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import React, { memo, Suspense, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,39 +46,44 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
   }, [cleanupStaleRunningTopics, expanded]);
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      action={
-        <Flexbox horizontal align="center" gap={2}>
-          <ToggleGroups />
-          <Filter />
-          <Actions />
-        </Flexbox>
-      }
-      headerWrapper={(header) => (
-        <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
-      )}
-      title={
-        <Flexbox horizontal align="center" gap={4}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('sidebar.title')}
-          </Text>
-          {topicCount > 0 && (
-            <Text fontSize={11} type="secondary">
-              {topicCount}
-            </Text>
-          )}
-          {isRevalidating && <NeuralNetworkLoading size={14} />}
-        </Flexbox>
-      }
-    >
-      <Suspense fallback={<SkeletonList />}>
-        <Flexbox gap={1} paddingBlock={1}>
-          <List />
-        </Flexbox>
-      </Suspense>
+    <AccordionItem value={itemKey}>
+      <ContextMenuTrigger items={dropdownMenu}>
+        <AccordionHeader>
+          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+            <Flexbox horizontal align="center" gap={4}>
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {t('sidebar.title')}
+              </Text>
+              {topicCount > 0 && (
+                <Text fontSize={11} type="secondary">
+                  {topicCount}
+                </Text>
+              )}
+              {isRevalidating && <NeuralNetworkLoading size={14} />}
+            </Flexbox>
+          </AccordionTrigger>
+          <div
+            className={cx(
+              'accordion-action',
+              accordionStyles.action,
+              accordionStyles.actionBorderless,
+            )}
+          >
+            <Flexbox horizontal align="center" gap={2}>
+              <ToggleGroups />
+              <Filter />
+              <Actions />
+            </Flexbox>
+          </div>
+        </AccordionHeader>
+      </ContextMenuTrigger>
+      <AccordionPanel contentStyle={{ padding: 0 }}>
+        <Suspense fallback={<SkeletonList />}>
+          <Flexbox gap={1} paddingBlock={1}>
+            <List />
+          </Flexbox>
+        </Suspense>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

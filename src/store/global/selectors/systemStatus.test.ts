@@ -175,6 +175,32 @@ describe('systemStatusSelectors', () => {
     });
   });
 
+  describe('taskListViewMode', () => {
+    it('should restore the persisted task board view', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: {
+          ...initialState.status,
+          taskListViewMode: 'kanban',
+        },
+      };
+
+      expect(systemStatusSelectors.taskListViewMode(s)).toBe('kanban');
+    });
+
+    it('should default legacy status without a task view mode to list', () => {
+      const s: GlobalState = {
+        ...initialState,
+        status: {
+          ...initialState.status,
+          taskListViewMode: undefined,
+        },
+      };
+
+      expect(systemStatusSelectors.taskListViewMode(s)).toBe('list');
+    });
+  });
+
   describe('sidebarItems', () => {
     it('should return DEFAULT_SIDEBAR_ITEMS when no data is set', () => {
       expect(systemStatusSelectors.sidebarItems(null)(initialState)).toEqual(DEFAULT_SIDEBAR_ITEMS);

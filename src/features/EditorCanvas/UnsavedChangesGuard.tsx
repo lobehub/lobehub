@@ -37,7 +37,7 @@ const UnsavedChangesGuard = memo<UnsavedChangesGuardProps>(
           if (!saved) {
             savingToast.close();
             toast.error({
-              description: t('networkError'),
+              description: t('pageEditor.saveFailed'),
               duration: 2000,
             });
             blockerRef.current?.reset?.();
@@ -48,7 +48,7 @@ const UnsavedChangesGuard = memo<UnsavedChangesGuardProps>(
           blockerRef.current?.proceed?.();
         } catch (error) {
           const content =
-            error instanceof Error && error.message ? error.message : t('networkError');
+            error instanceof Error && error.message ? error.message : t('pageEditor.saveFailed');
 
           savingToast.close();
           toast.error({

@@ -304,6 +304,31 @@ export default class GatewayConnectionService extends ServiceModule {
     };
   }
 
+  /**
+   * Whether a registry device id belongs to this physical desktop.
+   *
+   * A machine can be reachable through both its personal identity and one
+   * derived identity per persisted workspace enrollment. Reconnect deep links
+   * must accept all of those identities without waking a different machine.
+   */
+  async matchesDeviceId(deviceId: string): Promise<boolean> {
+    if (this.getDeviceId() === deviceId) return true;
+
+    const token = await this.tokenProvider?.();
+    const userId = token ? this.extractUserIdFromToken(token) : undefined;
+    if (userId) {
+      const identity = await this.resolveDeviceIdentity(userId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    for (const workspaceId of this.getPersistedWorkspaceEnrollments()) {
+      const identity = await this.resolveWorkspaceDeviceIdentity(workspaceId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    return false;
+  }
+
   // ─── Connection Logic ───
 
   async connect(): Promise<{ error?: string; success: boolean }> {
@@ -427,7 +452,7 @@ export default class GatewayConnectionService extends ServiceModule {
     });
 
     client.on('agent_run_request', (request) => {
-      this.handleAgentRunRequest(client, request);
+      this.handleAgentRunRequest(client, request, scope?.workspaceId);
     });
 
     client.on('auth_expired', () => {
@@ -666,6 +691,10 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── System Info ───
 
+  /**
+   * Triggering workflow: gateway `system_info_request` -> handleSystemInfoRequest
+   * -> {@link GatewayClient.sendSystemInfoResponse}, including desktop tool support.
+   */
   private async handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
     logger.info(`Received system_info_request: requestId=${request.requestId}`);
     const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
@@ -674,6 +703,7 @@ export default class GatewayConnectionService extends ServiceModule {
       result: {
         success: true,
         systemInfo: {
+          supportedTools: ['lobe-computer-use'],
           arch: os.arch(),
           // Tell the server-side prompt builder which shell runCommand spawns here.
           defaultShell: (await getShellInfo()).displayName,
@@ -722,6 +752,7 @@ export default class GatewayConnectionService extends ServiceModule {
   private handleAgentRunRequest = async (
     client: GatewayClient,
     request: AgentRunRequestMessage,
+    connectionWorkspaceId?: string,
   ) => {
     logger.info(
       `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
@@ -737,7 +768,14 @@ export default class GatewayConnectionService extends ServiceModule {
       return;
     }
 
-    const result = await this.agentRunHandler(request);
+    // Topic scope for heteroIngest/heteroFinish. Prefer the explicit ingest
+    // field, then a forwarded routing workspaceId, then the connection this
+    // request arrived on (workspace enrollments). Older gateways omit both
+    // payload fields; the workspace socket is still a reliable fallback.
+    const workspaceId = request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId;
+    const result = await this.agentRunHandler(
+      workspaceId && workspaceId !== request.workspaceId ? { ...request, workspaceId } : request,
+    );
     client.sendAgentRunAck({ operationId: request.operationId, ...result });
   };
 
@@ -753,6 +791,13 @@ export default class GatewayConnectionService extends ServiceModule {
     logger.info(
       `Received tool call: apiName=${apiName}, requestId=${requestId}, type=${type ?? 'tool'}`,
     );
+
+    // Timed on THIS machine's clock, around both routes. The server can only
+    // observe the whole dispatch round trip, so without this number a slow tool
+    // and slow transport are indistinguishable — and desktop is where most
+    // device tool calls actually happen, so leaving it out here would bias the
+    // measurement toward the `lh connect` subset.
+    const startedAt = performance.now();
 
     try {
       let result: ToolCallResult;
@@ -785,6 +830,7 @@ export default class GatewayConnectionService extends ServiceModule {
       // when present so payloads stay minimal.
       const wireResult: ToolCallResponseMessage['result'] = {
         content: result.content,
+        executionTimeMs: Math.round(performance.now() - startedAt),
         success: result.success,
       };
       const wireError = serializeWireError(result.error);
@@ -801,6 +847,9 @@ export default class GatewayConnectionService extends ServiceModule {
         result: {
           content: errorMsg,
           error: errorMsg,
+          // A failure is timed too: a tool that took 30s to fail is as
+          // interesting as one that took 30s to succeed.
+          executionTimeMs: Math.round(performance.now() - startedAt),
           success: false,
         },
       });

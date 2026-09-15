@@ -34,9 +34,19 @@ export const scanLocal = async (): Promise<HeterogeneousAgentScanMap> => {
           agentType: provider.type,
           command: provider.command ?? provider.type,
         });
-        return [provider.type, { available: status.available, version: status.version }] as const;
-      } catch {
-        return [provider.type, { available: false }] as const;
+        return [
+          provider.type,
+          {
+            available: status.available,
+            ...(status.error ? { reason: status.error } : undefined),
+            version: status.version,
+          },
+        ] as const;
+      } catch (error) {
+        return [
+          provider.type,
+          { available: false, reason: error instanceof Error ? error.message : String(error) },
+        ] as const;
       }
     }),
   );

@@ -13,6 +13,7 @@
   "ContextEnginePipelineError": "無法組裝此請求的對話上下文。請重試；如果問題持續，請聯繫支援。",
   "DatabasePersistError": "保存或載入此對話時的資料庫操作失敗。請重試；如果問題持續，請聯繫支援。",
   "ExceededContextWindow": "當前請求內容超過模型可處理的長度。請減少內容量並重試。",
+  "HarnessJsonParseError": "無法讀取內部負載，因此此操作已停止。重試相同的請求將遇到相同的錯誤——請開始新的訊息；如果問題持續，請聯絡支援。",
   "InsufficientQuota": "抱歉，此金鑰的配額已達上限。請檢查您的帳戶餘額是否充足，或在增加金鑰配額後重試。",
   "InvalidBedrockCredentials": "Bedrock 身份驗證失敗。請檢查 AccessKeyId/SecretAccessKey 並重試。",
   "InvalidComfyUIArgs": "ComfyUI 配置無效。請檢查設置並重試。",

@@ -1,5 +1,5 @@
 import { type Context as OtContext } from '@lobechat/observability-otel/api';
-import { type ClientSecretPayload } from '@lobechat/types';
+import { type ClientSecretPayload, type SpendOrigin } from '@lobechat/types';
 import type { ClientMetadata } from '@lobechat/utils/server';
 import { parseClientMetadata } from '@lobechat/utils/server';
 import { parse } from 'cookie';
@@ -16,6 +16,9 @@ import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
+
+import { describeOIDCAuthFailure, setAuthFailureHeader } from '../utils/authFailure';
+import { HETERO_OPERATION_JWT_PURPOSE } from '../utils/internalJwt';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
@@ -83,6 +86,18 @@ export interface OIDCAuth {
 }
 
 export interface AuthContext {
+  // Add OIDC authentication information
+  /**
+   * The agent on whose behalf this call runs, used for attribution in durable
+   * records (e.g. who reassigned a task).
+   *
+   * SECURITY: same contract as {@link AuthContext.spendOrigin} — never derived
+   * from request input, because it decides whose name a persisted action is
+   * recorded under. Populated ONLY by a server-side `createCaller` from an
+   * already-authorized run context; a client-supplied value would let a caller
+   * pin its own action on somebody else's agent.
+   */
+  actingAgentId?: string | null;
   /**
    * Set only when the request authenticated via an API key: the key's
    * capability scopes (`null` = full-access key). `undefined` means the
@@ -93,10 +108,20 @@ export interface AuthContext {
   clientMetadata?: ClientMetadata;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
-  // Add OIDC authentication information
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
   resHeaders?: Headers;
+  /**
+   * Origin attribution for spend produced by this call, forwarded to the
+   * billing points the procedure reaches.
+   *
+   * SECURITY: never derived from request headers or any other client input —
+   * it decides who a charge is billed against, so a client could otherwise
+   * forge another user's attribution. Populated ONLY by a server-side
+   * `createCaller` (see the tool-execution server runtimes), where the values
+   * come from the already-authorized run context.
+   */
+  spendOrigin?: SpendOrigin;
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
@@ -108,12 +133,17 @@ export interface AuthContext {
  * This is useful for testing when we don't want to mock Next.js' request/response
  */
 export const createContextInner = async (params?: {
+  /** See {@link AuthContext.actingAgentId} — server-side callers only. */
+  actingAgentId?: string | null;
   apiKeyScopes?: string[] | null;
+  authFailure?: string;
   clientMetadata?: ClientMetadata;
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
+  /** See {@link AuthContext.spendOrigin} — server-side callers only. */
+  spendOrigin?: SpendOrigin;
   traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
@@ -121,8 +151,12 @@ export const createContextInner = async (params?: {
 }): Promise<AuthContext> => {
   log('createContextInner called with params: %O', params);
   const responseHeaders = new Headers();
+  if (params?.authFailure && !params.userId) {
+    setAuthFailureHeader(responseHeaders, params.authFailure);
+  }
 
   return {
+    actingAgentId: params?.actingAgentId,
     apiKeyScopes: params?.apiKeyScopes,
     clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
@@ -130,6 +164,7 @@ export const createContextInner = async (params?: {
     oidcAuth: params?.oidcAuth,
     oidcClientId: params?.oidcClientId,
     resHeaders: responseHeaders,
+    spendOrigin: params?.spendOrigin,
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
     userId: params?.userId,
@@ -271,12 +306,14 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
   let userId;
   let oidcAuth;
+  let authFailure: string | undefined;
 
   // Prioritize checking for OIDC authentication (both standard Authorization and custom Oidc-Auth headers)
   if (authEnv.ENABLE_OIDC) {
     log('OIDC enabled, attempting OIDC authentication');
     const oidcAuthToken = request.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
     log('Oidc-Auth header: %s', oidcAuthToken ? 'exists' : 'not found');
+    if (!oidcAuthToken) authFailure = 'no_token';
 
     try {
       if (oidcAuthToken) {
@@ -284,9 +321,21 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         // so banned/deleted accounts cannot keep using an already-issued token.
         const tokenInfo = await validateOIDCJWT(oidcAuthToken);
 
+        const operationClaims =
+          tokenInfo.tokenData.purpose === HETERO_OPERATION_JWT_PURPOSE
+            ? {
+                capabilities: tokenInfo.payload.capabilities,
+                iss: tokenInfo.payload.iss,
+                model: tokenInfo.payload.model,
+                operation_id: tokenInfo.payload.operation_id,
+                provider_id: tokenInfo.payload.provider_id,
+                workspace_id: tokenInfo.payload.workspace_id,
+              }
+            : undefined;
         oidcAuth = {
           payload: tokenInfo.tokenData,
           ...tokenInfo.tokenData, // Spread payload into oidcAuth
+          ...operationClaims,
           sub: tokenInfo.userId, // Use tokenData as payload
         };
         userId = tokenInfo.userId;
@@ -313,6 +362,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         console.error('OIDC authentication failed for inactive user:', error);
         return createContextInner({
           ...commonContext,
+          authFailure: 'user_inactive',
           traceContext,
           userId: null,
         });
@@ -320,7 +370,8 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
       // If OIDC authentication fails, log error and continue with other authentication methods
       if (oidcAuthToken) {
-        log('OIDC authentication failed, error: %O', error);
+        authFailure = describeOIDCAuthFailure(error);
+        log('OIDC authentication failed (%s), error: %O', authFailure, error);
         console.error('OIDC authentication failed, trying other methods:', error);
       }
     }
@@ -342,6 +393,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
     return createContextInner({
       ...commonContext,
+      authFailure,
       traceContext,
       userId,
     });
@@ -355,5 +407,5 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     'All authentication methods attempted, returning final context, userId: %s',
     userId || 'not authenticated',
   );
-  return createContextInner({ ...commonContext, traceContext, userId });
+  return createContextInner({ ...commonContext, authFailure, traceContext, userId });
 };

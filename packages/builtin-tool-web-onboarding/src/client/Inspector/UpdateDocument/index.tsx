@@ -23,21 +23,19 @@ export const UpdateDocumentInspector = memo<
 
   if (isArgumentsStreaming && !type) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-web-onboarding.apiName.updateDocument')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-web-onboarding.apiName.updateDocument')}
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      style={{ gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-web-onboarding.apiName.updateDocument')}</span>
+    <div className={inspectorTextStyles.root} style={{ gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-web-onboarding.apiName.updateDocument')}
+      </span>
       {type && (
         <span className={styles.chip}>
           {t(`builtins.lobe-web-onboarding.docType.${type}` as const)}

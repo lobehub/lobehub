@@ -2,10 +2,13 @@ import { isDesktop } from '@lobechat/const';
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
+import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import { isLocalSandboxEnabled, resolveExecutionTarget } from '@/helpers/executionTarget';
+import { getTopicAgencyConfig } from '@/helpers/topicExecutionConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 export interface ClientLocalSandboxDecision {
   /** Confine this command (writes scoped to the working directory). */
@@ -38,42 +41,60 @@ const isFenced = (agencyConfig: LobeAgentAgencyConfig | undefined): boolean =>
  * it reads the two stores `useEffectiveAgencyConfig` composes: the shared
  * `agents.agencyConfig` plus this member's `agentDeviceOverrides` entry, merged
  * through the same `resolveAgentAgencyConfig` the picker and server dispatch
- * use — a plain `resolveAgencyConfig` would apply a member override on a
- * private Agent, where every other layer ignores it.
+ * use — a plain `resolveAgencyConfig` would apply an override on a personal
+ * Agent, where every other layer ignores it.
  *
- * One input is genuinely unavailable here: `canManage` comes from a permission
- * hook with no store to read synchronously. It only changes the answer for an
- * author/admin of a *public workspace* Agent carrying a stale member override,
- * so rather than guess, both readings are computed and a disagreement resolves
- * toward fencing. Over-fencing fails loudly and recoverably — a write outside
- * the working directory is refused with a clear error — while under-fencing
- * would run unconfined beneath a chip that claims otherwise, which is the one
- * outcome this whole feature exists to prevent.
+ * `canManage` follows the actual management decision the picker resolved
+ * (`getRuntimeCanManageAgent`, published by `useAgentManagementAccess`), so a
+ * fixed-policy manager's Local Sandbox pick — network allowance included — is
+ * honored the way their picker rendered it. The cache can still be cold when
+ * an executor fires before any dispatch resolved access; the fence itself
+ * therefore stays conservative — if EITHER role reading says fenced, the
+ * command is fenced. Over-fencing fails loudly and recoverably — a write
+ * outside the working directory is refused with a clear error — while
+ * under-fencing would run unconfined beneath a chip that claims otherwise,
+ * which is the one outcome this whole feature exists to prevent. The network
+ * relaxation, by contrast, follows only the resolved reading: it widens what
+ * a fenced command can reach, so it must match what the user's picker showed.
  */
-export const resolveClientLocalSandbox = (agentId?: string): ClientLocalSandboxDecision => {
+export const resolveClientLocalSandbox = (
+  agentId?: string,
+  topicId?: string | null,
+): ClientLocalSandboxDecision => {
   if (!isDesktop || !agentId) return unfenced;
 
   const state = useAgentStore.getState();
   const sharedAgencyConfig = agentByIdSelectors.getAgencyConfigById(agentId)(state);
   const agent = agentByIdSelectors.getAgentById(agentId)(state);
-  const override = useUserStore.getState().workspaceUserPreference.agentDeviceOverrides?.[agentId];
+  const userState = useUserStore.getState();
+  const override = userState.workspaceUserPreference.agentDeviceOverrides?.[agentId];
 
-  const context = { visibility: agent?.visibility, workspaceId: agent?.workspaceId ?? undefined };
-  const asMember = resolveAgentAgencyConfig(sharedAgencyConfig, override, context);
-  const asManager = resolveAgentAgencyConfig(sharedAgencyConfig, override, {
-    ...context,
-    canManage: true,
+  const canManage = getRuntimeCanManageAgent({
+    agentId,
+    agentUserId: agent?.userId,
+    currentUserId: userProfileSelectors.userId(userState),
   });
+  const context = { visibility: agent?.visibility, workspaceId: agent?.workspaceId ?? undefined };
+  const resolved = getTopicAgencyConfig(
+    resolveAgentAgencyConfig(sharedAgencyConfig, override, {
+      ...context,
+      canManage,
+    }),
+    topicId,
+  );
+  const otherRole = getTopicAgencyConfig(
+    resolveAgentAgencyConfig(sharedAgencyConfig, override, {
+      ...context,
+      canManage: !canManage,
+    }),
+    topicId,
+  );
 
-  const fenced = isFenced(asMember) || isFenced(asManager);
+  const fenced = isFenced(resolved) || isFenced(otherRole);
   if (!fenced) return unfenced;
 
-  // Network is a relaxation of the fence, so it needs agreement rather than
-  // either-or: opening the allowlist on the strength of a reading the user may
-  // never have seen would widen what a fenced command can reach.
   return {
     localSandbox: true,
-    localSandboxNetwork:
-      asMember?.localSandboxNetwork === true && asManager?.localSandboxNetwork === true,
+    localSandboxNetwork: resolved?.localSandboxNetwork === true,
   };
 };

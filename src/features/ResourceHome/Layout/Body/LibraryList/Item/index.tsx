@@ -1,11 +1,10 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Loader2Icon, LockIcon } from 'lucide-react';
+import { Loader2Icon } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 
-import RepoIcon from '@/components/LibIcon';
-import LockedLibIcon from '@/components/LibIcon/Locked';
+import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -84,21 +83,20 @@ const KnowledgeBaseItem = memo<KnowledgeBaseItemProps>(
     // no per-row permission request.
     const isMemberRestricted = visibility === 'public' && !!memberRestricted;
 
-    // Icon: loader while pending; a plain lock for private KBs ("only you can
-    // see this", the private-agent / private-task visual); the folder with a
-    // small corner lock for member-restricted shared KBs ("shared, but members
-    // cannot open it").
+    // Keep the same private / restricted / workspace icon language as the
+    // active-library header and its switcher.
     const icon = useMemo(() => {
       if (isLoading) {
         return <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={18} />;
       }
-      if (visibility === 'private') {
-        return <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={18} />;
-      }
-      if (isMemberRestricted) {
-        return <LockedLibIcon size={18} />;
-      }
-      return <RepoIcon size={18} />;
+
+      return (
+        <LibraryStatusIcon
+          memberRestricted={isMemberRestricted}
+          size={18}
+          visibility={visibility}
+        />
+      );
     }, [isLoading, visibility, isMemberRestricted]);
 
     const dropdownMenu = useDropdownMenu({

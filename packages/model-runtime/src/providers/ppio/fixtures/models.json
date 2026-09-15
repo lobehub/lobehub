@@ -32,5 +32,26 @@
     "context_size": 64000,
     "status": 1,
     "display_name": "DeepSeek: DeepSeek V3 (community)"
+  },
+  {
+    "created": 1787107460,
+    "id": "qwen/qwen3.5-vl-72b-instruct",
+    "object": "model",
+    "owned_by": "unknown",
+    "permission": null,
+    "root": "",
+    "parent": "",
+    "input_token_price_per_m": 10000,
+    "output_token_price_per_m": 30000,
+    "title": "qwen/qwen3.5-vl-72b-instruct",
+    "description": "Qwen3.5 VL multimodal instruction model.",
+    "tags": [],
+    "context_size": 131072,
+    "status": 1,
+    "display_name": "Qwen3.5 VL 72B Instruct",
+    "model_type": "chat",
+    "max_output_tokens": 32768,
+    "features": ["serverless", "function-calling", "structured-outputs", "reasoning"],
+    "input_modalities": ["text", "image", "video"]
   }
 ]

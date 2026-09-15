@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Collapse, Flexbox, Icon, Markdown, ScrollShadow, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Markdown, ScrollShadow } from '@lobehub/ui';
+import { Accordion, Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, responsive } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import qs from 'query-string';
@@ -108,10 +108,9 @@ const Overview = memo(() => {
 
       {/* SKILL.md */}
       {content && (
-        <Collapse
-          defaultActiveKey={['skill']}
-          expandIconPlacement={'end'}
-          padding={{ body: 0 }}
+        <Accordion
+          defaultValue={['skill']}
+          indicatorPlacement={'end'}
           variant={'outlined'}
           items={[
             {
@@ -121,7 +120,7 @@ const Overview = memo(() => {
                 </ScrollShadow>
               ),
               key: 'skill',
-              label: t('skills.details.overview.instructions'),
+              title: t('skills.details.overview.instructions'),
             },
           ]}
         />

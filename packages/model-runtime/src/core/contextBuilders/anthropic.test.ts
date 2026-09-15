@@ -576,6 +576,24 @@ describe('anthropicHelpers', () => {
       });
     });
 
+    it('should preserve redacted thinking in assistant history', async () => {
+      const message: OpenAIChatMessage = {
+        content: [
+          { data: 'encrypted-thinking', type: 'redacted_thinking' },
+          { text: 'Here is my response.', type: 'text' },
+        ],
+        role: 'assistant',
+      };
+
+      await expect(buildAnthropicMessage(message)).resolves.toEqual({
+        content: [
+          { data: 'encrypted-thinking', type: 'redacted_thinking' },
+          { text: 'Here is my response.', type: 'text' },
+        ],
+        role: 'assistant',
+      });
+    });
+
     it('should return undefined for assistant message with empty array content', async () => {
       const message: OpenAIChatMessage = {
         content: [],

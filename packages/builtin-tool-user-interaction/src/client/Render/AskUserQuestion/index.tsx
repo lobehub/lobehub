@@ -26,6 +26,7 @@ export const AskUserQuestionRender = memo<
         noAnswer: t('plugin:builtins.lobe-claude-code.askUserQuestion.noAnswer'),
         notAnswered: t('plugin:builtins.lobe-claude-code.askUserQuestion.notAnswered'),
         recommendedTag: t('tool:askUserQuestion.recommendedTag'),
+        supplement: t('tool:askUserQuestion.supplement.enter'),
       }}
     />
   );

@@ -1,3 +1,5 @@
+import { AUTH_FAILURE_HEADER } from '@lobechat/desktop-bridge';
+import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,9 +39,11 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/apiKey', () => ({
   ApiKeyModel: Object.assign(
-    vi.fn().mockImplementation((_db: unknown, userId: string) => ({
-      updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
-    })),
+    vi.fn(function (_db: unknown, userId: string) {
+      return {
+        updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
+      };
+    }),
     {
       findByKey: mockFindByKey,
     },
@@ -250,7 +254,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
       },
     });
 
@@ -283,7 +287,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -300,7 +304,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-2',
       },
     });
@@ -316,7 +320,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
       },
     });
 
@@ -332,7 +336,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -353,7 +357,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -370,7 +374,7 @@ describe('createLambdaContext', () => {
 
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
-        'X-API-Key': 'sk-lh-aaaaaaaaaaaaaaaa',
+        'X-API-Key': `${API_KEY_PREFIX}aaaaaaaaaaaaaaaa`,
         'X-Workspace-Id': 'ws-1',
       },
     });
@@ -387,7 +391,7 @@ describe('createLambdaContext', () => {
     const request = new NextRequest('https://example.com/trpc/lambda', {
       headers: {
         'Oidc-Auth': 'oidc-token',
-        'X-API-Key': 'sk-lh-bbbbbbbbbbbbbbbb',
+        'X-API-Key': `${API_KEY_PREFIX}bbbbbbbbbbbbbbbb`,
       },
     });
 
@@ -461,5 +465,59 @@ describe('createLambdaContext', () => {
     expect(context.oidcAuth).toBeUndefined();
     expect(mockValidateOIDCJWT).toHaveBeenCalledWith('oidc-token');
     expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('records jwt_expired in resHeaders when the OIDC JWT is expired and no session exists', async () => {
+    const cause = Object.assign(new Error('"exp" claim timestamp check failed'), {
+      code: 'ERR_JWT_EXPIRED',
+    });
+    mockValidateOIDCJWT.mockRejectedValueOnce(
+      Object.assign(new Error('JWT token validation failed'), { cause }),
+    );
+    mockGetSession.mockResolvedValueOnce(null);
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'stale-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBeUndefined();
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('jwt_expired');
+  });
+
+  it('does not record a failure when the session fallback authenticates the user', async () => {
+    mockValidateOIDCJWT.mockRejectedValueOnce(new Error('JWT token validation failed'));
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'stale-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBe('session-user');
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBeNull();
+  });
+
+  it('records user_inactive for a banned OIDC user', async () => {
+    mockAssertOIDCUserActive.mockRejectedValueOnce(new Error('OIDC user is no longer active'));
+    mockIsOIDCUserInactiveError.mockReturnValueOnce(true);
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'oidc-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('user_inactive');
+  });
+
+  it('records no_token when neither Oidc-Auth nor a session is present', async () => {
+    mockGetSession.mockResolvedValueOnce(null);
+
+    const context = await createLambdaContext(new NextRequest('https://example.com/trpc/lambda'));
+
+    expect(context.userId).toBeUndefined();
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('no_token');
   });
 });

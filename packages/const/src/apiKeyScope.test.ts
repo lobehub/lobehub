@@ -166,6 +166,14 @@ describe('requiredApiKeyScopeForTrpc', () => {
       blocked: true,
     });
     expect(requiredApiKeyScopeForTrpc('market.oidc.getToken', 'query')).toEqual({ blocked: true });
+    // gateway token minting: a restricted key must never obtain a user JWT
+    // that `oidcAuth` would accept as unscoped auth
+    expect(requiredApiKeyScopeForTrpc('aiAgent.refreshGatewayToken', 'query')).toEqual({
+      blocked: true,
+    });
+    expect(requiredApiKeyScopeForTrpc('aiAgent.issueGatewayUserToken', 'query')).toEqual({
+      blocked: true,
+    });
     // the rest of the market surface keeps its agent scopes
     expect(requiredApiKeyScopeForTrpc('market.getAgentsByPlugin', 'query')).toEqual({
       scopes: ['agent:read'],

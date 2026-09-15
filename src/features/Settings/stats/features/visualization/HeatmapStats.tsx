@@ -1,4 +1,5 @@
-import { Block, Flexbox, Skeleton } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { Fragment, memo, useMemo } from 'react';
@@ -94,11 +95,7 @@ const HeatmapStats = memo(() => {
             {index > 0 && <Divider style={{ height: 32, margin: 0 }} type={'vertical'} />}
             <Flexbox align={'center'} flex={1} gap={4}>
               <div style={{ fontSize: 20, fontWeight: 'bold' }}>
-                {loading || item.loading ? (
-                  <Skeleton.Button active size={'small'} style={{ width: 56 }} />
-                ) : (
-                  item.value
-                )}
+                {loading || item.loading ? <Skeleton height={28} width={56} /> : item.value}
               </div>
               <div style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>{item.label}</div>
             </Flexbox>

@@ -25,6 +25,12 @@ export interface TopicListItem extends ChatTopic {
   agentId?: string | null;
   lastAssistantMessage?: string | null;
   /**
+   * Visibility of the owning agent/group. `'private'` conversations stay out of
+   * team listings even when the viewer created them; null for legacy rows with
+   * no resolvable parent.
+   */
+  parentVisibility?: 'private' | 'public' | null;
+  /**
    * Start time of the topic's current run (latest top-level running
    * `agent_operations` row). Only set for `running` topics; null when the run
    * never wrote an operation row (e.g. client-mode) — keep a fallback.
@@ -155,8 +161,27 @@ export class TopicService {
     return lambdaClient.topic.updateTopic.mutate({ id, value: data });
   };
 
+  updateTopicModel = (
+    id: string,
+    value: {
+      metadata?: Pick<ChatTopicMetadata, 'heteroEffort' | 'reasoningConfig'>;
+      model: string;
+      provider: string;
+    },
+  ) => {
+    return lambdaClient.topic.updateTopicModel.mutate({ id, ...value });
+  };
+
   updateTopicMetadata = (id: string, metadata: UpdateTopicMetadataInput) => {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
+  };
+
+  settleRunningOperation = (
+    id: string,
+    operationId: string,
+    status?: NonNullable<ChatTopic['status']>,
+  ) => {
+    return lambdaClient.topic.settleRunningOperation.mutate({ id, operationId, status });
   };
 
   getShareInfo = (topicId: string) => {

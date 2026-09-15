@@ -1,5 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Tag } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { type MouseEventHandler } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -24,6 +24,7 @@ import {
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
 import { UserMessageExtra } from './Extra';
+import { getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
@@ -34,7 +35,8 @@ interface UserMessageProps {
 
 const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
-  const { content, createdAt, error, role, extra, targetId, sender } = item;
+  const { content, createdAt, error, role, extra, targetId, sender, metadata } = item;
+  const botSender = getBotSender(item);
 
   const { t } = useTranslation('chat');
   const selfAvatar = useUserAvatar();
@@ -44,12 +46,20 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
 
   // In workspaces every user bubble shows its sender avatar so ownership is
   // visible even during single-user testing; personal mode keeps the legacy
-  // hidden-avatar behavior. Optimistic/streaming rows without a `sender`
-  // fall back to the current user, which is who authored them.
-  const showSender = Boolean(activeWorkspaceId);
-  const senderName = sender?.fullName || sender?.username || '';
-  const avatar = sender?.avatar || senderName || selfAvatar;
-  const title = senderName || selfTitle;
+  // hidden-avatar behavior. Self identity applies only to the viewer's own
+  // rows — see resolveSenderIdentity.
+  // A bot-channel row is authored by someone else even in personal mode, so
+  // its sender is always shown.
+  const showSender = Boolean(activeWorkspaceId) || !!botSender;
+  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const { avatar, title } = resolveSenderIdentity({
+    botSender,
+    currentUserId,
+    selfAvatar,
+    selfTitle,
+    sender,
+    unknownLabel: t('sender.unknownMember'),
+  });
 
   // Get editing and loading state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
@@ -98,6 +108,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       avatar={{ avatar, title }}
       belowMessage={<ScheduledRunFooter id={id} />}
       editing={editing}
+      headerAddon={metadata?.steer ? <Tag>{t('steer.tag')}</Tag> : undefined}
       id={id}
       message={content}
       messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}

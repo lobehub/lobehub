@@ -49,7 +49,7 @@ describe('OperationTraceRecorder', () => {
         afterStepSignalEvents: [],
         agentState: {
           messages: [],
-          metadata: { agentConfig: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
+          world: { agent: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
         },
         beforeStepSignalEvents: [],
         currentContext: { phase: 'user_input' },
@@ -76,6 +76,12 @@ describe('OperationTraceRecorder', () => {
         {
           finalState: {
             activatedStepTools: [{ id: 'kept' }],
+            expertise: {
+              contentHash: 'hash',
+              domains: [{ id: 'product-design', lessonIds: ['lesson-1'] }],
+              renderedContext: '<expertise>heavy learned context</expertise>',
+              schemaVersion: 1,
+            },
             messages: ['heavy'],
             operationToolSet: { manifestMap: {} },
             otherStateField: 'kept',
@@ -108,6 +114,7 @@ describe('OperationTraceRecorder', () => {
       const doneEvent = step.events.find((e: any) => e.type === 'done');
       expect(doneEvent.finalState.activatedStepTools).toEqual([{ id: 'kept' }]);
       expect(doneEvent.finalState.otherStateField).toBe('kept');
+      expect(doneEvent.finalState.expertise).toBeUndefined();
       expect(doneEvent.finalState.messages).toBeUndefined();
       expect(doneEvent.finalState.operationToolSet).toBeUndefined();
       expect(doneEvent.finalState.toolManifestMap).toBeUndefined();
@@ -250,7 +257,7 @@ describe('OperationTraceRecorder', () => {
         completionReason: 'done',
         state: {
           cost: { total: 0.5 },
-          metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
+          origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
           stepCount: 1,
           usage: { llm: { tokens: { total: 200 } } },
         },

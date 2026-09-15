@@ -12,6 +12,7 @@ coverage
 dist
 es
 lib
+!apps/workbench/app/lib
 logs
 
 # framework specific

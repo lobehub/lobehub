@@ -18,8 +18,17 @@ export const FeatureFlagsSchema = z.object({
   api_key_manage: FeatureFlagValue.optional(),
   edit_agent: FeatureFlagValue.optional(),
 
+  /**
+   * Rollout gate for publishing or re-enabling Agent Share. Array values are
+   * creator user IDs. Visiting, chatting on, and managing existing shares do
+   * not require this flag. Deployment support is independently enforced by
+   * `ENABLE_BUSINESS_FEATURES` (see `_helpers/agentShareFeatureGate.ts`).
+   */
+  agent_share: FeatureFlagValue.optional(),
+
   ai_image: FeatureFlagValue.optional(),
   speech_to_text: FeatureFlagValue.optional(),
+  voice_dictation: FeatureFlagValue.optional(),
   token_counter: FeatureFlagValue.optional(),
 
   welcome_suggest: FeatureFlagValue.optional(),
@@ -64,7 +73,8 @@ export const evaluateFeatureFlag = (
   if (typeof flagValue === 'boolean') return flagValue;
 
   if (Array.isArray(flagValue)) {
-    return userId ? flagValue.includes(userId) : false;
+    if (userId && flagValue.includes(userId)) return true;
+    return false;
   }
 };
 
@@ -76,6 +86,12 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   api_key_manage: false,
   edit_agent: true,
+
+  // Cloud-only grayscale: off everywhere until an admin publishes a whitelist
+  // (array of user IDs) or flips it to true. Self-hosted deployments
+  // are additionally hard-blocked by ENABLE_BUSINESS_FEATURES on the server
+  // gate, so setting this env-side does not enable the feature there.
+  agent_share: false,
 
   ai_image: true,
 
@@ -97,6 +113,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   market: true,
   speech_to_text: true,
+  voice_dictation: false,
   changelog: true,
 
   // the flags below can only be used with commercial license
@@ -115,6 +132,8 @@ export const mapFeatureFlagsEnvToState = (
 ): IFeatureFlagsState => {
   return {
     isAgentEditable: evaluateFeatureFlag(config.edit_agent, userId),
+
+    enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),
@@ -142,6 +161,7 @@ export const mapFeatureFlagsEnvToState = (
 
     showMarket: evaluateFeatureFlag(config.market, userId),
     enableSTT: evaluateFeatureFlag(config.speech_to_text, userId),
+    enableVoiceDictation: evaluateFeatureFlag(config.voice_dictation, userId),
 
     hideGitHub: evaluateFeatureFlag(config.commercial_hide_github, userId),
     hideDocs: evaluateFeatureFlag(config.commercial_hide_docs, userId),

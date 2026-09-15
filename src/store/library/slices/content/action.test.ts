@@ -5,8 +5,6 @@ import { useFileStore } from '@/store/file';
 
 import { useKnowledgeBaseStore as useStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 beforeEach(() => {
   vi.clearAllMocks();
 });

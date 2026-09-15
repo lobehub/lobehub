@@ -1,4 +1,5 @@
 import {
+  Activity,
   AppWindow,
   ArrowUpDown,
   Bot,
@@ -12,6 +13,7 @@ import {
   MemoryStick,
   RotateCw,
   Route,
+  Ruler,
   ScanEye,
   Terminal,
 } from 'lucide-react';
@@ -77,6 +79,15 @@ export const registerBuiltinDevDockItems = () => {
     },
     {
       defaultPinned: true,
+      icon: Activity,
+      id: 'cls',
+      label: 'CLS',
+      load: () => import('./widgets/ClsWidget'),
+      slot: 'right',
+      type: 'readout',
+    },
+    {
+      defaultPinned: true,
       icon: MemoryStick,
       id: 'memory',
       label: 'Memory',
@@ -103,6 +114,15 @@ export const registerBuiltinDevDockItems = () => {
           slot: 'right',
           type: 'readout',
         },
+    {
+      getChecked: () => useDevDockStore.getState().mesurer,
+      icon: Ruler,
+      id: 'mesurer',
+      label: 'Mesurer',
+      onToggle: (checked) => useDevDockStore.getState().setMesurer(checked),
+      subscribe: subscribeDevDock,
+      type: 'toggle',
+    },
     {
       getChecked: () => useDevDockStore.getState().reactScan,
       icon: ScanEye,

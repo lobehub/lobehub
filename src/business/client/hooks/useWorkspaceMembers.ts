@@ -17,3 +17,9 @@ export type WorkspaceMemberWithProfile = WorkspaceMemberItem & {
 };
 
 export const useWorkspaceMembers = (): WorkspaceMemberWithProfile[] => [];
+
+/**
+ * Non-hook snapshot of the same list, for imperative callers such as tool
+ * executors. Empty in OSS; cloud reads the workspace store.
+ */
+export const getWorkspaceMembers = (): WorkspaceMemberWithProfile[] => [];

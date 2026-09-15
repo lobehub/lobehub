@@ -1,5 +1,6 @@
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { Paperclip } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -77,7 +78,9 @@ const TaskInstruction = memo(() => {
 
   useEffect(() => {
     if (persistedFiles && persistedFiles.length > 0) {
-      seedAttachments(persistedFiles.map((f) => ({ id: f.id, url: f.url })));
+      seedAttachments(
+        persistedFiles.map((f) => ({ downloadUrl: f.downloadUrl, id: f.id, url: f.url })),
+      );
     }
   }, [persistedFiles]);
 

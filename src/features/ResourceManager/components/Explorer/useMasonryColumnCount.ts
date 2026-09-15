@@ -1,25 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
-/**
- * Hook to calculate responsive column count for masonry layout
- * @returns The current column count based on window width
- */
+export const resolveMasonryColumnCount = (width: number) => {
+  if (width < 768) return 2;
+  if (width < 1024) return 3;
+  if (width < 1536) return 4;
+  return 5;
+};
+
+// Resolved synchronously on the first render: a default column count that is
+// corrected in an effect re-lays out every masonry card one frame later.
 export const useMasonryColumnCount = () => {
-  const [columnCount, setColumnCount] = useState(4);
+  const [columnCount, setColumnCount] = useState(() =>
+    resolveMasonryColumnCount(typeof window === 'undefined' ? 1024 : window.innerWidth),
+  );
 
-  useEffect(() => {
-    const updateColumnCount = () => {
-      const width = window.innerWidth;
-      if (width < 768) {
-        setColumnCount(2);
-      } else if (width < 1024) {
-        setColumnCount(3);
-      } else if (width < 1536) {
-        setColumnCount(4);
-      } else {
-        setColumnCount(5);
-      }
-    };
+  useLayoutEffect(() => {
+    const updateColumnCount = () => setColumnCount(resolveMasonryColumnCount(window.innerWidth));
 
     updateColumnCount();
     window.addEventListener('resize', updateColumnCount);

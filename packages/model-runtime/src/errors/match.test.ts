@@ -50,6 +50,20 @@ describe('matchErrorPattern', () => {
     );
   });
 
+  it('classifies an HTTP 413 body as RequestBodyTooLarge', () => {
+    expect(matchErrorPattern({ message: '413 Request Entity Too Large' })?.code).toBe(
+      AgentRuntimeErrorType.RequestBodyTooLarge,
+    );
+  });
+
+  it('classifies the observed DeepSeek buffer rejection as RequestBodyTooLarge', () => {
+    expect(
+      matchErrorPattern({
+        message: 'Failed to buffer the request body: length limit exceeded',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.RequestBodyTooLarge);
+  });
+
   it('classifies content moderation', () => {
     expect(matchErrorPattern({ message: 'Content Exists Risk' })?.code).toBe(
       AgentRuntimeErrorType.ContentModeration,
@@ -436,10 +450,7 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
     },
     {
       cases: [
-        [
-          'Request body too large for deepseek-r1 model',
-          AgentRuntimeErrorType.InvalidRequestFormat,
-        ],
+        ['Request body too large for deepseek-r1 model', AgentRuntimeErrorType.RequestBodyTooLarge],
         [
           'error getting file type: failed to download file from https://example.com/a.png',
           AgentRuntimeErrorType.InvalidRequestFormat,
@@ -503,5 +514,62 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
         provider: 'vertexai',
       })?.code,
     ).toBe(AgentRuntimeErrorType.InvalidVertexCredentials);
+  });
+});
+
+describe('2026-09 triage harvest (production residue)', () => {
+  // Real messages sampled from `agent_operations` rows that landed in the
+  // UpstreamHttpError / bare-500 / bare-403 residue over 30 days. Every pattern
+  // here was audited to match zero `provider = 'lobehub'` rows first — first-party
+  // provider errors are our own bugs and must stay visible.
+  const cases: [string, string][] = [
+    ['Sorry, your account balance is insufficient', AgentRuntimeErrorType.InsufficientQuota],
+    [
+      '403 {"error":{"type":"Aihubmix_api_error","message":"Your account balance is insufficient. Please recharge your account to continue using the API."}}',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      'LLM stream error: You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.',
+      AgentRuntimeErrorType.InsufficientQuota,
+    ],
+    [
+      '404 Model "gpt-5.6-luna" is not supported by any configured account in this group',
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    [
+      'This model models/gemini-2.5-pro is no longer available to new users. Please update your code to use a newer model.',
+      AgentRuntimeErrorType.ModelNotFound,
+    ],
+    [
+      '404 This model is only available through the Batch API. Use the /api/beta/batches endpoint instead.',
+      AgentRuntimeErrorType.CapabilityNotSupported,
+    ],
+    [
+      '400 当前模型或商家不支持请求中的能力。 原因：请求使用了当前渠道不支持的能力，例如图片、PDF、tools、response_format、thinking 或特定协议能力。',
+      AgentRuntimeErrorType.CapabilityNotSupported,
+    ],
+    [
+      '400 data: {"error":{"code":"data_inspection_failed","param":null,"message":"Input text data may contain inappropriate content."}}',
+      AgentRuntimeErrorType.ContentModeration,
+    ],
+    [
+      'LLM stream error: provider temporarily unavailable. Error id: glm-7f67a83c5d74',
+      AgentRuntimeErrorType.ProviderServiceUnavailable,
+    ],
+    [
+      'The bound service account is deleted or disabled. The service account bound to the API key is unavailable.',
+      AgentRuntimeErrorType.InvalidProviderAPIKey,
+    ],
+  ];
+
+  it.each(cases)('classifies %j', (message, expected) => {
+    expect(matchErrorPattern({ message })?.code).toBe(expected);
+    expect(isUserSideError(undefined, message)).toBe(true);
+  });
+
+  it('keeps first-party lobehub failures unclassified so they stay visible', () => {
+    // The bare `Forbidden` body behind 2.4k lobehub-provider rows must NOT be
+    // swept into a user-side code by any pattern added here.
+    expect(matchErrorPattern({ message: 'Forbidden', provider: 'lobehub' })).toBeUndefined();
   });
 });

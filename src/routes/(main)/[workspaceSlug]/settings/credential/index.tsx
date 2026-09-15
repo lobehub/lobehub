@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, Tabs } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
 import { Empty } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Plus, UserRoundIcon, UsersIcon } from 'lucide-react';

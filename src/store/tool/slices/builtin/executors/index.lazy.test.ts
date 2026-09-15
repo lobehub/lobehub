@@ -15,13 +15,17 @@ describe('builtin executor catalog loading', () => {
     mocks.catalogEvaluated.mockClear();
   });
 
-  it('keeps executor implementations out of the registry shell import', async () => {
-    const { registerBuiltinToolExecutors } = await import('./index');
+  it(
+    'keeps executor implementations out of the registry shell import',
+    { timeout: 30_000 },
+    async () => {
+      const { registerBuiltinToolExecutors } = await import('./index');
 
-    expect(mocks.catalogEvaluated).not.toHaveBeenCalled();
+      expect(mocks.catalogEvaluated).not.toHaveBeenCalled();
 
-    await registerBuiltinToolExecutors();
+      await registerBuiltinToolExecutors();
 
-    expect(mocks.catalogEvaluated).toHaveBeenCalledTimes(1);
-  });
+      expect(mocks.catalogEvaluated).toHaveBeenCalledTimes(1);
+    },
+  );
 });

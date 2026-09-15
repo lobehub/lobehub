@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import type {
   LocalFilePreviewUrlParams,
   LocalMoveFilesResultItem,
@@ -72,20 +73,30 @@ class ProjectFileService {
 
   /** Search files within a project working directory. Matching runs on the file host. */
   async searchProjectFiles({
+    changedOnly,
     deviceId,
+    excludeIgnored,
     limit,
     query,
     scope,
   }: {
+    changedOnly?: boolean;
     deviceId?: string;
+    excludeIgnored?: boolean;
     limit?: number;
     query: string;
     scope: string;
   }): Promise<ProjectFileSearchResult | undefined> {
     return deviceId
-      ? ((await lambdaClient.device.searchProjectFiles.query({ deviceId, limit, query, scope })) ??
-          undefined)
-      : localFileService.searchProjectFiles({ limit, query, scope });
+      ? ((await lambdaClient.device.searchProjectFiles.query({
+          changedOnly,
+          deviceId,
+          excludeIgnored,
+          limit,
+          query,
+          scope,
+        })) ?? undefined)
+      : localFileService.searchProjectFiles({ changedOnly, excludeIgnored, limit, query, scope });
   }
 
   /** File preview payload for a file in a project working directory. */
@@ -113,6 +124,66 @@ class ProjectFileService {
     }
 
     return localFileService.getLocalFilePreview(params);
+  }
+
+  /**
+   * Raw bytes for a file in a project working directory. Only the local desktop
+   * transport can serve bytes today — remote devices have no byte-read RPC yet,
+   * so device-backed calls resolve to `undefined`.
+   */
+  async readProjectFileBytes({
+    deviceId,
+    path,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    path: string;
+    workingDirectory: string;
+  }): Promise<{ bytes: Uint8Array; contentType: string } | undefined> {
+    if (deviceId || !isDesktop) return undefined;
+    return localFileService.readLocalFileBytes({ path, workingDirectory });
+  }
+
+  async readExternalAssetForPublish({
+    deviceId,
+    path,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    path: string;
+    workingDirectory: string;
+  }): Promise<{ bytes: Uint8Array; contentType: string } | undefined> {
+    if (!deviceId) {
+      return localFileService.readExternalAssetForPublish({ path, workingDirectory });
+    }
+
+    const result = await lambdaClient.device.readExternalAssetForPublish.query({
+      deviceId,
+      path,
+      workingDirectory,
+    });
+    if (!result.success || result.base64 === undefined || !result.contentType) return;
+
+    return {
+      bytes: Uint8Array.from(globalThis.atob(result.base64), (char) => char.charCodeAt(0)),
+      contentType: result.contentType,
+    };
+  }
+
+  async copyAssetForPublish({
+    deviceId,
+    from,
+    to,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    from: string;
+    to: string;
+    workingDirectory: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    return deviceId
+      ? lambdaClient.device.copyAssetForPublish.mutate({ deviceId, from, to, workingDirectory })
+      : localFileService.copyAssetForPublish({ from, to, workingDirectory });
   }
 
   /**

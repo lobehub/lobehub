@@ -1,5 +1,5 @@
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { Card } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Database, Plus } from 'lucide-react';

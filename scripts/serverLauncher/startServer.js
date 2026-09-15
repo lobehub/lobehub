@@ -15,6 +15,7 @@ const { checkDeprecatedAuth } = require(sharedModulePath);
 
 // Set file paths
 const DB_MIGRATION_SCRIPT_PATH = '/app/docker.cjs';
+const ES_MIGRATION_SCRIPT_PATH = '/app/fts-search-elasticsearch-reindex.cjs';
 const SERVER_SCRIPT_PATH = '/app/server.js';
 const PROXYCHAINS_CONF_PATH = '/etc/proxychains4.conf';
 
@@ -114,12 +115,13 @@ ${protocol} ${ip} ${port} ${user} ${pass}
 };
 
 // Function to execute a script with child process spawn
-const runScript = (scriptPath, useProxy = false) => {
+const runScript = (scriptPath, useProxy = false, args = []) => {
   const command = useProxy
-    ? ['/bin/proxychains', '-q', '/bin/node', scriptPath]
-    : ['/bin/node', scriptPath];
+    ? ['/bin/proxychains', '-q', '/bin/node', scriptPath, ...args]
+    : ['/bin/node', scriptPath, ...args];
   return new Promise((resolve, reject) => {
     const process = spawn(command.shift(), command, { stdio: 'inherit' });
+    process.on('error', reject);
     process.on('close', (code) =>
       code === 0 ? resolve() : reject(new Error(`🔴 Process exited with code ${code}`)),
     );
@@ -163,7 +165,25 @@ const startGateway = async () => {
   console.error('❌ Gateway: Failed to start after retries.');
 };
 
-// Function to create QStash schedule for dispatching workflow tasks every 10 minutes
+// Recurring QStash schedules this deployment needs.
+//
+// The goal sweep is not an optimization: a Goal Graph advances on events, so a
+// dropped delivery or a process that dies after dispatch would strand the goal
+// forever with nothing to notice. The sweep is what makes that recoverable.
+const QSTASH_SCHEDULES = [
+  {
+    cron: '*/10 * * * *',
+    id: 'lobe-task-schedule-dispatch',
+    path: '/api/workflows/task/schedule-dispatch',
+  },
+  {
+    cron: '*/5 * * * *',
+    id: 'lobe-goal-sweep',
+    path: '/api/workflows/goal/sweep',
+  },
+];
+
+// Function to create the recurring QStash schedules the server relies on
 const createQstashSchedule = async () => {
   const QSTASH_URL = process.env.QSTASH_URL || 'https://qstash-eu-central-1.upstash.io';
 
@@ -179,28 +199,30 @@ const createQstashSchedule = async () => {
     return;
   }
 
-  const url = `${QSTASH_URL}/v2/schedules/${APP_URL}/api/workflows/task/schedule-dispatch`;
+  for (const schedule of QSTASH_SCHEDULES) {
+    const url = `${QSTASH_URL}/v2/schedules/${APP_URL}${schedule.path}`;
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${QSTASH_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Upstash-Method': 'POST',
-        'Upstash-Cron': '*/10 * * * *',
-        'Upstash-Schedule-Id': 'lobe-task-schedule-dispatch',
-      },
-      body: JSON.stringify({}),
-    });
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${QSTASH_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Upstash-Method': 'POST',
+          'Upstash-Cron': schedule.cron,
+          'Upstash-Schedule-Id': schedule.id,
+        },
+        body: JSON.stringify({}),
+      });
 
-    if (res.ok) {
-      console.log('✅ QStash: Schedule created successfully.');
-    } else {
-      console.error(`❌ QStash: Failed to create schedule. Status ${res.status}`);
+      if (res.ok) {
+        console.log(`✅ QStash: Schedule ${schedule.id} created successfully.`);
+      } else {
+        console.error(`❌ QStash: Failed to create schedule ${schedule.id}. Status ${res.status}`);
+      }
+    } catch (err) {
+      console.error(`❌ QStash: Error creating schedule ${schedule.id}:`, err);
     }
-  } catch (err) {
-    console.error('❌ QStash: Error creating schedule:', err);
   }
 };
 
@@ -223,13 +245,14 @@ const runServer = async () => {
   console.log('🌐 DNS Server:', dns.getServers());
   console.log('-------------------------------------');
 
-  if (process.env.DATABASE_DRIVER) {
+  const migrateElasticsearch = process.env.FTS_SEARCH_PROVIDER === 'elasticsearch';
+  if (process.env.DATABASE_DRIVER || migrateElasticsearch) {
     try {
       await fs.access(DB_MIGRATION_SCRIPT_PATH);
 
       await runScript(DB_MIGRATION_SCRIPT_PATH);
     } catch (err) {
-      if (err.code === 'ENOENT') {
+      if (err.code === 'ENOENT' && !migrateElasticsearch) {
         console.log(
           `⚠️ DB Migration: Not found ${DB_MIGRATION_SCRIPT_PATH}. Skipping DB migration. Ensure to migrate database manually.`,
         );
@@ -239,6 +262,19 @@ const runServer = async () => {
         console.error(err);
         process.exit(1);
       }
+    }
+  }
+
+  /** Search indexes must be ready before the application can accept requests. */
+  if (migrateElasticsearch) {
+    try {
+      const args = ['--startup', '--yes'];
+      if (process.env.ENABLE_TELEMETRY) args.push('--telemetry-environment=production');
+      await runScript(ES_MIGRATION_SCRIPT_PATH, false, args);
+    } catch (err) {
+      console.error('❌ Elasticsearch migration failed; application startup stopped.');
+      console.error(err);
+      process.exit(1);
     }
   }
 

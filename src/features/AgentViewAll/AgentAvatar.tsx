@@ -1,10 +1,10 @@
 'use client';
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { type SidebarAgentItem } from '@lobechat/types';
-import { Avatar } from '@lobehub/ui';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { memo } from 'react';
 
+import Avatar from '@/components/Avatar';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 
 interface AgentAvatarProps {
@@ -28,6 +28,7 @@ const AgentAvatar = memo<AgentAvatarProps>(({ item, size }) => {
       emojiScaleWithBackground
       avatar={typeof avatar === 'string' ? avatar : DEFAULT_AVATAR}
       background={backgroundColor || undefined}
+      name={agentDisplayName(item)}
       shape={'square'}
       size={size}
     />

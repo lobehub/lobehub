@@ -2,8 +2,13 @@ import { spawn } from 'node:child_process';
 
 import {
   buildHeteroExecStdinPayload,
+  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
+import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
+
+import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
+import { registerAgentRun } from './agentRunRegistry';
 
 export interface SpawnHeteroAgentRunParams {
   agentType: string;
@@ -16,10 +21,14 @@ export interface SpawnHeteroAgentRunParams {
   jwt: string;
   operationId: string;
   prompt: string;
+  /** System context used only by the automatic retry without native resume. */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   serverUrl: string;
   systemContext?: string;
   topicId: string;
+  /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
+  workspaceId?: string;
 }
 
 export interface AgentRunAckResult {
@@ -43,11 +52,9 @@ interface SpawnHeteroAgentRunLogger {
  * detached `lh connect --daemon` child where `PATH` may be minimal.
  *
  * Resolves only once the child's outcome is known: `accepted` on the `spawn`
- * event, `rejected` on an early `error`. `spawn()` reports failures (missing or
- * inaccessible `cwd`, etc.) asynchronously via `error`, so acking eagerly would
- * report a false success and leave the run with no process to emit
- * `heteroFinish` — surfacing as a stuck assistant message. A rejected ack
- * instead flows back as a dispatch failure the user can see.
+ * event, `rejected` on an early wrapper-process `error`. A missing target cwd
+ * is handled inside `lh hetero exec`, which can classify it and emit
+ * `heteroFinish`; other wrapper spawn failures flow back as rejected dispatches.
  */
 export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
@@ -62,12 +69,18 @@ export function spawnHeteroAgentRun(
     jwt,
     operationId,
     prompt,
+    resumeFallbackSystemContext,
     resumeSessionId,
     serverUrl,
     systemContext,
     topicId,
+    workspaceId,
   } = params;
   const workDir = cwd ?? process.cwd();
+  // A stale project path must not prevent the wrapper CLI from starting: the
+  // inner spawnAgent preflight owns cwd classification and reports the
+  // structured working_directory_not_found error through heteroFinish.
+  const spawnCwd = resolveHeteroSpawnCwd(workDir);
 
   // Server-ingest mode (--topic + --operation-id): events are batch-POSTed to
   // the server, not rendered. `--input-json -` reads the prompt from stdin.
@@ -95,7 +108,25 @@ export function spawnHeteroAgentRun(
   // array: context block first, then the user's prompt, then images — mirrors
   // the desktop path. `lh hetero exec` coerces both shapes via
   // coerceJsonPrompt.
-  const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
+  const stdinPayload = buildHeteroExecStdinPayload({
+    imageList,
+    prompt,
+    resumeFallbackSystemContext,
+    systemContext,
+  });
+
+  // A connector can itself be started inside another agent run. Its ambient
+  // identity belongs to the launcher, not this dispatched conversation; CLI
+  // evidence commands must never attach this run's outputs to that ancestor.
+  const childEnv = { ...process.env };
+  for (const key of [
+    'LOBEHUB_AGENT_ID',
+    'LOBEHUB_ASSISTANT_MESSAGE_ID',
+    'LOBEHUB_TASK_ID',
+    'LOBEHUB_WORKSPACE_ID',
+  ]) {
+    delete childEnv[key];
+  }
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;
@@ -105,18 +136,44 @@ export function spawnHeteroAgentRun(
       resolve(result);
     };
 
+    let pid: number | undefined;
     const child = spawn(process.execPath, [...process.execArgv, ...cliArgs], {
-      cwd: workDir,
+      cwd: spawnCwd,
+      detached: true,
       env: {
-        ...process.env,
+        ...childEnv,
         ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
+        [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
         LOBEHUB_JWT: jwt,
+        LOBEHUB_OPERATION_ID: operationId,
         LOBEHUB_SERVER: serverUrl,
+        LOBEHUB_TOPIC_ID: topicId,
+        ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
       },
       stdio: ['pipe', 'inherit', 'inherit'],
+      windowsHide: true,
     });
 
     child.once('spawn', () => {
+      registerAgentRun(operationId, child);
+      // Register the child into the task registry so `cancelHeteroTask`
+      // dispatched from the server can resolve it by operationId and signal
+      // the whole process group. `detached: true` places the CLI in its own
+      // group; the inherited-group env contract keeps its agent descendants
+      // in that same group without affecting the connect daemon.
+      pid = child.pid;
+      if (pid !== undefined) {
+        saveTask({
+          agentType,
+          operationId,
+          pid,
+          startedAt: new Date().toISOString(),
+          taskId: operationId,
+          topicId,
+          workspaceId,
+        });
+      }
+
       // Only safe to write stdin once the process actually started.
       try {
         child.stdin?.write(stdinPayload);
@@ -135,6 +192,12 @@ export function spawnHeteroAgentRun(
     });
 
     child.on('exit', (code, signal) => {
+      // Only remove the registry entry if the exiting PID still owns this
+      // task — a newer run that reused the same operationId must not be
+      // cleared by a stale exit event.
+      if (pid !== undefined && getTask(operationId)?.pid === pid) {
+        removeTask(operationId);
+      }
       logger?.info?.(`hetero exec exited (op=${operationId}) code=${code} signal=${signal}`);
     });
   });

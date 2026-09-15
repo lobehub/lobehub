@@ -1,4 +1,5 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
+import { extractHtmlTitle } from '@lobechat/html-artifact';
 import { exportFile } from '@lobechat/utils/client';
 import { Block, Flexbox, Highlighter, HtmlPreview } from '@lobehub/ui';
 import { Button, Drawer, Tabs } from '@lobehub/ui/base-ui';
@@ -27,13 +28,6 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
   const { t } = useTranslation('components');
   const [mode, setMode] = useState<'preview' | 'code'>('preview');
 
-  const htmlContent = content;
-
-  const extractTitle = useCallback(() => {
-    const m = htmlContent.match(/<title>([\S\s]*?)<\/title>/i);
-    return m ? m[1].trim() : undefined;
-  }, [htmlContent]);
-
   const sanitizeFileName = useCallback((name: string) => {
     return name
       .replaceAll(/["*/:<>?\\|]/g, '-')
@@ -43,10 +37,10 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
   }, []);
 
   const onDownload = useCallback(() => {
-    const title = extractTitle();
+    const title = extractHtmlTitle(content);
     const base = title ? sanitizeFileName(title) : `chat-html-preview-${Date.now()}`;
     exportFile(content, `${base}.html`);
-  }, [content, extractTitle, sanitizeFileName]);
+  }, [content, sanitizeFileName]);
 
   const extra = (
     <Flexbox horizontal align={'center'} gap={8}>
@@ -115,7 +109,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
             showLanguage={false}
             style={{ height: '100%', overflow: 'auto' }}
           >
-            {htmlContent}
+            {content}
           </Highlighter>
         </Block>
       )}

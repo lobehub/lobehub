@@ -1,4 +1,5 @@
 export { ErrorClassifier, type ErrorClassifierType } from './classifier';
+export { getRuntimeErrorI18nKey, type RuntimeErrorI18nKey } from './i18nKey';
 export { isUserSideError, matchErrorPattern, type MatchInput, type MatchResult } from './match';
 export { isEmptyModelCompletion, ModelEmptyError } from './modelEmptyCompletion';
 export { ModelRefusalError } from './modelRefusal';

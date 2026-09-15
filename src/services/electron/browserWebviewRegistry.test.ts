@@ -76,11 +76,12 @@ describe('browserWebviewRegistry', () => {
     expect(webview?.parentElement).toBe(retainedHost);
     expect(retainedHost?.parentElement).toBe(portalRoot);
     expect(portalRoot.firstElementChild).toBe(appSurface);
-    expect(portalRoot.lastElementChild).toBe(retainedHost);
+    const resizeBridge = portalRoot.querySelector('[data-browser-resize-bridge="true"]');
+    expect(retainedHost?.nextElementSibling).toBe(resizeBridge);
 
     const overlayPortal = document.createElement('div');
     portalRoot.append(overlayPortal);
-    expect(retainedHost?.nextElementSibling).toBe(overlayPortal);
+    expect(resizeBridge?.nextElementSibling).toBe(overlayPortal);
     expect(webview?.style.left).toBe('320px');
     expect(webview?.style.top).toBe('40px');
     expect(webview?.style.width).toBe('360px');
@@ -118,6 +119,127 @@ describe('browserWebviewRegistry', () => {
     expect(webview?.style.left).toBe('240px');
     await browserWebviewRegistry.detach('moving-topic', viewport);
     vi.useRealTimers();
+  });
+
+  it('moves a zero-sized guest offscreen so its last compositor frame cannot remain visible', async () => {
+    vi.useFakeTimers();
+
+    const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
+    let width = 360;
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, right: 320 + width, top: 40, width }) as DOMRect;
+    document.body.append(viewport);
+
+    const attaching = browserWebviewRegistry.attach('collapsing-topic', viewport);
+    const webview = document.querySelector<HTMLElement>('webview');
+    webview?.dispatchEvent(new Event('dom-ready'));
+    await vi.advanceTimersByTimeAsync(0);
+    await attaching;
+    expect(webview).toHaveStyle({ left: '320px', opacity: '1', width: '360px' });
+
+    width = 0;
+    await vi.advanceTimersByTimeAsync(120);
+
+    const bridge = document.querySelector<HTMLElement>('[data-browser-resize-bridge="true"]');
+    expect(webview).toHaveStyle({ left: '-10000px', opacity: '0', width: '1200px' });
+    expect(bridge).toHaveStyle({ pointerEvents: 'none', visibility: 'hidden' });
+
+    width = 360;
+    await vi.advanceTimersByTimeAsync(120);
+
+    expect(webview).toHaveStyle({ left: '320px', opacity: '1', width: '360px' });
+    expect(bridge).toHaveStyle({ pointerEvents: 'auto', visibility: 'visible' });
+
+    await browserWebviewRegistry.detach('collapsing-topic', viewport);
+    vi.useRealTimers();
+  });
+
+  it('moves the guest offscreen when a collapsed ancestor clips a fixed-width host', async () => {
+    vi.useFakeTimers();
+
+    const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
+    let panelWidth = 360;
+    const panel = document.createElement('aside');
+    panel.style.overflow = 'hidden';
+    panel.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, top: 40, width: panelWidth }) as DOMRect;
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, right: 680, top: 40, width: 360 }) as DOMRect;
+    panel.append(viewport);
+    document.body.append(panel);
+
+    const attaching = browserWebviewRegistry.attach('clipped-topic', viewport);
+    const webview = document.querySelector<HTMLElement>('webview');
+    webview?.dispatchEvent(new Event('dom-ready'));
+    await vi.advanceTimersByTimeAsync(0);
+    await attaching;
+    expect(webview).toHaveStyle({ left: '320px', opacity: '1', width: '360px' });
+
+    panelWidth = 0;
+    await vi.advanceTimersByTimeAsync(120);
+
+    expect(webview).toHaveStyle({ left: '-10000px', opacity: '0', width: '1200px' });
+
+    panelWidth = 360;
+    await vi.advanceTimersByTimeAsync(120);
+
+    expect(webview).toHaveStyle({ left: '320px', opacity: '1', width: '360px' });
+
+    await browserWebviewRegistry.detach('clipped-topic', viewport);
+    vi.useRealTimers();
+  });
+
+  it('forwards edge drags to the panel resize handle without shrinking the webview', async () => {
+    const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
+    const portalRoot = document.createElement('div');
+    portalRoot.id = 'lobe-ui-theme-app';
+    document.body.append(portalRoot);
+    const draggablePanel = document.createElement('aside');
+    draggablePanel.className = 'ant-draggable-panel';
+    draggablePanel.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, right: 680, top: 40, width: 360 }) as DOMRect;
+    document.body.append(draggablePanel);
+    const viewport = document.createElement('div');
+    viewport.getBoundingClientRect = () =>
+      ({ height: 600, left: 320, right: 680, top: 40, width: 360 }) as DOMRect;
+    draggablePanel.append(viewport);
+
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'ant-draggable-panel-left-handle';
+    draggablePanel.append(resizeHandle);
+    const forwardedMouseDown = vi.fn();
+    resizeHandle.addEventListener('mousedown', forwardedMouseDown);
+
+    const attaching = browserWebviewRegistry.attach('resizable-topic', viewport);
+    const webview = document.querySelector<HTMLElement>('webview');
+    webview?.dispatchEvent(new Event('dom-ready'));
+    await attaching;
+
+    const bridge = document.querySelector<HTMLElement>('[data-browser-resize-bridge="true"]');
+    expect(bridge).not.toBeNull();
+    expect(webview?.style.left).toBe('320px');
+    expect(webview?.style.width).toBe('360px');
+
+    bridge?.dispatchEvent(
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        clientX: 320,
+        clientY: 200,
+      }),
+    );
+
+    expect(forwardedMouseDown).toHaveBeenCalledOnce();
+    expect(webview?.style.pointerEvents).toBe('none');
+
+    window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    expect(webview?.style.pointerEvents).toBe('auto');
+
+    await browserWebviewRegistry.detach('resizable-topic', viewport);
+    expect(document.querySelector('[data-browser-resize-bridge="true"]')).toBeNull();
   });
 
   it('does not evict a recently touched hidden webview', async () => {

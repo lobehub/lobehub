@@ -1,15 +1,7 @@
 'use client';
 
-import {
-  ActionIcon,
-  Avatar,
-  Block,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  stopPropagation,
-} from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { ActionIcon, Avatar, confirmModal } from '@lobehub/ui/base-ui';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -63,7 +55,6 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
     if (isInstalled) {
       return (
         <DropdownMenu
-          nativeButton={false}
           placement="bottomRight"
           items={[
             {

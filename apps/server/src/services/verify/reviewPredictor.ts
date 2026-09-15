@@ -1,6 +1,12 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainVerifyReviewPrediction,
+  REVIEW_PREDICT_PROMPT_VERSION,
+  REVIEW_PREDICTION_JSON_SCHEMA,
+} from '@lobechat/prompts';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import { pickTrimmedString, toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
@@ -8,16 +14,21 @@ import { FileModel } from '@/database/models/file';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
-import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
-import { buildReviewPredictPrompt, REVIEW_PREDICT_PROMPT_VERSION } from './prompts';
+import { resolveModelReadableFrameUrl } from './modelFrames';
+import type { ReviewEvidenceRow } from './reviewEvidence';
+import { formatTextEvidence, TEXT_EVIDENCE_TYPES } from './reviewEvidence';
+import { describeWithheldEvidence } from './reviewInspection';
 import type { RawReviewPrediction } from './schema';
-import { REVIEW_PREDICTION_JSON_SCHEMA, ReviewPredictionSchema } from './schema';
+import { ReviewPredictionSchema } from './schema';
 
 const log = debug('lobe-server:verify-review-predictor');
+
+/** Exactly what the model hands back, so the three readers cannot drift. */
+type CheckEvidenceRows = Awaited<ReturnType<VerifyEvidenceModel['listByCheckResult']>>;
 
 /** Media a still frame can actually carry a judgement about. */
 const VISUAL_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
@@ -43,6 +54,8 @@ export const REVIEW_PREDICT_CONCURRENCY = 4;
 export interface PredictReviewParams {
   /** The check result to re-judge. */
   checkResultId: string;
+  /** Goal reviews also inspect original nonvisual evidence. */
+  includeTextEvidence?: boolean;
   /** The check's detailed judging rubric, when the criterion links one. */
   instructionDocumentId?: string | null;
   modelConfig: { model: string; provider: string };
@@ -73,6 +86,25 @@ export const shouldSurfaceProposal = <
   // two from drifting — widen the gate and the UI type stops compiling.
 ): prediction is T & { action: 'reject' } =>
   prediction.action === 'reject' && !hasUserReview && !prediction.adjudication;
+
+/**
+ * Whether a stored row is the opinion of the reviewer currently in service.
+ *
+ * Rows from an earlier pin (a different model, or an older prompt version)
+ * stay in the table for the comparison set, but they are not what the page
+ * shows or what a fresh request is waiting on: reading the newest row across
+ * models let a stale verdict satisfy "the batch finished" the moment the
+ * current model's row was cleared for re-judging.
+ */
+export const isCurrentReviewPrediction = (
+  prediction: { id?: string; model: string; promptVersion: string; provider: string },
+  modelConfig: { model: string; provider: string },
+  automaticPredictionIds?: ReadonlySet<string>,
+): boolean =>
+  Boolean(prediction.id && automaticPredictionIds?.has(prediction.id)) ||
+  (prediction.provider === modelConfig.provider &&
+    prediction.model === modelConfig.model &&
+    prediction.promptVersion === REVIEW_PREDICT_PROMPT_VERSION);
 
 /**
  * Produces an automated second opinion on a check the verifier already judged.
@@ -107,6 +139,20 @@ export class VerifyReviewPredictorService {
   }
 
   /**
+   * Forget the unanswered attempts a new batch is about to replace, so that a
+   * missing row means "not judged yet" for every check in the batch. Called
+   * BEFORE the batch is dispatched — the reset is what lets a poller tell a
+   * finished batch from the previous run's leftovers.
+   */
+  async resetPending(checkResultIds: string[], modelConfig: { model: string; provider: string }) {
+    await this.predictionModel.resetUnadjudicated(checkResultIds, {
+      model: modelConfig.model,
+      promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
+      provider: modelConfig.provider,
+    });
+  }
+
+  /**
    * Re-judge one check.
    *
    * Never throws: this runs opportunistically behind the reviewer's own work and
@@ -138,28 +184,50 @@ export class VerifyReviewPredictorService {
       return null;
     }
 
-    const visuals = await this.collectVisuals(result);
+    // One read of the check's evidence feeds all three decisions below — which
+    // frames to attach, which payloads to inline, and what the request had to
+    // hold back — so they cannot disagree about what the check carries.
+    const evidence = await this.evidenceModel.listByCheckResult(result.id);
+    const visuals = await this.resolveVisuals(evidence);
     // Nothing to look at means nothing this reviewer can honestly say. A
     // text-only opinion here would be the model paraphrasing the verifier's own
     // reasoning back at the user, which is worse than silence.
-    if (visuals.length === 0) {
-      log('predict: %s has no visual evidence, skipping', checkResultId);
-      return this.record(params, 'skipped', 'no visual evidence to judge');
+    const collected = params.includeTextEvidence
+      ? await this.collectTextEvidence(evidence)
+      : undefined;
+    const textEvidence = collected?.text;
+    const withheldEvidence = describeWithheldEvidence({
+      attachedVisualIds: new Set(visuals.map((visual) => visual.evidenceId)),
+      evidence,
+      includedTextIds: collected?.includedIds ?? new Set(),
+      textLaneEnabled: Boolean(params.includeTextEvidence),
+    });
+    if (visuals.length === 0 && !textEvidence) {
+      log('predict: %s has no readable evidence, skipping', checkResultId);
+      return this.record(
+        params,
+        'skipped',
+        params.includeTextEvidence
+          ? 'no readable evidence (no frames and no text payload) to judge'
+          : 'no visual evidence to judge',
+      );
     }
 
     const instruction = params.instructionDocumentId
       ? ((await this.documentModel.findById(params.instructionDocumentId))?.content ?? undefined)
       : undefined;
 
-    const { system, user } = buildReviewPredictPrompt({
+    const chain = chainVerifyReviewPrediction({
       instruction,
+      textEvidence,
       requirement: params.requirement ?? undefined,
       surface: params.surface ?? undefined,
       title: result.checkItemTitle ?? 'Acceptance check',
       toulmin: (result.toulmin ?? undefined) as
         { evidence?: string; reasoning?: string } | undefined,
       verdict: result.verdict ?? undefined,
-      visuals: visuals.map((visual) => visual.description ?? ''),
+      visuals,
+      withheldEvidence,
     });
 
     const startedAt = Date.now();
@@ -168,19 +236,7 @@ export class VerifyReviewPredictorService {
       const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
       raw = await ai.generateObject(
         {
-          messages: [
-            { content: system, role: 'system' as const },
-            {
-              content: [
-                { text: user, type: 'text' as const },
-                ...visuals.map((visual) => ({
-                  image_url: { detail: 'high' as const, url: visual.accessUrl },
-                  type: 'image_url' as const,
-                })),
-              ],
-              role: 'user' as const,
-            },
-          ],
+          ...chain,
           model: modelConfig.model,
           provider: modelConfig.provider,
           schema: REVIEW_PREDICTION_JSON_SCHEMA,
@@ -195,7 +251,16 @@ export class VerifyReviewPredictorService {
       );
     } catch (error) {
       log('predict: model call failed for %s — %O', checkResultId, error);
-      return this.record(params, 'errored', error instanceof Error ? error.message : String(error));
+      const detail = toRecord(error);
+      const message =
+        pickTrimmedString(detail?.message) ??
+        pickTrimmedString(toRecord(detail?.error)?.message) ??
+        pickTrimmedString(error);
+      const errorType = pickTrimmedString(detail?.errorType);
+      const reason =
+        message ??
+        `Review model ${modelConfig.provider}/${modelConfig.model} could not run${errorType ? ` (${errorType})` : ''}. Check the provider configuration and retry the review.`;
+      return this.record(params, 'errored', reason);
     }
 
     const parsed = ReviewPredictionSchema.safeParse(raw);
@@ -223,6 +288,10 @@ export class VerifyReviewPredictorService {
       promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
       rationale: prediction.rationale ?? undefined,
       status: 'judged',
+      // Persisted on a judged row too: "rejected having seen everything" and
+      // "rejected while three frames were held back" are the same verdict in the
+      // agreement statistics unless the caveat is stored with it.
+      statusReason: withheldEvidence,
     });
   }
 
@@ -242,14 +311,46 @@ export class VerifyReviewPredictorService {
     });
   }
 
+  private async collectTextEvidence(evidence: CheckEvidenceRows) {
+    const rows: ReviewEvidenceRow[] = [];
+    for (const row of evidence) {
+      if (!TEXT_EVIDENCE_TYPES.has(row.type)) continue;
+      const content = await this.resolveEvidenceContent(row);
+      if (content) rows.push({ content, description: row.description, id: row.id, type: row.type });
+    }
+    return { includedIds: new Set(rows.map((row) => row.id)), text: formatTextEvidence(rows) };
+  }
+
+  /**
+   * The payload a text evidence row stands for, wherever it lives. A row that
+   * only names a path proves nothing, so an attachment is read rather than
+   * quoted: the size ceiling keeps one oversized artifact from being streamed
+   * into a prompt that could never hold it.
+   */
+  private async resolveEvidenceContent(row: {
+    content?: string | null;
+    documentId?: string | null;
+    fileId?: string | null;
+  }) {
+    if (row.content) return row.content;
+    if (row.documentId) {
+      const document = await this.documentModel.findById(row.documentId);
+      if (document?.content) return document.content;
+    }
+    if (row.fileId) {
+      const file = await this.fileModel.findById(row.fileId);
+      if (file && file.size <= 1_000_000) return this.fileService.getFileContent(file.url);
+    }
+    return null;
+  }
+
   /**
    * Evidence frames the model can actually read, resolved to model-readable
    * URLs. Order matters: `imageIndex` in the model's answer refers to a position
    * in this array, and that index is how a region gets bound back to the
    * evidence row it was drawn on.
    */
-  private async collectVisuals(result: VerifyCheckResultItem) {
-    const evidence = await this.evidenceModel.listByCheckResult(result.id);
+  private async resolveVisuals(evidence: CheckEvidenceRows) {
     const visual = evidence
       .filter((row) => VISUAL_EVIDENCE_TYPES.has(row.type) && row.fileId)
       .slice(0, MAX_VISUALS);
@@ -259,7 +360,7 @@ export class VerifyReviewPredictorService {
         const file = await this.fileModel.findById(row.fileId!);
         if (!file) return null;
         return {
-          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
+          accessUrl: await resolveModelReadableFrameUrl(this.fileService, file),
           description: row.description,
           evidenceId: row.id,
         };

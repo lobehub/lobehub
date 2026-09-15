@@ -1,34 +1,44 @@
 // @vitest-environment node
+import {
+  ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_UNJUDGEABLE_ERROR,
+} from '@lobechat/const/goal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+
+import { reviewGoalDelivery } from '../goalReview';
 import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
+
+vi.mock('../goalReview', () => ({ reviewGoalDelivery: vi.fn() }));
 
 vi.mock('../repairService', () => ({
   maybeAutoRepair: vi.fn(),
 }));
 vi.mock('../reporter', () => ({
-  VerifyReporterService: vi.fn(() => ({ generateReport: vi.fn() })),
+  VerifyReporterService: vi.fn(function () {
+    return { generateReport: vi.fn() };
+  }),
 }));
 
 const {
+  goalFindByTask,
   runFindByOperation,
   runClaimTaskDrive,
   runSetMetadata,
   opFindById,
   taskFindById,
-  taskGetGoalConfig,
   taskUpdateStatus,
+  briefModelConstruct,
   briefCreate,
   serviceUpdateStatus,
   statusRecompute,
   deliverMock,
-  goalContinueMock,
-  goalSyncMock,
 } = vi.hoisted(() => ({
+  goalFindByTask: vi.fn(),
   briefCreate: vi.fn(),
+  briefModelConstruct: vi.fn(),
   deliverMock: vi.fn(),
-  goalContinueMock: vi.fn(),
-  goalSyncMock: vi.fn(),
   opFindById: vi.fn(),
   runFindByOperation: vi.fn(),
   runClaimTaskDrive: vi.fn().mockResolvedValue(true),
@@ -36,90 +46,174 @@ const {
   serviceUpdateStatus: vi.fn(),
   statusRecompute: vi.fn(),
   taskFindById: vi.fn(),
-  taskGetGoalConfig: vi.fn(),
   taskUpdateStatus: vi.fn(),
 }));
 
-vi.mock('../goalLoop', () => ({
-  goalExhaustedBriefCopy: (task: any, outcome: string) => ({
-    summary: `budget exhausted (${outcome})`,
-    title: `${task.identifier} goal paused`,
-  }),
-  goalReadyForReviewBriefCopy: (task: any, acceptanceId?: string) => ({
-    actions: acceptanceId
-      ? [
-          {
-            key: 'review',
-            label: 'Review delivery',
-            type: 'link',
-            url: `/acceptance/${acceptanceId}`,
-          },
-        ]
-      : [],
-    summary: 'ready for your sign-off',
-    title: `${task.identifier} goal delivered`,
-  }),
-  maybeContinueGoalLoop: goalContinueMock,
-  resolveGoalRoundBudget: (goal: any) =>
-    goal.maxIterations === null ? Number.POSITIVE_INFINITY : (goal.maxIterations ?? 3),
-  syncGoalToolState: goalSyncMock,
-}));
-
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn(() => ({ recompute: statusRecompute })),
+  VerifyStatusService: vi.fn(function () {
+    return { recompute: statusRecompute };
+  }),
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    claimTaskDrive: runClaimTaskDrive,
-    findByOperation: runFindByOperation,
-    setMetadata: runSetMetadata,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      claimTaskDrive: runClaimTaskDrive,
+      findByOperation: runFindByOperation,
+      setMetadata: runSetMetadata,
+    };
+  }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: opFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: opFindById };
+  }),
 }));
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({
-    findById: taskFindById,
-    getGoalConfig: taskGetGoalConfig,
-    updateStatus: taskUpdateStatus,
-  })),
+  TaskModel: vi.fn(function () {
+    return {
+      findById: taskFindById,
+      updateStatus: taskUpdateStatus,
+    };
+  }),
 }));
 vi.mock('@/database/models/brief', () => ({
-  BriefModel: vi.fn(() => ({ create: briefCreate })),
+  BriefModel: briefModelConstruct,
 }));
 // Resolved via dynamic import inside driveTaskFromVerify (cycle break).
 vi.mock('@/server/services/task', () => ({
-  TaskService: vi.fn(() => ({ updateStatus: serviceUpdateStatus })),
+  TaskService: vi.fn(function () {
+    return { updateStatus: serviceUpdateStatus };
+  }),
 }));
 // The deferred creator callback, also resolved via dynamic import.
 vi.mock('@/server/services/taskResultBridge', () => ({
-  TaskResultBridgeService: vi.fn(() => ({ deliver: deliverMock })),
+  TaskResultBridgeService: vi.fn(function () {
+    return { deliver: deliverMock };
+  }),
 }));
 
 const db = {} as any;
 
 describe('driveTaskFromVerify', () => {
+  it('automatically sends a Goal delivery back when Acceptance review rejects a Verify pass', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      status: 'rejected',
+      feedback: 'Fix the table',
+      predictionIds: ['p1'],
+    });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+    expect(deliverMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'error' }));
+    expect(scheduleGoalAdvance).toHaveBeenCalledWith(
+      expect.objectContaining({ goalId: 'goal-1', trigger: 'settle' }),
+    );
+  });
+
+  /**
+   * Regression: an undecidable criterion paused the Task with the "did not pass"
+   * contract string, which the coordinator routes to another attempt. The
+   * builder re-delivered the same artifacts against the same criterion twice and
+   * the attempt budget ran out. This string has no recovery branch, so the Goal
+   * stops on a person instead.
+   */
+  it('parks an undecidable Goal delivery on a person instead of another attempt', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    goalFindByTask.mockResolvedValue({ id: 'goal-1' });
+    vi.mocked(reviewGoalDelivery).mockResolvedValueOnce({
+      status: 'unjudgeable',
+      feedback: 'The check asks the reviewer to rerun the scripts.',
+      predictionIds: ['p1'],
+    });
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_UNJUDGEABLE_ERROR,
+    });
+    expect(taskUpdateStatus).not.toHaveBeenCalledWith('task-1', 'paused', {
+      error: 'Delivery did not pass verification.',
+    });
+  });
+
+  /**
+   * Regression: a review that could not run paused the Task with the errored
+   * contract string, which the coordinator recovers by starting another builder
+   * attempt. A review that failed the same way every time — its model could not
+   * download a screenshot — re-delivered the same work until the attempt budget
+   * ran out, without the delivery ever being judged.
+   */
+  it('parks a review that keeps failing on a person instead of another attempt', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    vi.mocked(reviewGoalDelivery).mockResolvedValue({
+      status: 'errored',
+      feedback: 'Error while downloading file. Upstream status code: 407.',
+      predictionIds: [],
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    // The review retries its own errored checks; the settle path must not rerun
+    // the whole review, which would re-ask checks that already rejected.
+    expect(reviewGoalDelivery).toHaveBeenCalledTimes(1);
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: ACCEPTANCE_REVIEW_ERRORED_ERROR,
+    });
+    // The creator still hears the delivery was not evaluated, not that it failed.
+    expect(deliverMock.mock.calls[0][0].errorMessage.toLowerCase()).toContain('internal error');
+  });
+
+  it('does not launch a duplicate review when task drive is already claimed', async () => {
+    runFindByOperation.mockResolvedValue({
+      id: 'run-1',
+      acceptanceId: 'acceptance-1',
+      status: 'passed',
+    });
+    runClaimTaskDrive.mockResolvedValue(false);
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+    expect(reviewGoalDelivery).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
+    vi.mocked(reviewGoalDelivery).mockReset();
+    vi.mocked(scheduleGoalAdvance).mockClear();
+    goalFindByTask.mockReset();
     [
       runClaimTaskDrive,
       runFindByOperation,
       runSetMetadata,
       opFindById,
       taskFindById,
-      taskGetGoalConfig,
       taskUpdateStatus,
+      briefModelConstruct,
       briefCreate,
       serviceUpdateStatus,
       statusRecompute,
       deliverMock,
-      goalContinueMock,
-      goalSyncMock,
     ].forEach((m) => m.mockReset());
     // The drive is claimed before any side effect; unclaimed means "someone
     // else is driving this run", which every test here is not.
     runClaimTaskDrive.mockResolvedValue(true);
+    briefModelConstruct.mockImplementation(function () {
+      return { create: briefCreate };
+    });
     opFindById.mockResolvedValue({ taskId: 'task-1', topicId: 'topic-done' });
     taskFindById.mockResolvedValue({
       assigneeAgentId: 'a1',
@@ -127,7 +221,6 @@ describe('driveTaskFromVerify', () => {
       identifier: 'T-1',
       status: 'running',
     });
-    taskGetGoalConfig.mockReturnValue(undefined);
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -201,13 +294,46 @@ describe('driveTaskFromVerify', () => {
     expect(statusRecompute.mock.calls).toEqual([['repair-op-1'], ['root-op']]);
   });
 
-  it('failed → urgent brief + pauses with the reason on the task row', async () => {
+  it('failed → keeps a recurring task scheduled instead of pausing (disarming) it', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
+    taskFindById.mockResolvedValue({
+      assigneeAgentId: 'a1',
+      automationMode: 'schedule',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'scheduled',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    // Pausing would permanently disarm the cron — the schedule query never
+    // picks `paused` tasks up again. The verdict stays on the run.
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+    // The tick's rejection still reaches the creator callback.
+    expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
+  });
+
+  it('errored → keeps a recurring task scheduled', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
+    taskFindById.mockResolvedValue({
+      assigneeAgentId: 'a1',
+      automationMode: 'heartbeat',
+      id: 'task-1',
+      identifier: 'T-1',
+      status: 'scheduled',
+    });
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    expect(taskUpdateStatus).not.toHaveBeenCalled();
+    expect(serviceUpdateStatus).not.toHaveBeenCalled();
+  });
+
+  it('failed → pauses with the reason on the task row without creating an inbox brief', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
-    expect(briefCreate).toHaveBeenCalled();
-    // The reason must live on the task row, not only in a brief: the task
-    // detail feed deliberately excludes briefs, so a brief-only explanation is
-    // unreachable from the task page.
+    expect(briefModelConstruct).not.toHaveBeenCalled();
     expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
       error: 'Delivery did not pass verification.',
     });
@@ -216,7 +342,7 @@ describe('driveTaskFromVerify', () => {
     expect(deliverMock.mock.calls[0][0]).toMatchObject({ reason: 'error', taskId: 'task-1' });
   });
 
-  it('errored → pauses with a non-accusatory brief; never claims the delivery "did not pass"', async () => {
+  it('errored → pauses without an inbox brief; never claims the delivery "did not pass"', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
 
@@ -228,10 +354,7 @@ describe('driveTaskFromVerify', () => {
     );
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
 
-    // The brief frames it as an internal verification error, not a rejected delivery.
-    const briefArg = briefCreate.mock.calls[0][0];
-    expect(briefArg.summary).not.toContain('did not pass');
-    expect(briefArg.summary.toLowerCase()).toContain('could not run');
+    expect(briefModelConstruct).not.toHaveBeenCalled();
 
     // The creator callback is an error, but the message must NOT accuse the
     // delivery of failing verification.
@@ -272,150 +395,7 @@ describe('driveTaskFromVerify', () => {
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
   });
 
-  describe('goal outer loop', () => {
-    const goalTask = {
-      assigneeAgentId: 'a1',
-      id: 'task-1',
-      identifier: 'T-1',
-      status: 'running',
-      totalTopics: 1,
-    };
-    const goal = { maxIterations: 3, maxTotalCost: null, originTopicId: 'origin-t' };
-
-    beforeEach(() => {
-      taskFindById.mockResolvedValue(goalTask);
-      taskGetGoalConfig.mockReturnValue(goal);
-    });
-
-    it('failed + budget left → spawns the next round silently (no brief, no pause, no callback)', async () => {
-      runFindByOperation.mockResolvedValue({
-        id: 'run-1',
-        metadata: { maxRepairRounds: 2 },
-        status: 'failed',
-      });
-      goalContinueMock.mockResolvedValue('continued');
-
-      await driveTaskFromVerify(db, 'u1', 'op-1');
-
-      expect(goalContinueMock).toHaveBeenCalledWith(
-        expect.objectContaining({ goal, task: goalTask }),
-      );
-      expect(briefCreate).not.toHaveBeenCalled();
-      expect(taskUpdateStatus).not.toHaveBeenCalled();
-      expect(deliverMock).not.toHaveBeenCalled();
-      // The claim both stamps the marker and proves we own this drive.
-      expect(runClaimTaskDrive).toHaveBeenCalledWith('run-1');
-      expect(goalSyncMock).toHaveBeenCalledWith(
-        expect.objectContaining({ state: expect.objectContaining({ phase: 'running' }) }),
-      );
-    });
-
-    it('does nothing when another callback already claimed the drive', async () => {
-      // Two verifier callbacks can settle together; only the claim winner acts.
-      runClaimTaskDrive.mockResolvedValue(false);
-
-      await driveTaskFromVerify({} as never, 'user-1', 'op-1');
-
-      expect(goalContinueMock).not.toHaveBeenCalled();
-      expect(taskUpdateStatus).not.toHaveBeenCalled();
-      expect(serviceUpdateStatus).not.toHaveBeenCalled();
-      expect(briefCreate).not.toHaveBeenCalled();
-    });
-
-    it('failed + budget exhausted → pauses with budget-specific brief copy', async () => {
-      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
-      goalContinueMock.mockResolvedValue('exhausted-rounds');
-
-      await driveTaskFromVerify(db, 'u1', 'op-1');
-
-      // Reason on the row, not only in the brief — see the failed-branch test.
-      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
-        error: 'budget exhausted (exhausted-rounds)',
-      });
-      const briefArg = briefCreate.mock.calls[0][0];
-      expect(briefArg.summary).toContain('budget exhausted (exhausted-rounds)');
-      expect(goalSyncMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          state: expect.objectContaining({ pausedReason: 'exhausted-rounds', phase: 'paused' }),
-        }),
-      );
-    });
-
-    it('failed + spawn failure → falls back to the regular pause + brief path', async () => {
-      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'failed' });
-      goalContinueMock.mockResolvedValue('spawn-failed');
-
-      await driveTaskFromVerify(db, 'u1', 'op-1');
-
-      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
-        error: 'Delivery did not pass verification.',
-      });
-      expect(briefCreate.mock.calls[0][0].summary).toContain('did not pass');
-    });
-
-    it('errored → never loops (verification did not run), pauses like a non-goal task', async () => {
-      runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'errored' });
-
-      await driveTaskFromVerify(db, 'u1', 'op-1');
-
-      expect(goalContinueMock).not.toHaveBeenCalled();
-      expect(taskUpdateStatus).toHaveBeenCalledWith(
-        'task-1',
-        'paused',
-        expect.objectContaining({ error: expect.stringContaining('could not run') }),
-      );
-    });
-
-    it('passed → parks for sign-off instead of completing (the verifier only recommends)', async () => {
-      runFindByOperation.mockResolvedValue({
-        acceptanceId: 'acc-9',
-        id: 'run-1',
-        metadata: null,
-        status: 'passed',
-      });
-
-      await driveTaskFromVerify(db, 'u1', 'op-1');
-
-      // The agent saying "done" is not the business fact — the human sign-off is.
-      expect(serviceUpdateStatus).not.toHaveBeenCalled();
-      // A converged goal and a goal that gave up both land on `paused`; only the
-      // reason on the row tells them apart in the UI.
-      expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
-        error: 'ready for your sign-off',
-      });
-      expect(goalSyncMock).toHaveBeenCalledWith(
-        expect.objectContaining({ state: expect.objectContaining({ phase: 'review' }) }),
-      );
-    });
-
-    it('passed → raises exactly one decision brief that links to the acceptance', async () => {
-      runFindByOperation.mockResolvedValue({
-        acceptanceId: 'acc-9',
-        id: 'run-1',
-        metadata: null,
-        status: 'passed',
-      });
-
-      await driveTaskFromVerify(db, 'u1', 'op-1');
-
-      expect(briefCreate).toHaveBeenCalledTimes(1);
-      const brief = briefCreate.mock.calls[0][0];
-      // `result` would be filed under "news" and its approve completes the task,
-      // bypassing the sign-off this branch exists to require.
-      expect(brief.type).toBe('decision');
-      expect(brief.actions).toEqual([
-        expect.objectContaining({
-          key: 'review',
-          label: 'Review delivery',
-          type: 'link',
-          url: '/acceptance/acc-9',
-        }),
-      ]);
-    });
-  });
-
-  it('non-goal task still completes on a passing verify (contract unchanged)', async () => {
-    taskGetGoalConfig.mockReturnValue(undefined);
+  it('completes the task on a passing verify', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
 
     await driveTaskFromVerify(db, 'u1', 'op-1');
@@ -424,3 +404,10 @@ describe('driveTaskFromVerify', () => {
     expect(briefCreate).not.toHaveBeenCalled();
   });
 });
+
+vi.mock('@/server/services/goal/scheduler', () => ({ scheduleGoalAdvance: vi.fn() }));
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(function () {
+    return { findByGraphTask: goalFindByTask };
+  }),
+}));

@@ -33,7 +33,10 @@ class TopicReferenceExecutionRuntime {
 
     try {
       const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
-      const topic = await topicModel.findById(topicId);
+      // `findOwnTopicById`: this tool runs under the account owner's identity,
+      // so a raw topic id must never resolve to an agent-share visitor topic
+      // (those are stored under the creator's userId).
+      const topic = await topicModel.findOwnTopicById(topicId);
 
       if (!topic) {
         return { content: `Topic not found: ${topicId}`, success: false };

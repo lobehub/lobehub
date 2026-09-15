@@ -13,7 +13,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     min-height: 40px;
-    padding-block: 4px 10px;
+    padding-block: 2px 4px;
     padding-inline: 12px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 

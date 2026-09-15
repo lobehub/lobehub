@@ -205,7 +205,7 @@ export class PluginTypesActionImpl {
           // Only the in-process desktop path reaches here; gateway-routed runs
           // get the same decision from the server device-proxy. Both funnel
           // through `isLocalSandboxEnabled`, so they cannot disagree.
-          ...resolveClientLocalSandbox(agentId),
+          ...resolveClientLocalSandbox(agentId, topicId),
           messageId: id,
           operationId,
           registerAfterCompletion,

@@ -506,6 +506,21 @@ export class SlackApi {
     ];
   }
 
+  /**
+   * Resolve (or lazily create) the 1:1 DM channel with a user. Unlike
+   * `chat.postMessage` — which accepts a user id as `channel` —
+   * `files.completeUploadExternal` requires a real channel id, so outbound
+   * file delivery must open the conversation first. Idempotent: Slack
+   * returns the existing DM channel when one is already open.
+   *
+   * See: https://api.slack.com/methods/conversations.open
+   */
+  async openConversation(userId: string): Promise<{ id: string }> {
+    log('openConversation: user=%s', userId);
+    const data = await this.call('conversations.open', { users: userId });
+    return { id: data.channel.id };
+  }
+
   // ==================== Outbound File Upload (v2) ====================
 
   /**

@@ -9,6 +9,6 @@ Core workflow:
 
 Notes:
 - \`fill\` sets an input's value directly; pass \`submit: true\` to press Enter afterwards (search boxes, login forms).
-- \`screenshot\` renders a visual for the USER's chat — you cannot see it. Use \`snapshot\` / \`readPage\` for your own perception.
+- \`screenshot\` stores the capture as a file and returns it to you, and also renders it in the USER's chat. Use \`snapshot\` / \`readPage\` when the page structure or text is all you need.
 - Prefer refs over coordinates. Coordinates are a fallback for canvas-like surfaces only.
 - The browser shares the user's logged-in profile. Never visit pages or perform actions the user did not ask for, and never extract credentials or other sensitive data.`;

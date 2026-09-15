@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { defineConfig, type UserConfig } from 'vite';
 
+import { viteOsPlatformResolve } from '../../plugins/vite/osPlatformResolve';
 import {
   applyDesktopViteConfigExtension,
   loadDesktopEnv,
@@ -39,9 +40,11 @@ export default defineConfig(async (env) => {
       target: MAIN_NODE_TARGET,
     },
     define: { ...processEnvDefine },
+    plugins: [viteOsPlatformResolve()],
     publicDir: false,
     resolve: {
       alias: mainProcessAlias,
+      dedupe: ['@sentry/electron'],
     },
     root: __dirname,
     ssr: {

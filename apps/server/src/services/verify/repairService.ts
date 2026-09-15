@@ -143,7 +143,7 @@ export const createRepairRunner = (params: {
       // not an unrelated verification session. Attach it before it settles so
       // the aggregate immediately advances from "repairing" to the live round.
       if (sourceRun?.acceptanceId) {
-        await new AcceptanceService(db, userId, workspaceId).attachRun(
+        await new AcceptanceService(db, userId, workspaceId).attachPolicyRun(
           repairRun.id,
           sourceRun.acceptanceId,
         );

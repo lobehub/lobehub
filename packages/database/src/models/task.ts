@@ -1,8 +1,12 @@
 import type {
   CheckpointConfig,
   NewTask,
-  TaskGoalConfig,
+  TaskActivityLogPayload,
+  TaskActivityLogType,
+  TaskAutomationMode,
+  TaskAutomationSnapshot,
   TaskItem,
+  TaskSubtaskProgress,
   TaskVerifyConfig,
   WorkspaceData,
   WorkspaceDocNode,
@@ -12,11 +16,13 @@ import {
   and,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
   isNotNull,
   isNull,
+  lt,
   ne,
   notInArray,
   or,
@@ -28,13 +34,100 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { merge } from '@/utils/merge';
 
 import { documents } from '../schemas/file';
-import type { NewTaskComment, TaskCommentItem } from '../schemas/task';
-import { taskComments, taskDependencies, taskDocuments, tasks, taskTopics } from '../schemas/task';
+import type {
+  NewTaskActivity,
+  NewTaskComment,
+  TaskActivityItem,
+  TaskCommentItem,
+} from '../schemas/task';
+import {
+  taskActivities,
+  taskComments,
+  taskDependencies,
+  taskDocuments,
+  tasks,
+  taskTopics,
+} from '../schemas/task';
 import { topics } from '../schemas/topic';
 import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
+
+/** Columns whose change is worth a line in the task activity feed. */
+const TRACKED_TASK_COLUMNS = [
+  'assigneeAgentId',
+  'assigneeUserId',
+  'automationMode',
+  // Only for `schedule.maxExecutions`, which lives in the JSONB pocket; the
+  // rest of `config` is not diffed.
+  'config',
+  'heartbeatInterval',
+  'priority',
+  'schedulePattern',
+  'scheduleTimezone',
+  'status',
+] as const;
+
+/** The automation columns folded into one value — see `TaskAutomationSnapshot`. */
+/**
+ * The actor columns plus the payload tombstone for one activity row. An
+ * agent-driven edit is attributed to the agent, not to the session owner
+ * whose credentials it borrowed. Both ids null means the system did it on
+ * nobody's behalf (the runner's inbox fallback). `actorKind` repeats that in
+ * the payload because the id columns are cleared when the actor is deleted,
+ * and "someone who is gone" must not read as "the system".
+ */
+export const taskActivityActor = (actor: {
+  agentId?: string | null;
+  userId?: string | null;
+}): {
+  actorAgentId: string | null;
+  actorKind: 'agent' | 'system' | 'user';
+  actorUserId: string | null;
+} => ({
+  actorAgentId: actor.agentId ?? null,
+  actorKind: actor.agentId ? 'agent' : actor.userId ? 'user' : 'system',
+  actorUserId: actor.agentId ? null : (actor.userId ?? null),
+});
+
+const snapshotAutomation = (row: {
+  automationMode: TaskAutomationMode | null;
+  config: unknown;
+  heartbeatInterval: number | null;
+  schedulePattern: string | null;
+  scheduleTimezone: string | null;
+}): TaskAutomationSnapshot | null => {
+  // No mode means automation is off; the leftover pattern / interval columns
+  // are configuration in waiting, not something the user turned on.
+  if (!row.automationMode) return null;
+  const maxExecutions = (row.config as { schedule?: { maxExecutions?: number | null } } | null)
+    ?.schedule?.maxExecutions;
+  return {
+    heartbeatInterval: row.heartbeatInterval,
+    maxExecutions: typeof maxExecutions === 'number' ? maxExecutions : null,
+    mode: row.automationMode,
+    schedulePattern: row.schedulePattern,
+    scheduleTimezone: row.scheduleTimezone,
+  };
+};
+
+export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  const code =
+    typeof error === 'object' && error && 'code' in error
+      ? String((error as { code?: unknown }).code)
+      : '';
+  const cause = error instanceof Error ? error.cause : undefined;
+
+  return (
+    code === '23505' ||
+    message.includes('23505') ||
+    message.includes('duplicate') ||
+    message.includes('unique') ||
+    (!!cause && isTaskIdentifierUniqueViolation(cause))
+  );
+};
 
 /**
  * Ownership helpers in this model come in three flavors. Choose by USE CASE,
@@ -84,6 +177,45 @@ const RUNNABLE_AUTOMATION = and(
     and(eq(tasks.automationMode, 'heartbeat'), gt(tasks.heartbeatInterval, 0)),
   ),
 )!;
+
+interface TaskListFilterOptions {
+  assigneeAgentId?: string;
+  /** Only tasks assigned to this workspace member. */
+  assigneeUserId?: string;
+  automated?: boolean;
+  /** Only tasks created by this user. */
+  createdByUserId?: string;
+  parentTaskId?: string | null;
+  projectId?: string;
+  visibility?: 'private' | 'public';
+}
+
+interface TaskListOptions extends TaskListFilterOptions {
+  /**
+   * Keyset cursor: only rows that sort strictly after this `(orderBy, seq)`
+   * position in the list's newest-first order. Unlike `offset`, a cursor is
+   * unaffected by rows inserted or deleted ahead of it, so a client walking
+   * the whole list page by page never repeats or skips a row.
+   */
+  after?: { at: Date; seq: number };
+  limit?: number;
+  offset?: number;
+  orderBy?: 'createdAt' | 'updatedAt';
+  priorities?: number[];
+  statuses?: string[];
+}
+
+interface TaskRunStats extends Record<string, unknown> {
+  root_id: string;
+  total_run_cost: number;
+  total_run_duration: number;
+}
+
+interface TaskSubtaskProgressRow extends Record<string, unknown> {
+  completed: number;
+  root_id: string;
+  total: number;
+}
 
 export class TaskModel {
   private readonly userId: string;
@@ -152,6 +284,36 @@ export class TaskModel {
       : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL`;
   };
 
+  private buildListConditions = ({
+    assigneeAgentId,
+    assigneeUserId,
+    automated,
+    createdByUserId,
+    parentTaskId,
+    projectId,
+    visibility,
+  }: TaskListFilterOptions): SQL[] => {
+    const conditions = [this.ownership()];
+
+    if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
+    if (assigneeUserId) conditions.push(eq(tasks.assigneeUserId, assigneeUserId));
+    if (createdByUserId) conditions.push(eq(tasks.createdByUserId, createdByUserId));
+    if (automated === true) conditions.push(RUNNABLE_AUTOMATION);
+    // `IS NOT TRUE`, not `NOT (…)`: nullable automation fields make the
+    // runnable expression NULL for manual tasks, and WHERE would drop them.
+    if (automated === false) conditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
+    if (projectId) conditions.push(eq(tasks.projectId, projectId));
+    if (visibility) conditions.push(eq(tasks.visibility, visibility));
+
+    if (parentTaskId === null) {
+      conditions.push(isNull(tasks.parentTaskId));
+    } else if (parentTaskId) {
+      conditions.push(eq(tasks.parentTaskId, parentTaskId));
+    }
+
+    return conditions;
+  };
+
   /**
    * Look up a task's visibility so child-row inserts (deps, docs, topics) can
    * mirror it without forcing every call site to know the value. Defaults to
@@ -173,11 +335,12 @@ export class TaskModel {
     data: Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'> & {
       identifierPrefix?: string;
     },
+    options: { maxRetries?: number } = {},
   ): Promise<TaskItem> {
     const { identifierPrefix = 'T', ...rest } = data;
 
     // Retry loop to handle concurrent creates (parallel tool calls)
-    const maxRetries = 5;
+    const maxRetries = options.maxRetries ?? 5;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         // Seq is allocated per ownership scope: workspace-wide in team mode,
@@ -213,13 +376,7 @@ export class TaskModel {
       } catch (error: any) {
         // Retry on unique constraint violation (concurrent seq conflict)
         // Check error itself, cause, and stringified message for PG error code 23505
-        const errStr =
-          String(error?.message || '') +
-          String(error?.cause?.code || '') +
-          String(error?.code || '');
-        const isUniqueViolation =
-          errStr.includes('23505') || errStr.includes('unique') || errStr.includes('duplicate');
-        if (isUniqueViolation && attempt < maxRetries - 1) {
+        if (isTaskIdentifierUniqueViolation(error) && attempt < maxRetries - 1) {
           continue;
         }
         throw error;
@@ -245,6 +402,20 @@ export class TaskModel {
       .select()
       .from(tasks)
       .where(and(inArray(tasks.id, ids), this.ownership()));
+  }
+
+  async resolveMany(idsOrIdentifiers: string[]): Promise<TaskItem[]> {
+    if (idsOrIdentifiers.length === 0) return [];
+    const identifiers = idsOrIdentifiers.map((value) => value.toUpperCase());
+    return this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          or(inArray(tasks.id, idsOrIdentifiers), inArray(tasks.identifier, identifiers)),
+          this.ownership(),
+        ),
+      );
   }
 
   // Resolve id or identifier (e.g. 'T-1') to a task
@@ -388,6 +559,11 @@ export class TaskModel {
           .update(taskComments)
           .set({ visibility })
           .where(and(inArray(taskComments.taskId, taskIds), this.commentsOwnership()));
+
+        await tx
+          .update(taskActivities)
+          .set({ visibility })
+          .where(and(inArray(taskActivities.taskId, taskIds), this.activitiesOwnership()));
       }
 
       return updated ?? null;
@@ -457,8 +633,8 @@ export class TaskModel {
     const where = options?.restrictToCreator
       ? and(this.ownership(), eq(tasks.createdByUserId, this.userId))
       : this.ownership();
-    const result = await this.db.delete(tasks).where(where).returning();
 
+    const result = await this.db.delete(tasks).where(where).returning({ id: tasks.id });
     return result.length;
   }
 
@@ -491,81 +667,332 @@ export class TaskModel {
 
   // ========== Query ==========
 
-  async groupList(options: {
-    assigneeAgentId?: string;
-    groups: Array<{
-      key: string;
-      limit?: number;
-      offset?: number;
-      statuses: string[];
-    }>;
-    parentTaskId?: string | null;
-    /** Only return tasks carrying the goal-controller marker in `config.goal`. */
-    hasGoal?: boolean;
-    projectId?: string;
-    /** Same semantics as `list({ visibility })` — UI narrowing on top of the
-     *  already ownership-filtered set. */
-    visibility?: 'private' | 'public';
-  }): Promise<
+  async groupList(
+    options: TaskListFilterOptions & {
+      excludeStatuses?: string[];
+      groupBy?: 'agent' | 'assignee' | 'member' | 'priority';
+      groups?: Array<{
+        key: string;
+        limit?: number;
+        offset?: number;
+        statuses: string[];
+      }>;
+    },
+  ): Promise<
     Array<{
+      assigneeAgentId?: string | null;
+      assigneeUserId?: string | null;
       hasMore: boolean;
       key: string;
       limit: number;
       offset: number;
+      priority?: number;
       tasks: TaskItem[];
       total: number;
     }>
   > {
-    const { groups, assigneeAgentId, hasGoal, parentTaskId, projectId, visibility } = options;
+    const { assigneeAgentId, excludeStatuses, groupBy, groups } = options;
 
-    const baseConditions = [this.ownership()];
-    if (assigneeAgentId) baseConditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
-    if (hasGoal === true) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
-    if (hasGoal === false) baseConditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
-    if (projectId) baseConditions.push(eq(tasks.projectId, projectId));
-    if (visibility) baseConditions.push(eq(tasks.visibility, visibility));
-    if (parentTaskId === null) {
-      baseConditions.push(isNull(tasks.parentTaskId));
-    } else if (parentTaskId) {
-      baseConditions.push(eq(tasks.parentTaskId, parentTaskId));
+    if ((!groups || groups.length === 0) && !groupBy) {
+      throw new Error('Task groups or a grouping dimension are required');
     }
 
-    // Collect all statuses for a single aggregated count query
-    const allStatuses = Array.from(new Set(groups.flatMap((g) => g.statuses)));
-    const countResult = await this.db
-      .select({ count: sql<number>`count(*)`, status: tasks.status })
-      .from(tasks)
-      .where(and(...baseConditions, inArray(tasks.status, allStatuses)))
-      .groupBy(tasks.status);
-
-    const countByStatus: Record<string, number> = {};
-    for (const row of countResult) {
-      countByStatus[row.status] = Number(row.count);
+    const baseConditions = this.buildListConditions(options);
+    if (excludeStatuses?.length) {
+      baseConditions.push(notInArray(tasks.status, excludeStatuses));
     }
 
-    // Query each group's tasks in parallel
-    const results = await Promise.all(
-      groups.map(async (group) => {
-        const limit = group.limit ?? 50;
-        const offset = group.offset ?? 0;
+    interface GroupQuery {
+      assigneeAgentId?: string | null;
+      assigneeUserId?: string | null;
+      conditions: SQL[];
+      key: string;
+      limit: number;
+      offset: number;
+      prefetchedTasks?: TaskItem[];
+      priority?: number;
+      total: number;
+    }
 
-        const groupTasks = await this.db
+    let groupQueries: GroupQuery[];
+
+    if (groupBy === 'assignee') {
+      const limit = 50;
+      const assigneeGroupKey = sql<string>`case
+        when ${tasks.assigneeAgentId} is not null then 'assignee:' || ${tasks.assigneeAgentId}
+        when ${tasks.assigneeUserId} is not null then 'assignee:user:' || ${tasks.assigneeUserId}
+        else 'assignee:unassigned'
+      end`;
+      const rankedTasks = this.db
+        .select({
+          ...getTableColumns(tasks),
+          assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+          groupRank:
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc, ${tasks.seq} desc)`.as(
+              'group_rank',
+            ),
+        })
+        .from(tasks)
+        .where(and(...baseConditions))
+        .as('ranked_assignee_tasks');
+      const [countResult, rankedTaskRows] = await Promise.all([
+        this.db
+          .select({
+            assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+            count: sql<number>`count(*)`,
+          })
+          .from(tasks)
+          .where(and(...baseConditions))
+          .groupBy(assigneeGroupKey),
+        this.db
+          .select()
+          .from(rankedTasks)
+          .where(sql`${rankedTasks.groupRank} <= ${limit}`)
+          .orderBy(rankedTasks.assigneeGroupKey, rankedTasks.groupRank),
+      ]);
+      const assigneeCounts = new Map(
+        countResult.map((row) => [row.assigneeGroupKey, Number(row.count)]),
+      );
+      const tasksByAssignee = new Map<string, TaskItem[]>();
+      for (const row of rankedTaskRows) {
+        const { assigneeGroupKey: groupKey, groupRank: _groupRank, ...task } = row;
+        const groupTasks = tasksByAssignee.get(groupKey) ?? [];
+        groupTasks.push(task);
+        tasksByAssignee.set(groupKey, groupTasks);
+      }
+
+      // `assignee` is the released hybrid grouping contract: agents take
+      // precedence, member-only tasks get their own user group, and only tasks
+      // with neither assignee are unassigned. New clients use `agent` for the
+      // agent-only board instead of changing this existing API in place.
+      if (!assigneeAgentId && !assigneeCounts.has('assignee:unassigned')) {
+        assigneeCounts.set('assignee:unassigned', 0);
+      }
+
+      groupQueries = [...assigneeCounts.entries()].map(([key, total]) => {
+        const isUnassigned = key === 'assignee:unassigned';
+        const isUser = key.startsWith('assignee:user:');
+        const groupAssigneeAgentId =
+          isUnassigned || isUser
+            ? isUnassigned
+              ? null
+              : undefined
+            : key.slice('assignee:'.length);
+        const groupAssigneeUserId = isUser
+          ? key.slice('assignee:user:'.length)
+          : isUnassigned
+            ? null
+            : undefined;
+        const conditions = isUser
+          ? [and(isNull(tasks.assigneeAgentId), eq(tasks.assigneeUserId, groupAssigneeUserId!))!]
+          : isUnassigned
+            ? [and(isNull(tasks.assigneeAgentId), isNull(tasks.assigneeUserId))!]
+            : [eq(tasks.assigneeAgentId, groupAssigneeAgentId!)];
+
+        return {
+          assigneeAgentId: groupAssigneeAgentId,
+          assigneeUserId: groupAssigneeUserId,
+          conditions,
+          key,
+          limit,
+          offset: 0,
+          prefetchedTasks: tasksByAssignee.get(key) ?? [],
+          total,
+        };
+      });
+    } else if (groupBy === 'agent' || groupBy === 'member') {
+      const limit = 50;
+      const groupColumn = groupBy === 'agent' ? tasks.assigneeAgentId : tasks.assigneeUserId;
+      const groupPrefix = groupBy === 'agent' ? 'assignee:' : 'member:';
+      const unassignedKey = `${groupPrefix}unassigned`;
+      const assigneeGroupKey = sql<string>`case
+        when ${groupColumn} is not null then ${groupPrefix} || ${groupColumn}
+        else ${unassignedKey}
+      end`;
+      const rankedTasks = this.db
+        .select({
+          ...getTableColumns(tasks),
+          assigneeGroupKey: assigneeGroupKey.as('assignee_group_key'),
+          groupRank:
+            sql<number>`row_number() over (partition by ${assigneeGroupKey} order by ${tasks.createdAt} desc, ${tasks.seq} desc)`.as(
+              'group_rank',
+            ),
+        })
+        .from(tasks)
+        .where(and(...baseConditions))
+        .as('ranked_assignee_tasks');
+      const [countResult, rankedTaskRows] = await Promise.all([
+        this.db
+          .select({
+            assigneeId: groupColumn,
+            count: sql<number>`count(*)`,
+          })
+          .from(tasks)
+          .where(and(...baseConditions))
+          .groupBy(groupColumn),
+        this.db
+          .select()
+          .from(rankedTasks)
+          .where(sql`${rankedTasks.groupRank} <= ${limit}`)
+          .orderBy(rankedTasks.assigneeGroupKey, rankedTasks.groupRank),
+      ]);
+      const assigneeCounts = new Map(
+        countResult.map((row) => [
+          row.assigneeId ? `${groupPrefix}${row.assigneeId}` : unassignedKey,
+          Number(row.count),
+        ]),
+      );
+      const tasksByAssignee = new Map<string, TaskItem[]>();
+      for (const row of rankedTaskRows) {
+        const { assigneeGroupKey: groupKey, groupRank: _groupRank, ...task } = row;
+        const groupTasks = tasksByAssignee.get(groupKey) ?? [];
+        groupTasks.push(task);
+        tasksByAssignee.set(groupKey, groupTasks);
+      }
+
+      // Keep an empty Unassigned column as a stable drop target. Agent-scoped
+      // boards omit the Agent-unassigned column because their base filter
+      // guarantees one assignee, while Member grouping remains independent.
+      if ((groupBy === 'member' || !assigneeAgentId) && !assigneeCounts.has(unassignedKey)) {
+        assigneeCounts.set(unassignedKey, 0);
+      }
+
+      groupQueries = [...assigneeCounts.entries()].map(([key, total]) => {
+        const isUnassigned = key === unassignedKey;
+        const assigneeId = isUnassigned ? null : key.slice(groupPrefix.length);
+        const groupAssigneeAgentId = groupBy === 'agent' ? assigneeId : undefined;
+        const groupAssigneeUserId = groupBy === 'member' ? assigneeId : undefined;
+        const conditions = [isUnassigned ? isNull(groupColumn) : eq(groupColumn, assigneeId!)];
+
+        return {
+          assigneeAgentId: groupAssigneeAgentId,
+          assigneeUserId: groupAssigneeUserId,
+          conditions,
+          key,
+          limit,
+          offset: 0,
+          prefetchedTasks: tasksByAssignee.get(key) ?? [],
+          total,
+        };
+      });
+    } else if (groupBy === 'priority') {
+      const priorities = [1, 2, 3, 4, 0];
+      const countQuery = this.db
+        .select({ count: sql<number>`count(*)`, priority: tasks.priority })
+        .from(tasks)
+        .where(and(...baseConditions))
+        .groupBy(tasks.priority);
+      const taskQueries = priorities.map(async (priority) => {
+        const conditions = [
+          priority === 0
+            ? or(eq(tasks.priority, priority), isNull(tasks.priority))!
+            : eq(tasks.priority, priority),
+        ];
+        const limit = 50;
+        const offset = 0;
+        const prefetchedTasks = await this.db
           .select()
           .from(tasks)
-          .where(and(...baseConditions, inArray(tasks.status, group.statuses)))
-          .orderBy(desc(tasks.createdAt))
+          .where(and(...baseConditions, ...conditions))
+          .orderBy(desc(tasks.createdAt), desc(tasks.seq))
           .limit(limit)
           .offset(offset);
 
-        const total = group.statuses.reduce((sum, s) => sum + (countByStatus[s] || 0), 0);
+        return {
+          conditions,
+          key: `priority:${priority}`,
+          limit,
+          offset,
+          prefetchedTasks,
+          priority,
+          total: 0,
+        };
+      });
+      const [countResult, queriedGroups] = await Promise.all([
+        countQuery,
+        Promise.all(taskQueries),
+      ]);
+      const priorityCounts = new Map<number, number>();
+      for (const row of countResult) {
+        const priority = row.priority ?? 0;
+        priorityCounts.set(priority, (priorityCounts.get(priority) ?? 0) + Number(row.count));
+      }
+
+      // Priority is a finite dimension, so include empty values as usable drop
+      // targets. The order matches the task list's semantic rank.
+      groupQueries = queriedGroups.map((group) => ({
+        ...group,
+        total: priorityCounts.get(group.priority) ?? 0,
+      }));
+    } else {
+      const statusGroups = (groups ?? []).map((group) => ({
+        ...group,
+        statuses: Array.from(new Set(group.statuses)),
+      }));
+      const allStatuses = Array.from(new Set(statusGroups.flatMap((group) => group.statuses)));
+      const countQuery = this.db
+        .select({ count: sql<number>`count(*)`, status: tasks.status })
+        .from(tasks)
+        .where(and(...baseConditions, inArray(tasks.status, allStatuses)))
+        .groupBy(tasks.status);
+      const taskQueries = statusGroups.map(async (group) => {
+        const conditions = [inArray(tasks.status, group.statuses)];
+        const limit = group.limit ?? 50;
+        const offset = group.offset ?? 0;
+        const prefetchedTasks = await this.db
+          .select()
+          .from(tasks)
+          .where(and(...baseConditions, ...conditions))
+          .orderBy(desc(tasks.createdAt), desc(tasks.seq))
+          .limit(limit)
+          .offset(offset);
 
         return {
-          hasMore: offset + groupTasks.length < total,
+          conditions,
           key: group.key,
           limit,
           offset,
+          prefetchedTasks,
+          statuses: group.statuses,
+          total: 0,
+        };
+      });
+      const [countResult, queriedGroups] = await Promise.all([
+        countQuery,
+        Promise.all(taskQueries),
+      ]);
+      const countByStatus = new Map(countResult.map((row) => [row.status, Number(row.count)]));
+
+      groupQueries = queriedGroups.map(({ statuses, ...group }) => ({
+        ...group,
+        total: statuses.reduce((sum, status) => sum + (countByStatus.get(status) ?? 0), 0),
+      }));
+    }
+
+    const results = await Promise.all(
+      groupQueries.map(async (group) => {
+        const groupTasks =
+          group.prefetchedTasks ??
+          (await this.db
+            .select()
+            .from(tasks)
+            .where(and(...baseConditions, ...group.conditions))
+            .orderBy(desc(tasks.createdAt), desc(tasks.seq))
+            .limit(group.limit)
+            .offset(group.offset));
+
+        return {
+          ...(group.assigneeAgentId !== undefined
+            ? { assigneeAgentId: group.assigneeAgentId }
+            : {}),
+          ...(group.assigneeUserId !== undefined ? { assigneeUserId: group.assigneeUserId } : {}),
+          hasMore: group.offset + groupTasks.length < group.total,
+          key: group.key,
+          limit: group.limit,
+          offset: group.offset,
+          ...(group.priority !== undefined ? { priority: group.priority } : {}),
           tasks: groupTasks,
-          total,
+          total: group.total,
         };
       }),
     );
@@ -573,39 +1000,10 @@ export class TaskModel {
     const taskIds = Array.from(
       new Set(results.flatMap((group) => group.tasks.map(({ id }) => id))),
     );
-    const runStats =
-      taskIds.length === 0
-        ? []
-        : (
-            await this.db.execute<{
-              root_id: string;
-              total_run_cost: number;
-              total_run_duration: number;
-            }>(sql`
-              WITH RECURSIVE goal_tree AS (
-                SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id
-                FROM ${tasks}
-                WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
-                UNION ALL
-                SELECT goal_tree.root_id, child.id
-                FROM ${tasks} child
-                JOIN goal_tree ON child.parent_task_id = goal_tree.task_id
-                WHERE ${this.ownershipSql('child')}
-              )
-              SELECT
-                goal_tree.root_id,
-                coalesce(sum(${topics.totalCost}), 0) AS total_run_cost,
-                coalesce(
-                  sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000)
-                    filter (where ${topics.completedAt} is not null),
-                  0
-                ) AS total_run_duration
-              FROM goal_tree
-              LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = goal_tree.task_id
-              LEFT JOIN ${topics} ON ${topics.id} = ${taskTopics.topicId}
-              GROUP BY goal_tree.root_id
-            `)
-          ).rows;
+    const [runStats, subtaskProgressByTaskId] = await Promise.all([
+      this.runStatsByTaskIds(taskIds),
+      this.subtaskProgressByTaskIds(taskIds),
+    ]);
     const runStatsByTaskId = new Map(
       runStats.map((stats) => [
         stats.root_id,
@@ -620,92 +1018,123 @@ export class TaskModel {
       ...group,
       tasks: group.tasks.map((task) => ({
         ...task,
+        subtaskProgress: subtaskProgressByTaskId.get(task.id),
         totalRunCost: runStatsByTaskId.get(task.id)?.totalRunCost ?? 0,
         totalRunDuration: runStatsByTaskId.get(task.id)?.totalRunDuration ?? 0,
       })),
     }));
   }
 
-  async list(options?: {
-    assigneeAgentId?: string;
-    /**
-     * Narrow to tasks that still run on their own — see {@link RUNNABLE_AUTOMATION}
-     * for what "still" rules out. `false` is its exact complement.
-     */
-    automated?: boolean;
-    hasGoal?: boolean;
-    limit?: number;
-    offset?: number;
-    /**
-     * Which timestamp the (bounded) result is ordered by, newest first.
-     * `createdAt` is the default because most callers want a stable list;
-     * a surface that calls itself "recent" wants `updatedAt`, or its page
-     * would omit the task that just moved in favour of a newer, idle one.
-     */
-    orderBy?: 'createdAt' | 'updatedAt';
-    parentTaskId?: string | null;
-    priorities?: number[];
-    projectId?: string;
-    statuses?: string[];
-    /**
-     * UI-side narrowing of the (already ownership-filtered) result set.
-     * Undefined means "no extra filter" (= "All" in the chip). Security is
-     * still enforced by `ownership()`; this is a view preference.
-     */
-    visibility?: 'private' | 'public';
-  }): Promise<{ tasks: TaskItem[]; total: number }> {
-    const {
-      statuses,
-      priorities,
-      parentTaskId,
-      assigneeAgentId,
-      automated,
-      hasGoal,
-      projectId,
-      visibility,
-      limit = 50,
-      offset = 0,
-      orderBy = 'createdAt',
-    } = options || {};
+  private async runStatsByTaskIds(taskIds: string[]): Promise<TaskRunStats[]> {
+    if (taskIds.length === 0) return [];
 
-    const conditions = [this.ownership()];
+    const result = await this.db.execute<TaskRunStats>(sql`
+      WITH RECURSIVE goal_tree AS (
+        SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id
+        FROM ${tasks}
+        WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
+        UNION ALL
+        SELECT goal_tree.root_id, child.id
+        FROM ${tasks} child
+        JOIN goal_tree ON child.parent_task_id = goal_tree.task_id
+        WHERE ${this.ownershipSql('child')}
+      )
+      SELECT
+        goal_tree.root_id,
+        coalesce(sum(${topics.totalCost}), 0) AS total_run_cost,
+        coalesce(
+          sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000)
+            filter (where ${topics.completedAt} is not null),
+          0
+        ) AS total_run_duration
+      FROM goal_tree
+      LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = goal_tree.task_id
+      LEFT JOIN ${topics} ON ${topics.id} = ${taskTopics.topicId}
+      GROUP BY goal_tree.root_id
+    `);
+
+    return result.rows;
+  }
+
+  private async subtaskProgressByTaskIds(
+    taskIds: string[],
+  ): Promise<Map<string, TaskSubtaskProgress>> {
+    if (taskIds.length === 0) return new Map();
+
+    const result = await this.db.execute<TaskSubtaskProgressRow>(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT ${tasks.id} AS root_id, ${tasks.id} AS task_id, ${tasks.status} AS status
+        FROM ${tasks}
+        WHERE ${inArray(tasks.id, taskIds)} AND ${this.ownership()}
+        UNION ALL
+        SELECT task_tree.root_id, child.id, child.status
+        FROM ${tasks} child
+        JOIN task_tree ON child.parent_task_id = task_tree.task_id
+        WHERE ${this.ownershipSql('child')}
+      )
+      SELECT
+        task_tree.root_id,
+        count(*) filter (
+          where task_tree.task_id <> task_tree.root_id and task_tree.status = 'completed'
+        ) AS completed,
+        count(*) filter (where task_tree.task_id <> task_tree.root_id) AS total
+      FROM task_tree
+      GROUP BY task_tree.root_id
+    `);
+
+    return new Map(
+      result.rows.map((progress) => [
+        progress.root_id,
+        { completed: Number(progress.completed), total: Number(progress.total) },
+      ]),
+    );
+  }
+
+  async list(options: TaskListOptions = {}): Promise<{ tasks: TaskItem[]; total: number }> {
+    const { after, statuses, priorities, limit = 50, offset = 0, orderBy = 'createdAt' } = options;
+    const orderColumn = orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt;
+
+    const conditions = this.buildListConditions(options);
 
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
-    if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
-    if (automated === true) conditions.push(RUNNABLE_AUTOMATION);
-    // `IS NOT TRUE`, not `NOT (…)`: a manual task has a NULL `automation_mode`,
-    // so the predicate evaluates to NULL rather than false, and `NOT NULL` is
-    // still NULL — which WHERE drops. That would make `automated: false` return
-    // nothing at all for exactly the rows it is meant to return.
-    if (automated === false) conditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
-    if (hasGoal === true) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') <> ''`);
-    if (hasGoal === false) conditions.push(sql`COALESCE(${tasks.config} ->> 'goal', '') = ''`);
-    if (projectId) conditions.push(eq(tasks.projectId, projectId));
-    if (visibility) conditions.push(eq(tasks.visibility, visibility));
-
-    if (parentTaskId === null) {
-      conditions.push(isNull(tasks.parentTaskId));
-    } else if (parentTaskId) {
-      conditions.push(eq(tasks.parentTaskId, parentTaskId));
+    if (after) {
+      conditions.push(
+        or(
+          lt(orderColumn, after.at),
+          and(eq(orderColumn, after.at), lt(tasks.seq, after.seq)),
+        ) as SQL,
+      );
     }
 
     const where = and(...conditions);
 
-    const countResult = await this.db
+    const countQuery = this.db
       .select({ count: sql<number>`count(*)` })
       .from(tasks)
       .where(where);
 
-    const taskList = await this.db
+    const taskListQuery = this.db
       .select()
       .from(tasks)
       .where(where)
-      .orderBy(desc(orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt))
+      // `seq` breaks timestamp ties so the order is total — required for the
+      // keyset cursor above and for offset pages to never repeat or skip a row.
+      .orderBy(desc(orderColumn), desc(tasks.seq))
       .limit(limit)
       .offset(offset);
+    const [countResult, taskList] = await Promise.all([countQuery, taskListQuery]);
+    const subtaskProgressByTaskId = await this.subtaskProgressByTaskIds(
+      taskList.map(({ id }) => id),
+    );
 
-    return { tasks: taskList, total: Number(countResult[0].count) };
+    return {
+      tasks: taskList.map((task) => ({
+        ...task,
+        subtaskProgress: subtaskProgressByTaskId.get(task.id),
+      })),
+      total: Number(countResult[0].count),
+    };
   }
 
   /**
@@ -837,6 +1266,22 @@ export class TaskModel {
     return this.update(id, { status, ...extra });
   }
 
+  /** Atomically transition a task only while it still has the expected status. */
+  async updateStatusIfCurrent(
+    id: string,
+    currentStatus: string,
+    status: string,
+    extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
+  ): Promise<TaskItem | null> {
+    const [task] = await this.db
+      .update(tasks)
+      .set({ status, updatedAt: new Date(), ...extra })
+      .where(and(eq(tasks.id, id), eq(tasks.status, currentStatus), this.ownership()))
+      .returning();
+
+    return task ?? null;
+  }
+
   async batchUpdateStatus(ids: string[], status: string): Promise<number> {
     const result = await this.db
       .update(tasks)
@@ -845,6 +1290,25 @@ export class TaskModel {
       .returning();
 
     return result.length;
+  }
+
+  /**
+   * Update a frozen set of task ids in one SQL statement so the family cannot
+   * be left partially transitioned. Callers pass the exact ids they snapshotted
+   * (and the user confirmed); a task that changes status concurrently is never
+   * pulled into the update by a status re-query.
+   */
+  async updateStatusForIds(
+    ids: string[],
+    status: string,
+    extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
+  ): Promise<TaskItem[]> {
+    if (ids.length === 0) return [];
+    return this.db
+      .update(tasks)
+      .set({ status, updatedAt: new Date(), ...extra })
+      .where(and(inArray(tasks.id, ids), this.ownership()))
+      .returning();
   }
 
   // ========== Config ==========
@@ -896,19 +1360,6 @@ export class TaskModel {
 
   async updateReviewConfig(id: string, review: Record<string, any>): Promise<TaskItem | null> {
     return this.updateTaskConfig(id, { review });
-  }
-
-  // ========== Goal Config ==========
-
-  /**
-   * Read this task's goal-loop config from `config.goal`. Presence marks a
-   * goal-driven task (created via the `createGoal` builtin tool) and enables
-   * the outer verify-driven round loop. No inheritance — a goal belongs to the
-   * exact task it was created on.
-   */
-  getGoalConfig(task: TaskItem): TaskGoalConfig | undefined {
-    const config = task.config as Record<string, any> | undefined;
-    return config?.goal ? (config.goal as TaskGoalConfig) : undefined;
   }
 
   // ========== Verify Config ==========
@@ -1140,25 +1591,53 @@ export class TaskModel {
 
   // Find tasks that are now unblocked after a dependency completes
   async getUnlockedTasks(completedTaskId: string): Promise<TaskItem[]> {
-    // Find all tasks that depend on the completed task
-    const dependents = await this.getDependents(completedTaskId);
-    const unlocked: TaskItem[] = [];
+    return this.getUnlockedTasksForMany([completedTaskId]);
+  }
 
-    for (const dep of dependents) {
-      if (dep.type !== 'blocks') continue;
+  /**
+   * Batched variant of {@link getUnlockedTasks}: discover every task unblocked
+   * by any of `completedTaskIds` with a constant number of queries instead of
+   * one dependency walk per completed task.
+   */
+  async getUnlockedTasksForMany(completedTaskIds: string[]): Promise<TaskItem[]> {
+    if (completedTaskIds.length === 0) return [];
 
-      // Check if ALL dependencies of this task are now completed
-      const allDone = await this.areAllDependenciesCompleted(dep.taskId);
-      if (!allDone) continue;
+    // All tasks that depend on any of the completed tasks
+    const dependents = await this.db
+      .select({ taskId: taskDependencies.taskId })
+      .from(taskDependencies)
+      .where(
+        and(
+          inArray(taskDependencies.dependsOnId, completedTaskIds),
+          eq(taskDependencies.type, 'blocks'),
+          this.depsOwnership(),
+        ),
+      );
+    const dependentIds = [...new Set(dependents.map(({ taskId }) => taskId))];
+    if (dependentIds.length === 0) return [];
 
-      // Get the task itself — only unlock if it's in backlog
-      const task = await this.findById(dep.taskId);
-      if (task && task.status === 'backlog') {
-        unlocked.push(task);
-      }
-    }
+    // Of those, which still have at least one incomplete blocking dependency
+    const blocked = await this.db
+      .selectDistinct({ taskId: taskDependencies.taskId })
+      .from(taskDependencies)
+      .innerJoin(tasks, eq(taskDependencies.dependsOnId, tasks.id))
+      .where(
+        and(
+          inArray(taskDependencies.taskId, dependentIds),
+          eq(taskDependencies.type, 'blocks'),
+          ne(tasks.status, 'completed'),
+          this.depsOwnership(),
+        ),
+      );
+    const blockedIds = new Set(blocked.map(({ taskId }) => taskId));
+    const unlockedIds = dependentIds.filter((id) => !blockedIds.has(id));
+    if (unlockedIds.length === 0) return [];
 
-    return unlocked;
+    // Only unlock tasks still waiting in backlog
+    return this.db
+      .select()
+      .from(tasks)
+      .where(and(inArray(tasks.id, unlockedIds), eq(tasks.status, 'backlog'), this.ownership()));
   }
 
   // Check if all subtasks of a parent task are completed
@@ -1386,6 +1865,15 @@ export class TaskModel {
     return comment;
   }
 
+  async findCommentById(id: string): Promise<TaskCommentItem | undefined> {
+    const [comment] = await this.db
+      .select()
+      .from(taskComments)
+      .where(and(eq(taskComments.id, id), this.commentsOwnership()))
+      .limit(1);
+    return comment;
+  }
+
   async getComments(taskId: string): Promise<TaskCommentItem[]> {
     return this.db
       .select()
@@ -1417,6 +1905,190 @@ export class TaskModel {
       .where(and(eq(taskComments.id, id), this.commentsOwnership()))
       .returning();
     return comment;
+  }
+
+  // ========== Activities ==========
+
+  private activitiesOwnership = () =>
+    this.childOwnership({
+      userId: taskActivities.userId,
+      visibility: taskActivities.visibility,
+      workspaceId: taskActivities.workspaceId,
+    });
+
+  /**
+   * Append one event row. Mirrors the parent task's visibility onto the row so
+   * subsequent reads can be filtered without a JOIN — same contract as
+   * `addComment`.
+   */
+  async addActivity(
+    data: Omit<NewTaskActivity, 'id' | 'userId' | 'workspaceId' | 'visibility'>,
+  ): Promise<TaskActivityItem> {
+    const visibility = await this.getTaskVisibility(data.taskId);
+    const [activity] = await this.db
+      .insert(taskActivities)
+      .values({
+        ...data,
+        userId: this.userId,
+        visibility,
+        workspaceId: this.workspaceId ?? null,
+      })
+      .returning();
+    return activity;
+  }
+
+  /**
+   * Append several event rows in one INSERT. Unlike `addActivity`, the caller
+   * supplies each row's visibility — meant for a bulk write that has already
+   * read (and locked) the tasks it describes.
+   */
+  async addActivities(
+    rows: Omit<NewTaskActivity, 'id' | 'userId' | 'workspaceId'>[],
+  ): Promise<TaskActivityItem[]> {
+    if (rows.length === 0) return [];
+    return this.db
+      .insert(taskActivities)
+      .values(
+        rows.map((row) => ({ ...row, userId: this.userId, workspaceId: this.workspaceId ?? null })),
+      )
+      .returning();
+  }
+
+  /**
+   * Lock a set of tasks for the rest of the transaction and return what a
+   * bulk status write needs to describe them afterwards: the status each one
+   * is leaving and the visibility its activity row inherits. Reading these
+   * before the lock would let a concurrent edit slip in between and the log
+   * would name a transition that never happened.
+   */
+  async lockForStatusChange(
+    ids: string[],
+  ): Promise<{ id: string; status: string; visibility: 'private' | 'public' }[]> {
+    if (ids.length === 0) return [];
+    return this.db
+      .select({ id: tasks.id, status: tasks.status, visibility: tasks.visibility })
+      .from(tasks)
+      .where(and(inArray(tasks.id, ids), this.ownership()))
+      .for('update');
+  }
+
+  /**
+   * Update a task and append one event per tracked field that actually
+   * changed, in ONE transaction, with the previous values taken from a
+   * **locked** read of the row.
+   *
+   * The lock is the point. Reading the "before" value outside the write lets
+   * two concurrent edits both observe the same origin — an A→B and an A→C
+   * racing on one task persist A→B then B→C while a lock-free recorder logs
+   * A→B and A→C, losing the middle state. Rows are inserted next to the write
+   * they describe, so their order cannot disagree with the order the updates
+   * landed in.
+   *
+   * Which edits reach the feed is decided by the caller, not here: anything
+   * that goes through this method is logged. Person-made changes (the update
+   * procedure, the agent `editTask` tool, the status picker) and the runner's
+   * inbox fallback come here; the runner / lifecycle / watchdog status
+   * transitions use the plain writers, because the run row already tells that
+   * story.
+   */
+  async updateWithLog(
+    id: string,
+    data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+    actor: { agentId?: string | null; userId?: string | null },
+  ): Promise<TaskItem | null> {
+    const touched = TRACKED_TASK_COLUMNS.some((col) => data[col] !== undefined);
+    // Nothing to diff against: an ordinary rename should not pay for a lock.
+    if (!touched) return this.update(id, data);
+
+    return this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [before] = await runner
+        .select({
+          assigneeAgentId: tasks.assigneeAgentId,
+          assigneeUserId: tasks.assigneeUserId,
+          automationMode: tasks.automationMode,
+          config: tasks.config,
+          heartbeatInterval: tasks.heartbeatInterval,
+          priority: tasks.priority,
+          schedulePattern: tasks.schedulePattern,
+          scheduleTimezone: tasks.scheduleTimezone,
+          status: tasks.status,
+        })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!before) return null;
+
+      const scoped = new TaskModel(runner, this.userId, this.workspaceId);
+      const updated = await scoped.update(id, data);
+      if (!updated) return null;
+
+      const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];
+
+      // The two assignee slots are independent — one edit can move both, and
+      // each gets its own row so the feed reads one change per line.
+      if (before.assigneeAgentId !== updated.assigneeAgentId) {
+        events.push({
+          payload: { fromId: before.assigneeAgentId, toId: updated.assigneeAgentId },
+          type: 'assignee_agent',
+        });
+      }
+      if (before.assigneeUserId !== updated.assigneeUserId) {
+        events.push({
+          payload: { fromId: before.assigneeUserId, toId: updated.assigneeUserId },
+          type: 'assignee_user',
+        });
+      }
+      if (before.status !== updated.status) {
+        events.push({ payload: { from: before.status, to: updated.status }, type: 'status' });
+      }
+      if ((before.priority ?? null) !== (updated.priority ?? null)) {
+        events.push({
+          payload: { from: before.priority ?? null, to: updated.priority ?? null },
+          type: 'priority',
+        });
+      }
+      const automationBefore = snapshotAutomation(before);
+      const automationAfter = snapshotAutomation(updated);
+      if (JSON.stringify(automationBefore) !== JSON.stringify(automationAfter)) {
+        events.push({
+          payload: { from: automationBefore, to: automationAfter },
+          type: 'automation',
+        });
+      }
+
+      const { actorKind, ...actorColumns } = taskActivityActor(actor);
+      for (const event of events) {
+        await scoped.addActivity({
+          ...actorColumns,
+          payload: { ...event.payload, actorKind },
+          taskId: id,
+          type: event.type,
+        });
+      }
+
+      return updated;
+    });
+  }
+
+  /**
+   * Oldest-first. `limit` keeps the newest N rows (still returned
+   * oldest-first) so a long-lived task does not ship its whole history on
+   * every detail poll; the table itself is the full audit trail.
+   */
+  async getActivities(taskId: string, limit?: number): Promise<TaskActivityItem[]> {
+    const where = and(eq(taskActivities.taskId, taskId), this.activitiesOwnership());
+    if (limit === undefined) {
+      return this.db.select().from(taskActivities).where(where).orderBy(taskActivities.createdAt);
+    }
+    const newest = await this.db
+      .select()
+      .from(taskActivities)
+      .where(where)
+      .orderBy(desc(taskActivities.createdAt), desc(taskActivities.id))
+      .limit(limit);
+    return newest.reverse();
   }
 
   // ========== Transfer / Copy ==========
@@ -1470,9 +2142,14 @@ export class TaskModel {
 
   /**
    * Transfer a task subtree to another workspace / personal scope. Reallocates
-   * `identifier`/`seq` in the target scope and rewrites every dependent child
-   * table (`task_dependencies`, `task_documents`, `task_topics`,
-   * `task_comments`, `briefs`) so the ownership predicates remain consistent.
+   * `identifier`/`seq` in the target scope and rewrites the child tables that
+   * mirror the parent's ownership (`task_dependencies`, `task_documents`,
+   * `task_comments`, `task_activities`) so the ownership predicates keep
+   * resolving after the move — those mirrored columns are what authorizes
+   * reads, so a child left behind goes invisible in the destination scope.
+   *
+   * NOTE: `task_topics` and `briefs` carry the same mirrored columns but are
+   * not rewritten here. Pre-existing gap, called out rather than widened.
    *
    * Cross-scope references that may no longer be valid are cleared:
    *   - `assigneeAgentId` (workspace move: agent likely doesn't exist there)
@@ -1549,6 +2226,10 @@ export class TaskModel {
         .update(taskComments)
         .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(taskComments.taskId, ids));
+      await (trx as LobeChatDatabase)
+        .update(taskActivities)
+        .set({ ...ownershipUpdate, ...visibilityUpdate })
+        .where(inArray(taskActivities.taskId, ids));
 
       return { taskIds: ids };
     });

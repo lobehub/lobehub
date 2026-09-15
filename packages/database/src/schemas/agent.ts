@@ -1,4 +1,5 @@
 import type {
+  AgentProfile,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
   LobeAgentTTSConfig,
@@ -19,7 +20,7 @@ import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
-import { timestamps } from './_helpers';
+import { softDeleteColumns, timestamps } from './_helpers';
 import { files, knowledgeBases } from './file';
 import { sessionGroups } from './session';
 import { users } from './user';
@@ -52,6 +53,23 @@ export const agents = pgTable(
     avatar: text('avatar'),
     backgroundColor: text('background_color'),
     marketIdentifier: text('market_identifier'),
+    /**
+     * Default extension bag: anything an agent needs to carry that has no
+     * column and no home in `profile`. Untyped on purpose — give a value a
+     * typed home the moment more than one place reads it.
+     */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    /**
+     * The agent's character sheet — traits and artwork. One bag instead of a
+     * column per trait; nothing in it is ever queried. See `AgentProfile`.
+     */
+    profile: jsonb('profile').$type<AgentProfile>(),
+    /**
+     * Owning society (agent org). Left without a foreign key until the
+     * societies table exists; a plain column because agents are listed and
+     * filtered by it — index it together with the first query that does.
+     */
+    societyId: text('society_id'),
 
     plugins: jsonb('plugins').$type<string[]>(),
 
@@ -90,6 +108,8 @@ export const agents = pgTable(
      */
     visibility: text('visibility', { enum: AGENT_VISIBILITY }).default('public').notNull(),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [

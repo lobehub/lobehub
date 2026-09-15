@@ -6,7 +6,6 @@ import { type ActionKey } from '../ActionBar/config';
 import { actionMap } from '../ActionBar/config';
 import { useChatInputResourceAccess } from '../hooks/useChatInputResourceAccess';
 import { useChatInputStore } from '../store';
-import ExpandButton from './ExpandButton';
 import { resolveSendAreaActionKeys } from './resolveActionKeys';
 import SendButton from './SendButton';
 
@@ -27,27 +26,29 @@ interface SendAreaProps {
 
 const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
   const { canShowControls } = useChatInputResourceAccess();
-  const allowExpand = useChatInputStore((s) => s.allowExpand);
   const rightActions = useChatInputStore((s) => s.rightActions, isEqual);
-  const voiceMessageActive = useChatInputStore((s) => s.activeAudioInputMode === 'voiceMessage');
+  const activeAudioInputMode = useChatInputStore((s) => s.activeAudioInputMode);
+  const audioInputActive = activeAudioInputMode !== undefined;
 
   const items = useMemo(
     () =>
       canShowControls
         ? mapActionsToItems(
-            voiceMessageActive
-              ? (['voiceMessage'] as ActionKey[])
-              : resolveSendAreaActionKeys(rightActions as ActionKey[], hideContextWindow),
+            resolveSendAreaActionKeys(
+              rightActions as ActionKey[],
+              hideContextWindow,
+              activeAudioInputMode,
+            ),
           )
         : [],
-    [canShowControls, hideContextWindow, rightActions, voiceMessageActive],
+    [activeAudioInputMode, canShowControls, hideContextWindow, rightActions],
   );
 
   return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
-      {canShowControls && allowExpand && !voiceMessageActive && <ExpandButton />}
+    /** The model label must yield space before the footer clips Send on narrow panels. */
+    <Flexbox horizontal align={'center'} flex={'0 1 auto'} gap={12} style={{ minWidth: 0 }}>
       {items}
-      {!voiceMessageActive && <SendButton />}
+      {!audioInputActive && <SendButton />}
     </Flexbox>
   );
 });

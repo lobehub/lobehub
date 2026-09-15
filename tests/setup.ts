@@ -3,7 +3,6 @@ import '@testing-library/jest-dom';
 // refs: https://github.com/dumbmatter/fakeIndexedDB#dexie-and-other-indexeddb-api-wrappers
 import 'fake-indexeddb/auto';
 
-import { theme } from 'antd';
 import i18n from 'i18next';
 import { enableMapSet, enablePatches } from 'immer';
 import type { ButtonHTMLAttributes, ComponentType, ElementType, ReactNode } from 'react';
@@ -84,6 +83,27 @@ vi.mock('@/auth', () => ({
       getSession: vi.fn().mockResolvedValue(null),
     },
   },
+}));
+
+// Route zustand store creation through __mocks__/zustand/traditional.ts so every
+// store resets to its initial state between tests without per-file opt-in
+vi.mock('zustand/traditional');
+
+// Key-passthrough translations so component tests assert locale keys, not copy;
+// defaultValue still wins to match real t() fallback semantics. Tests needing
+// custom t/Trans behavior override with their own vi.mock
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useTranslation: () => ({
+    i18n: { changeLanguage: vi.fn(), language: 'en-US' },
+    t: (key: string, defaultValueOrOptions?: unknown, maybeOptions?: unknown) => {
+      if (typeof defaultValueOrOptions === 'string') return defaultValueOrOptions;
+      const options =
+        (defaultValueOrOptions as { defaultValue?: unknown } | undefined) ??
+        (maybeOptions as { defaultValue?: unknown } | undefined);
+      return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
+    },
+  }),
 }));
 
 type NativeButtonType = 'button' | 'submit' | 'reset';
@@ -238,9 +258,6 @@ if (typeof globalThis.window === 'undefined') {
 
 installTestStorage();
 beforeEach(installTestStorage);
-
-// remove antd hash on test
-theme.defaultConfig.hashed = false;
 
 // init i18n for non-React modules (stores/utils) using i18next.t(...)
 // Use in-memory resources to avoid interfering with Vitest module mocking.

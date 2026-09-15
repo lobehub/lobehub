@@ -1,4 +1,6 @@
 import type {
+  AgentInterventionRequestData,
+  AgentInterventionResponseData,
   AgentStreamEvent,
   StepCompleteData,
   StreamChunkData,
@@ -26,6 +28,7 @@ import type {
   RunScope,
 } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -59,6 +62,14 @@ const loadGetExecutor = async () => {
  * Fetch messages from DB and replace them in the chat store's dbMessagesMap.
  * This updates the ConversationArea component via React subscription:
  *   dbMessagesMap → ConversationArea (messages prop) → ConversationStore → UI
+ *
+ * `snapshotGeneration` drops a fetch that lost the race against a newer
+ * snapshot on the same handler (unqueued `step_start` vs in-flight `tool_end`).
+ * Last-write-wins would otherwise paint the older list over the next step.
+ *
+ * A dropped fetch returns `undefined` so callers that resolve an assistant id
+ * from the result (hetero / old-server `stream_start`) keep the current id
+ * instead of steering later chunks onto a row the store no longer has.
  */
 const fetchAndReplaceMessages = async (
   get: () => ChatStore,
@@ -72,12 +83,17 @@ const fetchAndReplaceMessages = async (
      * agent_runtime_end refetch recomputes them for real.
      */
     skipWorks?: boolean;
+    snapshotGeneration?: { current: number };
   },
-) => {
+): Promise<UIChatMessage[] | undefined> => {
   const skipWorks = options?.skipWorks;
+  const snapshotGeneration = options?.snapshotGeneration;
+  const started = snapshotGeneration?.current;
   const messages = await messageService.getMessages(
     skipWorks ? { ...context, skipWorks } : context,
   );
+  if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
+  if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
   return messages;
 };
@@ -227,9 +243,15 @@ const dispatchOnAfterCall = async (
   const executor = getExecutor(identity.identifier);
   if (!executor?.onAfterCall) return;
 
+  const result = (data?.result ?? {}) as BuiltinToolResult;
+
   await executor.onAfterCall({
     ...identity,
-    result: (data?.result ?? {}) as BuiltinToolResult,
+    // Gateway/hetero tool_end events carry the terminal outcome beside
+    // `result`, while client-tool results already include `result.success`.
+    // Normalize both shapes so hook-only heterogeneous executors do not treat
+    // a successful shell command as failed and skip git/worktree side effects.
+    result: { ...result, success: result.success ?? data?.isSuccess },
     topicId,
   });
 };
@@ -409,6 +431,16 @@ export const createGatewayEventHandler = (
   const gatewayOperationId = params.gatewayOperationId ?? operationId;
   const runtimeType = params.runtimeType ?? 'gateway';
 
+  /**
+   * Agent self-iteration signals are an owner-side feature: the agentSignal
+   * lambda resolves the agent in the caller's own scope, so a share visitor's
+   * emission 404s with "Agent not found". Drop them for share-visitor runs.
+   */
+  const emitAgentSignal: typeof emitClientAgentSignalSourceEvent = async (input) => {
+    if (context.agentShareId) return undefined;
+    return emitClientAgentSignalSourceEvent(input);
+  };
+
   const runScope: RunScope = context.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
   const lifecycleEventBase = {
     context,
@@ -438,6 +470,7 @@ export const createGatewayEventHandler = (
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const completedToolStateCallIds = new Set<string>();
+  const pendingInterventionToolCallIds = new Set<string>();
 
   // Tracks whether any server-confirmed state has actually arrived
   // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
@@ -478,6 +511,38 @@ export const createGatewayEventHandler = (
   const enqueue = (fn: () => Promise<void> | void): Promise<void> => {
     processingChain = processingChain.then(fn, fn);
     return processingChain;
+  };
+
+  // Bumped on every snapshot this handler applies. `step_start` is not queued,
+  // so an earlier `tool_end` getMessages can still resolve after it and would
+  // otherwise last-write-wins the older list over the next step.
+  const snapshotGeneration = { current: 0 };
+
+  const refreshMessagesFromDb = (options?: { skipWorks?: boolean }) =>
+    fetchAndReplaceMessages(get, context, { ...options, snapshotGeneration });
+
+  const applyPushedSnapshot = (
+    messages: UIChatMessage[],
+    params: { action?: string; preserveWorks?: boolean },
+  ) => {
+    snapshotGeneration.current += 1;
+    get().replaceMessages(messages, { context, ...params });
+  };
+
+  const writeTopicStatus = (status: 'running' | 'waitingForHuman') => {
+    if (!context.topicId) return;
+    const statusWrite = get().updateTopicStatus?.({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      ...(context.scope === 'group' || context.scope === 'group_agent'
+        ? { scope: context.scope }
+        : {}),
+      status,
+      topicId: context.topicId,
+    });
+    void statusWrite?.catch((error) => {
+      console.error('[gatewayEventHandler] updateTopicStatus failed:', error);
+    });
   };
 
   const getToolMessageByCallId = (toolCallId: string): UIChatMessage | undefined => {
@@ -566,7 +631,7 @@ export const createGatewayEventHandler = (
     const bootstrapPromise = enqueue(async () => {
       // A preceding queued tools_calling handler may have brought the row in.
       if (!getToolMessageByCallId(data.toolCallId)) {
-        await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+        await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
       }
       reconciled = applyLatestToolState(data.toolCallId, true);
     });
@@ -659,9 +724,7 @@ export const createGatewayEventHandler = (
                 // Older servers send only `{ id }` — fall back to a DB read.
                 // The row is inserted before stream_start is published, so the
                 // fetch is guaranteed to bring it into the store.
-                await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(
-                  console.error,
-                );
+                await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
               }
             }
           }
@@ -690,7 +753,7 @@ export const createGatewayEventHandler = (
           // dispatch to it, and (b) resolves the next-step assistant id for
           // the `newStep` fallback.
           if (!newAssistantMessageId) {
-            const messages = await fetchAndReplaceMessages(get, context, {
+            const messages = await refreshMessagesFromDb({
               skipWorks: true,
             }).catch((error) => {
               console.error(error);
@@ -710,7 +773,7 @@ export const createGatewayEventHandler = (
             }
           }
 
-          void emitClientAgentSignalSourceEvent({
+          void emitAgentSignal({
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
@@ -834,7 +897,7 @@ export const createGatewayEventHandler = (
             // lands — a fire-and-forget fetch would let the next event overtake
             // it and dispatch onto a message the store doesn't have yet.
             if ((data as any).toolMessageIds) {
-              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+              await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
             }
           }
         });
@@ -911,6 +974,83 @@ export const createGatewayEventHandler = (
         break;
       }
 
+      case 'agent_intervention_request': {
+        const data = event.data as AgentInterventionRequestData | undefined;
+        if (!data?.toolCallId) break;
+
+        pendingInterventionToolCallIds.add(data.toolCallId);
+        writeTopicStatus('waitingForHuman');
+        void notifyDesktopHumanApprovalRequired(get, context);
+
+        // Server persistence runs before stream publish. Reconcile from DB so
+        // both the inline tool and global InterventionBar see `pending`, even
+        // when this request raced ahead of the provider's tools_calling event.
+        enqueue(async () => {
+          await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
+          hasStreamedContent = true;
+        });
+        break;
+      }
+
+      case 'agent_intervention_response': {
+        const data = event.data as AgentInterventionResponseData | undefined;
+        if (!data?.toolCallId) break;
+
+        // A modern submit response is a producer-delivery leg, not completion.
+        // Keep the topic/card waiting until the producer echoes producerAck.
+        // Older responses had no request id and remain terminal-compatible.
+        if (data.resolutionRequestId && data.producerAck !== true) {
+          pendingInterventionToolCallIds.add(data.toolCallId);
+          writeTopicStatus('waitingForHuman');
+          enqueue(async () => {
+            const toolMessage = getToolMessageByCallId(data.toolCallId);
+            if (!toolMessage) return;
+            const intervention = {
+              ...toolMessage.pluginIntervention,
+              resolving: true,
+              status: 'pending' as const,
+            };
+
+            // The inline parent tool reads plugin.intervention, while the
+            // global approval collector reads the durable tool row's top-level
+            // pluginIntervention. Update both local projections immediately so
+            // every subscribed surface becomes non-actionable. Do not persist
+            // this subscriber hint: a slow write could overwrite a later
+            // producer-ACK terminal state.
+            get().internal_dispatchMessage(
+              {
+                id: toolMessage.id,
+                type: 'updateMessage',
+                value: { pluginIntervention: intervention },
+              },
+              { context },
+            );
+            if (toolMessage.parentId && toolMessage.tool_call_id) {
+              get().internal_dispatchMessage(
+                {
+                  id: toolMessage.parentId,
+                  tool_call_id: toolMessage.tool_call_id,
+                  type: 'updateMessageTools',
+                  value: { intervention },
+                },
+                { context },
+              );
+            }
+          });
+          break;
+        }
+
+        pendingInterventionToolCallIds.delete(data.toolCallId);
+        enqueue(async () => {
+          // Successful Web submits, explicit cancellation, producer timeout,
+          // and session teardown all converge on the durable tool row before
+          // this refresh. Do not infer the terminal state from identifier.
+          await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
+          if (pendingInterventionToolCallIds.size === 0) writeTopicStatus('running');
+        });
+        break;
+      }
+
       case 'step_start': {
         const data = event.data as {
           pendingToolsCalling?: unknown[];
@@ -934,9 +1074,8 @@ export const createGatewayEventHandler = (
         if (Array.isArray(data?.uiMessages)) {
           // step_start snapshots are fetched with `skipWorks` server-side —
           // graft the already-rendered works back so chips don't flicker.
-          get().replaceMessages(data.uiMessages, {
+          applyPushedSnapshot(data.uiMessages, {
             action: 'gateway/step_start',
-            context,
             preserveWorks: true,
           });
         }
@@ -945,20 +1084,7 @@ export const createGatewayEventHandler = (
           void notifyDesktopHumanApprovalRequired(get, context);
           // Persist the explicit "needs user input" marker so the sidebar swaps
           // the running spinner for the hand icon across reloads.
-          if (context.topicId) {
-            const statusWrite = get().updateTopicStatus?.({
-              agentId: context.agentId,
-              groupId: context.groupId,
-              ...(context.scope === 'group' || context.scope === 'group_agent'
-                ? { scope: context.scope }
-                : {}),
-              status: 'waitingForHuman',
-              topicId: context.topicId,
-            });
-            void statusWrite?.catch((error) => {
-              console.error('[gatewayEventHandler] updateTopicStatus failed:', error);
-            });
-          }
+          writeTopicStatus('waitingForHuman');
         }
 
         break;
@@ -994,7 +1120,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const maybeRefresh = shouldSkipMessageFetch(event, runtimeType)
             ? Promise.resolve()
-            : fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+            : refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
           const payload = unwrapToolPayload(data?.payload);
           const result = data?.result as
             { state?: unknown; workRegistration?: unknown } | undefined;
@@ -1064,7 +1190,7 @@ export const createGatewayEventHandler = (
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {
           enqueue(async () => {
-            void emitClientAgentSignalSourceEvent({
+            void emitAgentSignal({
               payload: {
                 agentId: context.agentId,
                 operationId,
@@ -1075,7 +1201,7 @@ export const createGatewayEventHandler = (
               sourceType: 'client.gateway.step_complete',
             });
             if (!shouldSkipMessageFetch(event, runtimeType)) {
-              await fetchAndReplaceMessages(get, context, { skipWorks: true }).catch(console.error);
+              await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
             }
           });
         }
@@ -1086,7 +1212,7 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
 
-          void emitClientAgentSignalSourceEvent({
+          void emitAgentSignal({
             payload: {
               agentId: context.agentId,
               ...(currentAssistantMessageId
@@ -1115,12 +1241,22 @@ export const createGatewayEventHandler = (
           // pushes the canonical snapshot directly on this event. Fall back
           // to a DB refetch only if the snapshot is absent (older server
           // builds, or push-event delivery edge cases).
+          const isSuperseded = operationSelectors.hasNewerConversationOperation(
+            operationId,
+            context,
+          )(get());
           if (Array.isArray(data?.uiMessages)) {
             terminalMessages = data.uiMessages;
-            get().replaceMessages(data.uiMessages, {
-              action: 'gateway/agent_runtime_end',
-              context,
-            });
+            // `visible_output_end` lets a follow-up start before this terminal
+            // event arrives. Once that happens, this run's snapshot is no longer
+            // the conversation SoT: replacing the list would erase the newer
+            // turn's optimistic rows until refresh. Keep terminalMessages for
+            // this run's notification, but do not mutate its successor's store.
+            if (!isSuperseded) {
+              applyPushedSnapshot(data.uiMessages, {
+                action: 'gateway/agent_runtime_end',
+              });
+            }
           } else if (
             (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
             hasStreamedContent
@@ -1143,8 +1279,8 @@ export const createGatewayEventHandler = (
             // arrives BEFORE any stream activity, the optimistic `tmp_*`
             // messages are the only in-memory state and they need the
             // refetch to be reconciled with the server-side rows.
-          } else {
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+          } else if (!isSuperseded) {
+            await refreshMessagesFromDb().catch(console.error);
           }
 
           if (runtimeType === 'gateway' && shouldRefreshWorkViews) {
@@ -1214,7 +1350,7 @@ export const createGatewayEventHandler = (
         // Remote hetero agent (openclaw / hermes) wrote a message to DB via
         // `lh notify`. DB is the source of truth — just refresh the message list.
         enqueue(async () => {
-          await fetchAndReplaceMessages(get, context).catch(console.error);
+          await refreshMessagesFromDb().catch(console.error);
         });
         break;
       }
@@ -1224,7 +1360,7 @@ export const createGatewayEventHandler = (
           const messageError = toChatMessageError(event.data);
           const errorMessage = messageError.message;
 
-          void emitClientAgentSignalSourceEvent({
+          void emitAgentSignal({
             payload: {
               agentId: context.agentId,
               errorMessage,
@@ -1251,20 +1387,29 @@ export const createGatewayEventHandler = (
             get().completeOperation(operationId);
           }
 
-          const updateResult = await messageService
-            .updateMessageError(currentAssistantMessageId, messageError, {
-              agentId: context.agentId,
-              groupId: context.groupId,
-              threadId: context.threadId,
-              topicId: context.topicId,
-            })
-            .catch(console.error);
+          // Share visitors must not persist through the owner-scoped
+          // `message.update`: it resolves rows in the CALLER's scope, so the
+          // visitor call "succeeds" with 0 rows updated and its response
+          // messages (queried as the visitor) come back empty — replacing the
+          // bucket with [] and leaving the inline error overlay nothing to
+          // attach to. Fall through to the share-aware refetch + overlay;
+          // server-side error persistence for share runs is a known v1 gap.
+          const updateResult = context.agentShareId
+            ? undefined
+            : await messageService
+                .updateMessageError(currentAssistantMessageId, messageError, {
+                  agentId: context.agentId,
+                  groupId: context.groupId,
+                  threadId: context.threadId,
+                  topicId: context.topicId,
+                })
+                .catch(console.error);
 
           if (updateResult?.success && updateResult.messages) {
             get().replaceMessages(updateResult.messages, { context });
           } else {
             // Fallback when the mutation response doesn't include messages.
-            await fetchAndReplaceMessages(get, context).catch(console.error);
+            await refreshMessagesFromDb().catch(console.error);
           }
 
           // Then overlay the inline error. This ensures the UI always shows the

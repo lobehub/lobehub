@@ -1,4 +1,4 @@
-import { ConnectorDataError } from '../errors';
+import { ConnectorDataError, getConnectorErrorMessage } from '../errors';
 import { createRecoverableMemo } from '../memo';
 import { withConnectorRetry } from '../retry';
 import type { GmailComposioConnectedAccounts } from './account';
@@ -75,6 +75,7 @@ export const createGmailConnectorClient = ({
         : undefined;
     if (discovered) return discovered;
     throw new ConnectorDataError({
+      cause: tool,
       code: 'gmail_tool_version_unavailable',
       operation: 'searchMessages',
       provider: 'gmail',
@@ -95,48 +96,45 @@ export const createGmailConnectorClient = ({
         Math.max(1, Math.floor(finiteMaxResults)),
         DEFAULT_MAX_RESULTS,
       );
-      return withConnectorRetry(
-        async () => {
-          const version = await getToolVersion();
-          const response = await composio.tools.execute(SEARCH_TOOL_SLUG, {
-            arguments: {
-              max_results: boundedMaxResults,
-              query: query.slice(0, MAX_QUERY_LENGTH),
-            },
-            connectedAccountId,
-            userId,
-            version,
+      return withConnectorRetry(async () => {
+        const version = await getToolVersion();
+        const response = await composio.tools.execute(SEARCH_TOOL_SLUG, {
+          arguments: {
+            max_results: boundedMaxResults,
+            query: query.slice(0, MAX_QUERY_LENGTH),
+          },
+          connectedAccountId,
+          userId,
+          version,
+        });
+        if (
+          typeof response !== 'object' ||
+          response === null ||
+          !('successful' in response) ||
+          response.successful !== true
+        ) {
+          throw new ConnectorDataError({
+            cause: response,
+            code: 'gmail_search_failed',
+            message: getConnectorErrorMessage(response),
+            operation: 'searchMessages',
+            provider: 'gmail',
+            retryable: false,
           });
-          if (
-            typeof response !== 'object' ||
-            response === null ||
-            !('successful' in response) ||
-            response.successful !== true
-          ) {
-            throw new ConnectorDataError({
-              code: 'gmail_search_failed',
-              operation: 'searchMessages',
-              provider: 'gmail',
-              retryable: false,
-            });
-          }
-          const messages = parseGmailMessages(response, { maxCandidates: boundedMaxResults });
-          if (!messages) {
-            throw new ConnectorDataError({
-              code: 'gmail_response_invalid',
-              operation: 'searchMessages',
-              provider: 'gmail',
-              retryable: false,
-            });
-          }
-          return messages;
-        },
-        {
-          code: 'gmail_search_failed',
-          operation: 'searchMessages',
-          provider: 'gmail',
-        },
-      );
+        }
+        const messages = parseGmailMessages(response, { maxCandidates: boundedMaxResults });
+        if (!messages) {
+          throw new ConnectorDataError({
+            cause: response,
+            code: 'gmail_response_invalid',
+            message: getConnectorErrorMessage(response),
+            operation: 'searchMessages',
+            provider: 'gmail',
+            retryable: false,
+          });
+        }
+        return messages;
+      });
     },
   };
 };

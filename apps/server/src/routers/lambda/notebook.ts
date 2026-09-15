@@ -1,11 +1,14 @@
 import { type NotebookDocument } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { NotebookRuntimeService } from '@/server/services/notebook';
@@ -22,6 +25,8 @@ const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
 
   return opts.next({
     ctx: {
+      operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
+      workModel: new WorkModel(ctx.serverDB, ctx.userId, wsId),
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
       notebookService: new NotebookRuntimeService({
         serverDB: ctx.serverDB,
@@ -41,6 +46,7 @@ export const notebookRouter = router({
         content: z.string(),
         description: z.string(),
         metadata: z.record(z.string(), z.any()).optional(),
+        operationId: z.string().optional(),
         source: z.string().optional().default('notebook'),
         sourceType: z.enum(['file', 'web', 'api', 'topic']).optional().default('api'),
         title: z.string(),
@@ -52,6 +58,36 @@ export const notebookRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Resolve provenance before creating anything. A caller may only attribute
+      // a document to an owned run in this topic, including its owned ancestry.
+      const operation = input.operationId
+        ? await ctx.operationModel.findOwnOperationById(input.operationId)
+        : null;
+      if (input.operationId && (!operation || operation.topicId !== input.topicId)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Operation does not belong to this topic',
+        });
+      }
+      let rootOperation = operation;
+      const visited = new Set<string>();
+      while (rootOperation?.parentOperationId) {
+        if (visited.has(rootOperation.id)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid operation ancestry' });
+        }
+        visited.add(rootOperation.id);
+        const parent = await ctx.operationModel.findOwnOperationById(
+          rootOperation.parentOperationId,
+        );
+        if (!parent) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Operation ancestry is not accessible',
+          });
+        }
+        rootOperation = parent;
+      }
+
       // Create the document
       const document = await ctx.documentModel.create({
         content: input.content,
@@ -70,6 +106,18 @@ export const notebookRouter = router({
         documentId: document.id,
         topicId: input.topicId,
       });
+
+      if (operation && rootOperation) {
+        await ctx.workModel.registerDocument({
+          agentId: operation.agentId,
+          changeType: 'created',
+          documentId: document.id,
+          rootOperationId: rootOperation.id,
+          toolIdentifier: 'lobehub-notebook',
+          toolName: 'createDocument',
+          topicId: input.topicId,
+        });
+      }
 
       return document;
     }),

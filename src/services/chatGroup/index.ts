@@ -171,16 +171,34 @@ class ChatGroupService {
     return lambdaClient.group.listReferencedMembers.query({ groupIds });
   };
 
-  transferGroup = (
+  transferGroup = async (
     groupId: string,
     targetWorkspaceId: string | null,
     targetVisibility?: 'private' | 'public',
   ): Promise<{ groupId: string; transferJobId?: string | null } | null> => {
-    return lambdaClient.group.transferGroup.mutate({
+    const result = await lambdaClient.group.transferGroup.mutate({
       groupId,
       targetVisibility,
       targetWorkspaceId,
     });
+    // Without `targetMemberId` the endpoint always takes the scope-move path.
+    return result as { groupId: string; transferJobId?: string | null } | null;
+  };
+
+  /**
+   * Hand ownership to another member of the current workspace. Creates a
+   * pending transfer request the recipient must accept — nothing moves yet.
+   */
+  requestGroupTransferToMember = async (params: {
+    groupId: string;
+    targetMemberId: string;
+  }): Promise<{ requestId: string; status: 'pending' }> => {
+    const result = await lambdaClient.group.transferGroup.mutate({
+      groupId: params.groupId,
+      targetMemberId: params.targetMemberId,
+      targetWorkspaceId: null,
+    });
+    return result as { requestId: string; status: 'pending' };
   };
 
   /**

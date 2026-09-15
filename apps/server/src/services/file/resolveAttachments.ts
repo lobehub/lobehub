@@ -5,7 +5,7 @@ import debug from 'debug';
 
 import { FileModel } from '@/database/models/file';
 import { DocumentService } from '@/server/services/document';
-import { FileService } from '@/server/services/file';
+import { FileService, getFileProxyUrl } from '@/server/services/file';
 
 const log = debug('lobe-server:resolveAttachments');
 
@@ -197,11 +197,12 @@ export const resolveAttachmentMetadata = async ({
   const fileService = signUrls ? new FileService(db, userId, workspaceId) : null;
   const recordById = new Map(fileRecords.map((f) => [f.id, f]));
   const items = await Promise.all(
-    dedupedFileIds.map(async (id) => {
+    dedupedFileIds.map(async (id): Promise<ChatFileItem | undefined> => {
       const file = recordById.get(id);
       if (!file) return undefined;
       const url = fileService ? (await fileService.getFullFileUrl(file.url)) || file.url : file.url;
       return {
+        downloadUrl: getFileProxyUrl(file.id),
         fileType: file.fileType || 'application/octet-stream',
         id: file.id,
         name: file.name || 'file',

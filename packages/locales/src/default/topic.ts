@@ -217,6 +217,8 @@ export default {
   'management.empty.noTopics.desc':
     'Start a conversation with this agent to create your first topic.',
   'management.empty.noTopics.title': 'No topics yet',
+  'management.filters.botChannel.empty': 'No channels',
+  'management.filters.botChannel.label': 'Channel',
   'management.filters.project.empty': 'No projects',
   'management.filters.project.label': 'Project',
   'management.filters.status.active': 'Active',
@@ -231,6 +233,7 @@ export default {
   'management.filters.time.today': 'Today',
   'management.filters.time.week': 'Past week',
   'management.filters.trigger.api': 'API',
+  'management.filters.trigger.bot': 'Channel',
   'management.filters.trigger.chat': 'Chat',
   'management.filters.trigger.eval': 'Eval',
   'management.filters.trigger.label': 'Trigger',

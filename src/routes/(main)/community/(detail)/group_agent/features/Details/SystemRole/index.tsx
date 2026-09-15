@@ -1,4 +1,5 @@
-import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { MessageCircleHeartIcon, MessageCircleQuestionIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -18,7 +19,15 @@ const SystemRole = memo(() => {
     <Flexbox gap={16}>
       {systemRole && (
         <>
-          <Title tag={tokenUsage && <Tag>{t('groupAgents.details.tokenUsage', { defaultValue: `${tokenUsage} tokens` })}</Tag>}>
+          <Title
+            tag={
+              tokenUsage && (
+                <Tag>
+                  {t('groupAgents.details.tokenUsage', { defaultValue: `${tokenUsage} tokens` })}
+                </Tag>
+              )
+            }
+          >
             {t('groupAgents.details.systemRole.title', { defaultValue: 'System Role' })}
           </Title>
           <Block gap={16} padding={16} variant={'outlined'}>

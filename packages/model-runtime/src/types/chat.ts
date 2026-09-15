@@ -27,6 +27,10 @@ interface UserMessageContentPartThinking {
   thinking: string;
   type: 'thinking';
 }
+interface UserMessageContentPartRedactedThinking {
+  data: string;
+  type: 'redacted_thinking';
+}
 interface UserMessageContentPartText {
   text: string;
   type: 'text';
@@ -59,7 +63,8 @@ export type UserMessageContentPart =
   | UserMessageContentPartImage
   | UserMessageContentPartVideo
   | UserMessageContentPartAudio
-  | UserMessageContentPartThinking;
+  | UserMessageContentPartThinking
+  | UserMessageContentPartRedactedThinking;
 
 export interface OpenAIChatMessage {
   content: string | UserMessageContentPart[];

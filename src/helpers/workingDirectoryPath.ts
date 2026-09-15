@@ -1,4 +1,4 @@
-import type { WorkingDirConfig, WorkingDirRepoType } from '@lobechat/types';
+import type { WorkingDirConfig, WorkingDirGitState, WorkingDirRepoType } from '@lobechat/types';
 
 import { isDesktop } from '@/const/version';
 
@@ -35,3 +35,22 @@ export const getWorkingDirectoryName = (path?: string | null) => {
 
   return value.replaceAll('\\', '/').split('/').findLast(Boolean) || value;
 };
+
+/**
+ * Whether the effective checkout is a linked worktree rather than the source
+ * repo itself. `isWorktree` is only stamped by the newer snapshot writer, so
+ * topics recorded before it exist fall back to comparing the two paths.
+ *
+ * Shared by the topic meta hover card and the ControlBar's stale snapshot so a
+ * topic can't be a worktree on one surface and a plain checkout on the other.
+ */
+export const isWorktreeCheckout = ({
+  effectivePath,
+  git,
+  sourcePath,
+}: {
+  effectivePath?: string;
+  git?: WorkingDirGitState;
+  sourcePath?: string;
+}): boolean =>
+  !!git?.isWorktree || (!!sourcePath && !!effectivePath && effectivePath !== sourcePath);

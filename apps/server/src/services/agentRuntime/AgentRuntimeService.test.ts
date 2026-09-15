@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 
-import { AgentRuntimeService } from './AgentRuntimeService';
+import { AgentRuntimeService, createEvalToolForwardingHook } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
 import {
   type AgentExecutionParams,
@@ -19,7 +19,9 @@ import {
 vi.mock('@lobechat/model-runtime', () => ({
   // RuntimeExecutors (loaded transitively) resolves extend params via this
   // helper; an empty result keeps the runtime payload unchanged.
-  applyModelExtendParams: vi.fn(() => ({})),
+  applyModelExtendParams: vi.fn(function () {
+    return {};
+  }),
   getModelPropertyWithFallback: vi.fn(),
   // `llmErrorClassification.ts` reads these at module-load time; an empty
   // spec map is fine here because this suite never exercises the runtime
@@ -28,6 +30,9 @@ vi.mock('@lobechat/model-runtime', () => ({
   getErrorCodeSpec: () => undefined,
   refineErrorCode: () => undefined,
 }));
+
+const { ssrfSafeFetch: mockSsrfSafeFetch } = vi.hoisted(() => ({ ssrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -38,37 +43,47 @@ vi.mock('@/libs/trusted-client', () => ({
 
 // Mock database and models
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfigById: vi.fn(),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfigById: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock ModelRuntime to avoid server-side env access
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initializeRuntimeOptions: vi.fn(),
-  ApiKeyManager: vi.fn().mockImplementation(() => ({
-    getApiKey: vi.fn(),
-    getAllApiKeys: vi.fn(),
-  })),
+  ApiKeyManager: vi.fn().mockImplementation(function () {
+    return {
+      getApiKey: vi.fn(),
+      getAllApiKeys: vi.fn(),
+    };
+  }),
 }));
 
 // Mock search service to avoid server-side env access
 vi.mock('@/server/services/search', () => ({
-  SearchService: vi.fn().mockImplementation(() => ({
-    search: vi.fn(),
-  })),
+  SearchService: vi.fn().mockImplementation(function () {
+    return {
+      search: vi.fn(),
+    };
+  }),
   searchService: {
     search: vi.fn(),
   },
@@ -107,16 +122,20 @@ vi.mock('@/server/modules/AgentRuntime', async (importOriginal) => {
 // so this mock survives future executor migrations without edits.
 vi.mock('@lobechat/agent-runtime', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
-    step: vi.fn(),
-  })),
+  AgentRuntime: vi.fn().mockImplementation(function (_agent, _options) {
+    return {
+      step: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/queue', () => ({
-  QueueService: vi.fn().mockImplementation(() => ({
-    getImpl: vi.fn().mockReturnValue(null),
-    scheduleMessage: vi.fn(),
-  })),
+  QueueService: vi.fn().mockImplementation(function () {
+    return {
+      getImpl: vi.fn().mockReturnValue(null),
+      scheduleMessage: vi.fn(),
+    };
+  }),
 }));
 
 // Mock Mecha module
@@ -246,6 +265,137 @@ describe('AgentRuntimeService', () => {
     hookDispatcher.unregister('test-operation-1');
   });
 
+  describe('eval tool forwarding hook', () => {
+    const event = {
+      apiName: 'search_tweets',
+      args: { query: 'test' },
+      callIndex: 2,
+      identifier: 'twitter',
+      mock: vi.fn(),
+      operationId: 'op-forwarding',
+      stepIndex: 3,
+    };
+
+    beforeEach(() => {
+      event.mock.mockReset();
+      mockSsrfSafeFetch.mockReset();
+    });
+
+    it('forwards the beforeToolCall payload and preserves the returned tool result', async () => {
+      const timeoutSpy = vi.spyOn(global, 'setTimeout');
+      const result = { content: 'fixture result', state: { source: 'mock' }, success: true };
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: result, success: true })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
+        'https://mock.test/tool-calls',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toEqual({
+        data: { apiName: 'search_tweets', args: { query: 'test' }, identifier: 'twitter' },
+        metadata: { callIndex: 2, operationId: 'op-forwarding', stepIndex: 3 },
+        type: 'toolCall',
+      });
+      expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 15_000);
+      expect(event.mock).toHaveBeenCalledWith(result);
+      timeoutSpy.mockRestore();
+    });
+
+    it('includes the dataset case id in forwarding metadata', async () => {
+      const result = { content: 'fixture result', success: true };
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: result, success: true })),
+      );
+      const hook = createEvalToolForwardingHook(
+        { twitter: { endpoint: 'https://mock.test/tool-calls' } },
+        'case-42',
+      );
+
+      await hook.handler(event as any);
+
+      expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toMatchObject({
+        metadata: { caseId: 'case-42' },
+      });
+    });
+
+    it('mocks a failed result without executing the real tool', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'fixture unavailable', success: false })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: 'fixture unavailable',
+        error: 'fixture unavailable',
+        success: false,
+      });
+    });
+
+    it('mocks a placeholder when a successful response has no tool result', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(new Response(JSON.stringify({ success: true })));
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
+    });
+
+    it('mocks a placeholder when a successful response has an invalid tool result', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: { content: 1, success: true }, success: true })),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({ content: 'No tool result', success: true });
+    });
+
+    it('mocks a failed result when the forwarding response is not JSON', async () => {
+      mockSsrfSafeFetch.mockResolvedValue(new Response('not-json'));
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: expect.stringContaining('SyntaxError'),
+        error: expect.any(SyntaxError),
+        success: false,
+      });
+    });
+
+    it('mocks transport failures', async () => {
+      mockSsrfSafeFetch.mockRejectedValue('SSRF blocked');
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith({
+        content: 'SSRF blocked',
+        error: 'SSRF blocked',
+        success: false,
+      });
+    });
+  });
+
   describe('constructor', () => {
     it('should initialize with default base URL', () => {
       delete process.env.AGENT_RUNTIME_BASE_URL;
@@ -300,12 +450,10 @@ describe('AgentRuntimeService', () => {
           status: 'idle',
           stepCount: 0,
           messages: [],
-          metadata: {
-            agentConfig: mockParams.agentConfig,
-            modelRuntimeConfig: mockParams.modelRuntimeConfig,
-            userId: mockParams.userId,
-          },
+          modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          origin: expect.objectContaining({ userId: mockParams.userId }),
           toolManifestMap: {},
+          world: expect.objectContaining({ agent: mockParams.agentConfig }),
         }),
       );
 
@@ -359,7 +507,7 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('should pass evalContext to metadata when provided', async () => {
+    it('should place evalContext on the world snapshot when provided', async () => {
       mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
 
       const evalContext = { envPrompt: 'You are in a test environment' };
@@ -368,9 +516,53 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
-          metadata: expect.objectContaining({
-            evalContext,
-          }),
+          world: expect.objectContaining({ eval: evalContext }),
+        }),
+      );
+    });
+
+    it('should persist the system-message context on the world snapshot', async () => {
+      mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
+
+      const projectInstructions = [{ content: 'Use bun.', source: 'AGENTS.md' }];
+      const connectorOwnershipNote = 'Gmail runs on Alice’s account.';
+      await service.createOperation({
+        ...mockParams,
+        connectorOwnershipNote,
+        projectInstructions,
+      });
+
+      // Steps can be claimed by another worker, so anything the context engine
+      // needs has to survive on the persisted operation state — in the typed
+      // `world` slot, which is the only place the engine reads it from.
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          world: expect.objectContaining({ connectorOwnershipNote, projectInstructions }),
+        }),
+      );
+    });
+
+    it('should persist the operation expertise snapshot in runtime state', async () => {
+      mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
+      const expertise = {
+        contentHash: 'stable-hash',
+        domains: [{ id: 'domain-1', lessonIds: ['lesson-1'] }],
+        renderedContext: '<expertise>stable</expertise>',
+        schemaVersion: 1,
+      };
+
+      await service.createOperation({
+        ...mockParams,
+        enableExpertise: true,
+        expertise,
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          enableExpertise: true,
+          expertise,
         }),
       );
     });
@@ -532,6 +724,23 @@ describe('AgentRuntimeService', () => {
       mockCoordinator.getOperationMetadata.mockResolvedValue(mockMetadata);
     });
 
+    it('acks a delayed delivery after the durable operation was abandoned', async () => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        id: mockParams.operationId,
+        status: 'abandoned',
+      });
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result).toEqual({
+        nextStepScheduled: false,
+        state: { status: 'interrupted' },
+        stepResult: null,
+        success: true,
+      });
+      expect(mockCoordinator.tryClaimStep).not.toHaveBeenCalled();
+    });
+
     it('should pass resolved contextWindowTokens into compressionConfig', async () => {
       vi.mocked(getModelPropertyWithFallback).mockResolvedValueOnce(200_000);
 
@@ -544,8 +753,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        metadata: {
-          agentConfig: { chatConfig: { enableContextCompression: true } },
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -579,8 +788,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        metadata: {
-          agentConfig: { chatConfig: { enableContextCompression: true } },
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'unknown-model', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -867,11 +1076,10 @@ describe('AgentRuntimeService', () => {
       const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
       vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
 
-      // First call returns running state (for executeStep's initial load),
-      // second call returns interrupted state (checked after runtime.step completes)
-      mockCoordinator.loadAgentState
-        .mockResolvedValueOnce(mockState) // initial load
-        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' }); // post-step check
+      // Initial load returns running state; the post-step interrupt check
+      // reads the sentinel instead of the state blob
+      mockCoordinator.loadAgentState.mockResolvedValueOnce(mockState);
+      mockCoordinator.isInterrupted.mockResolvedValueOnce(true);
 
       const result = await service.executeStep(mockParams);
 
@@ -883,6 +1091,162 @@ describe('AgentRuntimeService', () => {
         'test-operation-1',
         expect.objectContaining({
           newState: expect.objectContaining({ status: 'interrupted' }),
+        }),
+      );
+    });
+
+    it('should detect an interruption written by an old worker without a sentinel', async () => {
+      const mockStepResult = {
+        events: [],
+        newState: { ...mockState, status: 'running', stepCount: 2 },
+        nextContext: mockParams.context,
+      };
+
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+      mockCoordinator.loadAgentState
+        .mockResolvedValueOnce(mockState)
+        .mockResolvedValueOnce({ ...mockState, status: 'interrupted' });
+      mockCoordinator.isInterrupted.mockResolvedValueOnce(false);
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result.state).toEqual(expect.objectContaining({ status: 'interrupted' }));
+      expect(result.nextStepScheduled).toBe(false);
+      expect(mockCoordinator.loadAgentState).toHaveBeenCalledTimes(2);
+      expect(mockCoordinator.saveStepResult).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          newState: expect.objectContaining({ status: 'interrupted' }),
+        }),
+      );
+    });
+
+    it('should abort a long step when an old worker writes only interrupted state', async () => {
+      vi.useFakeTimers();
+      const mockStepResult = {
+        events: [],
+        newState: { ...mockState, status: 'running', stepCount: 2 },
+        nextContext: mockParams.context,
+      };
+
+      try {
+        vi.spyOn(service as any, 'createAgentRuntime').mockImplementation(function (
+          ...args: unknown[]
+        ) {
+          const { abortSignal } = args[0] as { abortSignal: AbortSignal };
+          return {
+            runtime: {
+              step: vi.fn(function () {
+                return new Promise((resolve) => {
+                  abortSignal.addEventListener('abort', () => resolve(mockStepResult), {
+                    once: true,
+                  });
+                });
+              }),
+            },
+          };
+        });
+        mockCoordinator.loadAgentState
+          .mockResolvedValueOnce(mockState)
+          .mockResolvedValue({ ...mockState, status: 'interrupted' });
+        mockCoordinator.isInterrupted.mockResolvedValue(false);
+
+        const execution = service.executeStep(mockParams);
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(30_000);
+        const result = await execution;
+
+        expect(result.state).toEqual(expect.objectContaining({ status: 'interrupted' }));
+        expect(result.nextStepScheduled).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should resolve pending client tools when interruption races the parked result', async () => {
+      const completedTool = {
+        apiName: 'calculate',
+        arguments: '{}',
+        id: 'completed-server-tool-call',
+        identifier: 'server-tool',
+        type: 'default' as const,
+      };
+      const pendingTool = {
+        apiName: 'search',
+        arguments: '{}',
+        id: 'client-tool-call',
+        identifier: 'client-tool',
+        type: 'default' as const,
+      };
+      const parkedResult = {
+        events: [{ type: 'interrupted' as const }],
+        newState: {
+          ...mockState,
+          messages: [
+            {
+              content: 'Completed server result',
+              role: 'tool' as const,
+              tool_call_id: completedTool.id,
+            },
+          ],
+          pendingToolsCalling: [pendingTool],
+          status: 'waiting_for_async_tool' as const,
+          stepCount: 2,
+        },
+        nextContext: undefined,
+      };
+      const resolvedResult = {
+        events: [{ type: 'done' as const }],
+        newState: {
+          ...parkedResult.newState,
+          messages: [
+            ...parkedResult.newState.messages,
+            {
+              content: 'Tool execution was aborted by user.',
+              role: 'tool' as const,
+              tool_call_id: pendingTool.id,
+            },
+          ],
+          status: 'done' as const,
+        },
+      };
+      const mockRuntime = {
+        step: vi.fn().mockResolvedValueOnce(parkedResult).mockResolvedValueOnce(resolvedResult),
+      };
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+      mockCoordinator.loadAgentState.mockResolvedValueOnce(mockState);
+      mockCoordinator.isInterrupted.mockResolvedValueOnce(true);
+
+      const mixedBatchContext = {
+        ...mockParams.context!,
+        payload: {
+          ...(mockParams.context!.payload as Record<string, unknown>),
+          hasToolsCalling: true,
+          toolsCalling: [completedTool, pendingTool],
+        },
+        phase: 'llm_result' as const,
+      };
+      const result = await service.executeStep({ ...mockParams, context: mixedBatchContext });
+
+      expect(result.state).toEqual(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              content: 'Completed server result',
+              tool_call_id: completedTool.id,
+            }),
+            expect.objectContaining({ tool_call_id: pendingTool.id }),
+          ]),
+          status: 'interrupted',
+        }),
+      );
+      expect(mockRuntime.step).toHaveBeenCalledTimes(2);
+      expect(mockRuntime.step).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'interrupted' }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ toolsCalling: [pendingTool] }),
+          phase: 'llm_result',
         }),
       );
     });
@@ -1414,6 +1778,19 @@ describe('AgentRuntimeService', () => {
         'Operation test-operation-1 is in error state',
       );
     });
+
+    it('should reject restarting an interrupted operation', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...mockState,
+        status: 'interrupted',
+      });
+
+      await expect(service.startExecution(mockParams)).rejects.toThrow(
+        'Operation test-operation-1 is interrupted',
+      );
+      expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
   });
 
   describe('processHumanIntervention', () => {
@@ -1472,6 +1849,14 @@ describe('AgentRuntimeService', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           { status: 'done' },
           { phase: 'user_input' },
+        );
+        expect(shouldContinue).toBe(false);
+      });
+
+      it('should return false for a plain interrupt with nothing left to settle', () => {
+        const shouldContinue = (service as any).shouldContinueExecution(
+          { status: 'interrupted' },
+          { phase: 'tool_result' },
         );
         expect(shouldContinue).toBe(false);
       });
@@ -1614,6 +1999,13 @@ describe('AgentRuntimeService', () => {
           lastModified: expect.any(String),
         }),
       );
+      expect(mockCoordinator.markInterrupted).toHaveBeenCalledWith('op-1');
+      // Sentinel must land before the state save: the step-boundary check
+      // reads only the sentinel, so state-first ordering would let a check
+      // between the two writes miss the interrupt and clobber it.
+      expect(mockCoordinator.markInterrupted.mock.invocationCallOrder[0]).toBeLessThan(
+        mockCoordinator.saveAgentState.mock.invocationCallOrder[0],
+      );
     });
 
     it('should interrupt a waiting_for_human operation', async () => {
@@ -1639,6 +2031,7 @@ describe('AgentRuntimeService', () => {
 
       expect(result).toBe(false);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+      expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
     });
 
     it('should return false when operation already done', async () => {
@@ -1695,11 +2088,59 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const result = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
-      expect(queryMessages).toHaveBeenCalledWith({ agentId: 'agt_1', topicId: 'tpc_1' });
+      expect(queryMessages).toHaveBeenCalledWith(
+        { agentId: 'agt_1', topicId: 'tpc_1' },
+        expect.anything(),
+      );
       expect(result).toEqual(stubMessages);
+    });
+
+    it('opts the snapshot into agent-share visitor rows', async () => {
+      // Regression: `MessageModel.query()` hides share-visitor messages by
+      // default. A visitor run executes under the creator's identity, so
+      // without the opt-in the terminal snapshot for the visitor's topic is
+      // `[]` and the client replaces the conversation it just streamed with
+      // nothing.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
+    });
+
+    it('scopes the snapshot to the run thread when the operation is a subtopic run', async () => {
+      // Regression: without `threadId` the snapshot is the topic's MAIN
+      // conversation, and the client writes it into the thread's bucket at
+      // step_start / agent_runtime_end — wiping the turn the run just produced,
+      // so a freshly created subtopic renders the main conversation instead.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        origin: { agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' }),
+        expect.anything(),
+      );
+    });
+
+    it('leaves threadId unset for a main-conversation run', async () => {
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages.mock.calls[0][0].threadId).toBeUndefined();
     });
 
     it('returns undefined when agentId or topicId is missing (skips empty-array push)', async () => {
@@ -1707,10 +2148,10 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const noAgent = await service.queryUiMessages({
-        metadata: { topicId: 'tpc_1' },
+        origin: { topicId: 'tpc_1' },
       } as any);
       const noTopic = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1' },
+        origin: { agentId: 'agt_1' },
       } as any);
       const noMeta = await service.queryUiMessages({} as any);
 
@@ -1725,7 +2166,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const result = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(result).toBeUndefined();
@@ -2048,7 +2489,7 @@ describe('AgentRuntimeService', () => {
         { content: 'question', role: 'user' },
         { content: 'final answer', role: 'assistant' },
       ],
-      metadata: { agentId: 'agent-a' },
+      origin: { agentId: 'agent-a' },
       modelRuntimeConfig: { model: 'gpt-test' },
       status: 'done',
       usage: { llm: { tokens: { total: 42 } }, tools: { totalCalls: 2 } },
@@ -2180,6 +2621,76 @@ describe('AgentRuntimeService', () => {
       expect(updateToolMessage).toHaveBeenCalledWith(
         'grp-tool-1',
         expect.objectContaining({ content: 'persisted member answer' }),
+      );
+    });
+
+    // Regression: same as completeSubAgentBridge's hetero case — a
+    // heterogeneous isolated member never populates the coordinator's
+    // runtime state at all, so `loadAgentState` genuinely resolves `null`.
+    // Recover the real answer from the member's own isolation thread instead
+    // of falling through to the "no textual answer" stub.
+    it('single isolated member: recovers the answer from the isolation thread when the coordinator has no state at all (hetero)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('hello from the CLI'),
+      );
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+        threadId: 'thread-1',
+      });
+
+      expect((service as any).messageModel.query).toHaveBeenCalledWith(
+        { threadId: 'thread-1' },
+        { allowShareVisitor: true },
+      );
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'hello from the CLI' }),
+      );
+    });
+
+    // Mirrors completeSubAgentBridge's identical Codex-flagged regression:
+    // the thread fallback must be gated on `!finalState`, not merely an
+    // empty `lastAssistantContent` — a real finalState whose last turn is
+    // legitimately textless must keep the stub, not risk a stale earlier
+    // reply from the thread's own history.
+    it('single isolated member: does not query the thread when a real finalState already says the final turn is textless', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...memberState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([{ image: 'https://example.com/image.png', type: 'image' }]),
+          { isMultimodal: true },
+        ),
+      );
+      const threadFallbackSpy = vi.spyOn(service as any, 'resolveLastAssistantContentFromThread');
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+        threadId: 'thread-1',
+      });
+
+      expect(threadFallbackSpy).not.toHaveBeenCalled();
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'Agent member completed without a textual answer.' }),
       );
     });
 
@@ -2334,6 +2845,33 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    // Regression: a heterogeneous (CLI-driven) child never populates the
+    // coordinator's Redis-backed runtime state at all — `loadAgentState`
+    // genuinely resolves `null` for it, unlike the standard-runtime case
+    // above where it resolves a real (if message-stripped) state object.
+    // Without a thread-scoped fallback this always fell through to "Sub-agent
+    // completed without a textual answer.", even though the CLI produced a
+    // real reply — because the webhook's `eventFields` deliberately excludes
+    // `lastAssistantContent` (see `createSubAgentBridgeHook`) and hetero never
+    // writes into the coordinator, so nothing else could ever supply it.
+    it('recovers the answer from the isolation thread when the coordinator has no state at all (hetero)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(null);
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('hello from the CLI'),
+      );
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect((service as any).messageModel.query).toHaveBeenCalledWith(
+        { threadId: 'thread-1' },
+        { allowShareVisitor: true },
+      );
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'hello from the CLI' }),
+      );
+    });
+
     it('extracts a grouped final answer after webhook state is rehydrated from the DB', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         ...childState,
@@ -2388,6 +2926,36 @@ describe('AgentRuntimeService', () => {
 
       await service.completeSubAgentBridge(bridgeParams);
 
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),
+      );
+    });
+
+    // Regression for a Codex review finding on the thread-fallback above: it
+    // must be gated on `!finalState` (no authoritative state at all — the
+    // heterogeneous case), not merely an empty `lastAssistantContent`.
+    // Otherwise a REAL, authoritative finalState whose last turn is
+    // legitimately textless would still trigger the thread re-query, and a
+    // lagging read that surfaces an EARLIER real reply from the same thread
+    // would silently show stale text instead of the correct empty-answer
+    // stub.
+    it('does not query the thread when a real finalState already says the final turn is textless', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        ...childState,
+        messages: undefined,
+      });
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain(
+          JSON.stringify([{ image: 'https://example.com/image.png', type: 'image' }]),
+          { isMultimodal: true },
+        ),
+      );
+      const threadFallbackSpy = vi.spyOn(service as any, 'resolveLastAssistantContentFromThread');
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect(threadFallbackSpy).not.toHaveBeenCalled();
       expect(updateToolMessage).toHaveBeenCalledWith(
         'tool-msg-1',
         expect.objectContaining({ content: 'Sub-agent completed without a textual answer.' }),

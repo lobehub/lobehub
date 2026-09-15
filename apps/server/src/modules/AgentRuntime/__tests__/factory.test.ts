@@ -11,14 +11,20 @@ const {
   mockInMemoryAgentStateManager,
   mockInMemoryStreamEventManager,
 } = vi.hoisted(() => ({
-  MockAgentStateManager: vi.fn(() => ({ kind: 'redis-state-manager' })),
-  MockGatewayStreamNotifier: vi.fn((inner: any, url: string, token: string) => ({
-    inner,
-    kind: 'gateway-stream-notifier',
-    token,
-    url,
-  })),
-  MockStreamEventManager: vi.fn(() => ({ kind: 'redis-stream-event-manager' })),
+  MockAgentStateManager: vi.fn(function () {
+    return { kind: 'redis-state-manager' };
+  }),
+  MockGatewayStreamNotifier: vi.fn(function (inner: any, url: string, token: string) {
+    return {
+      inner,
+      kind: 'gateway-stream-notifier',
+      token,
+      url,
+    };
+  }),
+  MockStreamEventManager: vi.fn(function () {
+    return { kind: 'redis-stream-event-manager' };
+  }),
   mockAppEnv: {
     AGENT_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,
     AGENT_GATEWAY_URL: 'https://agent-gateway.lobehub.com',

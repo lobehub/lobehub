@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
@@ -36,7 +37,7 @@ const CaseDetail = memo(() => {
   const {
     data: resultsData,
     error: resultsError,
-    isLoading: resultsLoading,
+    isLoading: isLoadingResults,
     mutate: mutateResults,
   } = useFetchRunResults(runId!, pollingConfig);
 
@@ -100,7 +101,8 @@ const CaseDetail = memo(() => {
       error={resultsError}
       errorVariant={'page'}
       isEmpty={!caseResult}
-      isLoading={resultsLoading}
+      isLoading={isLoadingResults}
+      loading={<RouteLoading />}
       onRetry={() => mutateResults()}
     >
       {caseResult && (

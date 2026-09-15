@@ -1,5 +1,6 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
+import type { AgentGraph } from './graph';
 import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 import {
@@ -11,6 +12,7 @@ import type {
   ClaudeCodeReasoningEffort,
   CodexReasoningEffort,
   CodexSpeedMode,
+  GrokBuildReasoningEffort,
   HeteroCliEncoding,
   HeterogeneousAgentMode,
   HeterogeneousReasoningEffort,
@@ -18,14 +20,18 @@ import type {
   QoderReasoningEffort,
 } from './heteroSelectorCapabilities';
 import {
+  applyHeteroSelection,
   CODEX_REASONING_EFFORT_CONFIG_KEY,
   CODEX_SERVICE_TIER_CONFIG_KEY,
+  getHeteroSelectorCapability,
+  GROK_BUILD_REASONING_EFFORT_FLAGS,
   HETERO_SELECTOR_CAPABILITIES,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   isAmpAgentMode,
   isClaudeCodeReasoningEffort,
   isCodexFastServiceTier,
   isCodexReasoningEffort,
+  isGrokBuildReasoningEffort,
   isQoderReasoningEffort,
   QODER_REASONING_EFFORT_FLAG,
 } from './heteroSelectorCapabilities';
@@ -50,7 +56,16 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type:
+    | 'codebuddy'
+    | 'cursor'
+    | 'devin'
+    | 'droid'
+    | 'grok-build'
+    | 'opencode'
+    | 'pi'
+    | 'qoder'
+    | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -71,6 +86,99 @@ export interface HeterogeneousAgentModelCatalogFailure {
 export type HeterogeneousAgentModelCatalog =
   HeterogeneousAgentModelCatalogFailure | HeterogeneousAgentModelCatalogSuccess;
 
+/** Authentication source used by a heterogeneous agent CLI. */
+export type HeterogeneousAuthMode = 'api' | 'subscription';
+
+/**
+ * Reference-only user-provider API binding for a heterogeneous agent.
+ * Provider credentials are resolved at launch and are never persisted here.
+ */
+export interface HeterogeneousProviderApiConfig {
+  /** Primary model used by the CLI. */
+  model: string;
+  /** User provider whose runtime credentials are resolved locally. */
+  providerId: string;
+  /** Optional model used for fast/background work. Defaults to the primary model. */
+  smallFastModel?: string | null;
+  /** Omitted by existing records; any omitted source is a user-provider binding. */
+  source?: 'provider';
+}
+
+/** Legacy Claude Code request alias. Current CLIs send `lobehub/${catalogId}`. */
+export const SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS = 'lobehub-default';
+
+const SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE = 'lobehub/';
+
+export const formatServerDefaultHeterogeneousModel = (model: string): string =>
+  `${SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE}${model}`;
+
+export const isServerDefaultHeterogeneousModel = (
+  requestModel: unknown,
+  operationModel: string,
+): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
+
+export interface ServerDefaultHeterogeneousRelayInvocation {
+  acceptedAt: string;
+  agentType: string;
+  ingress: 'anthropic-messages' | 'openai-responses';
+  model: string;
+  operationId: string;
+  provider: string;
+}
+
+/** Durable proof written only after the official relay accepts a model invocation. */
+export const isServerDefaultHeterogeneousRelayInvocation = (
+  value: unknown,
+): value is ServerDefaultHeterogeneousRelayInvocation => {
+  if (!value || typeof value !== 'object') return false;
+  const invocation = value as Partial<ServerDefaultHeterogeneousRelayInvocation>;
+  return (
+    typeof invocation.acceptedAt === 'string' &&
+    typeof invocation.agentType === 'string' &&
+    ['anthropic-messages', 'openai-responses'].includes(invocation.ingress ?? '') &&
+    typeof invocation.model === 'string' &&
+    typeof invocation.operationId === 'string' &&
+    typeof invocation.provider === 'string'
+  );
+};
+
+/**
+ * Map a CLI-reported server-default model back to the catalog id.
+ *
+ * Supported CLIs request `lobehub/${catalogId}`. Older Claude Code sessions used
+ * {@link SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS}. Neither is the catalog id
+ * the user picked.
+ */
+export const unwrapServerDefaultHeterogeneousModel = (
+  reportedModel: string | undefined,
+  configuredModel?: string,
+): string | undefined => {
+  const configured = configuredModel?.trim() || undefined;
+
+  if (!reportedModel) return configured;
+
+  if (reportedModel === SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS) {
+    return configured ?? reportedModel;
+  }
+
+  if (reportedModel.startsWith(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE)) {
+    const unwrapped = reportedModel.slice(SERVER_DEFAULT_HETEROGENEOUS_MODEL_NAMESPACE.length);
+    return unwrapped || reportedModel;
+  }
+
+  return reportedModel;
+};
+
+/** Deployment-owned API binding whose provider and credentials stay on the server. */
+export interface HeterogeneousServerDefaultApiConfig {
+  /** Model id from the deployment's enabled model catalog. */
+  model: string;
+  source: 'server-default';
+}
+
+export type HeterogeneousApiConfig =
+  HeterogeneousProviderApiConfig | HeterogeneousServerDefaultApiConfig;
+
 /**
  * Heterogeneous agent provider configuration.
  * When set, the assistant delegates execution to an external agent runtime
@@ -79,7 +187,7 @@ export type HeterogeneousAgentModelCatalog =
  * Two families of hetero agents are supported:
  *
  * - **Local CLI** (`amp` | `claude-code` | `codebuddy` | `codex` |
- *   `cursor` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
+ *   `cursor` | `droid` | `grok-build` | `kimi-code` | `opencode` | `pi` | `qoder` | `trae`):
  *   spawned as a child process on the desktop or a connected device; uses
  *   `command`, `args`, `env`, `systemContext`.
  *
@@ -88,8 +196,12 @@ export type HeterogeneousAgentModelCatalog =
  *   when it is `device`. `platformAgentId` selects the named platform agent.
  */
 export interface HeterogeneousProviderConfig {
+  /** Credential-free API binding used when `authMode` is `api`. */
+  apiConfig?: HeterogeneousApiConfig;
   /** Additional CLI arguments for the agent command (local CLI only). */
   args?: string[];
+  /** Defaults to `subscription` for backwards compatibility. */
+  authMode?: HeterogeneousAuthMode;
   /** Command to spawn the agent (e.g. 'claude') (local CLI only). */
   command?: string;
   /**
@@ -139,6 +251,104 @@ export interface HeterogeneousProviderConfig {
   /** Agent runtime type, derived from the shared heterogeneous-agent descriptor catalog. */
   type: HeterogeneousAgentType;
 }
+
+export interface HeterogeneousTopicModel {
+  model: string;
+  provider: string;
+}
+
+/**
+ * Everything a topic pins for a heterogeneous run: the model/provider pair from
+ * the top-level `topics.model`/`provider` columns plus the reasoning effort
+ * from `topics.metadata.heteroEffort`. Each part is optional — a topic may pin
+ * an effort without a model (runtimes without a model selector) or the other
+ * way round.
+ */
+export interface HeterogeneousTopicPin extends Partial<HeterogeneousTopicModel> {
+  effort?: HeterogeneousReasoningEffort;
+}
+
+/**
+ * Resolve the topic-level model snapshot for a heterogeneous provider.
+ *
+ * Server-default API models intentionally remain Agent-scoped: unlike a user-provider
+ * binding, their deployment-owned provider identity cannot be represented by the topic's
+ * model/provider pair. Their topic execution therefore ignores any stale pin from another
+ * auth mode and follows the current Agent config.
+ */
+export const resolveHeterogeneousProviderTopicModel = (
+  config: HeterogeneousProviderConfig,
+): HeterogeneousTopicModel | undefined => {
+  if (config.authMode === 'api') {
+    if (!config.apiConfig || config.apiConfig.source === 'server-default') return undefined;
+    return { model: config.apiConfig.model, provider: config.apiConfig.providerId };
+  }
+
+  const model = getHeteroSelectorCapability(config.type)?.model?.resolve(config);
+  return model ? { model, provider: config.type } : undefined;
+};
+
+const applyTopicModelPin = (
+  config: HeterogeneousProviderConfig,
+  topicModel: HeterogeneousTopicPin | undefined,
+): HeterogeneousProviderConfig => {
+  if (!topicModel?.model) return config;
+
+  if (config.authMode === 'api') {
+    const apiConfig = config.apiConfig;
+    // Server-default is Agent-scoped. In particular, do not turn it back into a
+    // user-provider binding when this topic retains a pin from an earlier auth mode.
+    if (apiConfig?.source === 'server-default') return config;
+    if (!topicModel.provider || topicModel.provider === config.type) return config;
+    return {
+      ...config,
+      apiConfig: {
+        model: topicModel.model,
+        providerId: topicModel.provider,
+        ...(apiConfig?.providerId === topicModel.provider
+          ? { smallFastModel: apiConfig.smallFastModel }
+          : {}),
+      },
+    };
+  }
+
+  if (topicModel.provider !== config.type) return config;
+  return {
+    ...config,
+    ...applyHeteroSelection(config, { model: topicModel.model }),
+  };
+};
+
+/**
+ * Overlay a topic's pins (model/provider + reasoning effort) on the agent's
+ * heterogeneous provider config. The model pin follows the auth-mode rules of
+ * {@link applyTopicModelPin}; the effort pin is a plain CLI-level override, so
+ * it applies when supported by the effective model — independent of whether
+ * a model was pinned. `'default'` is a real pin (it means "drop the
+ * agent's effort flag for this topic"), only `undefined` keeps the agent value.
+ */
+export const applyTopicModelToHeterogeneousProvider = (
+  config: HeterogeneousProviderConfig,
+  topicModel: HeterogeneousTopicPin | undefined,
+): HeterogeneousProviderConfig => {
+  const withModel = applyTopicModelPin(config, topicModel);
+  let effort = topicModel?.effort;
+  if (effort === undefined) return withModel;
+  const capability = getHeteroSelectorCapability(withModel.type);
+  if (!capability?.effort) return withModel;
+  const model =
+    withModel.authMode === 'api'
+      ? withModel.apiConfig?.model
+      : capability.model?.resolve(withModel);
+  /** Auth-mode changes can reject the topic model while leaving its old effort behind. */
+  if (effort !== 'default' && !capability.effort.levels(model ?? 'default').includes(effort)) {
+    effort = 'default';
+  }
+  return {
+    ...withModel,
+    ...applyHeteroSelection(withModel, { effort }),
+  };
+};
 
 const HETEROGENEOUS_AGENT_TYPES = new Set<string>([
   ...HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
@@ -225,6 +435,12 @@ interface CodexSelectionSource {
   speed?: string | null;
 }
 
+interface GrokBuildSelectionSource {
+  args?: string[];
+  effort?: string | null;
+  model?: string | null;
+}
+
 interface QoderSelectionSource {
   args?: string[];
   effort?: string | null;
@@ -233,13 +449,16 @@ interface QoderSelectionSource {
 
 const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
 
-const modelFlagsOf = (type: 'codex' | 'opencode' | 'pi' | 'qoder'): readonly string[] =>
+const modelFlagsOf = (
+  type: 'codex' | 'grok-build' | 'opencode' | 'pi' | 'qoder',
+): readonly string[] =>
   HETERO_SELECTOR_CAPABILITIES[type].model.encodings.flatMap((encoding: HeteroCliEncoding) =>
     encoding.kind === 'flag' ? encoding.flags : [],
   );
 
 const CODEX_MODEL_FLAGS = modelFlagsOf('codex');
 const CURSOR_MODEL_FLAGS = ['--model'] as const;
+const GROK_BUILD_MODEL_FLAGS = modelFlagsOf('grok-build');
 const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
 const PI_MODEL_FLAGS = modelFlagsOf('pi');
 const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
@@ -277,6 +496,13 @@ const getExplicitCodexReasoningEffort = (
 ): CodexReasoningEffort | undefined => {
   const effort = source?.effort?.trim();
   return isCodexReasoningEffort(effort) ? effort : undefined;
+};
+
+const getExplicitGrokBuildReasoningEffort = (
+  source: GrokBuildSelectionSource | null | undefined,
+): GrokBuildReasoningEffort | undefined => {
+  const effort = source?.effort?.trim();
+  return isGrokBuildReasoningEffort(effort) ? effort : undefined;
 };
 
 const getExplicitQoderReasoningEffort = (
@@ -320,6 +546,9 @@ export const buildHeteroSpawnArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
+    provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -365,6 +594,21 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      extraArgs.push('--model', model);
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      extraArgs.push('--effort', effort);
+    }
+  }
+
   if (provider.type === 'opencode') {
     const model = provider.model?.trim();
     if (
@@ -376,7 +620,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
+  if (provider.type === 'cursor' || provider.type === 'devin' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -439,6 +683,9 @@ export const buildHeteroExecArgs = (
     provider.type !== 'codebuddy' &&
     provider.type !== 'codex' &&
     provider.type !== 'cursor' &&
+    provider.type !== 'droid' &&
+    provider.type !== 'devin' &&
+    provider.type !== 'grok-build' &&
     provider.type !== 'kimi-code' &&
     provider.type !== 'opencode' &&
     provider.type !== 'pi' &&
@@ -498,6 +745,27 @@ export const buildHeteroExecArgs = (
     }
   }
 
+  if (provider.type === 'grok-build') {
+    const model = provider.model?.trim();
+    if (
+      model &&
+      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
+    ) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--model`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${model}`,
+      );
+    }
+    const effort = getExplicitGrokBuildReasoningEffort(provider);
+    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
+      wrapperArgs.push(
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=--effort`,
+        `${HETERO_EXEC_AGENT_ARG_FLAG}=${effort}`,
+      );
+    }
+  }
+
   if (provider.type === 'opencode') {
     const model = provider.model?.trim();
     if (
@@ -509,7 +777,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'kimi-code') {
+  if (provider.type === 'cursor' || provider.type === 'devin' || provider.type === 'kimi-code') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -546,7 +814,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'trae') {
+  if (provider.type === 'droid' || provider.type === 'trae') {
     const model = provider.model?.trim();
     if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
       selectorArgs.push('--model', model);
@@ -572,6 +840,45 @@ export const buildHeteroExecArgs = (
  */
 export type DeviceExecutionTarget = 'auto' | 'device' | 'local' | 'none' | 'sandbox';
 
+export type ExecutionPlanUnroutedReason =
+  /** `auto` mode with more than one device online — the model must pick one */
+  | 'ambiguous-online-devices'
+  /** an explicitly bound device exists but is offline — never silently fall back */
+  | 'bound-device-offline'
+  /**
+   * device-capable target (`auto` / `local` / `device`) but no device selected —
+   * nothing bound/requested, and not the `auto` single-online-device case
+   */
+  | 'no-bound-device'
+  /** `auto` mode but no device online at all */
+  | 'no-online-device';
+
+/**
+ * Where (and whether) a run executes, resolved ONCE at the entry point.
+ * Downstream layers consume the plan instead of re-deriving the answer from
+ * `executionTarget` / `boundDeviceId` / online state themselves.
+ *
+ * `target` is the EFFECTIVE execution target (platform defaults and coercions
+ * applied; degraded to `none` when device access is denied) — consumers must
+ * read it instead of re-resolving `agencyConfig.executionTarget`.
+ */
+export type ExecutionPlan = { target: DeviceExecutionTarget } &
+  /** route execution / device tools to this device (the local machine is a registered device) */
+  (
+    | { deviceId: string; kind: 'device' }
+    /**
+     * Device-targeted but no routable device right now. The run proceeds without
+     * an active device; the remote-device proxy may let the model activate one
+     * mid-run (native agents), or the caller may treat this as a hard error
+     * (hetero dispatch).
+     */
+    | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
+    /** plain chat — no execution environment, no run tools, no device ever */
+    | { kind: 'none' }
+    /** ephemeral cloud sandbox */
+    | { kind: 'sandbox' }
+  );
+
 /**
  * Whether a workspace member may override the agent's shared execution target.
  *
@@ -592,6 +899,24 @@ export type ExecutionTargetSelectionPolicy = 'fixed' | 'member';
 export type AgentModelSelectionPolicy = 'fixed' | 'member';
 
 /**
+ * Controls who may publish a share link for the topics a workspace agent
+ * holds.
+ *
+ * The permission is about the AGENT's topics, not just one's own: `member`
+ * (the default, which missing values resolve to) lets every workspace member
+ * publish any of this agent's topics they can open — including topics other
+ * members created. `restricted` narrows publishing to the agent's creator and
+ * workspace owners, the same "creator or workspace owner" bucket the
+ * Permission page's `canManage` uses.
+ *
+ * Only *publishing* is gated. Revoking a link (or the private placeholder the
+ * share popover creates on open) is never restricted: taking a topic back out
+ * of circulation is always safe, and blocking the placeholder would leave a
+ * restricted member staring at a popover that cannot load.
+ */
+export type AgentTopicSharePolicy = 'member' | 'restricted';
+
+/**
  * Agent agency configuration.
  * Contains settings for agent execution modes and device binding.
  */
@@ -601,6 +926,17 @@ export interface LobeAgentAgencyConfig {
    * Required when `executionTarget === 'device'`.
    */
   boundDeviceId?: string;
+  /**
+   * Whether to route this agent through a graph-style orchestration runtime
+   * (Graph Agent). Undefined means the agent uses the default runtime path.
+   *
+   * The graph is the agent's behavior definition — node policies, routing
+   * conditions and data contracts — so it lives on the agency config (how the
+   * agent behaves and executes) rather than the chat config (per-session
+   * preferences). This lets an agent evolve its own behavior by evolving its
+   * graph nodes.
+   */
+  enableGraphMode?: boolean;
   /**
    * Execution target for the hetero agent. When omitted, resolves to a
    * platform default: `'local'` on desktop and `'none'` on web.
@@ -612,6 +948,13 @@ export interface LobeAgentAgencyConfig {
    * a device.
    */
   executionTargetSelectionPolicy?: ExecutionTargetSelectionPolicy;
+  /**
+   * Graph Agent behavior definition. The `AgentGraph` snapshot describing
+   * nodes, edges, field contracts and routing conditions for graph-style
+   * orchestration. Together with `enableGraphMode`, this is the agent's
+   * behavior body — one graph is one agent.
+   */
+  graph?: null | AgentGraph;
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /**
    * Confine the run's shell commands to the device sandbox. A *modifier* on
@@ -673,6 +1016,15 @@ export interface LobeAgentAgencyConfig {
     provider?: string | null;
   };
   /**
+   * Who may publish a share link for this agent's topics. Missing values
+   * resolve to `member` for legacy rows — see {@link AgentTopicSharePolicy}.
+   *
+   * Enforced server-side in the topic share procedures; the share controls only
+   * mirror it so a restricted member sees a disabled button with a reason
+   * instead of a request that fails.
+   */
+  topicSharePolicy?: AgentTopicSharePolicy;
+  /**
    * Ad-hoc verify criteria mounted directly on this agent, in addition to any
    * `verifyRubricId`. Use for one-off checks that don't warrant a reusable
    * rubric. References `verify_criteria.id`.
@@ -705,19 +1057,114 @@ export interface LobeAgentAgencyConfig {
 }
 
 /**
+ * The `agencyConfig` keys that govern every workspace member rather than the
+ * agent's own behaviour, and which only the agent's creator or the workspace
+ * primary owner may write.
+ *
+ * Any surface that writes `agencyConfig` has to account for these: the TRPC
+ * writer strips them from an unauthorized patch, and the public API — whose
+ * schema cannot express them at all — must never drop them, not even when
+ * clearing the column.
+ */
+export const AGENT_PERMISSION_POLICY_KEYS = [
+  'executionTargetSelectionPolicy',
+  'modelSelectionPolicy',
+  'topicSharePolicy',
+] as const satisfies readonly (keyof LobeAgentAgencyConfig)[];
+
+/**
  * Explicit defaults written when a workspace agent is created.
  *
- * Members may choose their own model and execution environment by default.
- * Legacy public Workspace rows without a model policy resolve to the same
- * `member` default at runtime.
+ * Members may choose their own model and execution environment, and may share
+ * the agent's topics, by default. Legacy public Workspace rows without these
+ * policies resolve to the same `member` defaults at runtime.
  */
 export const DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES = {
   executionTargetSelectionPolicy: 'member',
   modelSelectionPolicy: 'member',
+  topicSharePolicy: 'member',
 } as const satisfies Pick<
   LobeAgentAgencyConfig,
-  'executionTargetSelectionPolicy' | 'modelSelectionPolicy'
+  'executionTargetSelectionPolicy' | 'modelSelectionPolicy' | 'topicSharePolicy'
 >;
+
+/**
+ * Resolve who may publish a share link for a topic held by this agent.
+ *
+ * Personal (non-workspace) agents are never restricted — there is no one else
+ * to restrict — and legacy workspace rows without the field keep the `member`
+ * behaviour they were created with.
+ */
+export const resolveAgentTopicSharePolicy = (
+  shared: Pick<AgentTopicShareSubject, 'agencyConfig' | 'workspaceId'>,
+): AgentTopicSharePolicy => {
+  if (!shared.workspaceId) return 'member';
+
+  return shared.agencyConfig?.topicSharePolicy ?? 'member';
+};
+
+/** The agent fields a topic-share decision reads. */
+export interface AgentTopicShareSubject {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'topicSharePolicy'> | null;
+  /** Creator of the agent — always allowed to publish its topics. */
+  userId?: string | null;
+  workspaceId?: string | null;
+}
+
+/**
+ * Whether `viewerId` may publish a share link for a topic held by this agent.
+ *
+ * The bypass bucket is deliberately the same one the Permission page calls
+ * `canManage`: the agent's creator, or a workspace owner (which the caller
+ * resolves — server-side from RBAC, client-side from the workspace role).
+ */
+export const canPublishAgentTopicLink = (
+  agent: AgentTopicShareSubject | null | undefined,
+  viewer: { isWorkspaceOwner?: boolean; userId?: string | null },
+): boolean => {
+  // No agent resolved (legacy session-only topic, or a row this caller cannot
+  // see): there is no policy to apply, so fall back to the role gate alone.
+  if (!agent) return true;
+  if (resolveAgentTopicSharePolicy(agent) === 'member') return true;
+  if (viewer.isWorkspaceOwner) return true;
+
+  return !!agent.userId && agent.userId === viewer.userId;
+};
+
+/**
+ * The raw override merge behind {@link resolveAgencyConfig}, without the
+ * `fixed`-policy short-circuit. The owner path of
+ * {@link resolveAgentAgencyConfig} needs it directly: the stored selection
+ * policy constrains members, not the owner, so the owner's own override
+ * applies even while the shared policy is `fixed`.
+ */
+const applyAgencyConfigOverride = (
+  base: LobeAgentAgencyConfig | undefined,
+  override:
+    | Pick<
+        LobeAgentAgencyConfig,
+        'boundDeviceId' | 'executionTarget' | 'localSandbox' | 'localSandboxNetwork'
+      >
+    | null
+    | undefined,
+): LobeAgentAgencyConfig | undefined => {
+  if (!override) return base;
+  const hasTarget = override.executionTarget !== undefined;
+  const hasDevice = override.boundDeviceId !== undefined;
+  // `false` is a real value here — a member turning the sandbox (or its network
+  // allowance) back off must override a shared `true`, so test for presence,
+  // not truthiness.
+  const hasLocalSandbox = override.localSandbox !== undefined;
+  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
+  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
+  return {
+    ...base,
+    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
+    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
+    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
+    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
+  };
+};
 
 /**
  * The workspace-shared `agencyConfig` on the agent row is one row per agent —
@@ -754,22 +1201,7 @@ export const resolveAgencyConfig = (
 ): LobeAgentAgencyConfig | undefined => {
   const base = normalizeAgencyConfigHeterogeneousProvider(agencyConfig);
   if (base?.executionTargetSelectionPolicy === 'fixed') return base;
-  if (!override) return base;
-  const hasTarget = override.executionTarget !== undefined;
-  const hasDevice = override.boundDeviceId !== undefined;
-  // `false` is a real value here — a member turning the sandbox (or its network
-  // allowance) back off must override a shared `true`, so test for presence,
-  // not truthiness.
-  const hasLocalSandbox = override.localSandbox !== undefined;
-  const hasLocalSandboxNetwork = override.localSandboxNetwork !== undefined;
-  if (!hasTarget && !hasDevice && !hasLocalSandbox && !hasLocalSandboxNetwork) return base;
-  return {
-    ...base,
-    ...(hasTarget ? { executionTarget: override.executionTarget } : {}),
-    ...(hasDevice ? { boundDeviceId: override.boundDeviceId } : {}),
-    ...(hasLocalSandbox ? { localSandbox: override.localSandbox } : {}),
-    ...(hasLocalSandboxNetwork ? { localSandboxNetwork: override.localSandboxNetwork } : {}),
-  };
+  return applyAgencyConfigOverride(base, override);
 };
 
 export interface AgentAgencyConfigContext {
@@ -782,10 +1214,15 @@ export interface AgentAgencyConfigContext {
 /**
  * Resolve an Agent's effective agency config in its ownership context.
  *
- * Member execution-target policies and overrides apply only after a Workspace
- * Agent is public. A Private Agent remains owner-configurable: its shared
- * execution target is used directly, while the stored selection policy is
- * retained only as the policy that will take effect if the Agent is published.
+ * Member execution-target policies apply only after a Workspace Agent is
+ * public. The caller's per-user override, however, merges for EVERY workspace
+ * agent — member, manager, or private owner alike: a `local` / this-machine
+ * pick is inherently per-user (the shared row must never carry a personal
+ * device — the server rejects it), so managers and private-agent owners store
+ * that pick in the same `agentDeviceOverrides` slot members use. The owner
+ * path bypasses the `fixed` short-circuit (the policy constrains members, not
+ * the owner) and keeps stripping the stored selection policy, which is
+ * retained only as the policy that takes effect once the Agent is published.
  */
 export const resolveAgentAgencyConfig = (
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
@@ -804,10 +1241,12 @@ export const resolveAgentAgencyConfig = (
 
   if (isPublicWorkspaceAgent) return resolveAgencyConfig(base, override);
 
-  if (!base?.executionTargetSelectionPolicy) return base;
+  const merged = context.workspaceId ? applyAgencyConfigOverride(base, override) : base;
 
-  const { executionTargetSelectionPolicy, ...ownerConfig } = base;
-  return executionTargetSelectionPolicy ? ownerConfig : base;
+  if (!merged?.executionTargetSelectionPolicy) return merged;
+
+  const { executionTargetSelectionPolicy, ...ownerConfig } = merged;
+  return executionTargetSelectionPolicy ? ownerConfig : merged;
 };
 
 /**

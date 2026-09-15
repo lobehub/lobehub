@@ -171,13 +171,26 @@ describe('NotificationModel (integration)', () => {
       expect(rows.map((r) => r.id)).toEqual([unread!.id]);
     });
 
+    it('filters explicitly by read state', async () => {
+      const model = new NotificationModel(serverDB, userId);
+      const read = await model.create(baseNotification({ title: 'Read' }));
+      await model.create(baseNotification({ title: 'Unread' }));
+
+      await model.markAsRead([read!.id]);
+
+      const rows = await model.list({ isRead: true });
+      expect(rows.map((row) => row.id)).toEqual([read!.id]);
+    });
+
     it('filters by category', async () => {
       const model = new NotificationModel(serverDB, userId);
       await model.create(baseNotification({ category: 'workspace', title: 'WS' }));
-      const budget = await model.create(baseNotification({ category: 'budget', title: 'Budget' }));
+      const pending = await model.create(
+        baseNotification({ category: 'pending', title: 'Transfer request' }),
+      );
 
-      const rows = await model.list({ category: 'budget' });
-      expect(rows.map((r) => r.id)).toEqual([budget!.id]);
+      const rows = await model.list({ category: 'pending' });
+      expect(rows.map((r) => r.id)).toEqual([pending!.id]);
     });
 
     it('respects the limit option', async () => {
@@ -245,6 +258,84 @@ describe('NotificationModel (integration)', () => {
     it('returns 0 when there are no notifications', async () => {
       const model = new NotificationModel(serverDB, userId);
       expect(await model.getUnreadCount()).toBe(0);
+    });
+  });
+
+  describe('getNavigationCounts', () => {
+    it('groups categories by read state in one query', async () => {
+      const model = new NotificationModel(serverDB, userId);
+      const otherModel = new NotificationModel(serverDB, otherUserId);
+      const read = await model.create(
+        baseNotification({ category: 'pending', title: 'Read transfer request' }),
+      );
+      await model.create(
+        baseNotification({ category: 'pending', title: 'Unread transfer request' }),
+      );
+      const archived = await model.create(
+        baseNotification({ category: 'system', title: 'Archived' }),
+      );
+      await model.create(baseNotification({ category: 'workspace', title: 'Workspace' }));
+      await otherModel.create(baseNotification({ category: 'pending', title: 'Other user' }));
+
+      await model.markAsRead([read!.id]);
+      await model.archive(archived!.id);
+
+      const counts = await model.getNavigationCounts();
+      counts.sort((a, b) => a.category.localeCompare(b.category));
+
+      expect(counts).toEqual([
+        { category: 'pending', readCount: 1, totalCount: 2, unreadCount: 1 },
+        { category: 'workspace', readCount: 0, totalCount: 1, unreadCount: 1 },
+      ]);
+    });
+  });
+
+  describe('countLinkedToTransfers', () => {
+    it('counts unarchived linked rows, split into total and unread', async () => {
+      const model = new NotificationModel(serverDB, userId);
+      await model.create(
+        baseNotification({
+          category: 'pending',
+          metadata: { transfer: { requestId: 'req-1' } },
+          title: 'Linked unread',
+        }),
+      );
+      const linkedRead = await model.create(
+        baseNotification({
+          category: 'pending',
+          metadata: { transfer: { requestId: 'req-2' } },
+          title: 'Linked read',
+        }),
+      );
+      const linkedArchived = await model.create(
+        baseNotification({
+          category: 'pending',
+          metadata: { transfer: { requestId: 'req-3' } },
+          title: 'Linked archived',
+        }),
+      );
+      await model.create(baseNotification({ category: 'pending', title: 'Unlinked unread' }));
+      // A linked row outside the pending category counts toward its own
+      // category's badge, so it must not be swapped against the requests.
+      await model.create(
+        baseNotification({
+          category: 'workspace',
+          metadata: { transfer: { requestId: 'req-4' } },
+          title: 'Linked but miscategorized',
+        }),
+      );
+
+      await model.markAsRead([linkedRead!.id]);
+      await model.archive(linkedArchived!.id);
+
+      // req-1 unread + req-2 read are unarchived pending rows; req-3 is
+      // archived and req-4 sits in another category, so neither counts.
+      expect(await model.countLinkedToTransfers(['req-1', 'req-2', 'req-3', 'req-4'])).toEqual({
+        total: 2,
+        unread: 1,
+      });
+      expect(await model.countLinkedToTransfers(['req-2'])).toEqual({ total: 1, unread: 0 });
+      expect(await model.countLinkedToTransfers([])).toEqual({ total: 0, unread: 0 });
     });
   });
 
@@ -380,7 +471,12 @@ describe('NotificationModel (integration)', () => {
 
       const writer = new NotificationModel(serverDB, userId);
       await writer.create(baseNotification({ title: 'personal' }));
-      await writer.create(baseNotification({ title: 'in-ws-1', workspaceId }));
+      await writer.create(
+        baseNotification({
+          title: 'in-ws-1',
+          workspaceId,
+        }),
+      );
       await writer.create(baseNotification({ title: 'in-ws-2', workspaceId: otherWorkspaceId }));
     };
 
@@ -391,6 +487,9 @@ describe('NotificationModel (integration)', () => {
       const rows = await personal.list();
       expect(rows.map((row) => row.title)).toEqual(['personal']);
       expect(await personal.getUnreadCount()).toBe(1);
+      expect(await personal.getNavigationCounts()).toEqual([
+        { category: 'workspace', readCount: 0, totalCount: 1, unreadCount: 1 },
+      ]);
     });
 
     it('workspace context sees only that workspace rows', async () => {
@@ -400,6 +499,9 @@ describe('NotificationModel (integration)', () => {
       const rows = await scoped.list();
       expect(rows.map((row) => row.title)).toEqual(['in-ws-1']);
       expect(await scoped.getUnreadCount()).toBe(1);
+      expect(await scoped.getNavigationCounts()).toEqual([
+        { category: 'workspace', readCount: 0, totalCount: 1, unreadCount: 1 },
+      ]);
     });
 
     it('context-free access spans both personal and workspace rows', async () => {

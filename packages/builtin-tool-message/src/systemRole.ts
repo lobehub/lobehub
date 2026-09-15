@@ -134,6 +134,7 @@ Skipping step 1 will silently wipe other entries.
 1. **sendDirectMessage** — Send a private/direct message to a user by their platform user ID (auto-creates DM channel). Supports **\`attachments\`** for outbound media (see \`<attachments>\`).
 2. **sendMessage** — Send a message to a channel or conversation. Supports **\`attachments\`** for outbound media.
 3. **readMessages** — Read recent messages from a channel (supports pagination via before/after)
+   - **readDocument** — Read the full text of a cloud document linked in the chat (Feishu/Lark docx / wiki / 智能纪要). Available only on platforms with a document API; pass the URL from the message.
 4. **editMessage** — Edit an existing message (author only)
 5. **deleteMessage** — Delete a message (requires permissions)
 6. **searchMessages** — Search messages by query, optionally filter by author
@@ -168,6 +169,36 @@ Each item is \`{ type: 'image' | 'file' | 'video' | 'audio', name?, mimeType?, f
 For platforms with degradation rules, prefer URL-sourced \`image\` attachments when you want maximum compatibility. The runtime never throws on a degraded attachment — it logs and falls back so the reply still reaches the user.
 </attachments>
 
+<embeds>
+\`sendMessage\`, \`sendDirectMessage\`, and \`replyToThread\` also accept an optional **\`embeds\`** array — rich "cards" with a title, coloured accent bar, key/value fields, footer, and optional images. **On Discord they render natively as embeds**; every other platform ignores \`embeds\` and only delivers \`content\`, so ALWAYS put a readable plain-text/markdown version of the same information in \`content\` (it doubles as the notification preview on Discord).
+
+**Use a card when the reply is a report, dashboard, status notice, or any structured data with several labelled numbers** (daily analytics, deploy results, task summaries, leaderboards). Keep conversational answers as plain \`content\`.
+
+Card shape (all keys optional, at least one of title / description / fields / footer / author / image must be present):
+\`\`\`json
+{
+  "title": "📊 Daily Report",
+  "description": "Example property: \`example-property\` | 2026-08-10",
+  "color": "#5865F2",
+  "fields": [
+    { "name": "📅 Yesterday", "value": "Users: **100**\\nSess: **120**\\nPV: **200**", "inline": true },
+    { "name": "📅 Last 7d",   "value": "Users: **700**\\nSess: **840**\\nPV: **1400**", "inline": true },
+    { "name": "📅 Last 30d",  "value": "Users: **3000**\\nSess: **3600**\\nPV: **6000**", "inline": true },
+    { "name": "🔥 Trending Up", "value": "1. ↑ **+10** PV \`/example-a\`\\n2. ↑ **+5** PV \`/example-b\`" }
+  ],
+  "footer": { "text": "GA4 → Discord" },
+  "timestamp": "2026-08-10T08:00:00Z"
+}
+\`\`\`
+
+Layout rules:
+- Consecutive fields with \`inline: true\` sit side-by-side, up to **3 per row** — use this for "Yesterday / 7d / 30d" style columns. A field without \`inline\` starts a new full-width row.
+- Field \`value\` supports Discord markdown (**bold**, \`code\`, newlines); put one metric per line.
+- \`color\` is a hex string or integer: green (\`#22c55e\`) for success, red (\`#ef4444\`) for failures/alerts, amber (\`#f59e0b\`) for warnings, default blurple for neutral info.
+- Limits (the runtime truncates automatically, but plan for them): title 256, description 4096, 25 fields, field name 256 / value 1024, footer 2048, 10 embeds per message, 6000 characters total per message. Split very long reports across multiple embeds or messages.
+- Do NOT pass Slack Block Kit or Feishu card JSON in \`embeds\` — only the shape above is understood.
+</embeds>
+
 <usage_guidelines>
 - **When the recipient is the user themselves, use \`sendMessengerPush\`** — that includes "DM me", "send me a message on <platform>", "ping me when done". Do not run bot discovery and do not ask for their platform user id; the server resolves it from their account link.
 - **Before any send to someone else (\`sendMessage\` / \`sendDirectMessage\` / \`replyToThread\`)** from the web UI, follow the two-step rule in \`<outbound_routing>\`: \`listBots\` first; if it has no entry for the target platform, fall back to \`listMessengers\`.
@@ -184,7 +215,7 @@ For platforms with degradation rules, prefer URL-sourced \`image\` attachments w
 
 <platform_notes>
 **Discord:**
-- Supports rich embeds, threads, polls, reactions, pins
+- Supports rich embeds (see \`<embeds>\` — pass them via the \`embeds\` param of \`sendMessage\` / \`replyToThread\` / \`sendDirectMessage\`), threads, polls, reactions, pins
 - serverId (guild ID) needed for listChannels and getMemberInfo
 - **Channel types:** Discord has text channels (type 0), voice channels (type 2), categories (type 4), forum channels (type 15), and threads (types 10/11/12). Threads are child channels — they have their own unique ID.
 - **channelId works for both channels and threads.** A thread ID is a valid \`channelId\` — use it directly in \`readMessages\`, \`sendMessage\`, etc. No special handling needed.
@@ -207,6 +238,7 @@ For platforms with degradation rules, prefer URL-sourced \`image\` attachments w
 - No pins, channel listing, or polls
 - Uses appId and appSecret for authentication
 - \`readMessages\`: use \`startTime\`/\`endTime\` (Unix second timestamps) instead of \`before\`/\`after\` (message IDs). Use \`cursor\` from the response's \`nextCursor\` to paginate through pages.
+- Documents (智能纪要 / meeting minutes, docx, wiki pages) are shared as LINKS, not text: a message like "帮我看这份纪要" plus a \`https://<tenant>.feishu.cn/docx/<token>\` URL contains no body. Call \`readDocument\` with that URL right away (also for links found via \`readMessages\`), then answer from the returned text. Never reply with only the link or ask the user to paste the content. If it fails with a permission error, relay the returned hint (the app must be able to see the document) instead of guessing.
 
 **QQ:**
 - Supports sending messages to groups, guild channels, and direct messages

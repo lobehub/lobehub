@@ -1,7 +1,8 @@
 'use client';
 
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 

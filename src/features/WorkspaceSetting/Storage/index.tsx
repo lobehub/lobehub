@@ -52,17 +52,6 @@ const WorkspaceStorageContent = memo(() => {
         layout: 'horizontal',
         minWidth: undefined,
       },
-      {
-        children: (
-          <Button danger disabled type={'primary'}>
-            {t('danger.reset.action')}
-          </Button>
-        ),
-        desc: t('workspaceSetting.storage.danger.reset.desc'),
-        label: t('workspaceSetting.storage.danger.reset.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-      },
     ],
     title: t('storage.actions.title'),
   };

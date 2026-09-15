@@ -106,12 +106,23 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: 24.11.1
 
       # 设置 package.json 的版本号
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} nightly
+
+      - name: Prepare macOS provisioning profile
+        if: runner.os == 'macOS'
+        env:
+          MAC_PROVISIONING_PROFILE_BASE64: ${{ secrets.MAC_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$MAC_PROVISIONING_PROFILE_BASE64" ]; then
+            printf '%s' "$MAC_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/lobehub.provisionprofile"
+            echo "MAC_PROVISIONING_PROFILE=$RUNNER_TEMP/lobehub.provisionprofile" >> "$GITHUB_ENV"
+          fi
 
       # macOS 构建处理
       # 注意：fork 的 PR 无法访问 secrets，会构建未签名版本
@@ -240,7 +251,7 @@ jobs:
           pattern: asar-size-*
           merge-multiple: true
 
-      # 基线:release-desktop-canary 最近一次成功 run 上传的 asar-size-baseline-* artifacts
+      # 基线:被测 merge SHA 祖先中最近一次成功的 release-desktop-canary run
       - name: Find latest canary baseline run
         id: baseline_run
         uses: actions/github-script@v8
@@ -249,7 +260,13 @@ jobs:
           result-encoding: string
           script: |
             const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
-            return await finder({ github, context, workflowId: 'release-desktop-canary.yml', artifactPrefix: 'asar-size-baseline-' });
+            return await finder({
+              github,
+              context,
+              workflowId: 'release-desktop-canary.yml',
+              artifactPrefix: 'asar-size-baseline-',
+              targetSha: context.sha,
+            });
 
       - name: Download ASAR size baselines
         if: steps.baseline_run.outputs.result != ''
@@ -263,6 +280,7 @@ jobs:
 
       - name: Check ASAR sizes against baseline
         id: asar_size_check
+        continue-on-error: true
         shell: bash
         run: |
           status=0

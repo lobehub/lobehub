@@ -1,11 +1,31 @@
 import type { StoreHandle } from '@/store/utils/optimisticEngine';
 
 export interface TreeItem {
+  /**
+   * Row creation time, so the sidebar can order a folder newest-first like the
+   * explorer's default sort does. Optional because optimistic stubs and older
+   * cached payloads carry no timestamp; those fall back to A-Z.
+   */
+  createdAt?: Date | string;
+  /**
+   * Underlying `files.id` for file nodes. The unified resource list addresses
+   * a file that backs a derived page by the page id, so file-table lookups
+   * (e.g. the messenger push) must go through this instead of `id`.
+   */
+  fileId?: string | null;
   fileType: string;
   id: string;
   isFolder: boolean;
   metadata?: Record<string, any>;
   name: string;
+  /**
+   * Parent folder id when the source row knows it (optimistic creates, rows the
+   * server returns with a parent). Lets `reconcile` drop a row the Explorer is
+   * holding for another folder; `undefined` means unknown and is kept.
+   */
+  parentId?: string | null;
+  /** Byte size for file nodes — drives the push modal's oversize pre-warning. */
+  size?: number;
   slug?: string | null;
   sourceType?: string;
   url: string;
@@ -21,6 +41,12 @@ export interface TreeDataState {
 export type TreeStoreHandle = StoreHandle<TreeDataState>;
 
 export interface TreeState extends TreeDataState {
+  /**
+   * Forget rows another store already deleted and refresh the folders that
+   * held them, falling back to `fallbackParentKey` for rows the tree never
+   * loaded. Local bookkeeping only — the caller owns the delete request.
+   */
+  dropNodes: (itemIds: string[], fallbackParentKey?: string) => Promise<void>;
   epoch: number;
   /** Last load error per folderId, so a failed fetch renders a failure state (with Retry) instead of a false "empty folder". */
   errors: Record<string, unknown>;

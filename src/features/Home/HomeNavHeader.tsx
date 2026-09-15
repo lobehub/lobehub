@@ -2,6 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
+import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import NavHeader from '@/features/NavHeader';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -31,6 +32,7 @@ const HomeNavHeader = memo(() => {
     systemStatusSelectors.isStatusInit(s),
   ]);
   const hiddenWidgets = useGlobalStore(systemStatusSelectors.hiddenHomeWidgets);
+  const usageActive = useHomeUsageWidgetActive();
 
   return (
     <NavHeader
@@ -39,7 +41,7 @@ const HomeNavHeader = memo(() => {
         isLogin && isStatusInit ? (
           <Flexbox horizontal align={'center'} gap={4}>
             <CustomizeButton />
-            {canHostRail(hiddenWidgets) && (
+            {canHostRail(hiddenWidgets, usageActive) && (
               <RailToggle railVisible={showHomeRail} onToggle={toggleHomeRail} />
             )}
           </Flexbox>

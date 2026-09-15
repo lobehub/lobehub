@@ -1,8 +1,8 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Text } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Block } from '@lobehub/ui';
+import { Alert, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

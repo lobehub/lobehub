@@ -19,6 +19,7 @@
  *      because the manifest was still resolvable in the engine even when
  *      the rule-layer gate denied it).
  */
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -28,6 +29,7 @@ export const DEVICE_TOOL_MANIFESTS = [
   LocalSystemManifest,
   RemoteDeviceManifest,
   BrowserManifest,
+  AuvManifest,
 ] as const;
 
 export const DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set(
@@ -73,6 +75,8 @@ export interface AllowedBuiltinToolsParams {
    * `disableLocalSystem?: boolean` param through don't need to coerce.
    */
   disableLocalSystem?: boolean;
+  /** Gateway callers pass reported capabilities or [] for older clients; omitted for standalone client execution. */
+  supportedDeviceTools?: readonly string[];
 }
 
 /**
@@ -87,10 +91,20 @@ export interface AllowedBuiltinToolsParams {
  * here is the only reliable enforcement point.
  */
 export const buildAllowedBuiltinTools = (params: AllowedBuiltinToolsParams) => {
-  const { canUseDevice, deviceLocked, disableLocalSystem } = params;
+  const { canUseDevice, deviceLocked, disableLocalSystem, supportedDeviceTools } = params;
 
   return builtinTools.filter((tool) => {
-    if (disableLocalSystem && tool.identifier === LocalSystemManifest.identifier) {
+    if (
+      tool.identifier === AuvManifest.identifier &&
+      supportedDeviceTools !== undefined &&
+      !supportedDeviceTools.includes(tool.identifier)
+    )
+      return false;
+    if (
+      disableLocalSystem &&
+      (tool.identifier === LocalSystemManifest.identifier ||
+        tool.identifier === AuvManifest.identifier)
+    ) {
       return false;
     }
     if (!canUseDevice && DEVICE_TOOL_IDENTIFIERS.has(tool.identifier)) {

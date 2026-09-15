@@ -300,6 +300,8 @@ export interface ToolCallPayload {
  * this shape. Provider-specific shape knowledge does not leak past the adapter.
  */
 export interface UsageData {
+  /** Estimated session or turn cost in USD, if the CLI reports it. */
+  cost?: number;
   /** Input tokens served from the prompt cache (cache reads). */
   inputCachedTokens?: number;
   /** Input tokens that missed the prompt cache (fresh prompt bytes). */

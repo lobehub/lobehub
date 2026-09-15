@@ -1,6 +1,7 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
-import { Center, FileTypeIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, FileTypeIcon, Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';

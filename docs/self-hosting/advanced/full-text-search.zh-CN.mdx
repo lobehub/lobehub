@@ -1,0 +1,234 @@
+---
+title: 全文搜索
+description: 为 LobeHub 产品搜索选择并运行 pg_search 或 Elasticsearch 后端。
+tags:
+  - 全文搜索
+  - Elasticsearch
+  - pg_search
+  - 私有部署
+---
+
+# 全文搜索
+
+LobeHub 使用全文搜索检索助手、话题、消息、文件、知识库、群聊和记忆等产品数据。这里的全文搜索与助手可调用的联网搜索工具无关。
+
+LobeHub 支持两种产品搜索后端：
+
+| 后端              | 适用场景                                              | 额外运维工作                                                                                     |
+| --------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `pg_search`     | PostgreSQL 已支持 ParadeDB `pg_search` 扩展，希望部署结构尽量简单 | BM25 索引由 PostgreSQL 维护，不需要单独运行搜索同步任务                                                       |
+| `elasticsearch` | 希望搜索服务独立扩容，或者数据库服务即将停止支持 `pg_search`              | 需要 Elasticsearch 服务（外部服务，或官方 Docker Compose 附带的可选单节点服务）、首次全量回填、PostgreSQL 变更采集和持续运行的增量消费任务 |
+
+`FTS_SEARCH_PROVIDER` 为整个部署选择唯一的后端，可用值为 `pg_search` 和
+`elasticsearch`，默认值是 `pg_search`。选中的后端不可用时，LobeHub 不会静默切换到另一个后端。
+
+<Callout type="warning">
+  设置 `FTS_SEARCH_PROVIDER=elasticsearch` 不会让历史数据库迁移跳过 `pg_search`。当前
+  Elasticsearch 迁移流程面向已经执行过 `pg_search` 迁移的现有 LobeHub 数据库。对于无法安装
+  `pg_search` 的数据库服务，仅选择 Elasticsearch 目前还不能完成全新建库：`bun run db:migrate`
+  仍会执行创建扩展和 BM25 索引的历史迁移，并在数据库服务不提供它们时失败。
+</Callout>
+
+## 如何选择
+
+### 继续使用 `pg_search`
+
+如果 PostgreSQL 服务支持 `pg_search`，BM25 索引没有挤占其他数据库工作负载，并且你不希望额外维护一套搜索服务，可以继续使用默认后端。
+
+自建数据库时，LobeHub 的 Docker 示例使用 `paradedb/paradedb:latest-pg17` 镜像并预加载
+`pg_search`。执行正常的 LobeHub 数据库迁移以安装扩展和项目维护的 BM25 索引，并保持：
+
+```bash
+FTS_SEARCH_PROVIDER=pg_search
+```
+
+### 使用 Elasticsearch
+
+如果搜索需要独立容量、希望把搜索存储从事务 PostgreSQL 中拆开，或者数据库服务即将停止支持
+`pg_search`，可以选择 Elasticsearch。
+
+Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`，并已通知受影响的现有客户：该扩展将在
+2026 年 9 月 21 日从 Neon 移除，此后依赖它的查询、索引和应用都会停止工作。已经在 Neon 上运行 LobeHub 的用户应在截止日期前完成
+[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。执行前请同时核对 Neon 的
+[最新 pg\_search 公告](https://neon.com/docs/extensions/pg_search)和
+[扩展列表](https://neon.com/docs/extensions/pg-extensions)。
+
+Elasticsearch 有两种受支持的运行方式。两者使用同一套回填和增量同步命令、同一个
+`ES_INDEX_NAMESPACE`，区别只在于 LobeHub 如何连接集群。
+
+#### 外部 Elasticsearch（Elastic Cloud 或托管集群）
+
+- LobeHub 服务端可以通过 HTTPS 访问的 Elasticsearch 项目；
+- 官方 ICU 分析插件；Elastic Cloud Serverless 已内置，自建集群则必须在每个节点安装；
+- `ES_URL`、`ES_API_KEY` 和保持不变的 `ES_INDEX_NAMESPACE`；
+- 先完成全量回填，再持续消费 PostgreSQL 增量队列；
+- 只有全量回填完成且增量队列追平后，才能设置 `FTS_SEARCH_PROVIDER=elasticsearch`。
+
+明文 HTTP 只允许用于本地开发时的回环地址。LobeHub 拒绝把 API 密钥通过明文 HTTP 发送到任何其他主机。
+
+#### Docker Compose 单节点 Elasticsearch
+
+官方 `docker-compose/deploy/docker-compose.yml` 附带一个默认关闭的可选 `elasticsearch`
+服务，以及基于官方 LobeHub 镜像的回填和同步命令，适合希望在单机上使用 Elasticsearch、又不想申请外部账号的部署。该
+Elasticsearch 关闭了安全认证，只能在 Compose 内部网络访问，因此必须通过
+`ES_ALLOW_INSECURE_HTTP=true` 显式允许无 API 密钥的明文连接。详见下文
+[使用 Docker Compose 运行 Elasticsearch](#使用-docker-compose-运行-elasticsearch)。
+
+#### 两种方式共同的数据库限制
+
+选择 Elasticsearch 不会移除历史 `pg_search` 迁移。在这项后续工作完成前，所有 LobeHub 数据库（包括全新的 Docker
+Compose 安装）仍必须运行在能够安装 `pg_search` 的 PostgreSQL 镜像上，例如自带的
+`paradedb/paradedb:latest-pg17`。回填完成后由 Elasticsearch 接管搜索流量；`pg_search`
+相关对象可以之后通过项目提供的清理命令移除。
+
+完整的演练、回填、切换和回滚流程，请参阅
+[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。
+
+## Elasticsearch 如何同步数据
+
+PostgreSQL 始终是数据事实来源。启用 Elasticsearch 路径后，采集触发器会把源数据变更合并写入持久化增量队列，持续运行的消费任务再把这些变更写入 Elasticsearch。搜索时，Elasticsearch 只返回候选标识，LobeHub 仍会回到 PostgreSQL 校验权限并读取最终结果。
+
+运行链路如下：
+
+```text
+PostgreSQL 写入
+  -> 采集触发器
+  -> 全文搜索增量队列
+  -> 持续运行的 fts-search:sync 消费任务
+  -> Elasticsearch 索引
+  -> 候选结果检索
+  -> PostgreSQL 权限校验和结果读取
+```
+
+全量回填只负责首次快照，不能代替持续消费任务。只要 Elasticsearch 仍在提供搜索，就必须持续调度
+`fts-search:sync`。
+
+## 使用 Docker Compose 运行 Elasticsearch
+
+`docker-compose/deploy/docker-compose.yml` 中的可选服务都由 Compose profile 控制，默认的
+`docker compose up` 既不会下载也不会启动它们：
+
+| 服务                   | Profile                 | 作用                                                                                |
+| -------------------- | ----------------------- | --------------------------------------------------------------------------------- |
+| `elasticsearch`      | `elasticsearch`         | 基于固定版本官方镜像在本机构建并内置 `analysis-icu` 的单节点，使用命名数据卷和健康检查，不向宿主机公开端口                     |
+| `fts-search-reindex` | `elasticsearch-reindex` | 基于 `lobehub/lobehub` 镜像的一次性回填 / 状态命令；checkpoint 保存在 `fts-search-reindex-state` 卷中 |
+| `fts-search-sync`    | `elasticsearch-sync`    | 基于 `lobehub/lobehub` 镜像的长期增量消费任务；遇到失败或死信任务时退出并由 Compose 重启，同时输出日志                 |
+
+资源说明：节点默认使用 1 GB JVM 堆内存（`ES_JAVA_OPTS`）；堆内存不要超过分配给容器内存的一半，并为
+Elasticsearch 单独预留至少 2 GB 内存。Linux 宿主机必须设置 `vm.max_map_count=262144`。启用该 profile 后首次执行
+`docker compose up` 会基于固定版本的官方镜像构建一次镜像并安装 `analysis-icu`，构建时需要能访问
+`docker.elastic.co` 和 `artifacts.elastic.co`；之后重建容器不再需要外网。构建上下文是 Compose 文件旁边的
+`elasticsearch/Dockerfile`，`setup.sh` 会一并下载。升级 Elasticsearch 时，同时修改 `elasticsearch` 服务中
+`image` 和 `build.args` 的版本号，再执行 `docker compose up -d --build`。
+
+1. **启用节点。** 在 `.env` 中取消 Elasticsearch 配置块的注释，并继续让 `pg_search` 提供搜索：
+
+   ```bash
+   COMPOSE_PROFILES=elasticsearch
+   ES_URL=http://elasticsearch:9200
+   ES_ALLOW_INSECURE_HTTP=true
+   ES_INDEX_NAMESPACE=lobehub
+   # FTS_SEARCH_PROVIDER 在最后一步之前保持默认值 pg_search
+   ```
+
+   然后启动整套服务并等待包括新节点在内的所有服务通过健康检查；同一版本的数据库迁移会创建增量队列的基础结构：
+
+   ```bash
+   docker compose up -d --wait
+   ```
+
+2. **全量回填。** 先查看状态，再执行一次性回填。`--apply` 会安装 PostgreSQL 变更采集、按 ICU
+   映射创建 14 类索引、复制数据并创建别名：
+
+   ```bash
+   docker compose run --rm fts-search-reindex --status
+   docker compose run --rm fts-search-reindex --apply --fresh-run --yes
+   ```
+
+   只有第一次执行需要 `--fresh-run`。如果中断，去掉 `--fresh-run` 重新执行同一命令即可从 checkpoint
+   卷续跑。反复执行 `--status`，直到状态为 `ready_for_incremental_sync`、所有数据类型为 `completed`
+   且所有 `failedCount` 为 `0`。
+
+3. **启动持续同步。** 加上同步 profile 并重新创建服务：
+
+   ```bash
+   COMPOSE_PROFILES=elasticsearch,elasticsearch-sync
+   ```
+
+   ```bash
+   docker compose up -d
+   docker compose logs -f fts-search-sync
+   ```
+
+   该任务循环执行 `fts-search-elasticsearch-sync.cjs --max-steps=8 --interval-seconds=15 --yes`
+   （`FTS_SEARCH_SYNC_INTERVAL_SECONDS` 可调整没有新任务时的等待时间）。遇到失败或死信任务时它会以非零状态退出，Compose
+   会重启它，因此容器反复重启说明队列需要人工处理。只要 Elasticsearch 仍在提供搜索，就必须保持它运行。
+
+4. **显式切换。** 当 `docker compose run --rm fts-search-reindex --status` 显示 `pending`、`ready`、
+   `retrying`、`inFlight`、`dead` 和 `revisionLag` 全部为 `0` 时，在 `.env` 中设置
+   `FTS_SEARCH_PROVIDER=elasticsearch`，并重新创建应用容器：
+
+   ```bash
+   docker compose up -d lobe
+   ```
+
+   任何步骤都不会自动切换搜索后端。回滚只需恢复 `FTS_SEARCH_PROVIDER=pg_search` 并重新创建
+   `lobe`；同步任务可以继续运行。
+
+外部目标：`fts-search-reindex` 和 `fts-search-sync` 只依赖 PostgreSQL，不依赖内置节点。如果要改为对接 Elastic
+Cloud，请不要在 `COMPOSE_PROFILES` 中启用 `elasticsearch` profile，在 `.env` 中设置 `ES_URL` 和 `ES_API_KEY`，
+且不要设置 `ES_ALLOW_INSECURE_HTTP`；第 2 到第 4 步完全相同。
+
+这一模式的安全边界：`ES_ALLOW_INSECURE_HTTP=true` 允许向非回环主机使用明文 HTTP，并允许省略
+`ES_API_KEY`；但它永远不允许通过明文 HTTP 发送 API 密钥，因此不要把它与 `ES_API_KEY` 和 `http://`
+地址同时使用。Elasticsearch 服务没有公开端口，也不要为它添加端口，因为该节点接受未认证的请求。Elastic Cloud
+路径保持不变：不设置这个变量时，LobeHub 仍然要求 HTTPS 和 API 密钥。
+
+## 配置项
+
+| 变量                        | 用途                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `FTS_SEARCH_PROVIDER`     | 整个部署使用的搜索后端：`pg_search` 或 `elasticsearch`                                                                         |
+| `ES_URL`                  | Elasticsearch 地址。使用 HTTPS；明文 HTTP 只允许用于回环地址，或在 `ES_ALLOW_INSECURE_HTTP=true` 时用于 `elasticsearch` 这类 Compose 内部主机名 |
+| `ES_API_KEY`              | 具备建索引、批量写入、刷新、统计、别名和搜索权限的 Elasticsearch 密钥；除 `ES_ALLOW_INSECURE_HTTP=true` 外均为必需                                  |
+| `ES_ALLOW_INSECURE_HTTP`  | 设为 `true` 时显式允许对只能在私有容器网络访问的 Elasticsearch 节点使用无 API 密钥的明文 HTTP；永远不会通过 HTTP 发送密钥                                  |
+| `ES_INDEX_NAMESPACE`      | 当前部署独占且保持不变的物理索引和别名前缀                                                                                             |
+| `FTS_SEARCH_SYNC_ENABLED` | 启用增量消费任务；首次全量回填就绪后才能设为 `true`。Compose 的同步服务会自行设置                                                                  |
+
+仅由 `docker-compose/deploy/docker-compose.yml` 读取的 Compose 变量：
+
+| 变量                                 | 用途                                                               |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| `COMPOSE_PROFILES`                 | `elasticsearch` 启动节点；`elasticsearch,elasticsearch-sync` 同时启动同步任务 |
+| `ES_JAVA_OPTS`                     | Elasticsearch 容器的 JVM 堆内存，默认 `-Xms1g -Xmx1g`                     |
+| `FTS_SEARCH_SYNC_INTERVAL_SECONDS` | 同步任务在一次没有新任务的消费后等待的秒数，默认 `15`                                    |
+
+不同 LobeHub 部署不能共用同一个索引前缀。迁移或增量消费期间不能更改此前缀。
+
+## 监控 Elasticsearch 搜索
+
+LobeHub 会输出有限维度的 OpenTelemetry 指标和链路，不会记录原始查询、用户标识、文档标识或索引正文。主要指标包括：
+
+| 指标                                               | 可以回答的问题                      |
+| ------------------------------------------------ | ---------------------------- |
+| `fts_search_backend_operations_total`            | 按后端、数据类型、操作和结果统计的请求量及失败量     |
+| `fts_search_backend_operation_duration`          | 搜索后端的端到端耗时                   |
+| `fts_search_backend_result_count`                | 请求数量、候选数量和 PostgreSQL 最终返回数量 |
+| `fts_search_elasticsearch_requests_total`        | 实际 Elasticsearch 请求量和结果      |
+| `fts_search_elasticsearch_request_duration`      | 包含响应解析的 Elasticsearch 请求耗时   |
+| `fts_search_elasticsearch_request_size`          | 序列化后的请求体大小                   |
+| `fts_search_elasticsearch_response_decoded_size` | 解码后的响应体大小                    |
+| `fts_search_elasticsearch_response_hits`         | 每次 Elasticsearch 请求返回的候选数量   |
+| `fts_search_elasticsearch_server_took`           | Elasticsearch 上报的服务端处理时间     |
+
+链路名称为 `fts.search.backend.<operation>`。分析 Elasticsearch 成本时，需要同时查看请求量、请求与响应大小、
+候选数量、服务端耗时和索引存储，不能只看其中一项。自部署 OpenTelemetry 环境请参阅
+[Grafana 可观测性](/zh/docs/self-hosting/advanced/observability/grafana)。
+
+## 运维原则
+
+- 生产迁移前先备份 PostgreSQL，并使用隔离的数据库副本和 Elasticsearch 项目完成演练。
+- 同一次全量回填的每次续跑都必须使用同一个持久化状态目录，不能让两个任务同时操作同一份状态和物理索引。
+- 所有数据类型完成、失败数为 0、增量队列追平前，必须继续让 `pg_search` 对外提供搜索。
+- 切换后使用项目提供的清理命令，不需要手工复制数据库对象 SQL。
+- 必须保留 Elasticsearch 依赖的增量队列、采集触发器和持续消费任务；它们与 Neon 删除 `pg_search` 无关。

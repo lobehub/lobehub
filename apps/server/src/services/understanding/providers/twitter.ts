@@ -1,4 +1,4 @@
-import { ConnectorDataError } from '@lobechat/connector-data';
+import { getConnectorErrorMessage, isConnectorErrorRetryable } from '@lobechat/connector-data';
 import type { TwitterPost } from '@lobechat/connector-data/twitter';
 
 import type { UnderstandingProvider } from '../types';
@@ -34,10 +34,11 @@ const collectRecentActivity = async (
       ? [
           {
             code: 'TWITTER_RECENT_ACTIVITY_FAILED',
-            message: 'X recent activity collection failed',
+            message:
+              getConnectorErrorMessage(result.reason) ?? 'X recent activity collection failed',
             operation: searches[index].kind,
             provider: 'twitter' as const,
-            retryable: result.reason instanceof ConnectorDataError ? result.reason.retryable : true,
+            retryable: isConnectorErrorRetryable(result.reason),
           },
         ]
       : [],

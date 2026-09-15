@@ -26,6 +26,8 @@ export default {
     'A database operation failed while saving or loading this conversation. Please try again; if it persists, contact support.',
   ExceededContextWindow:
     'The current request content exceeds the length that the model can handle. Please reduce the amount of content and try again.',
+  HarnessJsonParseError:
+    'An internal payload could not be read back, so this operation stopped. Retrying the same request will hit the same failure — please start a new message; if it persists, contact support.',
   InsufficientQuota:
     "Sorry, the quota for this key has been reached. Please check if your account balance is sufficient or try again after increasing the key's quota.",
   InvalidBedrockCredentials:
@@ -73,6 +75,8 @@ export default {
     "Sorry, the token usage or request count has reached the quota limit for this key. Please increase the key's quota or try again later.",
   RateLimitExceeded:
     "Sorry, the token usage or request count has reached the rate limit for this key. Please try again later or increase the key's quota.",
+  RequestBodyTooLarge:
+    'This request is too large for the model provider. Compact the conversation or reduce attached content, then try again.',
   StateStorePersistError:
     'A temporary issue with the conversation state store interrupted this operation. Please try again; if it persists, contact support.',
   StateStoreReadError:

@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -100,6 +101,7 @@ export interface AskUserQuestionResultLabels {
   notAnswered: string;
   /** Badge text for a chosen option carrying the recommended marker. */
   recommendedTag: string;
+  supplement: string;
 }
 
 interface QuestionAnswerProps {
@@ -161,6 +163,8 @@ export const AskUserQuestionResult = memo<AskUserQuestionResultProps>(
   ({ answers, isError, labels, questions }) => {
     const freeform = answers?.__freeform__;
     const freeformText = typeof freeform === 'string' ? freeform.trim() : '';
+    const supplement = answers?.__supplement__;
+    const supplementText = typeof supplement === 'string' ? supplement.trim() : '';
     const multiple = questions.length > 1;
 
     if (freeformText) {
@@ -203,6 +207,12 @@ export const AskUserQuestionResult = memo<AskUserQuestionResultProps>(
             recommendedTag={labels.recommendedTag}
           />
         ))}
+        {supplementText && (
+          <Flexbox gap={4}>
+            <span className={styles.header}>{labels.supplement}</span>
+            <span className={styles.answer}>{supplementText}</span>
+          </Flexbox>
+        )}
         {isError && <Text type="warning">{labels.noAnswer}</Text>}
       </Flexbox>
     );

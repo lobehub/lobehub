@@ -524,9 +524,33 @@ const transformOpenAIStream = (
         }
       }
 
+      // A provider that batches several tokens into one SSE frame can put the tail of the
+      // reasoning and the head of the answer in the SAME delta. Returning only the reasoning
+      // chunk there silently drops that first slice of the answer, so the user sees a reply
+      // that starts mid-sentence (or without the opening the system prompt asked for).
+      // Carry the reasoning along instead and let the content branch below run as usual.
+      const carriedReasoning: StreamProtocolChunk[] = [];
+
       if (typeof reasoning_content === 'string') {
-        return { data: reasoning_content, id: chunk.id, type: 'reasoning' };
+        const reasoningChunk: StreamProtocolChunk = {
+          data: reasoning_content,
+          id: chunk.id,
+          type: 'reasoning',
+        };
+
+        if (typeof content !== 'string' || content === '') return reasoningChunk;
+
+        carriedReasoning.push(reasoningChunk);
       }
+
+      // Prepends the deferred reasoning chunk (when there is one) to whatever the content
+      // branch resolved to, preserving the reasoning -> text order within the frame.
+      const withCarriedReasoning = (
+        result: StreamProtocolChunk | StreamProtocolChunk[],
+      ): StreamProtocolChunk | StreamProtocolChunk[] =>
+        carriedReasoning.length === 0
+          ? result
+          : [...carriedReasoning, ...(Array.isArray(result) ? result : [result])];
 
       if (typeof content === 'string') {
         // If content is an empty string but chunk has usage, prioritize returning usage (e.g., Gemini image-preview eventually returns usage in a separate chunk)
@@ -565,7 +589,9 @@ const transformOpenAIStream = (
             });
           }
 
-          return results.length > 0 ? results : { data: '', id: chunk.id, type: 'text' };
+          return withCarriedReasoning(
+            results.length > 0 ? results : { data: '', id: chunk.id, type: 'text' },
+          );
         }
 
         // Remove <think> tag (no need to split, as content after <think> tag is all reasoning)
@@ -611,7 +637,7 @@ const transformOpenAIStream = (
                 type: streamContext?.thinkingInContent ? 'reasoning' : 'text',
               },
             ];
-            return baseChunks;
+            return withCarriedReasoning(baseChunks);
           }
         }
 
@@ -628,16 +654,16 @@ const transformOpenAIStream = (
                 type: 'base64_image' as const,
               })),
             );
-            return arr;
+            return withCarriedReasoning(arr);
           }
         }
 
         // Determine return type based on current thinking mode
-        return {
+        return withCarriedReasoning({
           data: thinkingContent,
           id: chunk.id,
           type: streamContext?.thinkingInContent ? 'reasoning' : 'text',
-        };
+        });
       }
     }
 

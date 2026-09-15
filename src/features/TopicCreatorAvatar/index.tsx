@@ -1,10 +1,11 @@
 'use client';
 
-import { Avatar, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
+import Avatar from '@/components/Avatar';
 
 /**
  * Resolves a topic creator's profile from the *active workspace* members.
@@ -42,6 +43,7 @@ const TopicCreatorAvatar = memo<TopicCreatorAvatarProps>(({ userId, size = 20, c
     <Tooltip title={author.fullName}>
       <Avatar
         avatar={author.avatar ?? undefined}
+        name={author.fullName ?? undefined}
         shape={'circle'}
         size={size}
         style={{ flex: 'none' }}

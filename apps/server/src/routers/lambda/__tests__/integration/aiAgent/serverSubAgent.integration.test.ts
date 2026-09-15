@@ -29,13 +29,19 @@ process.env.OPENAI_API_KEY = 'sk-test-fake-api-key-for-testing';
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
+        return path ? `/files${path}` : null;
+      }),
+    };
+  }),
 }));
 
 let mockResponsesCreate: any;
@@ -206,7 +212,7 @@ describe('Server callSubAgent suspend/resume', () => {
   it('parks the parent, runs the sub-op, backfills the tool message and resumes', async () => {
     // 1: parent emits callSubAgent  2: sub-op final answer  3: parent resume final
     let callCount = 0;
-    mockResponsesCreate.mockImplementation(() => {
+    mockResponsesCreate.mockImplementation(function () {
       callCount++;
       if (callCount === 1) return Promise.resolve(createCallSubAgentResponse() as any);
       if (callCount === 2) return Promise.resolve(createFinalTextResponse(SUB_AGENT_ANSWER) as any);

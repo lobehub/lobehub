@@ -23,6 +23,14 @@ const topicCommentMigration = readMigrationFiles({
 
 if (!topicCommentMigration) throw new Error('Topic Comment migration not found');
 
+const goalGraphMigration = readMigrationFiles({
+  migrationsFolder: path.join(__dirname, '../../../migrations'),
+}).find((migration) =>
+  migration.sql.some((statement) => statement.includes('goal_edges_goal_source_node_fk')),
+);
+
+if (!goalGraphMigration) throw new Error('Goal Graph migration not found');
+
 const setupTopicCommentMigrationDependencies = async (client: PGlite) => {
   await client.exec(`
     CREATE TABLE users (id text PRIMARY KEY);
@@ -86,6 +94,20 @@ const downgradeTopicCommentsToSharedDraft = async (client: PGlite) => {
     ALTER TABLE topic_comments DROP COLUMN moderated_by_user_id;
     ALTER TABLE topic_comments DROP COLUMN moderation_expires_at;
   `);
+};
+
+const setupGoalGraphMigrationDependencies = async (client: PGlite) => {
+  await client.exec(`
+    CREATE TABLE users (id text PRIMARY KEY);
+    CREATE TABLE agents (id text PRIMARY KEY);
+    CREATE TABLE goals (id text PRIMARY KEY);
+    CREATE TABLE tasks (id text PRIMARY KEY);
+    CREATE TABLE work_versions (id uuid PRIMARY KEY);
+  `);
+};
+
+const runGoalGraphMigration = async (client: PGlite) => {
+  for (const statement of goalGraphMigration.sql) await client.exec(statement);
 };
 
 describe('DrizzleMigrationModel', () => {
@@ -243,6 +265,43 @@ describe('0127 Topic Comment migration', () => {
           AND column_name IN ('moderated_at', 'moderated_by_user_id', 'moderation_expires_at')
       `);
       expect(moderationColumns.rows[0].count).toBe(0);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+describe('0148 Goal Graph migration', () => {
+  it('repairs a partial deployment that created tables before the composite unique constraint', async () => {
+    const client = new PGlite();
+
+    try {
+      await setupGoalGraphMigrationDependencies(client);
+      await runGoalGraphMigration(client);
+      await client.exec(`
+        ALTER TABLE goal_edges DROP CONSTRAINT goal_edges_goal_source_node_fk;
+        ALTER TABLE goal_edges DROP CONSTRAINT goal_edges_goal_target_node_fk;
+        ALTER TABLE goal_nodes DROP CONSTRAINT goal_nodes_goal_id_id_unique;
+      `);
+
+      await runGoalGraphMigration(client);
+      await client.exec(`
+        INSERT INTO goals (id) VALUES ('goal-a'), ('goal-b');
+        INSERT INTO goal_nodes (id, goal_id, kind, title) VALUES
+          ('00000000-0000-0000-0000-000000000001', 'goal-a', 'problem', 'Goal A problem'),
+          ('00000000-0000-0000-0000-000000000002', 'goal-b', 'finding', 'Goal B finding');
+      `);
+
+      await expect(
+        client.exec(`
+          INSERT INTO goal_edges (goal_id, source_node_id, target_node_id, kind) VALUES (
+            'goal-a',
+            '00000000-0000-0000-0000-000000000001',
+            '00000000-0000-0000-0000-000000000002',
+            'supports'
+          );
+        `),
+      ).rejects.toThrow();
     } finally {
       await client.close();
     }

@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { DrawerPopup, DrawerPortal, DrawerRoot } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, DrawerPopup, DrawerPortal, DrawerRoot, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -45,10 +45,12 @@ interface SideBarDrawerProps {
   open: boolean;
   subHeader?: ReactNode;
   title?: ReactNode;
+  /** Content that needs more room (e.g. rows with inline actions) can widen past the default. */
+  width?: number;
 }
 
 const SideBarDrawer = memo<SideBarDrawerProps>(
-  ({ subHeader, open, onClose, children, title, action }) => {
+  ({ subHeader, open, onClose, children, title, action, width = DRAWER_WIDTH }) => {
     const [overlayContainer, setOverlayContainer] = useState<HTMLDivElement | null>(null);
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
 
@@ -74,7 +76,7 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
               panelClassName={styles.panel}
               placement={'left'}
               ref={setOverlayContainer}
-              width={DRAWER_WIDTH}
+              width={width}
             >
               <SideBarHeaderLayout
                 showBack={false}

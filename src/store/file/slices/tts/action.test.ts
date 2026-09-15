@@ -6,8 +6,6 @@ import { createServerConfigStore } from '@/store/serverConfig/store';
 
 import { useFileStore as useStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 //  mock the arrayBuffer
 beforeAll(() => {
   Object.defineProperty(File.prototype, 'arrayBuffer', {

@@ -1,8 +1,8 @@
 'use client';
 
 import { InfoCircleOutlined } from '@ant-design/icons';
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Alert, Button, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Button, Text, toast } from '@lobehub/ui/base-ui';
 import { QRCode } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLinkIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';

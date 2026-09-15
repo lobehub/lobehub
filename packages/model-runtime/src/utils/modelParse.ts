@@ -194,7 +194,9 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
 } as const;
 
 export const isDeepSeekV4FamilyModel = (model: string | undefined): boolean =>
-  typeof model === 'string' && model.toLowerCase().includes('deepseek-v4');
+  typeof model === 'string' &&
+  (model.toLowerCase().includes('deepseek-v4') ||
+    model.toLowerCase().split('/').at(-1) === 'deepseek-flash');
 
 export const isDeepSeekThinkingEligibleModel = (model: string | undefined): boolean =>
   typeof model === 'string' &&

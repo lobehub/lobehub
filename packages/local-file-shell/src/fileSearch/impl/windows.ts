@@ -254,6 +254,12 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
   }
 
   async glob(params: GlobFilesParams): Promise<GlobFilesResult> {
+    const missingScope = await this.missingScopeResult(params);
+    if (missingScope) {
+      logger.warn(`[glob: ${params.pattern}] ${missingScope.error}`);
+      return missingScope;
+    }
+
     if (await this.checkToolAvailable('fd')) {
       logger.info('Using glob tool: fd');
       return this.globWithFd(params);

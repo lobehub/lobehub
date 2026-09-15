@@ -1,12 +1,16 @@
 // @vitest-environment node
 import Anthropic from '@anthropic-ai/sdk';
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
+import { ContextExceededPreFlightError } from '../../utils/resolveSafeMaxTokens';
 import {
+  createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
   createDefaultAnthropicClient,
   DEFAULT_ANTHROPIC_TIMEOUT,
+  handleDefaultAnthropicError,
 } from './index';
 
 vi.mock('@anthropic-ai/sdk', () => {
@@ -143,7 +147,123 @@ describe('createDefaultAnthropicClient', () => {
   });
 });
 
+describe('handleDefaultAnthropicError', () => {
+  it('classifies upstream 413 as an oversized request body', () => {
+    expect(
+      handleDefaultAnthropicError(
+        { message: 'Failed to buffer the request body: length limit exceeded', status: 413 },
+        { apiKey: 'test-key', baseURL: 'https://api.example.com/anthropic' },
+      ),
+    ).toMatchObject({
+      errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
+    });
+  });
+
+  it('should classify provider balance errors as insufficient quota', () => {
+    expect(
+      handleDefaultAnthropicError(
+        {
+          error: {
+            error: {
+              code: 'invalid_request_error',
+              message: 'Insufficient Balance',
+              type: 'unknown_error',
+            },
+          },
+          status: 402,
+        },
+        { apiKey: 'test-key', baseURL: 'https://api.example.com/anthropic' },
+      ),
+    ).toMatchObject({
+      error: {
+        code: 'invalid_request_error',
+        message: 'Insufficient Balance',
+        type: 'unknown_error',
+      },
+      errorType: AgentRuntimeErrorType.InsufficientQuota,
+    });
+  });
+});
+
 describe('createAnthropicCompatibleRuntime', () => {
+  it('returns a structured context error before dispatch when payload pre-flight fails', async () => {
+    const messagesCreate = vi.fn();
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: () => {
+          throw new ContextExceededPreFlightError({
+            ctx: 1_048_576,
+            minOutputTokens: 1024,
+            model: 'deepseek-v4-flash',
+            promptTokens: 1_200_000,
+          });
+        },
+      },
+      customClient: {
+        createClient: () => ({ messages: { create: messagesCreate } }) as unknown as Anthropic,
+      },
+      provider: 'deepseek',
+    });
+
+    await expect(
+      new Runtime({ apiKey: 'test-key' }).chat({ model: 'deepseek-v4-flash' } as any),
+    ).rejects.toMatchObject({
+      error: {
+        ctx: 1_048_576,
+        promptTokens: 1_200_000,
+        type: 'context_exceeded_pre_flight',
+      },
+      errorType: AgentRuntimeErrorType.ExceededContextWindow,
+    });
+    expect(messagesCreate).not.toHaveBeenCalled();
+  });
+
+  it('classifies an upstream 413 response as an oversized request body', async () => {
+    const messagesCreate = vi.fn().mockRejectedValue({
+      message: '<html>413 Request Entity Too Large</html>',
+      status: 413,
+    });
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({ max_tokens: 1024, messages: [], model: payload.model }),
+      },
+      customClient: {
+        createClient: () => ({ messages: { create: messagesCreate } }) as unknown as Anthropic,
+      },
+      provider: 'deepseek',
+    });
+
+    await expect(
+      new Runtime({ apiKey: 'test-key' }).chat({ model: 'deepseek-v4-flash' } as any),
+    ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.RequestBodyTooLarge });
+  });
+
+  it.each([
+    [401, AgentRuntimeErrorType.InvalidGithubToken],
+    [500, AgentRuntimeErrorType.OllamaBizError],
+  ])('honors error type overrides for a %i response', async (status, expectedErrorType) => {
+    const messagesCreate = vi.fn().mockRejectedValue({ message: 'upstream error', status });
+    const Runtime = createAnthropicCompatibleRuntime(
+      createAnthropicCompatibleParams({
+        chatCompletion: {
+          handlePayload: (payload) => ({ max_tokens: 1024, messages: [], model: payload.model }),
+        },
+        customClient: {
+          createClient: () => ({ messages: { create: messagesCreate } }) as unknown as Anthropic,
+        },
+        errorType: {
+          bizError: AgentRuntimeErrorType.OllamaBizError,
+          invalidAPIKey: AgentRuntimeErrorType.InvalidGithubToken,
+        },
+        provider: 'test-provider',
+      }),
+    );
+
+    await expect(
+      new Runtime({ apiKey: 'test-key' }).chat({ model: 'test-model' } as any),
+    ).rejects.toMatchObject({ errorType: expectedErrorType });
+  });
+
   it('should normalize default baseURL before creating a custom client', () => {
     const createClient = vi.fn((options) => ({ baseURL: options.baseURL }) as unknown as Anthropic);
     const Runtime = createAnthropicCompatibleRuntime({
@@ -212,6 +332,48 @@ describe('createAnthropicCompatibleRuntime', () => {
       expect.objectContaining({ model: 'logical-model' }),
     );
     expect(createClient.mock.calls[0][0]).not.toHaveProperty('modelIdMapping');
+  });
+
+  it('should classify provider balance errors without a custom error handler', async () => {
+    const messagesCreate = vi.fn().mockRejectedValue({
+      error: {
+        error: {
+          code: 'invalid_request_error',
+          message: 'Insufficient Balance',
+          type: 'unknown_error',
+        },
+      },
+      status: 402,
+    });
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://api.example.com/anthropic',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({ apiKey: 'test-key' });
+
+    await expect(
+      runtime.chat({
+        messages: [{ content: 'hi', role: 'user' }],
+        model: 'test-model',
+        responseMode: 'json',
+        stream: false,
+      } as any),
+    ).rejects.toMatchObject({
+      errorType: AgentRuntimeErrorType.InsufficientQuota,
+    });
   });
 
   it('should retain the exact provider request and raw streaming response diagnostics', async () => {

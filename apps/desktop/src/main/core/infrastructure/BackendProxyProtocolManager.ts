@@ -1,10 +1,11 @@
-import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
+import { AUTH_FAILURE_HEADER, AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
 import { BrowserWindow, type Session, session as electronSession } from 'electron';
 
 import { isDev } from '@/const/env';
 import { isBackendPath } from '@/const/protocol';
 import { getDesktopEnv } from '@/env';
 import { appendVercelCookie } from '@/utils/http-headers';
+import { describeJwtClaims } from '@/utils/jwt-claims';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
 import { classifyProxyNetworkError } from '@/utils/proxy-network-error';
@@ -348,7 +349,8 @@ export class BackendProxyProtocolManager {
     // checking only status === 401 misses that case and the login modal never opens.
     // Other failures keep 401 without this header (e.g., invalid API keys) and must not notify here.
     const authRequired = upstreamResponse.headers.get(AUTH_REQUIRED_HEADER) === 'true';
-    if (authRequired) {
+    const isAuthStatus = upstreamResponse.status === 401 || upstreamResponse.status === 403;
+    if (authRequired || isAuthStatus) {
       const pathTag = (() => {
         try {
           return new URL(rewrittenUrl).pathname;
@@ -358,6 +360,7 @@ export class BackendProxyProtocolManager {
       })();
       const sourceTag = context.source ? `${context.source}:` : '';
       const wwwAuth = upstreamResponse.headers.get('www-authenticate') ?? '';
+      const authFailure = upstreamResponse.headers.get(AUTH_FAILURE_HEADER) ?? '';
       // Clone before forwarding the body downstream — the original stream stays
       // intact for the renderer. Body snippet is truncated to keep logs small
       // and to avoid leaking large payloads if the server ever returns one.
@@ -371,10 +374,18 @@ export class BackendProxyProtocolManager {
         `proxy:${sourceTag}status=${upstreamResponse.status}`,
         `${request.method} ${pathTag}`,
         `hadToken=${Boolean(token)}`,
+        `authRequired=${authRequired}`,
+        describeJwtClaims(token),
       ];
+      if (authFailure) parts.push(`authFailure=${authFailure}`);
       if (wwwAuth) parts.push(`wwwAuth=${wwwAuth}`);
       if (bodySnippet) parts.push(`body=${bodySnippet}`);
-      this.notifyAuthorizationRequired(parts.join(' '));
+      const reason = parts.join(' ');
+      // Every auth-status response lands in the production log file, not only
+      // the ones that open the re-login modal: a 401 without X-Auth-Required is
+      // exactly the case that was previously invisible in user-supplied logs.
+      this.logger.info(`${logPrefix} auth response ${reason}`);
+      if (authRequired) this.notifyAuthorizationRequired(reason);
     }
 
     return new Response(

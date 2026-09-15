@@ -16,7 +16,7 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
   lastModified: '2026-07-07T00:00:00.000Z',
   maxSteps: 100,
   messages: [],
-  metadata: {
+  origin: {
     agentId: 'agent-1',
     threadId: 'thread-1',
     topicId: 'topic-1',
@@ -48,12 +48,27 @@ const createToolCall = (id = 'tool-call-1') => ({
 
 describe('resolveTools executors', () => {
   let createToolMessage: ReturnType<typeof vi.fn>;
+  let findToolMessageIdByToolCallId: ReturnType<typeof vi.fn>;
+  /** `tool_call_id → row id` the store already holds. */
+  let toolRows: Map<string, { id: string; parentId: string }>;
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
   let host: AgentRuntimeHost;
 
   beforeEach(() => {
-    createToolMessage = vi.fn().mockResolvedValue({ id: 'tool-msg-1' });
+    toolRows = new Map();
+    createToolMessage = vi.fn().mockImplementation(async (params: any) => {
+      if (params?.tool_call_id) {
+        toolRows.set(params.tool_call_id, { id: 'tool-msg-1', parentId: params.parentId });
+      }
+      return { id: 'tool-msg-1' };
+    });
+    findToolMessageIdByToolCallId = vi
+      .fn()
+      .mockImplementation(async (toolCallId: string, parentMessageId: string) => {
+        const row = toolRows.get(toolCallId);
+        return row && row.parentId === parentMessageId ? row.id : undefined;
+      });
     publishError = vi.fn().mockResolvedValue(undefined);
     publishEvent = vi.fn().mockResolvedValue(undefined);
 
@@ -68,6 +83,7 @@ describe('resolveTools executors', () => {
           createToolMessage,
           deleteMessage: vi.fn(),
           findById: vi.fn(),
+          findToolMessageIdByToolCallId,
           query: vi.fn(),
           update: vi.fn(),
           updatePluginState: vi.fn(),
@@ -124,6 +140,82 @@ describe('resolveTools executors', () => {
       parentMessageId: 'tool-msg-1',
       toolCount: 1,
     });
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+    );
+  });
+
+  // Without this write the rejection is lost: state messages are rebuilt from
+  // the DB every step, and conversation-flow only collects a tool row whose
+  // parent assistant lists the matching call.
+  it('advertises unresolvable calls on the parent assistant and counts the round', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        blockedContent: 'Tool call rejected: no available tool is named searchh.',
+        blockedReason: 'tool_name_unresolved',
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+        unresolvedToolNames: true,
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    const result = await resolveBlockedTools(host)(instruction, createState());
+
+    expect(host.transports.messages.update).toHaveBeenCalledWith('assistant-msg-1', {
+      tools: [createToolCall()],
+    });
+    expect(result.newState.unresolvedToolFeedbackRounds).toBe(1);
+  });
+
+  it('accumulates unresolvable rounds across steps of one operation', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+        unresolvedToolNames: true,
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    const result = await resolveBlockedTools(host)(
+      instruction,
+      createState({ unresolvedToolFeedbackRounds: 1 }),
+    );
+
+    expect(result.newState.unresolvedToolFeedbackRounds).toBe(2);
+  });
+
+  it('leaves the parent untouched for ordinary blocked tools', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    const result = await resolveBlockedTools(host)(instruction, createState());
+
+    expect(host.transports.messages.update).not.toHaveBeenCalled();
+    expect(result.newState.unresolvedToolFeedbackRounds).toBeUndefined();
+  });
+
+  it('fails loudly when the parent assistant cannot be updated', async () => {
+    const failure = new Error('db down');
+    host.transports.messages.update = vi.fn().mockRejectedValue(failure);
+
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+        unresolvedToolNames: true,
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    await expect(resolveBlockedTools(host)(instruction, createState())).rejects.toThrow('db down');
+    expect(createToolMessage).not.toHaveBeenCalled();
   });
 
   it('persists a caller-provided blocked reason and content', async () => {
@@ -186,6 +278,10 @@ describe('resolveTools executors', () => {
     );
     expect(result.newState.status).toBe('done');
     expect(result.newState.messages).toHaveLength(2);
+    expect(result.newState.messages).toEqual([
+      expect.objectContaining({ id: 'tool-msg-1', tool_call_id: 'tool-call-1' }),
+      expect.objectContaining({ id: 'tool-msg-1', tool_call_id: 'tool-call-2' }),
+    ]);
     expect(result.events).toContainEqual(
       expect.objectContaining({
         reason: 'user_aborted',
@@ -216,11 +312,14 @@ describe('resolveTools executors', () => {
     const updateToolIntervention = vi.fn().mockResolvedValue(undefined);
     host.transports.messages.updateToolMessage = updateToolMessage;
     host.transports.messages.updateToolIntervention = updateToolIntervention;
+    // A single approval resume uses the pending row itself as parentMessageId,
+    // while the row's real parent remains the assistant that requested it.
+    toolRows.set('tool-call-1', { id: 'pending-msg-1', parentId: 'assistant-msg-1' });
 
     const instruction: Extract<AgentInstruction, { type: 'resolve_aborted_tools' }> = {
       payload: {
         existingToolMessageIds: { 'tool-call-1': 'pending-msg-1' },
-        parentMessageId: 'assistant-msg-1',
+        parentMessageId: 'pending-msg-1',
         toolsCalling: [createToolCall('tool-call-1'), createToolCall('tool-call-2')],
       },
       type: 'resolve_aborted_tools',
@@ -232,6 +331,8 @@ describe('resolveTools executors', () => {
       content: 'Tool execution was aborted by user.',
     });
     expect(updateToolIntervention).toHaveBeenCalledWith('pending-msg-1', { status: 'aborted' });
+    expect(findToolMessageIdByToolCallId).toHaveBeenCalledTimes(1);
+    expect(findToolMessageIdByToolCallId).toHaveBeenCalledWith('tool-call-2', 'pending-msg-1');
 
     // The call with no existing row still gets one created — mixed batches are
     // resolved per call, not all-or-nothing.
@@ -239,6 +340,10 @@ describe('resolveTools executors', () => {
     expect(createToolMessage).toHaveBeenCalledWith(
       expect.objectContaining({ tool_call_id: 'tool-call-2' }),
     );
+    expect(result.newState.messages).toEqual([
+      expect.objectContaining({ id: 'pending-msg-1', tool_call_id: 'tool-call-1' }),
+      expect.objectContaining({ id: 'tool-msg-1', tool_call_id: 'tool-call-2' }),
+    ]);
     expect(result.newState.status).toBe('done');
   });
 

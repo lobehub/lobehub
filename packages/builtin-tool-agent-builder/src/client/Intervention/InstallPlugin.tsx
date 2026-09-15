@@ -1,12 +1,14 @@
 'use client';
 
-import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { resolveConnectorCatalogItem } from '@lobechat/const';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { CheckCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
   composioStoreSelectors,
@@ -30,6 +32,8 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
   ({ args }) => {
     const { identifier, source } = args;
     const { t } = useTranslation('chat');
+    const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
+    const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     // Tool store selectors
     const isPluginInstalled = useToolStore((s) => pluginSelectors.isPluginInstalled(identifier)(s));
@@ -52,12 +56,14 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
       s.builtinTools.find((tool) => tool.identifier === identifier),
     );
 
-    // Check if it's a Composio tool
-    const composioAppInfo = COMPOSIO_APP_TYPES.find((t) => t.identifier === identifier);
+    const connector = resolveConnectorCatalogItem(identifier, {
+      composio: isComposioEnabled,
+      lobehub: isLobehubSkillEnabled,
+    });
+    const composioAppInfo = connector?.type === 'composio' ? connector.serverType : undefined;
     const isComposio = source === 'official' && !!composioAppInfo;
 
-    // Check if it's a LobehubSkill provider
-    const lobehubSkillProviderInfo = LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === identifier);
+    const lobehubSkillProviderInfo = connector?.type === 'lobehub' ? connector.provider : undefined;
     const isLobehubSkill = source === 'official' && !!lobehubSkillProviderInfo;
 
     // Render success state (already installed)

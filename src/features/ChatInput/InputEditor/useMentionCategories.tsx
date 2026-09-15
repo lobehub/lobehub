@@ -1,5 +1,6 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';

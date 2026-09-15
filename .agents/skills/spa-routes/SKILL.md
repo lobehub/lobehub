@@ -1,6 +1,6 @@
 ---
 name: spa-routes
-description: 'LobeHub SPA route architecture. Use when editing src/routes, src/features delegation, desktop/mobile/popup router configs, .desktop variants, route segments, redirects, or new pages.'
+description: 'Use for SPA routes and page segments: Web/desktop/mobile/popup routers, redirects and src/routes-to-features boundaries.'
 user-invocable: false
 ---
 
@@ -80,6 +80,15 @@ Each feature should:
    - **Shared Web/Electron route:** add the segment once in `desktopRouter.shared.tsx` with `dynamicElement` / `dynamicLayout`. Put its `preloadId` there as part of the shared lazy-loader definition.
    - **Web-only or Electron-only route:** add it to the corresponding thin `desktopRouter.config.tsx` adapter. Keep platform-only differences explicit and small.
    - **Mobile-only flow:** use `mobileRouter.config.tsx`; mobile does not consume the shared desktop tree.
+
+6. **Register a route skeleton (REQUIRED for every lazy route)**
+   - Every lazy route inside the main area renders `RouteSegmentSkeleton` (`src/components/Skeleton/RouteSegment.tsx`) while its chunk loads. It resolves via `handle.meta.Skeleton` only (deepest match wins, walking up through parent routes). Omitting `Skeleton` renders a blank pane — use `NoRouteSkeleton` when that is intentional.
+   - Pick the skeleton when adding or restructuring a route:
+     - A close-enough generic shape exists → `Skeleton: createSurfaceSkeleton('list' | 'form' | 'grid' | 'editor' | 'detail')` from `@/components/Skeleton/Surface`.
+     - The page has a distinctive layout (dashboard, multi-panel, conversation) → author a bespoke component under `src/components/Skeleton/` and register it (see `Home.tsx`, `Generation.tsx`, `Conversation/`).
+   - Where to put it: on the route's `routeMeta` (feature `routeMeta.ts` or inline in `desktopRouter.shared.tsx`). A whole subtree sharing one shape can register once on the parent/layout route's `handle` — children with their own `Skeleton` still override.
+   - When changing a page's layout, update its registered skeleton in the same PR — a stale skeleton that no longer matches the page is a regression.
+   - Skeleton-only parent handles are safe for titles: title/icon resolution also walks deepest-first, and leaf metas keep winning.
 
 ---
 

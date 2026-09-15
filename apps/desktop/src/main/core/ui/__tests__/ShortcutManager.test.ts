@@ -15,16 +15,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock Logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock desktop global shortcut defaults
 vi.mock('@lobechat/const/desktopGlobalShortcuts', () => ({
   DEFAULT_ELECTRON_DESKTOP_SHORTCUTS: {

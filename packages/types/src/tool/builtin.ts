@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { z } from 'zod';
 
+import { type DeviceUnavailableErrorData } from '../device';
 import { type RuntimeStepContext } from '../stepContext';
 import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
@@ -198,6 +199,17 @@ export interface LobeChatPluginApi {
    */
   humanIntervention?: ExtendedHumanInterventionConfig;
   name: string;
+  /**
+   * Run this API's calls one after another, in the order the model emitted
+   * them, when several land in the same tool batch. Set it on APIs whose side
+   * effects are order-sensitive — posting successive chat messages — where
+   * concurrent dispatch would let the platform keep whichever arrived first.
+   * Unmarked APIs in the same batch still run concurrently.
+   *
+   * Framework-only config like `humanIntervention`: it never reaches the
+   * LLM-facing tool spec.
+   */
+  ordered?: boolean;
   parameters: Record<string, any>;
   /**
    * Control the render display behavior for tool results
@@ -222,6 +234,7 @@ export const LobeChatPluginApiSchema = z.object({
   description: z.string(),
   humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   name: z.string(),
+  ordered: z.boolean().optional(),
   parameters: z.record(z.string(), z.any()),
   renderDisplayControl: RenderDisplayControlSchema.optional(),
   url: z.string().optional(),
@@ -305,9 +318,9 @@ export interface BuiltinToolResolveContext {
     unsupportedMessageApis?: string[];
   };
   /**
-   * Where this run executes, mirroring the resolved `ExecutionPlan.kind`
-   * (`device` / `device-unrouted` / `sandbox` / `none`) plus `local` for the
-   * desktop in-process engine. Lets exec-capable tools (e.g. lobe-skills)
+   * Where this run executes, derived from the resolved `ExecutionPlan`. The
+   * routed desktop-local target stays `local`; other plans mirror their `kind`
+   * (`device` / `device-unrouted` / `sandbox` / `none`). Lets exec-capable tools (e.g. lobe-skills)
    * rewrite their API descriptions per environment — most notably
    * `device-unrouted`, where the user picked their local device but it is
    * offline and commands silently fall back to the cloud sandbox. Kept as a
@@ -488,6 +501,8 @@ export interface BuiltinServerRuntimeOutput {
    */
   deferred?: boolean;
   error?: any;
+  /** Structured unavailable-device context preserved through the runtime error envelope. */
+  errorData?: DeviceUnavailableErrorData;
   state?: any;
   success: boolean;
 }
@@ -503,6 +518,8 @@ export interface BuiltinInterventionProps<Arguments = any> {
   actionsPortalTarget?: HTMLElement | null;
   apiName?: string;
   args: Arguments;
+  /** Keep the form visible but inert while a remote resolution awaits producer ACK. */
+  disabled?: boolean;
   identifier?: string;
   interactionMode?: 'approval' | 'custom';
   messageId: string;
