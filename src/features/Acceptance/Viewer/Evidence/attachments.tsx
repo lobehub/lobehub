@@ -16,11 +16,6 @@ const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const styles = createStaticStyles(({ css }) => ({
   flushUpload: css`
     display: contents;
-
-    .ant-upload,
-    .ant-upload-select {
-      display: contents;
-    }
   `,
   remove: css`
     cursor: pointer;

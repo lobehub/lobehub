@@ -24,13 +24,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   // Bold dropzone — the single primary action of this step.
   dragger: css`
-    .ant-upload-drag {
-      border-radius: ${cssVar.borderRadiusLG};
-      transition: border-color 0.15s ease;
+    border-radius: ${cssVar.borderRadiusLG};
+    transition: border-color 0.15s ease;
 
-      @media (prefers-reduced-motion: reduce) {
-        transition: none;
-      }
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
   draggerContent: css`
