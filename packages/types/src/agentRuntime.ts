@@ -200,6 +200,8 @@ export const AgentRuntimeErrorType = {
   CapabilityNotSupported: 'CapabilityNotSupported',
   /** Provider rejected the request as malformed (bad JSON, schema validation, etc.). */
   InvalidRequestFormat: 'InvalidRequestFormat',
+  /** Upstream rejected the serialized request body as too large (HTTP 413). */
+  RequestBodyTooLarge: 'RequestBodyTooLarge',
   /**
    * Upstream proxy / gateway layer failed (openresty, litellm, HTML 5xx,
    * Cloudflare 525) — distinct from the provider's own service. Split out of

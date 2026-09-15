@@ -62,6 +62,16 @@ export const createVariableGenerators = ({
     weekday: () => new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long' }),
     year: () => timeParts().year,
 
+    // The creds tool's session context renders the calendar date.
+    session_date: () =>
+      new Intl.DateTimeFormat('en-US', {
+        day: 'numeric',
+        month: 'long',
+        timeZone: tz,
+        weekday: 'long',
+        year: 'numeric',
+      }).format(new Date()),
+
     // --- model ---
     model: () => model ?? '',
     provider: () => provider ?? '',

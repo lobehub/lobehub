@@ -12,6 +12,7 @@ import { TRPCError } from '@trpc/server';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { TopicTrigger } from '@/const/topic';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -269,10 +270,11 @@ export class GoalManagerService {
     return this.startTurn(graph, problem);
   };
 
-  /** Shared entry conditions: a policy, an active Goal, and nobody waiting on a person. */
+  /** Shared entry conditions: a policy and its agent, an active Goal, and nobody waiting on a person. */
   private eligible = (graph: GoalGraphSnapshot) =>
     Boolean(
       graph.goal.config?.manager &&
+      graph.goal.agentId &&
       activeStatuses.has(graph.goal.status) &&
       !graph.decisions.some((d) => d.status === 'pending'),
     );
@@ -366,6 +368,8 @@ export class GoalManagerService {
   ): Promise<GoalTickResult | null> => {
     const { goal } = graph;
     const policy = goal.config!.manager!;
+    // The goal agent plans; `eligible` has already required one.
+    const agentId = goal.agentId!;
     const state = goal.config?.managerState;
     const nodes = graph.nodes.filter((n) => n.kind === 'task');
     const unfinished = nodes.filter((n) => !terminalNodes.has(n.status));
@@ -395,8 +399,12 @@ export class GoalManagerService {
     const claimed = await this.db.transaction(async (db) => {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const fresh = await model.lockById(goal.id);
+      // `managerSnapshot` does not cover the goal agent, so a handoff landing
+      // between the caller's graph read and this lock would otherwise dispatch
+      // the previous supervisor and spend one of the new supervisor's turns.
       if (
         !fresh ||
+        fresh.agentId !== agentId ||
         !activeStatuses.has(fresh.status) ||
         fresh.config?.managerState?.token !== state?.token ||
         fresh.config?.managerState?.turns !== state?.turns ||
@@ -410,14 +418,22 @@ export class GoalManagerService {
         (await this.budgetBlocked(current, db))
       )
         return;
+      // The management conversation lives in the goal agent's own history. After
+      // a handoff the previous agent's topic is not this agent's to continue.
+      const topicModel = new TopicModel(db, this.userId, this.workspaceId);
+      const previousTopic = state?.topicId ? await topicModel.findById(state.topicId) : undefined;
       const topicId =
-        state?.topicId ??
-        (
-          await new TopicModel(db, this.userId, this.workspaceId).create({
-            agentId: policy.agentId,
-            title: `Goal management: ${goal.title}`,
-          })
-        ).id;
+        previousTopic?.agentId === agentId
+          ? previousTopic.id
+          : (
+              await topicModel.create({
+                agentId,
+                title: `Goal management: ${goal.title}`,
+                // Read from the goal page's supervision panel; keeps the planning
+                // conversation out of the agent's chat sidebar and Recent.
+                trigger: TopicTrigger.GoalSupervision,
+              })
+            ).id;
       const reviews = await this.reviews(current, db);
       const next: GoalManagerState = {
         ...(problem
@@ -442,7 +458,7 @@ export class GoalManagerService {
       const result = await new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       }).execAgent({
-        agentId: policy.agentId,
+        agentId,
         appContext: { topicId: claimed.topicId },
         clientIds: { userMessageId: `msg_goal_manager_${claimed.token}` },
         autoStart: true,
@@ -481,7 +497,7 @@ export class GoalManagerService {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
       const state = goal?.config?.managerState;
-      if (!goal?.config?.manager || !state || state.token !== token)
+      if (!goal?.config?.manager || !goal.agentId || !state || state.token !== token)
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'This planning turn does not own the Goal',
@@ -491,7 +507,10 @@ export class GoalManagerService {
         this.userId,
         this.workspaceId,
       ).findByTopicSourceMessage(state.topicId, `msg_goal_manager_${token}`);
-      if (op?.id !== operationId || op.agentId !== goal.config.manager.agentId)
+      // Bound to the goal agent as it is NOW: a turn dispatched before a handoff
+      // no longer speaks for the goal.
+      const agentId = goal.agentId;
+      if (op?.id !== operationId || op.agentId !== agentId)
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Unrelated main Agent operation' });
       const graph = await this.graph(db).getGraph(goalId);
       if (
@@ -555,7 +574,7 @@ export class GoalManagerService {
           message: 'Existing work must be delivered before planning or verification',
         });
       const authored = new GoalGraphModel(db, this.userId, this.workspaceId, {
-        id: goal.config.manager.agentId,
+        id: agentId,
         type: 'agent',
       });
       // Accepting a plan that REPLACES the inherited work has to settle it too.
@@ -592,7 +611,7 @@ export class GoalManagerService {
             ...task,
             kind: 'task',
             status: 'proposed',
-            createdByAgentId: goal.config.manager.agentId,
+            createdByAgentId: agentId,
           });
           if (node && problem) await authored.createEdge(goalId, problem.id, node.id, 'decomposes');
         }

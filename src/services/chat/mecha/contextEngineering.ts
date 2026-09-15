@@ -1,46 +1,17 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
-import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
-import { formatUploadedFilesPrompt } from '@lobechat/builtin-tool-cloud-sandbox';
-import {
-  type ComposioServiceSummary,
-  CredsIdentifier,
-  type CredSummary,
-  excludeDisabledComposioServices,
-  generateComposioServicesList,
-  generateCredsList,
-  resolveAvailableComposioServices,
-} from '@lobechat/builtin-tool-creds';
-import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
-import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
-import {
-  AGENT_PLAN_FILE_TYPE,
-  COMPOSIO_APP_TYPES,
-  getConnectorCatalog,
-  isDesktop,
-} from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import type {
-  AgentBuilderContext,
-  AgentContextDocument,
   AgentGroupConfig,
-  AgentManagementContext,
-  GroupAgentBuilderContext,
-  GroupOfficialToolItem,
   LobeToolManifest,
   MemoryContext,
-  OnboardingContext,
   OperationSkillSet,
-  PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
-  WorkspaceContext,
 } from '@lobechat/context-engine';
-import { resolveTopicReferences } from '@lobechat/context-engine';
-import { type ContextSnapshot, runContextEngineering } from '@lobechat/mecha';
+import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from '@lobechat/mecha';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
-  getActivePluginIds,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -49,33 +20,20 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
-import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { HOST_VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
-import { lambdaClient } from '@/libs/trpc/client';
-import {
-  agentService,
-  AVAILABLE_AGENTS_CONTEXT_LIMIT,
-  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT,
-} from '@/services/agent';
-import { notebookService } from '@/services/notebook';
 import { getAgentStoreState } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentChatConfigSelectors,
+  agentSelectors,
+} from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
-import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
-import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
-import { getElectronStoreState } from '@/store/electron';
-import { electronSyncSelectors } from '@/store/electron/selectors';
 import { getToolStoreState } from '@/store/tool';
-import {
-  builtinToolSelectors,
-  composioStoreSelectors,
-  lobehubSkillStoreSelectors,
-  toolSelectors,
-} from '@/store/tool/selectors';
-import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
+import { toolSelectors } from '@/store/tool/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -86,6 +44,11 @@ import {
   isCanUseVideo,
   isCanUseVision,
 } from '../helper';
+import {
+  type BrowserShareVisitor,
+  createBrowserContextFactProviders,
+  resolveBrowserConnectorFeatures,
+} from './contextFactProviders';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { resolveClientSkills } from './skillEngineering';
 
@@ -94,9 +57,6 @@ const log = debug('context-engine:contextEngineering');
 interface ContextEngineeringContext {
   /** Agent-materialized presentation contexts for this LLM call */
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
-  /** Agent Builder context for injecting current agent info */
-  agentBuilderContext?: AgentBuilderContext;
-  agentDocuments?: AgentContextDocument[];
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
   /**
@@ -134,6 +94,12 @@ interface ContextEngineeringContext {
   provider: string;
   sessionId?: string;
   /**
+   * Present only when the run answers a share visitor. The shared rules then
+   * withhold the creator's documents, onboarding profile and workspace links
+   * and resolve topic references against the visitor's own conversations.
+   */
+  shareVisitor?: BrowserShareVisitor;
+  /**
    * Step context from Agent Runtime
    * Contains latest XML structure updated each step
    */
@@ -158,30 +124,18 @@ export const contextEngineering = async ({
   enableHistoryCount,
   historyCount,
   historySummary,
-  agentBuilderContext,
-  agentDocuments,
   agentId,
   disabledPluginIds,
   enableAgentMode,
   groupId,
   initialContext,
   plugins,
+  shareVisitor,
   stepContext,
   topicId,
   memoryContext,
 }: ContextEngineeringContext): Promise<OpenAIChatMessage[]> => {
   log('tools: %o', tools);
-
-  // Check if Agent Builder tool is enabled
-  const isAgentBuilderEnabled = tools?.includes(AgentBuilderIdentifier) ?? false;
-  // Check if Group Agent Builder tool is enabled
-  const isGroupAgentBuilderEnabled = tools?.includes(GroupAgentBuilderIdentifier) ?? false;
-  // Check if Agent Management tool is enabled
-  const isAgentManagementEnabled = tools?.includes(AgentManagementIdentifier) ?? false;
-
-  log('isAgentBuilderEnabled: %s', isAgentBuilderEnabled);
-  log('isGroupAgentBuilderEnabled: %s', isGroupAgentBuilderEnabled);
-  log('isAgentManagementEnabled: %s', isAgentManagementEnabled);
 
   // Build agent group configuration if groupId is provided
   let agentGroup: AgentGroupConfig | undefined;
@@ -225,131 +179,12 @@ export const contextEngineering = async ({
     }
   }
 
-  // Get agent store state (used for both group agent builder context and file/knowledge base)
+  // Agent store state: chat mode, knowledge and identity of the responding agent.
   const agentStoreState = getAgentStoreState();
   // Example: preset-task calls omit `enableAgentMode`; preserve explicit chat mode
   // from stored config instead of letting MessagesEngine treat `undefined` as agent mode.
   const effectiveEnableAgentMode =
     enableAgentMode ?? agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode;
-
-  // Build group agent builder context if Group Agent Builder is enabled
-  // Note: Uses activeGroupId from chatStore to get the group being edited
-  let groupAgentBuilderContext: GroupAgentBuilderContext | undefined;
-  if (isGroupAgentBuilderEnabled) {
-    const activeGroupId = getChatStoreState().activeGroupId;
-    if (activeGroupId) {
-      const groupStoreState = getChatGroupStoreState();
-      const activeGroupDetail = agentGroupSelectors.getGroupById(activeGroupId)(groupStoreState);
-
-      if (activeGroupDetail) {
-        // Get supervisor agent config if supervisorAgentId exists
-        let supervisorConfig: GroupAgentBuilderContext['supervisorConfig'];
-        let enabledPlugins: string[] = [];
-        if (activeGroupDetail.supervisorAgentId) {
-          const supervisorAgentConfig = agentSelectors.getAgentConfigById(
-            activeGroupDetail.supervisorAgentId,
-          )(agentStoreState);
-          // Pinned identifiers only — GroupAgentBuilderContext.supervisorConfig.plugins
-          // is a display/prompt-formatting DTO (still `string[]`) that joins
-          // entries as plain text, and a disabled plugin isn't "enabled".
-          enabledPlugins = getActivePluginIds(supervisorAgentConfig.plugins);
-          supervisorConfig = {
-            model: supervisorAgentConfig.model,
-            plugins: enabledPlugins,
-            provider: supervisorAgentConfig.provider,
-          };
-        }
-
-        // Build official tools list (builtin tools + Composio tools)
-        const toolState = getToolStoreState();
-        const officialTools: GroupOfficialToolItem[] = [];
-
-        const isComposioEnabled = Boolean(
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio,
-        );
-        const isLobehubSkillEnabled = Boolean(
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill,
-        );
-        const connectorCatalog = getConnectorCatalog({
-          composio: isComposioEnabled,
-          lobehub: isLobehubSkillEnabled,
-        });
-        const connectorIdentifiers = new Set(
-          connectorCatalog.map((item) =>
-            item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
-          ),
-        );
-
-        // Get builtin tools (excluding connectors rendered through their canonical owner)
-        const builtinTools = builtinToolSelectors.metaList(toolState);
-
-        for (const tool of builtinTools) {
-          if (connectorIdentifiers.has(tool.identifier)) continue;
-
-          officialTools.push({
-            description: tool.meta?.description,
-            enabled: enabledPlugins.includes(tool.identifier),
-            identifier: tool.identifier,
-            installed: true,
-            name: tool.meta?.title || tool.identifier,
-            type: 'builtin',
-          });
-        }
-
-        const allComposioServers = composioStoreSelectors.getServers(toolState);
-        const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
-        for (const connector of connectorCatalog) {
-          if (connector.type === 'composio') {
-            const { serverType } = connector;
-            const server = allComposioServers.find(
-              (item) => item.identifier === serverType.identifier,
-            );
-            officialTools.push({
-              description: `LobeHub Mcp Server: ${serverType.label}`,
-              enabled: enabledPlugins.includes(serverType.identifier),
-              identifier: serverType.identifier,
-              installed: !!server,
-              name: serverType.label,
-              type: 'composio',
-            });
-            continue;
-          }
-
-          const { provider } = connector;
-          const server = allLobehubSkillServers.find((item) => item.identifier === provider.id);
-          officialTools.push({
-            description: `LobeHub Skill Provider: ${provider.label}`,
-            enabled: enabledPlugins.includes(provider.id),
-            identifier: provider.id,
-            installed: !!server,
-            name: provider.label,
-            type: 'lobehub-skill',
-          });
-        }
-
-        groupAgentBuilderContext = {
-          config: {
-            openingMessage: activeGroupDetail.config?.openingMessage || undefined,
-            openingQuestions: activeGroupDetail.config?.openingQuestions,
-            systemPrompt: activeGroupDetail.config?.systemPrompt || undefined,
-          },
-          groupId: activeGroupId,
-          groupTitle: activeGroupDetail.title || undefined,
-          members: activeGroupDetail.agents?.map((agent) => ({
-            description: agent.description || undefined,
-            id: agent.id,
-            isSupervisor: agent.isSupervisor,
-            title: agent.title || 'Untitled Agent',
-          })),
-          officialTools,
-          supervisorConfig,
-        };
-        log('groupAgentBuilderContext built from activeGroupId: %o', groupAgentBuilderContext);
-      }
-    }
-  }
 
   // Get enabled agent files with content and knowledge bases from agent store
   const agentFiles = agentSelectors.currentAgentFiles(agentStoreState);
@@ -370,113 +205,6 @@ export const contextEngineering = async ({
     const topicMemories = resolveTopicMemories();
     const persona = resolveUserPersona();
     userMemoryData = combineUserMemoryData(topicMemories, persona);
-  }
-
-  // Resolve plan + todos context (now part of the lobe-agent tool).
-  // Lobe-agent must be enabled and topicId must be provided.
-  const isPlanTodoEnabled = tools?.includes(LobeAgentIdentifier) ?? false;
-  let planTodoConfig: PlanTodoConfig | undefined;
-
-  if (isPlanTodoEnabled && topicId) {
-    try {
-      // Fetch plan document for the current topic
-      const planResult = await notebookService.listDocuments({
-        topicId,
-        type: AGENT_PLAN_FILE_TYPE,
-      });
-
-      if (planResult.data.length > 0) {
-        const planDoc = planResult.data[0]; // Most recent plan
-
-        // Build plan object for injection
-        const plan = {
-          completed: false, // TODO: Add completed field to document if needed
-          context: planDoc.content ?? undefined,
-          createdAt: planDoc.createdAt.toISOString(),
-          description: planDoc.description || '',
-          goal: planDoc.title || '',
-          id: planDoc.id,
-          updatedAt: planDoc.updatedAt.toISOString(),
-        };
-
-        // Get todos from plan's metadata
-        const todos = planDoc.metadata?.todos;
-
-        planTodoConfig = {
-          enabled: true,
-          plan,
-          todos,
-        };
-
-        log('Plan/Todo context resolved: plan=%s, todos=%o', plan.goal, todos?.items?.length ?? 0);
-      }
-    } catch (error) {
-      // Silently fail - plan/todo context is optional
-      log('Failed to resolve plan/todo context:', error);
-    }
-  }
-
-  // Resolve user credentials context for creds tool
-  // Creds tool must be enabled to fetch credentials
-  const isCredsEnabled = tools?.includes(CredsIdentifier) ?? false;
-  let credsList: CredSummary[] | undefined;
-
-  if (isCredsEnabled) {
-    try {
-      const credsResult = await lambdaClient.market.creds.list.query();
-      const userCreds = (credsResult as any)?.data ?? [];
-      credsList = userCreds.map((cred: any): CredSummary => ({
-        description: cred.description,
-        key: cred.key,
-        name: cred.name,
-        type: cred.type,
-      }));
-      log('Creds context resolved: count=%d', credsList?.length ?? 0);
-    } catch (error) {
-      // Silently fail - creds context is optional
-      log('Failed to resolve creds context:', error);
-    }
-  }
-
-  // Build Composio services list for creds context
-  // Shows which Composio services are connected (authorized) and which are available to connect
-  let composioServicesList = '';
-
-  const isComposioEnabled =
-    typeof window !== 'undefined' &&
-    window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
-
-  if (isCredsEnabled && isComposioEnabled) {
-    try {
-      const toolState = getToolStoreState();
-      const allComposioServers = composioStoreSelectors.getServers(toolState);
-      const disabledIdSet = new Set(disabledPluginIds ?? []);
-
-      // Disabled services are dropped from both lists — not surfaced as
-      // "connected, use directly" (this agent shouldn't use it) nor as
-      // "available to connect" (the user's account-level OAuth connection,
-      // if any, is untouched; this agent just isn't meant to see it).
-      const connected: ComposioServiceSummary[] = excludeDisabledComposioServices(
-        allComposioServers.filter((s) => s.status === ComposioServerStatus.ACTIVE),
-        disabledIdSet,
-      ).map((s) => ({ identifier: s.identifier, name: s.label }));
-
-      const connectedIds = new Set(connected.map((s) => s.identifier));
-      const available = resolveAvailableComposioServices(
-        COMPOSIO_APP_TYPES,
-        connectedIds,
-        disabledIdSet,
-      );
-
-      composioServicesList = generateComposioServicesList(connected, available);
-      log(
-        'Composio services context resolved: connected=%d, available=%d',
-        connected.length,
-        available.length,
-      );
-    } catch (error) {
-      log('Failed to resolve Composio services context:', error);
-    }
   }
 
   const userMemoryConfig =
@@ -504,198 +232,47 @@ export const contextEngineering = async ({
     }
   }
 
-  // Build Agent Management context.
-  // - availableAgents is injected whenever the user is in auto skill mode (so the
-  //   supervisor can decide to activate agent-management on its own) OR when the tool
-  //   is explicitly enabled.
-  // - availableProviders / availablePlugins are only built when the tool is explicitly
-  //   enabled, since they're solely needed for createAgent / updateAgent.
-  let agentManagementContext: AgentManagementContext | undefined;
-
+  // Which facts this turn needs (plan, references, builder contexts, agent
+  // management, credentials, connectors, onboarding, workspace links) is
+  // decided by the shared rules; the browser only answers the lookups they
+  // ask for, from the stores first.
+  const chatStoreState = getChatStoreState();
+  const agentConfig = agentId
+    ? agentSelectors.getAgentConfigById(agentId)(agentStoreState)
+    : undefined;
+  const agentMeta = agentId ? agentSelectors.getAgentMetaById(agentId)(agentStoreState) : undefined;
+  const agentItem = agentId ? agentByIdSelectors.getAgentById(agentId)(agentStoreState) : undefined;
   const isInAutoSkillMode =
     agentChatConfigSelectors.skillActivateMode(agentStoreState) !== 'manual';
-  const shouldInjectAvailableAgents = isInAutoSkillMode || isAgentManagementEnabled;
-
-  if (shouldInjectAvailableAgents) {
-    try {
-      const recentAgents =
-        agentStoreState.availableAgents ??
-        (await agentService.queryAgents({ limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT }));
-
-      // Exclude current agent from `availableAgents`. The model is the current
-      // agent — its identity/persona is already established by `systemRole`, so
-      // we don't re-inject it here, and removing self from the list ensures the
-      // model never sees its own id in the agent-management context (so it
-      // cannot accidentally call itself via `callAgent`).
-      const otherAgents = agentId ? recentAgents.filter((a) => a.id !== agentId) : recentAgents;
-      const hasMoreAgents = otherAgents.length > AVAILABLE_AGENTS_CONTEXT_LIMIT;
-      const availableAgents = otherAgents.slice(0, AVAILABLE_AGENTS_CONTEXT_LIMIT).map((a) => ({
-        description: a.description ?? undefined,
-        id: a.id,
-        title: a.title ?? 'Untitled',
-      }));
-
-      agentManagementContext = {
-        availableAgents,
-        availableAgentsHasMore: hasMoreAgents,
-        ...(agentId && {
-          currentAgent: {
-            id: agentId,
-            title: agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? undefined,
-          },
-        }),
-      };
-      log('availableAgents fetched: %d agents (hasMore=%s)', availableAgents.length, hasMoreAgents);
-    } catch (error) {
-      // Silently fail - availableAgents context is optional
-      log('Failed to fetch availableAgents: %O', error);
-    }
-  }
-
-  if (isAgentManagementEnabled) {
-    // Get enabled providers and models from aiInfra store
-    const aiProviderState = getAiInfraStoreState();
-    const enabledChatModelList = aiProviderState.enabledChatModelList || [];
-
-    // Build availableProviders from enabled chat models (only user-enabled providers)
-    // Limit to first 5 providers to avoid context bloat
-    const availableProviders = enabledChatModelList.slice(0, 5).map((provider) => ({
-      id: provider.id,
-      models: provider.children.map((model) => ({
-        abilities: model.abilities,
-        description: model.description,
-        id: model.id,
-        name: model.displayName || model.id,
-      })),
-      name: provider.name,
-    }));
-
-    // Get tool state for plugins
-    const toolState = getToolStoreState();
-
-    // Build availablePlugins from all plugin sources
-    const availablePlugins = [];
-
-    // Builtin tools (use allMetaList to include hidden tools like web-browsing, cloud-sandbox, etc.)
-    // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
-    const allBuiltinTools = builtinToolSelectors.allMetaList(toolState);
-    const isComposioEnabled = Boolean(
-      typeof window !== 'undefined' &&
-      window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio,
-    );
-    const isLobehubSkillEnabled = Boolean(
-      typeof window !== 'undefined' &&
-      window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill,
-    );
-    const connectorCatalog = getConnectorCatalog({
-      composio: isComposioEnabled,
-      lobehub: isLobehubSkillEnabled,
-    });
-    const connectorIdentifiers = new Set(
-      connectorCatalog.map((item) =>
-        item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
-      ),
-    );
-    const INTERNAL_TOOLS = new Set([
-      'lobe-agent-management', // Don't show agent-management in its own context
-      'lobe-agent-builder', // Used for editing current agent, not for creating new agents
-      'lobe-group-agent-builder', // Used for editing current group, not for creating new agents
-      'lobe-page-agent', // Page-editor specific tool
-    ]);
-
-    for (const tool of allBuiltinTools) {
-      if (connectorIdentifiers.has(tool.identifier)) continue;
-      // Skip internal tools
-      if (INTERNAL_TOOLS.has(tool.identifier)) continue;
-
-      availablePlugins.push({
-        description: tool.meta?.description,
-        identifier: tool.identifier,
-        name: tool.meta?.title || tool.identifier,
-        type: 'builtin' as const,
-      });
-    }
-
-    for (const connector of connectorCatalog) {
-      if (connector.type === 'composio') {
-        const { serverType } = connector;
-        availablePlugins.push({
-          description: serverType.description,
-          identifier: serverType.identifier,
-          name: serverType.label,
-          type: 'composio' as const,
-        });
-        continue;
-      }
-
-      const { provider } = connector;
-      availablePlugins.push({
-        description: provider.description,
-        identifier: provider.id,
-        name: provider.label,
-        type: 'lobehub-skill' as const,
-      });
-    }
-
-    agentManagementContext = {
-      ...agentManagementContext,
-      availablePlugins,
-      availableProviders,
-    };
-
-    log(
-      'agentManagementContext built: %d providers, %d plugins, %d agents',
-      agentManagementContext.availableProviders?.length ?? 0,
-      agentManagementContext.availablePlugins?.length ?? 0,
-      agentManagementContext.availableAgents?.length ?? 0,
-    );
-  }
-
-  // Inject mentionedAgents independently of isAgentManagementEnabled.
-  // When user @mentions an agent, delegation context must always be injected
-  // even if the agent doesn't have agent-management tool in its config.
-  const hasMentionedAgents =
-    initialContext?.mentionedAgents && initialContext.mentionedAgents.length > 0;
-
-  if (hasMentionedAgents) {
-    agentManagementContext = {
-      ...agentManagementContext,
-      mentionedAgents: initialContext!.mentionedAgents,
-    };
-    log('mentionedAgents injected: %d agents', initialContext!.mentionedAgents!.length);
-  }
-
-  // Resolve topic references from messages containing <refer_topic> tags
-  const topicReferences =
-    (await resolveTopicReferences(
+  const facts = await gatherContextFacts(
+    {
+      agent: {
+        // The current-agent chat config carries the skill activation mode the
+        // management rule reads, even when `agentId` is a transient target.
+        chatConfig:
+          agentConfig?.chatConfig ?? agentChatConfigSelectors.currentChatConfig(agentStoreState),
+        description: agentMeta?.description,
+        slug: agentItem?.slug,
+        title: agentMeta?.title,
+      },
+      agentId,
+      disabledPluginIds,
+      // The Profile panel edits `activeAgentId` / `activeGroupId`, not the
+      // builder agent that is answering.
+      editingAgentId: tools?.includes(AgentBuilderIdentifier)
+        ? chatStoreState.activeAgentId || agentId
+        : undefined,
+      editingGroupId: chatStoreState.activeGroupId || undefined,
+      enabledToolIds: tools ?? [],
+      features: resolveBrowserConnectorFeatures(),
+      mentionedAgents: initialContext?.mentionedAgents,
       messages,
-      async (topicId: string) => {
-        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
-        return topic ?? null;
-      },
-      async (topicId: string) => {
-        const { messageService } = await import('@/services/message');
-        const msgs = await messageService.getMessages({ agentId, groupId, topicId });
-        return msgs.map((m) => ({
-          content: typeof m.content === 'string' ? m.content : '',
-          role: m.role,
-        }));
-      },
-    )) ?? [];
-
-  // Build onboarding context if this is the web-onboarding agent.
-  // Single combined trpc call — server runs state/soul/persona DB queries in parallel.
-  let onboardingContext: OnboardingContext | undefined;
-  const isOnboardingAgent = tools?.includes(WebOnboardingIdentifier);
-  if (isOnboardingAgent) {
-    try {
-      const { userService } = await import('@/services/user');
-      onboardingContext = await userService.getOnboardingAgentContext();
-      log('Built onboarding context');
-    } catch (error) {
-      log('Failed to build onboarding context: %O', error);
-    }
-  }
+      shareVisitor,
+      topicId,
+      workspaceId: getActiveWorkspaceId() ?? undefined,
+    },
+    createBrowserContextFactProviders({ agentId, groupId, shareVisitor }),
+  );
 
   // Resolve enabled skills (await: pinned DB skills fetch their content on demand).
   // In auto mode: expose all installed skills so the AI can discover and activate them.
@@ -711,32 +288,22 @@ export const contextEngineering = async ({
     }
   }
 
-  // The agent's identity lives on the agent row (name/title), not in the
-  // prompt text — inject it so the model can answer "who are you?" with the
-  // name the user gave it instead of the product/model name.
-  const agentIdentityMeta = agentId
-    ? agentSelectors.getAgentMetaById(agentId)(agentStoreState)
-    : undefined;
-
-  // Where the run lives (app origin + active workspace slug) so the model
-  // writes in-app links that resolve to the right scope. Mirrors the server
-  // runtime's `resolveWorkspaceContext`.
-  const workspaceContext = resolveClientWorkspaceContext();
-
-  // Create MessagesEngine with injected dependencies
   // One timezone for every date the prompt renders — the core's temporal
-  // placeholders, the system-date line and the host's own `session_date` —
-  // so a run near midnight cannot carry two different dates.
+  // placeholders (including `session_date`) and the system-date line — so a
+  // run near midnight cannot carry two different dates.
   const userTimezone = userGeneralSettingsSelectors.currentTimezone(useUserStore.getState());
 
   // Everything gathered above is host-specific; shaping it into engine
   // parameters is shared with the server through `@lobechat/mecha`.
   const snapshot: ContextSnapshot = {
     agent: {
-      documents: agentDocuments,
+      documents: facts.agentDocuments,
       enableHistoryCount,
       historyCount,
-      identity: { name: agentIdentityMeta?.name, title: agentIdentityMeta?.title },
+      // The agent's identity lives on the agent row (name/title), not in the
+      // prompt text — inject it so the model can answer "who are you?" with
+      // the name the user gave it instead of the product/model name.
+      identity: { name: agentMeta?.name, title: agentMeta?.title },
       inputTemplate,
       knowledge: { fileContents, knowledgeBases },
       systemRole,
@@ -762,15 +329,7 @@ export const contextEngineering = async ({
       messages,
       stepContext,
     },
-    step: {
-      ...(isAgentBuilderEnabled && { agentBuilderContext }),
-      ...(isGroupAgentBuilderEnabled && { groupAgentBuilderContext }),
-      agentManagementContext,
-      onboardingContext,
-      planTodo: planTodoConfig,
-      topicReferences,
-      workspaceContext,
-    },
+    step: facts.step,
     tools: {
       enabledSkills,
       enabledToolIds: tools,
@@ -780,53 +339,17 @@ export const contextEngineering = async ({
       selectedTools: initialContext?.selectedTools,
       toolDiscoveryConfig,
     },
-    // Browser-resolved placeholders. The store-backed generators stay lazy so a
-    // placeholder that never renders costs nothing. Temporal placeholders are
-    // not among them: the core renders those in the user's timezone, the same
-    // way on every host.
+    // Placeholders resolved by the shared rules (credentials, connectors,
+    // sandbox files, agent / topic identity) plus the browser's own lazy
+    // store-backed generators. Temporal placeholders are not among them: the
+    // core renders those in the user's timezone, the same way on every host.
     variables: {
+      ...facts.variables,
       ...HOST_VARIABLE_GENERATORS,
-      // NOTICE: required by builtin-tool-creds/src/systemRole.ts
-      CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
-      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Composio integrations)
-      COMPOSIO_SERVICES_LIST: () => composioServicesList,
-      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (session_context)
-      session_date: () =>
-        new Intl.DateTimeFormat('en-US', {
-          day: 'numeric',
-          month: 'long',
-          timeZone: userTimezone,
-          weekday: 'long',
-          year: 'numeric',
-        }).format(new Date()),
-      sandbox_enabled: () => String(tools?.includes('lobe-cloud-sandbox') ?? false),
-      // NOTICE: required by builtin-tool-cloud-sandbox/src/systemRole.ts —
-      // lists the topic files synced into the sandbox upload dir. Read lazily
-      // from the chat store so we only pay the cost when the placeholder renders.
-      sandbox_uploaded_files: () =>
-        tools?.includes('lobe-cloud-sandbox')
-          ? formatUploadedFilesPrompt(chatSelectors.currentUserFiles(getChatStoreState()))
-          : '',
-      // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
+      // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts —
+      // the browser knows the effective effort (agent override, else the user
+      // setting), which the agent row alone cannot tell.
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
-      // Current agent + topic identity — referenced by the LobeHub builtin
-      // skill (packages/builtin-skills/src/lobehub/content.ts) so the model
-      // can run `lh agent run -a {{agent_id}}` etc without first having to
-      // search for itself. Read lazily from stores so we only pay the cost
-      // when the placeholder actually appears in a rendered message.
-      agent_id: () => agentId ?? '',
-      agent_title: () =>
-        agentId ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.title ?? '') : '',
-      agent_description: () =>
-        agentId
-          ? (agentSelectors.getAgentMetaById(agentId)(agentStoreState)?.description ?? '')
-          : '',
-      topic_id: () => topicId ?? '',
-      topic_title: () => {
-        if (!topicId) return '';
-        const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
-        return topic?.title ?? '';
-      },
     },
     world: {
       group: agentGroup,
@@ -849,19 +372,4 @@ export const contextEngineering = async ({
   }
 
   return processed;
-};
-
-const resolveClientAppOrigin = (): string | undefined => {
-  if (isDesktop) return electronSyncSelectors.remoteServerUrl(getElectronStoreState()) || undefined;
-  if (typeof window === 'undefined') return undefined;
-  return window.location.origin || undefined;
-};
-
-const resolveClientWorkspaceContext = (): WorkspaceContext | undefined => {
-  const appUrl = resolveClientAppOrigin();
-  const slug = getActiveWorkspaceSlug();
-
-  if (!appUrl && !slug) return undefined;
-
-  return { appUrl, ...(slug && { workspace: { slug } }) };
 };

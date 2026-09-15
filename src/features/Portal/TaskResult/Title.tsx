@@ -11,6 +11,7 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useTaskStore } from '@/store/task';
 import { oneLineEllipsis } from '@/styles';
 
+import Actions from './Actions';
 import { useLiveRun } from './useLiveRun';
 
 const Title = memo(() => {
@@ -32,27 +33,32 @@ const Title = memo(() => {
         <Text
           className={oneLineEllipsis}
           fontSize={13}
-          style={{ color: cssVar.colorTextSecondary, flex: 1, minWidth: 0 }}
+          style={{ color: cssVar.colorTextSecondary, flex: '0 1 auto', minWidth: 0 }}
         >
           {liveRun.activity.title}
         </Text>
+        <Actions />
       </Flexbox>
     );
 
+  // The panel is headed by the task itself: the generic "Task result" label
+  // only pushed the name aside. It stays as the placeholder until the task loads.
   return (
     <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
-      <Text fontSize={14} weight={500}>
-        {t('goalDetail.taskResult')}
-      </Text>
-      {(detail?.identifier || detail?.name) && (
-        <Text
-          className={oneLineEllipsis}
-          fontSize={13}
-          style={{ color: cssVar.colorTextSecondary, flex: 1, minWidth: 0 }}
-        >
-          {[detail.identifier, detail.name].filter(Boolean).join(' · ')}
+      {detail?.identifier && (
+        <Text fontSize={13} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}>
+          {detail.identifier}
         </Text>
       )}
+      <Text
+        className={oneLineEllipsis}
+        fontSize={14}
+        style={{ flex: '0 1 auto', minWidth: 0 }}
+        weight={500}
+      >
+        {detail?.name || t('goalDetail.taskResult')}
+      </Text>
+      <Actions />
     </Flexbox>
   );
 });

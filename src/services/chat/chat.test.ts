@@ -1696,65 +1696,12 @@ describe('ChatService', () => {
     });
 
     describe('agent documents readiness', () => {
-      it('should ensure agent documents before assistant generation when cache is empty', async () => {
+      it('should hand the agent builder run to context engineering without prefetching documents', async () => {
         const contextEngineeringSpy = vi
           .spyOn(mechaModule, 'contextEngineering')
           .mockResolvedValue([]);
         vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
-          {
-            content: 'Project setup steps',
-            filename: 'setup.md',
-            id: 'doc-1',
-            loadRules: [],
-            policy: null,
-            policyLoadFormat: null,
-            policyLoadPosition: null,
-            templateId: null,
-            title: 'Setup',
-          },
-        ] as any);
-
-        await chatService.createAssistantMessage({
-          agentId: 'agent-1',
-          messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
-          resolvedAgentConfig: createMockResolvedConfig(),
-        });
-
-        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
-          agentId: 'agent-1',
-        });
-        expect(contextEngineeringSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            agentDocuments: [
-              expect.objectContaining({
-                content: 'Project setup steps',
-                filename: 'setup.md',
-                id: 'doc-1',
-              }),
-            ],
-          }),
-        );
-      });
-
-      it('should resolve agent builder documents from the edited agent', async () => {
-        const contextEngineeringSpy = vi
-          .spyOn(mechaModule, 'contextEngineering')
-          .mockResolvedValue([]);
-        vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
-          {
-            content: 'Edited agent setup',
-            filename: 'builder-target.md',
-            id: 'doc-1',
-            loadRules: [],
-            policy: null,
-            policyLoadFormat: null,
-            policyLoadPosition: null,
-            templateId: null,
-            title: 'Builder Target',
-          },
-        ] as any);
+        const getContextDocuments = vi.spyOn(agentDocumentService, 'getContextDocuments');
 
         useChatStore.setState({ activeAgentId: 'edited-agent' } as any);
 
@@ -1766,18 +1713,17 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
-          agentId: 'edited-agent',
-        });
+        // Which agent's documents to read (the edited one while the builder is
+        // active) is decided by the shared context rules inside
+        // contextEngineering; the service no longer resolves it up front.
+        expect(getContextDocuments).not.toHaveBeenCalled();
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({
-            agentDocuments: [
-              expect.objectContaining({
-                content: 'Edited agent setup',
-              }),
-            ],
+            agentId: 'builder-agent',
+            tools: [AgentBuilderIdentifier],
           }),
         );
+        expect(contextEngineeringSpy.mock.calls[0][0]).not.toHaveProperty('agentDocuments');
       });
     });
   });

@@ -1,3 +1,4 @@
+import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { type UIChatMessage } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,6 +6,7 @@ import * as isCanUseFCModule from '@/helpers/isCanUseFC';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 
 import * as helpers from '../helper';
@@ -79,9 +81,11 @@ beforeEach(() => {
   useUserStore.setState({ settings: { general: { timezone: 'UTC' } } } as any);
   useAgentStore.setState({
     activeAgentId: undefined,
+    agentDocumentsMap: {},
     agentMap: {},
     availableAgents: undefined,
-  });
+  } as any);
+  useChatStore.setState({ activeAgentId: undefined, activeGroupId: undefined } as any);
 });
 
 afterEach(() => {
@@ -101,41 +105,43 @@ const getCurrentDateContent = () => {
   return `Current date: ${year}-${month}-${day} (${tz})`;
 };
 
+const setupDocument = {
+  content: 'Project setup steps',
+  filename: 'setup.md',
+  id: 'doc-1',
+  policyLoad: 'always',
+  title: 'Setup',
+};
+
 describe('contextEngineering', () => {
-  it('should not fetch agent documents implicitly when agentId is provided', async () => {
-    const messages = [{ content: 'Hello', role: 'user' }] as UIChatMessage[];
-
-    await contextEngineering({
-      agentId: 'agent-1',
-      messages,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
-
-    expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
-  });
-
-  it('should use provided agent documents without fetching', async () => {
+  it('should read the agent documents from the store cache without refetching', async () => {
     const messages = [{ content: 'Summarize the setup', role: 'user' }] as UIChatMessage[];
+    useAgentStore.setState({
+      agentDocumentsMap: {
+        'agent-1': [
+          {
+            content: 'Project setup steps',
+            filename: 'setup.md',
+            id: 'doc-1',
+            // `always` keeps this doc in the inline bucket; without it the
+            // default is progressive (metadata-only index, content hidden).
+            policyLoad: 'always',
+            title: 'Setup',
+          },
+        ],
+      },
+    } as any);
+    const ensureSpy = vi.spyOn(useAgentStore.getState(), 'ensureAgentDocuments');
 
     const output = await contextEngineering({
-      agentDocuments: [
-        {
-          content: 'Project setup steps',
-          filename: 'setup.md',
-          id: 'doc-1',
-          // `always` keeps this doc in the inline bucket; without it the
-          // default is progressive (metadata-only index, content hidden).
-          policyLoad: 'always',
-          title: 'Setup',
-        },
-      ],
       agentId: 'agent-1',
       messages,
       model: 'gpt-4',
       provider: 'openai',
     });
 
+    // Cache-first: the store answers, the document service is never asked.
+    expect(ensureSpy).toHaveBeenCalledWith('agent-1');
     expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
     const documentsMessage = output.find(
       (message) =>
@@ -151,16 +157,8 @@ describe('contextEngineering', () => {
   });
 
   it('should suppress agent documents when runtime agent mode is disabled', async () => {
+    useAgentStore.setState({ agentDocumentsMap: { 'agent-1': [setupDocument] } } as any);
     const output = await contextEngineering({
-      agentDocuments: [
-        {
-          content: 'Project setup steps',
-          filename: 'setup.md',
-          id: 'doc-1',
-          policyLoad: 'always',
-          title: 'Setup',
-        },
-      ],
       agentId: 'agent-1',
       enableAgentMode: false,
       messages: [{ content: 'Summarize the setup', role: 'user' }] as UIChatMessage[],
@@ -183,23 +181,16 @@ describe('contextEngineering', () => {
   it('should fall back to stored chat mode when runtime agent mode is omitted', async () => {
     useAgentStore.setState({
       activeAgentId: 'agent-1',
+      agentDocumentsMap: { 'agent-1': [setupDocument] },
       agentMap: {
         'agent-1': {
           chatConfig: { enableAgentMode: false },
         },
       },
-    });
+    } as any);
 
     const output = await contextEngineering({
-      agentDocuments: [
-        {
-          content: 'Project setup steps',
-          filename: 'setup.md',
-          id: 'doc-1',
-          policyLoad: 'always',
-          title: 'Setup',
-        },
-      ],
+      agentId: 'agent-1',
       messages: [{ content: 'Summarize the setup', role: 'user' }] as UIChatMessage[],
       model: 'gpt-4',
       provider: 'openai',
@@ -215,6 +206,31 @@ describe('contextEngineering', () => {
     );
 
     expect(documentsMessage).toBeUndefined();
+  });
+
+  it('should read the documents of the edited agent while the agent builder is active', async () => {
+    useChatStore.setState({ activeAgentId: 'edited-agent' } as any);
+    useAgentStore.setState({
+      agentDocumentsMap: {
+        'builder-agent': [{ ...setupDocument, content: 'Builder agent notes', id: 'doc-b' }],
+        'edited-agent': [{ ...setupDocument, content: 'Edited agent setup', id: 'doc-e' }],
+      },
+    } as any);
+
+    const output = await contextEngineering({
+      agentId: 'builder-agent',
+      messages: [{ content: 'Improve my agent', role: 'user' }] as UIChatMessage[],
+      model: 'gpt-4',
+      provider: 'openai',
+      tools: [AgentBuilderIdentifier],
+    });
+
+    const rendered = output
+      .filter((message) => typeof message.content === 'string')
+      .map((message) => message.content as string)
+      .join('\n');
+    expect(rendered).toContain('Edited agent setup');
+    expect(rendered).not.toContain('Builder agent notes');
   });
 
   it('should use cached available agents without querying during context engineering', async () => {

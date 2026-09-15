@@ -215,6 +215,12 @@ export interface AgentWorldSnapshot {
   };
   /** Borrowed-connector attribution rendered into the system message. */
   connectorOwnershipNote?: string;
+  /**
+   * Plugin identifiers the agent explicitly disabled (tri-state entries).
+   * `agent.plugins` is already collapsed to pinned ids, so the disabled set
+   * is kept apart for the rules that must hide those tools from the model.
+   */
+  disabledPluginIds?: string[];
   /** Evaluation prompt data for eval runs. */
   eval?: EvalContext;
   /** Multi-agent group roster (or bot-conversation fallback). */

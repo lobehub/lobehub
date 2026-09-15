@@ -17,6 +17,7 @@ export const runContextEngineering = async (
 };
 
 export { buildMessagesEngineParams } from './buildMessagesEngineParams';
+export * from './facts';
 export type * from './types';
 export {
   createVariableGenerators,

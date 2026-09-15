@@ -1,11 +1,8 @@
-import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import {
-  getConnectorCatalog,
   REQUEST_AGENT_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
-import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
@@ -28,20 +25,10 @@ import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { getAgentStoreState } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentChatConfigSelectors,
-  agentSelectors,
-} from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
-import { getToolStoreState } from '@/store/tool';
-import {
-  builtinToolSelectors,
-  composioStoreSelectors,
-  lobehubSkillStoreSelectors,
-} from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
   settingsSelectors,
@@ -123,17 +110,6 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
 }
 
 class ChatService {
-  private resolveAgentDocumentsTargetId = (
-    targetAgentId: string,
-    enabledToolIds: string[] = [],
-  ): string | undefined => {
-    if (enabledToolIds.includes(AgentBuilderIdentifier)) {
-      return getChatStoreState().activeAgentId || targetAgentId || undefined;
-    }
-
-    return targetAgentId || undefined;
-  };
-
   buildAssistantMessageContext = async (
     {
       messages,
@@ -187,116 +163,9 @@ class ChatService {
     const enableAgentMode =
       chatConfig.enableAgentMode !== false && isCanUseFC(payload.model, payload.provider!);
 
-    // =================== 1.2 build agent builder context =================== //
-
-    // Check if Agent Builder tool is enabled and build context for it
-    // Note: When Agent Builder is active, we need to get the context of the agent being edited,
-    // which is stored in chatStore.activeAgentId, not the targetAgentId (which is the Agent Builder itself)
-    const isAgentBuilderEnabled = enabledToolIds.includes(AgentBuilderIdentifier);
-    const documentsAgentId = this.resolveAgentDocumentsTargetId(targetAgentId, enabledToolIds);
-    let agentBuilderContext;
-    let agentDocuments = documentsAgentId
-      ? agentSelectors.getAgentDocumentsById(documentsAgentId)(getAgentStoreState())
-      : undefined;
-
-    if (documentsAgentId && agentDocuments === undefined) {
-      try {
-        agentDocuments = await getAgentStoreState().ensureAgentDocuments(documentsAgentId);
-      } catch (error) {
-        // Agent documents are optional on the client; keep generation working if hydration fails.
-        console.error('[ChatService] Failed to ensure agent documents:', error);
-      }
-    }
-
-    if (isAgentBuilderEnabled) {
-      const activeAgentId = getChatStoreState().activeAgentId || '';
-      const baseContext =
-        agentByIdSelectors.getAgentBuilderContextById(activeAgentId)(getAgentStoreState());
-      const activeAgentConfig =
-        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
-
-      // Build official tools list (builtin tools + Composio tools)
-      const toolState = getToolStoreState();
-      const enabledPlugins = activeAgentConfig?.plugins || [];
-
-      const officialTools: OfficialToolItem[] = [];
-
-      const isComposioEnabled = Boolean(
-        typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio,
-      );
-      const isLobehubSkillEnabled = Boolean(
-        typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill,
-      );
-      const connectorCatalog = getConnectorCatalog({
-        composio: isComposioEnabled,
-        lobehub: isLobehubSkillEnabled,
-      });
-      const connectorIdentifiers = new Set(
-        connectorCatalog.map((item) =>
-          item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
-        ),
-      );
-
-      // Get builtin tools (excluding connectors rendered through their canonical owner)
-      const builtinTools = builtinToolSelectors.metaList(toolState);
-
-      for (const tool of builtinTools) {
-        if (connectorIdentifiers.has(tool.identifier)) continue;
-
-        officialTools.push({
-          description: tool.meta?.description,
-          enabled: enabledPlugins.includes(tool.identifier),
-          identifier: tool.identifier,
-          installed: true,
-          name: tool.meta?.title || tool.identifier,
-          type: 'builtin',
-        });
-      }
-
-      const allComposioServers = composioStoreSelectors.getServers(toolState);
-      const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
-      for (const connector of connectorCatalog) {
-        if (connector.type === 'composio') {
-          const { serverType } = connector;
-          const server = allComposioServers.find(
-            (item) => item.identifier === serverType.identifier,
-          );
-          officialTools.push({
-            description: `LobeHub Mcp Server: ${serverType.label}`,
-            enabled: enabledPlugins.includes(serverType.identifier),
-            identifier: serverType.identifier,
-            installed: !!server,
-            name: serverType.label,
-            type: 'composio',
-          });
-          continue;
-        }
-
-        const { provider } = connector;
-        const server = allLobehubSkillServers.find((item) => item.identifier === provider.id);
-        officialTools.push({
-          description: `LobeHub Skill Provider: ${provider.label}`,
-          enabled: enabledPlugins.includes(provider.id),
-          identifier: provider.id,
-          installed: !!server,
-          name: provider.label,
-          type: 'lobehub-skill',
-        });
-      }
-
-      agentBuilderContext = {
-        ...baseContext,
-        officialTools,
-      };
-    }
-
     // Apply context engineering with preprocessing configuration
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
     const modelMessages = await contextEngineering({
-      agentBuilderContext,
-      agentDocuments,
       agentId: targetAgentId,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).

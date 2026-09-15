@@ -189,15 +189,16 @@ describe('CLI main Agent planning', () => {
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 
-  it('explicitly dispatches the creator instead of the default Task assignee', async () => {
+  it('dispatches planning turns to the goal agent, not the task agent', async () => {
     await db.insert(agents).values({ id: 'task-worker', userId });
     const graph = await service().create({
-      agentId: 'task-worker',
-      createdByAgentId: agentId,
-      title: 'Creator-managed goal',
-      config: { manager: {} },
+      agentId,
+      title: 'Supervised goal',
+      config: { manager: {}, taskAgentId: 'task-worker' },
     });
-    expect(graph.goal.config?.manager?.agentId).toBe(agentId);
+    expect(graph.goal.agentId).toBe(agentId);
+    expect(graph.goal.config?.taskAgentId).toBe('task-worker');
+    expect(graph.goal.config?.manager).not.toHaveProperty('agentId');
     expect((await service().tick(graph.goal.id)).outcome).toBe('waiting_external');
     const state = (await model().findById(graph.goal.id))!.config!.managerState!;
     const op = await ops().findByTopicSourceMessage(
@@ -216,7 +217,7 @@ describe('CLI main Agent planning', () => {
       title: 'Selected agent',
       config: { manager: {} },
     });
-    expect(graph.goal.config?.manager?.agentId).toBe(agentId);
+    expect(graph.goal.agentId).toBe(agentId);
     expect(graph.events.every((event) => event.actorType === 'user')).toBe(true);
   });
 
@@ -229,23 +230,26 @@ describe('CLI main Agent planning', () => {
     },
   );
 
-  it('cannot select a different manager through a legacy config object', async () => {
+  it('ignores a legacy manager identity: the goal agent plans', async () => {
     const config = { manager: { agentId: 'unrelated-agent', maxTurns: 5 } };
     const graph = await service().create({
       createdByAgentId: agentId,
       config,
       title: 'Bound creator',
     });
-    expect(graph.goal.config?.manager).toEqual({ agentId, maxTurns: 5 });
-    await db.insert(agents).values({ id: 'new-task-worker', userId });
-    await service().setAgent(graph.goal.id, 'new-task-worker');
-    expect((await model().findById(graph.goal.id))?.config?.manager?.agentId).toBe(agentId);
+    expect(graph.goal.agentId).toBe(agentId);
+    expect(graph.goal.config?.manager).toEqual({ maxTurns: 5 });
+    await db.insert(agents).values({ id: 'next-supervisor', userId });
+    await service().setAgent(graph.goal.id, 'next-supervisor');
+    const moved = await model().findById(graph.goal.id);
+    expect(moved?.agentId).toBe('next-supervisor');
+    expect(moved?.config?.manager).toEqual({ maxTurns: 5 });
   });
 
   it('requires an accessible creator when planning options are supplied', async () => {
     await expect(
       service().create({ title: 'Missing creator', config: { manager: {} } }),
-    ).rejects.toThrow('creating or selected Agent');
+    ).rejects.toThrow('requires the goal agent');
     await expect(
       service().create({ title: 'Unknown creator', createdByAgentId: 'unrelated-agent' }),
     ).rejects.toThrow();
@@ -270,6 +274,49 @@ describe('CLI main Agent planning', () => {
     const created = await service().tick(id);
     expect(created.taskId).toBeTruthy();
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not dispatch the previous supervisor when a handoff lands before the claim', async () => {
+    const { id, op } = await start();
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+    // The coordinator read the graph, then the goal was handed over before it
+    // locked the row to claim the next turn.
+    const staleGraph = await service().graph(id);
+    await db.insert(agents).values({ id: 'handoff-supervisor', userId });
+    await service().setAgent(id, 'handoff-supervisor');
+    const turnsBefore = (await model().findById(id))!.config!.managerState!.turns;
+
+    await manager().advance(staleGraph, { mayStartTurn: true });
+
+    expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+    expect((await model().findById(id))!.config!.managerState!.turns).toBe(turnsBefore);
+  });
+
+  it('opens the next planning turn in the new supervisor history after a handoff', async () => {
+    const { id, state, op } = await start();
+    await ops().recordCompletion(op.id, { status: 'done' });
+    expect((await service().tick(id)).outcome).toBe('advanced');
+
+    await db.insert(agents).values({ id: 'next-supervisor', userId });
+    await service().setAgent(id, 'next-supervisor');
+    expect((await service().tick(id)).outcome).toBe('waiting_external');
+
+    const next = (await model().findById(id))!.config!.managerState!;
+    expect(next.topicId).not.toBe(state.topicId);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, next.topicId));
+    expect(topic?.agentId).toBe('next-supervisor');
+    // Both management topics stay out of the agent's chat sidebar.
+    const [first] = await db.select().from(topics).where(eq(topics.id, state.topicId));
+    expect(first?.trigger).toBe('goal_supervision');
+    expect(topic?.trigger).toBe('goal_supervision');
+    const nextOp = await ops().findByTopicSourceMessage(
+      next.topicId,
+      `msg_goal_manager_${next.token}`,
+    );
+    expect(nextOp?.agentId).toBe('next-supervisor');
+    // The earlier supervisor's operation no longer speaks for the goal.
+    await expect(manager().submit(id, next.token, op.id, taskPlan)).rejects.toThrow('Unrelated');
   });
 
   it('rejects wrong owner, operation, pause and changed graph without adding tasks', async () => {
@@ -374,7 +421,7 @@ describe('CLI main Agent planning', () => {
 
   it('keeps server-owned manager receipts across policy updates', async () => {
     const { id, state } = await start();
-    await model().update(id, { config: { manager: { agentId, maxTurns: 5 } } });
+    await model().update(id, { config: { manager: { maxTurns: 5 } } });
     expect((await model().findById(id))!.config!.managerState).toEqual(state);
   });
 
@@ -566,9 +613,10 @@ describe('CLI main Agent planning', () => {
       createdByAgentId: agentId,
       title: 'Mixed',
     });
+    expect(graph.goal.agentId).toBe(agentId);
     expect(graph.goal.config).toMatchObject({
       exploration: { maxExperiments: 2 },
-      manager: { agentId },
+      manager: {},
     });
   });
 });

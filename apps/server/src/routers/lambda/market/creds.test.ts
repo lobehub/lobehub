@@ -129,6 +129,38 @@ describe('credsRouter is always personal-scoped', () => {
   });
 });
 
+describe('credsRouter listForContext follows the runtime scope', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('lists the workspace organization creds for a verified workspace member', async () => {
+    const { credsRouter } = await import('./creds');
+    const caller = credsRouter.createCaller({
+      isWorkspaceMember: true,
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    } as any);
+
+    const result = await caller.listForContext();
+
+    expect(mockOrgCredsList).toHaveBeenCalledTimes(1);
+    expect(mockPersonalCredsList).not.toHaveBeenCalled();
+    expect(result.data.map((c) => c.key)).toEqual(['ORG_SECRET']);
+  });
+
+  it('lists personal creds outside a workspace', async () => {
+    const { credsRouter } = await import('./creds');
+    const caller = credsRouter.createCaller({ isWorkspaceMember: false, userId: 'user-1' } as any);
+
+    const result = await caller.listForContext();
+
+    expect(mockPersonalCredsList).toHaveBeenCalledTimes(1);
+    expect(mockOrgCredsList).not.toHaveBeenCalled();
+    expect(result.data.map((c) => c.key)).toEqual(['PERSONAL_SECRET']);
+  });
+});
+
 describe('credsRouter list scopes sharing to the active workspace', () => {
   beforeEach(() => {
     vi.clearAllMocks();
