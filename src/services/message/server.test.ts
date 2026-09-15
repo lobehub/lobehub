@@ -10,6 +10,7 @@ vi.mock('@/libs/trpc/client', () => ({
       createMessage: { mutate: vi.fn() },
       getMessages: { query: vi.fn() },
       removeMessagesByAssistant: { mutate: vi.fn() },
+      update: { mutate: vi.fn() },
     },
   },
 }));
@@ -71,6 +72,96 @@ describe('MessageService', () => {
         content: 'test',
         role: 'user',
         agentId: 'agent-123',
+      });
+    });
+  });
+
+  describe('updateMessage', () => {
+    const service = new MessageService();
+
+    it('normalizes provider errors without a valid type before persistence', async () => {
+      vi.mocked(lambdaClient.message.update.mutate).mockResolvedValue({ success: true } as any);
+
+      await service.updateMessage(
+        'msg-1',
+        {
+          error: {
+            body: { code: 'Arrearage' },
+            message: 'Access denied because the account is in arrears',
+            type: undefined,
+          } as any,
+        },
+        { agentId: 'agent-1', topicId: 'topic-1' },
+      );
+
+      expect(lambdaClient.message.update.mutate).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        id: 'msg-1',
+        topicId: 'topic-1',
+        value: {
+          error: {
+            body: { code: 'Arrearage' },
+            message: 'Access denied because the account is in arrears',
+            type: 'ApplicationRuntimeError',
+          },
+        },
+      });
+    });
+
+    it.each([undefined, null, {}, Number.NaN, Number.POSITIVE_INFINITY])(
+      'falls back when the persisted error type is invalid: %s',
+      async (type) => {
+        vi.mocked(lambdaClient.message.update.mutate).mockResolvedValue({ success: true } as any);
+
+        await service.updateMessage('msg-1', {
+          error: { message: 'provider failed', type } as any,
+        });
+
+        expect(lambdaClient.message.update.mutate).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            value: {
+              error: expect.objectContaining({ type: 'ApplicationRuntimeError' }),
+            },
+          }),
+        );
+      },
+    );
+
+    it('preserves a valid type even when errorType is also present', async () => {
+      vi.mocked(lambdaClient.message.update.mutate).mockResolvedValue({ success: true } as any);
+
+      await service.updateMessage('msg-1', {
+        error: {
+          errorType: 'ProviderBizError',
+          message: 'rate limited',
+          type: 'RateLimitExceeded',
+        } as any,
+      });
+
+      expect(lambdaClient.message.update.mutate).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: {
+            error: expect.objectContaining({ type: 'RateLimitExceeded' }),
+          },
+        }),
+      );
+    });
+  });
+
+  describe('updateMessageError', () => {
+    it('normalizes an invalid error type through the dedicated error update path', async () => {
+      vi.mocked(lambdaClient.message.update.mutate).mockResolvedValue({ success: true } as any);
+
+      await new MessageService().updateMessageError('msg-1', {
+        message: 'provider failed',
+        type: Number.NaN,
+      } as any);
+
+      expect(lambdaClient.message.update.mutate).toHaveBeenLastCalledWith({
+        id: 'msg-1',
+        value: {
+          error: expect.objectContaining({ type: 'ApplicationRuntimeError' }),
+        },
       });
     });
   });
