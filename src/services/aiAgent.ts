@@ -239,7 +239,7 @@ class AiAgentService {
     params: ExecAgentTaskParams,
     options?: { signal?: AbortSignal },
   ): Promise<ExecAgentResult> {
-    return await lambdaClient.aiAgent.execAgent.mutate(params, options);
+    return lambdaClient.aiAgent.execAgent.mutate(params, options);
   }
 
   /**
@@ -260,7 +260,7 @@ class AiAgentService {
    * Get a fresh JWT token for Gateway WebSocket reconnection.
    */
   async refreshGatewayToken(topicId: string): Promise<{ token: string }> {
-    return await lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
+    return lambdaClient.aiAgent.refreshGatewayToken.query({ topicId });
   }
 
   /**
@@ -273,7 +273,7 @@ class AiAgentService {
   }
 
   async execSubAgentTask(params: ExecSubAgentTaskParams) {
-    return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
+    return lambdaClient.aiAgent.execSubAgentTask.mutate(params);
   }
 
   /**
@@ -281,14 +281,14 @@ class AiAgentService {
    * Works for both Group and Single Agent mode tasks
    */
   async getSubAgentTaskStatus(params: GetSubAgentTaskStatusParams) {
-    return await lambdaClient.aiAgent.getSubAgentTaskStatus.query(params);
+    return lambdaClient.aiAgent.getSubAgentTaskStatus.query(params);
   }
 
   /**
    * Interrupt a running task
    */
   async interruptTask(params: InterruptTaskParams) {
-    return await lambdaClient.aiAgent.interruptTask.mutate(params);
+    return lambdaClient.aiAgent.interruptTask.mutate(params);
   }
 
   /**
@@ -338,7 +338,7 @@ class AiAgentService {
    * It creates the Thread but does NOT execute the task - execution happens locally.
    */
   async createClientTaskThread(params: CreateClientTaskThreadParams) {
-    return await lambdaClient.aiAgent.createClientTaskThread.mutate(params);
+    return lambdaClient.aiAgent.createClientTaskThread.mutate(params);
   }
 
   /**
@@ -349,7 +349,7 @@ class AiAgentService {
    * - Thread messages query should not filter by agentId
    */
   async createClientGroupAgentTaskThread(params: CreateClientGroupAgentTaskThreadParams) {
-    return await lambdaClient.aiAgent.createClientGroupAgentTaskThread.mutate(params);
+    return lambdaClient.aiAgent.createClientGroupAgentTaskThread.mutate(params);
   }
 
   /**
@@ -358,7 +358,7 @@ class AiAgentService {
    * This method is called by desktop client after task execution finishes.
    */
   async updateClientTaskThreadStatus(params: UpdateClientTaskThreadStatusParams) {
-    return await lambdaClient.aiAgent.updateClientTaskThreadStatus.mutate(params);
+    return lambdaClient.aiAgent.updateClientTaskThreadStatus.mutate(params);
   }
 }
 
