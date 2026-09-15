@@ -224,6 +224,8 @@ describe('callLlm executor', () => {
     });
     expect(transport.createTrace).toHaveBeenCalledWith({
       assistantMessageId: 'assistant-1',
+      // The built context rides along so the trace records what the request carries.
+      context: expect.objectContaining({ messages: [{ content: 'prepared hello', role: 'user' }] }),
       conversationId: 'topic-1',
       model: 'gpt-4',
       provider: 'openai',
