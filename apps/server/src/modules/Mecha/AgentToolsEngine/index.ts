@@ -12,8 +12,8 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import { resolveToolRules } from '@lobechat/mecha';
-import { type BuiltinToolManifest, type RuntimePlatform } from '@lobechat/types';
+import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
+import { type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
 import { isDeviceLockedPlan, resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -33,46 +33,6 @@ export type {
 } from './types';
 
 const log = debug('lobe-server:agent-tools-engine');
-
-/**
- * A manifest is usable by ToolsEngine only if it has an `api` array.
- * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)`
- * unconditionally, so any entry with `api` missing / non-array crashes the
- * whole tools build — and with it every execAgent call of the affected user.
- * Installed-plugin manifests come straight from a DB jsonb column with no
- * schema validation, so guard defensively at the merge point. Mirrors the
- * frontend `dropInvalidManifests` in `src/helpers/toolEngineering`.
- */
-const isValidToolManifest = (m: LobeToolManifest | undefined): m is LobeToolManifest =>
-  !!m && typeof m === 'object' && Array.isArray((m as LobeToolManifest).api);
-
-const dropInvalidManifests = (
-  manifests: (LobeToolManifest | undefined)[],
-  source: string,
-): LobeToolManifest[] => {
-  const valid: LobeToolManifest[] = [];
-  const dropped: Array<{ identifier?: string; reason: string }> = [];
-
-  for (const m of manifests) {
-    if (isValidToolManifest(m)) {
-      valid.push(m);
-    } else if (m) {
-      dropped.push({
-        identifier: (m as { identifier?: string }).identifier,
-        reason: 'missing `api` field (expected array)',
-      });
-    }
-  }
-
-  if (dropped.length > 0) {
-    console.warn(
-      `[AgentToolsEngine] Dropped ${dropped.length} invalid manifest(s) from ${source}:`,
-      dropped,
-    );
-  }
-
-  return valid;
-};
 
 /**
  * Initialize ToolsEngine with server-side context
@@ -96,62 +56,35 @@ export const createServerToolsEngine = (
     manifestContext,
   } = config;
 
-  // Get plugin manifests from installed plugins (from database)
-  const pluginManifests = dropInvalidManifests(
-    context.installedPlugins.map((plugin) => plugin.manifest as LobeToolManifest | undefined),
-    'installedPlugins',
+  // The pool rules (connector precedence, context-aware builtins, invalid
+  // manifest guard, exclusion from every source) are shared with the
+  // browser; the builtin list arrives pre-filtered by the device walls and
+  // `excludeIdentifiers` closes the second half of that wall for the other
+  // sources.
+  const { manifests } = assembleManifestPool(
+    {
+      additional: additionalManifests,
+      builtinTools: builtinToolsOverride,
+      installedPlugins: context.installedPlugins.map(
+        (plugin) => plugin.manifest as LobeToolManifest | undefined,
+      ),
+    },
+    { excludedIdentifiers: excludeIdentifiers, manifestContext },
   );
 
-  // Get builtin tool manifests from the (possibly pre-filtered) list. The
-  // filter is one half of the hard wall keeping device tools out of an
-  // external bot sender's manifestSchemas — see `buildAllowedBuiltinTools`
-  // and . The enableChecker rules below are defense-in-depth
-  // because `allowExplicitActivation` lets activator-driven activation
-  // bypass them.
-  //
-  // When a manifest context is supplied (agent runtime path), context-aware
-  // tools resolve their manifest for it — trimming APIs (e.g. lobe-agent hides
-  // callSubAgent inside a sub-agent / group, both list AND systemRole) or opting
-  // out entirely via `null`. This MUST mirror the frontend `createToolsEngine`:
-  // a sub-agent run server-side that skipped this would still be handed
-  // `callSubAgent`, letting the model recurse into nested sub-agents that the
-  // runtime then rejects — a dead loop that ends in the inactivity watchdog.
-  const builtinManifests = builtinToolsOverride
-    .map((tool) =>
-      manifestContext && tool.resolveManifest
-        ? tool.resolveManifest(manifestContext)
-        : tool.manifest,
-    )
-    .filter((m): m is BuiltinToolManifest => !!m) as LobeToolManifest[];
-
-  // Combine all manifests, then drop anything whose identifier the caller
-  // has explicitly forbidden for this turn. The post-merge filter closes
-  // the second half of the wall: an installed plugin or a
-  // Skill/Composio manifest claiming `lobe-remote-device` would otherwise
-  // slip through `buildAllowedBuiltinTools` (which only touches the
-  // builtin source).
-  const combinedManifests = [
-    ...pluginManifests,
-    ...builtinManifests,
-    ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
-  ];
-  const allManifests = excludeIdentifiers
-    ? combinedManifests.filter((m) => !excludeIdentifiers.has(m.identifier))
-    : combinedManifests;
-
   log(
-    'Creating ToolsEngine with %d plugin manifests, %d builtin manifests, %d additional manifests, %d excluded',
-    pluginManifests.length,
-    builtinManifests.length,
+    'Creating ToolsEngine with %d manifests (%d installed plugins, %d additional, %d excluded)',
+    manifests.length,
+    context.installedPlugins.length,
     additionalManifests.length,
-    combinedManifests.length - allManifests.length,
+    excludeIdentifiers?.size ?? 0,
   );
 
   return new ToolsEngine({
     defaultToolIds,
     enableChecker,
     functionCallChecker: context.isModelSupportToolUse,
-    manifestSchemas: allManifests,
+    manifestSchemas: manifests,
   });
 };
 
