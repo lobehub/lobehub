@@ -1346,7 +1346,6 @@ table environments {
   workspace_id text
   name varchar(255) [not null]
   description text
-  provider text [not null]
   enabled boolean [not null, default: true]
   configuration jsonb [not null]
   configuration_version integer [not null, default: 1]
@@ -1357,6 +1356,38 @@ table environments {
   indexes {
     user_id [name: 'environments_user_id_idx']
     workspace_id [name: 'environments_workspace_id_idx']
+
+
+
+  }
+}
+
+table environment_instances {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  environment_id uuid [not null]
+  name varchar(255) [not null]
+  kind text [not null]
+  device_id uuid
+  provider text
+  provider_scope text
+  provider_resource_id text
+  working_directory text [not null]
+  configuration_version integer [not null]
+  configuration_snapshot jsonb [not null]
+  configuration jsonb
+  enabled boolean [not null, default: true]
+  status text [not null, default: 'pending']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (environment_id, id) [name: 'environment_instances_environment_id_id_unique', unique]
+    (device_id, working_directory) [name: 'environment_instances_device_path_unique', unique]
+    (kind, provider, provider_scope, provider_resource_id, working_directory) [name: 'environment_instances_provider_path_unique', unique]
+    environment_id [name: 'environment_instances_environment_id_idx']
+
+
 
 
 
@@ -2786,6 +2817,7 @@ table project_environments {
   environment_id uuid [not null]
   workspace_id text
   added_by_user_id text
+  default_instance_id uuid
   enabled boolean [not null, default: true]
   is_default boolean [not null, default: false]
   sort_order integer [not null, default: 0]
@@ -2794,6 +2826,8 @@ table project_environments {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+
+    default_instance_id [name: 'project_environments_default_instance_id_idx']
     (project_id, environment_id) [name: 'project_environments_project_environment_unique', unique]
     project_id [name: 'project_environments_project_default_unique', unique]
     (project_id, sort_order) [name: 'project_environments_project_sort_order_idx']

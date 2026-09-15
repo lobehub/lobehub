@@ -24,6 +24,7 @@ export * from './documentHistory';
 export * from './documentLike';
 export * from './documentShare';
 export * from './environment';
+export * from './environmentInstance';
 export * from './expertise';
 export * from './file';
 export * from './ftsSearchSyncOutbox';

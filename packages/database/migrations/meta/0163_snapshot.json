@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "20e1d301-835c-489c-90d6-a5c70d7c3d14",
+  "id": "43b25228-f1bc-4ac7-a6e3-a5f814cc7e2c",
   "policies": {},
   "prevId": "d8e70660-8cee-4c41-a638-39e7de0dffa2",
   "roles": {},
@@ -11371,12 +11371,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "enabled": {
           "name": "enabled",
           "type": "boolean",
@@ -11479,10 +11473,6 @@
           "name": "environments_name_not_empty",
           "value": "length(btrim(\"environments\".\"name\")) > 0"
         },
-        "environments_provider_not_empty": {
-          "name": "environments_provider_not_empty",
-          "value": "length(btrim(\"environments\".\"provider\")) > 0"
-        },
         "environments_configuration_version_positive": {
           "name": "environments_configuration_version_positive",
           "value": "\"environments\".\"configuration_version\" > 0"
@@ -11490,6 +11480,270 @@
         "environments_configuration_object": {
           "name": "environments_configuration_object",
           "value": "jsonb_typeof(\"environments\".\"configuration\") = 'object'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.environment_instances": {
+      "name": "environment_instances",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "environment_id": {
+          "name": "environment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_id": {
+          "name": "device_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_scope": {
+          "name": "provider_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_resource_id": {
+          "name": "provider_resource_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "working_directory": {
+          "name": "working_directory",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "configuration_version": {
+          "name": "configuration_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "configuration_snapshot": {
+          "name": "configuration_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "configuration": {
+          "name": "configuration",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "accessed_at": {
+          "name": "accessed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "environment_instances_environment_id_id_unique": {
+          "name": "environment_instances_environment_id_id_unique",
+          "columns": [
+            {
+              "expression": "environment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "environment_instances_device_path_unique": {
+          "name": "environment_instances_device_path_unique",
+          "columns": [
+            {
+              "expression": "device_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "working_directory",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"environment_instances\".\"device_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "environment_instances_provider_path_unique": {
+          "name": "environment_instances_provider_path_unique",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_scope",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_resource_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "working_directory",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"environment_instances\".\"device_id\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "environment_instances_environment_id_idx": {
+          "name": "environment_instances_environment_id_idx",
+          "columns": [
+            {
+              "expression": "environment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "environment_instances_environment_id_environments_id_fk": {
+          "name": "environment_instances_environment_id_environments_id_fk",
+          "tableFrom": "environment_instances",
+          "tableTo": "environments",
+          "columnsFrom": ["environment_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "environment_instances_device_id_devices_id_fk": {
+          "name": "environment_instances_device_id_devices_id_fk",
+          "tableFrom": "environment_instances",
+          "tableTo": "devices",
+          "columnsFrom": ["device_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "environment_instances_name_not_empty": {
+          "name": "environment_instances_name_not_empty",
+          "value": "length(btrim(\"environment_instances\".\"name\")) > 0"
+        },
+        "environment_instances_directory_not_empty": {
+          "name": "environment_instances_directory_not_empty",
+          "value": "length(btrim(\"environment_instances\".\"working_directory\")) > 0"
+        },
+        "environment_instances_version_positive": {
+          "name": "environment_instances_version_positive",
+          "value": "\"environment_instances\".\"configuration_version\" > 0"
+        },
+        "environment_instances_snapshot_object": {
+          "name": "environment_instances_snapshot_object",
+          "value": "jsonb_typeof(\"environment_instances\".\"configuration_snapshot\") = 'object'"
+        },
+        "environment_instances_configuration_object": {
+          "name": "environment_instances_configuration_object",
+          "value": "\"environment_instances\".\"configuration\" IS NULL OR jsonb_typeof(\"environment_instances\".\"configuration\") = 'object'"
+        },
+        "environment_instances_binding": {
+          "name": "environment_instances_binding",
+          "value": "(\n    \"environment_instances\".\"kind\" = 'device' AND \"environment_instances\".\"device_id\" IS NOT NULL AND \"environment_instances\".\"provider\" IS NULL AND \"environment_instances\".\"provider_scope\" IS NULL AND \"environment_instances\".\"provider_resource_id\" IS NULL\n  ) OR (\n    \"environment_instances\".\"kind\" <> 'device' AND \"environment_instances\".\"device_id\" IS NULL AND\n    \"environment_instances\".\"provider\" IS NOT NULL AND length(btrim(\"environment_instances\".\"provider\")) > 0 AND\n    \"environment_instances\".\"provider_scope\" IS NOT NULL AND length(btrim(\"environment_instances\".\"provider_scope\")) > 0 AND\n    \"environment_instances\".\"provider_resource_id\" IS NOT NULL AND length(btrim(\"environment_instances\".\"provider_resource_id\")) > 0\n  )"
         }
       },
       "isRLSEnabled": false
@@ -23174,6 +23428,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "default_instance_id": {
+          "name": "default_instance_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "enabled": {
           "name": "enabled",
           "type": "boolean",
@@ -23218,6 +23478,21 @@
         }
       },
       "indexes": {
+        "project_environments_default_instance_id_idx": {
+          "name": "project_environments_default_instance_id_idx",
+          "columns": [
+            {
+              "expression": "default_instance_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "project_environments_project_environment_unique": {
           "name": "project_environments_project_environment_unique",
           "columns": [
@@ -23357,6 +23632,15 @@
           "columnsFrom": ["added_by_user_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "project_environments_default_instance_fk": {
+          "name": "project_environments_default_instance_fk",
+          "tableFrom": "project_environments",
+          "tableTo": "environment_instances",
+          "columnsFrom": ["environment_id", "default_instance_id"],
+          "columnsTo": ["environment_id", "id"],
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },

@@ -31,8 +31,6 @@ export const environments = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'restrict' }),
     name: varchar('name', { length: 255 }).notNull(),
     description: text('description'),
-    /** Adapter identifier; the attached resource ID is scoped to this provider's configuration. */
-    provider: text('provider').notNull(),
     /** Registration availability, not the running/stopped state of an instance. */
     enabled: boolean('enabled').notNull().default(true),
     configuration: jsonb('configuration').$type<EnvironmentConfiguration>().notNull(),
@@ -44,7 +42,6 @@ export const environments = pgTable(
     index('environments_user_id_idx').on(t.userId),
     index('environments_workspace_id_idx').on(t.workspaceId),
     check('environments_name_not_empty', sql`length(btrim(${t.name})) > 0`),
-    check('environments_provider_not_empty', sql`length(btrim(${t.provider})) > 0`),
     check('environments_configuration_version_positive', sql`${t.configurationVersion} > 0`),
     check('environments_configuration_object', sql`jsonb_typeof(${t.configuration}) = 'object'`),
   ],

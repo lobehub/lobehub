@@ -1,31 +1,31 @@
-/** How a provider prepares or locates the runtime; attached resources are not platform-owned. */
-export type EnvironmentRuntime =
-  | { image: string; kind: 'container' }
-  | { kind: 'virtualMachine'; templateId: string }
-  | { kind: 'attached'; resourceId: string };
+/** Abstract source material; paths are relative destinations within an instance. */
+export type EnvironmentSource =
+  | { kind: 'git'; path?: string; ref?: string; url: string }
+  | { kind: 'files'; path?: string; uri: string };
 
-/** Requested capacity, not a report of resources actually allocated by a provider. */
-export interface EnvironmentResourceRequest {
+export interface EnvironmentResourceRequirements {
   cpu?: number;
-  gpu?: {
-    count: number;
-    memoryGiB?: number;
-    model?: string;
-  };
+  gpu?: { count: number; memoryGiB?: number; model?: string };
   memoryGiB?: number;
 }
 
-/**
- * Persisted registration contract. Provider adapters must validate supported settings
- * before execution. Credentials and live instance state must never be stored here.
- */
+/** Portable definition, shared by device, sandbox and cluster instances. No credentials. */
 export interface EnvironmentConfiguration {
-  /** Run when preparing a new runtime, not on every conversation turn. */
   bootstrapCommand?: string;
+  /** Requirements, not a selection of a particular machine or provider. */
+  requirements?: EnvironmentResourceRequirements;
+  sources?: EnvironmentSource[];
+}
+
+/** Remote hosts connected through lh are devices too. Clusters are controlled through rc. */
+export type EnvironmentInstanceKind = 'device' | 'sandbox' | 'cluster';
+
+export type EnvironmentInstanceStatus = 'pending' | 'ready' | 'stopped' | 'error';
+
+/** Instance-specific choices. Actual resource observation belongs to the runtime adapter. */
+export interface EnvironmentInstanceConfiguration {
   /** Omitted means no automatic idle shutdown is requested. */
   idleTimeoutSeconds?: number;
-  resources?: EnvironmentResourceRequest;
-  runtime: EnvironmentRuntime;
-  /** A runtime path, not a repository URL or a persistence guarantee. */
-  workingDirectory?: string;
+  image?: string;
+  resources?: EnvironmentResourceRequirements;
 }

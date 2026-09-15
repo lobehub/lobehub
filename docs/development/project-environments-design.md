@@ -1,210 +1,108 @@
-# Project Environment 表设计草案
+# Environment：抽象资源与实例
 
-状态：本 PR 实现环境登记与项目关联的 schema、共享配置类型及迁移；其余内容是后续设计边界。
+本 PR 提供三张表、共享配置类型、数据库约束测试及一份尚未发布的迁移。没有新增 Jobs，也没有接入运行工具、API、Topic 路由或自动同步。
 
-## 本 PR 的实际范围
+## 核心定义
 
-- 新增 environments 与 project\_environments，使用独立 UUID 主键。
-- Environment 使用 enabled 表达登记是否可用；本轮不加 desired\_state、删除状态或实例控制字段。
-- 配置支持 container/image、virtualMachine/templateId、attached/resourceId，附带可选资源请求、工作目录、初始化命令和空闲超时；只是类型契约，不代表 Provider 已接入。
-- 平台内部设备外键、凭据绑定、存储、实例、Topic 选择与执行定位后续接入。attached.resourceId 仅为外部 Provider 的资源引用，不能代替内部 devices 外键。
-- API / 模型本轮不新增；JSONB 深层配置验证、跨资源同租户校验、配置版本递增和环境 enabled 与关联有效性的联合判断，须在写入 / 执行服务接入时实现。SQL FK 只保证引用存在，不提供权限隔离。
-- 用户与 Workspace 删除被环境 FK RESTRICT 阻止，直到显式清理环境记录；未来云资源启用前必须接入对应删除流程。项目删除仅级联关联表。
-- 以下候选字段与生命周期讨论以本节的交付范围为准。
+Environment 是抽象工作资源：Git 仓库、文件来源、初始化方式和必要资源要求。它独立于 Project、Agent、Device 和云端 Provider 存在。
 
-## 目标与边界
+Instance 是该资源的一份具体落地，分为：
 
-Environment 是可跨 Topic 使用、在运行实例重建后仍保持身份的工作环境。
-目标覆盖代码开发、日常文件工作和模型训练；普通 Topic sandbox 和已有设备目录继续兼容。
-Environment 提供工作条件，不定义工作流程；不引入 Jobs / Attempts 表。
-Environment 不等同于代码仓库、工作目录、一次 Agent Operation 或应用 Deployment。
+- `device`：用户设备上的一份目录。通过 `lh connect` 接入的远端开发机器也属于 device。
+- `sandbox`：沙箱中的一份工作环境。
+- `cluster`：通过 rc 控制的集群资源中的一份工作环境。
 
-本稿先讨论数据契约。字段进入生产 schema 时必须同时有明确的读写方；不预留无消费者的 metadata/config 大杂烩。
+多个 Project 关联同一 Environment 表示共享抽象定义。只有选择同一个 Instance 才表示共享具体工作目录和运行资源。不同实例的文件不自动同步。
 
-## 已确定：项目通过关联接入 Environment
+```mermaid
+flowchart LR
+    P[Project] --> PE[project_environments]
+    PE --> E[Environment 抽象资源]
+    E --> I[environment_instances]
+    PE -. 默认实例 .-> I
+    I --> D[device / lh connect]
+    I --> S[sandbox]
+    I --> C[cluster / rc]
+```
 
-Environment 独立于 Project 存在；Project 与 Environment 使用关联表建模。
-一个 Project 可关联多个 Environment，一个 Environment 可被多个 Project 关联。
-环境授权独立于项目关联，移除关联不销毁环境。
-以下个人 / Workspace 归属与同租户限制是首版建议，尚待确定跨范围共享需求。
+## environments
 
-## 核心主表：environments
+| 字段                     | 职责                                              |
+| ------------------------ | ------------------------------------------------- |
+| id                       | UUID，稳定资源身份                                |
+| user\_id / workspace\_id | 个人或 Workspace 归属，沿用仓库 scope 语义        |
+| name / description       | 用户可读标识                                      |
+| enabled                  | 环境登记是否可用，不是实例运行状态                |
+| configuration            | 明确类型的抽象配置，不含 Provider、设备或物理路径 |
+| configuration\_version   | 配置版本，后续写入服务负责递增                    |
+| timestamps               | 仓库标准时间字段                                  |
 
-| 字段                                     | 类型 / 可空性                 | 语义与写入方                                                                                          |
-| ---------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| id                                       | uuid PK，默认生成             | 稳定环境 ID，与 Provider 实例 ID 分开                                                                 |
-| user\_id                                 | text NOT NULL FK              | 遵循仓库资源 scope 约定：个人模式用于归属，Workspace 模式记录创建者；删除策略须与外部资源清理一起设计 |
-| workspace\_id                            | text NULL FK                  | 环境自身的租户范围；NULL 表示个人资源，不从关联项目改变归属                                           |
-| name                                     | varchar(255) NOT NULL         | 展示名称，创建 / 编辑写入                                                                             |
-| description                              | text NULL                     | 用户说明                                                                                              |
-| provider                                 | text NOT NULL                 | Provider 选择，由创建服务验证支持情况；不建 pgEnum                                                    |
-| enabled                                  | boolean NOT NULL DEFAULT true | 登记是否可用，不表示实例正在运行                                                                      |
-| configuration                            | typed jsonb NOT NULL          | 实际支持的启动配置，字段契约见下文                                                                    |
-| configuration\_version                   | integer NOT NULL DEFAULT 1    | 配置更新递增；实例记录启动时版本                                                                      |
-| created\_at / updated\_at / accessed\_at | 仓库 timestamps               | 遵循现有 helpers                                                                                      |
+configuration 包含可选的 sources（git URL/ref/ 相对目标路径，或文件来源 URI / 相对目标路径）、bootstrapCommand 和 requirements（CPU / 内存 / GPU）。来源路径是实例内的相对布局，不是某台机器的绝对路径。无来源的现有文件夹也可使用空配置登记。
 
-configuration 必须能表达不同运行后端，而非要求全部环境提供容器 image。
-候选契约包含 runtime（容器镜像、VM 模板或已有运行端引用的判别联合）、工作目录、初始化步骤、资源请求和回收策略。
-资源请求需能扩展 CPU、内存、GPU 型号 / 数量 / 显存要求；运行端实际分配结果保存在实例侧。
-每个字段随具体 Provider 消费方落地；不把不支持的字段先做成空占位。
-仓库 URL、秘密值、实际实例 ID、实时健康状态不放 configuration。
-配置应使用共享领域类型；跨 Provider 字段不同则使用带判别字段的类型并在服务边界验证。
+不把 code /office/training 作为互斥环境类型。资源要求只描述需要什么能力，实际选用的 Provider、镜像和资源规格属于 Instance。
 
-约束与索引：
+## environment\_instances
 
-- user\_id 和 workspace\_id 查询索引；名称去空白后不能为空。
-- configuration\_version > 0。
-- 名称首版不强制唯一，以 ID 标识环境，避免重命名引入额外产品限制。
-- 环境销毁影响所有关联项目，必须由环境管理权限控制；项目管理权限不自动赋予销毁权。
-- 环境硬删除前需完成云端清理；用户 / Workspace 删除不得直接级联抹掉尚未清理的资源依据。
+| 字段                                                | 职责                                                              |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| id / environment\_id                                | 实例身份和所属环境                                                |
+| name / kind                                         | 名称与 device、sandbox、cluster 分类                              |
+| device\_id                                          | device 实例使用的内部 devices.id 外键                             |
+| provider / provider\_scope / provider\_resource\_id | sandbox/cluster 的适配器及外部资源身份；cluster 的控制适配器为 rc |
+| working\_directory                                  | 该实例实际工作目录                                                |
+| configuration\_version / configuration\_snapshot    | 实例采用的抽象配置版本及快照                                      |
+| configuration                                       | 实例配置：可选镜像、资源选择、空闲超时                            |
+| enabled                                             | 是否允许使用此实例                                                |
+| status                                              | 最近记录的 pending /ready/stopped/error，默认 pending             |
+| timestamps                                          | 仓库标准时间字段                                                  |
 
-## 项目关联表：project\_environments
+实例归属从 Environment 推导，不重复保存可漂移的租户字段。使用实例还必须检查 Device 或外部资源的权限。
 
-| 字段                | 类型 / 可空性                  | 语义                                                  |
-| ------------------- | ------------------------------ | ----------------------------------------------------- |
-| id                  | uuid PK，默认生成              | 关联自身的稳定 ID                                     |
-| project\_id         | text NOT NULL FK               | 项目，ON DELETE CASCADE 只删除关联                    |
-| environment\_id     | uuid NOT NULL FK               | 被关联环境；建议 RESTRICT，显式处理解绑后再硬删除环境 |
-| workspace\_id       | text NULL FK                   | 从项目派生，用于项目范围查询；不作为独立授权依据      |
-| added\_by\_user\_id | text NULL FK                   | 谁建立关联，ON DELETE SET NULL                        |
-| is\_default         | boolean NOT NULL DEFAULT false | 该项目内是否默认，与环境自身无关                      |
-| enabled             | boolean NOT NULL DEFAULT true  | 是否允许该项目继续使用此关联                          |
-| sort\_order         | integer NOT NULL DEFAULT 0     | 项目内显示顺序                                        |
-| timestamps          | 仓库 timestamps                | 关联创建与更新时间                                    |
+实例表本轮登记已知运行端，sandbox/cluster 需要明确的外部资源引用；尚未分配资源的创建意图与调度重试不在本表本轮契约中。
 
-- unique (project\_id, environment\_id) 防止重复关联。
-- unique (project\_id) WHERE is\_default = true，保证每个项目最多一个默认关联。
-- CHECK (NOT is\_default OR enabled)，停用默认关联时同事务清除或切换默认值。
-- environment\_id 反向索引，用于查询影响哪些项目；项目列表使用 (project\_id, sort\_order) 索引。
-- 首版建议只允许同 Workspace 或同一个人的个人范围内关联；跨范围共享需要显式授权模型。
-- 创建关联时校验项目管理权限与环境使用权限；执行时重新校验环境状态及有效权限。
-- 项目内可用能力不能超过环境授予的权限。首版不预建没有执行端消费者的 permission JSON。
-- 环境逻辑删除时事务性停用所有关联并清除默认值；单表 CHECK 无法检查另一张表的生命周期。
-- 项目 scope 迁移时重新校验所有关联，不能顺带更改共享环境的归属。
-- 共享 Environment 表示共享同一个资源，不会自动产生独立文件或进程隔离；项目隔离能力由后续 checkout /instance 模型明确提供。
+约束：
 
-## 运行接入时增加：environment\_instances
+- device 必须有 device\_id，不能混入 Provider 绑定。
+- 非 device 的外部绑定必须提供非空 Provider、scope、resource ID，并且不能带 device\_id。当前共享类型只开放 sandbox 和 cluster。
+- 同一设备上的同一路径只能登记一份实例；不同目录可以是同一环境的不同实例。
+- 外部实例按 kind、Provider、scope、resource ID、路径去重，不能假定外部 ID 跨账户唯一。
+- 配置版本必须为正，配置快照必须是 JSON 对象。
+- 删除设备或抽象环境前必须显式清理实例绑定。删除实例记录不自动删除文件或外部资源。
 
-若本次只完成环境登记 CRUD，可先不建实例表；在真正创建云端实例的同一批变更中加入它。
+ready 是登记状态，不证明设备此刻在线；后续执行服务必须结合 Device Gateway 或 Provider 状态检查。实例不能仅因 Topic 不活跃而被自动回收，后台训练等进程需明确保活策略。
 
-| 字段                                             | 语义                                                                      |
-| ------------------------------------------------ | ------------------------------------------------------------------------- |
-| id                                               | uuid PK                                                                   |
-| environment\_id                                  | 环境 FK，历史记录存在时限制直接硬删除环境                                 |
-| provider / provider\_scope\_key                  | 启动时的 Provider 与非秘密账户 / 部署范围快照                             |
-| provider\_instance\_id                           | 外部实例 ID；创建完成前允许 NULL                                          |
-| provisioning\_key                                | 调用外部创建前持久化的幂等键                                              |
-| configuration\_version / configuration\_snapshot | 启动时实际配置，不含凭据                                                  |
-| status                                           | provisioning / running / stopping / stopped / failed / deleting / deleted |
-| last\_heartbeat\_at                              | 最近一次被控制服务确认存活的时间                                          |
-| started\_at / stopped\_at                        | 实际生命周期时间                                                          |
-| error                                            | 明确类型的错误 code、message，写入前脱敏                                  |
-| timestamps                                       | 创建与更新时间                                                            |
+## project\_environments
 
-外部唯一性使用 (provider, provider\_scope\_key, provider\_instance\_id)，不假设实例 ID 跨账户全局唯一。
-provisioning\_key 唯一；不对 environment\_id 施加全局 “一个非终结实例” 唯一约束。
-首版可以按 Provider 的运行模式限制单实例；同一 Environment 的历史实例与当前实例分开，不预建分布式调度能力。
-环境拥有 / 创建的实例与仅连接的外部运行端必须区分，后者解除连接不代表销毁底层机器。
-用条件状态更新 / 版本控制防止旧回调覆盖新状态。
-先持久化创建意图，再调用 Provider；失败重试复用幂等键，控制服务负责对账。
-DB 状态不等于云端事实，删除完成必须以外部资源释放确认作为依据。
+| 字段                                | 职责                           |
+| ----------------------------------- | ------------------------------ |
+| id / project\_id / environment\_id  | 项目与抽象环境的关联           |
+| workspace\_id / added\_by\_user\_id | 项目 scope 投影与添加人        |
+| enabled / is\_default / sort\_order | 项目内启用、默认环境选择与排序 |
+| default\_instance\_id               | 可选的项目级默认实例偏好       |
+| timestamps                          | 仓库标准时间字段               |
 
-## Topic 和 Operation 关联
+项目和环境关联唯一；每个项目最多一个默认环境，默认关联必须启用。
 
-- topics.project\_id 保持业务归属语义。
-- Topic 接入环境选择时增加 environment\_id（可空）；NULL 表示继承项目默认环境。
-  因此修改项目默认值会影响未显式绑定的 Topic 的未来运行；此行为需要在产品设计中明确。
-- 若用户选择了显式环境，必须存在当前项目到该环境的有效关联，并通过租户和环境权限校验。
-- Topic 首版建议仍保存 environment\_id：关联删除后保留显式选择，下一次运行因缺少有效关联而拒绝，不把它误当作默认继承。
-- 显式绑定失效时停止执行并提示修复，不静默换到另一个环境。
-  因此优先保留逻辑删除环境行，避免 SET NULL 将 “失效绑定” 误解释为 “继承默认”。
-- 不向全部旧 Topic 回填环境；Topic 不属于项目时保持现有 sandbox 路径。
-- agent\_operations 在运行接入时记录实际 instance\_id 和必要的执行配置快照；历史不能通过 Topic 当前配置反推。
-- 当前 project\_working\_directories 的 device\_id = NULL 表示设备已移除，不用于表示云端。
-- 同时存在本地目录绑定和云端环境选择时，启动入口必须明确选定目标，不按字段是否非空随意猜测。
+(environment\_id, default\_instance\_id) 通过复合外键引用实例的 (environment\_id, id)，防止选中另一环境的实例。实例表仍使用独立 UUID 主键；复合唯一索引仅用于外键约束。
 
-## 三场景推演后的模型补充（提案，尚未实现）
+默认实例是项目偏好，不是权限授予。未设置时由后续执行选择流程决定，不能静默挑选其他用户的设备。删除被默认引用的实例前先显式清除或切换默认选择。
 
-结论：现有主表与项目关联方向成立，但 image + workingDirectory + 单实例不足以完整支持三个场景。
-Environment 表保存稳定身份和配置；存储与实际实例通过独立实体关联，不能把三类业务全塞入 configuration。
+## 三个场景
 
-### 场景一：代码仓库开发
+| 场景         | Environment                         | Instance                                          |
+| ------------ | ----------------------------------- | ------------------------------------------------- |
+| 代码开发     | GitHub URL、分支要求、初始化命令    | Mac 本地 checkout、云端 sandbox 中的一份 checkout |
+| 日常文件工作 | 文档 / 素材来源和处理要求，可无 Git | 设备文件夹或沙箱工作目录                          |
+| 模型训练     | 数据来源、准备步骤、GPU 要求        | 本地 GPU 设备、GPU sandbox 或 rc 集群中的实例     |
 
-项目关联开发 Environment → 创建实例 → 准备持久目录及代码 checkout → Topic 执行修改 / 测试 → 保存未提交变更与产物 → 停止并重新启动后继续工作。
+训练进程的启动、查询和取消由执行工具或外部系统负责；Environment 不增加 Jobs。集群调度、分布式训练拓扑也不属于本 PR。
 
-- 仓库是文件来源，工作目录是运行时位置，两者分开。
-- 多 Topic 并行修改需要明确 checkout/worktree 或实例隔离策略。
-- 同一路径在不同实例上并不代表同一份数据，实例必须关联实际存储。
-- Operation 记录执行实例与代码版本；新 Topic 不要求重新创建 Environment。
-- 浏览器预览等服务端点随实例发布，不是环境永久 URL。
+## 权限、删除与后续接入
 
-### 场景二：日常工作文件夹
+数据库约束不代替授权。项目、环境和默认实例的租户 / 访问校验，配置深层验证，路径规范化、去重与相对路径越界检查，都须在新增写入 / 执行服务时实现。仅添加关联不扩大环境或设备权限。
 
-项目关联办公 Environment → 挂载文档、图纸或视频素材 → 工具或用户打开应用处理 → 保存输出与版本 → 关闭实例后保留工作文件。
+删除 Project 只级联删除关联。删除 Environment 需要先清理项目关联和实例；用户 / Workspace 删除也受到 Environment 的 RESTRICT 保护，必须接入资源清理流程后再启用产品写入。
 
-- Git、仓库字段均可缺省；持久存储是独立能力。
-- 脚本处理文档与操作完整 GUI 应用是不同执行能力，不能仅凭文件扩展名判定所需环境。
-- runtime 需支持适用的 OS / 架构与容器、VM、已有设备等后端；声明配置不等于 Provider 已支持。
-- CAD / 视频等具体应用的 OS、授权、图形能力和远程桌面兼容性需按选定产品验证，本稿不承诺软件兼容性。
-- 文件访问需要区分只读素材、可写成果与可丢弃缓存；恢复、锁和冲突策略由存储与应用层实现。
-- 仅将对象上传到文件表不代表已具备可供应用读写的文件系统。
+后续需要接入实例的实际创建 / 发现、Topic 的实例选择与 Operation 的执行溯源，以及文件持久化、同步和凭据授权。working\_directory 不承诺持久化；来源 URI 不提供访问凭据；configuration 中不能存放秘密值。
 
-### 场景三：模型训练
-
-项目关联训练 Environment → 获取适用算力与存储 → 执行工具启动训练进程 → 查询日志 / 保存 checkpoint → 完成后释放算力。
-
-- Environment 保存资源请求和运行配置；实例记录实际 GPU/CPU 等分配结果。
-- Task 表达业务工作，Operation 表达 Agent 执行；训练进程或外部平台任务标识由工具返回、查询和取消，不增加 Environment Jobs。
-- Agent 回合结束不代表训练进程结束；环境不得仅按聊天活跃度自动回收。
-- 首版若不能可靠检测后台工作，使用显式停止策略；后续可由运行端提供进程活跃检测或保活机制。
-- 数据集、checkpoint 和输出模型放持久存储；恢复逻辑属于训练程序和执行工具。
-
-### 需要明确的公共关系
-
-| 实体                           | 关键职责 / 候选字段                                                            |
-| ------------------------------ | ------------------------------------------------------------------------------ |
-| environments                   | 稳定身份、租户、Provider、runtime 与资源请求配置及其版本                       |
-| project\_environments          | 项目关联、启用与默认选择                                                       |
-| environment\_instances         | 实际后端引用、生命周期、已解析配置、实际资源、观测到的能力                     |
-| 存储资源实体（命名待复用检查） | 租户、后端及外部引用、生命周期 / 保留策略；独立于实例存在                      |
-| environment\_mounts            | environment\_id、storage\_id、源子路径、目标位置、读写模式；同环境目标位置唯一 |
-
-存储访问方式必须明确：文件系统挂载、对象 API 或下载同步不能被当作同一种能力。
-存储绑定与挂载需要独立鉴权；Environment 的访问权不能自动授予任意存储资源权限。
-project\_environments 的默认选择只是一项用户偏好，调度还需匹配此次任务的运行能力和资源要求。
-Environment 不添加 code /office/training 互斥类型；一个环境可以同时承担文档处理与代码开发。
-同一环境关联多个项目表示共享同一资源。若只想复用安装配置但隔离数据，应由模板创建不同 Environment。
-Provider 能力不满足请求时明确拒绝；不得悄悄删除 GPU、GUI 或持久化等要求后运行。
-
-这部分定义的是支持边界，不要求本轮一次性创建所有表。首批两张表仅能宣称完成环境登记与项目关联，完整支持三场景需对应执行与存储链路验收。
-
-## 后续实现顺序
-
-- 代码来源与 checkout：多仓库、commit/branch、挂载路径、Task/worktree 隔离。
-- 持久存储与 mounts：是三个场景的公共基础，优先于特定 Git checkout 扩展。仅登记 Environment 不承诺实例重建后文件可恢复。
-- 凭据绑定：复用现有加密凭据系统，保存授权引用，不保存明文环境变量秘密。
-- 运行端访问：终端、端口预览、远程桌面等随 Provider 真实能力接入，连接地址和短期令牌不放静态配置。
-- 后台进程：由执行工具管理；环境层只确保回收行为与后台运行承诺一致。
-- 长期 Deployment：按真实产品能力单独接入。
-
-## 首次实现验收项
-
-1. 环境 CRUD 与项目关联 CRUD 的个人和 Workspace 隔离，以及两者权限分离。
-2. 并发设置默认环境仍最多保留一个默认值。
-3. 同一环境可关联两个有权限的项目；重复关联和未授权跨租户关联被拒绝。
-4. 删除项目或解绑仅移除关联，不销毁共享环境；显式绑定已失效的 Topic 不静默回退。
-5. 运行接入后补充并发启动幂等、旧回调拒绝、实际执行实例溯源的测试。
-6. 销毁共享环境时所有关联项目正确失效；父级用户 / Workspace 删除不会留下不可追踪的云端资源。
-
-项目关联方式已确定；环境租户归属和最小创建流程确定后，再写共享类型、Drizzle schema、模型 / 测试并生成迁移。
-
-## 收敛后的必要补充
-
-1. 运行绑定：区分平台创建的资源与已有设备 / 外部资源，保存可解析的运行端引用；Provider 名称不足以定位资源。引用不用自由字符串假装本地外键。
-2. 配置契约：runtime、资源请求、工作目录、初始化步骤、非秘密变量与秘密引用，均按实际消费者定义；不是互斥的业务场景类型。
-3. 存储契约：独立资源身份、访问方式、挂载位置和读写模式；声明临时 / 持久属性以及环境删除时的保留行为。
-4. 生命周期：环境定义启用 / 停用 / 删除与实例运行状态分开；外部设备不可启动时不承诺平台可自动开机，解除连接不销毁外部资源。
-5. 使用与管理权限：关联不是授权；管理共享环境会影响所有关联项目。对获得 shell 的用户，不能用调用工具层的只读标志假装已经隔离底层文件和凭据。
-6. 执行定位：Topic 选择环境，运行时固定实际实例和 cwd；新配置只影响后续启动，历史记录保存实际配置版本。
-
-本轮建表重点是 environments 与 project\_environments 的稳定契约；实例和存储按具体接入实现，不再增加工作流实体。
+本 PR 没有产品消费入口，不要求新产品 acceptance；数据库测试与 lint 是单独质量检查，不声称已经验证了 lh、sandbox 或 rc 的运行集成。

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -12,6 +13,7 @@ import {
 
 import { timestamps } from './_helpers';
 import { environments } from './environment';
+import { environmentInstances } from './environmentInstance';
 import { projects } from './project';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -34,12 +36,20 @@ export const projectEnvironments = pgTable(
     /** Derived from the project, never accepted as an independent authorization scope. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     addedByUserId: text('added_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Optional project-wide preference; runtime selection must also check user/device access. */
+    defaultInstanceId: uuid('default_instance_id'),
     enabled: boolean('enabled').notNull().default(true),
     isDefault: boolean('is_default').notNull().default(false),
     sortOrder: integer('sort_order').notNull().default(0),
     ...timestamps,
   },
   (t) => [
+    foreignKey({
+      columns: [t.environmentId, t.defaultInstanceId],
+      foreignColumns: [environmentInstances.environmentId, environmentInstances.id],
+      name: 'project_environments_default_instance_fk',
+    }).onDelete('restrict'),
+    index('project_environments_default_instance_id_idx').on(t.defaultInstanceId),
     uniqueIndex('project_environments_project_environment_unique').on(t.projectId, t.environmentId),
     uniqueIndex('project_environments_project_default_unique')
       .on(t.projectId)
