@@ -179,6 +179,7 @@ class ChatService {
     const modelParams = await resolveBrowserModelParams({
       agentId: targetAgentId,
       chatConfig,
+      groupId,
       model: payload.model,
       provider: payload.provider!,
       searchDecision: searchConfig,

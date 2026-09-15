@@ -36,15 +36,34 @@ const toModelCard = (item: EnabledAiModel | LobeDefaultAiModelListItem) => ({
  * model-instance reasoning config and the topic's reasoning pin — all read
  * from the stores, never the network.
  */
-export const createBrowserModelParamsProviders = (): ModelParamsProviders => ({
+export interface BrowserModelParamsSource {
+  /** The group the run belongs to; a topic listed under a group is a group topic. */
+  groupId?: string;
+}
+
+interface StoredTopicOwnership {
+  agentId?: string | null;
+  groupId?: string | null;
+}
+
+export const createBrowserModelParamsProviders = ({
+  groupId,
+}: BrowserModelParamsSource = {}): ModelParamsProviders => ({
   findTopicReasoningPin: async (topicId) => {
-    const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
+    const chatState = getChatStoreState();
+    const topic = topicSelectors.getTopicById(topicId)(chatState);
     if (!topic?.model) return null;
-    // The store keeps the row's ownership columns beyond the `ChatTopic` type.
-    const stored = topic as typeof topic & { agentId?: string | null; groupId?: string | null };
+    // The group sidebar's slim list projection carries neither `agentId` nor
+    // `groupId`; the detail cache (a full row) does. Prefer it, then whatever
+    // the list row kept, and finally the run's own group — a group topic
+    // whose owning agent is unknown must not pass as a personal one, or the
+    // pin would apply to every member that answers.
+    const listed = topic as typeof topic & StoredTopicOwnership;
+    const detail = chatState.topicDetailMap?.[topicId] as
+      (typeof topic & StoredTopicOwnership) | undefined;
     return {
-      agentId: stored.agentId,
-      groupId: stored.groupId,
+      agentId: detail?.agentId ?? listed.agentId,
+      groupId: detail?.groupId ?? listed.groupId ?? groupId,
       model: topic.model,
       provider: topic.provider || '',
       reasoningConfig: topic.metadata?.reasoningConfig,
@@ -72,6 +91,8 @@ export interface BrowserModelParamsContext {
   /** The answering agent; a group topic's pin only counts for it. */
   agentId?: string;
   chatConfig: LobeAgentChatConfig;
+  /** The group the run belongs to, when any. */
+  groupId?: string;
   model: string;
   provider: string;
   searchDecision?: ModelParamsRequest['searchDecision'];
@@ -100,5 +121,5 @@ export const resolveBrowserModelParams = (
       searchDecision: ctx.searchDecision,
       topicId: ctx.topicId,
     },
-    createBrowserModelParamsProviders(),
+    createBrowserModelParamsProviders({ groupId: ctx.groupId }),
   );

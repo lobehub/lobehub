@@ -26,7 +26,7 @@ beforeEach(() => {
     enabledAiModels: [reasoningCard],
     modelReasoningConfigMap: { 'openai/gpt-4': { reasoningEffort: 'low' } },
   } as any);
-  useChatStore.setState({ topicDataMap: {} } as any);
+  useChatStore.setState({ topicDataMap: {}, topicDetailMap: {} } as any);
 });
 
 describe('createBrowserModelParamsProviders', () => {
@@ -145,6 +145,54 @@ describe('resolveBrowserModelParams', () => {
 
     const owner = await resolveBrowserModelParams({ ...base, agentId: 'agt_2' });
     expect(owner.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
+  });
+
+  it('withholds a group topic pin whose owner is unknown and applies it once the detail row names it', async () => {
+    // The group list projection carries no ownership columns.
+    useChatStore.setState({
+      topicDataMap: {
+        group_grp_1: {
+          items: [
+            {
+              id: 'tpc_1',
+              metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+              model: 'gpt-4',
+              provider: 'openai',
+              title: 't',
+            },
+          ],
+        },
+      },
+      topicDetailMap: {},
+    } as any);
+    const base = {
+      agentId: 'agt_1',
+      chatConfig: {},
+      groupId: 'grp_1',
+      model: 'gpt-4',
+      provider: 'openai',
+      topicId: 'tpc_1',
+    };
+
+    const unknownOwner = await resolveBrowserModelParams(base);
+    expect(unknownOwner.resolvedExtendParams).toMatchObject({ reasoning_effort: 'low' });
+
+    useChatStore.setState({
+      topicDetailMap: {
+        tpc_1: {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          id: 'tpc_1',
+          model: 'gpt-4',
+          provider: 'openai',
+        },
+      },
+    } as any);
+    const owner = await resolveBrowserModelParams(base);
+    expect(owner.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
+
+    const member = await resolveBrowserModelParams({ ...base, agentId: 'agt_2' });
+    expect(member.resolvedExtendParams).toMatchObject({ reasoning_effort: 'low' });
   });
 
   it('returns no extend params for a model without any', async () => {
