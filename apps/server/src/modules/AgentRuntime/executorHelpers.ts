@@ -490,16 +490,6 @@ export const buildServerAgentMemberRunner = (
   };
 };
 
-export const resolveRuntimeHistoryCount = (historyCount?: number) => {
-  if (historyCount === undefined) return undefined;
-
-  // Agent config stores historical message count, excluding the current turn.
-  // Runtime executors already pass the current user/tool turn in `llmPayload.messages`;
-  // without this +1, `historyCount: 0` truncates the current message too and sends
-  // `messages: []` to providers.
-  return historyCount + 1;
-};
-
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const isOperationInterrupted = async (ctx: RuntimeExecutorContext) => {
