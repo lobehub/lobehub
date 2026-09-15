@@ -1,7 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
-import { Avatar, Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Accordion, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
@@ -160,123 +160,142 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
         <>
           {/* Collapsed Summary */}
           {(summary || safeTags.length > 0) && (
-            <Accordion gap={0}>
-              <AccordionItem
-                itemKey="summary"
-                paddingBlock={8}
-                paddingInline={8}
-                styles={{
-                  base: { marginBlock: 4, marginInline: 4 },
-                }}
-                title={
-                  <Text fontSize={12} type={'secondary'} weight={500}>
-                    Summary
-                  </Text>
-                }
-              >
-                <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
-                  {summary && <div className={styles.summary}>{summary}</div>}
-                  {details && <div className={styles.detail}>{details}</div>}
-                  {safeTags.length > 0 && (
-                    <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
-                      {safeTags.map((tag, index) => (
-                        <Tag key={index}>{tag}</Tag>
-                      ))}
+            <Accordion
+              gap={0}
+              items={[
+                {
+                  children: (
+                    <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
+                      {summary && <div className={styles.summary}>{summary}</div>}
+                      {details && <div className={styles.detail}>{details}</div>}
+                      {safeTags.length > 0 && (
+                        <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
+                          {safeTags.map((tag, index) => (
+                            <Tag key={index}>{tag}</Tag>
+                          ))}
+                        </Flexbox>
+                      )}
                     </Flexbox>
-                  )}
-                </Flexbox>
-              </AccordionItem>
-            </Accordion>
+                  ),
+                  key: 'summary',
+                  title: (
+                    <Text fontSize={12} type={'secondary'} weight={500}>
+                      Summary
+                    </Text>
+                  ),
+                },
+              ]}
+              styles={{
+                content: { paddingBlock: 8, paddingInline: 8 },
+                header: { paddingBlock: 8, paddingInline: 8 },
+                item: { marginBlock: 4, marginInline: 4 },
+              }}
+            />
           )}
 
           {/* Origin Context Steps */}
           {hasContextContent && (
-            <Accordion className={styles.section} defaultExpandedKeys={['context']} gap={0}>
-              <AccordionItem
-                itemKey="context"
-                paddingBlock={8}
-                paddingInline={8}
-                title={
-                  <Text fontSize={12} type={'secondary'} weight={500}>
-                    Origin Context
-                  </Text>
-                }
-              >
-                <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
-                  <Steps
-                    className={styles.stepsContainer}
-                    current={null as any}
-                    direction="vertical"
-                    size="small"
-                    items={contextItems.map((item) => ({
-                      description: <div className={styles.stepContent}>{item.content}</div>,
-                      icon: (
-                        <Avatar
-                          shadow
-                          avatar={item.avatar}
-                          shape={'square'}
-                          size={20}
-                          style={{
-                            border: `1px solid ${cssVar.colorBorderSecondary}`,
-                            fontSize: 11,
-                          }}
-                        />
-                      ),
-                      title: (
-                        <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
-                          {item.title}
-                        </Text>
-                      ),
-                    }))}
-                  />
-                </Flexbox>
-              </AccordionItem>
-            </Accordion>
+            <Accordion
+              className={styles.section}
+              defaultValue={['context']}
+              gap={0}
+              items={[
+                {
+                  children: (
+                    <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
+                      <Steps
+                        className={styles.stepsContainer}
+                        current={null as any}
+                        direction="vertical"
+                        size="small"
+                        items={contextItems.map((item) => ({
+                          description: <div className={styles.stepContent}>{item.content}</div>,
+                          icon: (
+                            <Avatar
+                              shadow
+                              avatar={item.avatar}
+                              shape={'square'}
+                              size={20}
+                              style={{
+                                border: `1px solid ${cssVar.colorBorderSecondary}`,
+                                fontSize: 11,
+                              }}
+                            />
+                          ),
+                          title: (
+                            <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
+                              {item.title}
+                            </Text>
+                          ),
+                        }))}
+                      />
+                    </Flexbox>
+                  ),
+                  key: 'context',
+                  title: (
+                    <Text fontSize={12} type={'secondary'} weight={500}>
+                      Origin Context
+                    </Text>
+                  ),
+                },
+              ]}
+              styles={{
+                content: { paddingBlock: 8, paddingInline: 8 },
+                header: { paddingBlock: 8, paddingInline: 8 },
+              }}
+            />
           )}
 
           {/* App Context */}
           {hasAppContext && (
-            <Accordion className={styles.section} gap={0}>
-              <AccordionItem
-                itemKey="appContext"
-                paddingBlock={8}
-                paddingInline={8}
-                title={
-                  <Text fontSize={12} type={'secondary'} weight={500}>
-                    App Context
-                  </Text>
-                }
-              >
-                <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
-                  <Steps
-                    className={styles.stepsContainer}
-                    current={null as any}
-                    direction="vertical"
-                    size="small"
-                    items={appContextItems.map((item) => ({
-                      description: <div className={styles.stepContent}>{item.content}</div>,
-                      icon: (
-                        <Avatar
-                          shadow
-                          avatar={item.avatar}
-                          shape={'square'}
-                          size={20}
-                          style={{
-                            border: `1px solid ${cssVar.colorBorderSecondary}`,
-                            fontSize: 11,
-                          }}
-                        />
-                      ),
-                      title: (
-                        <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
-                          {item.title}
-                        </Text>
-                      ),
-                    }))}
-                  />
-                </Flexbox>
-              </AccordionItem>
-            </Accordion>
+            <Accordion
+              className={styles.section}
+              gap={0}
+              items={[
+                {
+                  children: (
+                    <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
+                      <Steps
+                        className={styles.stepsContainer}
+                        current={null as any}
+                        direction="vertical"
+                        size="small"
+                        items={appContextItems.map((item) => ({
+                          description: <div className={styles.stepContent}>{item.content}</div>,
+                          icon: (
+                            <Avatar
+                              shadow
+                              avatar={item.avatar}
+                              shape={'square'}
+                              size={20}
+                              style={{
+                                border: `1px solid ${cssVar.colorBorderSecondary}`,
+                                fontSize: 11,
+                              }}
+                            />
+                          ),
+                          title: (
+                            <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
+                              {item.title}
+                            </Text>
+                          ),
+                        }))}
+                      />
+                    </Flexbox>
+                  ),
+                  key: 'appContext',
+                  title: (
+                    <Text fontSize={12} type={'secondary'} weight={500}>
+                      App Context
+                    </Text>
+                  ),
+                },
+              ]}
+              styles={{
+                content: { paddingBlock: 8, paddingInline: 8 },
+                header: { paddingBlock: 8, paddingInline: 8 },
+              }}
+            />
           )}
 
           {/* Conclusion Directive */}

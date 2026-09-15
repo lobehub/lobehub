@@ -1,7 +1,7 @@
 'use client';
 
-import { Badge, Checkbox, Tag } from '@lobehub/ui/base-ui';
-import { Table, Tooltip, Typography } from 'antd';
+import { Badge, Checkbox, Tag, Tooltip } from '@lobehub/ui/base-ui';
+import { Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';

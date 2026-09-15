@@ -2,7 +2,8 @@
 
 import { type InputProps } from '@lobehub/ui';
 import { Input, Popover, stopPropagation } from '@lobehub/ui';
-import { type InputRef, type PopoverProps } from 'antd';
+import { type PopoverPlacement } from '@lobehub/ui/base-ui';
+import { type InputRef } from 'antd';
 import { type KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
@@ -38,7 +39,7 @@ export interface InlineRenameProps {
   /**
    * Popover placement
    */
-  placement?: PopoverProps['placement'];
+  placement?: PopoverPlacement;
   /**
    * Current title
    */

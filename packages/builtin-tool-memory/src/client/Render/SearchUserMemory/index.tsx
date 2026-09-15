@@ -1,10 +1,10 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Accordion, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SearchMemoryParams, SearchUserMemoryState } from '../../../types';
@@ -119,156 +119,144 @@ const SearchUserMemoryRender = memo<BuiltinRenderProps<SearchMemoryParams, Searc
       ...(preferences.length > 0 ? ['preferences'] : []),
     ];
 
+    const items = [
+      activities.length > 0 && {
+        children: (
+          <Flexbox>
+            {activities.map((item) => (
+              <MemoryItem
+                content={item.narrative}
+                key={item.id}
+                subContent={item.feedback}
+                tags={item.tags}
+                title={item.notes || item.type}
+              />
+            ))}
+          </Flexbox>
+        ),
+        key: 'activities',
+        title: (
+          <Text className={styles.sectionHeader}>
+            <span>Activities</span>
+            <Text as={'span'} type={'secondary'}>
+              {' '}
+              ({activities.length})
+            </Text>
+          </Text>
+        ),
+      },
+      contexts.length > 0 && {
+        children: (
+          <Flexbox>
+            {contexts.map((item) => (
+              <MemoryItem
+                content={item.description}
+                key={item.id}
+                subContent={item.currentStatus}
+                tags={item.tags}
+                title={item.title}
+              />
+            ))}
+          </Flexbox>
+        ),
+        key: 'contexts',
+        title: (
+          <Text className={styles.sectionHeader}>
+            <span>{t('builtins.lobe-user-memory.render.contexts')}</span>
+            <Text as={'span'} type={'secondary'}>
+              {' '}
+              ({contexts.length})
+            </Text>
+          </Text>
+        ),
+      },
+      experiences.length > 0 && {
+        children: (
+          <Flexbox>
+            {experiences.map((item) => (
+              <MemoryItem
+                content={item.situation}
+                key={item.id}
+                subContent={item.keyLearning}
+                tags={item.tags}
+                title={item.action}
+              />
+            ))}
+          </Flexbox>
+        ),
+        key: 'experiences',
+        title: (
+          <Text className={styles.sectionHeader}>
+            <span>{t('builtins.lobe-user-memory.render.experiences')}</span>
+            <Text as={'span'} type={'secondary'}>
+              {' '}
+              ({experiences.length})
+            </Text>
+          </Text>
+        ),
+      },
+      identities.length > 0 && {
+        children: (
+          <Flexbox>
+            {identities.map((item) => (
+              <MemoryItem
+                content={item.description}
+                key={item.id}
+                subContent={item.role}
+                tags={item.tags}
+                title={item.relationship || item.type}
+              />
+            ))}
+          </Flexbox>
+        ),
+        key: 'identities',
+        title: (
+          <Text className={styles.sectionHeader}>
+            <span>Identities</span>
+            <Text as={'span'} type={'secondary'}>
+              {' '}
+              ({identities.length})
+            </Text>
+          </Text>
+        ),
+      },
+      preferences.length > 0 && {
+        children: (
+          <Flexbox>
+            {preferences.map((item) => (
+              <MemoryItem
+                content={item.conclusionDirectives}
+                key={item.id}
+                subContent={item.suggestions}
+                tags={item.tags}
+              />
+            ))}
+          </Flexbox>
+        ),
+        key: 'preferences',
+        title: (
+          <Text className={styles.sectionHeader}>
+            <span>{t('builtins.lobe-user-memory.render.preferences')}</span>
+            <Text as={'span'} type={'secondary'}>
+              {' '}
+              ({preferences.length})
+            </Text>
+          </Text>
+        ),
+      },
+    ].filter(Boolean) as { children: ReactNode; key: string; title: ReactNode }[];
+
     return (
       <Flexbox className={styles.container}>
-        <Accordion defaultExpandedKeys={defaultActiveKeys} gap={0}>
-          {activities.length > 0 && (
-            <AccordionItem
-              itemKey="activities"
-              paddingBlock={8}
-              paddingInline={12}
-              title={
-                <Text className={styles.sectionHeader}>
-                  <span>Activities</span>
-                  <Text as={'span'} type={'secondary'}>
-                    {' '}
-                    ({activities.length})
-                  </Text>
-                </Text>
-              }
-            >
-              <Flexbox>
-                {activities.map((item) => (
-                  <MemoryItem
-                    content={item.narrative}
-                    key={item.id}
-                    subContent={item.feedback}
-                    tags={item.tags}
-                    title={item.notes || item.type}
-                  />
-                ))}
-              </Flexbox>
-            </AccordionItem>
-          )}
-
-          {/* Contexts */}
-          {contexts.length > 0 && (
-            <AccordionItem
-              itemKey="contexts"
-              paddingBlock={8}
-              paddingInline={12}
-              title={
-                <Text className={styles.sectionHeader}>
-                  <span>{t('builtins.lobe-user-memory.render.contexts')}</span>
-                  <Text as={'span'} type={'secondary'}>
-                    {' '}
-                    ({contexts.length})
-                  </Text>
-                </Text>
-              }
-            >
-              <Flexbox>
-                {contexts.map((item) => (
-                  <MemoryItem
-                    content={item.description}
-                    key={item.id}
-                    subContent={item.currentStatus}
-                    tags={item.tags}
-                    title={item.title}
-                  />
-                ))}
-              </Flexbox>
-            </AccordionItem>
-          )}
-
-          {/* Experiences */}
-          {experiences.length > 0 && (
-            <AccordionItem
-              itemKey="experiences"
-              paddingBlock={8}
-              paddingInline={12}
-              title={
-                <Text className={styles.sectionHeader}>
-                  <span>{t('builtins.lobe-user-memory.render.experiences')}</span>
-                  <Text as={'span'} type={'secondary'}>
-                    {' '}
-                    ({experiences.length})
-                  </Text>
-                </Text>
-              }
-            >
-              <Flexbox>
-                {experiences.map((item) => (
-                  <MemoryItem
-                    content={item.situation}
-                    key={item.id}
-                    subContent={item.keyLearning}
-                    tags={item.tags}
-                    title={item.action}
-                  />
-                ))}
-              </Flexbox>
-            </AccordionItem>
-          )}
-
-          {/* Preferences */}
-          {identities.length > 0 && (
-            <AccordionItem
-              itemKey="identities"
-              paddingBlock={8}
-              paddingInline={12}
-              title={
-                <Text className={styles.sectionHeader}>
-                  <span>Identities</span>
-                  <Text as={'span'} type={'secondary'}>
-                    {' '}
-                    ({identities.length})
-                  </Text>
-                </Text>
-              }
-            >
-              <Flexbox>
-                {identities.map((item) => (
-                  <MemoryItem
-                    content={item.description}
-                    key={item.id}
-                    subContent={item.role}
-                    tags={item.tags}
-                    title={item.relationship || item.type}
-                  />
-                ))}
-              </Flexbox>
-            </AccordionItem>
-          )}
-
-          {preferences.length > 0 && (
-            <AccordionItem
-              itemKey="preferences"
-              paddingBlock={8}
-              paddingInline={12}
-              title={
-                <Text className={styles.sectionHeader}>
-                  <span>{t('builtins.lobe-user-memory.render.preferences')}</span>
-                  <Text as={'span'} type={'secondary'}>
-                    {' '}
-                    ({preferences.length})
-                  </Text>
-                </Text>
-              }
-            >
-              <Flexbox>
-                {preferences.map((item) => (
-                  <MemoryItem
-                    content={item.conclusionDirectives}
-                    key={item.id}
-                    subContent={item.suggestions}
-                    tags={item.tags}
-                  />
-                ))}
-              </Flexbox>
-            </AccordionItem>
-          )}
-        </Accordion>
+        <Accordion
+          defaultValue={defaultActiveKeys}
+          gap={0}
+          items={items}
+          styles={{
+            content: { paddingBlock: 8, paddingInline: 12 },
+            header: { paddingBlock: 8, paddingInline: 12 },
+          }}
+        />
       </Flexbox>
     );
   },
