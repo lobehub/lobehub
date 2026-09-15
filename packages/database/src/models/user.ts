@@ -15,7 +15,7 @@ import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
+import { goals, messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
@@ -484,6 +484,10 @@ export class UserModel {
       if (timeoutMs !== undefined) {
         await tx.execute(sql`SELECT set_config('statement_timeout', ${String(timeoutMs)}, true)`);
       }
+      // A goal decision can reference the same user that owns its parent goal.
+      // Delete the graph first so its CASCADE completes before the user delete
+      // runs the decision's SET NULL action on an already-deleted node.
+      await tx.delete(goals).where(eq(goals.userId, id));
       // Purge share-visitor topics authored by this user under any creator.
       await tx.delete(topics).where(eq(topics.senderId, id));
       return tx.delete(users).where(eq(users.id, id));
@@ -511,6 +515,7 @@ export class UserModel {
     }
     const timeoutMs = options.finalStatementTimeoutMs;
     validateDeletionStatementTimeout(timeoutMs);
+    const topicBatchSize = Math.min(batchSize, 20);
 
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
@@ -549,48 +554,52 @@ export class UserModel {
     const ownedTopic = or(eq(topics.userId, id), eq(topics.senderId, id));
     for (;;) {
       if (options.shouldContinue?.() === false) return false;
-      const [topic] = await db.select({ id: topics.id }).from(topics).where(ownedTopic).limit(1);
-      if (!topic) break;
+      const foundTopics = await db.transaction(async (tx) => {
+        // Transfers lock topics before changing their owner and messages. Holding
+        // the same locks keeps every captured message inside its original scope.
+        const currentTopics = await tx
+          .select({ id: topics.id })
+          .from(topics)
+          .where(ownedTopic)
+          .orderBy(asc(topics.id))
+          .limit(topicBatchSize)
+          .for('update');
+        if (currentTopics.length === 0) return false;
+        if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id)) {
+          throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        }
 
-      for (;;) {
-        if (options.shouldContinue?.() === false) return false;
-        const drained = await db.transaction(async (tx) => {
-          // Transfers lock the topic before changing its owner and messages.
-          // Holding the same row lock through this batch prevents a transfer
-          // from rehoming captured message IDs before they are deleted.
-          const [currentTopic] = await tx
-            .select({ id: topics.id })
-            .from(topics)
-            .where(and(eq(topics.id, topic.id), ownedTopic))
-            .for('update');
-          if (!currentTopic) return true;
-          if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id)) {
-            throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
-          }
-
-          // A visitor's topic can contain messages owned by the host account.
-          const rows = await tx
-            .select({ id: messages.id })
-            .from(messages)
-            .where(eq(messages.topicId, topic.id))
-            .limit(batchSize);
-          if (rows.length === 0) {
-            await tx.delete(topics).where(and(eq(topics.id, topic.id), ownedTopic));
-            return true;
-          }
+        const topicIds = currentTopics.map((topic) => topic.id);
+        // A visitor's topic can contain messages owned by the host account.
+        const rows = await tx
+          .select({ id: messages.id })
+          .from(messages)
+          .where(inArray(messages.topicId, topicIds))
+          .limit(batchSize);
+        if (rows.length > 0) {
           await tx.delete(messages).where(
             and(
-              eq(messages.topicId, topic.id),
+              inArray(messages.topicId, topicIds),
               inArray(
                 messages.id,
                 rows.map((row) => row.id),
               ),
             ),
           );
-          return false;
-        });
-        if (drained) break;
-      }
+        }
+
+        const remainingTopics = await tx
+          .selectDistinct({ id: messages.topicId })
+          .from(messages)
+          .where(inArray(messages.topicId, topicIds));
+        const remainingTopicIds = new Set(remainingTopics.map((topic) => topic.id));
+        const emptyTopicIds = topicIds.filter((topicId) => !remainingTopicIds.has(topicId));
+        if (emptyTopicIds.length > 0) {
+          await tx.delete(topics).where(and(inArray(topics.id, emptyTopicIds), ownedTopic));
+        }
+        return true;
+      });
+      if (!foundTopics) break;
     }
 
     if (options.shouldContinue?.() === false) return false;

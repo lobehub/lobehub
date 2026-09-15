@@ -3,7 +3,16 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { messages, nextauthAccounts, topics, users, userSettings } from '../../schemas';
+import {
+  goalNodeDecisions,
+  goalNodes,
+  goals,
+  messages,
+  nextauthAccounts,
+  topics,
+  users,
+  userSettings,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from '../agentTransferJob';
 import type { ListUsersForMemoryExtractorCursor } from '../user';
@@ -683,7 +692,6 @@ describe('UserModel', () => {
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(false)
-          .mockResolvedValueOnce(false)
           .mockResolvedValueOnce(true);
         try {
           await expect(
@@ -778,7 +786,36 @@ describe('UserModel', () => {
         ).toBeDefined();
         expect(
           await serverDB.query.messages.findMany({ where: eq(messages.topicId, topicId) }),
-        ).toHaveLength(2);
+        ).toHaveLength(1);
+      });
+
+      it('drains multiple small topics in one committed topic batch', async () => {
+        const topicIds = Array.from({ length: 3 }, (_, index) => `topic-small-batch-${index}`);
+        await serverDB.insert(topics).values(topicIds.map((id) => ({ id, userId })));
+        await serverDB.insert(messages).values(
+          topicIds.map((topicId, index) => ({
+            id: `message-small-batch-${index}`,
+            role: 'user',
+            topicId,
+            userId,
+          })),
+        );
+        let checks = 0;
+
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 10,
+            shouldContinue: () => ++checks <= 2,
+          }),
+        ).resolves.toBe(false);
+
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+        expect(await serverDB.query.topics.findMany({ where: eq(topics.userId, userId) })).toEqual(
+          [],
+        );
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toEqual([]);
       });
 
       it('stops before a topic batch when a transfer becomes pending after the initial guard', async () => {
@@ -821,6 +858,40 @@ describe('UserModel', () => {
         });
 
         expect(user).toBeUndefined();
+      });
+
+      it('deletes a user whose goal decision also references the user', async () => {
+        const [goal] = await serverDB
+          .insert(goals)
+          .values({ title: 'Delete account regression', userId })
+          .returning();
+        const [node] = await serverDB
+          .insert(goalNodes)
+          .values({ goalId: goal.id, kind: 'decision', title: 'Confirm deletion' })
+          .returning();
+        await serverDB.insert(goalNodeDecisions).values({
+          authority: 'user',
+          nodeId: node.id,
+          question: 'Delete this account?',
+          requestedUserId: userId,
+        });
+
+        await UserModel.deleteUser(serverDB, userId);
+
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.goals.findFirst({ where: eq(goals.id, goal.id) }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.goalNodes.findFirst({ where: eq(goalNodes.id, node.id) }),
+        ).toBeUndefined();
+        expect(
+          await serverDB.query.goalNodeDecisions.findFirst({
+            where: eq(goalNodeDecisions.nodeId, node.id),
+          }),
+        ).toBeUndefined();
       });
 
       it('purges share-visitor topics and messages when the visitor is deleted', async () => {
