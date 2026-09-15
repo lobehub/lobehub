@@ -78,6 +78,12 @@ export interface UploadFileItem {
    */
   previewUrl?: string;
   /**
+   * Set when the draft was uploaded as an agent-share VISITOR: the file lives
+   * under the creator's account, so remove/retry must go through the
+   * share-scoped endpoints instead of the visitor's own file API.
+   */
+  shareId?: string;
+  /**
    * marks a draft entry that references an already-persisted file still backing
    * an existing message (e.g. restored via "restore to input"). Removing such
    * an entry from the draft must only drop the draft item — it must NOT delete
@@ -91,6 +97,13 @@ export interface UploadFileItem {
 }
 
 export const FileMetadataSchema = z.object({
+  /**
+   * Provenance of a `FileSource.AgentShare` upload: the file row sits under
+   * the CREATOR (storage quota), this records which share and which visitor
+   * actually uploaded it. Server-written only; the share endpoints check it
+   * before letting a visitor attach or remove the file.
+   */
+  agentShare: z.object({ shareId: z.string(), visitorUserId: z.string() }).optional(),
   date: z.string(),
   dirname: z.string(),
   filename: z.string(),

@@ -483,8 +483,12 @@ export class AgentShareModel {
         agentBackgroundColor: agents.backgroundColor,
         agentDescription: agents.description,
         agentId: agentShares.agentId,
+        // Model identity is for a server-side capability lookup only (what
+        // media a visitor may attach); the visitor payload never carries it.
+        agentModel: agents.model,
         agentName: agents.name,
         agentOpeningQuestions: agents.openingQuestions,
+        agentProvider: agents.provider,
         agentSlug: agents.slug,
         agentTags: agents.tags,
         agentTitle: agents.title,

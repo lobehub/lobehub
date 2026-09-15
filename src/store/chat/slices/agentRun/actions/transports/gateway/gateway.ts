@@ -792,9 +792,9 @@ export class GatewayActionImpl {
     }
 
     // Agent-share visitor surface: dispatch through the share-authorized mirror.
-    // It accepts only the share-safe subset (prompt / topic / clientIds) —
-    // everything else (tools, devices, mentions) is decided server-side by the
-    // share config, never by this client.
+    // It accepts only the share-safe subset (prompt / topic / clientIds /
+    // the visitor's share-uploaded fileIds) — everything else (tools, devices, mentions) is
+    // decided server-side by the share config, never by this client.
     const agentShareId = executionContext.agentShareId;
 
     const result =
@@ -803,6 +803,7 @@ export class GatewayActionImpl {
         ? await shareChatService.execAgentTask(
             {
               clientIds,
+              fileIds,
               prompt: message,
               shareId: agentShareId,
               topicId: executionContext.topicId,

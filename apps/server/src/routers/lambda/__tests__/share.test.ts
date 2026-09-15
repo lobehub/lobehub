@@ -26,6 +26,23 @@ vi.mock('@/database/models/topic', () => ({
   },
 }));
 
+const loadModelsMock = vi.hoisted(() => vi.fn());
+const findByIdAndProviderMock = vi.hoisted(() => vi.fn());
+const aiModelModelConstructor = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/client/model-bank/loadModels', () => ({
+  loadModels: loadModelsMock,
+}));
+
+vi.mock('@/database/models/aiModel', () => ({
+  AiModelModel: class {
+    constructor(...args: unknown[]) {
+      aiModelModelConstructor(...args);
+    }
+    findByIdAndProvider = findByIdAndProviderMock;
+  },
+}));
+
 vi.mock('@/database/models/topicShare', () => ({
   TopicShareModel: {
     findByShareIdWithAccessCheck: vi.fn(),
@@ -83,8 +100,10 @@ describe('shareRouter', () => {
       agentBackgroundColor: '#ffffff',
       agentDescription: 'A shared agent',
       agentId: 'agent-1',
+      agentModel: 'gpt-4o',
       agentName: 'Alice',
       agentOpeningQuestions: ['What can you do?'],
+      agentProvider: 'openai',
       agentTags: ['research'],
       agentTitle: 'Research Assistant',
       ownerId: 'owner-user',
@@ -110,6 +129,14 @@ describe('shareRouter', () => {
       vi.mocked(AgentShareModel.assertShareAccess).mockReturnValue(undefined);
       vi.mocked(AgentShareModel.incrementUserViewCount).mockResolvedValue(undefined);
       countShareVisitors.mockResolvedValue({ topicCount: 12, visitorCount: 7 });
+      loadModelsMock.mockResolvedValue([
+        {
+          abilities: { audio: false, video: false, vision: true },
+          id: 'gpt-4o',
+          providerId: 'openai',
+        },
+      ]);
+      findByIdAndProviderMock.mockResolvedValue(undefined);
     });
 
     it('requires authentication without resolving or counting the share', async () => {
@@ -150,8 +177,12 @@ describe('shareRouter', () => {
         },
         // Identifier only: the granted API list is owner-facing configuration.
         toolGrants: ['lobe-web-browsing'],
+        // Derived from the agent's model abilities; the model itself stays hidden.
+        uploadAbility: { audio: false, image: true, video: false },
         visibility: 'link',
       });
+      expect(result).not.toHaveProperty('agentModel');
+      expect(result).not.toHaveProperty('agentProvider');
       expect(result).not.toHaveProperty('ownerId');
       expect(result).not.toHaveProperty('shareConfig');
       expect(result).not.toHaveProperty('userViewCount');
@@ -167,6 +198,57 @@ describe('shareRouter', () => {
         expect.anything(),
         'agent-share-1',
       );
+    });
+
+    describe('uploadAbility', () => {
+      const resolve = async () => {
+        const caller = shareRouter.createCaller(
+          await createContextInner({ userId: 'visitor-user' }),
+        );
+        return (await caller.getSharedAgent({ slugOrId: 'shared-agent' })).uploadAbility;
+      };
+
+      it('looks the model up as the OWNER, whose overrides the run itself honours', async () => {
+        await resolve();
+
+        expect(aiModelModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+        expect(findByIdAndProviderMock).toHaveBeenCalledWith('gpt-4o', 'openai');
+      });
+
+      it("prefers the owner's stored ability override over the bundled list", async () => {
+        findByIdAndProviderMock.mockResolvedValue({
+          abilities: { audio: true, video: true, vision: false },
+        });
+
+        await expect(resolve()).resolves.toEqual({ audio: true, image: false, video: true });
+      });
+
+      it('falls back to the default model when the agent has none configured', async () => {
+        vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+          ...agentShare,
+          agentModel: null,
+          agentProvider: null,
+        } as any);
+
+        await resolve();
+
+        const [model, provider] = findByIdAndProviderMock.mock.calls[0];
+        expect(typeof model).toBe('string');
+        expect(typeof provider).toBe('string');
+        expect(model).not.toBe('gpt-4o');
+      });
+
+      it('fails closed (no media) when the capability lookup throws', async () => {
+        loadModelsMock.mockRejectedValue(new Error('bundle missing'));
+
+        await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
+      });
+
+      it('fails closed when the model is unknown to both the owner and the bundle', async () => {
+        loadModelsMock.mockResolvedValue([]);
+
+        await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
+      });
     });
 
     it('does not count owner views', async () => {

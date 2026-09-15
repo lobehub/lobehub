@@ -484,6 +484,8 @@ export default {
   'share.visitor.access.signInDesc':
     'Sign in to start chatting with this shared agent. Your conversations stay tied to your account.',
   'share.visitor.access.signInTitle': 'Sign in to continue',
+  'share.visitor.errors.fileUnavailable':
+    'One of the attachments is no longer available. Remove it and try again.',
   'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
   'share.visitor.errors.heterogeneousUnsupported':
     "This shared agent isn't available for visitor chat yet. Please contact its owner.",
@@ -538,6 +540,10 @@ export default {
   'share.visitor.profile.terms.visibilityCreator':
     'The creator has turned on session review, so they can read this conversation.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your conversations.',
+  'share.visitor.upload.creatorStorageBlocked':
+    "This agent's storage is full. Ask its creator to free up space.",
+  'share.visitor.upload.fileTooLarge': 'Files must be under {{max}}.',
+  'share.visitor.upload.tooManyFiles': 'You can attach up to {{max}} files per message.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
   'share.visitor.topics.empty': 'No conversations yet',
   'share.visitor.topics.new': 'New conversation',

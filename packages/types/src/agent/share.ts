@@ -26,6 +26,12 @@ export interface SharedAgentStats {
 }
 
 /** Agent metadata exposed to signed-in visitors of an agent share. */
+export interface SharedAgentUploadAbility {
+  audio: boolean;
+  image: boolean;
+  video: boolean;
+}
+
 export interface SharedAgentData {
   agentId: string;
   agentMeta: {
@@ -67,6 +73,13 @@ export interface SharedAgentData {
    * — never the granted API list, which is owner-facing configuration.
    */
   toolGrants: string[];
+  /**
+   * Which media the visitor composer may attach, derived server-side from
+   * the agent's model abilities so the model itself stays hidden (it is
+   * owner-facing unless `showModelInfo` opts in). Documents are always
+   * allowed; these only gate direct media input.
+   */
+  uploadAbility: SharedAgentUploadAbility;
   visibility: ShareVisibility;
 }
 

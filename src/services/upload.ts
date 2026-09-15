@@ -206,6 +206,51 @@ class UploadService {
     return result;
   };
 
+  /**
+   * PUT a file to a pre-signed URL someone else minted (the agent-share
+   * visitor path: `shareChat.createUploadUrl` reserves the key under the
+   * CREATOR's quota and hands back the URL). Single PUT only — callers cap the
+   * size below the multipart threshold. Reports progress in the same
+   * `FileUploadState` shape as {@link uploadToServerS3}; abort/cleanup of the
+   * reservation is the caller's job since only it knows which endpoint to hit.
+   */
+  uploadToPresignedUrl = async (
+    file: File,
+    url: string,
+    {
+      abortController,
+      onProgress,
+    }: {
+      abortController?: AbortController;
+      onProgress?: (status: FileUploadStatus, state: FileUploadState) => void;
+    } = {},
+  ): Promise<void> => {
+    const startTime = Date.now();
+
+    try {
+      await this.putBlob(
+        url,
+        file,
+        abortController?.signal,
+        (loaded) => {
+          onProgress?.('uploading', this.getUploadState(loaded, file.size, startTime));
+        },
+        file.type,
+      );
+    } catch (error) {
+      if (abortController?.signal.aborted) {
+        onProgress?.('cancelled', { progress: 0, restTime: 0, speed: 0 });
+      }
+      throw error;
+    }
+
+    onProgress?.('success', {
+      progress: 100,
+      restTime: 0,
+      speed: file.size / Math.max((Date.now() - startTime) / 1000, 0.001),
+    });
+  };
+
   private getUploadState = (loaded: number, total: number, startTime: number): FileUploadState => {
     const elapsed = Math.max((Date.now() - startTime) / 1000, 0.001);
     const speed = loaded / elapsed;

@@ -1,16 +1,22 @@
 import {
   AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
   AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
+  SHARE_VISITOR_MAX_FILE_SIZE,
+  SHARE_VISITOR_MAX_FILES_PER_TURN,
   SHARE_VISITOR_PROMPT_MAX_LENGTH,
 } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
-import { ChatErrorType, entityIdPattern, RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, entityIdPattern, FileSource, RequestTrigger } from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
 import { checkAgentShareSpendAllowance } from '@/business/server/agent-share/spendGate';
+import { serverDBEnv } from '@/config/db';
 import { AgentShareModel } from '@/database/models/agentShare';
+import { FileModel } from '@/database/models/file';
+import { FileUploadModel } from '@/database/models/fileUpload';
 import { MessageModel, sanitizeVisitorError } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
@@ -18,9 +24,12 @@ import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { FileS3 } from '@/server/modules/S3';
 import { AiAgentService } from '@/server/services/aiAgent';
 import type { AgentShareGate } from '@/server/services/aiAgent/shareGate';
 import { FileService } from '@/server/services/file';
+import { FileUploadService } from '@/server/services/fileUpload';
+import { reserveUpload } from '@/server/services/fileUploadReservation';
 
 import { assertAgentShareVisitorEnabled } from './_helpers/agentShareFeatureGate';
 
@@ -157,7 +166,247 @@ const toVisitorSafeStartupError = (
   });
 };
 
+/**
+ * Storage key prefix for a share's visitor uploads, under the CREATOR's file
+ * namespace. The prefix is what ties an upload session / file row back to a
+ * specific share on the settle and abort paths: a visitor can only complete or
+ * release reservations that live under their share's prefix, never one of the
+ * creator's own uploads.
+ */
+const shareUploadPrefix = (ownerId: string, shareId: string) =>
+  `files/${ownerId}/agent-share/${shareId}/`;
+
+/** Basename only — a visitor-supplied name must not steer the storage key. */
+const sanitizeUploadName = (name: string) =>
+  name
+    .replaceAll(/[/\\]/g, '_')
+    .replaceAll(/\p{Cc}/gu, '')
+    .trim() || 'file';
+
+const shareFileProvenance = (
+  file: { metadata?: unknown; source?: string | null } | undefined,
+): { shareId: string; visitorUserId: string } | undefined => {
+  if (!file || file.source !== FileSource.AgentShare) return undefined;
+  const metadata = file.metadata as { agentShare?: unknown } | null | undefined;
+  const provenance = metadata?.agentShare as
+    { shareId?: unknown; visitorUserId?: unknown } | undefined;
+  if (typeof provenance?.shareId !== 'string' || typeof provenance.visitorUserId !== 'string') {
+    return undefined;
+  }
+  return { shareId: provenance.shareId, visitorUserId: provenance.visitorUserId };
+};
+
+/**
+ * Every attachment id a visitor pins to a turn must be a file THIS visitor
+ * uploaded through THIS share (`shareChat.createFile`). Visitor uploads live
+ * under the creator's account, so a creator-scoped lookup would happily
+ * resolve any of the creator's files — the `agentShare` provenance on the row
+ * is the only thing that stops a visitor from naming an arbitrary id and
+ * having the creator's own document injected into the run. `NOT_FOUND` on
+ * purpose — same fail-closed shape as the topic guard, revealing nothing
+ * about whether the id exists for someone else.
+ */
+const assertShareVisitorFiles = async (
+  db: LobeChatDatabase,
+  share: { ownerId: string; shareId: string },
+  visitorUserId: string,
+  fileIds: string[] | undefined,
+) => {
+  if (!fileIds?.length) return;
+
+  const uniqueIds = Array.from(new Set(fileIds));
+  const rows = await new FileModel(db, share.ownerId).findByIds(uniqueIds);
+  const owned = rows.filter((file) => {
+    const provenance = shareFileProvenance(file);
+    return provenance?.shareId === share.shareId && provenance.visitorUserId === visitorUserId;
+  });
+  if (owned.length !== uniqueIds.length) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+  }
+};
+
+/**
+ * Metadata a visitor may attach to their upload — the same intrinsic
+ * image/audio facts the owner upload path records client-side, so share
+ * attachments render (dimensions, duration) exactly like owner ones. Anything
+ * else (notably `agentShare`) is server-written.
+ */
+const ShareUploadMetadataSchema = z
+  .object({
+    codec: z.string().max(64),
+    durationMs: z.number().nonnegative(),
+    height: z.number().positive(),
+    mimeType: z.string().max(255),
+    ratio: z.number().positive(),
+    width: z.number().positive(),
+  })
+  .partial();
+
 export const shareChatRouter = router({
+  /**
+   * Release a share upload reservation the visitor abandoned (PUT failed or
+   * was cancelled). Scoped to the share's own key prefix so a visitor cannot
+   * release one of the creator's in-flight uploads.
+   */
+  abortUpload: shareChatProcedure
+    .input(z.object({ pathname: z.string().min(1), shareId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
+      if (!input.pathname.startsWith(shareUploadPrefix(share.ownerId, share.shareId))) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
+      }
+
+      const fileUploadService = new FileUploadService(ctx.serverDB, share.ownerId);
+      const upload = await fileUploadService.findLatest(input.pathname);
+      if (upload?.status === 'active') await fileUploadService.release(input.pathname);
+
+      return { success: true };
+    }),
+
+  /**
+   * Settle a share upload into a file row — the visitor counterpart of
+   * `file.createFile`.
+   *
+   * The row is written under the CREATOR: share conversations are creator-owned
+   * data (topics/messages already are), and the creator's storage quota is what
+   * paid for the reservation in `createUploadUrl`. What makes it the visitor's
+   * attachment rather than a creator resource is `source: agent_share` (hidden
+   * from the creator's library and knowledge listings) plus the
+   * `metadata.agentShare` provenance every share read/write path checks.
+   *
+   * Deliberately simpler than the owner path: no content-hash dedup against
+   * `global_files`, no knowledge base / parent folder / visibility. A visitor
+   * attachment is only ever reached through the message it was sent with.
+   */
+  createFile: shareChatProcedure
+    .input(
+      z.object({
+        fileType: z.string().min(1).max(255),
+        hash: z.string().min(1).max(64),
+        metadata: ShareUploadMetadataSchema.optional(),
+        name: z.string().min(1).max(255),
+        pathname: z.string().min(1),
+        shareId: z.string(),
+        size: z.number().int().min(0).max(SHARE_VISITOR_MAX_FILE_SIZE),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
+      if (!input.pathname.startsWith(shareUploadPrefix(share.ownerId, share.shareId))) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
+      }
+
+      const fileUploadService = new FileUploadService(ctx.serverDB, share.ownerId);
+      const fileService = new FileService(ctx.serverDB, share.ownerId);
+
+      // No legacy (reservation-less) path here: the share upload flow was born
+      // with reservations, so a pathname without an active session is either
+      // expired, already settled, or never ours.
+      const activeUpload = await fileUploadService.touchActive(input.pathname);
+      if (!activeUpload) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Upload session is no longer active' });
+      }
+
+      let actualSize: number;
+      try {
+        actualSize = (await fileService.getFileMetadata(input.pathname)).contentLength;
+      } catch {
+        await fileUploadService.releaseBestEffort(input.pathname);
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Uploaded file is unavailable' });
+      }
+      if (input.size !== activeUpload.size || actualSize !== activeUpload.size) {
+        await fileUploadService.releaseBestEffort(input.pathname);
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Uploaded file size mismatch' });
+      }
+
+      const parts = input.pathname.split('/');
+      const filename = parts.pop()!;
+      const dirname = parts.join('/');
+
+      const { id } = await ctx.serverDB.transaction(async (trx) => {
+        const lockedUpload = await fileUploadService.model.findLatestByPathnameForUpdate(
+          input.pathname,
+          trx,
+        );
+        if (lockedUpload?.id !== activeUpload.id || lockedUpload.status !== 'active') {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Upload session is no longer active' });
+        }
+
+        const file = await new FileModel(ctx.serverDB, share.ownerId).create(
+          {
+            fileHash: input.hash,
+            fileType: input.fileType,
+            metadata: {
+              ...input.metadata,
+              agentShare: { shareId: share.shareId, visitorUserId: ctx.userId },
+              date: new Date().toISOString().slice(0, 10),
+              dirname,
+              filename,
+              path: input.pathname,
+            },
+            name: sanitizeUploadName(input.name),
+            size: actualSize,
+            source: FileSource.AgentShare,
+            url: input.pathname,
+          },
+          true,
+          trx,
+        );
+
+        const settled = await fileUploadService.model.settle(lockedUpload.id, file.id, trx);
+        if (!settled) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Upload could not be settled' });
+        }
+        return file;
+      });
+
+      log('createFile: share=%s visitor=%s file=%s', input.shareId, ctx.userId, id);
+
+      return { id, url: await fileService.getFileAccessUrl({ id, url: input.pathname }) };
+    }),
+
+  /**
+   * Reserve storage and mint a pre-signed PUT for a visitor attachment — the
+   * visitor counterpart of `upload.createS3PreSignedUrl`.
+   *
+   * The reservation is taken under the CREATOR: the bytes count against the
+   * creator's storage quota, so it is the creator's `storage_block:*` reason
+   * (not the visitor's plan) that decides whether the upload is admitted. The
+   * key lives under the share's own prefix so `createFile` / `abortUpload` can
+   * prove the session belongs to this share.
+   */
+  createUploadUrl: shareChatProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(255),
+        shareId: z.string(),
+        size: z.number().int().min(0).max(SHARE_VISITOR_MAX_FILE_SIZE),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
+
+      const pathname = `${shareUploadPrefix(share.ownerId, share.shareId)}${nanoid()}/${sanitizeUploadName(input.name)}`;
+      const s3 = new FileS3();
+
+      await reserveUpload({
+        clientIp: ctx.clientIp ?? undefined,
+        db: ctx.serverDB,
+        model: new FileUploadModel(ctx.serverDB, share.ownerId),
+        pathname,
+        size: input.size,
+        storage: s3,
+        userId: share.ownerId,
+      });
+
+      try {
+        return { pathname, url: await s3.createPreSignedUrl(pathname, input.size) };
+      } catch (error) {
+        await new FileUploadService(ctx.serverDB, share.ownerId).releaseBestEffort(pathname);
+        throw error;
+      }
+    }),
+
   /**
    * Execute a shared agent as a visitor — the gateway-transport mirror of
    * `aiAgent.execAgent`, restricted to the share surface: fixed agent, no
@@ -173,6 +422,15 @@ export const shareChatRouter = router({
             topicId: z.string().regex(entityIdPattern('topics')).optional(),
             userMessageId: z.string().regex(entityIdPattern('messages')).optional(),
           })
+          .optional(),
+        /**
+         * Ids of files the VISITOR uploaded through `shareChat.createFile`.
+         * Re-checked below against the file rows' share provenance — see
+         * `assertShareVisitorFiles`.
+         */
+        fileIds: z
+          .array(z.string().min(1).max(64))
+          .max(SHARE_VISITOR_MAX_FILES_PER_TURN)
           .optional(),
         /** See `SHARE_VISITOR_PROMPT_MAX_LENGTH`'s JSDoc for the size-bound rationale. */
         prompt: z.string().max(SHARE_VISITOR_PROMPT_MAX_LENGTH),
@@ -201,6 +459,12 @@ export const shareChatRouter = router({
           message: ChatErrorType.ShareSpendLimitExceeded,
         });
       }
+
+      // Verify every attachment is this visitor's own share upload before it
+      // is handed to a run that executes (and reads files) as the creator.
+      // Also ahead of any row creation, like the spend gate — a foreign id
+      // must not leave a topic behind.
+      await assertShareVisitorFiles(ctx.serverDB, share, ctx.userId, input.fileIds);
 
       // Runtime-normalized (findByShareIdWithAccessCheck fills defaults), but
       // the config TYPE keeps every field optional — re-apply the same default
@@ -295,6 +559,9 @@ export const shareChatRouter = router({
           appContext: { topicId: input.topicId },
           clientIds: input.clientIds,
           clientIp: ctx.clientIp ?? undefined,
+          // Share uploads are creator-owned rows (see `createFile` below), so
+          // the creator-scoped runtime resolves them like any owner attachment.
+          fileIds: input.fileIds,
           // `interactiveStart: true` (the `aiAgent.execAgent` owner path's
           // default) makes `TopicModel.tryReserveTaskCallback` skip its
           // `runningOperation` liveness check entirely — a policy that is safe
@@ -541,6 +808,30 @@ export const shareChatRouter = router({
       const token = await signUserJWT(ctx.userId);
 
       return { token };
+    }),
+
+  /**
+   * Drop a share upload the visitor removed from their draft before sending.
+   * Only the uploading visitor's own share files qualify (provenance check),
+   * and only while no message references the row — once sent, the attachment
+   * is part of a creator-owned conversation and stays put.
+   */
+  removeFile: shareChatProcedure
+    .input(z.object({ fileId: z.string().min(1).max(64), shareId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
+
+      const fileModel = new FileModel(ctx.serverDB, share.ownerId);
+      const existing = await fileModel.findById(input.fileId);
+      const provenance = shareFileProvenance(existing);
+      if (provenance?.shareId !== share.shareId || provenance.visitorUserId !== ctx.userId) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+      }
+
+      const file = await fileModel.deleteUnreferenced(input.fileId, serverDBEnv.REMOVE_GLOBAL_FILE);
+      if (!file) return;
+
+      await new FileService(ctx.serverDB, share.ownerId).deleteFile(file.url!);
     }),
 });
 
