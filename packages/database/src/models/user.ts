@@ -15,7 +15,17 @@ import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { goals, messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
+import {
+  agents,
+  chatGroups,
+  goals,
+  messages,
+  nextauthAccounts,
+  sessions,
+  topics,
+  users,
+  userSettings,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
@@ -467,10 +477,11 @@ export class UserModel {
   static deleteUser = async (
     db: LobeChatDatabase,
     id: string,
-    options: { statementTimeoutMs?: number } = {},
+    options: { statementTimeoutMs?: number; transactionTimeoutMs?: number } = {},
   ) => {
     const timeoutMs = options.statementTimeoutMs;
     validateDeletionStatementTimeout(timeoutMs);
+    validateDeletionStatementTimeout(options.transactionTimeoutMs);
     // A pending agent-TRANSFER backfill means message rows moved to (or from)
     // this user still carry the other side's scope snapshot; cascading the
     // delete now would destroy history the transfer already re-homed. Transfer
@@ -481,16 +492,34 @@ export class UserModel {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
     return db.transaction(async (tx) => {
-      if (timeoutMs !== undefined) {
-        await tx.execute(sql`SELECT set_config('statement_timeout', ${String(timeoutMs)}, true)`);
-      }
+      const deadline =
+        options.transactionTimeoutMs === undefined
+          ? undefined
+          : Date.now() + options.transactionTimeoutMs;
+      // PostgreSQL statement_timeout restarts for each statement. Spend one
+      // shared budget across all cascades instead of granting each another 300s.
+      const applyRemainingTimeout = async () => {
+        const remaining = deadline === undefined ? timeoutMs : deadline - Date.now();
+        if (remaining !== undefined && remaining <= 0)
+          throw new Error('Account deletion transaction deadline exceeded');
+        if (remaining !== undefined) {
+          const limit = Math.min(remaining, timeoutMs ?? remaining);
+          await tx.execute(sql`SELECT set_config('statement_timeout', ${String(limit)}, true)`);
+        }
+      };
+      await applyRemainingTimeout();
       // A goal decision can reference the same user that owns its parent goal.
       // Delete the graph first so its CASCADE completes before the user delete
       // runs the decision's SET NULL action on an already-deleted node.
       await tx.delete(goals).where(eq(goals.userId, id));
+      await applyRemainingTimeout();
       // Purge share-visitor topics authored by this user under any creator.
       await tx.delete(topics).where(eq(topics.senderId, id));
-      return tx.delete(users).where(eq(users.id, id));
+      await applyRemainingTimeout();
+      const result = await tx.delete(users).where(eq(users.id, id));
+      if (deadline !== undefined && Date.now() >= deadline)
+        throw new Error('Account deletion transaction deadline exceeded');
+      return result;
     });
   };
 
@@ -521,34 +550,64 @@ export class UserModel {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
 
-    // A transfer can leave the old userId on topic messages until its async job
-    // finishes. Only pre-delete standalone messages here; topic messages must be
-    // drained under their topic lock, and linked topicless messages stay for the
-    // final guarded cascade.
-    const standaloneMessage = and(
-      eq(messages.userId, id),
-      isNull(messages.topicId),
-      isNull(messages.agentId),
-      isNull(messages.groupId),
-      isNull(messages.sessionId),
-    );
+    const topiclessMessage = and(eq(messages.userId, id), isNull(messages.topicId));
     for (;;) {
       if (options.shouldContinue?.() === false) return false;
       const rows = await db
-        .select({ id: messages.id })
+        .select({
+          id: messages.id,
+          agentId: messages.agentId,
+          groupId: messages.groupId,
+          sessionId: messages.sessionId,
+        })
         .from(messages)
-        .where(standaloneMessage)
+        .where(topiclessMessage)
         .limit(batchSize);
       if (rows.length === 0) break;
-      await db.delete(messages).where(
-        and(
-          standaloneMessage,
-          inArray(
-            messages.id,
-            rows.map((row) => row.id),
-          ),
-        ),
-      );
+      await db.transaction(async (tx) => {
+        // Topicless history moves with its group/agent/session. Lock those
+        // parents before checking jobs, so a new transfer cannot commit between
+        // the guard and deletion. Recheck captured links to avoid deleting rows
+        // that were reattached to an unlocked parent while we waited.
+        for (const [table, ids] of [
+          [chatGroups, rows.flatMap((row) => (row.groupId ? [row.groupId] : []))],
+          [agents, rows.flatMap((row) => (row.agentId ? [row.agentId] : []))],
+          [sessions, rows.flatMap((row) => (row.sessionId ? [row.sessionId] : []))],
+        ] as const) {
+          if (ids.length > 0)
+            await tx
+              .select({ id: table.id })
+              .from(table)
+              .where(inArray(table.id, [...new Set(ids)]))
+              .orderBy(asc(table.id))
+              .for('update');
+        }
+        if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id))
+          throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        await tx
+          .delete(messages)
+          .where(
+            and(
+              topiclessMessage,
+              or(
+                ...rows.map((row) =>
+                  and(
+                    eq(messages.id, row.id),
+                    row.agentId === null
+                      ? isNull(messages.agentId)
+                      : eq(messages.agentId, row.agentId),
+                    row.groupId === null
+                      ? isNull(messages.groupId)
+                      : eq(messages.groupId, row.groupId),
+                    row.sessionId === null
+                      ? isNull(messages.sessionId)
+                      : eq(messages.sessionId, row.sessionId),
+                  ),
+                ),
+              ),
+            ),
+          );
+      });
     }
 
     const ownedTopic = or(eq(topics.userId, id), eq(topics.senderId, id));
@@ -606,6 +665,7 @@ export class UserModel {
 
     await UserModel.deleteUser(db, id, {
       statementTimeoutMs: options.finalStatementTimeoutMs,
+      transactionTimeoutMs: options.finalStatementTimeoutMs,
     });
     return true;
   };

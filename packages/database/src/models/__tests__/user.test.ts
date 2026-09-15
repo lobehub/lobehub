@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agents,
+  chatGroups,
   goalNodeDecisions,
   goalNodes,
   goals,
   messages,
   nextauthAccounts,
+  sessions,
   topics,
   users,
   userSettings,
@@ -646,6 +649,95 @@ describe('UserModel', () => {
     });
 
     describe('deleteUser', () => {
+      it('commits linked topicless messages before a pause and resumes the remainder', async () => {
+        await serverDB.insert(agents).values({ id: 'topicless-agent', userId });
+        await serverDB.insert(sessions).values({ id: 'topicless-session', userId });
+        await serverDB.insert(chatGroups).values({ id: 'topicless-group', userId });
+        await serverDB.insert(messages).values(
+          Array.from({ length: 5 }, (_, index) => ({
+            agentId: 'topicless-agent',
+            groupId: 'topicless-group',
+            sessionId: 'topicless-session',
+            id: `linked-topicless-${index}`,
+            role: 'user',
+            userId,
+          })),
+        );
+        let checks = 0;
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, {
+            batchSize: 2,
+            shouldContinue: () => ++checks <= 1,
+          }),
+        ).resolves.toBe(false);
+        expect(
+          await serverDB.query.messages.findMany({ where: eq(messages.userId, userId) }),
+        ).toHaveLength(3);
+        await expect(
+          UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 2 }),
+        ).resolves.toBe(true);
+        expect(
+          await serverDB.query.users.findFirst({ where: eq(users.id, userId) }),
+        ).toBeUndefined();
+      });
+
+      it('rolls back earlier cascades when the shared final deadline is exhausted', async () => {
+        await serverDB
+          .insert(goals)
+          .values({ id: 'deadline-goal', title: 'Keep on rollback', userId });
+        let elapsed = 0;
+        const now = vi.spyOn(Date, 'now').mockImplementation(() => elapsed);
+        const transaction = serverDB.transaction.bind(serverDB);
+        const transactionSpy = vi.spyOn(serverDB, 'transaction').mockImplementation((callback) =>
+          transaction(async (tx) => {
+            const execute = tx.execute.bind(tx);
+            vi.spyOn(tx, 'execute').mockImplementation(async (...args) => {
+              const result = await execute(...args);
+              elapsed += 60;
+              return result;
+            });
+            return callback(tx);
+          }),
+        );
+        try {
+          await expect(
+            UserModel.deleteUser(serverDB, userId, { transactionTimeoutMs: 100 }),
+          ).rejects.toThrow('transaction deadline exceeded');
+        } finally {
+          now.mockRestore();
+          transactionSpy.mockRestore();
+        }
+        expect(
+          await serverDB.query.goals.findFirst({ where: eq(goals.id, 'deadline-goal') }),
+        ).toBeDefined();
+        expect(await serverDB.query.users.findFirst({ where: eq(users.id, userId) })).toBeDefined();
+      });
+
+      it('preserves linked topicless rows when a transfer appears after selection', async () => {
+        await serverDB.insert(agents).values({ id: 'pending-topicless-agent', userId });
+        await serverDB.insert(messages).values({
+          id: 'pending-topicless-message',
+          agentId: 'pending-topicless-agent',
+          role: 'user',
+          userId,
+        });
+        const guard = vi
+          .spyOn(AgentTransferJobModel, 'hasPendingJobTouchingUser')
+          .mockResolvedValueOnce(false)
+          .mockResolvedValueOnce(true);
+        try {
+          await expect(
+            UserModel.deleteUserInBatches(serverDB, userId, { batchSize: 1 }),
+          ).rejects.toThrow(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        } finally {
+          guard.mockRestore();
+        }
+        expect(
+          await serverDB.query.messages.findFirst({
+            where: eq(messages.id, 'pending-topicless-message'),
+          }),
+        ).toBeDefined();
+      });
       it.each([0, Number.NaN, 1.5, 2_147_483_648])(
         'rejects invalid batched statement timeout %s before deleting user data',
         async (timeout) => {

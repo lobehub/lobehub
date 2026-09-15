@@ -252,6 +252,7 @@ table agent_documents {
   indexes {
     workspace_id [name: 'agent_documents_workspace_id_idx']
     user_id [name: 'agent_documents_user_id_idx']
+    deleted_by_user_id [name: 'agent_documents_deleted_by_user_id_idx']
     agent_id [name: 'agent_documents_agent_id_idx']
     access_self [name: 'agent_documents_access_self_idx']
     access_shared [name: 'agent_documents_access_shared_idx']
@@ -606,6 +607,7 @@ table agent_label_assignments {
   indexes {
     (label_id, agent_id) [name: 'agent_label_assignments_label_id_agent_id_unique', unique]
     agent_id [name: 'agent_label_assignments_agent_id_idx']
+    user_id [name: 'agent_label_assignments_user_id_idx']
     workspace_id [name: 'agent_label_assignments_workspace_id_idx']
   }
 }
@@ -769,6 +771,7 @@ table agent_quota_calibrations {
   indexes {
     (account_id, limit_type, scope_key, calibrated_at) [name: 'agent_quota_calibrations_account_type_scope_idx']
     workspace_id [name: 'agent_quota_calibrations_workspace_id_idx']
+    user_id [name: 'agent_quota_calibrations_user_id_idx']
   }
 }
 
@@ -793,6 +796,7 @@ table agent_quota_snapshots {
     (account_id, captured_at) [name: 'agent_quota_snapshots_account_captured_idx']
     resets_at [name: 'agent_quota_snapshots_resets_at_idx']
     workspace_id [name: 'agent_quota_snapshots_workspace_id_idx']
+    user_id [name: 'agent_quota_snapshots_user_id_idx']
   }
 }
 
@@ -825,6 +829,7 @@ table agent_quota_usage_ledger {
     message_id [name: 'agent_quota_usage_ledger_message_id_idx']
     operation_id [name: 'agent_quota_usage_ledger_operation_id_idx']
     workspace_id [name: 'agent_quota_usage_ledger_workspace_id_idx']
+    user_id [name: 'agent_quota_usage_ledger_user_id_idx']
     external_event_id [name: 'agent_quota_usage_ledger_external_event_unique', unique]
   }
 }
@@ -1990,6 +1995,7 @@ table goal_node_decisions {
   indexes {
     node_id [name: 'goal_node_decisions_node_id_unique', unique]
     status [name: 'goal_node_decisions_status_idx']
+    resolved_by_user_id [name: 'goal_node_decisions_resolved_by_user_id_idx']
     (requested_user_id, status) [name: 'goal_node_decisions_requested_user_id_status_idx']
   }
 }
@@ -2026,6 +2032,7 @@ table goal_nodes {
 
   indexes {
     (goal_id, status) [name: 'goal_nodes_goal_id_status_idx']
+    created_by_user_id [name: 'goal_nodes_created_by_user_id_idx']
     (goal_id, kind) [name: 'goal_nodes_goal_id_kind_idx']
     (goal_id, id) [name: 'goal_nodes_goal_id_id_unique', unique]
     task_id [name: 'goal_nodes_task_id_unique', unique]
@@ -3189,6 +3196,8 @@ table resource_permissions {
     (workspace_id, resource_type, resource_id, user_id) [name: 'resource_permissions_workspace_resource_user_id_unique', unique]
     (resource_type, resource_id) [name: 'resource_permissions_resource_idx']
     workspace_id [name: 'resource_permissions_workspace_idx']
+    user_id [name: 'resource_permissions_user_id_idx']
+    created_by [name: 'resource_permissions_created_by_idx']
     (workspace_id, user_id) [name: 'resource_permissions_workspace_user_idx']
   }
 }
@@ -3693,6 +3702,8 @@ table trash_items {
     (workspace_id, deleted_at) [name: 'trash_items_workspace_listing_idx']
     expires_at [name: 'trash_items_expires_at_idx']
     root_id [name: 'trash_items_root_id_idx']
+    user_id [name: 'trash_items_user_id_idx']
+    deleted_by_user_id [name: 'trash_items_deleted_by_user_id_idx']
   }
 }
 
@@ -4332,6 +4343,7 @@ table workspace_invitations {
 
   indexes {
     workspace_id [name: 'workspace_invitations_workspace_id_idx']
+    inviter_id [name: 'workspace_invitations_inviter_id_idx']
     email [name: 'workspace_invitations_email_idx']
     token [name: 'workspace_invitations_token_idx']
   }
