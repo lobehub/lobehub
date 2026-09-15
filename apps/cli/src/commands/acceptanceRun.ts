@@ -20,6 +20,7 @@ import {
   deriveReportVerdict,
   evidenceDescriptionForFile,
   evidenceTypeForFile,
+  findIdenticalLatestRound,
   genericContextFromResult,
   inlineTextEvidenceForFile,
   interactionCostFromReportDir,
@@ -31,6 +32,7 @@ import {
   pullRequestFromBranch,
   pullRequestFromResult,
   reportEvidence,
+  reuseSourceCriteria,
   scenarioFromResult,
   screenProgrammaticTestChecks,
   subjectFromEnv,
@@ -682,19 +684,53 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   }
   const requirement = options.requirement ?? subject?.requirement;
 
+  // The report as it will be published — `summary` is the overall conclusion
+  // (rendered at the top of the report page); `content` is the full markdown
+  // detail. Built up front so the duplicate check below compares exactly what
+  // would land.
+  const conclusion =
+    typeof summary.conclusion === 'string'
+      ? summary.conclusion
+      : typeof summary.note === 'string'
+        ? summary.note
+        : undefined;
+  // A 0-100 quality score lands on overallConfidence (0-1); the report page
+  // surfaces it as the `score` stat.
+  const score =
+    typeof summary.score === 'number' ? Math.max(0, Math.min(1, summary.score / 100)) : undefined;
+  // The authored counts describe the report the author wrote. Once a
+  // programmatic-test check is screened out they no longer match what was
+  // published, so recount from the cases that actually landed — a stats block
+  // that disagrees with the visible check list is worse than no stats.
+  const recount = cases.length !== allCases.length;
+  const verdicts = cases.map(({ case: c }) => toVerdict(c.result ?? c.status ?? c.verdict));
+  const counted = (verdict: Verdict) => verdicts.filter((v) => v === verdict).length;
+  const report = {
+    content,
+    failedChecks: recount ? counted('failed') : summary.failed,
+    overallConfidence: score,
+    passedChecks: recount ? counted('passed') : summary.passed,
+    summary: conclusion,
+    totalChecks: recount ? cases.length : (summary.total ?? cases.length),
+    uncertainChecks: recount
+      ? counted('uncertain') || undefined
+      : (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
+    // An explicit summary.verdict wins; otherwise the headline is derived
+    // from the ingested cases (deriveReportVerdict) so no report ships
+    // verdict-less and lists as a permanent "?". After a screen the authored
+    // verdict may have been about a check that is no longer here, so rederive.
+    verdict:
+      summary.verdict && !recount
+        ? toVerdict(summary.verdict)
+        : deriveReportVerdict(cases.map(({ case: c }) => c)),
+  };
+
   const client = await getTrpcClient();
   let acceptance;
+  let bundle;
   if (requestedAcceptanceId) {
-    const bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
+    bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
     acceptance = bundle.acceptance;
-    plan = plan?.map((item) => ({
-      ...item,
-      sourceCriterionId:
-        item.sourceCriterionId ??
-        bundle.checks?.find((check) => check.id === item.id || check.planItem?.id === item.id)
-          ?.planItem?.sourceCriterionId ??
-        undefined,
-    }));
     subject = {
       ref: {
         subjectId: acceptance.subjectId,
@@ -710,6 +746,21 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         ? { title: title || goal }
         : {}),
     });
+    // A subject's acceptance may already hold rounds; this one has to line up
+    // with them exactly as an explicit `--acceptance` round does.
+    bundle = await client.acceptance.getBundle.query({ id: acceptance.id });
+  }
+  plan = reuseSourceCriteria(plan, bundle?.checks);
+
+  const identicalRound = findIdenticalLatestRound(bundle?.rounds, { plan, report });
+  if (identicalRound) {
+    log.error(
+      `This report is identical to round ${identicalRound.roundIndex ?? '?'} (${identicalRound.id}) — nothing new to publish.`,
+    );
+    log.error(
+      `  To replace that round, delete it first: lh acceptance run delete ${identicalRound.id}`,
+    );
+    process.exit(1);
   }
   // The in-app conversation that ran this harness, if any (env-supplied).
   // Strictly the authoring conversation. `--operation` names the Agent Run
@@ -819,45 +870,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     }
   }
 
-  // 3. Write the report. `summary` is the overall conclusion (rendered at
-  //    the top of the report page); `content` is the full markdown detail.
-  const conclusion =
-    typeof summary.conclusion === 'string'
-      ? summary.conclusion
-      : typeof summary.note === 'string'
-        ? summary.note
-        : undefined;
-  // A 0-100 quality score lands on overallConfidence (0-1); the report page
-  // surfaces it as the `score` stat.
-  const score =
-    typeof summary.score === 'number' ? Math.max(0, Math.min(1, summary.score / 100)) : undefined;
-  // The authored counts describe the report the author wrote. Once a
-  // programmatic-test check is screened out they no longer match what was
-  // published, so recount from the cases that actually landed — a stats block
-  // that disagrees with the visible check list is worse than no stats.
-  const recount = cases.length !== allCases.length;
-  const verdicts = cases.map(({ case: c }) => toVerdict(c.result ?? c.status ?? c.verdict));
-  const counted = (verdict: Verdict) => verdicts.filter((v) => v === verdict).length;
-  await client.verify.upsertReport.mutate({
-    content,
-    failedChecks: recount ? counted('failed') : summary.failed,
-    overallConfidence: score,
-    passedChecks: recount ? counted('passed') : summary.passed,
-    summary: conclusion,
-    totalChecks: recount ? cases.length : (summary.total ?? cases.length),
-    uncertainChecks: recount
-      ? counted('uncertain') || undefined
-      : (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
-    // An explicit summary.verdict wins; otherwise the headline is derived
-    // from the ingested cases (deriveReportVerdict) so no report ships
-    // verdict-less and lists as a permanent "?". After a screen the authored
-    // verdict may have been about a check that is no longer here, so rederive.
-    verdict:
-      summary.verdict && !recount
-        ? toVerdict(summary.verdict)
-        : deriveReportVerdict(cases.map(({ case: c }) => c)),
-    verifyRunId: runId,
-  });
+  // 3. Write the report.
+  await client.verify.upsertReport.mutate({ ...report, verifyRunId: runId });
 
   // 4. Post the round's note. It renders as part of the round rather than as
   //    another message, so the discussion reads "<agent> shipped round N"

@@ -784,6 +784,91 @@ export function planFromResult(result: Record<string, unknown>, droppedIds?: Set
   return items;
 }
 
+type IngestPlanItem = NonNullable<ReturnType<typeof planFromResult>>[number];
+
+interface ExistingAcceptanceCheck {
+  id: string;
+  planItem?: { id?: string; sourceCriterionId?: string | null } | null;
+}
+
+/**
+ * Line a new round's plan up with the checks its acceptance already holds.
+ * The server mints a fresh criterion for every item that arrives without one,
+ * and the union keys rows by criterion — so a re-verification that skips this
+ * lands every check as a brand-new row instead of the next entry in its history.
+ */
+export function reuseSourceCriteria(
+  plan: IngestPlanItem[] | undefined,
+  checks: ExistingAcceptanceCheck[] | null | undefined,
+): IngestPlanItem[] | undefined {
+  if (!plan || !checks?.length) return plan;
+
+  return plan.map((item) => ({
+    ...item,
+    sourceCriterionId:
+      item.sourceCriterionId ??
+      checks.find((check) => check.id === item.id || check.planItem?.id === item.id)?.planItem
+        ?.sourceCriterionId ??
+      undefined,
+  }));
+}
+
+export interface IngestReportSnapshot {
+  content?: string;
+  failedChecks?: number;
+  passedChecks?: number;
+  summary?: string;
+  totalChecks?: number;
+}
+
+interface ExistingAcceptanceRound {
+  report?: {
+    content?: string | null;
+    failedChecks?: number | null;
+    passedChecks?: number | null;
+    summary?: string | null;
+    totalChecks?: number | null;
+  } | null;
+  run: {
+    id: string;
+    plan?: { id: string; title: string }[] | null;
+    roundIndex?: number | null;
+  };
+}
+
+/**
+ * The acceptance's latest round when it already publishes exactly this report.
+ * Re-running the same ingest (a retry loop, a re-sent command) would otherwise
+ * stack identical rounds on the page. Only a report with a body counts: without
+ * one, two genuinely different runs of the same plan are indistinguishable here.
+ */
+export function findIdenticalLatestRound(
+  rounds: ExistingAcceptanceRound[] | null | undefined,
+  incoming: { plan?: { id: string; title: string }[]; report: IngestReportSnapshot },
+): ExistingAcceptanceRound['run'] | undefined {
+  if (!incoming.report.content || !rounds?.length) return undefined;
+
+  const latest = rounds.reduce((a, b) =>
+    (b.run.roundIndex ?? 0) > (a.run.roundIndex ?? 0) ? b : a,
+  );
+  const published = latest.report;
+  if (!published) return undefined;
+
+  const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
+  const planKey = (items: { id: string; title: string }[] | null | undefined) =>
+    JSON.stringify((items ?? []).map(({ id, title }) => [id, title]));
+
+  const identical =
+    same(published.content, incoming.report.content) &&
+    same(published.summary, incoming.report.summary) &&
+    same(published.totalChecks, incoming.report.totalChecks) &&
+    same(published.passedChecks, incoming.report.passedChecks) &&
+    same(published.failedChecks, incoming.report.failedChecks) &&
+    planKey(latest.run.plan) === planKey(incoming.plan);
+
+  return identical ? latest.run : undefined;
+}
+
 /**
  * The LobeHub conversation this harness is running inside, read off the env the
  * agent runtime echoes into the child process. Lets a report published from an
