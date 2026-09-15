@@ -2227,9 +2227,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           state,
         );
 
-        return mockChat.mock.calls[0][0].messages.find(
-          (message: { role?: string }) => message.role === 'user',
-        )?.content as string;
+        return mockChat.mock.calls[0][0].messages
+          .filter((message: { role?: string }) => message.role === 'user')
+          .map((message: { content: string }) => message.content)
+          .join('\n');
       };
 
       it('injects the newest valid message TODO state and skips Notebook', async () => {
@@ -2263,6 +2264,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(content).toContain('New task');
         expect(content).not.toContain('Old task');
         expect(content).not.toContain('Stale metadata task');
+        const userMessages = mockChat.mock.calls[0][0].messages.filter(
+          (message: { role?: string }) => message.role === 'user',
+        );
+        expect(userMessages).toHaveLength(2);
+        expect(userMessages[0].content).toBe('Continue');
+        expect(userMessages[1].content).toContain('<todo_context>');
+        expect(userMessages[1].content).toContain('New task');
         expect(mockFindPlanDocuments).not.toHaveBeenCalled();
       });
 

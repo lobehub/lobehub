@@ -65,6 +65,27 @@ describe('ReactionFeedbackProcessor', () => {
     expect(result.metadata.reactionFeedbackProcessed).toBe(1);
   });
 
+  it('should skip virtual last-user messages when injecting feedback', async () => {
+    const processor = new ReactionFeedbackProcessor({ enabled: true });
+    const virtualTodoMessage = {
+      ...createMessage('3', 'user', '<todo_context>Current todos</todo_context>'),
+      meta: { virtualLastUser: true },
+    };
+
+    const result = await processor.process(
+      createContext([
+        createMessage('1', 'user', 'Run the task'),
+        createMessage('2', 'assistant', 'Finished', [{ count: 1, emoji: '👍', users: ['user1'] }]),
+        virtualTodoMessage,
+        createMessage('4', 'user', 'Next question'),
+      ]),
+    );
+
+    expect(result.messages[2].content).toBe('<todo_context>Current todos</todo_context>');
+    expect(result.messages[3].content).toBe('[User Feedback Emoji: 👍]\n\nNext question');
+    expect(result.metadata.reactionFeedbackProcessed).toBe(1);
+  });
+
   it('should handle multiple reactions on one assistant message', async () => {
     const processor = new ReactionFeedbackProcessor({ enabled: true });
 

@@ -1146,9 +1146,9 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('sends rejected ack when remote server URL is not configured', async () => {
-      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValueOnce('');
-
       const client = await connectAndOpen();
+      // Connection setup also reads the URL; only the agent run should see it missing.
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValueOnce('');
       client.simulateAgentRunRequest('openclaw', 'op-fail');
       await vi.advanceTimersByTimeAsync(0);
 
