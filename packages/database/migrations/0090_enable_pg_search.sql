@@ -1,2 +1,4 @@
--- Custom SQL migration file, put your code below! --
-CREATE EXTENSION IF NOT EXISTS pg_search;
+-- Custom SQL migration file, put your code below!
+-- Vercel/Supabase compatibility: pg_search is not available on managed PostgreSQL.
+-- LobeHub core chat does not require this extension; advanced BM25 search is skipped.
+-- CREATE EXTENSION IF NOT EXISTS pg_search;
