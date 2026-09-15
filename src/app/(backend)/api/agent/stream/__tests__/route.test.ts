@@ -964,4 +964,75 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
       expect(data.error).toBe('operationId parameter is required');
     });
   });
+
+  describe('AbortSignal listener cleanup', () => {
+    it('should remove the abort listener from request.signal when cleanup runs on agent_runtime_end', async () => {
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+
+      const addEventListenerSpy = vi.spyOn(request.signal, 'addEventListener');
+      const removeEventListenerSpy = vi.spyOn(request.signal, 'removeEventListener');
+
+      let capturedCallback: ((events: any[]) => void) | null = null;
+      let capturedSignal: AbortSignal | null = null;
+
+      mockStreamEventManager.subscribeStreamEvents.mockImplementation(
+        (_operationId, _lastEventId, callback, signal) => {
+          capturedCallback = callback;
+          capturedSignal = signal;
+          return new Promise(() => {});
+        },
+      );
+
+      await GET(request);
+
+      // The route registers an abort listener for client-disconnect detection
+      expect(addEventListenerSpy).toHaveBeenCalledWith('abort', expect.any(Function));
+      const registeredListener = addEventListenerSpy.mock.calls[0][1];
+
+      // Simulate agent runtime completion - triggers the internal cleanup
+      capturedCallback!([
+        {
+          type: 'agent_runtime_end',
+          timestamp: MOCK_TIMESTAMP + 1000,
+          operationId: 'test-operation',
+          data: { status: 'completed' },
+        },
+      ]);
+
+      expect(capturedSignal!.aborted).toBe(true);
+      // Regression: without removeEventListener the abort listener leaks per connection
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('abort', registeredListener);
+    });
+
+    it('should remove the abort listener from request.signal when the client aborts the request', async () => {
+      const request = new NextRequest(
+        'https://test.com/api/agent/stream?operationId=test-operation',
+      );
+
+      const addEventListenerSpy = vi.spyOn(request.signal, 'addEventListener');
+      const removeEventListenerSpy = vi.spyOn(request.signal, 'removeEventListener');
+
+      let capturedSignal: AbortSignal | null = null;
+
+      mockStreamEventManager.subscribeStreamEvents.mockImplementation(
+        (_operationId, _lastEventId, _callback, signal) => {
+          capturedSignal = signal;
+          return new Promise(() => {});
+        },
+      );
+
+      await GET(request);
+
+      const registeredListener = addEventListenerSpy.mock.calls[0][1];
+
+      // Simulate client disconnect - undici fires the abort event on request.signal
+      request.signal.dispatchEvent(new Event('abort'));
+
+      // Cleanup must run and deregister itself so the closed connection stops being referenced
+      expect(capturedSignal!.aborted).toBe(true);
+      expect(removeEventListenerSpy).toHaveBeenCalledWith('abort', registeredListener);
+    });
+  });
 });
