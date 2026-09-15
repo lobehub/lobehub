@@ -77,8 +77,6 @@ export interface AgentProfileCardProps {
   /** When set, avatar + title become clickable and trigger this handler. */
   onHeaderClick?: () => void;
   title: string;
-  /** Small label right after the name, e.g. which runtime the agent runs on. */
-  titleTag?: ReactNode;
 }
 
 const AgentProfileCard = memo<AgentProfileCardProps>(
@@ -90,7 +88,6 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
     loading,
     onHeaderClick,
     title,
-    titleTag,
     children,
   }) => {
     return (
@@ -119,16 +116,13 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
           />
           <Flexbox gap={2}>
             <Flexbox horizontal align={'center'} justify={'space-between'}>
-              <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-                <Text
-                  ellipsis
-                  className={`${styles.name} ${onHeaderClick ? styles.clickableTitle : ''}`}
-                  onClick={onHeaderClick}
-                >
-                  {title}
-                </Text>
-                {titleTag}
-              </Flexbox>
+              <Text
+                ellipsis
+                className={`${styles.name} ${onHeaderClick ? styles.clickableTitle : ''}`}
+                onClick={onHeaderClick}
+              >
+                {title}
+              </Text>
               {headerAction}
             </Flexbox>
             {description ? (

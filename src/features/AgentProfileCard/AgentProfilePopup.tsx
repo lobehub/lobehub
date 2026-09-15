@@ -2,7 +2,7 @@
 
 import { agentDisplayName, type AgentItem } from '@lobechat/types';
 import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { ActionIcon, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import { BookOpen, FileText, Settings, SquareTerminal } from 'lucide-react';
@@ -23,7 +23,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentProfileCard from '.';
-import { resolveAgentRuntime } from './runtime';
+import { resolveAgentRuntimeLabel } from './runtime';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
@@ -103,12 +103,11 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
       { revalidateOnFocus: false },
     );
 
-    const runtime = resolveAgentRuntime({
+    const runtimeLabel = resolveAgentRuntimeLabel({
       fetchedType: fetched?.agencyConfig?.heterogeneousProvider?.type,
-      isFetched: !!fetched,
       listEntry,
     });
-    const isExternal = !!runtime.heterogeneousLabel;
+    const isExternal = !!runtimeLabel;
 
     const merged: Partial<AgentPreview> = {
       avatar: fetched?.avatar ?? agent?.avatar,
@@ -181,7 +180,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             <Flexbox horizontal align={'center'} className={styles.statItem} gap={6}>
               <Icon icon={SquareTerminal} size={14} />
               <Text fontSize={12} type={'secondary'}>
-                {t('agentProfile.runtime', { name: runtime.heterogeneousLabel })}
+                {t('agentProfile.runtime', { name: runtimeLabel })}
               </Text>
             </Flexbox>
           ) : (
@@ -242,13 +241,6 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
                 onClick={handleSettings}
               />
             </Flexbox>
-          ) : undefined
-        }
-        titleTag={
-          runtime.known ? (
-            <Tag size={'small'} style={{ flexShrink: 0 }}>
-              {runtime.heterogeneousLabel ?? t('agentProfile.runtimeBuiltin')}
-            </Tag>
           ) : undefined
         }
         onHeaderClick={canConfigure ? handleHeaderClick : undefined}
