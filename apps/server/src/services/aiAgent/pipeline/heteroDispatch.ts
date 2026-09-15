@@ -1,4 +1,4 @@
-import { withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LOADING_FLAT } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
@@ -503,7 +503,9 @@ export const dispatchHeteroAgent = async (
     imageList: heteroImageList,
     jwt: operationJwt,
     operationId,
-    prompt,
+    // The CLI receives only the request: `/goal` is already in the system
+    // context, and Claude Code's own `/goal` command would otherwise take it.
+    prompt: stripGoalCommand(prompt),
     repos: topicRepos,
     resumeFallbackSystemContext,
     resumeSessionId,
