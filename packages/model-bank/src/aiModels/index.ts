@@ -29,6 +29,7 @@ import { default as githubcopilot } from './githubCopilot';
 import { default as glmcodingplan } from './glmCodingPlan';
 import { default as google } from './google';
 import { default as groq } from './groq';
+import { default as hefu } from './hefu';
 import { default as higress } from './higress';
 import { default as huggingface } from './huggingface';
 import { default as hunyuan } from './hunyuan';
@@ -141,6 +142,7 @@ const staticModelMap: ModelsMap = {
   google,
   glmcodingplan,
   groq,
+  hefu,
   higress,
   huggingface,
   hunyuan,
@@ -259,6 +261,7 @@ export { default as githubcopilot } from './githubCopilot';
 export { default as glmcodingplan } from './glmCodingPlan';
 export { default as google } from './google';
 export { default as groq } from './groq';
+export { default as hefu } from './hefu';
 export { default as higress } from './higress';
 export { default as huggingface } from './huggingface';
 export { default as hunyuan } from './hunyuan';

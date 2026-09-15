@@ -40,6 +40,7 @@
     "./google": "./src/aiModels/google.ts",
     "./glmCodingPlan": "./src/aiModels/glmCodingPlan.ts",
     "./groq": "./src/aiModels/groq.ts",
+    "./hefu": "./src/aiModels/hefu.ts",
     "./higress": "./src/aiModels/higress.ts",
     "./huggingface": "./src/aiModels/huggingface.ts",
     "./hunyuan": "./src/aiModels/hunyuan.ts",
