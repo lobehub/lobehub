@@ -2,9 +2,8 @@
 
 import { OFFICIAL_URL } from '@lobechat/const';
 import { Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
-import { Accordion, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import type { UploadProps } from 'antd';
-import { Form, Input as AntInput, Upload } from 'antd';
+import { Accordion, Button, Text, toast, Upload, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, Input as AntInput } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -142,13 +141,10 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
     [t, uploadWithProgress],
   );
 
-  const handleBannerUpload: UploadProps['customRequest'] = useCallback(
-    async (options: Parameters<NonNullable<UploadProps['customRequest']>>[0]) => {
-      const file = options.file as File;
-
+  const handleBannerUpload = useCallback(
+    async (file: File) => {
       if (file.size > MAX_FILE_SIZE) {
         toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
-        options.onError?.(new Error('File too large'));
         return;
       }
 
@@ -157,18 +153,15 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
           toast.error(t('user.workspaceProfile.errors.uploadFailed'));
-          options.onError?.(new Error('Upload failed'));
           return;
         }
         const url = result.url.startsWith('/')
           ? `${window.location.origin}${result.url}`
           : result.url;
         setBannerUrl(url);
-        options.onSuccess?.(result);
       } catch (error) {
         console.error('[WorkspaceProfileModal] Banner upload failed:', error);
         toast.error(t('user.workspaceProfile.errors.uploadFailed'));
-        options.onError?.(error as Error);
       } finally {
         setBannerUploading(false);
       }
@@ -256,10 +249,9 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
           <Flexbox gap={8} width="100%">
             <Upload
               accept="image/*"
-              customRequest={handleBannerUpload}
               maxCount={1}
-              showUploadList={false}
               style={{ display: 'block', width: '100%' }}
+              onFiles={([file]) => handleBannerUpload(file)}
             >
               <div
                 style={{

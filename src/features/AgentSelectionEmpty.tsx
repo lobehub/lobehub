@@ -4,7 +4,7 @@ import { Users } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-interface AgentSelectionEmptyProps extends Omit<EmptyProps, 'icon'> {
+interface AgentSelectionEmptyProps extends Omit<EmptyProps, 'icon' | 'variant'> {
   search?: boolean;
   variant?: 'noAvailable' | 'noSelected' | 'empty';
 }

@@ -1,7 +1,6 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import { Icon, Tooltip } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
-import { Upload } from 'antd';
+import { toast, Upload } from '@lobehub/ui/base-ui';
 import { css, cx } from 'antd-style';
 import { FileUp, FolderUp, ImageUp, Paperclip } from 'lucide-react';
 import { memo, Suspense, useState } from 'react';
@@ -90,13 +89,10 @@ const FileUpload = memo(() => {
         <Upload
           multiple
           accept={'image/*'}
-          showUploadList={false}
-          beforeUpload={async (file) => {
+          onFiles={async (files) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file], agentId);
-
-            return false;
+            await upload(files, agentId);
           }}
         >
           <div className={cx(hotArea)}>{t('upload.action.imageUpload')}</div>
@@ -114,8 +110,7 @@ const FileUpload = memo(() => {
       label: (
         <Upload
           multiple
-          showUploadList={false}
-          beforeUpload={async (file) => {
+          beforeUpload={(file) => {
             if (
               (file.type.startsWith('image') && !canUploadImage) ||
               (file.type.startsWith('video') && !canUploadVideo) ||
@@ -123,7 +118,6 @@ const FileUpload = memo(() => {
             )
               return false;
 
-            // Validate video file size
             const validation = validateVideoFileSize(file);
             if (!validation.isValid) {
               toast.error(
@@ -135,11 +129,12 @@ const FileUpload = memo(() => {
               return false;
             }
 
+            return true;
+          }}
+          onFiles={async (files) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file], agentId);
-
-            return false;
+            await upload(files, agentId);
           }}
         >
           <div className={cx(hotArea)}>{t('upload.action.fileUpload')}</div>
@@ -154,8 +149,7 @@ const FileUpload = memo(() => {
         <Upload
           directory
           multiple={true}
-          showUploadList={false}
-          beforeUpload={async (file) => {
+          beforeUpload={(file) => {
             if (
               (file.type.startsWith('image') && !canUploadImage) ||
               (file.type.startsWith('video') && !canUploadVideo) ||
@@ -163,7 +157,6 @@ const FileUpload = memo(() => {
             )
               return false;
 
-            // Validate video file size
             const validation = validateVideoFileSize(file);
             if (!validation.isValid) {
               toast.error(
@@ -175,11 +168,12 @@ const FileUpload = memo(() => {
               return false;
             }
 
+            return true;
+          }}
+          onFiles={async (files) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file], agentId);
-
-            return false;
+            await upload(files, agentId);
           }}
         >
           <div className={cx(hotArea)}>{t('upload.action.folderUpload')}</div>

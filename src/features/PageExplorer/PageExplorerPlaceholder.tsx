@@ -1,8 +1,7 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { Center, FileTypeIcon, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Upload } from 'antd';
+import { Text, Upload } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import React, { memo, useState } from 'react';
@@ -169,7 +168,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
     };
 
     const handleUploadFile = async (file: File) => {
-      if (!canCreate) return false;
+      if (!canCreate) return;
 
       try {
         setIsUploading(true);
@@ -247,8 +246,6 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       } finally {
         setIsUploading(false);
       }
-
-      return false; // Prevent default upload behavior
     };
 
     return (
@@ -282,10 +279,9 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             {/* Upload Files (PDF, DOCX, Markdown) */}
             <Upload
               accept=".md,.markdown,.pdf,.docx"
-              beforeUpload={handleUploadFile}
               disabled={!canCreate || isUploading}
               multiple={false}
-              showUploadList={false}
+              onFiles={([file]) => handleUploadFile(file)}
             >
               <Flexbox
                 className={styles.card}

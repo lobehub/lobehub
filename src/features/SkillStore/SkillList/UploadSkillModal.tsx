@@ -8,9 +8,10 @@ import {
   type ModalInstance,
   Spin,
   toast,
+  Upload,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Typography, Upload } from 'antd';
+import { Typography } from 'antd';
 import { sha256 } from 'js-sha256';
 import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -92,15 +93,11 @@ const UploadSkillContent = memo(() => {
 
       {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
-      <Upload.Dragger
+      <Upload
+        dragger
         accept=".zip,.skill"
         disabled={loading || !canCreate}
-        showUploadList={false}
-        beforeUpload={(file) => {
-          if (!canCreate) return false;
-          handleUploadFile(file);
-          return false;
-        }}
+        onFiles={([file]) => void handleUploadFile(file)}
       >
         <Flexbox align="center" gap={8} padding={24}>
           {loading ? (
@@ -123,7 +120,7 @@ const UploadSkillContent = memo(() => {
             </>
           )}
         </Flexbox>
-      </Upload.Dragger>
+      </Upload>
 
       <Flexbox gap={8}>
         <Typography.Text strong>{t('agentSkillModal.upload.requirements')}</Typography.Text>

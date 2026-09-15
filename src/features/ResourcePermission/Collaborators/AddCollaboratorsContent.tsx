@@ -264,7 +264,7 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
           ) : filtered.length === 0 ? (
             <Empty
               icon={isSearchMiss ? SearchXIcon : UsersIcon}
-              paddingBlock={48}
+              style={{ paddingBlock: 48 }}
               description={t(
                 isSearchMiss
                   ? 'permission.collaborators.addModal.noMatch'

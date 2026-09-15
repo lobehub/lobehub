@@ -70,7 +70,7 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           <Empty
             description={t('screen4.share.description')}
             icon={HeartHandshake}
-            padding={0}
+            style={{ padding: 0 }}
             title={t('screen4.share.title')}
             type={'page'}
             descriptionProps={{
