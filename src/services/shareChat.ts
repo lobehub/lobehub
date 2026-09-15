@@ -7,6 +7,8 @@ export interface ShareChatExecParams {
   clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
   prompt: string;
   shareId: string;
+  /** The prompt was queued behind a running turn and renders as its continuation. */
+  steer?: boolean;
   /** Absent → the server creates a new visitor topic (counted against the topic cap). */
   topicId?: string | null;
 }

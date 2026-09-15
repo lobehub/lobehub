@@ -234,6 +234,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
+   * The prompt was queued while the previous turn was still running. The user
+   * message is persisted with `metadata.steer` so it renders as a continuation
+   * of that turn.
+   */
+  steer?: boolean;
+  /**
    * Whether the LLM call should use streaming.
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */

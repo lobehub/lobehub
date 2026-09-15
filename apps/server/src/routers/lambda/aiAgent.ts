@@ -1097,6 +1097,12 @@ const ExecAgentSchema = z
      * messages are the dominant caller. Pass a more specific value (`'cli'`,
      * `'openapi'`, `'eval'`, …) to override.
      */
+    /**
+     * The prompt was queued while the previous turn was still running. The
+     * persisted user message carries `metadata.steer` so it renders as a
+     * continuation of that turn instead of a new one.
+     */
+    steer: z.boolean().optional(),
     trigger: z
       .string()
       .refine((value) => value !== RequestTrigger.Bot, {
@@ -2143,6 +2149,7 @@ export const aiAgentRouter = router({
       resumeApprovals,
       resumeToolResult,
       selectedToolIds,
+      steer,
       trigger,
       userInterventionConfig,
     } = input;
@@ -2339,6 +2346,7 @@ export const aiAgentRouter = router({
         resumeToolResult,
         selectedToolIds,
         slug,
+        steer,
         trigger: trigger ?? RequestTrigger.Chat,
         userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,

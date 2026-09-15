@@ -259,6 +259,14 @@ describe('shareChatRouter', () => {
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
+    it('keeps the steer mark of a follow-up the visitor queued behind a running turn', async () => {
+      const caller = await createCaller();
+
+      await caller.execAgent({ prompt: 'follow up', shareId: 'share-1', steer: true });
+
+      expect(mockExecAgent).toHaveBeenCalledWith(expect.objectContaining({ steer: true }));
+    });
+
     it('dispatches a creator-scoped run carrying the share gate', async () => {
       const caller = await createCaller();
 

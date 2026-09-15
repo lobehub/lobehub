@@ -340,6 +340,8 @@ export interface TurnSetupInput {
   runFromHistory: boolean;
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
+  /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
+  steer?: boolean;
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   title?: string;
   trigger?: string;
@@ -361,6 +363,7 @@ export interface TurnSetupResult {
   provider: string;
   requestTriggerMetadata: {
     agentDispatch?: { kind: 'callAgent'; visibility: 'internal' };
+    steer?: true;
     trigger?: RequestTrigger;
   };
   runAttachments: RunAttachments;
@@ -411,6 +414,7 @@ export const setupTurn = async (
     resume,
     runFromHistory,
     shareGate,
+    steer,
     throwIfExecutionAborted,
     title,
     trigger,
@@ -671,6 +675,9 @@ export const setupTurn = async (
     // Bot-channel turns are inserted under the OWNER's userId; keep the real
     // platform author alongside so the UI can attribute the bubble correctly.
     ...(botSender ? { botSender } : undefined),
+    // A follow-up queued behind a running turn renders as that turn's
+    // continuation; the client's optimistic row is replaced by this one.
+    ...(steer ? { steer: true as const } : undefined),
   };
 
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded

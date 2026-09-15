@@ -637,7 +637,7 @@ export class GatewayActionImpl {
      */
     messageContext?: ConversationContext;
     /** Request metadata carried from the originating user message. */
-    metadata?: Pick<MessageMetadata, 'trigger'>;
+    metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
     /** Called when the gateway session completes (agent finished running) */
@@ -814,6 +814,7 @@ export class GatewayActionImpl {
               clientIds,
               prompt: message,
               shareId: agentShareId,
+              steer: metadata?.steer,
               topicId: executionContext.topicId,
             },
             { signal: abortSignal },
@@ -879,6 +880,9 @@ export class GatewayActionImpl {
               resumeApprovals,
               resumeToolResult,
               selectedToolIds,
+              // A queued follow-up keeps its continuation mark on the row the
+              // server persists, which replaces the optimistic one.
+              steer: metadata?.steer,
               trigger: metadata?.trigger,
               userInterventionConfig,
             },

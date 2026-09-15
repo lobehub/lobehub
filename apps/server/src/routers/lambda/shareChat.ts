@@ -218,6 +218,8 @@ export const shareChatRouter = router({
         /** See `SHARE_VISITOR_PROMPT_MAX_LENGTH`'s JSDoc for the size-bound rationale. */
         prompt: z.string().max(SHARE_VISITOR_PROMPT_MAX_LENGTH),
         shareId: z.string(),
+        /** Queued behind a running turn; see `aiAgent.execAgent`'s `steer`. */
+        steer: z.boolean().optional(),
         /** Absent → the run creates a new visitor topic (counted against the topic cap). */
         topicId: z.string().nullish(),
       }),
@@ -359,6 +361,7 @@ export const shareChatRouter = router({
           interactiveStart: false,
           prompt: input.prompt,
           shareGate,
+          steer: input.steer,
           // Not `RequestTrigger.Chat`: a share run is billed to the CREATOR,
           // so its spend rows must be separable from the creator's own chat
           // spend (they land on the same account). The trigger rides
