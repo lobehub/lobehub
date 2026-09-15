@@ -53,6 +53,20 @@ export const useDocumentCommentDeepLink = (documentId: string) => {
   }, [documentId, location.hash, location.pathname, location.search, navigate]);
 
   const clearFocus = useCallback(() => setFocus(undefined), []);
+  /**
+   * Land on a thread picked from the body whose card is not loaded yet — the
+   * same pinning a notification deep link gets, minus the URL round trip.
+   */
+  const focusThread = useCallback(
+    (rootCommentId: string) =>
+      setFocus((current) => ({
+        commentId: rootCommentId,
+        documentId,
+        rootCommentId,
+        token: (current?.token ?? 0) + 1,
+      })),
+    [documentId],
+  );
   /** Fall back to the thread root when the linked reply itself is gone. */
   const focusRoot = useCallback(
     () =>
@@ -64,5 +78,10 @@ export const useDocumentCommentDeepLink = (documentId: string) => {
   );
 
   // A focus target belongs to the document it was opened on.
-  return { clearFocus, focus: focus?.documentId === documentId ? focus : undefined, focusRoot };
+  return {
+    clearFocus,
+    focus: focus?.documentId === documentId ? focus : undefined,
+    focusRoot,
+    focusThread,
+  };
 };

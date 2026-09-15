@@ -129,6 +129,15 @@ describe('DocumentCommentModel', () => {
       .from(documentComments)
       .where(eq(documentComments.id, root.comment.id));
     expect(stored.selectionAnchor).toEqual(selectionAnchor);
+
+    // The body paints from the document's full anchor set, independent of
+    // thread paging: roots only, anchored only, scoped to the workspace.
+    await memberModel.create({ clientId: 'plain-root', content: 'whole page', documentId });
+    expect(await authorModel.listAnchors(documentId)).toEqual([
+      { id: root.comment.id, selectionAnchor },
+    ]);
+    expect(await authorModel.listAnchors(secondDocumentId)).toEqual([]);
+    expect(await outsiderModel.listAnchors(documentId)).toEqual([]);
   });
 
   it('leaves a comment made without a selection unanchored', async () => {

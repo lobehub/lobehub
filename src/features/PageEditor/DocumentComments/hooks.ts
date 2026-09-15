@@ -1,4 +1,5 @@
 import type {
+  DocumentCommentAnchorList,
   DocumentCommentDetail,
   DocumentCommentItem,
   DocumentCommentReplyPage,
@@ -124,6 +125,20 @@ export const useOptimisticDocumentComment = () => {
       });
     },
     [user?.avatar, user?.fullName, user?.id, user?.username, workspaceId],
+  );
+};
+
+/**
+ * Every anchored root of the document, independent of how many thread pages
+ * the list has loaded. Body highlights and badges are painted from this so a
+ * newer anchored comment is discoverable from the document right after a
+ * reload, not only once the reader has paged the list far enough to reach it.
+ */
+export const useDocumentCommentAnchorList = (documentId?: string | null) => {
+  const workspaceId = useActiveWorkspaceId();
+  return useClientDataSWR<DocumentCommentAnchorList>(
+    documentId && workspaceId ? documentCommentKeys.anchors(workspaceId, documentId) : null,
+    () => documentCommentService.listAnchors(documentId!),
   );
 };
 

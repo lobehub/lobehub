@@ -1,5 +1,21 @@
-import type { DocumentCommentJson, DocumentCommentSelectionAnchor } from '@lobechat/types';
-import { and, asc, count, eq, getTableColumns, gt, inArray, isNull, or, sql } from 'drizzle-orm';
+import type {
+  DocumentCommentAnchorItem,
+  DocumentCommentJson,
+  DocumentCommentSelectionAnchor,
+} from '@lobechat/types';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  getTableColumns,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { DocumentCommentItem } from '../schemas/documentComment';
 import { documentCommentMentions, documentComments } from '../schemas/documentComment';
@@ -471,6 +487,33 @@ export class DocumentCommentModel {
         ? encodeCursor(pageRows.at(-1)!.cursorCreatedAt, pageRows.at(-1)!.id)
         : null,
     };
+  }
+
+  /**
+   * Every anchored root of a document, oldest-first, unpaginated. Anchors are
+   * small and bounded (see the router's quote cap), and a document has far
+   * fewer anchored threads than comments, so one round trip is cheaper than
+   * paging the full thread list just to paint highlights. Tombstoned roots
+   * keep their anchor while replies remain, matching `listThreads`.
+   */
+  async listAnchors(documentId: string): Promise<DocumentCommentAnchorItem[]> {
+    const workspaceId = this.requireWorkspaceId();
+    const rows = await this.db
+      .select({ id: documentComments.id, selectionAnchor: documentComments.selectionAnchor })
+      .from(documentComments)
+      .where(
+        and(
+          eq(documentComments.documentId, documentId),
+          eq(documentComments.workspaceId, workspaceId),
+          isNull(documentComments.parentCommentId),
+          isNotNull(documentComments.selectionAnchor),
+        ),
+      )
+      .orderBy(asc(documentComments.createdAt), asc(documentComments.id));
+
+    return rows.flatMap(({ id, selectionAnchor }) =>
+      selectionAnchor ? [{ id, selectionAnchor }] : [],
+    );
   }
 
   async listReplies(params: ListDocumentCommentRepliesParams) {

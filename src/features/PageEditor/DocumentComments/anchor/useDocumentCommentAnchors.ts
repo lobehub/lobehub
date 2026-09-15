@@ -1,6 +1,6 @@
 'use client';
 
-import type { DocumentCommentSelectionAnchor, DocumentCommentThread } from '@lobechat/types';
+import type { DocumentCommentAnchorItem } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
 import type { Dispatch, SetStateAction } from 'react';
@@ -113,9 +113,22 @@ export interface DocumentCommentAnchorsValue {
   setHoveredRootId: Dispatch<SetStateAction<string | null>>;
 }
 
+export interface DocumentCommentAnchorsOptions {
+  /**
+   * A run was picked in the body but its card is not mounted — the thread is
+   * on a page the list has not loaded yet. The caller brings it into view
+   * (the same pinning a notification deep link uses).
+   */
+  onPickUnloaded?: (rootCommentId: string) => void;
+}
+
 /**
  * Resolve every anchored thread against the live body, paint the highlights,
  * and wire the two-way jump between a run and its comment card.
+ *
+ * `anchors` is the document's complete anchor set, not the loaded thread
+ * pages: highlights must exist for every anchored run so a comment further
+ * down the list is still discoverable from the body.
  *
  * Nothing here writes back to the server: an anchor's stored offsets are a
  * capture-time snapshot, and re-location is a pure read of the current DOM. A
@@ -123,7 +136,8 @@ export interface DocumentCommentAnchorsValue {
  * re-pointed at a different run.
  */
 export const useDocumentCommentAnchors = (
-  threads: DocumentCommentThread[],
+  anchors: readonly DocumentCommentAnchorItem[],
+  { onPickUnloaded }: DocumentCommentAnchorsOptions = {},
 ): DocumentCommentAnchorsValue => {
   const editor = usePageEditorStore((s) => s.editor);
   // A quote captured before a document switch belongs to the previous body;
@@ -143,40 +157,37 @@ export const useDocumentCommentAnchors = (
 
   const flatRef = useRef<FlattenedText>(EMPTY_FLATTENED_TEXT);
   const matchesRef = useRef<ReadonlyMap<string, AnchorMatch>>(EMPTY_MATCHES);
-  // `threads` is rebuilt from the SWR pages on every render, so it can't be an
+  // `anchors` is rebuilt from SWR data on every render, so it can't be an
   // effect dependency — the resolve below writes state and would re-run itself
   // forever. The signature is the content that actually matters, as a string.
-  const threadsRef = useRef(threads);
-  threadsRef.current = threads;
+  const anchorsRef = useRef(anchors);
+  anchorsRef.current = anchors;
+  const onPickUnloadedRef = useRef(onPickUnloaded);
+  onPickUnloadedRef.current = onPickUnloaded;
 
   const anchorSignature = useMemo(
     () =>
-      threads
-        .flatMap(({ root }) =>
-          root.selectionAnchor
-            ? [`${root.id}\u0001${root.selectionAnchor.start}\u0001${root.selectionAnchor.quote}`]
-            : [],
+      anchors
+        .map(
+          ({ id, selectionAnchor }) =>
+            `${id}\u0001${selectionAnchor.start}\u0001${selectionAnchor.quote}`,
         )
         .join('\u0000'),
-    [threads],
+    [anchors],
   );
   const hasPendingAnchor = Boolean(pendingAnchor);
 
   useEffect(() => {
-    const anchors = threadsRef.current.flatMap(({ root }) =>
-      root.selectionAnchor
-        ? [[root.id, root.selectionAnchor] as [string, DocumentCommentSelectionAnchor]]
-        : [],
-    );
+    const entries = anchorsRef.current;
 
     // Most documents carry no anchors at all; skip the body walk entirely for them.
     const flat =
-      anchors.length > 0 || hasPendingAnchor ? flattenEditorText(element) : EMPTY_FLATTENED_TEXT;
+      entries.length > 0 || hasPendingAnchor ? flattenEditorText(element) : EMPTY_FLATTENED_TEXT;
     const matches = new Map<string, AnchorMatch>();
     const orphaned = new Set<string>();
 
-    for (const [rootId, anchor] of anchors) {
-      const match = locateAnchor(flat, anchor);
+    for (const { id: rootId, selectionAnchor } of entries) {
+      const match = locateAnchor(flat, selectionAnchor);
       if (match) matches.set(rootId, match);
       else orphaned.add(rootId);
     }
@@ -244,7 +255,9 @@ export const useDocumentCommentAnchors = (
       setSelectedRootId(hitId);
       if (!hitId) return;
 
-      focusCommentCard(hitId, { scroll: false });
+      // The card may sit on a thread page the list has not loaded yet — the
+      // highlight exists because anchors are fetched for the whole document.
+      if (!focusCommentCard(hitId, { scroll: false })) onPickUnloadedRef.current?.(hitId);
     };
 
     element.addEventListener('click', handleClick);

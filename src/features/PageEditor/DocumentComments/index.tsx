@@ -1,5 +1,6 @@
 'use client';
 
+import type { DocumentCommentAnchorItem } from '@lobechat/types';
 import { Center, Flexbox } from '@lobehub/ui';
 import { Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -15,6 +16,7 @@ import DocumentCommentHighlightStyle from './anchor/HighlightStyle';
 import { useDocumentCommentAnchors } from './anchor/useDocumentCommentAnchors';
 import Composer from './Composer';
 import {
+  useDocumentCommentAnchorList,
   useDocumentCommentDetail,
   useDocumentCommentSummary,
   useDocumentCommentThreads,
@@ -40,14 +42,16 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   const workspaceId = useActiveWorkspaceId();
   const summary = useDocumentCommentSummary(workspaceId ? documentId : undefined);
   const threads = useDocumentCommentThreads(workspaceId ? documentId : undefined);
+  const anchorList = useDocumentCommentAnchorList(workspaceId ? documentId : undefined);
   const createOptimistic = useOptimisticDocumentComment();
-  const { clearFocus, focus, focusRoot } = useDocumentCommentDeepLink(documentId);
+  const { clearFocus, focus, focusRoot, focusThread } = useDocumentCommentDeepLink(documentId);
   const reloadSummary = summary.mutate;
   const reloadThreads = threads.reload;
   const mutateThreads = threads.mutate;
+  const mutateAnchors = anchorList.mutate;
   const refresh = useCallback(async () => {
-    await Promise.all([reloadThreads(), reloadSummary()]);
-  }, [reloadSummary, reloadThreads]);
+    await Promise.all([reloadThreads(), reloadSummary(), mutateAnchors()]);
+  }, [mutateAnchors, reloadSummary, reloadThreads]);
   const updateSummaryTotal = useCallback(
     (delta: number) =>
       reloadSummary(
@@ -109,8 +113,33 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
         void reloadThreads();
       }
       if (created.isDuplicate) void reloadSummary();
+      // The body paints from the document-wide anchor list, so the new root
+      // joins it here rather than waiting for the next revalidation.
+      const createdAnchor = created.comment.selectionAnchor;
+      if (createdAnchor) {
+        void mutateAnchors(
+          (current) =>
+            current && !current.items.some(({ id }) => id === created.comment.id)
+              ? {
+                  items: [
+                    ...current.items,
+                    { id: created.comment.id, selectionAnchor: createdAnchor },
+                  ],
+                }
+              : current,
+          { revalidate: false },
+        );
+      }
     },
-    [createOptimistic, documentId, mutateThreads, reloadSummary, reloadThreads, updateSummaryTotal],
+    [
+      createOptimistic,
+      documentId,
+      mutateAnchors,
+      mutateThreads,
+      reloadSummary,
+      reloadThreads,
+      updateSummaryTotal,
+    ],
   );
   const handleUpdate: DocumentCommentUpdateHandler = useCallback(
     async (comment, value) => {
@@ -163,13 +192,24 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
         : undefined,
     [focus, focusedRootData, hasFocusedThread, isFocusedRootUsable],
   );
-  // The pinned thread is not on a loaded page yet, so it has to be resolved
-  // alongside the list or its quote would render as a dead jump target.
-  const anchorThreads = useMemo(
-    () => (pinnedThread ? [pinnedThread, ...threads.items] : threads.items),
-    [pinnedThread, threads.items],
-  );
-  const anchors = useDocumentCommentAnchors(anchorThreads);
+  // Highlights come from the document-wide anchor list so every anchored run
+  // is discoverable from the body, however far down the list its card sits.
+  // Loaded pages and the pinned thread are folded in on top: an optimistic
+  // root has no server row yet, and a pinned root may predate the last fetch.
+  const anchorItems = useMemo(() => {
+    const byId = new Map<string, DocumentCommentAnchorItem>();
+    for (const { id, selectionAnchor } of anchorList.data?.items ?? []) {
+      byId.set(id, { id, selectionAnchor });
+    }
+    const loaded = pinnedThread ? [pinnedThread, ...threads.items] : threads.items;
+    for (const { root } of loaded) {
+      if (root.selectionAnchor && !byId.has(root.id)) {
+        byId.set(root.id, { id: root.id, selectionAnchor: root.selectionAnchor });
+      }
+    }
+    return [...byId.values()];
+  }, [anchorList.data, pinnedThread, threads.items]);
+  const anchors = useDocumentCommentAnchors(anchorItems, { onPickUnloaded: focusThread });
   const isFocusedRootMissing =
     Boolean(focusRootCommentId) &&
     (focusedRoot.isNotFound || (Boolean(focusedRootData) && !isFocusedRootUsable));

@@ -1,4 +1,5 @@
 import type {
+  DocumentCommentAnchorList,
   DocumentCommentDetail,
   DocumentCommentItem as DocumentCommentDTO,
 } from '@lobechat/types';
@@ -491,6 +492,16 @@ export const documentCommentRouter = router({
     ]);
     return { ...enriched[0], replyCount } satisfies DocumentCommentDetail;
   }),
+
+  listAnchors: documentCommentProcedure
+    .input(z.object({ documentId: idSchema }))
+    .query(async ({ ctx, input }) => {
+      const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_READ');
+      await assertDocumentView(ctx, input.documentId, grantedPermissions);
+      return {
+        items: await ctx.documentCommentModel.listAnchors(input.documentId),
+      } satisfies DocumentCommentAnchorList;
+    }),
 
   listReplies: documentCommentProcedure
     .input(pageSchema.extend({ rootCommentId: idSchema }))

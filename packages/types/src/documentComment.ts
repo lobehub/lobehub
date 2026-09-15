@@ -71,6 +71,20 @@ export interface DocumentCommentThread {
   root: DocumentCommentItem;
 }
 
+/**
+ * One anchored root, as served by `listAnchors`. Body highlights are painted
+ * from this list rather than from the paginated thread cards, so every
+ * anchored run is discoverable from the document before its card has loaded.
+ */
+export interface DocumentCommentAnchorItem {
+  id: string;
+  selectionAnchor: DocumentCommentSelectionAnchor;
+}
+
+export interface DocumentCommentAnchorList {
+  items: DocumentCommentAnchorItem[];
+}
+
 export interface DocumentCommentThreadPage {
   items: DocumentCommentThread[];
   nextCursor: string | null;

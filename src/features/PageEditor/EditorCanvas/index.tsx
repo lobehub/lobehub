@@ -53,6 +53,10 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
       extraPlugins={extraPlugins}
       mentionOption={mentionOption}
       placeholder={placeholder || t('pageEditor.editorPlaceholder')}
+      // Commenting on a selection is a read action: it must survive the page
+      // being locked by another collaborator or opened view-only, when the
+      // formatting toolbar (and Ask Copilot with it) is withheld.
+      readonlySelectionItems={editable ? undefined : addCommentItem}
       slashItems={slashItems}
       style={style}
       toolbarExtraItems={editable ? toolbarExtraItems : undefined}

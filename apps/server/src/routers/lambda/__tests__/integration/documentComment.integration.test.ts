@@ -172,6 +172,12 @@ describe('documentCommentRouter integration', () => {
     expect((await member.listThreads({ documentId })).items[0].root.selectionAnchor).toEqual(
       selectionAnchor,
     );
+    // The document-wide anchor list is what paints body highlights; readers
+    // get it under the same view check as the thread list.
+    const viewer = documentCommentRouter.createCaller(context(viewerId, workspaceId));
+    expect(await viewer.listAnchors({ documentId })).toEqual({
+      items: [{ id: created.comment.id, selectionAnchor }],
+    });
 
     // Offsets that disagree with the quote mean the client measured against
     // different text, so the hint would mis-rank every re-location candidate.

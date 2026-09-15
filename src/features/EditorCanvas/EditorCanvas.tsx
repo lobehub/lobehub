@@ -140,6 +140,15 @@ export interface EditorCanvasProps {
   plugins?: EditorPlugins;
 
   /**
+   * Selection actions that stay available while the editor is NOT editable
+   * (locked or view-only page). They render in a floating toolbar of their
+   * own with no formatting controls, so a reader can still act on a selection
+   * — comment on it, ask about it — without being offered edits that would
+   * never save. Ignored while editable; use `toolbarExtraItems` there.
+   */
+  readonlySelectionItems?: ChatInputActionsProps['items'];
+
+  /**
    * Slash menu items
    */
   slashItems?: SlashOptions['items'];
