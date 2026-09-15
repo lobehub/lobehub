@@ -607,7 +607,8 @@ export class GoalService {
     if (taskNodes.length === 0) return undefined;
 
     const nodeByTaskId = new Map(taskNodes.map((node) => [node.taskId, node.id]));
-    const tasks = await this.taskModel.findByIds(taskNodes.map((node) => node.taskId));
+    // Runs on every graph poll: read the one column, not whole task rows.
+    const tasks = await this.taskModel.findAssigneesByIds(taskNodes.map((node) => node.taskId));
 
     const result: Record<string, string> = {};
     for (const task of tasks) {

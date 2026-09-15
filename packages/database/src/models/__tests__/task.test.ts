@@ -2026,6 +2026,25 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('findAssigneesByIds', () => {
+    it('returns only id and assignee, scoped to the owner', async () => {
+      const model1 = new TaskModel(serverDB, userId);
+      const model2 = new TaskModel(serverDB, userId2);
+      const a = await model1.create({ instruction: 'A' });
+      const other = await model2.create({ instruction: 'Other user' });
+
+      const found = await model1.findAssigneesByIds([a.id, other.id]);
+
+      // The goal graph polls this; a full row (instruction, editor data, config)
+      // for every task node is exactly what it must not pull.
+      expect(found).toEqual([{ assigneeAgentId: a.assigneeAgentId, id: a.id }]);
+    });
+
+    it('returns an empty array for empty input', async () => {
+      expect(await new TaskModel(serverDB, userId).findAssigneesByIds([])).toEqual([]);
+    });
+  });
+
   describe('resolve', () => {
     it('should resolve by task id when value starts with task_', async () => {
       const model = new TaskModel(serverDB, userId);
