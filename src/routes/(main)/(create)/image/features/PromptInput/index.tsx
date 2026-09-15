@@ -26,6 +26,7 @@ import {
   useImageGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import {
+  BackgroundSelect,
   CfgSliderInput,
   DimensionControlGroup,
   ImageNum,
@@ -165,6 +166,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const currentModel = useImageStore(imageGenerationConfigSelectors.model);
   const currentProvider = useImageStore(imageGenerationConfigSelectors.provider);
   const isInit = useImageStore((s) => s.isInit);
+  const isSupportBackground = useImageStore(isSupportedParamSelector('background'));
   const isSupportQuality = useImageStore(isSupportedParamSelector('quality'));
   const isSupportResolution = useImageStore(isSupportedParamSelector('resolution'));
   const isSupportSize = useImageStore(isSupportedParamSelector('size'));
@@ -352,6 +354,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                     <Flexbox gap={6}>
                       <Text fontSize={12}>{t('config.size.label')}</Text>
                       <SizeSelect />
+                    </Flexbox>
+                  )}
+                  {isSupportBackground && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.background.label')}</Text>
+                      <BackgroundSelect />
                     </Flexbox>
                   )}
                   {showDimensionControl && <DimensionControlGroup />}
