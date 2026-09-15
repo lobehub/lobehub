@@ -36,13 +36,7 @@ const toModelCard = (item: EnabledAiModel | LobeDefaultAiModelListItem) => ({
  * model-instance reasoning config and the topic's reasoning pin — all read
  * from the stores, never the network.
  */
-export const createBrowserModelParamsProviders = ({
-  model,
-  provider,
-}: {
-  model: string;
-  provider: string;
-}): ModelParamsProviders => ({
+export const createBrowserModelParamsProviders = (): ModelParamsProviders => ({
   findTopicReasoningPin: async (topicId) => {
     const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
     if (!topic?.model) return null;
@@ -58,26 +52,19 @@ export const createBrowserModelParamsProviders = ({
   },
   getModelReasoningConfig: async (model, provider) =>
     aiModelSelectors.modelReasoningConfig(model, provider)(getAiInfraStoreState()),
+  // The enabled list already merges the user's settings over the card, so it
+  // doubles as the user row: an explicitly emptied extend-param list is an
+  // opt-out the shared rule must keep, not a miss to fall back from.
+  getUserModelRow: async (m, p) => {
+    const state = getAiInfraStoreState();
+    const own = aiModelSelectors.getEnabledModelById(m, p)(state);
+    const extendParams = aiModelSelectors.modelExtendParams(m, p)(state);
+    if (!own && extendParams === undefined) return null;
+    return { displayName: own?.displayName, extendParams };
+  },
   listModelCards: () => {
     const state = getAiInfraStoreState();
-    // The attempt's own card goes through the selectors so a user-edited
-    // extend-param list is honoured exactly as the rest of the app reads it.
-    const own = aiModelSelectors.getEnabledModelById(model, provider)(state);
-    const ownExtendParams = aiModelSelectors.modelExtendParams(model, provider)(state);
-    const ownCard =
-      own || ownExtendParams
-        ? [
-            {
-              ...(own ? toModelCard(own) : { id: model, providerId: provider }),
-              extendParams: ownExtendParams,
-            },
-          ]
-        : [];
-    return [
-      ...ownCard,
-      ...(state.enabledAiModels ?? []).filter((item) => item !== own),
-      ...state.builtinAiModelList,
-    ].map((item) => ('providerId' in item && 'extendParams' in item ? item : toModelCard(item)));
+    return [...(state.enabledAiModels ?? []), ...state.builtinAiModelList].map(toModelCard);
   },
 });
 
@@ -113,5 +100,5 @@ export const resolveBrowserModelParams = (
       searchDecision: ctx.searchDecision,
       topicId: ctx.topicId,
     },
-    createBrowserModelParamsProviders({ model: ctx.model, provider: ctx.provider }),
+    createBrowserModelParamsProviders(),
   );

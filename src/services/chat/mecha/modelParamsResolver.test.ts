@@ -31,10 +31,7 @@ beforeEach(() => {
 
 describe('createBrowserModelParamsProviders', () => {
   it('lists the enabled models (user settings already merged) ahead of the bundled bank', () => {
-    const cards = createBrowserModelParamsProviders({
-      model: 'gpt-4',
-      provider: 'openai',
-    }).listModelCards();
+    const cards = createBrowserModelParamsProviders().listModelCards();
 
     expect(cards[0]).toMatchObject({
       displayName: 'GPT-4 (mine)',
@@ -44,10 +41,33 @@ describe('createBrowserModelParamsProviders', () => {
     expect(cards.find((c) => c.id === 'bank-only')).toMatchObject({ abilities: { vision: true } });
   });
 
+  it('keeps an explicitly emptied extend-param list as the user’s opt-out', async () => {
+    useAiInfraStore.setState({
+      builtinAiModelList: [
+        {
+          abilities: {},
+          id: 'gpt-4',
+          providerId: 'azure',
+          settings: { extendParams: ['thinking'] },
+        },
+      ],
+      enabledAiModels: [{ ...reasoningCard, settings: { extendParams: [] } }],
+    } as any);
+
+    await expect(
+      createBrowserModelParamsProviders().getUserModelRow!('gpt-4', 'openai'),
+    ).resolves.toMatchObject({ extendParams: [] });
+    const resolved = await resolveBrowserModelParams({
+      chatConfig: {},
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+    expect(resolved.modelExtendParams).toEqual([]);
+  });
+
   it('reads the cached model-instance reasoning config', async () => {
     await expect(
-      createBrowserModelParamsProviders({ model: 'gpt-4', provider: 'openai' })
-        .getModelReasoningConfig!('gpt-4', 'openai'),
+      createBrowserModelParamsProviders().getModelReasoningConfig!('gpt-4', 'openai'),
     ).resolves.toEqual({ reasoningEffort: 'low' });
   });
 
@@ -70,7 +90,7 @@ describe('createBrowserModelParamsProviders', () => {
         },
       },
     } as any);
-    const providers = createBrowserModelParamsProviders({ model: 'gpt-4', provider: 'openai' });
+    const providers = createBrowserModelParamsProviders();
 
     await expect(providers.findTopicReasoningPin!('tpc_1')).resolves.toEqual({
       agentId: 'agt_1',
