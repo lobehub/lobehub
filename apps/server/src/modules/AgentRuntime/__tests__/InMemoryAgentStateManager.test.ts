@@ -191,36 +191,6 @@ describe('InMemoryAgentStateManager', () => {
       expect(history.length).toBeLessThanOrEqual(200);
     });
 
-    it('should save event history when events are provided', async () => {
-      const events = [
-        { type: 'text', data: 'hello' },
-        { type: 'tool', data: 'run' },
-      ];
-      const stepResult = makeStepResult({ events });
-
-      await manager.saveStepResult('op-ev', stepResult);
-
-      const eventHistory = manager.getEventHistory('op-ev');
-      expect(eventHistory).toHaveLength(1);
-      expect(eventHistory[0]).toEqual(events);
-    });
-
-    it('should not add to event history when events array is empty', async () => {
-      const stepResult = makeStepResult({ events: [] });
-      await manager.saveStepResult('op-ev2', stepResult);
-
-      const eventHistory = manager.getEventHistory('op-ev2');
-      expect(eventHistory).toHaveLength(0);
-    });
-
-    it('should not add to event history when events is undefined', async () => {
-      const stepResult = makeStepResult({ events: undefined });
-      await manager.saveStepResult('op-ev3', stepResult);
-
-      const eventHistory = manager.getEventHistory('op-ev3');
-      expect(eventHistory).toHaveLength(0);
-    });
-
     it('should update metadata after saving step result', async () => {
       await manager.createOperationMetadata('op-meta-update', {});
       const stepResult = makeStepResult({
@@ -310,6 +280,23 @@ describe('InMemoryAgentStateManager', () => {
   // ------------------------------------------------------------------ //
   // deleteAgentOperation
   // ------------------------------------------------------------------ //
+  describe('interrupt sentinel', () => {
+    it('should report false before markInterrupted and true after', async () => {
+      expect(await manager.isInterrupted('op-int')).toBe(false);
+
+      await manager.markInterrupted('op-int');
+
+      expect(await manager.isInterrupted('op-int')).toBe(true);
+    });
+
+    it('should clear the sentinel when the operation is deleted', async () => {
+      await manager.markInterrupted('op-int');
+      await manager.deleteAgentOperation('op-int');
+
+      expect(await manager.isInterrupted('op-int')).toBe(false);
+    });
+  });
+
   describe('deleteAgentOperation', () => {
     it('should remove all data for an operation', async () => {
       await manager.createOperationMetadata('op-del', { userId: 'u1' });
@@ -324,7 +311,6 @@ describe('InMemoryAgentStateManager', () => {
       expect(await manager.loadAgentState('op-del')).toBeNull();
       expect(await manager.getOperationMetadata('op-del')).toBeNull();
       expect(await manager.getExecutionHistory('op-del')).toEqual([]);
-      expect(manager.getEventHistory('op-del')).toEqual([]);
     });
 
     it('should not throw when deleting a non-existent operation', async () => {
@@ -489,30 +475,7 @@ describe('InMemoryAgentStateManager', () => {
       expect(await manager.loadAgentState('op-clear')).toBeNull();
       expect(await manager.getOperationMetadata('op-clear')).toBeNull();
       expect(await manager.getExecutionHistory('op-clear')).toEqual([]);
-      expect(manager.getEventHistory('op-clear')).toEqual([]);
       expect(await manager.getActiveOperations()).toEqual([]);
-    });
-  });
-
-  // ------------------------------------------------------------------ //
-  // getEventHistory
-  // ------------------------------------------------------------------ //
-  describe('getEventHistory', () => {
-    it('should return empty array for unknown operationId', () => {
-      expect(manager.getEventHistory('no-such')).toEqual([]);
-    });
-
-    it('should accumulate event history in newest-first order', async () => {
-      const events1 = [{ type: 'a' }];
-      const events2 = [{ type: 'b' }];
-
-      await manager.saveStepResult('op-evhist', makeStepResult({ events: events1 }));
-      await manager.saveStepResult('op-evhist', makeStepResult({ events: events2 }));
-
-      const history = manager.getEventHistory('op-evhist');
-      // newest first (unshift order)
-      expect(history[0]).toEqual(events2);
-      expect(history[1]).toEqual(events1);
     });
   });
 });

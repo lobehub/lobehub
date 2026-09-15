@@ -171,6 +171,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableDevDock).toBe(false);
   });
 
+  it('should keep agent share publishing off by default and enable it for listed creators', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_share).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableAgentShare).toBe(false);
+
+    const config = { agent_share: ['creator-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'creator-123').enableAgentShare).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableAgentShare).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
+  });
+
   it('should correctly map boolean feature flags to state', () => {
     const config = {
       provider_settings: true,

@@ -1,7 +1,9 @@
 'use client';
 
+import type { GoalStatus } from '@lobechat/const/goal';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import type { TFunction } from 'i18next';
 import {
@@ -18,9 +20,8 @@ import {
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAcceptanceBySubject } from '@/features/Verify';
-import { acceptanceOverviewPath } from '@/features/Verify/Acceptance/routes';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import type { CreateGoalParams, CreateGoalState } from '../../../types';
 import { TaskResultCard } from '../shared';
@@ -86,37 +87,35 @@ const phaseLabel = (t: TFunction<'plugin'>, phase: PhaseKey): string => {
 };
 
 /**
- * The card reads the acceptance aggregate directly instead of waiting for the
- * loop to push a phase onto this tool message. A push can silently never
- * arrive (it needs the task to remember which tool call spawned it); the
- * aggregate is the same record the task page and the acceptance page read, so
- * the conversation can never disagree with them.
+ * The card reads the goal's own lifecycle state instead of waiting for the
+ * coordinator to push a phase onto this tool message. A push can silently never
+ * arrive (it needs the task to remember which tool call spawned it); the goal
+ * row is the same record the goal page reads, so the conversation can never
+ * disagree with it.
  */
-const resolvePhase = (status?: string, latestRunStatus?: string | null): PhaseKey => {
+const resolvePhase = (status: GoalStatus | undefined, pendingDecisions: number): PhaseKey => {
+  if (pendingDecisions > 0) return 'awaitingDecision';
   switch (status) {
-    case 'accepted': {
+    case 'achieved': {
       return 'accepted';
     }
-    case 'closed': {
+    case 'canceled': {
       return 'closed';
     }
-    case 'delivered': {
-      return latestRunStatus === 'passed' ? 'awaitingReview' : 'awaitingDecision';
-    }
-    case 'errored': {
+    case 'failed': {
       return 'errored';
     }
-    case 'rejected': {
-      return 'rejected';
+    // Paused means the coordinator stopped scheduling: either the user paused
+    // it, or a budget ran out. Either way the next move is theirs.
+    case 'paused': {
+      return 'awaitingDecision';
     }
-    case 'repairing': {
-      return 'repairing';
+    case 'review': {
+      return 'awaitingReview';
     }
     case 'verifying': {
       return 'verifying';
     }
-    // No aggregate yet, or one that only holds the plan: the round is still
-    // producing the delivery.
     default: {
       return 'running';
     }
@@ -127,46 +126,45 @@ const CreateGoalRender = memo<BuiltinRenderProps<CreateGoalParams, CreateGoalSta
   ({ args, pluginState }) => {
     const { t } = useTranslation('plugin');
     const navigate = useWorkspaceAwareNavigate();
-    const identifier = pluginState?.identifier;
+    const goalId = pluginState?.goalId;
     const [now, setNow] = useState(() => Date.now());
 
-    const { data: acceptance, mutate } = useAcceptanceBySubject(
-      'task',
-      pluginState?.taskId ?? null,
-    );
-    const phase = resolvePhase(acceptance?.status, acceptance?.latestRunStatus);
+    const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
+    useFetchGoalGraph(goalId);
+    const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
+    const pendingDecisions =
+      snapshot?.decisions.filter((decision) => decision.status === 'pending').length ?? 0;
+    const phase = resolvePhase(snapshot?.goal.status, pendingDecisions);
     const meta = PHASE_META[phase];
 
-    // The elapsed clock and the poll share one timer: both exist only while the
-    // goal is still moving, and both stop the moment it settles.
+    // Ticks the elapsed clock only. Refreshing the graph is `useFetchGoalGraph`'s
+    // job and it already polls while the goal is one the server can move — doing
+    // it here too meant every mounted card pulled the whole snapshot once a
+    // second, and a card whose fetch had failed read as unsettled and never
+    // stopped asking.
     useEffect(() => {
       if (meta.settled) return;
-      const timer = window.setInterval(() => {
-        setNow(Date.now());
-        void mutate();
-      }, 1000);
+      const timer = window.setInterval(() => setNow(Date.now()), 1000);
       return () => window.clearInterval(timer);
-    }, [meta.settled, mutate]);
+    }, [meta.settled]);
 
-    if (!pluginState?.success || !identifier) return null;
+    if (!pluginState?.success || !goalId) return null;
 
-    const openAcceptance = acceptance
-      ? () => navigate(acceptanceOverviewPath(acceptance.id))
-      : undefined;
+    const agentId = snapshot?.goal.agentId;
+    const openGoal = agentId ? () => navigate(`/agent/${agentId}/goal/${goalId}`) : undefined;
 
     return (
       <TaskResultCard
         icon={Target}
         iconColor={cssVar.colorTextSecondary}
-        identifier={identifier}
-        title={pluginState.name ?? args?.name}
+        title={snapshot?.goal.title ?? pluginState.name ?? args?.name}
       >
         <Flexbox
           horizontal
           align={'center'}
           gap={8}
-          style={openAcceptance ? { cursor: 'pointer' } : undefined}
-          onClick={openAcceptance}
+          style={openGoal ? { cursor: 'pointer' } : undefined}
+          onClick={openGoal}
         >
           <Icon
             color={meta.color}

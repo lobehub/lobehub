@@ -15,15 +15,15 @@ import { useElectronStore } from '@/store/electron';
 vi.mock('@/hooks/useActiveLocation', async () => await import('@/hooks/useActiveLocation.desktop'));
 
 vi.mock('../../hooks/useCategory', () => ({
-  SettingsGroupKey: { General: 'general' },
+  SettingsGroupKey: { Account: 'account', General: 'general' },
   useCategory: () => [
     {
       items: [
         { icon: () => null, key: 'profile', label: 'Profile' },
         { icon: () => null, key: 'appearance', label: 'Appearance' },
       ],
-      key: 'general',
-      title: 'General',
+      key: 'account',
+      title: 'Account',
     },
   ],
 }));
@@ -44,14 +44,6 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
 
 vi.mock('react-router', () => ({
   Link: ({ children }: { children?: ReactNode }) => h('span', null, children),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Accordion: ({ children }: { children?: ReactNode }) => h('div', null, children),
-  AccordionItem: ({ children, title }: { children?: ReactNode; title?: ReactNode }) =>
-    h('div', null, title, children),
-  Flexbox: ({ children }: { children?: ReactNode }) => h('div', null, children),
-  Text: ({ children }: { children?: ReactNode }) => h('span', null, children),
 }));
 
 const tab = (id: string, url: string) => ({ id, lastVisited: 0, url });

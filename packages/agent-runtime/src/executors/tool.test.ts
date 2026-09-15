@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '../transport';
@@ -29,7 +30,7 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
   lastModified: '2026-07-09T00:00:00.000Z',
   maxSteps: 100,
   messages: [],
-  metadata: {
+  origin: {
     agentId: 'agent-1',
     threadId: 'thread-1',
     topicId: 'topic-1',
@@ -51,7 +52,7 @@ const createToolCall = (id = 'tool-call-1', identifier = 'web-search') => ({
 });
 
 describe('tool executors', () => {
-  let createToolMessage: ReturnType<typeof vi.fn>;
+  let createToolMessage: Mock;
   let findToolMessageIdByToolCallId: ReturnType<typeof vi.fn>;
   let updateToolIntervention: ReturnType<typeof vi.fn>;
   let updateToolMessage: ReturnType<typeof vi.fn>;
@@ -65,7 +66,7 @@ describe('tool executors', () => {
   let publishError: ReturnType<typeof vi.fn>;
   let publishEvent: ReturnType<typeof vi.fn>;
   let query: ReturnType<typeof vi.fn>;
-  let runTool: ReturnType<typeof vi.fn>;
+  let runTool: Mock;
   let host: AgentRuntimeHost;
 
   beforeEach(() => {
@@ -169,6 +170,9 @@ describe('tool executors', () => {
     );
     expect(result.nextContext?.phase).toBe('tool_result');
     expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'tool-msg-1' });
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+    );
     expect(result.newState.usage.tools.totalCalls).toBe(1);
   });
 
@@ -1134,6 +1138,157 @@ describe('tool executors', () => {
       // Resuming an approved batch continues from the assistant that emitted
       // it, exactly like a batch that never paused.
       expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'assistant-msg-1' });
+    });
+  });
+
+  describe('ordered batch calls', () => {
+    // A model that posts a long report as several `sendMessage` calls emits
+    // them in reading order, but `Promise.all` handed every call to the
+    // platform at once and the channel kept whichever arrived first. An API
+    // marked `ordered` runs its calls one after another in emission order;
+    // everything else in the batch stays concurrent.
+    const manifestMap = {
+      'lobe-message': {
+        api: [
+          { name: 'sendMessage', ordered: true },
+          { name: 'replyToThread', ordered: true },
+          { name: 'readMessages' },
+        ],
+        identifier: 'lobe-message',
+      },
+    };
+
+    const messageCall = (id: string, apiName: string) => ({
+      apiName,
+      arguments: '{}',
+      id,
+      identifier: 'lobe-message',
+      type: 'builtin' as const,
+    });
+
+    const batchOf = (
+      toolsCalling: ReturnType<typeof messageCall>[],
+    ): Extract<AgentInstruction, { type: 'call_tools_batch' }> => ({
+      payload: { parentMessageId: 'assistant-msg-1', toolsCalling },
+      type: 'call_tools_batch',
+    });
+
+    /** Records `start:<id>` / `end:<id>` so the interleaving is observable. */
+    const trackingRunner = (delays: Record<string, number>, timeline: string[]) =>
+      vi.fn().mockImplementation(async (tool: { id: string }) => {
+        timeline.push(`start:${tool.id}`);
+        await new Promise((resolve) => setTimeout(resolve, delays[tool.id] ?? 0));
+        timeline.push(`end:${tool.id}`);
+        return {
+          attempts: 1,
+          result: { content: `sent ${tool.id}`, executionTime: 1, state: {}, success: true },
+        };
+      });
+
+    it('runs ordered calls one after another in emission order, even when the first is slowest', async () => {
+      const timeline: string[] = [];
+      // Slowest first: concurrent dispatch would finish send-3 before send-1.
+      host.transports.tools!.run = trackingRunner(
+        { 'send-1': 30, 'send-2': 10, 'send-3': 0 },
+        timeline,
+      );
+      host.transports.messages.createToolMessage = vi
+        .fn()
+        .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+          id: `tool-msg-${tool_call_id}`,
+        }));
+
+      const result = await callToolsBatch(host)(
+        batchOf([
+          messageCall('send-1', 'sendMessage'),
+          messageCall('send-2', 'sendMessage'),
+          messageCall('send-3', 'replyToThread'),
+        ]),
+        createState({ toolManifestMap: manifestMap }),
+      );
+
+      expect(timeline).toEqual([
+        'start:send-1',
+        'end:send-1',
+        'start:send-2',
+        'end:send-2',
+        'start:send-3',
+        'end:send-3',
+      ]);
+      // Every call still lands in the batch result.
+      expect((result.nextContext?.payload as any).toolResults).toHaveLength(3);
+      expect(result.nextContext?.payload).toMatchObject({ parentMessageId: 'assistant-msg-1' });
+    });
+
+    it('does not hold up unordered siblings behind the ordered chain', async () => {
+      const timeline: string[] = [];
+      host.transports.tools!.run = trackingRunner(
+        { 'read-1': 0, 'send-1': 30, 'send-2': 10 },
+        timeline,
+      );
+      host.transports.messages.createToolMessage = vi
+        .fn()
+        .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+          id: `tool-msg-${tool_call_id}`,
+        }));
+
+      await callToolsBatch(host)(
+        batchOf([
+          messageCall('send-1', 'sendMessage'),
+          messageCall('read-1', 'readMessages'),
+          messageCall('send-2', 'sendMessage'),
+        ]),
+        createState({ toolManifestMap: manifestMap }),
+      );
+
+      // The read finished while send-1 was still in flight …
+      expect(timeline.indexOf('end:read-1')).toBeLessThan(timeline.indexOf('end:send-1'));
+      // … and send-2 still waited for send-1.
+      expect(timeline.indexOf('start:send-2')).toBeGreaterThan(timeline.indexOf('end:send-1'));
+    });
+
+    it('reads the flag from a step-activated manifest as well', async () => {
+      const timeline: string[] = [];
+      host.transports.tools!.run = trackingRunner({ 'send-1': 20, 'send-2': 0 }, timeline);
+      host.transports.messages.createToolMessage = vi
+        .fn()
+        .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+          id: `tool-msg-${tool_call_id}`,
+        }));
+
+      await callToolsBatch(host)(
+        batchOf([messageCall('send-1', 'sendMessage'), messageCall('send-2', 'sendMessage')]),
+        createState({
+          activatedStepTools: [
+            {
+              activatedAtStep: 0,
+              id: 'lobe-message',
+              manifest: manifestMap['lobe-message'] as any,
+              source: 'activator' as any,
+            },
+          ],
+          toolManifestMap: {},
+        }),
+      );
+
+      expect(timeline).toEqual(['start:send-1', 'end:send-1', 'start:send-2', 'end:send-2']);
+    });
+
+    it('keeps unmarked calls concurrent', async () => {
+      const timeline: string[] = [];
+      host.transports.tools!.run = trackingRunner({ 'read-1': 20, 'read-2': 0 }, timeline);
+      host.transports.messages.createToolMessage = vi
+        .fn()
+        .mockImplementation(async ({ tool_call_id }: { tool_call_id: string }) => ({
+          id: `tool-msg-${tool_call_id}`,
+        }));
+
+      await callToolsBatch(host)(
+        batchOf([messageCall('read-1', 'readMessages'), messageCall('read-2', 'readMessages')]),
+        createState({ toolManifestMap: manifestMap }),
+      );
+
+      expect(timeline.indexOf('start:read-2')).toBeLessThan(timeline.indexOf('end:read-1'));
     });
   });
 

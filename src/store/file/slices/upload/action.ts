@@ -1,18 +1,17 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
-import { inferImageMimeTypeFromBytes } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
-import { sha256 } from 'js-sha256';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
 import { fileService } from '@/services/file';
+import { hashFile } from '@/services/hashFile';
 import { uploadService } from '@/services/upload';
-import { type StoreSetter } from '@/store/types';
-import { type UploadFileItem } from '@/types/files';
+import type { StoreSetter } from '@/store/types';
+import type { UploadFileItem } from '@/types/files';
 import { getAudioDuration } from '@/utils/client/audioDuration';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
-import { type FileStore } from '../../store';
+import type { FileStore } from '../../store';
 import { audioMimeFromExtension } from '../chat/uploadGuard';
 
 type OnStatusUpdate = (
@@ -71,18 +70,23 @@ interface UploadWithProgressResult {
   url: string;
 }
 
-const normalizeUploadedImageFileType = async (
+const normalizeUploadedFileType = async (
   file: File,
-  fileArrayBuffer: ArrayBuffer,
-): Promise<File> => {
-  const detectedMimeType = await inferImageMimeTypeFromBytes(fileArrayBuffer);
+): Promise<{ detectedMimeType?: string; file: File }> => {
+  const { fileTypeFromBlob } = await import('file-type');
+  const detectedMimeType = (await fileTypeFromBlob(file))?.mime;
 
-  if (!detectedMimeType || detectedMimeType === file.type) return file;
+  if (!detectedMimeType?.startsWith('image/') || detectedMimeType === file.type) {
+    return { detectedMimeType, file };
+  }
 
-  return new File([file], file.name, {
-    lastModified: file.lastModified,
-    type: detectedMimeType,
-  });
+  return {
+    detectedMimeType,
+    file: new File([file], file.name, {
+      lastModified: file.lastModified,
+      type: detectedMimeType,
+    }),
+  };
 };
 
 type ExistingFileMetadata = Record<string, unknown> & { path?: string };
@@ -109,11 +113,13 @@ export class FileUploadActionImpl {
   uploadBase64FileWithProgress = async (
     base64: string,
   ): Promise<UploadWithProgressResult | undefined> => {
+    let uploadedPathname: string | undefined;
     try {
       // Extract image dimensions from base64 data
       const dimensions = await getImageDimensions(base64);
 
       const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
+      uploadedPathname = metadata.path;
 
       const res = await fileService.createFile({
         fileType,
@@ -123,8 +129,10 @@ export class FileUploadActionImpl {
         size,
         url: metadata.path,
       });
+      uploadedPathname = undefined;
       return { ...res, dimensions, filename: metadata.filename };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       if (handleFileUploadError(error)) return;
 
       throw error;
@@ -144,10 +152,10 @@ export class FileUploadActionImpl {
     fileMetadata,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
+    let uploadedPathname: string | undefined;
 
     try {
-      const fileArrayBuffer = await file.arrayBuffer();
-      const normalizedFile = await normalizeUploadedImageFileType(file, fileArrayBuffer);
+      const { detectedMimeType, file: normalizedFile } = await normalizeUploadedFileType(file);
       const extensionAudioMime = audioMimeFromExtension(normalizedFile.name);
       const audioDurationPromise =
         normalizedFile.type.startsWith('audio/') || extensionAudioMime
@@ -158,7 +166,13 @@ export class FileUploadActionImpl {
       const dimensions = await getImageDimensions(normalizedFile);
 
       // 2. check file hash
-      const hash = sha256(fileArrayBuffer);
+      const hash = await hashFile(normalizedFile, abortController?.signal, (progress) => {
+        onStatusUpdate?.({
+          id: statusId,
+          type: 'updateFile',
+          value: { status: 'pending', uploadState: { progress, restTime: 0, speed: 0 } },
+        });
+      });
 
       const checkStatus = await fileService.checkFileHash(hash);
       let metadata: ExistingFileMetadata;
@@ -199,17 +213,11 @@ export class FileUploadActionImpl {
         if (!success) return;
 
         metadata = { ...data };
+        uploadedPathname = data.path;
       }
 
       // 4. use more powerful file type detector to get file type
-      let fileType = normalizedFile.type;
-
-      if (!normalizedFile.type) {
-        const { fileTypeFromBuffer } = await import('file-type');
-
-        const type = await fileTypeFromBuffer(fileArrayBuffer);
-        fileType = type?.mime || 'text/plain';
-      }
+      let fileType = normalizedFile.type || detectedMimeType || 'text/plain';
 
       // Audio containers like .m4a share the ISO-BMFF box with .mp4, so both the browser and
       // byte-sniffing may report an empty or `video/*` mime. Trust the extension to keep these
@@ -244,11 +252,13 @@ export class FileUploadActionImpl {
         },
         knowledgeBaseId,
       );
+      uploadedPathname = undefined;
 
       onStatusUpdate?.({
         id: statusId,
         type: 'updateFile',
         value: {
+          ...(dimensions && { dimensions }),
           fileUrl: data.url,
           id: data.id,
           status: 'success',
@@ -258,6 +268,16 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
+      if (abortController?.signal.aborted) {
+        onStatusUpdate?.({
+          id: statusId,
+          type: 'updateFile',
+          value: { status: 'cancelled', uploadState: { progress: 0, restTime: 0, speed: 0 } },
+        });
+        return;
+      }
+
       if (
         handleFileUploadError(error, {
           onUploadBlocked: ({ code, description }) =>

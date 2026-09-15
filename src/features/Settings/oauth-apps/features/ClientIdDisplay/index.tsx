@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, toast } from '@lobehub/ui/base-ui';
 import { Flex } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Copy } from 'lucide-react';

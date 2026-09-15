@@ -35,6 +35,12 @@ export interface State extends PublicState {
   isMetaDirty?: boolean;
   /** True when the open page belongs to a workspace (gates view-first behaviour). */
   isWorkspacePage?: boolean;
+  /**
+   * True when the page row carries a workspaceId, private drafts included.
+   * Wider than {@link isWorkspacePage}, which additionally excludes private
+   * pages because they never take the collaborative edit lock.
+   */
+  isWorkspaceScopedPage?: boolean;
   lastSavedEmoji?: string;
   lastSavedTitle?: string;
   /** Lease expiry of the current lock holder, if known. */
@@ -67,6 +73,7 @@ export const initialState: State = {
   isLockPending: true,
   isMetaDirty: false,
   isWorkspacePage: false,
+  isWorkspaceScopedPage: false,
   lockExpiresAt: null,
   lockHealth: 'healthy',
   lockHolderId: null,

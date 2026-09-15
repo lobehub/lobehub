@@ -1,0 +1,42 @@
+import type { AgentState } from '@lobechat/agent-runtime';
+import { describe, expect, it } from 'vitest';
+
+import { resolveServerCallLlmTooling } from '../serverCallLlmTooling';
+
+const buildState = (state: Pick<AgentState, 'binding' | 'plan' | 'principal'> = {}): AgentState =>
+  state as AgentState;
+
+describe('resolveServerCallLlmTooling', () => {
+  // Regression: `serverCallLlmContextBuilder` needs this to compute
+  // `creds_sandbox_reachable` — `sandbox_enabled` alone (whether the
+  // dedicated Cloud Sandbox tool is offered) doesn't tell it whether
+  // `runCommand`/`execScript` will actually land in that sandbox or on a
+  // routed device, so it must read the same single-track device gate the
+  // rest of the run executors use.
+  it('exposes the active device id when a device is routed for this run', () => {
+    const result = resolveServerCallLlmTooling(
+      { operationId: 'op-1', stepIndex: 0 },
+      buildState({
+        binding: { device: { id: 'device-1' } },
+        plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
+      }),
+    );
+
+    expect(result.activeDeviceId).toBe('device-1');
+  });
+
+  it('leaves the active device id undefined when no device is routed', () => {
+    const result = resolveServerCallLlmTooling(
+      { operationId: 'op-1', stepIndex: 0 },
+      buildState({ plan: { execution: { kind: 'sandbox', target: 'sandbox' } } }),
+    );
+
+    expect(result.activeDeviceId).toBeUndefined();
+  });
+
+  it('leaves the active device id undefined with no binding at all', () => {
+    const result = resolveServerCallLlmTooling({ operationId: 'op-1', stepIndex: 0 }, buildState());
+
+    expect(result.activeDeviceId).toBeUndefined();
+  });
+});

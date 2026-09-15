@@ -1,6 +1,7 @@
 import type { RemoteServerAuth } from '@/modules/heterogeneousAgent/fileStorePort';
 
 import type HeterogeneousAgentImplementation from './HeterogeneousAgentImpl';
+import type { LhHeteroExecCancellationResult } from './HeterogeneousAgentImpl';
 import { ControllerModule, IpcMethod } from './index';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
@@ -113,6 +114,26 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   spawnLhHeteroExec(...args: Parameters<Implementation['spawnLhHeteroExec']>) {
     return this.getImplementation().then((implementation) =>
       implementation.spawnLhHeteroExec(...args),
+    );
+  }
+
+  /**
+   * Cancels a gateway CLI wrapper through the lazy implementation boundary.
+   *
+   * Use when:
+   * - A server interrupt must stop a device-hosted heterogeneous run.
+   *
+   * Expects:
+   * - The operation id belongs to a wrapper started by this desktop process.
+   *
+   * Returns:
+   * - The wrapper cancellation result, or `undefined` when no wrapper is registered.
+   */
+  cancelLhHeteroExec(
+    ...args: Parameters<Implementation['cancelLhHeteroExec']>
+  ): Promise<LhHeteroExecCancellationResult | undefined> {
+    return this.getImplementation().then((implementation) =>
+      implementation.cancelLhHeteroExec(...args),
     );
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import { Icon, Tag } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { GitFork } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -61,7 +62,6 @@ const GroupForkTag = memo(() => {
 
   return (
     <Tag
-      bordered={false}
       color="default"
       icon={<Icon icon={GitFork} />}
       style={{ cursor: 'pointer' }}

@@ -1,186 +1,194 @@
-import { act, renderHook } from '@testing-library/react';
+import type { RecentItem } from '@lobechat/types';
+import { act, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as swr from '@/libs/swr';
 import { recentKeys } from '@/libs/swr/keys';
 import * as cacheScope from '@/libs/swr/useCacheScope';
-import { type RecentItem } from '@/server/routers/lambda/recent';
-import { recentService } from '@/services/recent';
+import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
-import { initialRecentState } from '@/store/home/slices/recent/initialState';
+import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
+import { recentProjection } from '@/store/home/slices/recent/projection';
+import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
-const item = (id: string, title: string): RecentItem => ({ id, title }) as unknown as RecentItem;
+const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem => ({
+  icon: type,
+  id,
+  routePath: '/',
+  status: null,
+  title,
+  type,
+  updatedAt: new Date(0),
+});
 
-/**
- * Render `useFetchRecents` with `useClientDataSWRWithSync` stubbed so we can grab
- * the `onData` sync callback and drive the scope guard directly.
- */
-const captureOnData = (scope: string) => {
-  let onData: ((data: RecentItem[]) => void) | undefined;
-  vi.spyOn(swr, 'useClientDataSWRWithSync').mockImplementation(((
-    _key: unknown,
-    _fetcher: unknown,
-    opts: any,
-  ) => {
-    onData = opts?.onData;
-    return { data: undefined, isValidating: false, mutate: vi.fn() };
-  }) as any);
+type TaskUpdateResult = Awaited<ReturnType<typeof taskService.update>>;
+const taskUpdateResult = {} as TaskUpdateResult;
 
-  renderHook(() => useHomeStore.getState().useFetchRecents(true, 10, scope));
-  return () => onData;
+const deferred = <T>() => {
+  let reject!: (reason?: unknown) => void;
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    reject = rejectPromise;
+    resolve = resolvePromise;
+  });
+  return { promise, reject, resolve };
 };
+
+const replaceQuery = (scope: string, queryKey: string, items: RecentItem[]) =>
+  useHomeStore.getState().internal_replaceRecentQuery(scope, queryKey, items);
 
 beforeEach(() => {
   useHomeStore.setState({ ...initialRecentState });
+  vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  localStorage.clear();
 });
 
 describe('RecentActionImpl', () => {
-  describe('useFetchRecents onData scope guard', () => {
-    it('fetches only document and task recents without polling', async () => {
-      const swrSpy = vi.spyOn(swr, 'useClientDataSWRWithSync').mockReturnValue({
-        data: undefined,
-        isValidating: false,
-        mutate: vi.fn(),
-      } as any);
-      const getAllSpy = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
+  it('keeps list projections isolated by scope and query', () => {
+    const compactQuery = createRecentQueryKey(11);
+    const drawerQuery = createRecentQueryKey(50);
 
-      renderHook(() => useHomeStore.getState().useFetchRecents(true, 10, 'user-1:ws-A'));
-
-      expect(swrSpy).toHaveBeenCalledWith(expect.any(Array), expect.any(Function), {
-        onData: expect.any(Function),
-      });
-
-      const fetcher = swrSpy.mock.calls[0][1] as () => Promise<RecentItem[]>;
-      await fetcher();
-
-      expect(getAllSpy).toHaveBeenCalledWith(11, ['document', 'task']);
+    act(() => {
+      replaceQuery('user-1:ws-A', compactQuery, [item('a', 'Compact')]);
+      replaceQuery('user-1:ws-A', drawerQuery, [item('a', 'Drawer'), item('b', 'B')]);
     });
 
-    it('applies data for the matching scope and tags recentsScope', () => {
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
-      const getOnData = captureOnData('user-1:ws-A');
-
-      act(() => getOnData()!([item('a', 'A')]));
-
-      const state = useHomeStore.getState();
-      expect(state.recents).toEqual([item('a', 'A')]);
-      expect(state.isRecentsInit).toBe(true);
-      expect(state.recentsScope).toBe('user-1:ws-A');
-    });
-
-    it('ignores data whose scope no longer matches the active cache scope', () => {
-      // active scope moved to ws-A, but this callback belongs to the stale ws-B key
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
-      const getOnData = captureOnData('user-1:ws-B');
-
-      act(() => getOnData()!([item('stale', 'STALE')]));
-
-      const state = useHomeStore.getState();
-      expect(state.recents).toEqual([]);
-      expect(state.isRecentsInit).toBe(false);
-      expect(state.recentsScope).toBeNull();
-    });
-
-    it('keeps data isolated across users in the same workspace', () => {
-      useHomeStore.setState({
-        isRecentsInit: true,
-        recents: [item('u1', 'user1 item')],
-        recentsScope: 'user-1:ws-A',
-      });
-      // now signed in as user-2 in the same workspace
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-2:ws-A');
-      const getOnData = captureOnData('user-2:ws-A');
-
-      act(() => getOnData()!([item('u2', 'user2 item')]));
-
-      const state = useHomeStore.getState();
-      expect(state.recents).toEqual([item('u2', 'user2 item')]);
-      expect(state.recentsScope).toBe('user-2:ws-A');
-    });
-
-    it('skips redundant set when init, same scope and equal data', () => {
-      useHomeStore.setState({
-        isRecentsInit: true,
-        recents: [item('a', 'A')],
-        recentsScope: 'user-1:ws-A',
-      });
-      vi.spyOn(cacheScope, 'getCacheScope').mockReturnValue('user-1:ws-A');
-      const getOnData = captureOnData('user-1:ws-A');
-
-      // an early return means no set() runs, so the state object keeps its identity
-      const before = useHomeStore.getState();
-      act(() => getOnData()!([item('a', 'A')]));
-
-      expect(useHomeStore.getState()).toBe(before);
-    });
+    expect(
+      homeRecentSelectors.query('user-1:ws-A', compactQuery)(useHomeStore.getState())?.items,
+    ).toEqual([item('a', 'Compact')]);
+    expect(
+      homeRecentSelectors.query('user-1:ws-A', drawerQuery)(useHomeStore.getState())?.items,
+    ).toEqual([item('a', 'Drawer'), item('b', 'B')]);
   });
 
-  describe('updateRecentTitle', () => {
-    it('renames in the store mirror and patches the scoped SWR caches', () => {
-      useHomeStore.setState({ recents: [item('a', 'old'), item('b', 'keep')] });
-      const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
+  it('persists query projections through the async storage contract', async () => {
+    const queryKey = createRecentQueryKey(11);
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Cached')]));
 
-      act(() => {
-        useHomeStore.getState().updateRecentTitle('a', 'new');
-      });
+    const persisted = await recentProjection.get({ queryKey, scope: 'user-1:ws-A' });
+    expect(persisted?.data[0].title).toBe('Cached');
+    expect(persisted?.data[0].updatedAt).toEqual(new Date(0));
+  });
 
-      expect(useHomeStore.getState().recents).toEqual([item('a', 'new'), item('b', 'keep')]);
-      // both the list and the drawer SWR caches get a non-revalidating patch
-      expect(mutateSpy).toHaveBeenCalledTimes(2);
-      expect(mutateSpy).toHaveBeenCalledWith(expect.any(Function), expect.any(Function), {
-        revalidate: false,
-      });
-    });
+  it('ignores storage hydration that resolves after server data', async () => {
+    const queryKey = createRecentQueryKey(11);
+    const cached = deferred<Awaited<ReturnType<typeof recentProjection.get>>>();
+    vi.spyOn(recentProjection, 'get').mockReturnValue(cached.promise);
 
-    it('SWR cache updater matches keys by root and renames the target item only', () => {
-      useHomeStore.setState({ recents: [] });
-      let updater: (items?: RecentItem[]) => RecentItem[] | undefined = () => undefined;
-      const matchers: Array<(key: unknown) => boolean> = [];
-      vi.spyOn(swr, 'mutate').mockImplementation(((match: any, fn: any) => {
-        matchers.push(match);
-        updater = fn;
-        return Promise.resolve(undefined);
-      }) as any);
+    const hydration = useHomeStore.getState().hydrateRecentQuery('user-1:ws-A', queryKey);
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Server')]));
+    cached.resolve({ data: [item('a', 'Cached')], updatedAt: 1 });
+    await hydration;
 
-      act(() => {
-        useHomeStore.getState().updateRecentTitle('a', 'new');
-      });
+    expect(
+      homeRecentSelectors.query('user-1:ws-A', queryKey)(useHomeStore.getState())?.items[0].title,
+    ).toBe('Server');
+  });
 
-      expect(matchers[0](recentKeys.list(true, 10, 's'))).toBe(true);
-      expect(matchers[0](['other:key'])).toBe(false);
-      expect(updater([item('a', 'old'), item('b', 'keep')])).toEqual([
-        item('a', 'new'),
-        item('b', 'keep'),
+  it('ignores a query update after the active cache scope changed', () => {
+    act(() => replaceQuery('user-1:ws-B', createRecentQueryKey(11), [item('stale', 'STALE')]));
+    expect(useHomeStore.getState().recentsByScope['user-1:ws-B']).toBeUndefined();
+  });
+
+  it('shows an optimistic title and rolls it back when persistence fails', async () => {
+    const queryKey = createRecentQueryKey(11);
+    const request = deferred<TaskUpdateResult>();
+    vi.spyOn(taskService, 'update').mockReturnValue(request.promise);
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Old')]));
+
+    const renamePromise = useHomeStore
+      .getState()
+      .renameRecent({ id: 'a', scope: 'user-1:ws-A', title: 'Draft', type: 'task' });
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
+    ).toBe('Draft');
+
+    await Promise.resolve();
+    request.reject(new Error('failed'));
+    await expect(renamePromise).rejects.toThrow('failed');
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
+    ).toBe('Old');
+  });
+
+  it('fans a confirmed rename out to every loaded query projection', async () => {
+    const compactQuery = createRecentQueryKey(11);
+    const drawerQuery = createRecentQueryKey(50);
+    vi.spyOn(taskService, 'update').mockResolvedValue(taskUpdateResult);
+    act(() => {
+      replaceQuery('user-1:ws-A', compactQuery, [item('same', 'Task', 'task')]);
+      replaceQuery('user-1:ws-A', drawerQuery, [
+        item('same', 'Task', 'task'),
+        item('same', 'Document', 'document'),
       ]);
-      expect(updater(undefined)).toBeUndefined();
     });
+
+    await useHomeStore
+      .getState()
+      .renameRecent({ id: 'same', scope: 'user-1:ws-A', title: 'Renamed', type: 'task' });
+
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', compactQuery, 'task:same')(useHomeStore.getState())
+        ?.title,
+    ).toBe('Renamed');
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', drawerQuery, 'task:same')(useHomeStore.getState())
+        ?.title,
+    ).toBe('Renamed');
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', drawerQuery, 'document:same')(useHomeStore.getState())
+        ?.title,
+    ).toBe('Document');
   });
 
-  describe('refreshRecents', () => {
-    it('revalidates both the list and the drawer SWR caches', async () => {
-      const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as any);
+  it('serializes repeated renames and keeps the latest optimistic title', async () => {
+    const queryKey = createRecentQueryKey(11);
+    const firstRequest = deferred<TaskUpdateResult>();
+    const secondRequest = deferred<TaskUpdateResult>();
+    const updateSpy = vi
+      .spyOn(taskService, 'update')
+      .mockReturnValueOnce(firstRequest.promise)
+      .mockReturnValueOnce(secondRequest.promise);
+    act(() => replaceQuery('user-1:ws-A', queryKey, [item('a', 'Old')]));
 
-      await act(async () => {
-        await useHomeStore.getState().refreshRecents();
-      });
+    const firstRename = useHomeStore
+      .getState()
+      .renameRecent({ id: 'a', scope: 'user-1:ws-A', title: 'First', type: 'task' });
+    const secondRename = useHomeStore
+      .getState()
+      .renameRecent({ id: 'a', scope: 'user-1:ws-A', title: 'Second', type: 'task' });
 
-      expect(mutateSpy).toHaveBeenCalledTimes(2);
-      const matcher = mutateSpy.mock.calls[0][0] as (key: unknown) => boolean;
-      expect(matcher(recentKeys.list(true, 10, 's'))).toBe(true);
-    });
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
+    ).toBe('Second');
+
+    firstRequest.resolve(taskUpdateResult);
+    await firstRename;
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(2));
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
+    ).toBe('Second');
+
+    secondRequest.resolve(taskUpdateResult);
+    await secondRename;
+    expect(
+      homeRecentSelectors.item('user-1:ws-A', queryKey, 'task:a')(useHomeStore.getState())?.title,
+    ).toBe('Second');
   });
 
-  describe('drawer visibility', () => {
-    it('opens and closes the all-recents drawer', () => {
-      act(() => useHomeStore.getState().openAllRecentsDrawer());
-      expect(useHomeStore.getState().allRecentsDrawerOpen).toBe(true);
+  it('revalidates both list surfaces only in the requested scope', async () => {
+    const mutateSpy = vi.spyOn(swr, 'mutate').mockResolvedValue(undefined as never);
 
-      act(() => useHomeStore.getState().closeAllRecentsDrawer());
-      expect(useHomeStore.getState().allRecentsDrawerOpen).toBe(false);
-    });
+    await act(() => useHomeStore.getState().refreshRecents('user-1:ws-A'));
+
+    expect(mutateSpy).toHaveBeenCalledTimes(2);
+    const matcher = mutateSpy.mock.calls[0][0] as (key: unknown) => boolean;
+    expect(matcher(recentKeys.list(true, 10, 'user-1:ws-A'))).toBe(true);
+    expect(matcher(recentKeys.list(true, 10, 'user-1:ws-B'))).toBe(false);
   });
 });

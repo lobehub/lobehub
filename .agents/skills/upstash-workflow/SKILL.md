@@ -1,6 +1,6 @@
 ---
 name: upstash-workflow
-description: 'LobeHub Upstash Workflow and QStash guide. Use for async workflows, process/paginate/execute fan-out, serve handlers, context.run/call/sleep, or workflow triggers.'
+description: 'Use for Upstash Workflow/QStash handlers, triggers, durable steps and async fan-out.'
 user-invocable: false
 ---
 

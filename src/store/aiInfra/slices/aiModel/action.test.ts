@@ -13,8 +13,6 @@ import { withSWR } from '~test-utils';
 import { useAiInfraStore as useStore } from '../../store';
 import { aiModelSelectors } from './selectors';
 
-vi.mock('zustand/traditional');
-
 vi.mock('i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof I18nextModule>();
   return {
@@ -23,8 +21,9 @@ vi.mock('i18next', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { error: vi.fn(), warning: vi.fn() },
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('@/libs/swr', async (importOriginal) => {
@@ -1049,6 +1048,27 @@ describe('AiModelAction', () => {
         const state = useStore.getState();
         expect(state.aiProviderModelList).toEqual(newModels);
       });
+    });
+  });
+
+  describe('useFetchAiModelReasoningConfig', () => {
+    it('resolves a missing config as null so SWR data is never undefined', async () => {
+      // The server legitimately returns nothing when the user never customized
+      // this model's reasoning params; `null` keeps that distinguishable from a
+      // fetch that has not settled yet.
+      vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockResolvedValue(undefined);
+
+      const { result } = renderHook(
+        () => useStore.getState().useFetchAiModelReasoningConfig('test-model', 'test-provider'),
+        { wrapper: withSWR },
+      );
+
+      await waitFor(() => expect(result.current.data).toBeNull());
+      expect(aiModelService.getAiModelReasoningConfig).toHaveBeenCalledTimes(1);
+      // The store map keeps its `| undefined` contract — null never leaks in.
+      expect(
+        useStore.getState().modelReasoningConfigMap['test-provider/test-model'],
+      ).toBeUndefined();
     });
   });
 });

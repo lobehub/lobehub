@@ -35,10 +35,6 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 // Personal vs workspace only changes the label, not the count under test.
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => 'ws-1',
@@ -49,12 +45,13 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
 vi.mock('@/features/ProfileEditor/AgentTool', () => ({ default: () => null }));
 vi.mock('@/features/ProfileEditor/PluginTag', () => ({ default: () => null }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Text: ({ children }: { children: ReactNode }) => <span data-testid="label">{children}</span>,
 }));
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Text: ({ children }: { children: ReactNode }) => <span data-testid="label">{children}</span>,
 }));
 
 // Apply the real selectors against the mock state.

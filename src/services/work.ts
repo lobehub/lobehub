@@ -103,6 +103,9 @@ class WorkService {
   deleteTaskWork = async (params: { taskId: string }): Promise<void> =>
     lambdaClient.work.deleteTaskWork.mutate(params);
 
+  /** Remove one Work card by id (see `useRemoveWork`); server-side restricted to the caller's own rows. */
+  deleteWork = async (id: string): Promise<void> => lambdaClient.work.deleteWork.mutate({ id });
+
   handleSkillToolResult = async (
     params: RegisterSkillToolResultWorkParams,
   ): Promise<WorkItem | null> => lambdaClient.work.handleSkillToolResult.mutate(params);

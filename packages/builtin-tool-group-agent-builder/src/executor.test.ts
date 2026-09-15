@@ -31,10 +31,16 @@ vi.mock('@/store/groupProfile', () => ({
 vi.mock('@/services/agent', () => ({ agentService: {} }));
 vi.mock('@/services/discover', () => ({ discoverService: {} }));
 
-vi.mock('@lobechat/agent-manager-runtime', () => ({ AgentManagerRuntime: vi.fn(() => ({})) }));
+vi.mock('@lobechat/agent-manager-runtime', () => ({
+  AgentManagerRuntime: vi.fn(function () {
+    return {};
+  }),
+}));
 
 vi.mock('./ExecutionRuntime', () => ({
-  GroupAgentBuilderExecutionRuntime: vi.fn(() => ({ createAgent: mockCreateAgent })),
+  GroupAgentBuilderExecutionRuntime: vi.fn(function () {
+    return { createAgent: mockCreateAgent };
+  }),
 }));
 
 const afterCall = (apiName: string, params: unknown, success: boolean) =>

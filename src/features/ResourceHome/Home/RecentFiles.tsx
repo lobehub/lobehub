@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { memo } from 'react';
@@ -10,6 +9,10 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import FileIcon from '@/components/FileIcon';
+import {
+  RESOURCE_HOME_SECTIONS,
+  ResourceSectionSkeleton,
+} from '@/components/Skeleton/ResourceHome';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getResourceQueryVisibility } from '@/features/ResourceManager/store/selectors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -104,11 +107,7 @@ const RecentFiles = memo(() => {
       {error && !data?.length ? (
         <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
       ) : isLoading ? (
-        <div className={styles.grid}>
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton.Node active key={index} style={{ height: 160, width: '100%' }} />
-          ))}
-        </div>
+        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.files} />
       ) : (
         <div className={styles.grid}>
           {data?.map((item) => {

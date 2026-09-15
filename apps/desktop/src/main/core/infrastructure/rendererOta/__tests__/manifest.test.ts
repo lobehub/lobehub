@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canonicalJson,
-  diffManifest,
   isValidManifestShape,
   patchNumber,
   type RendererManifest,
@@ -13,6 +12,7 @@ import {
 
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const publicKeyPem = publicKey.export({ format: 'pem', type: 'spki' }).toString();
+const sha = (character: string) => character.repeat(64);
 
 const signManifest = (unsigned: Omit<RendererManifest, 'signature'>): RendererManifest => ({
   ...unsigned,
@@ -22,11 +22,9 @@ const signManifest = (unsigned: Omit<RendererManifest, 'signature'>): RendererMa
 const baseManifest = (): RendererManifest =>
   signManifest({
     appVersion: '1.147.0',
-    files: [
-      { path: 'apps/desktop/index.html', sha256: 'a'.repeat(64), size: 10 },
-      { path: 'assets/entry-abc.js', sha256: 'b'.repeat(64), size: 20 },
-    ],
-    mainHash: 'f'.repeat(64),
+    full: { path: `packs/${sha('c')}.zip`, sha256: sha('c'), size: 30 },
+    mainHash: sha('f'),
+    schemaVersion: 2,
     version: 'r3',
   });
 
@@ -43,7 +41,7 @@ describe('verifyManifestSignature', () => {
 
   it('rejects a tampered manifest', () => {
     const manifest = baseManifest();
-    manifest.files[0].sha256 = 'c'.repeat(64);
+    manifest.full.size += 1;
     expect(verifyManifestSignature(manifest, publicKeyPem)).toBe(false);
   });
 
@@ -56,19 +54,29 @@ describe('verifyManifestSignature', () => {
 });
 
 describe('isValidManifestShape', () => {
-  it('accepts a well-formed manifest', () => {
+  it('accepts a well-formed V2 manifest', () => {
     expect(isValidManifestShape(baseManifest())).toBe(true);
   });
 
-  it('rejects path traversal', () => {
-    const manifest = baseManifest();
-    manifest.files[0].path = '../evil.js';
-    expect(isValidManifestShape(manifest)).toBe(false);
+  it('rejects the V1 CAS manifest shape', () => {
+    const { full: _full, schemaVersion: _schemaVersion, ...rest } = baseManifest();
+    expect(
+      isValidManifestShape({
+        ...rest,
+        files: [{ path: 'index.html', sha256: sha('a'), size: 10 }],
+      }),
+    ).toBe(false);
   });
 
-  it('rejects absolute paths', () => {
+  it('rejects unsafe artifact paths', () => {
+    const artifactTraversal = baseManifest();
+    artifactTraversal.full.path = '../foreign.zip';
+    expect(isValidManifestShape(artifactTraversal)).toBe(false);
+  });
+
+  it('rejects a pack path that does not match its content hash', () => {
     const manifest = baseManifest();
-    manifest.files[0].path = '/etc/passwd';
+    manifest.full.path = `packs/${sha('b')}.zip`;
     expect(isValidManifestShape(manifest)).toBe(false);
   });
 
@@ -76,50 +84,24 @@ describe('isValidManifestShape', () => {
     expect(isValidManifestShape({ ...baseManifest(), version: '1.2.3' })).toBe(false);
   });
 
-  it('accepts a signed tree delta', () => {
+  it('accepts a signed V2 delta pack', () => {
     const manifest = baseManifest();
     manifest.deltas = [
       {
         fromVersion: 'r0',
-        ops: [
-          { op: 'copy', path: 'apps/desktop/index.html', sha256: 'a'.repeat(64) },
-          {
-            fromSha256: 'b'.repeat(64),
-            op: 'patch',
-            patchSha256: 'c'.repeat(64),
-            patchSize: 12,
-            path: 'assets/entry-abc.js',
-            sha256: 'd'.repeat(64),
-            size: 20,
-          },
-        ],
+        pack: { path: `packs/${sha('d')}.zip`, sha256: sha('d'), size: 12 },
       },
     ];
     expect(isValidManifestShape(manifest)).toBe(true);
   });
-});
 
-describe('diffManifest', () => {
-  it('splits files into reusable and missing by content hash', () => {
-    const manifest = baseManifest();
-    const local = new Map([['/old/apps/desktop/index.html', 'a'.repeat(64)]]);
-
-    const { missing, reusable } = diffManifest(manifest, local);
-
-    expect(reusable).toEqual([
-      { file: manifest.files[0], localPath: '/old/apps/desktop/index.html' },
-    ]);
-    expect(missing).toEqual([manifest.files[1]]);
-  });
-
-  it('reuses by hash regardless of local path', () => {
-    const manifest = baseManifest();
-    const local = new Map([['/anywhere/renamed.js', 'b'.repeat(64)]]);
-
-    const { missing, reusable } = diffManifest(manifest, local);
-
-    expect(reusable[0].file.path).toBe('assets/entry-abc.js');
-    expect(missing).toEqual([manifest.files[0]]);
+  it('rejects a target tree in the outer manifest', () => {
+    expect(
+      isValidManifestShape({
+        ...baseManifest(),
+        tree: [{ path: 'index.html', sha256: sha('a'), size: 10 }],
+      }),
+    ).toBe(false);
   });
 });
 

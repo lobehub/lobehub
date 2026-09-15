@@ -10,11 +10,13 @@ import { AgentRuntimeService } from '../AgentRuntimeService';
 
 // Mock database models
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 // Mock ModelRuntime
@@ -23,10 +25,12 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     chat: vi.fn(),
   }),
-  ApiKeyManager: vi.fn().mockImplementation(() => ({
-    getApiKey: vi.fn(),
-    getAllApiKeys: vi.fn(),
-  })),
+  ApiKeyManager: vi.fn().mockImplementation(function () {
+    return {
+      getApiKey: vi.fn(),
+      getAllApiKeys: vi.fn(),
+    };
+  }),
 }));
 
 // Mock search service
@@ -45,15 +49,19 @@ vi.mock('@/server/services/mcp', () => ({
 
 // Mock tool execution service
 vi.mock('@/server/services/toolExecution', () => ({
-  ToolExecutionService: vi.fn().mockImplementation(() => ({
-    executeToolCall: vi.fn().mockResolvedValue({ result: 'success' }),
-  })),
+  ToolExecutionService: vi.fn().mockImplementation(function () {
+    return {
+      executeToolCall: vi.fn().mockResolvedValue({ result: 'success' }),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/toolExecution/builtin', () => ({
-  BuiltinToolsExecutor: vi.fn().mockImplementation(() => ({
-    execute: vi.fn(),
-  })),
+  BuiltinToolsExecutor: vi.fn().mockImplementation(function () {
+    return {
+      execute: vi.fn(),
+    };
+  }),
 }));
 
 describe('AgentRuntimeService.executeSync', () => {
@@ -151,8 +159,8 @@ describe('AgentRuntimeService.executeSync', () => {
       const state = await stateManager.loadAgentState(operationId);
       expect(state).not.toBeNull();
       expect(state?.messages).toHaveLength(2);
-      expect(state?.metadata?.agentId).toBe('test-agent');
-      expect(state?.metadata?.topicId).toBe('topic-1');
+      expect(state?.origin?.agentId).toBe('test-agent');
+      expect(state?.origin?.topicId).toBe('topic-1');
     });
   });
 
@@ -211,10 +219,10 @@ describe('AgentRuntimeService.executeSync', () => {
       expect(metadata).toBeNull();
     });
 
-    it('should clear all data', () => {
+    it('should clear all data', async () => {
       stateManager.clear();
       // After clear, getActiveOperations should return empty array
-      expect(stateManager.getActiveOperations()).resolves.toEqual([]);
+      await expect(stateManager.getActiveOperations()).resolves.toEqual([]);
     });
   });
 

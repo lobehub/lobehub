@@ -6,6 +6,10 @@ import { getDesktopEnv } from '@/env';
 
 import { createLogger } from '../logger';
 
+// This suite exercises the real logger, so opt out of the global stub in
+// `__mocks__/setup.ts`.
+vi.unmock('@/utils/logger');
+
 vi.mock('debug');
 
 vi.mock('electron-log', () => ({

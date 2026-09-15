@@ -6,6 +6,7 @@ import {
   resolveEffectiveReasoningChatConfig,
 } from '@lobechat/model-runtime/utils/modelExtendParams';
 import type { LobeAgentChatConfig } from '@lobechat/types';
+import type { AiModelReasoningConfig } from 'model-bank';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 
@@ -24,6 +25,12 @@ export interface ModelParamsContext {
    * over the user's model-instance defaults.
    */
   subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
+  /**
+   * Reasoning config pinned to the topic for exactly this model
+   * (`topicSelectors.getTopicReasoningConfigForModel`). Wins over the
+   * user-level model-instance config; absent → user-level applies.
+   */
+  topicReasoningConfig?: AiModelReasoningConfig;
 }
 
 /**
@@ -33,12 +40,13 @@ export interface ModelParamsContext {
  * actual resolution to the shared `applyModelExtendParams` so the client chat service and the
  * server-side agent runtime stay in sync.
  *
- * Reasoning fields (effort family + reasoningMode) are user-level model-instance settings:
- * same-named agent chatConfig values are ignored and the personal-scope config from the
- * aiInfra store applies instead — except explicit sub-agent overrides, which stay honored.
+ * Reasoning fields (effort family + reasoningMode) resolve as topic pin → user-level
+ * model-instance setting: same-named agent chatConfig values are ignored and the topic's
+ * pinned config (or, without one, the personal-scope config from the aiInfra store)
+ * applies instead — except explicit sub-agent overrides, which stay honored.
  */
 export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendParams => {
-  const { model, provider, chatConfig, subAgentChatConfigOverride } = ctx;
+  const { model, provider, chatConfig, subAgentChatConfigOverride, topicReasoningConfig } = ctx;
 
   const aiInfraStoreState = getAiInfraStoreState();
 
@@ -55,7 +63,9 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
 
   const effectiveChatConfig = resolveEffectiveReasoningChatConfig({
     agentChatConfig: chatConfig,
-    modelReasoningConfig: aiModelSelectors.modelReasoningConfig(model, provider)(aiInfraStoreState),
+    modelReasoningConfig:
+      topicReasoningConfig ??
+      aiModelSelectors.modelReasoningConfig(model, provider)(aiInfraStoreState),
     subAgentReasoningOverrides: subAgentChatConfigOverride,
   });
 

@@ -233,13 +233,38 @@ interface RenameOp extends EditOpBase {
 
 type EditOp = ChangeOp | RenameOp | WriteOp;
 
+/**
+ * Count changed lines in a unified patch. Some sources ship the patch but keep
+ * their line counts one level up (Codex puts `linesAdded` on the tool state
+ * root, not on each `changes[]` entry), which would otherwise leave every file
+ * in the edited-files card reading "+0 -0". Header lines (`+++` / `---`) are
+ * not content.
+ */
+const countPatchDeltas = (patch: string) => {
+  let linesAdded = 0;
+  let linesDeleted = 0;
+
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) linesAdded += 1;
+    else if (line.startsWith('-')) linesDeleted += 1;
+  }
+
+  return { linesAdded, linesDeleted };
+};
+
 const emptyDeltas = (
   record: Record<string, unknown> | undefined,
-): Pick<EditOpBase, 'diffText' | 'linesAdded' | 'linesDeleted'> => ({
-  diffText: record ? nonEmptyString(record.diffText) : undefined,
-  linesAdded: toNumber(record?.linesAdded),
-  linesDeleted: toNumber(record?.linesDeleted),
-});
+): Pick<EditOpBase, 'diffText' | 'linesAdded' | 'linesDeleted'> => {
+  const diffText = record ? nonEmptyString(record.diffText) : undefined;
+  const linesAdded = toNumber(record?.linesAdded);
+  const linesDeleted = toNumber(record?.linesDeleted);
+
+  if (diffText && linesAdded === 0 && linesDeleted === 0)
+    return { diffText, ...countPatchDeltas(diffText) };
+
+  return { diffText, linesAdded, linesDeleted };
+};
 
 // ── Per-source extraction ────────────────────────────────────────────────────
 

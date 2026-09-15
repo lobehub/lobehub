@@ -1,3 +1,4 @@
+import type { RecentItem } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
@@ -10,7 +11,7 @@ import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransfer
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
-import { type RecentItem } from '@/server/routers/lambda/recent';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
@@ -21,10 +22,8 @@ export const useRecentItemDropdownMenu = (
   toggleEditing: (visible?: boolean) => void,
 ) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
-  const [updateRecentTitle, refreshRecents] = useHomeStore((s) => [
-    s.updateRecentTitle,
-    s.refreshRecents,
-  ]);
+  const scope = useCacheScope();
+  const [renameRecent, refreshRecents] = useHomeStore((s) => [s.renameRecent, s.refreshRecents]);
 
   // Viewer can read recents but cannot rename/delete them — keep the menu
   // items visible-but-disabled so the affordance is clear (per disabled-not-
@@ -41,27 +40,8 @@ export const useRecentItemDropdownMenu = (
   const transferMenuItems = documentTransferItems ?? taskTransferItems;
 
   const handleRename = useCallback(
-    async (newTitle: string) => {
-      // Optimistic update
-      updateRecentTitle(item.id, newTitle);
-
-      // Persist to server
-      switch (item.type) {
-        case 'document': {
-          await documentService.updateDocument({ id: item.id, title: newTitle });
-          break;
-        }
-        case 'task': {
-          await taskService.update(item.id, { name: newTitle });
-          break;
-        }
-        case 'topic': {
-          await topicService.updateTopic(item.id, { title: newTitle });
-          break;
-        }
-      }
-    },
-    [item, updateRecentTitle],
+    (newTitle: string) => renameRecent({ id: item.id, scope, title: newTitle, type: item.type }),
+    [item.id, item.type, renameRecent, scope],
   );
 
   const handleDelete = useCallback(() => {
@@ -70,7 +50,7 @@ export const useRecentItemDropdownMenu = (
         onConfirm: async (removeFiles) => {
           // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly.
           await topicService.removeTopic(item.id, removeFiles);
-          await refreshRecents();
+          await refreshRecents(scope);
         },
         topicIds: [item.id],
       });
@@ -97,11 +77,11 @@ export const useRecentItemDropdownMenu = (
             break;
           }
         }
-        await refreshRecents();
+        await refreshRecents(scope);
       },
       title: t('delete', { ns: 'common' }),
     });
-  }, [item, t, refreshRecents]);
+  }, [item, refreshRecents, scope, t]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
     const items: NativeContextMenuItem[] = [

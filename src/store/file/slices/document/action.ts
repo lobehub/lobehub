@@ -2,6 +2,8 @@ import {
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
   DERIVED_DOCUMENT_SOURCE_TYPE,
+  PAGE_DOCUMENT_FILE_TYPES,
+  PAGE_DOCUMENT_SOURCE_TYPES,
 } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { type SWRResponse } from 'swr';
@@ -21,8 +23,12 @@ import { type DocumentQueryFilter } from './initialState';
 
 const n = setNamespace('document');
 
-const ALLOWED_DOCUMENT_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
-const ALLOWED_DOCUMENT_FILE_TYPES = new Set([CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf']);
+// EDITOR is a client-only stamp on in-memory drafts; DB rows never carry it.
+const ALLOWED_DOCUMENT_SOURCE_TYPES = new Set([
+  DocumentSourceType.EDITOR as string,
+  ...PAGE_DOCUMENT_SOURCE_TYPES,
+]);
+const ALLOWED_DOCUMENT_FILE_TYPES = new Set(PAGE_DOCUMENT_FILE_TYPES);
 const EDITOR_DOCUMENT_FILE_TYPE = CUSTOM_DOCUMENT_FILE_TYPE;
 
 interface ResourceDocumentSnapshot {
@@ -437,8 +443,8 @@ export class DocumentActionImpl {
       const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
       const queryFilters: DocumentQueryFilter | undefined = pageOnly
         ? {
-            fileTypes: Array.from(ALLOWED_DOCUMENT_FILE_TYPES),
-            sourceTypes: Array.from(ALLOWED_DOCUMENT_SOURCE_TYPES),
+            fileTypes: PAGE_DOCUMENT_FILE_TYPES,
+            sourceTypes: PAGE_DOCUMENT_SOURCE_TYPES,
           }
         : undefined;
 

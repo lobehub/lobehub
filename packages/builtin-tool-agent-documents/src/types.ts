@@ -15,6 +15,8 @@ export const AgentDocumentsApiName = {
 export interface CreateDocumentArgs {
   content: string;
   hintIsSkill?: boolean;
+  /** Parent folder's underlying `documents.id`, as returned by listDocuments.documentId. */
+  parentId?: string;
   scope?: 'agent' | 'currentTopic';
   title: string;
 }

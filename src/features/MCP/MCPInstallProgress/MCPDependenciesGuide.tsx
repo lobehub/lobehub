@@ -1,5 +1,5 @@
-import { Flexbox, Markdown, Snippet, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox, Markdown, Snippet } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { Card, Space } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { AlertTriangle, CheckCircle, ExternalLink, Terminal } from 'lucide-react';

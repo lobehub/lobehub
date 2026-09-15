@@ -8,7 +8,8 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,7 +33,8 @@ import { useChatStore } from '@/store/chat';
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
-  const { actionsPortalTarget, args, interactionMode, messageId, onInteractionAction } = props;
+  const { actionsPortalTarget, args, disabled, interactionMode, messageId, onInteractionAction } =
+    props;
 
   const persistedDraft = useConversationStore((s) => {
     const msg = dataSelectors.getDbMessageById(messageId)(s);
@@ -46,6 +48,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
   const form = useAskUserForm({
     args,
+    disabled,
     onInteractionAction,
     persistedDraft,
     writeDraft,

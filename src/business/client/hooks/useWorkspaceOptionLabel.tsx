@@ -1,7 +1,8 @@
 'use client';
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { type ReactNode, useCallback } from 'react';
 
 import type { WorkspaceListItem } from './useActiveWorkspace';

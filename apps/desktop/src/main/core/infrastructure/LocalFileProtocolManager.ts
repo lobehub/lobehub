@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { EXTERNAL_PUBLISH_ASSET_MAX_BYTES } from '@lobechat/device-control/file-preview';
 import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
 
@@ -318,12 +319,14 @@ export class LocalFileProtocolManager {
     accept,
     allowExternalFile,
     filePath,
+    persistExternalApproval = true,
     resourceScope,
     workspaceRoot,
   }: {
     accept?: PreviewFileAccept;
     allowExternalFile?: boolean;
     filePath: string;
+    persistExternalApproval?: boolean;
     resourceScope?: 'workspace';
     workspaceRoot: string;
   }): Promise<string | null> {
@@ -339,7 +342,12 @@ export class LocalFileProtocolManager {
             workspaceRoot,
           })
         )?.realPath
-      : await this.resolveApprovedPreviewPath({ allowExternalFile, filePath, workspaceRoot });
+      : await this.resolveApprovedPreviewPath({
+          allowExternalFile,
+          filePath,
+          persistExternalApproval,
+          workspaceRoot,
+        });
     if (!realFilePath) return null;
 
     this.cleanupExpiredTokens();
@@ -428,6 +436,71 @@ export class LocalFileProtocolManager {
       contentType,
       realPath: realFilePath,
     };
+  }
+
+  async readExternalFileForPublish({
+    filePath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    workspaceRoot: string;
+  }): Promise<PreviewFileReadResult | null> {
+    const realFilePath = await this.resolveApprovedPreviewPath({
+      allowExternalFile: true,
+      filePath,
+      persistExternalApproval: false,
+      workspaceRoot,
+    });
+    if (!realFilePath) return null;
+
+    const fileStat = await stat(realFilePath);
+    if (!fileStat.isFile()) return null;
+    // Reject by size before reading: the renderer's limit check only runs after
+    // the whole file has been read and base64-encoded into a gateway response.
+    if (fileStat.size > EXTERNAL_PUBLISH_ASSET_MAX_BYTES) {
+      throw new Error('File is too large to publish');
+    }
+    const buffer = await readFile(realFilePath);
+
+    return {
+      buffer,
+      contentType: await resolveMimeType(realFilePath, buffer),
+      realPath: realFilePath,
+    };
+  }
+
+  async copyExternalFileForPublish({
+    filePath,
+    targetPath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    targetPath: string;
+    workspaceRoot: string;
+  }): Promise<boolean> {
+    const normalizedTarget = normalizeAbsolutePath(targetPath);
+    const normalizedRoot = normalizeAbsolutePath(workspaceRoot);
+    if (!normalizedTarget || !normalizedRoot) return false;
+    const realRoot = normalizeAbsolutePath(await realpath(normalizedRoot));
+    if (!realRoot || !isPathWithinRoot(normalizedTarget, realRoot)) return false;
+
+    const realFilePath = await this.resolveApprovedPreviewPath({
+      allowExternalFile: true,
+      filePath,
+      persistExternalApproval: false,
+      workspaceRoot,
+    });
+    if (!realFilePath) return false;
+
+    const fileStat = await stat(realFilePath);
+    if (!fileStat.isFile()) return false;
+    if (fileStat.size > EXTERNAL_PUBLISH_ASSET_MAX_BYTES) {
+      throw new Error('File is too large to publish');
+    }
+
+    await mkdir(path.dirname(normalizedTarget), { recursive: true });
+    await copyFile(realFilePath, normalizedTarget);
+    return true;
   }
 
   /**

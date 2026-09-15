@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import { FileTextIcon } from 'lucide-react';
@@ -10,6 +9,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
+import {
+  RESOURCE_HOME_SECTIONS,
+  ResourceSectionSkeleton,
+} from '@/components/Skeleton/ResourceHome';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getResourceQueryVisibility } from '@/features/ResourceManager/store/selectors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -92,11 +95,7 @@ const RecentPages = memo(() => {
       {error && !data?.length ? (
         <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
       ) : isLoading ? (
-        <div className={styles.grid}>
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton.Node active key={index} style={{ height: 64, width: '100%' }} />
-          ))}
-        </div>
+        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.pages} />
       ) : (
         <div className={styles.grid}>
           {data?.map((item) => {

@@ -49,8 +49,10 @@ export const SendMessageInspector = memo<BuiltinInspectorProps<SendMessageArgs>>
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{recap ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {recap ? `${label}:` : label}
+        </span>
         {recap && <span className={styles.chip}>{recap}</span>}
       </div>
     );

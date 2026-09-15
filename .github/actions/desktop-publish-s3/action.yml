@@ -53,7 +53,23 @@ runs:
         echo ""
         echo "📋 Version: ${{ inputs.version }}, Channel: ${{ inputs.channel }}"
 
+    - name: Setup Node.js for renderer validation
+      id: setup
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        package-manager-cache: false
+
+    - name: Validate renderer OTA baseline before publishing
+      id: validate
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        VERSION: ${{ inputs.version }}
+      run: node apps/desktop/scripts/validateMainHash.mjs --base release "$CHANNEL" "$VERSION"
+
     - name: Upload to S3
+      id: installers
       if: inputs.upload-release-files == 'true'
       shell: bash
       env:
@@ -65,6 +81,7 @@ runs:
         CHANNEL: ${{ inputs.channel }}
         VERSION: ${{ inputs.version }}
       run: |
+        set -euo pipefail
         if [ -z "$S3_BUCKET" ]; then
           echo "⚠️ S3 bucket is not configured, skipping S3 upload"
           exit 0
@@ -117,28 +134,7 @@ runs:
           fi
         done
 
-        # 4. 创建 renderer manifest (仅 stable 渠道有 renderer tar)
-        RENDERER_TAR="release/lobehub-renderer.tar.gz"
-        if [ -f "$RENDERER_TAR" ]; then
-          echo ""
-          echo "📋 Creating renderer manifest..."
-          RENDERER_SHA512=$(shasum -a 512 "$RENDERER_TAR" | awk '{print $1}' | xxd -r -p | base64)
-          RENDERER_SIZE=$(stat -f%z "$RENDERER_TAR" 2>/dev/null || stat -c%s "$RENDERER_TAR")
-          RELEASE_DATE=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-          cat > "release/${CHANNEL}-renderer.yml" <<EOF
-        version: $VERSION
-        files:
-          - url: $VERSION/lobehub-renderer.tar.gz
-            sha512: $RENDERER_SHA512
-            size: $RENDERER_SIZE
-        path: $VERSION/lobehub-renderer.tar.gz
-        sha512: $RENDERER_SHA512
-        releaseDate: '$RELEASE_DATE'
-        EOF
-          echo "   📄 Created ${CHANNEL}-renderer.yml"
-        fi
-
-        # 5. 上传 manifest 到根目录和版本目录
+        # 4. 上传 installer manifest 到根目录和版本目录
         # 根目录: electron-updater 需要，每次发版覆盖
         # 版本目录: 作为存档保留
         echo ""
@@ -163,6 +159,7 @@ runs:
         aws s3 ls "s3://$S3_BUCKET/$CHANNEL/$VERSION/" $ENDPOINT_ARG || true
 
     - name: Publish renderer OTA base marker
+      id: base
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
@@ -178,6 +175,7 @@ runs:
 
         if [ -z "$S3_BUCKET" ]; then
           echo "S3 bucket not configured, skipping renderer OTA marker"
+          echo "reason=upload-not-configured" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -197,26 +195,42 @@ runs:
           --arg cloudRef "$CLOUD_REF" \
           --arg mainHash "$MAIN_HASH" \
           --arg version "$VERSION" \
-          '{ cloudRef: $cloudRef, mainHash: $mainHash, version: $version }' \
+          '{ cloudRef: $cloudRef, mainHash: $mainHash, rendererProtocol: 2, version: $version }' \
           > /tmp/renderer-ota-base.json
 
-        LATEST=$(find release/renderer-ota -name latest.json | head -n 1)
-        SNAPSHOT=$(find release/renderer-ota -path '*/versions/r0.json' | head -n 1)
-        if [ ! -d release/renderer-ota/files ] || [ -z "$LATEST" ] || [ -z "$SNAPSHOT" ]; then
+        RENDERER_ROOT="release/renderer-ota/$CHANNEL/$VERSION/renderer/v2"
+        LATEST="$RENDERER_ROOT/latest.json"
+        SNAPSHOT="$RENDERER_ROOT/versions/r0.json"
+        if [ ! -d "$RENDERER_ROOT/packs" ] || [ ! -f "$LATEST" ] || [ ! -f "$SNAPSHOT" ]; then
           echo "Renderer OTA r0 artifacts are incomplete"
           exit 1
         fi
 
-        aws s3 sync release/renderer-ota/files "s3://$S3_BUCKET/renderer/files" \
+        S3_RENDERER_ROOT="s3://$S3_BUCKET/$CHANNEL/$VERSION/renderer/v2"
+        aws s3 sync "$RENDERER_ROOT/packs" "$S3_RENDERER_ROOT/packs" \
           --size-only \
-          --content-encoding gzip \
-          --content-type application/octet-stream \
+          --content-type application/zip \
           --cache-control public,max-age=31536000,immutable \
           $ENDPOINT_ARG
-        aws s3 cp "$SNAPSHOT" "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/versions/r0.json" \
+        aws s3 cp "$SNAPSHOT" "$S3_RENDERER_ROOT/versions/r0.json" \
           --cache-control no-store $ENDPOINT_ARG
-        aws s3 cp "$LATEST" "s3://$S3_BUCKET/renderer/$CHANNEL/$MAIN_HASH/latest.json" \
+        aws s3 cp "$LATEST" "$S3_RENDERER_ROOT/latest.json" \
           --cache-control no-store $ENDPOINT_ARG
-        aws s3 cp /tmp/renderer-ota-base.json "s3://$S3_BUCKET/renderer/$CHANNEL/base.json" \
+        aws s3 cp release/renderer-mainhash-inputs.json "$S3_RENDERER_ROOT/mainhash-inputs.json" \
           --cache-control no-store $ENDPOINT_ARG
-        echo "Published renderer OTA r0 for $CHANNEL/$MAIN_HASH"
+        aws s3 cp /tmp/renderer-ota-base.json "s3://$S3_BUCKET/$CHANNEL/base.json" \
+          --cache-control no-store $ENDPOINT_ARG
+        echo "Published renderer OTA r0 for $CHANNEL/$VERSION"
+        echo "published=true" >> "$GITHUB_OUTPUT"
+
+    - name: Preserve release publication diagnostics
+      if: always()
+      uses: ./.github/actions/desktop-ota-diagnostics
+      env:
+        APP_VERSION: ${{ inputs.version }}
+        CLOUD_REF: ${{ inputs.cloud-ref }}
+      with:
+        kind: release
+        channel: ${{ inputs.channel }}
+        steps-json: ${{ toJSON(steps) }}
+        job-status: ${{ job.status }}

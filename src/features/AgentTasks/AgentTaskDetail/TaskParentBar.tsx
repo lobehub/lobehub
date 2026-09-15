@@ -1,6 +1,6 @@
 import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -75,26 +75,33 @@ const TaskParentBar = memo(() => {
       : parent.agentId;
 
   return (
-    <Flexbox horizontal align="center" gap={8}>
-      <Text fontSize={12} type={'secondary'}>
+    <Flexbox horizontal align="center" gap={8} style={{ maxWidth: '100%', minWidth: 0 }}>
+      <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
         {t('taskDetail.subIssueOf')}
       </Text>
       <Button
         icon={<TaskStatusIcon size={16} status={parentStatus} />}
         size={'small'}
+        style={{ maxWidth: '100%', minWidth: 0 }}
         type={'text'}
-        onClick={() => navigate(taskDetailPath(parent.identifier, parentAgentId ?? undefined))}
+        onClick={() =>
+          navigate(taskDetailPath(parent.identifier, parentAgentId ?? undefined, parent.name))
+        }
       >
-        <Text weight={500}>{parent.name}</Text>
+        <Text ellipsis style={{ minWidth: 0 }} weight={500}>
+          {parent.name}
+        </Text>
       </Button>
       {parentSubtasks.length > 0 && (
-        <TaskSubtaskProgressTag
-          currentIdentifier={currentIdentifier}
-          subtasks={parentSubtasks}
-          onSubtaskClick={(identifier, assigneeAgentId) =>
-            navigate(taskDetailPath(identifier, assigneeAgentId))
-          }
-        />
+        <span style={{ flex: 'none' }}>
+          <TaskSubtaskProgressTag
+            currentIdentifier={currentIdentifier}
+            subtasks={parentSubtasks}
+            onSubtaskClick={(identifier, assigneeAgentId, name) =>
+              navigate(taskDetailPath(identifier, assigneeAgentId, name))
+            }
+          />
+        </span>
       )}
     </Flexbox>
   );

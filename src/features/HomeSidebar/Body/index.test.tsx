@@ -21,31 +21,29 @@ const mocks = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Accordion: ({
-    children,
-    expandedKeys,
-    onExpandedChange,
-  }: {
-    children: React.ReactNode;
-    expandedKeys?: string[];
-    onExpandedChange?: (keys: string[]) => void;
-  }) => (
-    <div data-expanded-keys={JSON.stringify(expandedKeys)} data-testid="sidebar-accordion">
-      <button aria-label="collapse recents" onClick={() => onExpandedChange?.(['agent'])} />
-      {children}
-    </div>
-  ),
-  ActionIcon: () => <span />,
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Flexbox: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="sidebar-body">{children}</div>
   ),
-  Icon: () => <span />,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  AccordionRoot: ({
+    children,
+    value,
+    onValueChange,
+  }: {
+    children: React.ReactNode;
+    onValueChange?: (keys: string[]) => void;
+    value?: string[];
+  }) => (
+    <div data-expanded-keys={JSON.stringify(value)} data-testid="sidebar-accordion">
+      <button aria-label="collapse recents" onClick={() => onValueChange?.(['agent'])} />
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('react-router', () => ({

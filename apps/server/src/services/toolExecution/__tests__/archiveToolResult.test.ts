@@ -29,8 +29,12 @@ describe('archiveToolResultIfNeeded', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(AgentDocumentVfsService).mockImplementation(() => mockVfsService as any);
-    vi.mocked(TopicDocumentModel).mockImplementation(() => mockTopicDocumentModel as any);
+    vi.mocked(AgentDocumentVfsService).mockImplementation(function () {
+      return mockVfsService as any;
+    });
+    vi.mocked(TopicDocumentModel).mockImplementation(function () {
+      return mockTopicDocumentModel as any;
+    });
     mockVfsService.mkdir.mockResolvedValue({});
     mockVfsService.read.mockResolvedValue({ content: '0123456789' });
     mockVfsService.write.mockResolvedValue({ documentId: 'document-1', id: 'agent-doc-1' });

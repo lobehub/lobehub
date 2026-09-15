@@ -212,20 +212,24 @@ export const buildServerVirtualSubAgentRunner = (
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
 ): ServerSubAgentRunner | undefined => {
+  // Share-visitor runs never get a sub-agent runner: the child run spawned
+  // here does not thread the parent's shareGate, so it would execute with the
+  // creator's full unrestricted tool surface. Same fail-closed stance as
+  // `ServerSubAgentTransport` and the `isShareBlockedBuiltinDispatch` gate.
+  if (ctx.agentShareVisitor) return undefined;
   const execVirtualSubAgent = ctx.execVirtualSubAgent;
   if (!execVirtualSubAgent) return undefined;
 
-  const agentId = state.metadata?.agentId;
-  const topicId = ctx.topicId ?? state.metadata?.topicId;
+  const agentId = state.origin?.agentId;
+  const topicId = ctx.topicId ?? state.origin?.topicId;
   if (!agentId || !topicId) return undefined;
 
-  const parentAgentConfig = state.metadata?.agentConfig as LobeAgentConfig | undefined;
-  // The model the parent run ACTUALLY uses. `metadata.agentConfig` alone is not
+  const parentAgentConfig = state.world?.agent as LobeAgentConfig | undefined;
+  // The model the parent run ACTUALLY uses. `world.agent` alone is not
   // enough: when a run continues a topic whose model was switched, execAgent
   // keeps the topic-pinned model only in `modelRuntimeConfig` while the
-  // metadata config retains the agent default.
-  const parentEffectiveModel =
-    state.modelRuntimeConfig ?? state.metadata?.modelRuntimeConfig ?? parentAgentConfig;
+  // world config retains the agent default.
+  const parentEffectiveModel = state.modelRuntimeConfig ?? parentAgentConfig;
 
   return {
     run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
@@ -254,12 +258,12 @@ export const buildServerVirtualSubAgentRunner = (
       const placeholder = await ctx.messageModel.create({
         agentId,
         content: '',
-        groupId: state.metadata?.groupId ?? undefined,
+        groupId: state.origin?.groupId ?? undefined,
         parentId: parentMessageId,
         plugin: chatToolPayload as any,
         pluginState: { status: 'pending' },
         role: 'tool',
-        threadId: state.metadata?.threadId,
+        threadId: state.origin?.threadId,
         tool_call_id: chatToolPayload.id,
         topicId,
       });
@@ -270,7 +274,7 @@ export const buildServerVirtualSubAgentRunner = (
       const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
         chatConfig: subAgentChatConfig,
-        groupId: state.metadata?.groupId ?? undefined,
+        groupId: state.origin?.groupId ?? undefined,
         instruction,
         model: subAgentModel?.model,
         parentMessageId: placeholder.id,
@@ -288,7 +292,9 @@ export const buildServerVirtualSubAgentRunner = (
       //    an inline tool error instead.
       if (!result?.success) {
         try {
-          await ctx.messageModel.deleteMessage(placeholder.id);
+          // Runtime placeholder cleanup — also valid inside an agent-share
+          // visitor topic, hence the explicit opt-in.
+          await ctx.messageModel.deleteMessage(placeholder.id, { includeShareVisitor: true });
         } catch (error) {
           log(
             'buildServerVirtualSubAgentRunner: failed to clean up placeholder %s: %O',
@@ -338,18 +344,22 @@ export const buildServerAgentMemberRunner = (
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
 ): ServerAgentMemberRunner | undefined => {
+  // Same share-visitor fail-close as `buildServerVirtualSubAgentRunner`:
+  // member runs would not inherit the parent's shareGate.
+  if (ctx.agentShareVisitor) return undefined;
   const execGroupMember = ctx.execGroupMember;
   if (!execGroupMember) return undefined;
 
-  const agentId = state.metadata?.agentId;
-  const topicId = ctx.topicId ?? state.metadata?.topicId;
-  const groupId = state.metadata?.groupId ?? undefined;
+  const agentId = state.origin?.agentId;
+  const topicId = ctx.topicId ?? state.origin?.topicId;
+  const groupId = state.origin?.groupId ?? undefined;
   if (!agentId || !topicId || !groupId) return undefined;
 
   return {
     run: async ({ members, mode, onComplete, disableTools, timeout }) => {
-      const agentMap = (state.metadata?.agentGroup as { agentMap?: Record<string, { name: string }> }
-        | undefined)?.agentMap;
+      const agentMap = (
+        state.world?.group as { agentMap?: Record<string, { name: string }> } | undefined
+      )?.agentMap;
       const resolvedMembers = members.map((member) => ({
         ...member,
         agentId: resolveGroupMemberId(member.agentId, agentMap),
@@ -377,7 +387,7 @@ export const buildServerAgentMemberRunner = (
         plugin: chatToolPayload as any,
         pluginState: { expectedMembers, onComplete, status: 'pending' },
         role: 'tool',
-        threadId: state.metadata?.threadId,
+        threadId: state.origin?.threadId,
         tool_call_id: chatToolPayload.id,
         topicId,
       });
@@ -402,7 +412,7 @@ export const buildServerAgentMemberRunner = (
             plugin: { ...(chatToolPayload as any), id: memberToolCallId },
             pluginState: { status: 'pending' },
             role: 'tool',
-            threadId: state.metadata?.threadId,
+            threadId: state.origin?.threadId,
             tool_call_id: memberToolCallId,
             topicId,
           });
@@ -466,7 +476,8 @@ export const buildServerAgentMemberRunner = (
       if (startedCount === 0) {
         for (const id of new Set([...anchorIds, groupTool.id])) {
           try {
-            await ctx.messageModel.deleteMessage(id);
+            // Runtime placeholder cleanup — see the sub-agent runner above.
+            await ctx.messageModel.deleteMessage(id, { includeShareVisitor: true });
           } catch (error) {
             log('buildServerAgentMemberRunner: cleanup failed for %s: %O', id, error);
           }

@@ -19,9 +19,9 @@ const MB = 1024 * 1024;
  * The agent-facing `botMessage` procedures do NOT go through that pass: the
  * router hands raw attachments straight to the platform services. There, an
  * oversized body is refused here and the sender skips the attachment, which
- * means it is dropped without a fallback link. That gap is tracked separately
- * (see LOBE-13364) — routing those sends through the budget pass is a change
- * to the agent tool contract, not something to bolt on inside this loader.
+ * means it is dropped without a fallback link. That gap is tracked separately —
+ * routing those sends through the budget pass is a change to the agent tool
+ * contract, not something to bolt on inside this loader.
  */
 export const MAX_IN_MEMORY_ATTACHMENT_BYTES = 50 * MB;
 

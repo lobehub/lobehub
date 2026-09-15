@@ -37,10 +37,18 @@ local JWT → `auth_success` → full local loop.
 .agents/acceptance/scripts/agent-gateway/local-gateway-setup.sh
 
 # 2. Start the worker (separate terminal) → http://localhost:8787
+#    8787 is a shared default: the sibling `device-gateway/` repo's worker uses it
+#    too, and another session may already own it. Check first, and take your own
+#    port rather than restarting someone else's worker — `.dev.vars` is shared, so
+#    regenerating it against YOUR JWKS breaks whoever is running on it.
+#      lsof -nP -iTCP:8787 -sTCP:LISTEN   # inspect the owning process path
+#      GATEWAY_PORT=8788 .../local-gateway-setup.sh && bunx wrangler dev --port 8788
+#    Back `agent-gateway/.dev.vars` up before regenerating it, and restore at teardown.
 cd ../agent-gateway && bun run dev
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8787/health # → 200
 
 # 3. Decisive check — does the local gateway accept the app's JWT?
+#    (add GATEWAY_WS=ws://localhost:<port> when not on 8787)
 node .agents/acceptance/scripts/agent-gateway/local-gateway-probe.mjs
 #    → RECV: {"type":"auth_success"}   ✅ feasible
 

@@ -8,7 +8,6 @@ import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
   ChatImageItem,
-  ChatThreadType,
   ChatTopicMetadata,
   ChatVideoItem,
   ConversationContext,
@@ -22,12 +21,17 @@ import {
   getWorkingDirEffectivePath,
   getWorkingDirSourcePath,
   resolveAgentAgencyConfig,
+  snapshotTopicExecutionConfig,
 } from '@lobechat/types';
 import { generateEntityId, nanoid } from '@lobechat/utils';
 import { toast } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
+import {
+  ensureAgentManagementAccess,
+  getRuntimeCanManageAgent,
+} from '@/helpers/agentManagementAccess';
 import {
   resolveAgentWorkingDirectory,
   resolveAgentWorkingDirectoryConfig,
@@ -39,6 +43,7 @@ import {
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { getTopicAgencyConfig, getTopicWorkspaceScoped } from '@/helpers/topicExecutionConfig';
 import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -62,6 +67,7 @@ import {
 } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
+import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import {
@@ -76,6 +82,7 @@ import {
 } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
+import { resolveTopicHeteroPin } from '@/store/chat/slices/topic/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
   mergeAgentRuntimeInitialContexts,
@@ -88,7 +95,7 @@ import {
 } from '@/store/chat/utils/compression';
 import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { snapshotAgentModel } from '@/store/chat/utils/snapshotAgentModel';
+import { snapshotAgentModel, snapshotAgentReasoning } from '@/store/chat/utils/snapshotAgentModel';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { deviceSelectors, getDeviceStoreState } from '@/store/device';
 import { getElectronStoreState } from '@/store/electron';
@@ -273,6 +280,38 @@ export class ConversationLifecycleActionImpl {
     };
   };
 
+  /**
+   * Land a thread the server created for this send: record it on the operation,
+   * pivot the portal from the staged `isNew` thread to the persisted one, and
+   * refresh the sidebar's nested list. Shared by both send transports — the
+   * gateway path creates the thread through `execAgentTask.appContext.newThread`
+   * and the client path through `sendMessageInServer.newThread`, but everything
+   * downstream of "the row now exists" is identical.
+   */
+  #syncCreatedThread = (
+    operationId: string,
+    createdThreadId: string,
+    sourceMessageId?: string,
+  ): void => {
+    this.#get().updateOperationMetadata(operationId, { createdThreadId });
+
+    // When the active portal view is already the Thread surface (the
+    // main-page "create subtopic" flow staged it before sending), pivot it
+    // from `isNew` → persisted thread id. Otherwise the thread was started
+    // by a panel-hosted ConversationProvider (e.g. FloatingChatPanel inside
+    // the Document portal) and we must NOT push a Thread view — doing so
+    // would cover the host view the user is still reading.
+    const currentPortalViewType = chatPortalSelectors.currentViewType(this.#get());
+    if (currentPortalViewType === PortalViewType.Thread) {
+      this.#get().openThreadInPortal(createdThreadId, sourceMessageId);
+    } else {
+      this.#get().syncThreadInPortal(createdThreadId, sourceMessageId);
+    }
+
+    // Refresh threads list to update the sidebar
+    void Promise.resolve(this.#get().refreshThreads()).catch(console.error);
+  };
+
   sendMessage = async ({
     message,
     editorData: inputEditorData,
@@ -346,15 +385,9 @@ export class ConversationLifecycleActionImpl {
     // Use context from params (required)
     // If creating new thread (isNew + scope='thread'), threadId will be created by server
     const isCreatingNewThread = context.isNew && context.scope === 'thread';
-    // Build newThread params for server from new context format
-    // Only create newThread if we have both sourceMessageId and threadType
-    const newThread =
-      isCreatingNewThread && context.sourceMessageId && context.threadType
-        ? {
-            sourceMessageId: context.sourceMessageId,
-            type: context.threadType as ChatThreadType,
-          }
-        : undefined;
+    // Shared with the gateway transport so both send paths materialise a staged
+    // subtopic the same way.
+    const newThread = resolveNewThreadIntent(context);
 
     if (!ownerAgentId) {
       onPreflightFailure?.();
@@ -381,21 +414,49 @@ export class ConversationLifecycleActionImpl {
     }
     const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
     const currentUserId = userProfileSelectors.userId(getUserStoreState());
-    const isAuthor = !!currentUserId && agent?.userId === currentUserId;
-    const usesWorkspaceMemberSelection =
-      !!agent?.workspaceId && agent.visibility !== 'private' && !isAuthor;
-    const deviceOverride = usesWorkspaceMemberSelection
-      ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
-      : undefined;
-    const workspaceScoped = resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride);
-    // Runtime selection must use the same per-user device override as the
-    // switcher. A workspace-local pick is intentionally private to this member
-    // and is therefore safe to execute in-process on their desktop.
-    const agencyConfig = resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-      canManage: isAuthor,
+    // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and
+    // the server (`isResourceAuthorOrAdmin`) — an admin's own override must
+    // survive a `fixed` selection policy just like the author's does. On a
+    // cold load or a direct mention the picker's hook may never have run, so
+    // resolve access from the server first (no-op for authors and members
+    // whose answer is already cached).
+    await ensureAgentManagementAccess({
+      agentId,
+      agentUserId: agent?.userId,
+      currentUserId,
       visibility: agent?.visibility,
       workspaceId: agent?.workspaceId,
     });
+    const canManage = getRuntimeCanManageAgent({
+      agentId,
+      agentUserId: agent?.userId,
+      currentUserId,
+    });
+    const usesWorkspaceMemberSelection =
+      !!agent?.workspaceId && agent.visibility !== 'private' && !canManage;
+    // Every workspace caller's override matters — a manager's / private owner's
+    // `local` pick also lives in `agentDeviceOverrides` (the shared row must
+    // never reference a personal device); `resolveAgentAgencyConfig` decides
+    // how it applies per role.
+    const deviceOverride = agent?.workspaceId
+      ? getUserStoreState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
+      : undefined;
+    const workspaceScoped = getTopicWorkspaceScoped(
+      agentConfig?.agencyConfig,
+      context.topicId,
+      resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
+    );
+    // Runtime selection must use the same per-user device override as the
+    // switcher. A workspace-local pick is intentionally private to this member
+    // and is therefore safe to execute in-process on their desktop.
+    const agencyConfig = getTopicAgencyConfig(
+      resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
+        canManage,
+        visibility: agent?.visibility,
+        workspaceId: agent?.workspaceId,
+      }),
+      context.topicId,
+    );
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
     // unchanged when it is available. Recover the provider when gateway mode is
@@ -730,7 +791,7 @@ export class ConversationLifecycleActionImpl {
                   : undefined,
             ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
             message: merged.content,
-            metadata: merged.metadata,
+            metadata: { ...merged.metadata, steer: true },
           })
           .catch((error: unknown) => {
             console.error('[sendMessage] restarting queued content after Stop failed:', error);
@@ -898,6 +959,7 @@ export class ConversationLifecycleActionImpl {
     const tempImages: ChatImageItem[] = filesForPreview
       .filter((f) => f.file?.type?.startsWith('image'))
       .map((f) => ({
+        ...f.dimensions,
         id: f.id,
         url: f.fileUrl || f.base64Url || f.previewUrl || '',
         alt: f.file?.name || f.id,
@@ -1141,7 +1203,10 @@ export class ConversationLifecycleActionImpl {
         : [];
     // Example: a pending repo topic without this metadata renders under "No
     // directory" until the server row lands.
-    const optimisticTopicMetadata: ChatTopicMetadata | undefined =
+    const newTopicReasoningSnapshot = newTopicModelSnapshot
+      ? await snapshotAgentReasoning(operationContext.agentId, newTopicModelSnapshot)
+      : undefined;
+    const workingDirectoryMetadata: ChatTopicMetadata | undefined =
       pendingTopicRepos.length > 0
         ? {
             repos: pendingTopicRepos,
@@ -1154,6 +1219,12 @@ export class ConversationLifecycleActionImpl {
               ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
             }
           : undefined;
+    /** First-send persistence bypasses turnSetup, so both runtime paths must carry the effort snapshot. */
+    const optimisticTopicMetadata: ChatTopicMetadata = {
+      ...workingDirectoryMetadata,
+      ...newTopicReasoningSnapshot,
+      executionConfig: snapshotTopicExecutionConfig(agencyConfig),
+    };
 
     // The sidebar row was already inserted (title + model) before the awaits
     // above; the cwd/repos metadata only resolves here, so patch it on now.
@@ -1312,12 +1383,7 @@ export class ConversationLifecycleActionImpl {
               ? {
                   // Same id the optimistic sidebar row already uses.
                   id: optimisticTopic?.id,
-                  metadata: workingDirectory
-                    ? {
-                        workingDirectory,
-                        ...(workingDirectoryConfig ? { workingDirectoryConfig } : {}),
-                      }
-                    : undefined,
+                  metadata: optimisticTopicMetadata,
                   ...newTopicModelSnapshot,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
@@ -1565,7 +1631,7 @@ export class ConversationLifecycleActionImpl {
         }
         const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
           heterogeneousProvider,
-          topic?.model ? { model: topic.model, provider: topic.provider || '' } : undefined,
+          resolveTopicHeteroPin(topic),
         );
 
         await executeHeterogeneousAgent(() => this.#get(), {
@@ -1680,6 +1746,11 @@ export class ConversationLifecycleActionImpl {
         });
         const cancelledAfterPersistence = abortController.signal.aborted;
 
+        // Record created threadId in operation metadata
+        if (result.createdThreadId) {
+          this.#syncCreatedThread(operationId, result.createdThreadId, context.sourceMessageId);
+        }
+
         // Topic title: gateway-created topics had no LLM-summarized
         // title. executeGatewayAgent has already replaced messages + switched to
         // the new topic, so the shared hook reads the persisted conversation from
@@ -1696,7 +1767,17 @@ export class ConversationLifecycleActionImpl {
             void sendRunLifecycle
               .afterUserMessagePersisted({
                 assistantMessageId: result.assistantMessageId,
-                context: { ...operationContext, topicId: result.topicId },
+                context: {
+                  ...operationContext,
+                  // The turn was persisted inside the thread the server just
+                  // created, so the lifecycle must read that bucket — not the
+                  // topic's main spine — when it loads the conversation.
+                  ...(result.createdThreadId && {
+                    isNew: false,
+                    threadId: result.createdThreadId,
+                  }),
+                  topicId: result.topicId,
+                },
                 isCreateNewTopic: willCreateNewTopic,
                 operationId,
                 runId: operationId,
@@ -1714,6 +1795,7 @@ export class ConversationLifecycleActionImpl {
 
         return {
           assistantMessageId: result.assistantMessageId,
+          createdThreadId: result.createdThreadId,
           userMessageId: result.userMessageId,
         };
       } catch (e) {
@@ -1892,23 +1974,7 @@ export class ConversationLifecycleActionImpl {
 
       // Record created threadId in operation metadata
       if (data.createdThreadId) {
-        this.#get().updateOperationMetadata(operationId, { createdThreadId: data.createdThreadId });
-
-        // When the active portal view is already the Thread surface (the
-        // main-page "create subtopic" flow staged it before sending), pivot it
-        // from `isNew` → persisted thread id. Otherwise the thread was started
-        // by a panel-hosted ConversationProvider (e.g. FloatingChatPanel inside
-        // the Document portal) and we must NOT push a Thread view — doing so
-        // would cover the host view the user is still reading.
-        const currentPortalViewType = chatPortalSelectors.currentViewType(this.#get());
-        if (currentPortalViewType === PortalViewType.Thread) {
-          this.#get().openThreadInPortal(data.createdThreadId, context.sourceMessageId);
-        } else {
-          this.#get().syncThreadInPortal(data.createdThreadId, context.sourceMessageId);
-        }
-
-        // Refresh threads list to update the sidebar
-        this.#get().refreshThreads();
+        this.#syncCreatedThread(operationId, data.createdThreadId, context.sourceMessageId);
       }
 
       // Create final context with updated topicId/threadId from server response

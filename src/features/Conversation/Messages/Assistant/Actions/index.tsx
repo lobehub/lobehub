@@ -12,10 +12,18 @@ import {
 
 const DEFAULT_BAR_WITH_TOOLS: MessageActionSlot[] = ['delAndRegenerate', 'copy'];
 const DEFAULT_BAR: MessageActionSlot[] = ['edit', 'copy'];
+// The developer-facing actions live one level down, under Advanced: each is
+// gated (dev mode, Labs) and rare, so flat they were noise in the menu that
+// every user opens. It sits with the other utilities rather than after Delete —
+// trailing the destructive group made a debugging aid read as a last resort.
+// The submenu drops itself when none of its children apply.
+const ADVANCED_GROUP: MessageActionSlot = {
+  children: ['copyMessageId', 'copyOperationId', 'saveAsEvalCase'],
+  key: 'advanced',
+};
 const DEFAULT_MENU: MessageActionSlot[] = [
   'edit',
   'copy',
-  'copyOperationId',
   'comments',
   'branching',
   'collapse',
@@ -25,6 +33,8 @@ const DEFAULT_MENU: MessageActionSlot[] = [
   'divider',
   'share',
   'select',
+  'divider',
+  ADVANCED_GROUP,
   'divider',
   'regenerate',
   'delAndRegenerate',

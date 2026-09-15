@@ -1,6 +1,7 @@
 'use client';
 
-import { Avatar, stopPropagation } from '@lobehub/ui';
+import { stopPropagation } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { Command, defaultFilter } from 'cmdk';
 import { CornerDownLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -10,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
 
+import { useCommandMenuAnalytics } from './analytics';
 import AskAgentCommands from './AskAgentCommands';
 import AskAIMenu from './AskAIMenu';
 import { CommandMenuProvider, useCommandMenuContext } from './CommandMenuContext';
@@ -28,6 +30,11 @@ interface CommandMenuContentProps {
   onClose: () => void;
 }
 
+interface VisibleSearchResults {
+  count: number;
+  key: string;
+}
+
 /**
  * Inner component that uses the context
  */
@@ -37,14 +44,48 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
     handleBack,
     handleSendToSelectedAgent,
     hasSearch,
+    hasSearchResponse,
     isSearching,
+    isSearchValidating,
     searchQuery,
+    searchError,
     searchResults,
     selectedAgent,
   } = useCommandMenu();
 
-  const { setPages, page, pages, search, setSearch, setTypeFilter, setSelectedAgent, typeFilter } =
-    useCommandMenuContext();
+  const {
+    menuContext,
+    page,
+    pages,
+    search,
+    setPages,
+    setSearch,
+    setSelectedAgent,
+    setTypeFilter,
+    typeFilter,
+  } = useCommandMenuContext();
+  const analyticsResultKey = searchQuery ? `${searchQuery}\u0000${typeFilter ?? 'all'}` : '';
+  const [visibleSearchResults, setVisibleSearchResults] = useState<VisibleSearchResults>();
+  const handleVisibleResultCountChange = useCallback(
+    (count: number) => {
+      setVisibleSearchResults((current) => {
+        if (current?.key === analyticsResultKey && current.count === count) return current;
+        return { count, key: analyticsResultKey };
+      });
+    },
+    [analyticsResultKey],
+  );
+  const hasVisibleResultCount = visibleSearchResults?.key === analyticsResultKey;
+  const searchAnalytics = useCommandMenuAnalytics({
+    enabled: !page && !selectedAgent && !search.trimStart().startsWith('@'),
+    hasError: Boolean(searchError),
+    hasResponse: hasSearchResponse && hasVisibleResultCount,
+    isValidating: isSearchValidating,
+    menuContext,
+    resultCount: hasVisibleResultCount ? (visibleSearchResults?.count ?? 0) : 0,
+    searchQuery,
+    typeFilter,
+  });
 
   // Ref for Command.List to control scroll position
   const listRef = useRef<HTMLDivElement>(null);
@@ -128,7 +169,10 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
             }
           }}
         >
-          <CommandInput />
+          <CommandInput
+            onInputChange={searchAnalytics.trackInputChange}
+            onTypeFilterChange={searchAnalytics.trackFilterChange}
+          />
 
           <Command.List ref={listRef}>
             {/* Hide cmdk's Empty when we have search results or are loading them,
@@ -183,7 +227,10 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
                 searchQuery={searchQuery}
                 typeFilter={typeFilter}
                 onClose={onClose}
+                onResultClick={searchAnalytics.trackResultClick}
                 onSetTypeFilter={setTypeFilter}
+                onTypeFilterChange={searchAnalytics.trackFilterChange}
+                onVisibleResultCountChange={handleVisibleResultCountChange}
               />
             )}
           </Command.List>

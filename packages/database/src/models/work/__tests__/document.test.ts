@@ -373,7 +373,80 @@ describe('WorkModel · workspace document visibility', () => {
     // registrant keeps the orphan card.
     await serverDB.delete(documents).where(eq(documents.id, doc.documentId));
 
-    expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+    const ownerView = await ownerWorks.listByConversation({ topicId });
+    expect(ownerView).toHaveLength(1);
+    // The orphan surfaces flagged `resourceDeleted` (documents LEFT JOIN miss)
+    // so the UI renders "document deleted" + a remove action instead of a live
+    // card that 404s on open.
+    expect(ownerView[0].resourceDeleted).toBe(true);
+    const { items } = await ownerWorks.listByWorkspace({});
+    expect(items).toHaveLength(1);
+    expect(items[0].resourceDeleted).toBe(true);
     expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
+  });
+
+  it('reports resourceDeleted=false while the backing document is live', async () => {
+    await seedWorkspace();
+    const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+    await registerWorkspaceDocument('public');
+
+    const [conversation] = await ownerWorks.listByConversation({ topicId });
+    expect(conversation.resourceDeleted).toBe(false);
+    const { items } = await ownerWorks.listByWorkspace({});
+    expect(items[0].resourceDeleted).toBe(false);
+  });
+
+  describe('deleteWork', () => {
+    it('removes the caller-owned Work and cascades its versions', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      const { doc } = await registerWorkspaceDocument('public');
+      await serverDB.delete(documents).where(eq(documents.id, doc.documentId));
+
+      const [orphan] = await ownerWorks.listByConversation({ topicId });
+      await ownerWorks.deleteWork({ id: orphan.id });
+
+      expect(await serverDB.select().from(works).where(eq(works.id, orphan.id))).toHaveLength(0);
+      expect(
+        await serverDB.select().from(workVersions).where(eq(workVersions.workId, orphan.id)),
+      ).toHaveLength(0);
+    });
+
+    it('refuses to delete a Work whose backing document is still live', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      await registerWorkspaceDocument('public');
+
+      const [live] = await ownerWorks.listByConversation({ topicId });
+      expect(live.resourceDeleted).toBe(false);
+      // The UI only offers removal on orphan cards; the model enforces the same
+      // invariant so a hand-crafted request cannot wipe a live Work's history.
+      await ownerWorks.deleteWork({ id: live.id });
+
+      expect(await serverDB.select().from(works).where(eq(works.id, live.id))).toHaveLength(1);
+    });
+
+    it('does not let another member delete a Work they did not register', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      const memberWorks = new WorkModel(serverDB, userId2, workspaceId);
+      const { doc } = await registerWorkspaceDocument('public');
+      await serverDB.delete(documents).where(eq(documents.id, doc.documentId));
+
+      const [work] = await ownerWorks.listByConversation({ topicId });
+      // Even with the row id in hand, only the registrant may remove an orphan.
+      await memberWorks.deleteWork({ id: work.id });
+
+      expect(await serverDB.select().from(works).where(eq(works.id, work.id))).toHaveLength(1);
+    });
+
+    it('is a no-op for an unknown id', async () => {
+      await seedWorkspace();
+      const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
+      await registerWorkspaceDocument('public');
+
+      await expect(ownerWorks.deleteWork({ id: 'work_missing' })).resolves.toBeUndefined();
+      expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
+    });
   });
 });

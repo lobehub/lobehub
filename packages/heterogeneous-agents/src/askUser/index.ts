@@ -13,6 +13,7 @@
  */
 export {
   AskUserBridge,
+  type AskUserBridgeOptions,
   type InterventionAnswer,
   type PendingArgs,
   type PendingOptions,

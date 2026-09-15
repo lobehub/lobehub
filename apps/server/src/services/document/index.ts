@@ -16,6 +16,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
+import { diffAddedMentionUserIds } from '@/server/utils/documentMentions';
 import { type LobeDocument } from '@/types/document';
 
 import { EditLockService } from '../editLock';
@@ -644,6 +645,26 @@ export class DocumentService {
         throw new Error(`Document not found: ${id}`);
       }
 
+      // Optimistic-concurrency predicate for the client's CONFLICT recovery:
+      // the retry asserts the exact version it verified. Re-read the row with
+      // FOR UPDATE so the check-and-write is atomic inside this transaction —
+      // an interleaved save from another session either commits first (and
+      // fails this predicate) or blocks until we commit.
+      if (params.expectedUpdatedAt !== undefined) {
+        const [row] = await transactionDb
+          .select({ updatedAt: documents.updatedAt })
+          .from(documents)
+          .where(eq(documents.id, id))
+          .for('update');
+        if (!row?.updatedAt || row.updatedAt.getTime() !== params.expectedUpdatedAt.getTime()) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentVersionMismatch' } },
+            code: 'CONFLICT',
+            message: 'Document has been updated by another session',
+          });
+        }
+      }
+
       // Accepted-view projections used only for historyAppended comparison and
       // for the "before" snapshot written into history. The persisted editorData
       // keeps any pending diff nodes — they're only normalized when the user
@@ -658,6 +679,11 @@ export class DocumentService {
       const historyAppended =
         nextEditorDataAccepted !== undefined &&
         !isEqual(nextEditorDataAccepted, currentEditorDataAccepted);
+      // Mentions are diffed on the accepted view so a chip inside a pending
+      // AI diff block only pings once the suggestion is accepted.
+      const addedMentionUserIds = historyAppended
+        ? diffAddedMentionUserIds(currentEditorDataAccepted, nextEditorDataAccepted)
+        : [];
 
       // Collaborative edit lock guard: reject writes to a workspace document that
       // another member is actively editing, so concurrent edits can't clobber
@@ -738,6 +764,7 @@ export class DocumentService {
       changed = Object.keys(updates).length > 0 || historyAppended;
 
       return {
+        ...(addedMentionUserIds.length > 0 ? { addedMentionUserIds } : {}),
         historyAppended,
         id,
         savedAt,

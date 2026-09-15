@@ -1,46 +1,29 @@
+import type { BlockProps } from '@lobehub/ui';
 import { render, screen } from '@testing-library/react';
-import { type ComponentProps, type ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import type { ComponentType } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import StatisticCard from './index';
 
+const blockPropsSpy = vi.hoisted(() => vi.fn());
+
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
+  const ActualBlock = actual.Block as ComponentType<BlockProps>;
   return {
     ...actual,
-    Block: ({
-      children,
-      className,
-      padding,
-      paddingBlock,
-      paddingInline,
-      style,
-      variant,
-    }: {
-      children?: ReactNode;
-      className?: string;
-      padding?: number | string;
-      paddingBlock?: number | string;
-      paddingInline?: number | string;
-      style?: ComponentProps<'div'>['style'];
-      variant?: string;
-    }) => (
-      <div
-        className={className}
-        data-padding={padding}
-        data-padding-block={paddingBlock}
-        data-padding-inline={paddingInline}
-        data-testid="block"
-        data-variant={variant}
-        style={style}
-      >
-        {children}
-      </div>
-    ),
+    Block: (props: BlockProps) => {
+      blockPropsSpy(props);
+      return <ActualBlock {...props} />;
+    },
   };
 });
 
 describe('StatisticCard', () => {
+  beforeEach(() => {
+    blockPropsSpy.mockClear();
+  });
+
   it('renders title and formatted value with prefix, suffix and precision', () => {
     render(
       <StatisticCard
@@ -115,16 +98,19 @@ describe('StatisticCard', () => {
       />,
     );
 
-    const block = screen.getByTestId('block');
-    expect(block).toHaveAttribute('data-variant', 'outlined');
-    expect(block).toHaveAttribute('data-padding', '24');
-    expect(block).toHaveAttribute('data-padding-block', '8');
-    expect(block).toHaveAttribute('data-padding-inline', '16');
+    expect(blockPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        padding: 24,
+        paddingBlock: 8,
+        paddingInline: 16,
+        variant: 'outlined',
+      }),
+    );
   });
 
   it('defaults to the borderless variant', () => {
     render(<StatisticCard title="T" />);
 
-    expect(screen.getByTestId('block')).toHaveAttribute('data-variant', 'borderless');
+    expect(blockPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ variant: 'borderless' }));
   });
 });

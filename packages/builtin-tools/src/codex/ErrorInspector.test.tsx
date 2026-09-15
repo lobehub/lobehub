@@ -17,22 +17,11 @@ vi.mock('@lobechat/shared-tool-ui/styles', () => ({
   shinyTextStyles: { shinyText: 'shiny-text' },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Icon: ({ className }: { className?: string }) => (
-    <span className={className} data-testid="icon" />
-  ),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => new Proxy({}, { get: (_target, property) => String(property) }),
-  cx: (...classNames: Array<string | false | undefined>) => classNames.filter(Boolean).join(' '),
-}));
-
 describe('Codex ErrorInspector', () => {
   afterEach(cleanup);
 
   it('renders the warning icon and error message', () => {
-    render(
+    const { container } = render(
       <ErrorInspector
         apiName="error"
         args={{ id: 'item_0', message: 'The session model changed.', type: 'error' }}
@@ -40,7 +29,7 @@ describe('Codex ErrorInspector', () => {
       />,
     );
 
-    expect(screen.getByTestId('icon')).toBeTruthy();
+    expect(container.querySelector('svg')).toBeTruthy();
     expect(screen.getByText('The session model changed.')).toBeTruthy();
   });
 
@@ -55,8 +44,7 @@ describe('Codex ErrorInspector', () => {
       />,
     );
 
-    expect(screen.getByText('Session compatibility warning')).toBeTruthy();
-    expect(screen.getByTestId('codex-error-inspector').classList).toContain('shiny-text');
+    expect(screen.getByText('Session compatibility warning').classList).toContain('shiny-text');
   });
 
   it('uses localized fallback copy when no message is available', () => {

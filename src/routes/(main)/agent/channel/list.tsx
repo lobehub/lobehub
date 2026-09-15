@@ -1,7 +1,8 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, responsive, useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';

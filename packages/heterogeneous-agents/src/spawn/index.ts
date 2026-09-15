@@ -84,6 +84,30 @@ export {
   normalizeCursorQuestion,
 } from './cursorAcpSession';
 export {
+  buildDroidAcpArgs,
+  buildDroidAcpPrompt,
+  type DroidAcpImagePromptBlock,
+  type DroidAcpModelCatalog,
+  type DroidAcpPromptBlock,
+  DroidAcpSession,
+  type DroidAcpSessionOptions,
+  type DroidAcpTextPromptBlock,
+  isDroidAcpSessionNotFoundError,
+  listDroidAcpModels,
+  type ListDroidAcpModelsOptions,
+  parseDroidAcpModelCatalog,
+} from './droidAcpSession';
+export {
+  buildDevinAcpArgs,
+  buildDevinAcpPrompt,
+  type DevinAcpImagePromptBlock,
+  type DevinAcpPromptBlock,
+  DevinAcpSession,
+  type DevinAcpSessionOptions,
+  type DevinAcpTextPromptBlock,
+  isDevinAcpSessionNotFoundError,
+} from './devinAcpSession';
+export {
   createFileStoreImageUploader,
   type FileStoreCreateFileInput,
   type FileStorePort,

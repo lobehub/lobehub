@@ -17,6 +17,8 @@ export interface FileUploadState {
 export type FileUploadStatus =
   'pending' | 'uploading' | 'processing' | 'success' | 'error' | 'cancelled';
 
+export type FileUploadSessionStatus = 'active' | 'cleaning' | 'settled' | 'released' | 'expired';
+
 export type FileProcessStatus = 'pending' | 'chunking' | 'embedding' | 'success' | 'error';
 
 export const UPLOAD_STATUS_SET = new Set(['uploading', 'pending', 'processing']);
@@ -51,6 +53,12 @@ export interface UploadFileItem {
    * base64 data, it will use in other data
    */
   base64Url?: string;
+  /** Intrinsic dimensions captured for image uploads. */
+  dimensions?: {
+    height: number;
+    ratio: number;
+    width: number;
+  };
   /** Human-readable reason retained on the originating upload surface. */
   error?: string;
   /** Stable business reason used to render an in-context remedy action. */

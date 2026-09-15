@@ -1,9 +1,11 @@
 'use client';
 
+import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
 import { TooltipGroup } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
+import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
 import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
@@ -12,6 +14,7 @@ import {
   COMPACT_MODEL_PICKER_STYLE,
   compactModelTriggerText,
   modelPickerStyles,
+  resolveServerDefaultAgentModels,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import { useAgentStore } from '@/store/agent';
@@ -33,12 +36,12 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const updateAgentConfigById = useAgentStore((state) => state.updateAgentConfigById);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const activeTopicId = useChatStore((state) => state.activeTopicId);
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const topicModel = useChatStore(topicSelectors.activeTopicHeteroPin, isEqual);
   const updateTopicModel = useChatStore((state) => state.updateTopicModel);
   const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
   const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
   const serverDefaultAgentType =
-    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+    heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
       ? heterogeneousProvider.type
       : undefined;
   const apiConfig = heterogeneousProvider?.apiConfig;
@@ -55,7 +58,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const serverDefaultModelOptions = useMemo(() => {
     const models =
       serverCapability.data?.enabled === true && serverDefaultAgentType
-        ? serverCapability.data.models[serverDefaultAgentType]
+        ? resolveServerDefaultAgentModels(serverCapability.data.models, serverDefaultAgentType)
         : [];
     return buildServerDefaultModelOptions(models, builtinAiModelList);
   }, [builtinAiModelList, serverCapability.data, serverDefaultAgentType]);

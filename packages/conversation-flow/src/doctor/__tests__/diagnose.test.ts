@@ -96,24 +96,11 @@ describe('diagnoseTopic', () => {
       { content: 'sure', id: 'b1', parent: 'u2', role: 'assistant', t: 45 },
     ]);
 
-    it('detects the fork and hides one of the two branches', () => {
-      const { hiddenCount, issues, patch } = diagnoseTopic(messages);
-
-      expect(issues).toHaveLength(1);
-      expect(issues[0]).toMatchObject({
-        kind: 'concurrent-fork',
-        messageId: 'a1',
-        repairable: true,
-      });
-      expect(hiddenCount).toBeGreaterThan(0);
-      // the user's own turn is what the reader drops
-      expect(issues[0].hiddenMessageIds).toEqual(expect.arrayContaining(['u2', 'b1']));
-
-      // repair re-anchors the interjection onto the tail of the run it interrupted
-      expect(patch).toEqual([{ messageId: 'u2', parentId: 'a3', type: 'reparent' }]);
+    it('does not rewrite a concurrent interruption the reader already recovers', () => {
+      expect(diagnoseTopic(messages)).toEqual({ hiddenCount: 0, issues: [], patch: [] });
     });
 
-    it('makes every message visible again once repaired', () => {
+    it('keeps every message visible without a database repair', () => {
       const { patch } = diagnoseTopic(messages);
       const repaired = applyPatch(messages, patch);
 

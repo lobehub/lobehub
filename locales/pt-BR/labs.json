@@ -16,6 +16,8 @@
   "features.codexAppServer.title": "Runtime do Servidor de Aplicativos Codex",
   "features.desktopSplitView.desc": "Exiba duas abas da área de trabalho lado a lado, com navegação independente e um divisor redimensionável.",
   "features.desktopSplitView.title": "Visualização Dividida de Abas",
+  "features.evalCapture.desc": "Adiciona uma ação de mensagem que captura uma interação de conversa — seu contexto anterior, entrada e a resposta produzida — como um caso de teste de avaliação.",
+  "features.evalCapture.title": "Salvar uma interação como caso de avaliação",
   "features.groupChat.desc": "Ative a coordenação de bate-papo em grupo com múltiplos agentes.",
   "features.groupChat.title": "Bate-Papo em Grupo (Multiagente)",
   "features.heteroSessionImport.desc": "Adicione uma entrada \"Importar Sessões de Agente Local\" ao menu da lista de tópicos: escaneie transcrições locais do Claude Code / Codex CLI e importe-as como tópicos, com sincronização incremental na reimportação.",

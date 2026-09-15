@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Footprints, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

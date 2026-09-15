@@ -1,8 +1,7 @@
 'use client';
 
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
-import { type ActionIconProps } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon, type ActionIconProps } from '@lobehub/ui/base-ui';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo } from 'react';

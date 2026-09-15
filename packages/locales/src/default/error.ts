@@ -106,6 +106,8 @@ export default {
   'unknownError.copyTraceIdTooltip': 'Click to copy',
   'unknownError.desc': 'An unexpected error occurred. You can retry or report on',
   'unknownError.retry': 'Retry',
+  'unknownError.sharedDesc': 'Please report this issue on',
+  'unknownError.sharedTitle': 'Unable to generate this answer',
   'unknownError.traceIdLabel': 'Trace ID:',
   'unknownError.title': 'Oops, the request took a nap',
 
@@ -170,6 +172,12 @@ export default {
     'Repeated content policy rejections detected. Please revise your prompt before retrying.',
   'response.ProviderImageContentModerationWarning':
     'Repeated image safety rejections detected. Similar prompts may temporarily pause image generation.',
+  'response.ProviderImageContentModerationCooldown':
+    'Image generation is temporarily paused due to repeated safety rejections. Try again later with safer prompts.',
+  'response.ProviderImageContentModerationCooldownUntil':
+    'Image generation is temporarily paused due to repeated safety rejections and is expected to resume at {{time}}. Revise your prompt before retrying.',
+  'response.ProviderImageContentModerationCooldownExpired':
+    'This generation was paused due to content safety restrictions. Its waiting period has ended. Revise your prompt and try again.',
   'response.DeviceGatewayNotConfigured':
     "Couldn't reach a run device for this agent. Connect a device, or configure the device gateway on the server, then try again.",
   'response.RemoteServerOffline':
@@ -186,8 +194,6 @@ export default {
     'The server could not be reached. This usually indicates a local network problem — please check your internet connection, proxy, or VPN settings and try again.',
   'response.ServerAgentRuntimeError':
     'Sorry, the Agent service is currently unavailable. Please try again later or contact us via email for support.',
-  'response.SubscriptionKeyMismatch':
-    'We apologize for the inconvenience. Due to a temporary system malfunction, your current subscription usage is inactive. Please click the button below to restore your subscription, or contact us via email for support.',
   'response.SubscriptionPlanLimit':
     'Your subscription points have been exhausted, and you cannot use this feature. Please upgrade to a higher plan or configure a custom model API to continue using it.',
   'response.SubscriptionPlanLimitUltimate':
@@ -198,6 +204,8 @@ export default {
     'The model "{{model}}" is no longer available. Please pick a current model from the model selector.',
   'response.UnknownChatFetchError':
     'Sorry, an unknown request error occurred. Please check the information below or try again.',
+  'response.UnreadableServerResponse':
+    'The server returned a response the app could not read. This is usually a temporary network or gateway problem — please try again in a moment.',
   'response.WorkspaceAgentRequiresWorkspaceDevice':
     'This agent lives in a workspace, so it can only bind devices the whole team can reach. Personal devices stay with the user who registered them — pick a workspace device instead, or enroll this device to the workspace first.',
   'response.WorkspaceFrozenByAdmin':
@@ -247,6 +255,7 @@ export default {
     'A previous copy of this agent is still duplicating its history. Try again once it finishes.',
   'transfer.transferInProgress':
     'A previous move of this resource is still migrating its history. Try again once it finishes.',
+  'transfer.sharedTransferBlocked': 'This agent has a share link, so its owner cannot be changed.',
   'transfer.sameWorkspace':
     'This resource is already in the selected workspace. Choose another target.',
   'transfer.targetIsCurrentOwner': 'This agent already belongs to that member. Pick someone else.',

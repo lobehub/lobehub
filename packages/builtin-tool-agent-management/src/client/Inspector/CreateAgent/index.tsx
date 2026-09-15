@@ -2,7 +2,8 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx, useTheme } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,20 +37,17 @@ export const CreateAgentInspector = memo<BuiltinInspectorProps<CreateAgentParams
 
     if (isArgumentsStreaming && !title) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent-management.apiName.createAgent')}</span>
+        <div className={styles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-agent-management.apiName.createAgent')}
+          </span>
         </div>
       );
     }
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-agent-management.inspector.createAgent.title')}
         </span>
         <Avatar

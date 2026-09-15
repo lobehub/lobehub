@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Avatar, Flexbox, Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { Input, InputNumber } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';

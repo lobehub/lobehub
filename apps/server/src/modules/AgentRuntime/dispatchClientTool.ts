@@ -155,6 +155,9 @@ function projectToExecutionResult(
 ): ToolExecutionResultResponse {
   return {
     content: payload.content ?? '',
+    // Absent when the device or the gateway is too old to report it; the
+    // server-observed `executionTime` is always present.
+    deviceExecutionTime: payload.executionTimeMs,
     error: payload.error,
     executionTime,
     state: payload.state,

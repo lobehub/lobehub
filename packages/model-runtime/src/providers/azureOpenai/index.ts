@@ -14,8 +14,17 @@ import { isResponsesAPIModel, responsesAPIModels, systemToUserModels } from '../
 const azureImageLogger = debug('lobe-image:azure');
 const azureSearchContextSize = process.env.OPENAI_SEARCH_CONTEXT_SIZE;
 
+/**
+ * Azure reasoning models reject sampling/penalty params (`temperature` and friends
+ * 400 with "Unsupported parameter"). Matches GPT-5 and every later GPT generation —
+ * GPT-6 dropped the minor version (`gpt-6-astra`) but kept the same restriction.
+ *
+ * Substring matching is deliberate: Azure deployment names commonly wrap the model
+ * id (`prod-gpt-54`). The `[.-]`/end boundary keeps Azure's legacy `gpt-35-turbo`
+ * deployment name out.
+ */
 const isAzureReasoningModel = (model: string) =>
-  model.includes('gpt-5') || model.includes('o1') || model.includes('o3');
+  /gpt-[5-9](?:$|[.-])/.test(model) || model.includes('o1') || model.includes('o3');
 
 const supportsImageInputFidelity = (model: string) => /^gpt-image-1(?:$|[-.])/.test(model);
 

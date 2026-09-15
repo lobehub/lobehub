@@ -5,7 +5,7 @@ import {
   resolveTargetDeviceId,
 } from '@/helpers/agentWorkingDirectory';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -51,7 +51,7 @@ export const useEffectiveWorkingDirectory = (
   // Effective config = shared row + this member's device override,
   // so `resolveTargetDeviceId` targets the device THIS member's run goes to —
   // not whichever machine landed on the workspace-shared row.
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId, topicId);
   const legacyAgentWorkingDirectory = useAgentStore((s) =>
     agentId ? s.localAgentWorkingDirectoryMap[agentId] : undefined,
   );

@@ -54,15 +54,18 @@ describe('useSystemFontOptions', () => {
     expect(electronSystemService.getSystemFonts).not.toHaveBeenCalled();
   });
 
-  it('keeps a selected font that is not installed on this device', async () => {
-    const { result } = renderHook(() => useSystemFontOptions({ ...params, value: 'Gone Sans' }));
+  it('keeps every selected font that is not installed on this device', async () => {
+    const { result } = renderHook(() =>
+      useSystemFontOptions({ ...params, values: ['Gone Sans', 'Georgia', 'Lost Serif'] }),
+    );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.options[1]).toEqual({
-      label: 'Gone Sans (unavailable)',
-      value: 'Gone Sans',
-    });
+    expect(result.current.options.slice(1, 3)).toEqual([
+      { label: 'Gone Sans (unavailable)', value: 'Gone Sans' },
+      { label: 'Lost Serif (unavailable)', value: 'Lost Serif' },
+    ]);
+    expect(result.current.options.filter((o) => o.value === 'Georgia')).toHaveLength(1);
   });
 
   it('reports a load failure while still offering the default entry', async () => {
@@ -74,5 +77,14 @@ describe('useSystemFontOptions', () => {
     await waitFor(() => expect(result.current.hasLoadError).toBe(true));
 
     expect(result.current.options).toEqual([{ label: 'default', value: APPLICATION_DEFAULT_FONT }]);
+  });
+
+  it('does not load system fonts when disabled', () => {
+    const { result } = renderHook(() => useSystemFontOptions({ ...params, enabled: false }));
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.options).toEqual([{ label: 'default', value: APPLICATION_DEFAULT_FONT }]);
+    expect(electronSystemService.getSystemFonts).not.toHaveBeenCalled();
+    expect(electronSystemService.getSystemMonospaceFonts).not.toHaveBeenCalled();
   });
 });

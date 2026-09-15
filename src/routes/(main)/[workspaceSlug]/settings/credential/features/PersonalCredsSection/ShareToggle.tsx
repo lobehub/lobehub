@@ -1,8 +1,8 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
-import { Segmented, Switch, toast } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Segmented, Switch, Text, toast } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

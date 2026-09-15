@@ -1,4 +1,6 @@
-import type { VerifyVisibility } from '@lobechat/const/verify';
+import { randomUUID } from 'node:crypto';
+
+import { isDraftVerifyRun, type VerifyVisibility } from '@lobechat/const/verify';
 import type {
   VerifyCheckItem,
   VerifyRunDecisionDetail,
@@ -6,20 +8,7 @@ import type {
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -27,6 +16,7 @@ import { verifyCheckResults, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { VerifyCriterionModel } from './verifyCriterion';
 
 /**
  * Shape returned by the *State helpers — kept field-compatible with the legacy
@@ -145,16 +135,27 @@ export class VerifyRunModel {
     // reserve its unique operation_id (see {@link assertOperationOwned}).
     if (params.operationId) await this.assertOperationOwned(params.operationId);
 
-    const [run] = await this.db
-      .insert(verifyRuns)
-      .values(
-        buildWorkspacePayload(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          { visibility: this.defaultVisibility(), ...params },
-        ),
-      )
-      .returning();
-    return run;
+    return this.db.transaction(async (tx) => {
+      params = { ...params, id: params.id ?? randomUUID() };
+      if (params.plan)
+        params = {
+          ...params,
+          plan: await new VerifyCriterionModel(tx, this.userId, this.workspaceId).materialize(
+            params.plan,
+            params.acceptanceId ?? params.id!,
+          ),
+        };
+      const [run] = await tx
+        .insert(verifyRuns)
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { visibility: this.defaultVisibility(), ...params },
+          ),
+        )
+        .returning();
+      return run;
+    });
   };
 
   findById = async (id: string) => {
@@ -327,6 +328,58 @@ export class VerifyRunModel {
     return run;
   };
 
+  /**
+   * A harness run arriving while the acceptance still holds a draft round must
+   * not open another round: its plan folds into the draft, the draft becomes the
+   * ingest target (frozen now, since results are about to land) and the
+   * detached run row goes away. Returns the draft row the caller ingests into.
+   */
+  foldIntoRound = async (sourceRunId: string, targetRunId: string): Promise<VerifyRunItem> => {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(verifyRuns)
+        .where(and(inArray(verifyRuns.id, [sourceRunId, targetRunId]), this.ownership()))
+        .for('update');
+      const source = rows.find((row) => row.id === sourceRunId);
+      const target = rows.find((row) => row.id === targetRunId);
+      if (!source || !target) throw new Error('Verify run not found in the current workspace');
+      if (source.acceptanceId) throw new Error('Only a detached run can fold into a draft round');
+      if (!isDraftVerifyRun(target)) throw new Error('Only a draft round can absorb another run');
+      const executed = await tx
+        .select({ id: verifyCheckResults.id })
+        .from(verifyCheckResults)
+        .where(inArray(verifyCheckResults.verifyRunId, [sourceRunId, targetRunId]))
+        .limit(1);
+      if (executed.length) throw new Error('A run with results cannot fold into a draft round');
+
+      const known = new Set((target.plan ?? []).map((item) => item.id));
+      const plan = [
+        ...(target.plan ?? []),
+        ...(source.plan ?? []).filter((item) => !known.has(item.id)),
+      ].map((item, index) => ({ ...item, index }));
+      // The source row goes first so its unique operation_id can move over.
+      await tx.delete(verifyRuns).where(eq(verifyRuns.id, sourceRunId));
+      const [folded] = await tx
+        .update(verifyRuns)
+        .set({
+          context: target.context ?? source.context,
+          goal: target.goal ?? source.goal,
+          metadata: { ...target.metadata, ...source.metadata },
+          operationId: target.operationId ?? source.operationId,
+          plan,
+          planConfirmedAt: new Date(),
+          scenario: target.scenario ?? source.scenario,
+          source: source.source ?? target.source,
+          // Ingested rounds carry no rollup status: the report settles them.
+          status: null,
+        })
+        .where(eq(verifyRuns.id, targetRunId))
+        .returning();
+      return folded;
+    });
+  };
+
   /** Flip who can read this round's report page beyond its creator. */
   setVisibility = async (runId: string, visibility: VerifyVisibility): Promise<void> => {
     await this.db
@@ -433,25 +486,39 @@ export class VerifyRunModel {
    * The plan is mutable while a draft; it is frozen on {@link confirmPlan}.
    */
   setPlan = async (runId: string, items: VerifyCheckItem[]): Promise<void> => {
-    await this.db
-      .update(verifyRuns)
-      .set({ plan: items, status: 'planned' })
-      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+    await this.writeDraftPlan(runId, items, true);
   };
 
-  /** Replace the draft plan items (user edited the plan before confirming). */
   replacePlanItems = async (runId: string, items: VerifyCheckItem[]): Promise<void> => {
-    await this.db
-      .update(verifyRuns)
-      .set({ plan: items })
-      .where(
-        and(
-          eq(verifyRuns.id, runId),
-          // only a not-yet-confirmed plan may be edited
-          isNull(verifyRuns.planConfirmedAt),
-          this.ownership(),
-        ),
+    await this.writeDraftPlan(runId, items, false);
+  };
+
+  private writeDraftPlan = async (
+    runId: string,
+    items: VerifyCheckItem[],
+    markPlanned: boolean,
+  ) => {
+    await this.db.transaction(async (tx) => {
+      const [run] = await tx
+        .select()
+        .from(verifyRuns)
+        .where(and(eq(verifyRuns.id, runId), this.ownership()))
+        .for('update');
+      if (!run || run.planConfirmedAt) {
+        if (!markPlanned) return;
+        throw new Error('Draft verification round required');
+      }
+      if (run.flowSnapshots?.length)
+        throw new Error('Flow plans must be changed through a new flow round');
+      const plan = await new VerifyCriterionModel(tx, this.userId, this.workspaceId).materialize(
+        items,
+        run.acceptanceId ?? run.id,
       );
+      await tx
+        .update(verifyRuns)
+        .set({ plan, ...(markPlanned ? { status: 'planned' as const } : {}) })
+        .where(eq(verifyRuns.id, runId));
+    });
   };
 
   /** Freeze the plan (records confirmation time). Results relate to frozen items. */

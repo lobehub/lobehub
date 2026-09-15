@@ -44,7 +44,9 @@ describe('resourcePermissionRouter.setGeneralAccess', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permissionModelMock = { setAccessLevel: vi.fn().mockResolvedValue(undefined) };
-    vi.mocked(ResourcePermissionModel).mockImplementation(() => permissionModelMock);
+    vi.mocked(ResourcePermissionModel).mockImplementation(function () {
+      return permissionModelMock;
+    });
   });
 
   const caller = () =>
@@ -129,6 +131,67 @@ describe('resourcePermissionRouter.setGeneralAccess', () => {
   });
 });
 
+describe('resourcePermissionRouter.getGeneralAccess', () => {
+  let permissionModelMock: any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    permissionModelMock = { getAccessLevel: vi.fn().mockResolvedValue(null) };
+    vi.mocked(ResourcePermissionModel).mockImplementation(function () {
+      return permissionModelMock;
+    });
+  });
+
+  const caller = () =>
+    resourcePermissionRouter.createCaller({
+      serverDB: {},
+      userId: 'user_member',
+      workspaceId: 'ws_1',
+    } as any);
+
+  // Regression: a member opening someone else's workspace page got
+  // `view` from the resource default, and the editor renders `view` as
+  // read-only — so a shared page could be read but never edited, even though
+  // `documentRouter.updateDocument` would have accepted the write.
+  it('reports edit access on another member public document without a row', async () => {
+    getResourceMetaMock.mockResolvedValue({
+      userId: 'user_creator',
+      visibility: 'public',
+      workspaceId: 'ws_1',
+    } as any);
+    canManageMock.mockResolvedValue(false);
+
+    const result = await caller().getGeneralAccess({
+      resourceId: 'doc-1',
+      resourceType: 'document',
+    });
+
+    expect(result).toMatchObject({
+      accessLevel: 'edit',
+      canManage: false,
+      creatorId: 'user_creator',
+      visibility: 'public',
+    });
+  });
+
+  it('still reports an explicitly lowered document as view', async () => {
+    getResourceMetaMock.mockResolvedValue({
+      userId: 'user_creator',
+      visibility: 'public',
+      workspaceId: 'ws_1',
+    } as any);
+    canManageMock.mockResolvedValue(false);
+    permissionModelMock.getAccessLevel.mockResolvedValue('view');
+
+    const result = await caller().getGeneralAccess({
+      resourceId: 'doc-1',
+      resourceType: 'document',
+    });
+
+    expect(result.accessLevel).toBe('view');
+  });
+});
+
 /**
  * Fake drizzle db resolving one prepared result per `select()` call, in order.
  * Records whether a query was locked (`.for('update')`) and whether it ran
@@ -175,7 +238,9 @@ describe('resourcePermissionRouter collaborators', () => {
       removeCollaborators: vi.fn().mockResolvedValue(undefined),
       upsertCollaborators: vi.fn().mockResolvedValue(undefined),
     };
-    vi.mocked(ResourcePermissionModel).mockImplementation(() => collaboratorModelMock);
+    vi.mocked(ResourcePermissionModel).mockImplementation(function () {
+      return collaboratorModelMock;
+    });
     getResourceMetaMock.mockResolvedValue({
       userId: 'user_creator',
       visibility: 'public',

@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { users, verifyRuns } from '../../schemas';
+import { acceptances, users, verifyRuns } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyRunModel } from '../verifyRun';
@@ -234,5 +234,72 @@ describe('VerifyRunModel.findStuckVerifying', () => {
     );
 
     expect(stuck.map((r) => r.id)).not.toContain(run.id);
+  });
+});
+
+describe('VerifyRunModel.foldIntoRound', () => {
+  const model = () => new VerifyRunModel(serverDB, userId);
+  const item = (id: string) => ({
+    id,
+    index: 0,
+    onFail: 'manual' as const,
+    required: true,
+    title: id,
+    verifierConfig: {},
+    verifierType: 'agent' as const,
+  });
+  const draftRound = async () => {
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ userId, subjectType: 'standalone', subjectId: 'fold-subject' })
+      .returning();
+    const draft = await model().create({
+      acceptanceId: acceptance.id,
+      plan: [item('flow-1')],
+      roundIndex: 1,
+      status: 'planned',
+      title: 'draft',
+    });
+    return { acceptance, draft };
+  };
+
+  it('folds a detached harness run into the draft and removes the extra row', async () => {
+    const { acceptance, draft } = await draftRound();
+    const incoming = await model().create({
+      metadata: { interactionCost: { total: 1 } } as any,
+      plan: [item('case-1'), item('flow-1')],
+      source: 'agent-testing',
+      title: 'harness',
+    });
+
+    const folded = await model().foldIntoRound(incoming.id, draft.id);
+
+    expect(folded.id).toBe(draft.id);
+    expect(folded.roundIndex).toBe(1);
+    expect(folded.plan?.map((p) => [p.id, p.index])).toEqual([
+      ['flow-1', 0],
+      ['case-1', 1],
+    ]);
+    expect(folded.status).toBeNull();
+    expect(folded.planConfirmedAt).not.toBeNull();
+    expect(folded.source).toBe('agent-testing');
+    expect(folded.metadata).toMatchObject({ interactionCost: { total: 1 } });
+    expect(await model().findById(incoming.id)).toBeUndefined();
+    expect(await model().listByAcceptance(acceptance.id)).toHaveLength(1);
+  });
+
+  it('refuses to fold into a round that already executed or a run already chained', async () => {
+    const { acceptance, draft } = await draftRound();
+    await model().confirmPlan(draft.id);
+    const incoming = await model().create({ plan: [item('case-1')], title: 'harness' });
+    await expect(model().foldIntoRound(incoming.id, draft.id)).rejects.toThrow('draft round');
+
+    const chained = await model().create({
+      acceptanceId: acceptance.id,
+      plan: [item('case-2')],
+      roundIndex: 2,
+      title: 'chained',
+    });
+    await expect(model().foldIntoRound(chained.id, draft.id)).rejects.toThrow('detached');
   });
 });

@@ -21,10 +21,12 @@ import { z } from 'zod';
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { ExpertiseModel } from '@/database/models/expertise';
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorMessage, notShareVisitorTopic } from '@/database/utils/shareVisitor';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { resolveExpertiseModelConfig } from './modelConfig';
+import { isProviderAccountError } from './providerAccountError';
 
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
@@ -162,15 +164,27 @@ export class ExpertiseIngestionService {
       ? eq(messages.workspaceId, this.workspaceId)
       : and(eq(messages.userId, this.userId), isNull(messages.workspaceId));
 
+    // Share-visitor topics/messages are billed to the creator but are visitor traffic,
+    // not the creator's own activity — they must never feed self-learning/expertise
+    // ingestion. See `notShareVisitorMessage`/`notShareVisitorTopic` for the shared rule.
     const byMessageAgent = this.db
       .select({ topicId: messages.topicId })
       .from(messages)
-      .where(and(scope, eq(messages.agentId, agentId), isNotNull(messages.topicId)));
+      .where(
+        and(
+          scope,
+          eq(messages.agentId, agentId),
+          isNotNull(messages.topicId),
+          notShareVisitorMessage(),
+        ),
+      );
     const byTopicAgent = this.db
       .select({ topicId: messages.topicId })
       .from(messages)
       .innerJoin(topics, eq(topics.id, messages.topicId))
-      .where(and(scope, isNull(messages.agentId), eq(topics.agentId, agentId)));
+      .where(
+        and(scope, isNull(messages.agentId), eq(topics.agentId, agentId), notShareVisitorTopic()),
+      );
 
     return byMessageAgent.union(byTopicAgent).as('historical_topic_candidates');
   };
@@ -218,13 +232,26 @@ export class ExpertiseIngestionService {
     return row?.count ?? 0;
   };
 
-  /** Imports one old topic with a stable key, so retrying the workflow cannot duplicate runs. */
-  ingestHistoricalTopic = async (agentId: string, topicId: string) =>
-    this.ingestCompletion({
-      agentId,
-      ingestionKey: `historical-v1:${topicId}`,
-      topicId,
-    });
+  /**
+   * Imports one old topic with a stable key, so retrying the workflow cannot duplicate runs.
+   *
+   * A provider account refusal is the user's to fix, not a server fault: it finishes as a skip so
+   * the durable workflow neither reports a 500 nor retries every topic against a dead account.
+   */
+  ingestHistoricalTopic = async (agentId: string, topicId: string) => {
+    try {
+      return await this.ingestCompletion({
+        agentId,
+        ingestionKey: `historical-v1:${topicId}`,
+        topicId,
+      });
+    } catch (error) {
+      if (isProviderAccountError(error)) {
+        return { ingested: 0, reason: 'provider-account-error' } as const;
+      }
+      throw error;
+    }
+  };
 
   /** Local-runtime fallback for the durable workflow used in queue deployments. */
   ingestHistory = async (agentId: string) => {
@@ -237,6 +264,8 @@ export class ExpertiseIngestionService {
         const result = await this.ingestHistoricalTopic(agentId, topic.topicId);
         ingested += result.ingested;
         scanned += 1;
+        // Every remaining topic would hit the same refusal until the user fixes their account.
+        if (result.reason === 'provider-account-error') return { ingested, scanned };
       }
       const last = topicRows.at(-1);
       if (!last || topicRows.length < 50 || !last.lastActivityAt) break;
@@ -327,6 +356,8 @@ export class ExpertiseIngestionService {
           : and(eq(messages.userId, this.userId), isNull(messages.workspaceId)),
         eq(messages.topicId, topicId),
         isNull(messages.threadId),
+        // Same rule as `historicalTopicCandidates` above — exclude share-visitor messages.
+        notShareVisitorMessage(),
       ),
     });
     return {

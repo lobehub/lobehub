@@ -4,12 +4,14 @@ import { fetchEventSource } from '@lobechat/utils/client';
 import { useEffect } from 'react';
 
 import { mutate } from '@/libs/swr';
+import { documentLikeKeys, isDocumentCommentKeyForEvent } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
 import { pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
+import { shouldIgnoreResourceEvent } from './resourceEventUtils';
 import { usePageEditorStore } from './store';
 
 const buildHeaders = async (): Promise<Record<string, string>> => {
@@ -70,6 +72,7 @@ export const useResourceEvents = () => {
                 expiresAt?: string | null;
                 holderId?: string | null;
                 ownerId?: string | null;
+                rootCommentId?: string;
               };
               type?: string;
             };
@@ -78,13 +81,24 @@ export const useResourceEvents = () => {
             } catch {
               return;
             }
-            // Ignore our own echoes.
-            if (parsed.actorId && parsed.actorId === myUserId) return;
+            // Content and lock mutations are already reflected locally, but comment
+            // and like events must reach another window signed in as the same account.
+            if (shouldIgnoreResourceEvent(parsed, myUserId)) return;
 
             if (parsed.type === 'doc.updated') {
               // Re-fetch; DocumentIdMode re-hydrates the editor on the new
               // version when the local editor isn't dirty.
               void mutate(documentSWRKeys.editor(documentId));
+            } else if (parsed.type === 'document.commentsChanged' && workspaceId) {
+              void mutate((key) =>
+                isDocumentCommentKeyForEvent(key, {
+                  documentId,
+                  rootCommentId: parsed.data?.rootCommentId,
+                  workspaceId,
+                }),
+              );
+            } else if (parsed.type === 'document.likesChanged' && workspaceId) {
+              void mutate(documentLikeKeys.summary(workspaceId, documentId));
             } else if (parsed.type === 'lock.changed') {
               // Store the holder verbatim; "locked by other" is derived against
               // the current user/session at read time (usePageLockedByOther).

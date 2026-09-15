@@ -5,6 +5,8 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
     interface ProcessEnv {
+      /** Comma-separated origins merged into Better Auth's resolved trusted origins. */
+      AUTH_ADDITIONAL_TRUSTED_ORIGINS?: string;
       AUTH_ALLOWED_EMAILS?: string;
       AUTH_APPLE_APP_BUNDLE_IDENTIFIER?: string;
       AUTH_APPLE_CLIENT_ID?: string;
@@ -114,6 +116,7 @@ export const getAuthConfig = () => {
       AUTH_COOKIE_PREFIX: z.string().optional(),
       AUTH_SECRET: z.string().optional(),
       AUTH_SSO_PROVIDERS: z.string().optional().default(''),
+      AUTH_ADDITIONAL_TRUSTED_ORIGINS: z.string().optional(),
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
       AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
       AUTH_ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
@@ -202,6 +205,7 @@ export const getAuthConfig = () => {
     },
 
     runtimeEnv: {
+      AUTH_ADDITIONAL_TRUSTED_ORIGINS: process.env.AUTH_ADDITIONAL_TRUSTED_ORIGINS,
       AUTH_COOKIE_PREFIX: process.env.AUTH_COOKIE_PREFIX,
       AUTH_EMAIL_VERIFICATION: process.env.AUTH_EMAIL_VERIFICATION === '1',
       AUTH_ENABLE_MAGIC_LINK: process.env.AUTH_ENABLE_MAGIC_LINK === '1',

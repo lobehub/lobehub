@@ -34,6 +34,15 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
+const seedWorkspace = async (id: string) => {
+  await serverDB
+    .insert(workspaces)
+    .values({ id, name: id, primaryOwnerId: userId, slug: id })
+    .onConflictDoNothing();
+
+  return id;
+};
+
 describe('AgentBotProviderModel', () => {
   describe('create', () => {
     it('should create a bot provider without encryption', async () => {
@@ -101,6 +110,60 @@ describe('AgentBotProviderModel', () => {
 
       const found = await model1.findById(created.id);
       expect(found).toBeDefined();
+    });
+
+    it('reports that it removed nothing when the row is outside the active scope', async () => {
+      const workspaceId = await seedWorkspace('bot-provider-scope-gap-ws');
+      const inWorkspace = new AgentBotProviderModel(serverDB, userId, undefined, workspaceId);
+      const created = await inWorkspace.create({
+        agentId,
+        applicationId: 'app-scope-gap',
+        credentials: { botToken: 'tok' },
+        platform: 'discord',
+      });
+
+      // Same user, personal scope: the workspace row is invisible here, but it
+      // keeps holding the global (platform, applicationId) key.
+      const personal = new AgentBotProviderModel(serverDB, userId);
+      const deleted = await personal.delete(created.id);
+
+      expect(deleted).toHaveLength(0);
+      expect(await inWorkspace.findById(created.id)).toBeDefined();
+    });
+
+    it('reports the rows it removed on a delete that matched', async () => {
+      const model = new AgentBotProviderModel(serverDB, userId);
+      const created = await model.create({
+        agentId,
+        applicationId: 'app-del-reported',
+        credentials: { botToken: 'tok' },
+        platform: 'discord',
+      });
+
+      await expect(model.delete(created.id)).resolves.toEqual([{ id: created.id }]);
+    });
+  });
+
+  describe('findByIdAcrossScopes / deleteAcrossScopes', () => {
+    it('reaches a row the active scope hides, so a creator can reclaim the application id', async () => {
+      const workspaceId = await seedWorkspace('bot-provider-stranded-ws');
+      const inWorkspace = new AgentBotProviderModel(serverDB, userId, undefined, workspaceId);
+      const created = await inWorkspace.create({
+        agentId,
+        applicationId: 'app-stranded',
+        credentials: { botToken: 'tok' },
+        platform: 'discord',
+      });
+
+      const personal = new AgentBotProviderModel(serverDB, userId);
+      expect(await personal.findById(created.id)).toBeUndefined();
+
+      const stranded = await personal.findByIdAcrossScopes(created.id);
+      expect(stranded?.userId).toBe(userId);
+      expect(stranded?.workspaceId).toBe(workspaceId);
+
+      await expect(personal.deleteAcrossScopes(created.id)).resolves.toEqual([{ id: created.id }]);
+      expect(await inWorkspace.findById(created.id)).toBeUndefined();
     });
   });
 

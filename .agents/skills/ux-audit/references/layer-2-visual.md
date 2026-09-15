@@ -15,12 +15,12 @@ Part of the **ux-audit** skill — see [`../SKILL.md`](../SKILL.md).
 
 - **User-supplied** — the fastest anchor; a screenshot pasted into the chat is enough for a
   first pass. Ask for the specific state/viewport you're missing.
-- **Captured via agent-testing** — `agent-browser --cdp 9222 screenshot` renders from the
-  renderer (works headless under `xvfb-run`). See the **agent-testing** skill for launch +
+- **Captured via the acceptance skill** — `agent-browser --cdp 9222 screenshot` renders from the
+  renderer (works headless under `xvfb-run`). See the **acceptance** skill for launch +
   auth (its Step 0). Capture the states you need; forcing hard-to-reach states (error,
   empty) is an L3 job (see [layer-3-dynamic.md](layer-3-dynamic.md)).
 - **Verify before citing.** Open every screenshot with the **Read tool** and confirm it
-  shows what you claim _before_ writing a finding — same rule agent-testing uses for
+  shows what you claim _before_ writing a finding — same rule the acceptance skill uses for
   evidence. A cited screenshot you didn't look at is a vibe, not evidence.
 
 **Capture the set, not one frame:** the default state, plus (where reachable) empty /

@@ -1,17 +1,16 @@
 'use client';
 
 import { MAX_RESOURCE_COLLABORATORS_PER_ADD } from '@lobechat/const';
+import { Empty, Flexbox, Icon, SearchBar } from '@lobehub/ui';
 import {
   Avatar,
-  Empty,
-  Flexbox,
-  Icon,
-  SearchBar,
+  Button,
   SkeletonAvatar,
-  SkeletonTitle,
+  SkeletonText,
   Text,
-} from '@lobehub/ui';
-import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { useHover } from 'ahooks';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CheckIcon, SearchXIcon, UsersIcon } from 'lucide-react';
@@ -259,7 +258,7 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
             [0, 1, 2].map((key) => (
               <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={key}>
                 <SkeletonAvatar size={40} />
-                <SkeletonTitle style={{ marginBottom: 0, width: 180 }} />
+                <SkeletonText style={{ marginBottom: 0, width: 180 }} />
               </Flexbox>
             ))
           ) : filtered.length === 0 ? (

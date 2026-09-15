@@ -8,8 +8,8 @@ import { memo } from 'react';
 import SafeBoundary from '@/components/ErrorBoundary';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getConfigRepoType, getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
@@ -38,7 +38,7 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   // Effective config (shared row + this member's device override)
   // so GitStatus probes the same device `useEffectiveWorkingDirectory` resolved
   // the cwd from — raw shared config could point them at different machines.
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,

@@ -1,12 +1,20 @@
-# PROJECT.md — agent-testing adapter for LobeHub
+# PROJECT.md — acceptance adapter for LobeHub
 
-This is the LobeHub adapter for the generic `agent-testing` skill. The skill is
-project-agnostic; every LobeHub-specific command, port, service, and probe lives
-here. The skill reads this file — it never guesses LobeHub's commands.
+This file is the **commands** layer of LobeHub's acceptance setup: every
+LobeHub-specific command, port, service, surface, and probe. The `acceptance`
+skill reads it — it never guesses LobeHub's commands.
 
-Scripts referenced below live under `.agents/acceptance/scripts/`. The generic skill
-and its own scripts (`report-init.sh`, `cdp-screenshot.sh`, `record-gif.sh`,
-`check-screen-recording.sh`, …) are installed at `.agents/skills/agent-testing/`.
+Its two siblings:
+
+- [`PROCESS.md`](./PROCESS.md) — the run process (plan gate, execution rules,
+  publishing, teardown).
+- `.agents/skills/acceptance/` — the portable skill: what a check, evidence,
+  report, and round are. In this repository that path is a symlink onto the
+  skill's source, `packages/builtin-skills/src/acceptance/`.
+
+Every script referenced below lives under `.agents/acceptance/scripts/`, including
+the generic capture toolchain (`report-init.sh`, `cdp-screenshot.sh`,
+`record-gif.sh`, `check-screen-recording.sh`, …).
 
 ## 1. Project summary
 
@@ -244,6 +252,16 @@ stale standalone install: a recently added workspace package fails to resolve �
   `agent-browser --session s<port> --cdp <port>`. Pool design, the collision
   matrix, and the login-copy recipe: `.agents/acceptance/references/multi-instance.md`.
 
+### Heterogeneous-agent compatibility (project skill)
+
+The live official-provider model matrix belongs to the
+`testing-heterogeneous-agents` project skill
+(`.agents/skills/testing-heterogeneous-agents/`). It extends Acceptance with the
+matrix semantics and harness while reusing the Electron environment, auth, and
+CDP commands above. It is manual-only: the user must explicitly invoke
+`/testing-heterogeneous-agents` in Claude Code or `$testing-heterogeneous-agents`
+in Codex. Do not automatically load or run it during other acceptance tasks.
+
 ### Bot channels (project skill)
 
 Bot-channel surfaces (Discord / Slack / Telegram / WeChat / Lark / QQ / iMessage)
@@ -336,7 +354,7 @@ in `.agents/acceptance/references/agent-gateway.md`.
 - **OS-capture surfaces are macOS-only** (bot channels, `capture-app-window.sh`,
   osascript screenshots): they come out black without Screen Recording (TCC)
   permission or when the display is asleep/locked. CDP-based evidence
-  (`agent-browser screenshot`, the installed skill's `cdp-screenshot.sh`) is
+  (`agent-browser screenshot`, `.agents/acceptance/scripts/cdp-screenshot.sh`) is
   unaffected. Electron runs on Linux/cloud only under `xvfb-run`, and there OS
   capture does not work — prefer CDP evidence for cloud-portable runs.
 

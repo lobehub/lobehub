@@ -29,7 +29,7 @@ page gives the reviewer a player.
 ```bash
 # The generated file is the evidence — attach the artifact the feature produced,
 # not a re-encode and not a screenshot of the player.
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type audio --file ./out/tts-zh-female.mp3 --by program \
   --desc "TTS output for 「今天天气不错」, zh-CN female voice, 2.4s"
 ```
@@ -64,17 +64,28 @@ join an explanation from an older round with fresh execution output.
 - Use `--file` for binary artifacts and larger text/DOM/transcript files.
 - Use `--content` for short text assertions. Pass exactly one of `--file` and
   `--content`.
-- Keep the description factual: identify the action, observed state, and relevant
-  target. Do not place the verdict in the description unless explicitly asked.
+- **Description is mandatory for every file artifact.** Always supply a non-empty
+  `--desc` when using `--file`, and a `description` when attaching a `fileId` or
+  adding a file to an ingest manifest. Small text files converted to inline
+  content still require it; do not rely on the filename fallback.
+- Write a concise, factual sentence identifying the file's contents and their
+  relevance to the criterion, including the action, observed state, or target
+  where useful. The reviewer should know why to open it without inspecting the
+  payload. A filename, path, id, "JSON", or "evidence" alone is insufficient.
+  Do not invent conclusions or place the verdict in the description unless
+  explicitly asked.
+- Example: `goal-final-state.json` → "Goal final state after training: completion
+  status and the four final validation results." Describe each artifact
+  separately instead of repeating the criterion title for every file.
 
 ```bash
 # File artifact captured by the selected surface.
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type "$EVIDENCE_TYPE" --file "$ARTIFACT_PATH" --by "$PROVENANCE" \
   --desc "Observed state after the planned action"
 
 # Short text assertion.
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
   --type text --content "$ASSERTION_OUTPUT" --by cli \
   --desc "Machine-readable assertion output"
 ```

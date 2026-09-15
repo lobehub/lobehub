@@ -6,6 +6,7 @@ import { type ChangeEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHomeStore } from '@/store/home';
 import { useSessionStore } from '@/store/session';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -15,13 +16,13 @@ const SessionSearchBar = memo<{ mobile?: boolean }>(({ mobile }) => {
   const isLoaded = useUserStore((s) => s.isLoaded);
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.Search));
 
-  const [keywords, useSearchSessions, updateSearchKeywords] = useSessionStore((s) => [
+  const [keywords, updateSearchKeywords] = useSessionStore((s) => [
     s.sessionSearchKeywords,
-    s.useSearchSessions,
     s.updateSearchKeywords,
   ]);
+  const useSearchAgents = useHomeStore((s) => s.useSearchAgents);
 
-  const { isValidating } = useSearchSessions(keywords);
+  const { isValidating } = useSearchAgents(keywords?.trim() || undefined);
 
   const handleChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {

@@ -20,8 +20,12 @@ export const CONVERSATION_SPACER_TRANSITION_MS = 200;
 
 const SCROLL_SHRINK_END_DELAY_MS = 150;
 
-/** The one `scrollToPinned` reason that is allowed to animate — see `scrollToPinned`. */
-const SEND_SCROLL_REASON = 'send';
+// The send scroll fires before the spacer row exists, so virtua clamps it and
+// the slide really happens on the settle re-pins that follow mount. Those must
+// stay smooth too, otherwise their instant `scroll()` aborts the in-flight
+// animation. Settles after this window (e.g. the workflow collapse at turn
+// completion) must stay instant so the correction is imperceptible.
+const SEND_SCROLL_ANIMATION_WINDOW_MS = 800;
 
 // -------- pure helpers --------
 
@@ -293,7 +297,7 @@ const useSpacerHeight = ({
 // during render — this avoids the race where a send effect ran before the
 // ref was attached and silently dropped the scroll.
 // ---------------------------------------------------------------------------
-type PinState = { index: number; seenActive: boolean } | null;
+type PinState = { index: number; seenActive: boolean; sentAt: number } | null;
 
 const usePinController = ({
   headerOffset,
@@ -315,11 +319,7 @@ const usePinController = ({
         return;
       }
 
-      // Only the initial send scroll animates. Settle re-pins fire while the
-      // content height is still changing (e.g. the workflow collapse at turn
-      // completion); a smooth scroll there is itself a visible slide, so the
-      // correction must land in the same frame to stay imperceptible.
-      const smooth = reason === SEND_SCROLL_REASON;
+      const smooth = Date.now() - pin.sentAt < SEND_SCROLL_ANIMATION_WINDOW_MS;
 
       log('scrollToPinned (%s) index=%d smooth=%s', reason, pin.index, smooth);
       // pin.index is a message index; the header slot row shifts virtua rows.
@@ -564,11 +564,11 @@ export const useConversationScroll = ({
     prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
     setUserMessageIndex(userIndex);
     setAssistantMessageIndex(assistantIndex);
-    pinRef.current = { index: userIndex, seenActive: mountedRef.current };
+    pinRef.current = { index: userIndex, seenActive: mountedRef.current, sentAt: Date.now() };
 
     // Scroll immediately. If virtuaRef isn't ready yet, the spacerLayoutVersion
     // bumps that follow mount+measurement will retry.
-    scrollToPinned(SEND_SCROLL_REASON);
+    scrollToPinned('send');
 
     requestAnimationFrame(() => {
       updateSpacerHeight();

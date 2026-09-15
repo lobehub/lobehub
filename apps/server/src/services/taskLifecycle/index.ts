@@ -199,15 +199,13 @@ export class TaskLifecycleService {
       //    The agent-driven `createBrief` tool path stays the default until
       //    the GrowthBook flag flips. See for the rollout plan.
       //
-      //    Goal-loop rounds are deliberately silent. The outer loop can run many
-      //    rounds before it converges, and a card per round buries the one moment
-      //    that actually needs the user. The settle path owns those moments:
-      //    `driveTaskFromVerify` raises "delivery ready for sign-off" when the
-      //    loop succeeds and the budget-exhausted alert when it stops.
+      //    Goal Task rounds are deliberately silent. The coordinator can run
+      //    many attempts on one Task before it converges, and a card per round
+      //    buries the one moment that actually needs the user — the decision
+      //    gate the coordinator opens when the attempt budget runs out.
       const isGoalLoopRound =
         !!currentTask &&
-        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findBySubject(
-          'task',
+        !!(await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
           currentTask.id,
         ));
       if (
@@ -321,6 +319,7 @@ export class TaskLifecycleService {
       //    heartbeat ticks stay silent to avoid flooding the inbox.
       if (currentTask?.automationMode === 'schedule' && params.runTrigger === 'schedule') {
         void notifyScheduledTaskCompleted({
+          agentId: currentTask.assigneeAgentId ?? undefined,
           lastAssistantContent,
           operationId: params.operationId,
           taskId,
@@ -492,6 +491,7 @@ export class TaskLifecycleService {
         (runTrigger === 'schedule' || pausedByFuse)
       ) {
         void notifyScheduledTaskFailed({
+          agentId: currentTask.assigneeAgentId ?? undefined,
           consecutiveFailures: scheduleConsecutiveFailures,
           errorCode,
           operationId: params.operationId,

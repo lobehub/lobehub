@@ -18,6 +18,8 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
     expect(isHeteroSelectorAvailable('cursor')).toBe(true);
+    expect(isHeteroSelectorAvailable('droid')).toBe(true);
+    expect(isHeteroSelectorAvailable('devin')).toBe(true);
     expect(isHeteroSelectorAvailable('grok-build')).toBe(true);
     expect(isHeteroSelectorAvailable('opencode')).toBe(true);
     expect(isHeteroSelectorAvailable('pi')).toBe(true);
@@ -40,6 +42,8 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
     expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
     expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('droid')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('devin')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('grok-build')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('grok-build')?.effort?.levels('grok-4.6')).toEqual([
       'low',
@@ -150,6 +154,25 @@ describe('applyHeteroSelection', () => {
     expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
       '--mode',
       'plan',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+  });
+
+  it('clears a hand-authored Devin model before applying a catalog selection', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--agent-type', 'coding', '--model=old-model'],
+      type: 'devin',
+    };
+    const patch = applyHeteroSelection(provider, { model: 'claude-sonnet-4-6-thinking' });
+
+    expect(patch).toEqual({
+      args: ['--agent-type', 'coding'],
+      model: 'claude-sonnet-4-6-thinking',
+    });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--agent-type',
+      'coding',
       '--model',
       'claude-sonnet-4-6-thinking',
     ]);

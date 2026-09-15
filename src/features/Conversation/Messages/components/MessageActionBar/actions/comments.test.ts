@@ -26,10 +26,6 @@ vi.mock('@/store/chat', () => ({
     selector({ activeTopicId: mocks.topicId, openTopicComments: mocks.openTopicComments }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 const build = () =>
   renderHook(() =>
     commentsAction.useBuild({

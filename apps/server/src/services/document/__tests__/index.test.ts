@@ -136,11 +136,21 @@ describe('DocumentService', () => {
       findById: vi.fn().mockResolvedValue({ id: 'kb-1', visibility: 'public' }),
     };
 
-    vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
-    vi.mocked(DocumentHistoryService).mockImplementation(() => mockDocumentHistoryService);
-    vi.mocked(FileModel).mockImplementation(() => mockFileModel);
-    vi.mocked(FileService).mockImplementation(() => mockFileService);
-    vi.mocked(KnowledgeBaseModel).mockImplementation(() => mockKnowledgeBaseModel);
+    vi.mocked(DocumentModel).mockImplementation(function () {
+      return mockDocumentModel;
+    });
+    vi.mocked(DocumentHistoryService).mockImplementation(function () {
+      return mockDocumentHistoryService;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return mockFileModel;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return mockFileService;
+    });
+    vi.mocked(KnowledgeBaseModel).mockImplementation(function () {
+      return mockKnowledgeBaseModel;
+    });
 
     service = new DocumentService(mockDb, userId);
   });
@@ -834,6 +844,46 @@ describe('DocumentService', () => {
       expect(result.historyAppended).toBe(true);
     });
 
+    it('rejects the save with CONFLICT when expectedUpdatedAt no longer matches the stored row', async () => {
+      const storedUpdatedAt = new Date('2026-04-11T00:00:05.000Z');
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+      (mockDb as any).select = vi.fn(() => ({
+        from: () => ({
+          where: () => ({ for: vi.fn().mockResolvedValue([{ updatedAt: storedUpdatedAt }]) }),
+        }),
+      }));
+
+      await expect(
+        service.updateDocument('doc-1', {
+          content: 'stale retry payload',
+          expectedUpdatedAt: new Date('2026-04-11T00:00:00.000Z'),
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts the save when expectedUpdatedAt matches the stored row', async () => {
+      const storedUpdatedAt = new Date('2026-04-11T00:00:00.000Z');
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+      (mockDb as any).select = vi.fn(() => ({
+        from: () => ({
+          where: () => ({ for: vi.fn().mockResolvedValue([{ updatedAt: storedUpdatedAt }]) }),
+        }),
+      }));
+
+      const result = await service.updateDocument('doc-1', {
+        content: 'retry payload',
+        expectedUpdatedAt: new Date('2026-04-11T00:00:00.000Z'),
+      });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ content: 'retry payload' }),
+      );
+      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+    });
+
     it('should skip history when editorData is unchanged', async () => {
       const editorData = { blocks: [] };
       mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
@@ -847,6 +897,59 @@ describe('DocumentService', () => {
       );
       expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
       expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+    });
+
+    it('should report members newly mentioned by this save on the accepted view', async () => {
+      const mention = (id: string) => ({ metadata: { id, type: 'member' }, type: 'mention' });
+      const paragraph = (...children: unknown[]) => ({ children, type: 'paragraph' });
+      const currentEditorData = {
+        root: { children: [paragraph(mention('user-1'))], type: 'root' },
+      };
+      const editorData = {
+        root: {
+          children: [
+            paragraph(mention('user-1'), mention('user-2')),
+            // A chip inside a pending "add" diff block is not accepted yet.
+            {
+              children: [paragraph(mention('user-3'))],
+              diffType: 'add',
+              type: 'diff',
+            },
+          ],
+          type: 'root',
+        },
+      };
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ editorData: currentEditorData }),
+      );
+
+      const result = await service.updateDocument('doc-1', { editorData });
+
+      expect(result.historyAppended).toBe(true);
+      expect(result.addedMentionUserIds).toEqual(['user-2']);
+    });
+
+    it('should omit addedMentionUserIds when the mentions did not change', async () => {
+      const mention = { metadata: { id: 'user-1', type: 'member' }, type: 'mention' };
+      const currentEditorData = {
+        root: { children: [{ children: [mention], type: 'paragraph' }], type: 'root' },
+      };
+      const editorData = {
+        root: {
+          children: [{ children: [{ text: 'edited ', type: 'text' }, mention], type: 'paragraph' }],
+          type: 'root',
+        },
+      };
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ editorData: currentEditorData }),
+      );
+
+      const result = await service.updateDocument('doc-1', { editorData });
+
+      expect(result.historyAppended).toBe(true);
+      expect(result).not.toHaveProperty('addedMentionUserIds');
     });
 
     it('should update title and filename together', async () => {
@@ -1823,9 +1926,9 @@ describe('DocumentService', () => {
       const executeSpy = vi.fn().mockResolvedValue(undefined);
       const trx = { execute: executeSpy };
       mockDb.transaction = vi.fn(async (callback: any) => callback(trx));
-      vi.mocked(DocumentModel).mockImplementation(
-        (db: any) => (db === trx ? transactionModel : mockDocumentModel) as any,
-      );
+      vi.mocked(DocumentModel).mockImplementation(function (db: any) {
+        return (db === trx ? transactionModel : mockDocumentModel) as any;
+      });
 
       return { executeSpy, trx };
     };

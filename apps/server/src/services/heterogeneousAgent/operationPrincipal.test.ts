@@ -32,10 +32,23 @@ const claims: HeteroOperationJwtClaims = {
   iat: 1,
   iss: 'urn:lobehub:internal',
   jti: 'jti-1',
+  model: 'model-a',
   operation_id: 'op-1',
+  provider_id: 'lobehub',
   purpose: 'hetero-operation',
   sub: 'user-1',
 };
+
+const activeOperation = (overrides: Record<string, unknown> = {}) => ({
+  id: 'op-1',
+  metadata: { agentType: 'kimi-code', serverDefaultHeterogeneous: true },
+  model: 'model-a',
+  provider: 'lobehub',
+  status: 'running',
+  userId: 'user-1',
+  workspaceId: null,
+  ...overrides,
+});
 
 const dbWithOperation = (operation: unknown) => {
   const query = {
@@ -58,11 +71,16 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
     const principal = await resolveActiveHeteroOperationPrincipal({
       capability: 'model:invoke',
       claims,
-      db: dbWithOperation({ id: 'op-1', status: 'running', userId: 'user-1', workspaceId: null }),
+      db: dbWithOperation(activeOperation()),
       operationId: 'op-1',
     });
 
-    expect(principal).toEqual({ operationId: 'op-1', userId: 'user-1', workspaceId: undefined });
+    expect(principal).toEqual({
+      agentType: 'kimi-code',
+      operationId: 'op-1',
+      userId: 'user-1',
+      workspaceId: undefined,
+    });
     expect(activeUser).toHaveBeenCalledWith(expect.anything(), 'user-1');
     expect(hasPermission).toHaveBeenCalledOnce();
   });
@@ -84,7 +102,7 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
       resolveActiveHeteroOperationPrincipal({
         capability: 'model:invoke',
         claims,
-        db: dbWithOperation({ id: 'op-1', status: 'done', userId: 'user-1', workspaceId: null }),
+        db: dbWithOperation(activeOperation({ status: 'done' })),
         operationId: 'op-1',
       }),
     ).rejects.toEqual(new HeteroOperationPrincipalError('Operation has already ended', 409));
@@ -94,15 +112,38 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
     await expect(
       resolveActiveHeteroOperationPrincipal({
         capability: 'model:invoke',
-        claims: { ...claims, model: 'model-a', provider_id: 'openai' },
-        db: dbWithOperation({
-          id: 'op-1',
-          model: 'model-b',
-          provider: 'openai',
-          status: 'running',
-          userId: 'user-1',
-          workspaceId: null,
-        }),
+        claims,
+        db: dbWithOperation(activeOperation({ model: 'model-b' })),
+        operationId: 'op-1',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it.each([
+    ['missing server-default marker', { agentType: 'kimi-code' }],
+    ['missing agent type', { serverDefaultHeterogeneous: true }],
+    ['unsupported agent type', { agentType: 'opencode', serverDefaultHeterogeneous: true }],
+  ])('rejects model invocation with %s in durable metadata', async (_label, metadata) => {
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        capability: 'model:invoke',
+        claims,
+        db: dbWithOperation(activeOperation({ metadata })),
+        operationId: 'op-1',
+      }),
+    ).rejects.toEqual(
+      new HeteroOperationPrincipalError('Operation token has no valid server model selection', 403),
+    );
+  });
+
+  it('rejects a model-invocation token without model and provider claims', async () => {
+    const { model: _model, provider_id: _providerId, ...unscopedClaims } = claims;
+
+    await expect(
+      resolveActiveHeteroOperationPrincipal({
+        capability: 'model:invoke',
+        claims: unscopedClaims,
+        db: dbWithOperation(activeOperation()),
         operationId: 'op-1',
       }),
     ).rejects.toMatchObject({ status: 403 });
@@ -111,12 +152,7 @@ describe('resolveActiveHeteroOperationPrincipal', () => {
   it('rechecks workspace membership and RBAC', async () => {
     hasMembership.mockResolvedValue(false);
     const workspaceClaims = { ...claims, workspace_id: 'workspace-1' };
-    const db = dbWithOperation({
-      id: 'op-1',
-      status: 'running',
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    });
+    const db = dbWithOperation(activeOperation({ workspaceId: 'workspace-1' }));
 
     await expect(
       resolveActiveHeteroOperationPrincipal({

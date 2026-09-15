@@ -1,3 +1,84 @@
+table acceptance_comments {
+  id text [pk, not null]
+  acceptance_id uuid [not null]
+  author_user_id text
+  author_agent_id text
+  workspace_id text
+  parent_comment_id text
+  kind text [not null, default: 'comment']
+  anchor_type text [not null, default: 'acceptance']
+  context_run_id uuid
+  check_item_id text
+  evidence_id uuid
+  anchor_rect jsonb
+  content text [not null]
+  editor_data jsonb
+  attachments jsonb
+  client_id text [not null]
+  resolved_at "timestamp with time zone"
+  resolved_by_user_id text
+  deleted_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (acceptance_id, author_user_id, client_id) [name: 'acceptance_comments_acceptance_id_author_user_id_client_id_unique', unique]
+    (acceptance_id, created_at, id) [name: 'acceptance_comments_acceptance_id_created_at_id_idx']
+    parent_comment_id [name: 'acceptance_comments_parent_comment_id_idx']
+    evidence_id [name: 'acceptance_comments_evidence_id_idx']
+    author_user_id [name: 'acceptance_comments_author_user_id_idx']
+    author_agent_id [name: 'acceptance_comments_author_agent_id_idx']
+    workspace_id [name: 'acceptance_comments_workspace_id_idx']
+  }
+}
+
+table acceptance_flow_edges {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  flow_id uuid [not null]
+  source_node_id uuid [not null]
+  target_node_id uuid [not null]
+  trigger text [not null]
+  condition text
+  required boolean [not null, default: true]
+
+  indexes {
+    
+    
+    (flow_id, source_node_id) [name: 'acceptance_flow_edges_source_idx']
+    (flow_id, target_node_id) [name: 'acceptance_flow_edges_target_idx']
+  }
+}
+
+table acceptance_flow_nodes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  flow_id uuid [not null]
+  criterion_id uuid
+  sub_flow_id uuid
+  is_entry boolean [not null, default: false]
+  overrides jsonb
+
+  indexes {
+    
+    sub_flow_id [name: 'acceptance_flow_nodes_sub_flow_idx']
+    (flow_id, id) [name: 'acceptance_flow_nodes_flow_id_unique', unique]
+    flow_id [name: 'acceptance_flow_nodes_entry_unique', unique]
+    criterion_id [name: 'acceptance_flow_nodes_criterion_idx']
+  }
+}
+
+table acceptance_flows {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  acceptance_id uuid [not null]
+  title text [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    acceptance_id [name: 'acceptance_flows_acceptance_idx']
+  }
+}
+
 table agents {
   id text [pk, not null]
   slug varchar(100)
@@ -30,6 +111,8 @@ table agents {
   opening_questions text[] [default: `[]`]
   session_group_id text
   visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -127,6 +210,8 @@ table agent_cron_jobs {
   execution_conditions jsonb
   last_executed_at timestamp
   total_executions integer [default: 0]
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -210,7 +295,7 @@ table agent_eval_benchmarks {
 
 table agent_eval_datasets {
   id text [pk, not null]
-  benchmark_id text [not null]
+  benchmark_id text
   source_experiment_id text
   identifier text [not null]
   user_id text
@@ -400,6 +485,111 @@ table agent_history_jobs {
     target_user_id [name: 'agent_history_jobs_target_user_id_idx']
     source_workspace_id [name: 'agent_history_jobs_source_workspace_id_idx']
     target_workspace_id [name: 'agent_history_jobs_target_workspace_id_idx']
+  }
+}
+
+table agent_intervention_resolutions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  resolution_request_id uuid [not null]
+  operation_id text [not null]
+  batch_id text [not null]
+  source text [not null]
+  user_id text [not null]
+  workspace_id text
+  actor_id text [not null]
+  scope text [not null]
+  selected_intervention_ids jsonb [not null]
+  expected_versions jsonb [not null]
+  expected_request_revision_hashes jsonb [not null]
+  expected_item_count integer [not null]
+  action jsonb [not null]
+  custom_execution_input_hash varchar(64)
+  custom_execution_state text
+  custom_execution_attempt integer
+  custom_execution_lease_token uuid
+  custom_execution_lease_expires_at "timestamp with time zone"
+  custom_execution_result jsonb
+  remember_tool_key text
+  remember_effect_status text
+  original_arguments text
+  edited_arguments text
+  original_request_revision_hash text
+  edited_request_revision_hash text
+  argument_effect_status text
+  status text [not null, default: 'resolving']
+  resolving_at "timestamp with time zone" [not null, default: `now()`]
+  published_at "timestamp with time zone"
+  continuation_started_at "timestamp with time zone"
+  producer_ack_at "timestamp with time zone"
+  terminal_at "timestamp with time zone"
+  rolled_back_at "timestamp with time zone"
+  version integer [not null, default: 1]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    resolution_request_id [name: 'agent_intervention_resolutions_request_unique', unique]
+    (user_id, workspace_id, batch_id) [name: 'agent_intervention_resolutions_owner_batch_idx']
+    (status, created_at) [name: 'agent_intervention_resolutions_status_created_idx']
+    
+    
+    
+    
+    
+  }
+}
+
+table agent_interventions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  operation_id text [not null]
+  tool_call_id text [not null]
+  tool_message_id text
+  user_id text [not null]
+  workspace_id text
+  source text [not null]
+  provider text
+  interaction_kind text [not null]
+  surface text [not null]
+  system_action_eligibility text [not null]
+  approval_mode text
+  batch_id text [not null]
+  activity_key text [not null]
+  step_index integer [not null]
+  item_index integer [not null]
+  item_count integer [not null]
+  sealed boolean [not null, default: false]
+  canonical_tool_key text
+  request_revision_hash text [not null]
+  allowed_actions jsonb [not null]
+  risk jsonb
+  review_token_hash text [not null]
+  review_context jsonb [not null]
+  sanitized_request jsonb [not null]
+  deadline "timestamp with time zone" [not null]
+  status text [not null, default: 'pending']
+  resolution_id uuid
+  resolving_at "timestamp with time zone"
+  published_at "timestamp with time zone"
+  resolved_at "timestamp with time zone"
+  producer_ack_at "timestamp with time zone"
+  version integer [not null, default: 1]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (operation_id, tool_call_id) [name: 'agent_interventions_operation_tool_call_unique', unique]
+    review_token_hash [name: 'agent_interventions_review_token_hash_unique', unique]
+    (operation_id, batch_id, item_index) [name: 'agent_interventions_operation_batch_item_unique', unique]
+    (user_id, activity_key, item_index) [name: 'agent_interventions_owner_activity_item_unique', unique]
+    (user_id, workspace_id, status, deadline) [name: 'agent_interventions_owner_status_deadline_idx']
+    (user_id, workspace_id, batch_id, item_index) [name: 'agent_interventions_owner_batch_idx']
+    (user_id, activity_key) [name: 'agent_interventions_activity_key_idx']
+    (status, deadline) [name: 'agent_interventions_status_deadline_idx']
+    
+    
+    
+    
+    
   }
 }
 
@@ -699,6 +889,8 @@ table agent_skills {
   zip_file_hash varchar(64)
   user_id text [not null]
   workspace_id text
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -916,6 +1108,8 @@ table chat_groups {
   group_id text
   pinned boolean [default: false]
   visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1057,6 +1251,44 @@ table devices {
   }
 }
 
+table document_comment_mentions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  comment_id uuid [not null]
+  mentioned_user_id text [not null]
+  workspace_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (comment_id, mentioned_user_id) [name: 'document_comment_mentions_comment_id_mentioned_user_id_unique', unique]
+    (mentioned_user_id, created_at) [name: 'document_comment_mentions_mentioned_user_id_created_at_idx']
+    workspace_id [name: 'document_comment_mentions_workspace_id_idx']
+  }
+}
+
+table document_comments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  document_id text [not null]
+  parent_comment_id uuid
+  reply_to_comment_id uuid
+  author_user_id text
+  workspace_id text [not null]
+  content text [not null]
+  editor_data jsonb
+  client_id text [not null]
+  deleted_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (document_id, author_user_id, client_id) [name: 'document_comments_document_id_author_user_id_client_id_unique', unique]
+    (parent_comment_id, created_at, id) [name: 'document_comments_parent_comment_id_created_at_id_idx']
+    reply_to_comment_id [name: 'document_comments_reply_to_comment_id_idx']
+    (document_id, created_at, id) [name: 'document_comments_document_id_created_at_id_idx']
+    author_user_id [name: 'document_comments_author_user_id_idx']
+    workspace_id [name: 'document_comments_workspace_id_idx']
+  }
+}
+
 table document_histories {
   id varchar(255) [pk, not null]
   document_id varchar(255) [not null]
@@ -1071,6 +1303,21 @@ table document_histories {
     user_id [name: 'document_histories_user_id_idx']
     workspace_id [name: 'document_histories_workspace_id_idx']
     saved_at [name: 'document_histories_saved_at_idx']
+  }
+}
+
+table document_likes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  document_id text [not null]
+  user_id text [not null]
+  workspace_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (document_id, user_id) [name: 'document_likes_document_id_user_id_unique', unique]
+    (document_id, created_at) [name: 'document_likes_document_id_created_at_idx']
+    user_id [name: 'document_likes_user_id_idx']
+    workspace_id [name: 'document_likes_workspace_id_idx']
   }
 }
 
@@ -1359,6 +1606,8 @@ table documents {
   slug varchar(255)
   workspace_id text
   visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1379,6 +1628,30 @@ table documents {
   }
 }
 
+table file_uploads {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  pathname text [not null]
+  size integer [not null]
+  status text [not null, default: 'active']
+  multipart_upload_id text
+  multipart_part_size integer
+  completed_at "timestamp with time zone"
+  file_id text
+  expires_at "timestamp with time zone" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, workspace_id, status) [name: 'file_uploads_user_scope_status_idx']
+    (workspace_id, status) [name: 'file_uploads_workspace_status_idx']
+    (status, expires_at) [name: 'file_uploads_status_expires_at_idx']
+    (status, updated_at, id) [name: 'file_uploads_status_updated_at_id_idx']
+    pathname [name: 'file_uploads_live_pathname_unique', unique]
+  }
+}
+
 table files {
   id text [pk, not null]
   user_id text [not null]
@@ -1395,6 +1668,8 @@ table files {
   embedding_task_id uuid
   workspace_id text
   visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1454,6 +1729,8 @@ table knowledge_bases {
   settings jsonb
   workspace_id text
   visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1463,6 +1740,33 @@ table knowledge_bases {
     user_id [name: 'knowledge_bases_user_id_idx']
     workspace_id [name: 'knowledge_bases_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'knowledge_bases_workspace_visibility_idx']
+  }
+}
+
+table fts_search_sync_capture_version {
+  id text [pk, not null]
+  version integer [not null]
+}
+
+table fts_search_sync_outbox {
+  attempts integer [not null, default: 0]
+  available_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  dead_at "timestamp with time zone"
+  document_id text [not null]
+  entity text [not null]
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  last_error text
+  locked_until "timestamp with time zone"
+  priority smallint [not null, default: 10]
+  revision bigint [not null, default: `nextval('fts_search_sync_revision_seq')`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (entity, document_id) [name: 'fts_search_sync_outbox_entity_document_id_unique', unique]
+    (priority, available_at, revision) [name: 'fts_search_sync_outbox_claim_idx']
+    dead_at [name: 'fts_search_sync_outbox_dead_idx']
+    locked_until [name: 'fts_search_sync_outbox_lease_idx']
   }
 }
 
@@ -1478,6 +1782,8 @@ table generation_batches {
   height integer
   ratio varchar(64)
   config jsonb
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1497,6 +1803,8 @@ table generation_topics {
   cover_url text
   type varchar(32) [not null, default: 'image']
   visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1517,6 +1825,8 @@ table generations {
   file_id text
   seed integer
   asset jsonb
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1545,6 +1855,8 @@ table goals {
   subject_id text
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -1570,9 +1882,9 @@ table goal_edges {
     (source_node_id, target_node_id, kind) [name: 'goal_edges_source_target_kind_unique', unique]
     goal_id [name: 'goal_edges_goal_id_idx']
     target_node_id [name: 'goal_edges_target_node_id_idx']
-
-
-
+    
+    
+    
   }
 }
 
@@ -1659,8 +1971,36 @@ table goal_nodes {
     (goal_id, kind) [name: 'goal_nodes_goal_id_kind_idx']
     (goal_id, id) [name: 'goal_nodes_goal_id_id_unique', unique]
     task_id [name: 'goal_nodes_task_id_unique', unique]
+    
+  }
+}
 
+table goal_traces {
+  goal_id text [pk, not null]
+  trace_s3_key text
+  started_at "timestamp with time zone"
+  completed_at "timestamp with time zone"
+  final_status text
+  advances_total integer
+  ticks_total integer
+  advances_by_trigger jsonb
+  advances_by_outcome jsonb
+  ticks_by_branch jsonb
+  total_cost "numeric(20, 6)"
+  work_operations integer
+  nodes_total integer
+  work_resolved integer
+  work_retired integer
+  findings_total integer
+  gates_opened integer
+  gates_resolved integer
+  human_waiting_ms integer
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
 
+  indexes {
+    started_at [name: 'goal_traces_started_at_idx']
+    final_status [name: 'goal_traces_final_status_idx']
   }
 }
 
@@ -1878,6 +2218,8 @@ table messages {
   target_id text
   message_group_id varchar(255)
   workspace_id text
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -1959,6 +2301,51 @@ table messenger_installations {
     (platform, application_id, tenant_id) [name: 'messenger_installations_platform_app_tenant_unique', unique]
     (platform, tenant_id) [name: 'messenger_installations_platform_tenant_idx']
     token_expires_at [name: 'messenger_installations_token_expires_at_idx']
+  }
+}
+
+table metric_points {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  metric_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  value "numeric(20, 6)" [not null]
+  observed_at "timestamp with time zone" [not null]
+  actor_type text [not null]
+  actor_id text
+  operation_id text
+  source_type text [not null]
+  metadata jsonb
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (metric_id, observed_at) [name: 'metric_points_series_time_idx']
+    user_id [name: 'metric_points_user_id_idx']
+    workspace_id [name: 'metric_points_workspace_id_idx']
+  }
+}
+
+table metrics {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  subject_type text [not null]
+  subject_id text [not null]
+  key text [not null]
+  title text
+  kind text [not null, default: 'gauge']
+  unit text
+  config jsonb
+  metadata jsonb
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (subject_type, subject_id, key) [name: 'metrics_subject_key_unique', unique]
+    user_id [name: 'metrics_user_id_idx']
+    workspace_id [name: 'metrics_workspace_id_idx']
   }
 }
 
@@ -2307,22 +2694,29 @@ table project_knowledge_bases {
   }
 }
 
-table project_works {
+table project_working_directories {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   project_id text [not null]
-  work_id text [not null]
-  added_by_user_id text
+  device_id uuid
   workspace_id text
+  added_by_user_id text
+  path text [not null]
+  name varchar(255) [not null]
+  permission text [not null, default: 'readWrite']
+  is_primary boolean [not null, default: false]
   sort_order integer [not null, default: 0]
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (project_id, work_id) [name: 'project_works_project_id_work_id_unique', unique]
-    (project_id, sort_order) [name: 'project_works_project_id_sort_order_idx']
-    work_id [name: 'project_works_work_id_idx']
-    workspace_id [name: 'project_works_workspace_id_idx']
+    (project_id, device_id, path) [name: 'project_working_directories_project_device_path_unique', unique]
+    project_id [name: 'project_working_directories_project_primary_unique', unique]
+    (project_id, sort_order) [name: 'project_working_directories_project_sort_order_idx']
+    device_id [name: 'project_working_directories_device_id_idx']
+    workspace_id [name: 'project_working_directories_workspace_id_idx']
+    
+    
   }
 }
 
@@ -2342,6 +2736,8 @@ table projects {
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
   archived_at "timestamp with time zone"
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -2360,14 +2756,56 @@ table projects {
   }
 }
 
+table project_works {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  project_id text [not null]
+  work_id text [not null]
+  added_by_user_id text
+  workspace_id text
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (project_id, work_id) [name: 'project_works_project_id_work_id_unique', unique]
+    (project_id, sort_order) [name: 'project_works_project_id_sort_order_idx']
+    work_id [name: 'project_works_work_id_idx']
+    workspace_id [name: 'project_works_workspace_id_idx']
+  }
+}
+
+table push_live_activities {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  device_id text [not null]
+  activity_key text [not null]
+  operation_id text [not null]
+  activity_id text [not null]
+  push_token text [not null]
+  apns_environment text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  last_seen_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, device_id, activity_key) [name: 'idx_push_live_activities_user_device_activity', unique]
+    (user_id, activity_key) [name: 'idx_push_live_activities_user_activity']
+    (user_id, operation_id) [name: 'idx_push_live_activities_user_operation']
+    last_seen_at [name: 'idx_push_live_activities_last_seen']
+    
+  }
+}
+
 table push_tokens {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   expo_token text [not null]
   device_id text [not null]
   platform text [not null]
+  apns_environment text
   app_version text
   locale text
+  live_activity_push_to_start_token text
   created_at "timestamp with time zone" [not null, default: `now()`]
   last_seen_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -2375,6 +2813,7 @@ table push_tokens {
     (user_id, device_id) [name: 'idx_push_tokens_user_device', unique]
     user_id [name: 'idx_push_tokens_user']
     last_seen_at [name: 'idx_push_tokens_last_seen']
+    
   }
 }
 
@@ -2700,6 +3139,8 @@ table session_groups {
   client_id text
   workspace_id text
   visibility text [not null, default: 'public']
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -2790,6 +3231,26 @@ table briefs {
     (user_id, resolved_at) [name: 'briefs_unresolved_idx']
     trigger [name: 'briefs_trigger_idx']
     workspace_id [name: 'briefs_workspace_id_idx']
+  }
+}
+
+table task_activities {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  task_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  actor_user_id text
+  actor_agent_id text
+  type text [not null]
+  payload jsonb
+  visibility text [not null, default: 'public']
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    task_id [name: 'task_activities_task_id_idx']
+    user_id [name: 'task_activities_user_id_idx']
+    workspace_id [name: 'task_activities_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'task_activities_workspace_visibility_idx']
   }
 }
 
@@ -2927,6 +3388,8 @@ table tasks {
   visibility text [not null, default: 'public']
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -2967,6 +3430,8 @@ table threads {
   user_id text [not null]
   last_active_at "timestamp with time zone" [default: `now()`]
   workspace_id text
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -3026,6 +3491,8 @@ table topics {
   editor_data jsonb
   agent_id text
   group_id text
+  project_id text
+  project_working_directory_id uuid
   user_id text [not null]
   client_id text
   description text
@@ -3045,6 +3512,8 @@ table topics {
   provider text
   sender_id text
   workspace_id text
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -3057,6 +3526,8 @@ table topics {
     session_id [name: 'topics_session_id_idx']
     group_id [name: 'topics_group_id_idx']
     agent_id [name: 'topics_agent_id_idx']
+    project_id [name: 'topics_project_id_idx']
+    project_working_directory_id [name: 'topics_project_working_directory_id_idx']
     trigger [name: 'topics_trigger_idx']
     status [name: 'topics_status_idx']
     model [name: 'topics_model_idx']
@@ -3114,6 +3585,29 @@ table topic_comments {
     moderation_expires_at [name: 'topic_comments_moderation_expires_at_idx']
     moderated_by_user_id [name: 'topic_comments_moderated_by_user_id_idx']
     workspace_id [name: 'topic_comments_workspace_id_idx']
+  }
+}
+
+table trash_items {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  resource_type text [not null]
+  resource_id text [not null]
+  title text
+  meta jsonb
+  root_id uuid
+  user_id text [not null]
+  workspace_id text
+  deleted_by_user_id text
+  deleted_at "timestamp with time zone" [not null, default: `now()`]
+  expires_at "timestamp with time zone" [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (resource_type, resource_id) [name: 'trash_items_resource_unique', unique]
+    (user_id, deleted_at) [name: 'trash_items_personal_listing_idx']
+    (workspace_id, deleted_at) [name: 'trash_items_workspace_listing_idx']
+    expires_at [name: 'trash_items_expires_at_idx']
+    root_id [name: 'trash_items_root_id_idx']
   }
 }
 
@@ -3187,6 +3681,8 @@ table user_memories {
   accessed_count bigint [default: 0]
   last_accessed_at "timestamp with time zone" [not null]
   captured_at "timestamp with time zone" [not null, default: `now()`]
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -3256,6 +3752,7 @@ table user_memories_contexts {
     description_vector [name: 'user_memories_contexts_description_vector_index']
     type [name: 'user_memories_contexts_type_index']
     user_id [name: 'user_memories_contexts_user_id_index']
+    user_memory_ids [name: 'user_memories_contexts_user_memory_ids_gin_idx']
   }
 }
 
@@ -3426,6 +3923,7 @@ table verify_check_results {
   user_id text [not null]
   workspace_id text
   check_item_id text [not null]
+  source_criterion_id uuid
   check_item_title text
   required boolean [not null, default: true]
   check_item_index integer
@@ -3449,6 +3947,7 @@ table verify_check_results {
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    (source_criterion_id, created_at) [name: 'verify_check_results_criterion_created_idx']
     verify_run_id [name: 'verify_check_results_verify_run_id_idx']
     operation_id [name: 'verify_check_results_operation_id_idx']
     user_id [name: 'verify_check_results_user_id_idx']
@@ -3468,6 +3967,9 @@ table verify_criteria {
   user_id text [not null]
   title text [not null]
   description text
+  definition jsonb
+  tags text[] [not null, default: `[]`]
+  archived_at "timestamp with time zone"
   required boolean [not null, default: true]
   verifier_type text [not null]
   verifier_config jsonb [default: `{}`]
@@ -3618,6 +4120,7 @@ table verify_runs {
   context jsonb
   metadata jsonb
   plan jsonb
+  flow_snapshots jsonb
   plan_confirmed_at "timestamp with time zone"
   status text
   user_decision text
@@ -3693,6 +4196,8 @@ table works {
   user_id text [not null]
   workspace_id text
   visibility text [not null]
+  deleted_at "timestamp with time zone"
+  is_deleted boolean
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
@@ -3852,9 +4357,27 @@ ref: unstructured_chunks.file_id - files.id
 
 ref: document_chunks.document_id > documents.id
 
+ref: document_comment_mentions.comment_id > document_comments.id
+
+ref: document_comment_mentions.mentioned_user_id - users.id
+
+ref: document_comment_mentions.workspace_id - workspaces.id
+
+ref: document_comments.author_user_id - users.id
+
+ref: document_comments.document_id > documents.id
+
+ref: document_comments.workspace_id - workspaces.id
+
 ref: document_histories.document_id > documents.id
 
 ref: document_histories.user_id - users.id
+
+ref: document_likes.document_id > documents.id
+
+ref: document_likes.user_id - users.id
+
+ref: document_likes.workspace_id - workspaces.id
 
 ref: documents.file_id > files.id
 

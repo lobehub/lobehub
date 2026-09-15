@@ -1,8 +1,10 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
+  type AgentShareVisitorContext,
   type ChatToolPayload,
   type ClientSecretPayload,
+  type DeviceUnavailableErrorData,
   type ExecSubAgentParams,
   type StepActivatedSkill,
   type StepContextTodoItem,
@@ -156,6 +158,26 @@ export interface ToolExecutionContext {
    */
   agentMember?: ServerAgentMemberRunner;
   /**
+   * Shared-agent visitor marker, forwarded from
+   * `RuntimeExecutorContext.agentShareVisitor` (see
+   * `modules/AgentRuntime/context.ts`). Present ONLY for a share-visitor run.
+   * `BuiltinToolsExecutor.execute` re-checks every builtin dispatch against
+   * `isShareBlockedBuiltinDispatch` with these permissions — the unbypassable
+   * counterpart of the assembly-time tool-set trim, which only shapes what the
+   * model is OFFERED, not what the executor will run. That gate is strictly
+   * wider than a plain data-tool check: master default-deny allowlist, the
+   * owner's `toolGrants` picker, and humanIntervention policy, and it
+   * internally delegates to `isShareBlockedDataToolCall` for the per-API
+   * data-tool rules.
+   *
+   * Tool runtimes that trigger their own billed work (e.g. image generation)
+   * project it with `toAgentShareVisitorIds` into a `spendOrigin` payload so
+   * the resulting spend log is attributed to the shared agent, exactly like the
+   * LLM path. Only those ids may be projected; never forward this object as a
+   * whole, since its permission fields have no place in billing metadata.
+   */
+  agentShareVisitor?: AgentShareVisitorContext;
+  /**
    * Visibility of the agent executing this tool call. Resolved once per tool
    * call in the runtime executor. Tool runtimes that persist agent side-effects
    * (documents, tasks, etc.) forward this so private-agent output inherits
@@ -185,7 +207,7 @@ export interface ToolExecutionContext {
   currentTodos?: StepContextTodoItem[];
   /**
    * Whether the run's execution plan is device-capable (`device` or
-   * `device-unrouted`) — derived from `state.metadata.executionPlan` by the
+   * `device-unrouted`) — derived from `state.plan.execution` by the
    * runtime executors. Device-only skills gate listing/activation/loading on
    * this consistently, so a `device-unrouted` run can activate them before the
    * model routes a device; actual command execution stays gated at the device
@@ -310,7 +332,7 @@ export interface ToolExecutionContext {
    * Workspace ID that scopes ownership for any model/service the runtime
    * instantiates. When unset the runtime falls back to personal mode
    * (`workspace_id IS NULL`). Threaded from the chat/task router through
-   * `state.metadata.workspaceId` so tool side-effects (createBrief, pinTask,
+   * `state.origin.workspaceId` so tool side-effects (createBrief, pinTask,
    * etc.) land in the same workspace the request originated from.
    */
   workspaceId?: string;
@@ -325,6 +347,8 @@ export interface ToolExecutionResult {
    */
   deferred?: boolean;
   error?: any;
+  /** Structured unavailable-device context preserved through the runtime error envelope. */
+  errorData?: DeviceUnavailableErrorData;
   state?: Record<string, any>;
   success: boolean;
   /**
@@ -340,6 +364,13 @@ export interface ToolExecutionResult {
 }
 
 export interface ToolExecutionResultResponse extends ToolExecutionResult {
+  /**
+   * Wall time the tool took on the DEVICE, by the device's own clock, when the
+   * call was dispatched to one. Paired with the server-observed
+   * `executionTime`, the difference is pure dispatch overhead — the number that
+   * decides whether moving the agent loop onto the device is worth it.
+   */
+  deviceExecutionTime?: number;
   executionTime: number;
 }
 

@@ -13,7 +13,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
-import { resolveWorkAttemptBudget } from '@/server/services/goal/recoveryPolicy';
+import { resolveTaskAttemptBudget } from '@/server/services/goal/recoveryPolicy';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 
 /** Cap on unresolved checks carried into the next round's prompt. */
@@ -31,12 +31,10 @@ const resolveGoalLoopContext = async (
   deps: BuildTaskPromptDeps,
 ): Promise<TaskRunPromptGoalLoop | undefined> => {
   const { db, userId, workspaceId } = deps;
-  const goalModel = new GoalModel(db, userId, workspaceId);
-  const taskCarriedGoal = await goalModel.findBySubject('task', task.id);
-  const goal = taskCarriedGoal ?? (await goalModel.findByWorkTask(task.id));
+  const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(task.id);
   if (!goal || !task.totalTopics) return undefined;
 
-  const budget = resolveWorkAttemptBudget(goal, Boolean(taskCarriedGoal));
+  const budget = resolveTaskAttemptBudget(goal);
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
     round: (task.totalTopics || 0) + 1,
@@ -56,6 +54,12 @@ const resolveGoalLoopContext = async (
     if (last.userDecision === 'reject') {
       const comment = (last.decisionDetail as { comment?: string } | null)?.comment;
       if (comment) context.rejectComment = comment;
+    }
+
+    const automaticReview = [...runs].reverse().find((run) => run.metadata?.goalReview)
+      ?.metadata?.goalReview;
+    if (automaticReview && automaticReview.status !== 'passed') {
+      context.automaticReviewFeedback = automaticReview.feedback;
     }
 
     const plan = (last.plan ?? []) as Array<{ id: string; title: string }>;
@@ -91,6 +95,9 @@ export interface BuildTaskPromptDeps {
 }
 
 export interface BuiltTaskPrompt {
+  /** The Task carries an active Acceptance, so the builder needs the evidence
+   * tool mounted for the whole run — it submits while it works. */
+  acceptanceEnabled: boolean;
   /** Merged, deduplicated list of fileIds (task instruction + all comments)
    * to forward to execAgent so files arrive as multimodal inputs. */
   fileIds: string[];
@@ -230,9 +237,12 @@ export async function buildTaskPrompt(
   // what to self-evidence while it works. Run-time handles (verifyRunId /
   // checkItemId) don't exist yet at prompt-build time — the verify skill
   // resolves those at runtime from the builder's operationId.
-  const resolvedAcceptance = await resolveTaskAcceptance(db, userId, task.id, workspaceId).catch(
-    () => undefined,
-  );
+  // Recurring tasks (schedule / heartbeat) never get a verify plan (see
+  // instantiateVerifyPlanOnStart) — don't tell the builder to self-evidence
+  // acceptance criteria whose run-time plan will never exist.
+  const resolvedAcceptance = task.automationMode
+    ? undefined
+    : await resolveTaskAcceptance(db, userId, task.id, workspaceId).catch(() => undefined);
   const verifyConfig = resolvedAcceptance?.config;
   const verifyEnabled = !!resolvedAcceptance && verifyConfig?.enabled !== false;
   let verifyCriteria: Array<{
@@ -375,5 +385,5 @@ export async function buildTaskPrompt(
     }),
   });
 
-  return { fileIds: allFileIds, prompt };
+  return { acceptanceEnabled: verifyEnabled, fileIds: allFileIds, prompt };
 }

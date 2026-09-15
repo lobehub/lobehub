@@ -6,6 +6,7 @@ import {
   buildDailySpend,
   buildSessionGrid,
   buildWindowStats,
+  formatTokens,
   isCalendarMonthAvailable,
   type QuotaWindowSpan,
   selectQuotaAccount,
@@ -179,5 +180,22 @@ describe('quota calendar window statistics', () => {
     [120, 'error'],
   ] as const)('maps %s%% utilization to %s pressure', (utilization, status) => {
     expect(utilizationStatusOf(utilization)).toBe(status);
+  });
+});
+
+describe('formatTokens', () => {
+  it('keeps sub-billion counts in K and M', () => {
+    expect(formatTokens(820)).toBe('820');
+    expect(formatTokens(340_000)).toBe('340K');
+    expect(formatTokens(1_200_000)).toBe('1.2M');
+    expect(formatTokens(585_000_000)).toBe('585M');
+    expect(formatTokens(999_400_000)).toBe('999M');
+  });
+
+  it('steps up to B past a billion instead of printing four-digit M', () => {
+    expect(formatTokens(1_000_000_000)).toBe('1.0B');
+    expect(formatTokens(1_319_000_000)).toBe('1.3B');
+    expect(formatTokens(3_136_000_000)).toBe('3.1B');
+    expect(formatTokens(12_500_000_000)).toBe('13B');
   });
 });

@@ -27,16 +27,6 @@ vi.mock('node:http', () => ({
   }),
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock LOCAL_STORAGE_URL_PREFIX
 vi.mock('@/const/dir', () => ({
   LOCAL_STORAGE_URL_PREFIX: '/lobe-desktop-file',

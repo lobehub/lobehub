@@ -12,8 +12,8 @@ export interface WorkspaceAwareNavigateOptions extends NavigateOptions {
  * a new top-level personal-only route, append it here.
  *
  * `/settings` is handled separately via {@link WORKSPACE_SETTINGS_TABS} —
- * sub-paths in the allowlist get auto-prefixed; everything else (profile,
- * llm, referral, system-tools, etc.) stays personal.
+ * sub-paths in the allowlist get auto-prefixed; everything else (llm,
+ * referral, system-tools, etc.) stays personal.
  */
 const PERSONAL_PATH_REGEX =
   /^\/(?:apps|invite|onboarding|me|share|devtools|desktop-onboarding)(?:[/?#]|$)/;
@@ -25,12 +25,20 @@ const isPersonalPath = (to: string): boolean => PERSONAL_PATH_REGEX.test(to);
  * the SPA routers. Kept in sync with the workspace settings subtree in
  * `src/spa/router/desktopRouter.shared.tsx` and `mobileRouter.config.tsx`.
  *
- * Tabs absent from this set (profile, llm, messenger, referral, system-tools,
- * security, sync, plugin, tts, hotkey, agent, about, common, system-agent, ...)
- * are personal-only and never prefixed.
+ * Tabs absent from this set (llm, referral, system-tools, security, sync,
+ * plugin, tts, agent, common, system-agent, memory, ...) are personal-only
+ * and never prefixed.
  */
 export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
+  // About and the developer tools (advanced / labs) are user-level pages
+  // mirrored under the workspace alongside the account-level tabs.
+  'about',
+  'advanced',
   'apikey',
+  // Account-level tabs (profile / appearance / hotkey / messenger) are
+  // mirrored under the workspace so members can reach them without leaving
+  // the workspace.
+  'appearance',
   'audit-log',
   'billing',
   'budget',
@@ -42,11 +50,15 @@ export const WORKSPACE_SETTINGS_TABS: ReadonlySet<string> = new Set([
   'credits',
   'devices',
   'general',
+  'hotkey',
   'labels',
+  'labs',
   'members',
+  'messenger',
   'notification',
   'oauth-apps',
   'plans',
+  'profile',
   'provider',
   'service-model',
   'skill',
@@ -86,7 +98,7 @@ const parseFirstSegment = (pathname: string): string | null => {
 
 /**
  * Returns `true` for `/settings/<tab>` where `<tab>` is NOT in
- * {@link WORKSPACE_SETTINGS_TABS} (profile, llm, referral, system-tools, …).
+ * {@link WORKSPACE_SETTINGS_TABS} (llm, referral, system-tools, …).
  * `/settings` index (or with query/hash) gets prefixed too — workspace
  * `/${slug}/settings` redirects to `/${slug}/settings/general`, personal
  * `/settings` redirects to `/settings/profile`.

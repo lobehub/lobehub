@@ -21,13 +21,32 @@ export class TrpcIngestSink implements IngestSink {
   ) {}
 
   async finish(params: Parameters<IngestSink['finish']>[0]): Promise<void> {
-    await this.client.aiAgent.heteroFinish.mutate({
+    const receipt = {
       agentType: this.agentType,
       assistantMessageId: this.assistantMessageId,
       operationId: this.operationId,
       topicId: this.topicId,
       ...params,
-    });
+    };
+    // A native process may exit while the backend is restarting. Retain this
+    // exact terminal receipt until acknowledged; never launch the agent again.
+    // Bounded, in-memory retry only: this does not survive killing the wrapper.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.client.aiAgent.heteroFinish.mutate(receipt);
+        return;
+      } catch (error) {
+        const code = (error as { data?: { code?: string } } | null)?.data?.code;
+        if (
+          attempt >= 6 ||
+          (code && !['INTERNAL_SERVER_ERROR', 'TIMEOUT', 'SERVICE_UNAVAILABLE'].includes(code))
+        )
+          throw error;
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, Math.min(500 * 2 ** attempt, 8000)),
+        );
+      }
+    }
   }
 
   async ingest(events: AgentStreamEvent[]): Promise<void> {

@@ -305,6 +305,20 @@ export interface AgentInstructionResolveBlockedTools extends AgentInstructionBas
     parentMessageId: string;
     /** Tool calls that were blocked and need tool results */
     toolsCalling: ChatToolPayload[];
+    /**
+     * These calls named tools that resolved to nothing, so the parent assistant
+     * was persisted without any `tools` of its own. Two consequences the
+     * executor has to handle:
+     *
+     * - The tool rows must be advertised on the parent, or the next step loses
+     *   them: state messages are rebuilt from the DB every step, and
+     *   conversation-flow only collects a tool row when its parent assistant
+     *   lists the matching call. An unadvertised rejection never reaches the
+     *   model, which is the feedback this whole path exists to deliver.
+     * - The instruction counts as one round against
+     *   {@link AgentState.unresolvedToolFeedbackRounds}.
+     */
+    unresolvedToolNames?: boolean;
   };
   type: 'resolve_blocked_tools';
 }
@@ -355,15 +369,22 @@ export interface AgentInstructionRequestHumanApprove extends AgentInstructionBas
    * creates pending tool rows should set it, so those rows land under their real
    * owner — see the parent resolution comment in `executors/humanApprove.ts`.
    *
-   * Optional for the `skipCreateToolMessage` (resume) paths, which create no
-   * rows, and for backwards compatibility with producers that omit it: the
-   * executor still falls back to scanning `state.messages`, which is accurate
-   * only within a single step.
+   * Required by `skipCreateToolMessage` (resume) paths so an unresolved subset
+   * can be rebound to its authoritative assistant owner. Optional only for
+   * backwards compatibility with fresh producers that omit it: the executor
+   * still falls back to scanning `state.messages`, which is accurate only
+   * within a single step.
    */
   parentMessageId?: string;
   pendingToolsCalling: ChatToolPayload[];
   reason?: string;
   skipCreateToolMessage?: boolean;
+  /** Previous sealed batch for a partial-decision re-park. */
+  supersedes?: {
+    batchId: string;
+    operationId: string;
+    toolCallIds: string[];
+  };
   type: 'request_human_approve';
 }
 

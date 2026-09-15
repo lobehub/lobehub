@@ -7,7 +7,8 @@ import {
   OFFICIAL_SITE,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Image } from '@lobehub/ui';
+import { Avatar, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -197,7 +198,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   if (isLoading)
     return (
       <Block horizontal gap={12} key={identifier} padding={12} variant={'outlined'}>
-        <Skeleton paragraph={{ rows: 1 }} title={false} />
+        <Skeleton.Text rows={1} />
       </Block>
     );
 

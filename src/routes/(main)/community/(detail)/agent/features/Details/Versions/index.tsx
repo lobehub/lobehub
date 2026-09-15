@@ -1,4 +1,5 @@
-import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { CheckIcon, MinusIcon } from 'lucide-react';
 import qs from 'query-string';
@@ -118,9 +119,7 @@ const Versions = memo(() => {
             {
               align: 'end',
               dataIndex: 'createdAt',
-              render: (_: any, record: any) => (
-                <PublishedTime date={record.createdAt} />
-              ),
+              render: (_: any, record: any) => <PublishedTime date={record.createdAt} />,
               title: t('assistants.details.version.table.publishAt'),
             },
           ]}

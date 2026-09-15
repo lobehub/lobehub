@@ -34,10 +34,6 @@ vi.mock('@/features/NavPanel/OverlayContainer', () => ({
   useOverlayPopoverPortalProps: () => undefined,
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: (selector: (state: { setLibraryId: () => void }) => unknown) =>
     selector({ setLibraryId: vi.fn() }),

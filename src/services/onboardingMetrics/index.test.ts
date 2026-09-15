@@ -18,11 +18,11 @@ import {
 } from './index';
 
 const analyticsMocks = vi.hoisted(() => ({
-  getSingletonAnalyticsOptional: vi.fn(),
+  track: vi.fn(),
 }));
 
-vi.mock('@lobehub/analytics', () => ({
-  getSingletonAnalyticsOptional: analyticsMocks.getSingletonAnalyticsOptional,
+vi.mock('@/libs/analytics/client', () => ({
+  analyticsClient: { track: analyticsMocks.track },
 }));
 
 describe('onboardingMetrics', () => {
@@ -30,8 +30,7 @@ describe('onboardingMetrics', () => {
 
   beforeEach(() => {
     track.mockReset();
-    analyticsMocks.getSingletonAnalyticsOptional.mockReset();
-    analyticsMocks.getSingletonAnalyticsOptional.mockReturnValue(null);
+    analyticsMocks.track.mockReset();
     setOnboardingAnalyticsClient({ track });
   });
 
@@ -216,10 +215,9 @@ describe('onboardingMetrics', () => {
     });
   });
 
-  it('falls back to the global analytics singleton when no explicit client is configured', () => {
-    const singletonTrack = vi.fn();
+  it('falls back to the deferred analytics client when no explicit client is configured', () => {
+    const singletonTrack = analyticsMocks.track;
     setOnboardingAnalyticsClient(null);
-    analyticsMocks.getSingletonAnalyticsOptional.mockReturnValue({ track: singletonTrack });
 
     trackOnboardingStepViewed({
       flow: 'classic',

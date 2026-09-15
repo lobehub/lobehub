@@ -1,4 +1,4 @@
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { cx } from 'antd-style';
 import { ArrowDownIcon } from 'lucide-react';
 import { lazy, memo, Suspense } from 'react';

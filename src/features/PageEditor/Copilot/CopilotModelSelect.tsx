@@ -1,4 +1,5 @@
-import { ActionIcon, Center, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';

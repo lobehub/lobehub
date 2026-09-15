@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { REQUEST_TOPIC_ID_HEADER } from '@lobechat/const';
 import { type LobeRuntimeAI } from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
@@ -82,30 +83,35 @@ describe('POST handler', () => {
   });
 
   describe('chat', () => {
-    it('should correctly handle chat completion with valid payload', async () => {
-      const mockParams = Promise.resolve({ provider: 'test-provider' });
-      const mockChatPayload = { message: 'Hello, world!' };
-      request = new Request(new URL('https://test.com'), {
-        method: 'POST',
-        body: JSON.stringify(mockChatPayload),
-      });
+    it.each([undefined, 'topic-123'])(
+      'should pass topic %s to chat runtime metadata',
+      async (topicId) => {
+        const mockParams = Promise.resolve({ provider: 'test-provider' });
+        const mockChatPayload = { message: 'Hello, world!' };
+        request = new Request(new URL('https://test.com'), {
+          method: 'POST',
+          headers: topicId ? { [REQUEST_TOPIC_ID_HEADER]: topicId } : {},
+          body: JSON.stringify(mockChatPayload),
+        });
 
-      const mockChatResponse: any = { success: true, message: 'Reply from agent' };
-      const mockRuntime: LobeRuntimeAI = {
-        baseURL: 'abc',
-        chat: vi.fn().mockResolvedValue(mockChatResponse),
-      };
+        const mockChatResponse: any = { success: true, message: 'Reply from agent' };
+        const mockRuntime: LobeRuntimeAI = {
+          baseURL: 'abc',
+          chat: vi.fn().mockResolvedValue(mockChatResponse),
+        };
 
-      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
 
-      const response = await POST(request as unknown as Request, { params: mockParams });
+        const response = await POST(request as unknown as Request, { params: mockParams });
 
-      expect(response).toEqual(mockChatResponse);
-      expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
-        user: 'test-user-id',
-        signal: expect.anything(),
-      });
-    });
+        expect(response).toEqual(mockChatResponse);
+        expect(mockRuntime.chat).toHaveBeenCalledWith(mockChatPayload, {
+          metadata: { topicId },
+          user: 'test-user-id',
+          signal: expect.anything(),
+        });
+      },
+    );
 
     it('should return an error response when chat completion fails', async () => {
       const mockParams = Promise.resolve({ provider: 'test-provider' });

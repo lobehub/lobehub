@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Tag } from '@lobehub/ui/base-ui';
 import { Tooltip } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';

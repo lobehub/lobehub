@@ -45,10 +45,6 @@ vi.mock('@/features/Conversation/store', () => ({
     selector(mockConversationState.current),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Icon: ({ icon }: { icon: () => void }) => <span data-testid="icon">{icon.name}</span>,
-}));
-
 describe('FloatingChatPanel InputRow', () => {
   it('does not render the expand affordance when disabled', () => {
     render(<InputRow isCollapsed={false} showExpandBar={false} onExpand={() => {}} />);

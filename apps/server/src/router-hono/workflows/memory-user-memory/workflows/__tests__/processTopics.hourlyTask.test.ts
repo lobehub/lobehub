@@ -13,16 +13,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobechat/observability-otel/modules/upstash-workflow', () => ({
-  buildUpstashWorkflowMetricAttributes: vi.fn(() => ({})),
+  buildUpstashWorkflowMetricAttributes: vi.fn(function () {
+    return {};
+  }),
   tracer: {
-    startActiveSpan: vi.fn((_name: string, callback: (span: unknown) => unknown) =>
-      callback({
+    startActiveSpan: vi.fn(function (_name: string, callback: (span: unknown) => unknown) {
+      return callback({
         end: vi.fn(),
         recordException: vi.fn(),
         setAttributes: vi.fn(),
         setStatus: vi.fn(),
-      }),
-    ),
+      });
+    }),
   },
 }));
 
@@ -52,11 +54,13 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
 }));
 
 vi.mock('@/database/models/asyncTask', () => ({
-  AsyncTaskModel: vi.fn(() => ({
-    appendUserMemoryWorkflowRunIds: mocks.appendUserMemoryWorkflowRunIds,
-    isHourlyMemoryExtractionCancellationRequested:
-      mocks.isHourlyMemoryExtractionCancellationRequested,
-  })),
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      appendUserMemoryWorkflowRunIds: mocks.appendUserMemoryWorkflowRunIds,
+      isHourlyMemoryExtractionCancellationRequested:
+        mocks.isHourlyMemoryExtractionCancellationRequested,
+    };
+  }),
 }));
 
 vi.mock('@/database/server', () => ({

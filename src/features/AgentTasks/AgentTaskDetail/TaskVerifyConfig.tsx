@@ -1,13 +1,16 @@
 'use client';
 
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { ActionIcon, Block, Flexbox, Icon, Tag, Text, TextArea } from '@lobehub/ui';
+import { Block, Flexbox, Icon, TextArea } from '@lobehub/ui';
 import {
+  ActionIcon,
   Button,
   confirmModal,
   type DropdownItem,
   DropdownMenu,
   Select,
+  Tag,
+  Text,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -32,8 +35,8 @@ import {
   CriterionRequiredChip,
   CriterionRow,
   openCriterionEditModal,
-} from '@/features/Verify/CriterionList';
-import { useRubrics } from '@/features/Verify/hooks';
+} from '@/features/Acceptance/CriterionList';
+import { useRubrics } from '@/features/Acceptance/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';

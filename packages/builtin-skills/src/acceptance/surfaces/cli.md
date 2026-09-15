@@ -19,18 +19,18 @@ about rendered UI.
 ```bash
 # CHECK_ITEM_ID is the criterion's plan item id (from `lh verify plan state`).
 # short result → inline
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
   --content "$(your-cli command --json)" \
   --by cli --desc "command reports the new field after the change"
 
 # larger output (test log, full dump) → file
 your-cli command --json > ./proof/result.json
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
   --file ./proof/result.json --by cli --desc "full result set"
 
 # a test run is itself proof
 your-test-runner path/to/spec > ./proof/test.log 2>&1
-lh acceptance run result submit --operation "$LOBE_OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
   --file ./proof/test.log --by program --desc "regression spec passes"
 ```
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
+  ActionIcon,
   Button,
   type ContextMenuItem,
   ContextMenuTrigger,
@@ -9,6 +10,7 @@ import {
   TabsList,
   TabsRoot,
   TabsTab,
+  Text,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import {

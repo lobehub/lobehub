@@ -25,6 +25,7 @@ import {
   visualizationMetadata,
 } from './verify';
 import { registerAcceptanceCommands } from './verifyAcceptance';
+import { evidenceDescriptionForFile } from './verifyHelpers';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -44,11 +45,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
 vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.lobehub.com' }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('verify rubric config commands', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
 
@@ -814,6 +810,41 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     });
   });
 
+  it('reuses the asset when the acceptance row is keyed by criterion rather than plan item', async () => {
+    mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+      acceptance: {
+        id: 'acceptance-existing',
+        status: 'delivered',
+        subjectId: 'subject',
+        subjectType: 'standalone',
+      },
+      checks: [
+        { id: 'criterion-1', planItem: { id: 'stable-check', sourceCriterionId: 'criterion-1' } },
+      ],
+    });
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [{ id: 'stable-check', name: '输入区域可用', status: 'pass' }],
+        plan: [
+          {
+            id: 'stable-check',
+            title: '输入区域可用',
+            verifier: 'agent',
+            method: '打开输入区域',
+            expected: '可以输入',
+          },
+        ],
+      }),
+    );
+    await run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+    expect(mockTrpcClient.verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: [expect.objectContaining({ id: 'stable-check', sourceCriterionId: 'criterion-1' })],
+      }),
+    );
+  });
+
   it('appends a re-verification round directly to an existing acceptance', async () => {
     mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
       acceptance: {
@@ -854,6 +885,102 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
         context: expect.objectContaining({ question: 'How mature is X?', sourceCount: 8 }),
         scenario: 'research',
       }),
+    );
+  });
+
+  it('prices a recorded interaction trace with the platform counting logic', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    const atom = (operators: Record<string, number>) =>
+      JSON.stringify({
+        klm: { category: 'action', operators },
+        phase: { id: 'login', label: 'Login' },
+        schema: 'lobehub.agentBrowserKlmTrace@1',
+      });
+    writeFileSync(
+      path.join(dir, 'interaction-trace.jsonl'),
+      `${atom({ K: 1, P: 1 })}\n${atom({ R_ms: 2000 })}\n`,
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          interactionCost: expect.objectContaining({
+            activeSeconds: 1.3,
+            model: 'goms-klm@lobe-v1',
+            sourceTrace: 'interaction-trace.jsonl',
+            totalSeconds: 3.3,
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('publishes without interaction cost when no trace was recorded', async () => {
+    // A CLI-only round, or a machine with no agent-browser, records no trace.
+    // Interaction cost is an optional overlay: absent must stay silent, never a
+    // warning and never a 0s measurement rendered as a real one.
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    const warnSpy = vi.spyOn(log, 'warn').mockImplementation(() => {});
+
+    await run(['ingest-report', dir, '--json']);
+
+    const metadata = verify.createRun.mutate.mock.calls[0][0].metadata;
+    expect(metadata?.interactionCost).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('interaction'));
+    warnSpy.mockRestore();
+  });
+
+  it('still prices the trace when result.json scaffolds interactionCost as null', async () => {
+    // Regression (found by running the flow): `report-init.sh` writes
+    // `"interactionCost": null` to document the field. Treating key presence as
+    // an explicit summary made the project's own scaffolder silently suppress
+    // pricing on every traced round it created.
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({ cases: [], interactionCost: null }),
+    );
+    writeFileSync(
+      path.join(dir, 'interaction-trace.jsonl'),
+      `${JSON.stringify({
+        klm: { category: 'action', operators: { P: 1 } },
+        schema: 'lobehub.agentBrowserKlmTrace@1',
+      })}\n`,
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate.mock.calls[0][0].metadata.interactionCost).toMatchObject({
+      totalSeconds: 1.1,
+    });
+  });
+
+  it('keeps an explicit result.json interactionCost over the trace', async () => {
+    const verify = mockTrpcClient.verify as Record<string, any>;
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [],
+        interactionCost: {
+          activeSeconds: 9,
+          model: 'hand-written',
+          operators: {},
+          totalSeconds: 9,
+          waitSeconds: 0,
+        },
+      }),
+    );
+    writeFileSync(
+      path.join(dir, 'interaction-trace.jsonl'),
+      `${JSON.stringify({ klm: { operators: { P: 1 } } })}\n`,
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(verify.createRun.mutate.mock.calls[0][0].metadata.interactionCost.model).toBe(
+      'hand-written',
     );
   });
 
@@ -1227,6 +1354,29 @@ describe('lh acceptance — canonical run tree', () => {
     rmSync(dir, { force: true, recursive: true });
   });
 
+  it('reports the installed version and leaves it in the SKILL.md on disk', async () => {
+    // The version is what a later install compares against, so it has to survive
+    // in two places: the JSON result, and the frontmatter of the materialized
+    // file (the copy a builder actually reads).
+    const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-version-'));
+    mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValue({
+      content: '---\nname: acceptance\nversion: 1.0.0\n---\n\n# Acceptance SKILL',
+      files: {},
+      identifier: 'acceptance',
+      name: 'acceptance',
+      version: '1.0.0',
+    });
+
+    await run(['install', '--dir', dir, '--json']);
+
+    const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0] as string);
+    expect(printed.version).toBe('1.0.0');
+    expect(
+      readFileSync(path.join(dir, '.agents', 'skills', 'acceptance', 'SKILL.md'), 'utf8'),
+    ).toContain('version: 1.0.0');
+    rmSync(dir, { force: true, recursive: true });
+  });
+
   it('removes stale materialized resources on `acceptance update`', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'acceptance-update-'));
     mockTrpcClient.verify.getSkillBundle.query.mockReset().mockResolvedValueOnce({
@@ -1302,5 +1452,24 @@ describe('formatAnnotationRegion', () => {
   it('returns undefined when there is no location at all', () => {
     expect(formatAnnotationRegion({ comment: 'just a note' })).toBeUndefined();
     expect(formatAnnotationRegion({ rect: { x: 0.1 } })).toBeUndefined();
+  });
+});
+
+describe('file evidence descriptions', () => {
+  it('preserves an explicit description', () => {
+    expect(evidenceDescriptionForFile('Goal final state', '/tmp/state.json')).toBe(
+      'Goal final state',
+    );
+  });
+
+  it('retains the basename when a file is inlined without a description', () => {
+    expect(evidenceDescriptionForFile(undefined, '/tmp/goal-final-state.json')).toBe(
+      'goal-final-state.json',
+    );
+    expect(evidenceDescriptionForFile('  ', '/tmp/events.json')).toBe('events.json');
+  });
+
+  it('does not invent a description for inline content', () => {
+    expect(evidenceDescriptionForFile(undefined)).toBeUndefined();
   });
 });

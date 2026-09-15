@@ -1,7 +1,9 @@
-import type {
-  AgentOperationCompletionReason,
-  AgentOperationStatus,
-  VerifyRunStatus,
+import {
+  type AgentOperationCompletionReason,
+  type AgentOperationStatus,
+  isServerDefaultHeterogeneousRelayInvocation,
+  type ServerDefaultHeterogeneousRelayInvocation,
+  type VerifyRunStatus,
 } from '@lobechat/types';
 import { and, eq, gte, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
@@ -15,6 +17,7 @@ import type {
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
+import { notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -46,6 +49,31 @@ export interface RecordOperationStartParams {
   topicId?: string | null;
   trigger?: string;
 }
+
+export interface AgentInterventionDispatchMarker {
+  deduplicationId: string;
+  messageId: string;
+  resolutionRequestId: string;
+  scheduledAt: string;
+  state: 'scheduled';
+}
+
+export interface AgentInterventionPreparationMarker {
+  deduplicationId: string;
+  resolutionRequestId: string;
+  state: 'ready';
+  stepIndex: number;
+}
+
+const sameServerDefaultRelayInvocation = (
+  left: ServerDefaultHeterogeneousRelayInvocation,
+  right: ServerDefaultHeterogeneousRelayInvocation,
+): boolean =>
+  left.agentType === right.agentType &&
+  left.ingress === right.ingress &&
+  left.model === right.model &&
+  left.operationId === right.operationId &&
+  left.provider === right.provider;
 
 /** Terminal usage summed across every child operation of one parent. All-zero when it has none. */
 export interface ChildUsageRollup {
@@ -208,6 +236,96 @@ export class AgentOperationModel {
     return Boolean(row);
   }
 
+  /**
+   * Persist provider enqueue acknowledgement without replacing other runtime
+   * metadata. The provenance request id is checked in SQL so a stale/colliding
+   * operation can never be marked scheduled by another intervention.
+   */
+  async recordAgentInterventionDispatch(
+    operationId: string,
+    marker: AgentInterventionDispatchMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ agentInterventionDispatch: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`${agentOperations.metadata}->'agentInterventionContinuation'->>'resolutionRequestId' = ${marker.resolutionRequestId}`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Persist the crash-recovery boundary after runtime state and serialized
+   * hooks are complete, but before the first queue publish. A missing runtime
+   * state with this marker is therefore ambiguous (it may already have run)
+   * and must never be rebuilt from scratch.
+   */
+  async recordAgentInterventionPreparation(
+    operationId: string,
+    marker: AgentInterventionPreparationMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ agentInterventionPreparation: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`${agentOperations.metadata}->'agentInterventionContinuation'->>'resolutionRequestId' = ${marker.resolutionRequestId}`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
+  /**
+   * Record the first official-relay acceptance for a server-default operation.
+   * Matching retries reuse the original timestamp; a conflicting selection or
+   * terminal operation fails closed.
+   */
+  async recordServerDefaultRelayInvocation(
+    operationId: string,
+    invocation: ServerDefaultHeterogeneousRelayInvocation,
+  ): Promise<ServerDefaultHeterogeneousRelayInvocation | null> {
+    if (operationId !== invocation.operationId) return null;
+
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ serverDefaultRelayInvocation: invocation })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          eq(agentOperations.model, invocation.model),
+          eq(agentOperations.provider, invocation.provider),
+          this.ownership(),
+          sql`${agentOperations.metadata}->>'serverDefaultHeterogeneous' = 'true'`,
+          sql`${agentOperations.metadata}->>'agentType' = ${invocation.agentType}`,
+          sql`NOT COALESCE(jsonb_exists(${agentOperations.metadata}, 'serverDefaultRelayInvocation'), false)`,
+        ),
+      )
+      .returning({ metadata: agentOperations.metadata });
+
+    if (row) return invocation;
+
+    const existing = (await this.findById(operationId))?.metadata?.serverDefaultRelayInvocation;
+    return isServerDefaultHeterogeneousRelayInvocation(existing) &&
+      sameServerDefaultRelayInvocation(existing, invocation)
+      ? existing
+      : null;
+  }
+
   /** Idempotently settle a running operation without rewriting an existing terminal outcome. */
   async settleRunning(
     operationId: string,
@@ -330,6 +448,14 @@ export class AgentOperationModel {
     };
   }
 
+  /**
+   * Raw ownership-scoped lookup. Agent-share visitor runs execute under the
+   * CREATOR's identity, so this DOES return their operations — required by the
+   * agent runtime (execution, intervention, completion, verify, abandon), which
+   * has to resolve the operation it is currently driving no matter who started
+   * it. Creator-facing read entry points must use
+   * {@link AgentOperationModel.findOwnOperationById} instead.
+   */
   async findById(operationId: string) {
     const [row] = await this.db
       .select()
@@ -337,6 +463,94 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
+  }
+
+  /** Batch lookup for callers that would otherwise issue one query per id. */
+  async findByIds(operationIds: string[]) {
+    if (operationIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(agentOperations)
+      .where(and(inArray(agentOperations.id, operationIds), this.ownership()));
+  }
+
+  /**
+   * Creator-facing twin of {@link AgentOperationModel.findById}: excludes
+   * operations recorded inside an agent-share visitor topic, so a creator
+   * handed a raw visitor operation id gets nothing back instead of reading a
+   * visitor conversation's trajectory (e.g. via a pre-signed trace URL).
+   *
+   * Mirrors `TopicModel.findById` / `TopicModel.findOwnTopicById`.
+   */
+  async findOwnOperationById(operationId: string) {
+    const [row] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** Match a server-minted turn identity when a diagnostic dispatch receipt was lost. */
+  async findByTopicSourceMessage(topicId: string, sourceMessageId: string) {
+    const [operation] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          eq(agentOperations.topicId, topicId),
+          sql`${agentOperations.appContext}->>'sourceMessageId' = ${sourceMessageId}`,
+        ),
+      )
+      .limit(1);
+    return operation;
+  }
+
+  /**
+   * Operations recorded for one topic, newest first — the lookup that turns a
+   * topic id (what a user actually has on hand) into the operation ids their
+   * traces are keyed by. `traceS3Key` rides along so callers can tell "no
+   * snapshot was recorded" apart from "snapshot exists but the fetch failed".
+   *
+   * Creator-facing only (the trace panel). Agent-share visitor runs execute
+   * under the CREATOR's identity, so their operation rows pass `ownership()`;
+   * without the visitor guard a creator could read a visitor conversation's
+   * full trajectory snapshot from a raw topic id.
+   */
+  async listByTopic(topicId: string, limit = 20) {
+    return this.db
+      .select({
+        agentId: agentOperations.agentId,
+        createdAt: agentOperations.createdAt,
+        id: agentOperations.id,
+        model: agentOperations.model,
+        parentOperationId: agentOperations.parentOperationId,
+        provider: agentOperations.provider,
+        startedAt: agentOperations.startedAt,
+        status: agentOperations.status,
+        stepCount: agentOperations.stepCount,
+        totalCost: agentOperations.totalCost,
+        totalTokens: agentOperations.totalTokens,
+        traceS3Key: agentOperations.traceS3Key,
+        trigger: agentOperations.trigger,
+      })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          this.ownership(),
+          notShareVisitorTopicRef(agentOperations.topicId),
+        ),
+      )
+      .orderBy(sql`${agentOperations.createdAt} desc`)
+      .limit(limit);
   }
 
   /**

@@ -1,5 +1,7 @@
 import type { TopicCommentJson } from '@lobechat/types';
 import type { IEditor, ISlashMenuOption } from '@lobehub/editor';
+import { INSERT_MENTION_COMMAND } from '@lobehub/editor';
+import { $getSelection, $isRangeSelection } from 'lexical';
 
 export interface MentionableWorkspaceMember {
   user?: {
@@ -53,10 +55,33 @@ export const createTopicCommentMentionPayload = (option: ISlashMenuOption) => ({
   metadata: option.metadata,
 });
 
-export const readTopicCommentEditorValue = (editor: IEditor): TopicCommentEditorValue => ({
-  content: String(editor.getDocument('markdown') ?? ''),
-  editorData: (editor.getDocument('json') ?? null) as unknown as TopicCommentJson,
-});
+export const insertTopicCommentMention = (editor: IEditor, option: ISlashMenuOption) => {
+  editor.dispatchCommand(INSERT_MENTION_COMMAND, createTopicCommentMentionPayload(option));
+
+  editor.getLexicalEditor()?.update(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) return;
+
+    // An inline decorator at the end of a paragraph has no DOM text position for the caret.
+    // Keep a trailing text node selected so typing can continue immediately after the mention.
+    selection.insertText(' ');
+  });
+  editor.focus();
+};
+
+export const readTopicCommentEditorValue = (editor: IEditor): TopicCommentEditorValue => {
+  const editorData = editor.getDocument('json') ?? null;
+
+  return {
+    content: String(editor.getDocument('markdown') ?? ''),
+    // Lexical nodes can expose optional properties with an `undefined` value
+    // (for example a FileNode without message/size). tRPC and PostgreSQL accept
+    // JSON values only, so normalize the editor snapshot at this shared
+    // boundary before comments are drafted or submitted.
+    // eslint-disable-next-line unicorn/prefer-structured-clone -- structuredClone preserves undefined properties.
+    editorData: JSON.parse(JSON.stringify(editorData)) as TopicCommentJson,
+  };
+};
 
 export const resolveTopicCommentEditorContent = (
   initialContent: string,

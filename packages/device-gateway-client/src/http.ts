@@ -1,3 +1,9 @@
+import {
+  describeGatewayRequestFailure,
+  describeGatewayResponseFailure,
+  type DeviceTransportFailure,
+  type DeviceUnavailableErrorData,
+} from './deviceTransportError';
 import type {
   DeviceSystemInfo,
   GatewayDevice,
@@ -6,6 +12,12 @@ import type {
 } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
+/**
+ * Device *reads* are on the critical path of every routing decision, and `post`
+ * has no deadline of its own — an unanswered read would otherwise hang for as
+ * long as the socket stays open.
+ */
+const DEVICE_QUERY_TIMEOUT_MS = 10_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
 
 export interface DeviceStatusResult {
@@ -13,24 +25,45 @@ export interface DeviceStatusResult {
   online: boolean;
 }
 
+/** Result envelope returned by a tunneled device tool call. */
 export interface DeviceToolCallResult {
   content: string;
   error?: string;
+  /** Structured availability context for callers that can choose whether to retry. */
+  errorData?: DeviceUnavailableErrorData;
   state?: unknown;
   success: boolean;
 }
 
+/** Result envelope returned by a tunneled device messaging call. */
 export interface DeviceMessageApiResult {
   content: string;
   error?: string;
+  /** Structured availability context for callers that can choose whether to retry. */
+  errorData?: DeviceUnavailableErrorData;
   success: boolean;
 }
 
+/**
+ * Result envelope returned by a generic device RPC.
+ *
+ * @param T Successful RPC payload type.
+ */
 export interface DeviceRpcResult<T = unknown> {
   data?: T;
   error?: string;
+  /** Structured availability context for callers that can choose whether to retry. */
+  errorData?: DeviceUnavailableErrorData;
   success: boolean;
 }
+
+/** Shape a described transport failure into the LLM-facing tool result. */
+const toFailedToolCallResult = (failure: DeviceTransportFailure): DeviceToolCallResult => ({
+  content: failure.content,
+  error: failure.error,
+  ...(failure.data ? { errorData: failure.data } : {}),
+  success: false,
+});
 
 export interface GatewayHttpClientOptions {
   gatewayUrl: string;
@@ -47,8 +80,15 @@ export class GatewayHttpClient {
   }
 
   async queryDeviceStatus(userId: string, workspaceId?: string): Promise<DeviceStatusResult> {
-    const res = await this.post('/api/device/status', { userId, workspaceId });
-    if (!res.ok) return { deviceCount: 0, online: false };
+    const res = await this.post(
+      '/api/device/status',
+      { userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    // A gateway that answered with an error did not tell us "nothing is
+    // online" — it told us nothing. Reporting the two as the same value is how
+    // a transient 5xx became an authoritative "all devices offline" downstream.
+    if (!res.ok) throw new Error(`Device gateway /api/device/status responded ${res.status}`);
 
     const data = await res.json();
     return {
@@ -58,8 +98,14 @@ export class GatewayHttpClient {
   }
 
   async queryDeviceList(userId: string, workspaceId?: string): Promise<GatewayDevice[]> {
-    const res = await this.post('/api/device/devices', { userId, workspaceId });
-    if (!res.ok) return [];
+    const res = await this.post(
+      '/api/device/devices',
+      { userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    // See `queryDeviceStatus`: an errored read is an UNKNOWN online set, and
+    // only the caller can decide what to do about that.
+    if (!res.ok) throw new Error(`Device gateway /api/device/devices responded ${res.status}`);
 
     const data = await res.json();
     return Array.isArray(data.devices) ? data.devices : [];
@@ -124,44 +170,58 @@ export class GatewayHttpClient {
       typeof params.timeout === 'number' && Number.isFinite(params.timeout)
         ? Math.max(Math.trunc(params.timeout), 0)
         : DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS;
-    const res = await this.post(
-      '/api/device/tool-call',
-      {
-        deviceId: params.deviceId,
-        operationId: params.operationId,
-        timeout: params.timeout,
-        toolCall,
-        userId: params.userId,
-        workspaceId: params.workspaceId,
-      },
-      { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
-    );
+    let res: Response;
+    try {
+      res = await this.post(
+        '/api/device/tool-call',
+        {
+          deviceId: params.deviceId,
+          operationId: params.operationId,
+          timeout: params.timeout,
+          toolCall,
+          userId: params.userId,
+          workspaceId: params.workspaceId,
+        },
+        { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
+      );
+    } catch (error) {
+      // A client-side deadline or an unreachable gateway host used to escape as
+      // a raw `TimeoutError` / `fetch failed`, which reads to the model as if
+      // the tool itself blew up. Describe the hop that actually failed instead.
+      return toFailedToolCallResult(describeGatewayRequestFailure(error, 'tool call'));
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return {
-        content: `Device tool call failed (HTTP ${res.status})`,
-        error: text || `HTTP ${res.status}`,
-        success: false,
-      };
+      return toFailedToolCallResult(
+        describeGatewayResponseFailure(res.status, text, 'tool call', params),
+      );
     }
 
     const data = await res.json();
+
+    // Device sends a typed envelope ({ content, state, success }). The legacy
+    // fallback used to JSON.stringify `data.content ?? data` — when content was
+    // missing it would stringify the *entire response body* including `success`
+    // and any other top-level fields, which leaked the structured payload into
+    // the LLM-facing content string. Only stringify the `content` field itself;
+    // never fall back to the whole body.
+    const deviceContent =
+      typeof data.content === 'string'
+        ? data.content
+        : data.content === undefined || data.content === null
+          ? ''
+          : JSON.stringify(data.content);
+
     return {
-      // Device sends a typed envelope ({ content, state, success }). The legacy
-      // fallback used to JSON.stringify `data.content ?? data` — when content
-      // was missing it would stringify the *entire response body* including
-      // `success` and any other top-level fields, which leaked the structured
-      // payload into the LLM-facing content string. Only stringify the
-      // `content` field itself; never fall back to the whole body.
-      content:
-        typeof data.content === 'string'
-          ? data.content
-          : data.content !== undefined && data.content !== null
-            ? JSON.stringify(data.content)
-            : typeof data.error === 'string'
-              ? data.error
-              : '',
+      // A device that fails with nothing to say — an api it has no handler for,
+      // a handler that threw before writing output — reported `content: ''`,
+      // and `typeof '' === 'string'` short-circuited the error fallback below.
+      // The failure then reached the model as an empty, successful-looking
+      // result: observed live as a builder calling `screenshot` fifteen times
+      // against a device with no browser handler and reading nothing back each
+      // time. Every other failure path here puts the failure text in `content`.
+      content: deviceContent || (typeof data.error === 'string' ? data.error : ''),
       error: data.error,
       state: data.state,
       success: data.success ?? true,
@@ -182,9 +242,11 @@ export class GatewayHttpClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+      const failure = describeGatewayResponseFailure(res.status, text, 'message API call', params);
       return {
-        content: `Device message API call failed (HTTP ${res.status})`,
-        error: text || `HTTP ${res.status}`,
+        content: failure.content,
+        error: failure.error,
+        ...(failure.data ? { errorData: failure.data } : {}),
         success: false,
       };
     }
@@ -224,11 +286,16 @@ export class GatewayHttpClient {
      * `lh hetero exec` can write back under the topic's scope.
      */
     ingestWorkspaceId?: string;
-  }): Promise<{ success: boolean; error?: string }> {
+  }): Promise<{ success: boolean; error?: string; errorData?: DeviceUnavailableErrorData }> {
     const res = await this.post('/api/device/agent/run', params);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { error: text || `HTTP ${res.status}`, success: false };
+      const failure = describeGatewayResponseFailure(res.status, text, 'agent run', params);
+      return {
+        error: failure.error,
+        ...(failure.data ? { errorData: failure.data } : {}),
+        success: false,
+      };
     }
     const data = await res.json().catch(() => null);
     if (data && (data.success === false || data.status === 'rejected')) {
@@ -271,7 +338,12 @@ export class GatewayHttpClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { error: text || `HTTP ${res.status}`, success: false };
+      const failure = describeGatewayResponseFailure(res.status, text, 'RPC call', params);
+      return {
+        error: failure.error,
+        ...(failure.data ? { errorData: failure.data } : {}),
+        success: false,
+      };
     }
 
     const data = await res.json();

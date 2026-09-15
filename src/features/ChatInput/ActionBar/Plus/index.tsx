@@ -2,8 +2,8 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover, Tag } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Icon, Popover } from '@lobehub/ui';
+import { Tag, toast } from '@lobehub/ui/base-ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
@@ -56,7 +56,6 @@ import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
-import { useEffortMenuItem } from './useEffortMenuItem';
 
 const hotArea = css`
   &::before {
@@ -310,13 +309,14 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
 
   const { model, provider } = useEffectiveModel(agentId);
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
-  const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
-    useGlobalStore((s) => [
+  const [showRightPanel, workingSidebarTab, openWorkingSidebar, toggleRightPanel] = useGlobalStore(
+    (s) => [
       systemStatusSelectors.showRightPanel(s),
       s.status.workingSidebarTab,
-      s.setWorkingSidebarTab,
+      s.openWorkingSidebar,
       s.toggleRightPanel,
-    ]);
+    ],
+  );
   const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
@@ -399,17 +399,14 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     [updateAgentChatConfig],
   );
 
-  const effortItem = useEffortMenuItem();
-
   const handleToggleParams = useCallback(() => {
     close();
     if (isParamsPanelActive) {
       toggleRightPanel(false);
       return;
     }
-    setWorkingSidebarTab('params');
-    toggleRightPanel(true);
-  }, [close, isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
+    openWorkingSidebar('params');
+  }, [close, isParamsPanelActive, openWorkingSidebar, toggleRightPanel]);
 
   const items = useMemo<ActionDropdownMenuItems>(() => {
     const renderActive = (label: string, active: boolean) =>
@@ -663,10 +660,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       },
       // Agent Gateway directly below the formatting toolbar.
       ...gatewayItem,
-      // Reasoning intensity — a personal per-model preference, so it is NOT
-      // gated on canConfigureResource; hidden only when the model has no
-      // reasoning extend params (the hook returns []).
-      ...effortItem,
       // Advanced parameter settings — only when resources can be configured.
       ...(canConfigureResource
         ? [
@@ -746,7 +739,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     agentId,
     activeSearchOption,
     canConfigureResource,
-    effortItem,
     enableTopicAcceptance,
     canUploadImage,
     canUploadVideo,

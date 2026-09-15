@@ -2,39 +2,26 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import Arguments from './index';
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   ActionIcon: ({
     active,
-    icon: IconComponent,
     onClick,
     title,
   }: {
     active?: boolean;
-    icon?: ComponentType;
     onClick?: () => void;
     title?: string;
   }) => (
     <button aria-pressed={active} type="button" onClick={onClick}>
       {title}
-      {IconComponent ? <IconComponent /> : null}
     </button>
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Highlighter: ({ children, wrap }: { children?: ReactNode; wrap?: boolean }) => (
-    <pre data-testid="highlighter" data-wrap={String(Boolean(wrap))}>
-      {children}
-    </pre>
-  ),
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('antd', () => ({
-  Divider: () => <hr />,
 }));
 
 vi.mock('@/components/Descriptions', () => ({

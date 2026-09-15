@@ -1,7 +1,6 @@
 import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
-import { ActionIcon, copyToClipboard, Flexbox, Icon } from '@lobehub/ui';
-import { type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
 import { Copy, ExternalLink, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,6 +57,7 @@ const AcceptanceHeader = memo(() => {
 
   return (
     <Header
+      paddingInline={24}
       rightExtra={
         <ActionIcon
           disabled={!externalUrl}

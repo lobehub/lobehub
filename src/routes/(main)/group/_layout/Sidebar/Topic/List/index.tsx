@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -32,6 +33,7 @@ const TopicList = memo(() => {
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
   useFetchChatTopics();
+  useFetchActiveTopicDetail();
 
   // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;

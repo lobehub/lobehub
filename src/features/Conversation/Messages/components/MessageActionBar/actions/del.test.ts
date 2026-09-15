@@ -16,10 +16,6 @@ vi.mock('../../../../store', () => ({
     selector({ deleteAssistantMessage, deleteMessage }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 // A group's id IS its head child's id — the assistantGroup bubble is a virtual
 // message built from the run's first assistant row. Fixtures mirror that.
 const build = (

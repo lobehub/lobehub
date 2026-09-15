@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 
 import { findNewComponentTestAdvisories } from './advisories';
 import { diffStat, renderDiffsForStdout } from './autofix';
-import { hostRootFromGitdir } from './delegate';
 import { lobehubPipelines } from './pipelines';
 import {
   findVitestConfigDir,
@@ -180,17 +179,6 @@ describe('findVitestConfigDir', () => {
     await expect(
       findVitestConfigDir('somewhere/deep/file.test.ts', async () => false),
     ).resolves.toBe('.');
-  });
-});
-
-describe('hostRootFromGitdir', () => {
-  it('extracts the superproject root from a submodule gitdir', () => {
-    expect(hostRootFromGitdir('/work/host/.git/modules/vendor/sub')).toBe('/work/host');
-  });
-
-  it('returns null for standalone clones and linked worktrees', () => {
-    expect(hostRootFromGitdir('/work/repo/.git')).toBeNull();
-    expect(hostRootFromGitdir('/work/repo/.git/worktrees/feature')).toBeNull();
   });
 });
 

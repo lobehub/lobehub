@@ -1,4 +1,4 @@
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
+import { analyticsClient } from '@/libs/analytics/client';
 
 export const ONBOARDING_METRICS_EVENTS = {
   COMPLETED: 'onboarding_completed',
@@ -32,15 +32,14 @@ interface AnalyticsLike {
   track: (event: { name: string; properties?: Record<string, unknown> }) => unknown;
 }
 
-let analyticsClient: AnalyticsLike | null = null;
+let injectedClient: AnalyticsLike | null = null;
 
 export const setOnboardingAnalyticsClient = (client: AnalyticsLike | null): void => {
-  analyticsClient = client;
+  injectedClient = client;
 };
 
 const emit = (name: string, properties: Record<string, unknown>): void => {
-  const client = analyticsClient ?? getSingletonAnalyticsOptional();
-  if (!client) return;
+  const client = injectedClient ?? analyticsClient;
 
   try {
     client.track({ name, properties });

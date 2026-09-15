@@ -13,12 +13,6 @@ vi.mock('react-router', () => ({
   useParams: () => ({ aid: 'agent-from-url' }),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...(props as Record<string, unknown>)}>{children}</div>
-  ),
-}));
-
 const pageEditorProps = vi.hoisted(() => ({
   current: undefined as undefined | Record<string, unknown>,
 }));

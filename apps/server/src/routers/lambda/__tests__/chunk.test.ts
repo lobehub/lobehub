@@ -7,7 +7,6 @@ import { DocumentModel } from '@/database/models/document';
 import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
-import { SearchRepo } from '@/database/repositories/search';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 
@@ -19,7 +18,6 @@ vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/database/models/embedding', () => ({ EmbeddingModel: vi.fn() }));
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
 vi.mock('@/database/models/message', () => ({ MessageModel: vi.fn() }));
-vi.mock('@/database/repositories/search', () => ({ SearchRepo: vi.fn() }));
 vi.mock('@/server/services/chunk', () => ({ ChunkService: vi.fn() }));
 vi.mock('@/server/services/document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/database/server', () => ({ getServerDB: vi.fn() }));
@@ -38,15 +36,30 @@ describe('chunkRouter.getFileContents — ID branching', () => {
     fileModelMock = { findById: vi.fn() };
     documentServiceMock = { parseFile: vi.fn() };
 
-    vi.mocked(DocumentModel).mockImplementation(() => documentModelMock);
-    vi.mocked(FileModel).mockImplementation(() => fileModelMock);
-    vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
-    vi.mocked(AsyncTaskModel).mockImplementation(() => ({}) as any);
-    vi.mocked(ChunkModel).mockImplementation(() => ({}) as any);
-    vi.mocked(EmbeddingModel).mockImplementation(() => ({}) as any);
-    vi.mocked(MessageModel).mockImplementation(() => ({}) as any);
-    vi.mocked(SearchRepo).mockImplementation(() => ({}) as any);
-    vi.mocked(ChunkService).mockImplementation(() => ({}) as any);
+    vi.mocked(DocumentModel).mockImplementation(function () {
+      return documentModelMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return fileModelMock;
+    });
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return documentServiceMock;
+    });
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(ChunkModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(EmbeddingModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {} as any;
+    });
+    vi.mocked(ChunkService).mockImplementation(function () {
+      return {} as any;
+    });
 
     mockCtx = {
       userId,

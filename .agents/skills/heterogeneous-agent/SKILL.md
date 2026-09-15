@@ -1,6 +1,6 @@
 ---
 name: heterogeneous-agent
-description: 'Implement or debug LobeHub heterogeneous agents. Use for Claude Code/Codex adapters, external CLI agents, event mapping, IPC, persistence, tool-call chains, sessions, traces, or adapter bugs.'
+description: 'Use for Claude Code/Codex external-agent adapters, IPC, event mapping, sessions, persistence and tool-call chains.'
 ---
 
 # Heterogeneous Agent Development
@@ -85,3 +85,8 @@ Use this skill when the bug or feature lives in the external CLI agent pipeline,
 ## References
 
 - For commands, trace capture, invariants, and focused test commands, read [references/debug-workflow.md](./references/debug-workflow.md).
+- Live official-model compatibility checks are available only through explicit
+  user invocation of `/testing-heterogeneous-agents` in Claude Code or
+  `$testing-heterogeneous-agents` in Codex. Do not automatically load or run that
+  skill during diagnosis. Its failed-cell evidence can be used here for diagnosis
+  or a code fix.

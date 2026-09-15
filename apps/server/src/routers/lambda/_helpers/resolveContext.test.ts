@@ -8,7 +8,9 @@ import {
 } from './resolveContext';
 
 const { mockBuildWorkspaceWhere } = vi.hoisted(() => ({
-  mockBuildWorkspaceWhere: vi.fn(() => 'workspace-where'),
+  mockBuildWorkspaceWhere: vi.fn(function () {
+    return 'workspace-where';
+  }),
 }));
 
 // Mock the database module

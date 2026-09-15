@@ -2,7 +2,8 @@
 
 import { type TaskDetail } from '@lobechat/types';
 import { type IconProps } from '@lobehub/ui';
-import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Footprints, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';

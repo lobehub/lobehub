@@ -1,7 +1,7 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, Select, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Select, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';

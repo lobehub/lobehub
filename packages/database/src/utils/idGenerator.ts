@@ -31,6 +31,7 @@ const prefixes = {
   memory: 'mem',
   messageGroups: 'mg',
   messages: 'msg',
+  metrics: 'mtr',
   plugins: 'plg',
   projects: 'prj',
   sessionGroups: 'sg',

@@ -13,7 +13,12 @@ import {
   createSandboxLocalFileScopeKey,
   getLocalFileTabId,
 } from './helpers';
-import { type OpenLocalFileParams, type PortalFile, type PortalViewData } from './initialState';
+import {
+  type GoalMetricKind,
+  type OpenLocalFileParams,
+  type PortalFile,
+  type PortalViewData,
+} from './initialState';
 import { PortalViewType } from './initialState';
 
 // Helper to get current view type from stack
@@ -629,6 +634,38 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
   };
 
+  openTaskResult = (taskId: string): void => {
+    this.#get().pushPortalView({ taskId, type: PortalViewType.TaskResult });
+  };
+
+  openGoalNode = (goalId: string, nodeId: string): void => {
+    this.#get().pushPortalView({ goalId, nodeId, type: PortalViewType.GoalNode });
+  };
+
+  /** Follow graph provenance without replacing the experiment being inspected. */
+  drillIntoGoalNode = (goalId: string, nodeId: string): void => {
+    const { portalStack } = this.#get();
+    const existing = portalStack.findIndex(
+      (view) =>
+        view.type === PortalViewType.GoalNode && view.goalId === goalId && view.nodeId === nodeId,
+    );
+    this.#set(
+      {
+        portalStack:
+          existing >= 0
+            ? portalStack.slice(0, existing + 1)
+            : [...portalStack, { goalId, nodeId, type: PortalViewType.GoalNode }],
+        showPortal: true,
+      },
+      false,
+      'drillIntoGoalNode',
+    );
+  };
+
+  openGoalMetric = (goalId: string, metric: GoalMetricKind): void => {
+    this.#get().pushPortalView({ goalId, metric, type: PortalViewType.GoalMetric });
+  };
+
   openTopicCommentThread = (
     topicId: string,
     rootCommentId: string,
@@ -647,9 +684,7 @@ export class ChatPortalActionImpl {
   };
 
   openTopicComments = (topicId: string, messageId?: string): void => {
-    const { setWorkingSidebarTab, toggleRightPanel } = useGlobalStore.getState();
-    toggleRightPanel(true);
-    setWorkingSidebarTab('comments');
+    useGlobalStore.getState().openWorkingSidebar('comments');
     this.#get().pushPortalView({ messageId, topicId, type: PortalViewType.TopicComments });
   };
 

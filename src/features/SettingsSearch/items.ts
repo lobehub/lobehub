@@ -326,13 +326,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Appearance,
   },
   {
-    anchor: 'appearance-font-size',
-    descKey: 'settingChatAppearance.fontSize.desc',
-    keywords: ['font', 'size', 'text'],
-    labelKey: 'settingChatAppearance.fontSize.title',
-    tab: SettingsTabs.Appearance,
-  },
-  {
     anchor: 'appearance-app-tray',
     keywords: ['tray', 'menu bar', 'menubar'],
     labelKey: 'settingAppearance.appTray.title',
@@ -348,12 +341,35 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
+    anchor: 'appearance-font-fallback',
+    descKey: 'settingAppearance.font.fallback.desc',
+    keywords: ['fallback font', 'font stack', 'cjk font', 'chinese font', 'font family'],
+    labelKey: 'settingAppearance.font.fallback.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
     anchor: 'appearance-monospace-font',
     descKey: 'settingAppearance.font.monospace.desc',
     keywords: ['terminal font', 'monospace', 'code font', 'font family'],
     labelKey: 'settingAppearance.font.monospace.title',
     tab: SettingsTabs.Appearance,
     visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-monospace-font-fallback',
+    descKey: 'settingAppearance.font.monospaceFallback.desc',
+    keywords: ['fallback font', 'monospace', 'code font', 'terminal font'],
+    labelKey: 'settingAppearance.font.monospaceFallback.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-font-size',
+    descKey: 'settingChatAppearance.fontSize.desc',
+    keywords: ['font', 'size', 'text'],
+    labelKey: 'settingChatAppearance.fontSize.title',
+    tab: SettingsTabs.Appearance,
   },
   // System Tools
   {
@@ -661,6 +677,22 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     tab: SettingsTabs.Usage,
   },
   // Notification
+  {
+    anchor: 'notification-completion-sound',
+    descKey: 'completionSound.desc',
+    keywords: ['sound', 'audio', 'OpenPeon', 'completion'],
+    labelKey: 'completionSound.title',
+    tab: SettingsTabs.Notification,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'notification-banner-sound',
+    descKey: 'completionSound.banner.desc',
+    keywords: ['sound', 'notification', 'banner', 'background'],
+    labelKey: 'completionSound.banner.title',
+    tab: SettingsTabs.Notification,
+    visible: (ctx) => ctx.isDesktop,
+  },
   {
     anchor: 'notification-inbox',
     keywords: ['inbox', 'in-app notification'],

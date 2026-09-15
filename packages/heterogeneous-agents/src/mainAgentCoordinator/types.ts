@@ -1,3 +1,6 @@
+import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
+import type { ToolIntervention } from '@lobechat/types';
+
 import type { PersistToolBatchEntry, SubagentRunsState } from '../subagentCoordinator';
 import { createSubagentRunsState } from '../subagentCoordinator';
 import type { ExternalSignalContext, ToolCallPayload } from '../types';
@@ -57,6 +60,19 @@ export interface MainAgentTurnToolState {
   toolMsgIdByCallId: Map<string, string>;
 }
 
+export type MainAgentInterventionTransition =
+  'cancelled' | 'pending' | 'resolved' | 'session_ended' | 'timed_out';
+
+/** Latest durable projection for one intervention correlation id. */
+export interface MainAgentInterventionState {
+  intervention: ToolIntervention;
+  /** Original request metadata, retained so terminal business hooks stay typed. */
+  request?: AgentInterventionRequestData;
+  /** User-resolution id echoed by the producer on its terminal ACK. */
+  resolutionRequestId?: string;
+  transition: MainAgentInterventionTransition;
+}
+
 /**
  * Per-run main-agent state. Lifetime spans the whole CLI run. Designed to be
  * fully RE-HYDRATABLE from the DB so a stateless server replica can project it
@@ -81,6 +97,8 @@ export interface MainAgentRunState {
   currentMainMessageId: string | undefined;
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
+  /** Request/terminal state buffered independently from tool-event ordering. */
+  interventionsByCallId: Map<string, MainAgentInterventionState>;
   /** Highest seen reasoning snapshot sequence (replace-mode de-dup). */
   lastReasoningSnapshotSeq: number;
   /**
@@ -131,6 +149,7 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   lastReasoningSnapshotSeq: 0,
   lastTextSnapshotSeq: 0,
   lastToolMsgIdEver: undefined,
+  interventionsByCallId: new Map(),
   subagents: createSubagentRunsState(),
   toolState: { payloads: [], persistedIds: new Set(), toolMsgIdByCallId: new Map() },
   turnMetadata: {},
@@ -173,6 +192,7 @@ export type MainAgentIntent =
   | MainPersistToolBatchIntent
   | MainUpdateToolStateIntent
   | MainResolveToolResultIntent
+  | MainSetToolInterventionIntent
   | MainRecordUsageIntent
   | SetErrorIntent;
 
@@ -253,6 +273,12 @@ export interface MainResolveToolResultIntent {
   isError: boolean;
   kind: 'resolveToolResult';
   pluginState?: Record<string, any>;
+  toolCallId: string;
+}
+
+/** Persist one intervention state transition on its correlated tool row. */
+export interface MainSetToolInterventionIntent extends MainAgentInterventionState {
+  kind: 'setToolIntervention';
   toolCallId: string;
 }
 

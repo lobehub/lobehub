@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps, SearchQuery, UniformSearchResponse } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,20 +18,17 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
 
     if (isArgumentsStreaming && !query) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-web-browsing.apiName.search')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-web-browsing.apiName.search')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-web-browsing.apiName.search')}:{'\u00A0'}
         </span>
         {query && <span className={highlightTextStyles.primary}>{query}</span>}

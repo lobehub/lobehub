@@ -1,17 +1,17 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { deviceService } from '@/services/device';
 
 import { useRemoteAgentDeviceGuard } from './useRemoteAgentDeviceGuard';
 
-vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({ useEffectiveAgencyConfig: vi.fn() }));
+vi.mock('@/hooks/useTopicAgencyConfig', () => ({ useTopicAgencyConfig: vi.fn() }));
 vi.mock('@/services/device', () => ({
   deviceService: { checkCapability: vi.fn(), listDevices: vi.fn() },
 }));
 
-const mockedUseEffectiveAgencyConfig = vi.mocked(useEffectiveAgencyConfig);
+const mockedUseEffectiveAgencyConfig = vi.mocked(useTopicAgencyConfig);
 const mockedCheckCapability = vi.mocked(deviceService.checkCapability);
 const mockedListDevices = vi.mocked(deviceService.listDevices);
 

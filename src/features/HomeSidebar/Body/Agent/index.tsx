@@ -1,6 +1,16 @@
 'use client';
 
-import { AccordionItem, ActionIcon, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
+import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Text,
+} from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -59,41 +69,51 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   );
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      action={
-        <Flexbox horizontal align="center" gap={2}>
-          {/* The flat view-all page adapts per mode: workspace gets the
-              workspace/private segments + per-user pin + author column;
-              personal mode gets the plain flat list. */}
-          <ActionIcon
-            icon={ArrowRight}
-            size={'small'}
-            title={t('navPanel.viewAllAgents')}
-            onClick={handleViewAll}
-          />
-          <Actions addMenuItems={addMenuItems} dropdownMenu={dropdownMenu} isLoading={isLoading} />
-        </Flexbox>
-      }
-      headerWrapper={(header) => (
-        <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
-      )}
-      title={
-        <Flexbox horizontal align="center" gap={4}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t(titleKey)}
-          </Text>
-          {isRevalidating && <NeuralNetworkLoading size={14} />}
-        </Flexbox>
-      }
-    >
-      <Suspense fallback={<SkeletonList rows={6} />}>
-        <Flexbox gap={1} paddingBlock={1}>
-          <List />
-        </Flexbox>
-      </Suspense>
+    <AccordionItem value={itemKey}>
+      <ContextMenuTrigger items={dropdownMenu}>
+        <AccordionHeader>
+          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+            <Flexbox horizontal align="center" gap={4}>
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {t(titleKey)}
+              </Text>
+              {isRevalidating && <NeuralNetworkLoading size={14} />}
+            </Flexbox>
+          </AccordionTrigger>
+          <Flexbox
+            horizontal
+            align="center"
+            className={cx(
+              'accordion-action',
+              accordionStyles.action,
+              accordionStyles.actionBorderless,
+            )}
+            gap={2}
+          >
+            {/* The flat view-all page adapts per mode: workspace gets the
+                workspace/private segments + per-user pin + author column;
+                personal mode gets the plain flat list. */}
+            <ActionIcon
+              icon={ArrowRight}
+              size={'small'}
+              title={t('navPanel.viewAllAgents')}
+              onClick={handleViewAll}
+            />
+            <Actions
+              addMenuItems={addMenuItems}
+              dropdownMenu={dropdownMenu}
+              isLoading={isLoading}
+            />
+          </Flexbox>
+        </AccordionHeader>
+      </ContextMenuTrigger>
+      <AccordionPanel>
+        <Suspense fallback={<SkeletonList rows={6} />}>
+          <Flexbox gap={1} paddingBlock={1}>
+            <List />
+          </Flexbox>
+        </Suspense>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

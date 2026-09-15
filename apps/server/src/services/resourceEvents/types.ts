@@ -6,7 +6,12 @@ export interface ResourceRef {
   type: ResourceType;
 }
 
-export type ResourceEventType = 'doc.updated' | 'lock.changed' | 'topic.commentsChanged';
+export type ResourceEventType =
+  | 'doc.updated'
+  | 'document.commentsChanged'
+  | 'document.likesChanged'
+  | 'lock.changed'
+  | 'topic.commentsChanged';
 
 export interface ResourceEvent {
   /** User id that triggered the event; allows subscriber-side attribution or filtering. */

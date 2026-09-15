@@ -437,6 +437,17 @@ export class UserModel {
     return { duplicate: false, user };
   };
 
+  /**
+   * Deletes a user account and their agent-share visitor conversations.
+   *
+   * Agent-share visitor topics are stored under the CREATOR's userId (for
+   * billing/data attribution) and linked to the visitor only via
+   * `topics.senderId`, which has no FK. That means the `users` cascade cannot
+   * reach them — deleting the visitor's account would otherwise orphan every
+   * conversation they had inside someone else's shared agent. We explicitly
+   * drop `topics` where `senderId = id`; messages, threads, and topic
+   * documents cascade from `topics.id`, so the topic delete is enough.
+   */
   static deleteUser = async (db: LobeChatDatabase, id: string) => {
     // A pending agent-TRANSFER backfill means message rows moved to (or from)
     // this user still carry the other side's scope snapshot; cascading the
@@ -447,7 +458,11 @@ export class UserModel {
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
-    return db.delete(users).where(eq(users.id, id));
+    return db.transaction(async (tx) => {
+      // Purge share-visitor topics authored by this user under any creator.
+      await tx.delete(topics).where(eq(topics.senderId, id));
+      return tx.delete(users).where(eq(users.id, id));
+    });
   };
 
   static findById = async (db: LobeChatDatabase, id: string) => {
@@ -492,6 +507,23 @@ export class UserModel {
         id: users.id,
         username: users.username,
       })
+      .from(users)
+      .where(inArray(users.id, ids));
+  };
+
+  /**
+   * Emails for a set of users. Deliberately separate from
+   * {@link UserModel.getDisplayInfoByIds}, whose contract is display-only and
+   * must never leak email — call this only where the audience is allowed to
+   * see addresses (e.g. workspace members resolving a teammate to assign).
+   */
+  static getEmailsByIds = async (
+    db: LobeChatDatabase,
+    ids: string[],
+  ): Promise<Array<{ email: string | null; id: string }>> => {
+    if (ids.length === 0) return [];
+    return db
+      .select({ email: users.email, id: users.id })
       .from(users)
       .where(inArray(users.id, ids));
   };

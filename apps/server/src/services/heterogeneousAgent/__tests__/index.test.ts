@@ -64,7 +64,11 @@ const createFakePersistenceHandler = () => {
   return handler as unknown as HeterogeneousPersistenceHandler & typeof handler;
 };
 
-const createFakeAgentOperationModel = () => ({ touchRunning: vi.fn(async () => true) });
+const createFakeAgentOperationModel = () => ({
+  findById: vi.fn(async () => null),
+  settleRunning: vi.fn(async () => true),
+  touchRunning: vi.fn(async () => true),
+});
 
 const buildEvent = (
   type: AgentStreamEvent['type'],
@@ -90,6 +94,7 @@ const createService = (
       operationId,
       status: 'settled',
     })),
+    updateMetadata: vi.fn(async () => undefined),
   };
   const service = new HeterogeneousAgentService({} as any, 'user-test', {
     agentOperationModel: agentOperationModel as any,
@@ -514,14 +519,30 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
-    it('ignores a delayed finish when a newer operation owns the topic', async () => {
+    /**
+     * @example Operation A finishes after operation B owns the topic; A still becomes terminal.
+     */
+    it('settles a delayed finish without touching the newer topic operation', async () => {
+      // ROOT CAUSE:
+      //
+      // A delayed operation used to return on topic-owner conflict without
+      // settling its durable row. Persisting its session id before that conflict
+      // check could also overwrite the replacement operation's resume binding.
+      //
+      // Before: the old row remained running and its session binding could win.
+      // After: its message state flushes without a binding update, then its own
+      // row and terminal stream settle independently of the new topic owner.
       const { manager, published } = createFakeStreamManager();
       const persistenceHandler = createFakePersistenceHandler();
+      const settleRunningSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'settleRunning')
+        .mockResolvedValue(true);
       const topicModel = {
         settleRunningOperation: vi.fn(async () => ({
           activeOperationId: 'op-new',
           status: 'conflict' as const,
         })),
+        updateMetadata: vi.fn(async () => undefined),
       } as any;
       const completeOperationSpy = vi
         .spyOn(CompletionLifecycle.prototype, 'completeOperation')
@@ -541,7 +562,13 @@ describe('HeterogeneousAgentService', () => {
       });
 
       expect(topicModel.settleRunningOperation).toHaveBeenCalledWith('topic-1', 'op-old');
-      expect(published).toHaveLength(0);
+      expect(topicModel.updateMetadata).not.toHaveBeenCalled();
+      expect(settleRunningSpy).toHaveBeenCalledWith('op-old', 'done');
+      expect(published).toHaveLength(1);
+      expect(published[0].event).toMatchObject({
+        data: { operationId: 'op-old', reason: 'success' },
+        type: 'agent_runtime_end',
+      });
       expect(completeOperationSpy).not.toHaveBeenCalled();
 
       completeOperationSpy.mockRestore();
@@ -797,19 +824,28 @@ describe('HeterogeneousAgentService', () => {
       },
     };
 
-    const makeService = (hooks: SerializedHook[] | undefined) => {
+    const makeService = (
+      hooks: SerializedHook[] | undefined,
+      options: { operationHooks?: SerializedHook[]; topicStatus?: 'missing' | 'settled' } = {},
+    ) => {
       const topicModel = {
-        // Mirror what execAgent persisted at dispatch: the serialized hooks live
-        // under runningOperation. heteroFinish must read them from here.
+        // Keep covering the legacy topic mirror used by partially upgraded runs.
         settleRunningOperation: vi.fn(async () => ({
           assistantMessageId: undefined,
           hooks,
-          status: 'settled' as const,
+          status: options.topicStatus ?? ('settled' as const),
           threadId: undefined,
         })),
       } as any;
       const { manager } = createFakeStreamManager();
+      const agentOperationModel = createFakeAgentOperationModel();
+      agentOperationModel.findById.mockResolvedValue({
+        metadata: options.operationHooks
+          ? { _hooks: options.operationHooks, assistantMessageId: 'asst-op' }
+          : undefined,
+      } as any);
       const service = new HeterogeneousAgentService({} as any, 'user-test', {
+        agentOperationModel: agentOperationModel as any,
         persistenceHandler: createFakePersistenceHandler(),
         snapshotStore: null,
         streamEventManager: manager,
@@ -852,6 +888,26 @@ describe('HeterogeneousAgentService', () => {
         hookType: 'onComplete',
         reason: 'done',
         taskId: 'task_q',
+        topicId: 'topic-q',
+      });
+    });
+
+    it('delivers hooks from the operation when the stream terminal already cleared the topic', async () => {
+      const { service } = makeService(undefined, {
+        operationHooks: [taskHook],
+        topicStatus: 'missing',
+      });
+
+      await service.heteroFinish({
+        agentType: 'claude-code',
+        operationId: 'op-q',
+        result: 'success',
+        topicId: 'topic-q',
+      });
+
+      expect(mockPublishJSON).toHaveBeenCalledTimes(1);
+      expect(mockPublishJSON.mock.calls[0][0].body).toMatchObject({
+        hookId: 'task-on-complete',
         topicId: 'topic-q',
       });
     });

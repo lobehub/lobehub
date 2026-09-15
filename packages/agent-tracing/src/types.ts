@@ -108,6 +108,16 @@ export interface StepSnapshot {
   toolsetBaseline?: any;
   toolsResult?: Array<{
     apiName: string;
+    /**
+     * Wall time the tool took on the DEVICE, by its own clock — present only
+     * for calls dispatched to one, and only when the device and gateway are new
+     * enough to report it. `executionTimeMs - deviceExecutionTimeMs` is the
+     * dispatch overhead: how much of a device tool call is transport rather
+     * than work.
+     */
+    deviceExecutionTimeMs?: number;
+    /** Wall time the server observed for the call, dispatch included. */
+    executionTimeMs?: number;
     identifier: string;
     isSuccess?: boolean;
     output?: string;

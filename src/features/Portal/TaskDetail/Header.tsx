@@ -1,5 +1,5 @@
 import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui/base-ui';
 import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,10 +23,14 @@ const TaskDetailHeader = memo(() => {
   const agentId = useTaskStore((state) =>
     taskId ? (state.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
   );
+  const taskTitle = useTaskStore((state) =>
+    taskId ? (state.taskDetailMap[taskId]?.name ?? undefined) : undefined,
+  );
   const pageUrl = getTaskDetailPageUrl({
     agentId,
     appOrigin,
     taskId,
+    title: taskTitle,
     workspaceSlug: activeWorkspaceSlug,
   });
 

@@ -3,15 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearDetectionCache, getCachedDetection } from '../cache';
 import { detectAllApps } from '../detectors';
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('../detectors', () => ({
   detectAllApps: vi.fn(),
 }));

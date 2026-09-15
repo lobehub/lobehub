@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
   agent: { updateAgentConfigById: vi.fn() },
   chat: {
     activeTopicId: 'topic-a' as string | null,
-    updateTopicModel: vi.fn(),
+    updateTopicHeteroPin: vi.fn(),
   },
 }));
 
@@ -23,7 +23,7 @@ describe('useHeteroProviderPatch', () => {
   beforeEach(() => {
     state.agent.updateAgentConfigById.mockReset();
     state.chat.activeTopicId = 'topic-a';
-    state.chat.updateTopicModel.mockReset();
+    state.chat.updateTopicHeteroPin.mockReset();
   });
 
   it('writes a model selection to the active topic without changing the Agent default', async () => {
@@ -37,14 +37,15 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ model: 'topic-model' }));
 
-    expect(state.chat.updateTopicModel).toHaveBeenCalledWith('topic-a', {
+    expect(state.chat.updateTopicHeteroPin).toHaveBeenCalledWith('topic-a', {
+      effort: undefined,
       model: 'topic-model',
       provider: 'cursor',
     });
     expect(state.agent.updateAgentConfigById).not.toHaveBeenCalled();
   });
 
-  it('keeps non-model compatibility resets global when selecting a topic model', async () => {
+  it('writes model and effort selections to the active topic, never the Agent default', async () => {
     const { result } = renderHook(() =>
       useHeteroProviderPatch({
         agentId: 'agent-a',
@@ -55,10 +56,50 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ effort: 'default', model: 'topic-model' }));
 
-    expect(state.chat.updateTopicModel).toHaveBeenCalledWith('topic-a', {
+    expect(state.chat.updateTopicHeteroPin).toHaveBeenCalledWith('topic-a', {
+      effort: 'default',
       model: 'topic-model',
       provider: 'codex',
     });
+    expect(state.agent.updateAgentConfigById).not.toHaveBeenCalled();
+  });
+
+  it('keeps the remaining dimensions global when selecting a topic effort', async () => {
+    const { result } = renderHook(() =>
+      useHeteroProviderPatch({
+        agentId: 'agent-a',
+        enabled: true,
+        provider: { effort: 'high', model: 'global-model', type: 'codex' },
+      }),
+    );
+
+    await act(() => result.current({ effort: 'medium', speed: 'fast' }));
+
+    expect(state.chat.updateTopicHeteroPin).toHaveBeenCalledWith('topic-a', {
+      effort: 'medium',
+      model: undefined,
+      provider: 'codex',
+    });
+    expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
+      agencyConfig: {
+        heterogeneousProvider: { args: undefined, speed: 'fast' },
+      },
+    });
+  });
+
+  it('writes the effort to the Agent default when there is no active topic', async () => {
+    state.chat.activeTopicId = null;
+    const { result } = renderHook(() =>
+      useHeteroProviderPatch({
+        agentId: 'agent-a',
+        enabled: true,
+        provider: { effort: 'high', model: 'global-model', type: 'codex' },
+      }),
+    );
+
+    await act(() => result.current({ effort: 'default' }));
+
+    expect(state.chat.updateTopicHeteroPin).not.toHaveBeenCalled();
     expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
       agencyConfig: {
         heterogeneousProvider: { args: undefined, effort: 'default' },
@@ -78,7 +119,7 @@ describe('useHeteroProviderPatch', () => {
 
     await act(() => result.current({ model: 'next-default' }));
 
-    expect(state.chat.updateTopicModel).not.toHaveBeenCalled();
+    expect(state.chat.updateTopicHeteroPin).not.toHaveBeenCalled();
     expect(state.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-a', {
       agencyConfig: {
         heterogeneousProvider: { args: undefined, model: 'next-default' },

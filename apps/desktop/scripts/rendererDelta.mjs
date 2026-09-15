@@ -1,10 +1,7 @@
-import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import { promisify } from 'node:util';
+import { constants, zstdCompress } from 'node:zlib';
 
-const execFileAsync = promisify(execFile);
+const zstdCompressAsync = promisify(zstdCompress);
 
 export const MIN_PATCH_BYTES = 16 * 1024;
 const MAX_PATCH_RATIO = 0.5;
@@ -87,24 +84,20 @@ export const pairRendererFiles = (fromFiles, toFiles) => {
   return pairings;
 };
 
-export const generateZstdPatch = async (oldPath, newPath, newSize) => {
-  if (newSize < MIN_PATCH_BYTES) return null;
-
-  const dir = await mkdtemp(path.join(tmpdir(), 'renderer-delta-'));
-  const patchPath = path.join(dir, 'patch.zst');
-
+export const generateZstdPatch = async (oldContent, newContent) => {
+  if (newContent.byteLength < MIN_PATCH_BYTES) return null;
   try {
-    await execFileAsync(
-      'zstd',
-      ['--patch-from', oldPath, '-19', '-q', '-f', newPath, '-o', patchPath],
-      { timeout: 120_000 },
+    const patch = Buffer.from(
+      await zstdCompressAsync(newContent, {
+        dictionary: oldContent,
+        params: { [constants.ZSTD_c_compressionLevel]: 19 },
+      }),
     );
-    const patch = await readFile(patchPath);
-    if (patch.byteLength === 0 || patch.byteLength >= newSize * MAX_PATCH_RATIO) return null;
-    return patch;
+    if (patch.byteLength === 0 || patch.byteLength >= newContent.byteLength * MAX_PATCH_RATIO) {
+      return null;
+    }
+    return Buffer.from(patch);
   } catch {
     return null;
-  } finally {
-    await rm(dir, { force: true, recursive: true });
   }
 };

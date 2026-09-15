@@ -1,7 +1,8 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Tag, Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import type { UpdateIdentityMemoryParams, UpdateIdentityMemoryState } from '../../../types';

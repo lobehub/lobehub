@@ -1,6 +1,6 @@
 ---
 name: modal
-description: 'LobeHub imperative modal conventions. Use when creating or migrating modals, dialogs, popups, confirm flows, ModalHost wiring, createModal, confirmModal, useModalContext, or base-ui modal APIs.'
+description: 'Use for modals, dialogs and confirmations with createModal, confirmModal, ModalHost or base-ui modal APIs.'
 user-invocable: false
 ---
 

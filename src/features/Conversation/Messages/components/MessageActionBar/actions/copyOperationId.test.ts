@@ -16,8 +16,8 @@ interface MockOperation {
 }
 
 const mocks = vi.hoisted(() => ({
-  copyToClipboard: vi.fn(),
   isDevMode: true,
+  copyToClipboard: vi.fn(),
   messageOperationMap: {} as Record<string, string>,
   messageSuccess: vi.fn(),
   operations: {} as Record<string, MockOperation>,
@@ -27,11 +27,13 @@ vi.mock('@lobehub/ui', () => ({
   copyToClipboard: mocks.copyToClipboard,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: { success: mocks.messageSuccess },
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: { useApp: () => ({ message: { success: mocks.messageSuccess } }) },
 }));
 
@@ -41,6 +43,16 @@ vi.mock('@/store/chat', () => ({
       messageOperationMap: mocks.messageOperationMap,
       operations: mocks.operations,
     }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  userGeneralSettingsSelectors: {
+    config: () => ({ isDevMode: mocks.isDevMode }),
+  },
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
@@ -56,20 +68,6 @@ vi.mock('@/store/chat/selectors', () => ({
         return op;
       },
   },
-}));
-
-vi.mock('@/store/user', () => ({
-  useUserStore: (selector: (state: unknown) => unknown) => selector({}),
-}));
-
-vi.mock('@/store/user/selectors', () => ({
-  userGeneralSettingsSelectors: {
-    config: () => ({ isDevMode: mocks.isDevMode }),
-  },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 const build = (

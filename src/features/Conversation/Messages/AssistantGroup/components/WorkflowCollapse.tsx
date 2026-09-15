@@ -1,9 +1,11 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { Accordion, AccordionItem, ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { AlertTriangle, Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
-import { AnimatePresence, m as motion } from 'motion/react';
-import { type Key, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import * as motion from 'motion/react-m';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -338,7 +340,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     // every nested AccordionItem (each GroupTool) re-renders due to "context
     // changed" on every streaming chunk.
     const handleExpandedChange = useCallback(
-      (keys: Key[]) => {
+      (keys: string[]) => {
         const nowExpanded = keys.includes('workflow');
         if (forceExpanded && !nowExpanded) return;
 
@@ -391,30 +393,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           return wrapInBlock(<Icon color={cssVar.colorError} icon={X} />);
         }
         case 'partial': {
-          // Mix of success + failure: show success as the primary state and
-          // surface a small warning badge slightly inset from the bottom-right
-          // so the overall turn still reads as "done" rather than "broken".
-          return (
-            <div style={{ flex: 'none', position: 'relative' }}>
-              {wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />)}
-              <div
-                style={{
-                  alignItems: 'center',
-                  background: cssVar.colorBgContainer,
-                  borderRadius: '50%',
-                  bottom: 2,
-                  display: 'flex',
-                  height: 10,
-                  justifyContent: 'center',
-                  position: 'absolute',
-                  right: 2,
-                  width: 10,
-                }}
-              >
-                <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={8} />
-              </div>
-            </div>
-          );
+          return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
         }
         default: {
           return wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />);
@@ -533,28 +512,30 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
 
     return (
       <Accordion
-        expandedKeys={expandedKeys}
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        value={expandedKeys}
         variant="borderless"
-        onExpandedChange={handleExpandedChange}
-      >
-        <AccordionItem
-          alwaysShowAction
-          action={expandToggleNode}
-          itemKey="workflow"
-          paddingBlock={4}
-          paddingInline={4}
-          title={title}
-        >
-          <WorkflowExpandedList
-            assistantId={assistantMessageId}
-            blocks={blocks}
-            constrained={constrained}
-            disableEditing={disableEditing}
-            scrollRef={scrollRef}
-            onScroll={handleAutoScroll}
-          />
-        </AccordionItem>
-      </Accordion>
+        items={[
+          {
+            action: expandToggleNode,
+            alwaysShowAction: true,
+            children: (
+              <WorkflowExpandedList
+                assistantId={assistantMessageId}
+                blocks={blocks}
+                constrained={constrained}
+                disableEditing={disableEditing}
+                scrollRef={scrollRef}
+                onScroll={handleAutoScroll}
+              />
+            ),
+            key: 'workflow',
+            title,
+          },
+        ]}
+        onValueChange={handleExpandedChange}
+      />
     );
   },
 );

@@ -210,6 +210,25 @@ export class MessageGatewayClient {
     return res.json();
   }
 
+  /**
+   * What this gateway says it can do. Optional by design: the Cloudflare
+   * gateway has no such endpoint, so anything unreachable, missing or
+   * unparseable comes back as `null` — "makes no claim", never "claims
+   * nothing". A caller must not read absence of information as a refusal.
+   */
+  async getCapabilities(): Promise<{ platforms?: string[] } | null> {
+    try {
+      const res = await this.fetch('/api/admin/capabilities');
+      if (!res.ok) return null;
+      const body = (await res.json()) as { platforms?: unknown };
+      if (!Array.isArray(body?.platforms)) return null;
+      return { platforms: body.platforms.filter((p): p is string => typeof p === 'string') };
+    } catch (err) {
+      log('Capabilities unavailable: %O', err);
+      return null;
+    }
+  }
+
   // ─── Internal HTTP ───
 
   private async fetch(path: string, init?: RequestInit): Promise<Response> {

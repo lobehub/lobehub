@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
@@ -12,6 +12,7 @@ import {
   ExternalLinkIcon,
   InfoIcon,
   MonitorDownIcon,
+  RefreshCwIcon,
   SettingsIcon,
   ShieldCheckIcon,
 } from 'lucide-react';
@@ -36,8 +37,8 @@ import {
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
 import { localFileService } from '@/services/electron/localFileService';
 import { useAgentStore } from '@/store/agent';
 import { useElectronStore } from '@/store/electron';
@@ -124,9 +125,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   deviceList: css`
     overflow-y: auto;
-
-    /* Cap the device section so a long list (servers/CLI fleets) stays scrollable
-       inside the popover instead of growing past the viewport. */
     max-height: 240px;
 
     /* Room for the scrollbar so rows don't sit flush against it. */
@@ -214,6 +212,12 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
   `,
+  reconnectButton: css`
+    min-height: 18px;
+    padding-block: 0;
+    padding-inline: 2px;
+    font-size: 11px;
+  `,
   optionTitle: css`
     overflow: hidden;
 
@@ -242,7 +246,7 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 6px 4px;
+    padding-block: 4px;
     padding-inline: 8px;
   `,
   headerInfo: css`
@@ -384,7 +388,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     canSelectExecutionTarget,
     isPreferenceLoading: isWorkspacePreferenceLoading,
     workspaceScoped,
-  } = useEffectiveAgencyConfig(agentId);
+  } = useTopicAgencyConfig(agentId);
   const canShowExecutionTarget = canUseResource && canDisplayExecutionTarget;
   const canShowExecutionTargetSelector = canShowExecutionTarget && canSelectExecutionTarget;
 
@@ -400,7 +404,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Workspace-keyed SWR fetch — the raw lambdaQuery key has no workspace
   // dimension, so the picker kept showing the previous workspace's pool after
   // a switch.
-  const { data: devices, isLoading } = useDeviceList();
+  const { data: devices, isLoading, mutate: refreshDevices } = useDeviceList();
 
   // The current machine's own gateway deviceId (desktop only), used to badge the
   // matching device row with a "This device" tag and show the local-process
@@ -408,6 +412,40 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+  const [reconnectingDeviceId, setReconnectingDeviceId] = useState<string>();
+
+  const handleReconnectDevice = useCallback(
+    async (deviceId: string) => {
+      setReconnectingDeviceId(deviceId);
+      try {
+        if (isDesktop && deviceId === currentDeviceId) {
+          await useElectronStore.getState().connectGateway();
+        } else {
+          window.location.href = `lobehub://device/reconnect?deviceId=${encodeURIComponent(deviceId)}`;
+        }
+
+        // The deep link crosses browser → desktop → gateway → server, so give
+        // the live device registry a short window to converge instead of
+        // making the user close and reopen the picker to see the result.
+        let connected = false;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const nextDevices = await refreshDevices();
+          if (nextDevices?.some((device) => device.deviceId === deviceId && device.online)) {
+            connected = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        if (!connected) toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+      } catch (error) {
+        console.error('Device reconnect failed:', error);
+        toast.error(t('heteroAgent.executionTarget.reconnectFailed'));
+      } finally {
+        setReconnectingDeviceId(undefined);
+      }
+    },
+    [currentDeviceId, refreshDevices, t],
+  );
 
   // A member's explicit target override may resolve `local`; without one the
   // raw shared fallback stays workspace-scoped so a legacy `local` value keeps
@@ -655,7 +693,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     <ExecutionTargetDeviceStatus
       offlineLabel={t('heteroAgent.executionTarget.offline')}
       online={d.online}
-      onlineLabel={t('heteroAgent.executionTarget.online')}
+      onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
+        count: d.channels.length,
+      })}
     />
   );
 
@@ -670,7 +710,26 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={d.friendlyName || d.hostname || d.deviceId}
         tag={isCurrentMachine ? t('heteroAgent.executionTarget.gateway') : undefined}
         desc={
-          isCurrentMachine ? t('heteroAgent.executionTarget.gatewayDesc') : renderDeviceStatus(d)
+          <>
+            {isCurrentMachine
+              ? t('heteroAgent.executionTarget.gatewayDesc')
+              : renderDeviceStatus(d)}
+            {d.online ? null : (
+              <Button
+                className={styles.reconnectButton}
+                icon={<Icon icon={RefreshCwIcon} size={10} />}
+                loading={reconnectingDeviceId === d.deviceId}
+                size={'small'}
+                type={'text'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleReconnectDevice(d.deviceId);
+                }}
+              >
+                {t('heteroAgent.executionTarget.reconnect')}
+              </Button>
+            )}
+          </>
         }
         onClick={() => void handleSelect('device', d.deviceId)}
       />
@@ -678,7 +737,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   };
 
   const content = (
-    <Flexbox gap={6} style={{ maxWidth: 320, minWidth: 280 }}>
+    <Flexbox style={{ maxWidth: 320, minWidth: 280 }}>
       <div className={styles.header}>
         <Flexbox horizontal align={'center'} gap={4}>
           <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
@@ -810,30 +869,34 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         onClick={() => void handleSelect('sandbox')}
       />
       {deviceRows.length > 0 ? (
-        <div className={styles.deviceList}>
-          {showDeviceGroups ? (
-            <>
-              {privateDevices.length > 0 ? (
-                <>
-                  <div className={styles.groupLabel}>
-                    {t('heteroAgent.executionTarget.personalGroup')}
-                  </div>
+        showDeviceGroups ? (
+          <>
+            {privateDevices.length > 0 ? (
+              <>
+                <div className={styles.groupLabel}>
+                  {t('heteroAgent.executionTarget.personalGroup')}
+                </div>
+                <div className={styles.deviceList}>
                   {privateDevices.map((d) => renderDeviceRow(d))}
-                </>
-              ) : null}
-              {workspaceDevices.length > 0 ? (
-                <>
-                  <div className={styles.groupLabel}>
-                    {t('heteroAgent.executionTarget.workspaceGroup')}
-                  </div>
+                </div>
+              </>
+            ) : null}
+            {workspaceDevices.length > 0 ? (
+              <>
+                <div className={styles.groupLabel}>
+                  {t('heteroAgent.executionTarget.workspaceGroup')}
+                </div>
+                <div className={styles.deviceList}>
                   {workspaceDevices.map((d) => renderDeviceRow(d))}
-                </>
-              ) : null}
-            </>
-          ) : (
-            personalOnlyDevices.map((d) => renderDeviceRow(d))
-          )}
-        </div>
+                </div>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <div className={styles.deviceList}>
+            {personalOnlyDevices.map((d) => renderDeviceRow(d))}
+          </div>
+        )
       ) : null}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>

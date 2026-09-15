@@ -5,6 +5,12 @@ export {
   planCheckIdRemap,
 } from './acceptanceMerge';
 export {
+  previewAcceptancePurge,
+  purgeAcceptance,
+  type PurgePreview,
+  purgeVerifyRun,
+} from './acceptancePurge';
+export {
   type AcceptanceCheckHistoryEntry,
   type AcceptanceCheckReviewEvent,
   type AcceptanceCheckReviewOverlay,
@@ -25,14 +31,6 @@ export {
   VerifyExecutorService,
 } from './executor';
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
-export { DEFAULT_GOAL_MAX_ROUNDS, resolveGoalRoundBudget } from './goalBudget';
-export {
-  goalExhaustedBriefCopy,
-  type GoalLoopOutcome,
-  goalReadyForReviewBriefCopy,
-  maybeContinueGoalLoop,
-  syncGoalToolState,
-} from './goalLoop';
 export { runVerifyOnCompletion } from './lifecycle';
 export {
   isHeterogeneousVerifyProvider,

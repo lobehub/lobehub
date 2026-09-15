@@ -557,7 +557,7 @@ export class FlatListBuilder {
 
     while (true) {
       const nextContinuation = this.findNextUnprocessedChild(parentIds, processedIds);
-      if (!nextContinuation) return;
+      if (!nextContinuation) break;
 
       if (this.shouldDrainParentContinuations(nextContinuation.parentId, processedIds)) {
         this.buildFlatListRecursive(nextContinuation.parentId, flatList, processedIds, allMessages);
@@ -571,6 +571,57 @@ export class FlatListBuilder {
         processedIds,
         allMessages,
       );
+    }
+
+    this.continueInterruptedAssistantGroup(assistantChain, flatList, processedIds, allMessages);
+  }
+
+  /**
+   * A user can interrupt a tool run before its final assistant is persisted.
+   * The collector folds that run into one group, so the interruption is attached
+   * to an intermediate (now consumed) assistant rather than the group tail.
+   * Recover that user continuation without exposing regenerated assistant
+   * branches or overriding an explicit branch selection.
+   */
+  private continueInterruptedAssistantGroup(
+    assistantChain: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): void {
+    const tail = assistantChain.at(-1);
+    if (!tail) return;
+
+    for (const assistant of assistantChain.slice(0, -1)) {
+      const childIds = this.childrenMap.get(assistant.id) ?? [];
+      const interruptions = childIds.filter((id) => {
+        const message = this.messageMap.get(id);
+        return (
+          message?.role === 'user' &&
+          !message.threadId &&
+          !processedIds.has(id) &&
+          message.createdAt >= assistant.createdAt &&
+          message.createdAt <= tail.createdAt
+        );
+      });
+      if (interruptions.length === 0) continue;
+
+      const activeId = this.branchResolver.getActiveBranchIdFromMetadata(
+        assistant,
+        interruptions,
+        this.childrenMap,
+        this.branchResolver.getMetadataBranchIds(childIds),
+      );
+      // Explicit indices use all non-tool siblings, not only interruptions.
+      if (activeId && interruptions.includes(activeId)) {
+        this.buildFlatListRecursiveForChild(
+          assistant.id,
+          activeId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+      }
     }
   }
 

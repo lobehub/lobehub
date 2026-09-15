@@ -249,11 +249,19 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - Default: -
 - Example: `gemini-2.5-flash` or your local multimodal model ID
 
+### `MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS`
+
+- Type: Optional
+- Description: Comma-separated image formats accepted by the fallback multimodal understanding model. Supported values are `jpeg`, `png`, `webp`, or their MIME types. The image format is inferred from the URL extension when available; unsupported formats are converted to the first configured format before being sent to the model. URLs without a recognizable extension are downloaded to detect their format.
+- Default: `jpeg,png`
+- Example: `png,jpeg,webp`
+
 Configuration example:
 
 ```bash
 MULTIMODAL_UNDERSTANDING_PROVIDER=google
 MULTIMODAL_UNDERSTANDING_MODEL=gemini-2.5-flash
+MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS=png,jpeg,webp
 ```
 
 For migration compatibility, `VISUAL_UNDERSTANDING_PROVIDER` and `VISUAL_UNDERSTANDING_MODEL` remain supported as legacy aliases. When both old and new variables are set, `MULTIMODAL_UNDERSTANDING_*` takes precedence.

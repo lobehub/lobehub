@@ -1,7 +1,4 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { zstdDecompressSync } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
 
@@ -81,37 +78,19 @@ describe('pairRendererFiles', () => {
   });
 });
 
-const hasZstd = (() => {
-  try {
-    execFileSync('zstd', ['-V'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-})();
-
-describe.skipIf(!hasZstd)('generateZstdPatch', () => {
+describe('generateZstdPatch', () => {
   it('emits a tiny patch when a large file only changes a few bytes', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'delta-'));
-    const oldPath = path.join(dir, 'old.bin');
-    const newPath = path.join(dir, 'new.bin');
     const oldBuf = Buffer.alloc(MIN_PATCH_BYTES * 4, 7);
     const newBuf = Buffer.from(oldBuf);
     newBuf[100] = 9;
-    writeFileSync(oldPath, oldBuf);
-    writeFileSync(newPath, newBuf);
 
-    const patch = await generateZstdPatch(oldPath, newPath, newBuf.byteLength);
+    const patch = await generateZstdPatch(oldBuf, newBuf);
     expect(patch).toBeInstanceOf(Buffer);
     expect(patch.byteLength).toBeLessThan(512);
+    expect(Buffer.from(zstdDecompressSync(patch, { dictionary: oldBuf }))).toEqual(newBuf);
   });
 
   it('skips patching files below the size floor', async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'delta-'));
-    const oldPath = path.join(dir, 'old.bin');
-    const newPath = path.join(dir, 'new.bin');
-    writeFileSync(oldPath, Buffer.from('old'));
-    writeFileSync(newPath, Buffer.from('new'));
-    await expect(generateZstdPatch(oldPath, newPath, 3)).resolves.toBeNull();
+    await expect(generateZstdPatch(Buffer.from('old'), Buffer.from('new'))).resolves.toBeNull();
   });
 });

@@ -106,6 +106,18 @@ When configuring OAuth providers, use the following callback URL format:
 - **Development**: `http://localhost:3210/api/auth/callback/{provider}`
 - **Production**: `https://yourdomain.com/api/auth/callback/{provider}`
 
+## Additional Trusted Origins
+
+Better Auth validates the origin of callback and redirect URLs. To allow another exact origin while keeping the automatically generated application, Vercel, mobile, and provider origins, configure:
+
+```bash
+AUTH_ADDITIONAL_TRUSTED_ORIGINS=https://gateway.example.com
+```
+
+Separate multiple origins with commas. HTTP(S) values are reduced to their origin, so `https://gateway.example.com/signin` is treated as `https://gateway.example.com`; mobile custom schemes are preserved.
+
+Use `AUTH_TRUSTED_ORIGINS` only when you intend to replace the complete generated list. When using that variable, include every required web origin and mobile custom scheme yourself. Use exact origins instead of wildcards.
+
 ## Email/Password Options
 
 **Disable email/password login (SSO-only mode):**

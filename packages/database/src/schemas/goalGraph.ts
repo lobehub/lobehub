@@ -34,8 +34,8 @@ import { workVersions } from './work';
 
 /**
  * Goal Graph nodes preserve the evolving problem framing above individual Task
- * execution. A Work node may own one responsible Task; that Task remains free to
- * create its own implementation-level subtree.
+ * execution. A task node may own one responsible Task; that Task remains free
+ * to create its own implementation-level subtree.
  */
 export const goalNodes = pgTable(
   'goal_nodes',
@@ -48,7 +48,7 @@ export const goalNodes = pgTable(
     status: text('status').$type<GoalNodeStatus>().default('proposed').notNull(),
     title: text('title').notNull(),
     description: text('description'),
-    /** Responsible execution container. Valid only when kind is `work`. */
+    /** Responsible execution container. Valid only when kind is `task`. */
     taskId: text('task_id').references(() => tasks.id, { onDelete: 'set null' }),
     priority: integer('priority').default(0).notNull(),
     /** Agent or reviewer confidence from 0 to 1. */
@@ -66,8 +66,16 @@ export const goalNodes = pgTable(
     index('goal_nodes_goal_id_status_idx').on(t.goalId, t.status),
     index('goal_nodes_goal_id_kind_idx').on(t.goalId, t.kind),
     unique('goal_nodes_goal_id_id_unique').on(t.goalId, t.id),
+    /**
+     * One task, one node. This stays in the database because it is a real
+     * invariant no single write can check for itself.
+     *
+     * *Which* kinds may own a task deliberately does not: `bindTask` is the
+     * only writer of `task_id` and its WHERE already requires the kind, and a
+     * CHECK would pin the kind vocabulary into DDL — an ALTER every time that
+     * vocabulary moves, which is exactly what renaming `work` to `task` cost.
+     */
     uniqueIndex('goal_nodes_task_id_unique').on(t.taskId).where(isNotNull(t.taskId)),
-    check('goal_nodes_task_requires_work_kind', sql`${t.taskId} IS NULL OR ${t.kind} = 'work'`),
     check(
       'goal_nodes_confidence_range',
       sql`${t.confidence} IS NULL OR (${t.confidence} >= 0 AND ${t.confidence} <= 1)`,

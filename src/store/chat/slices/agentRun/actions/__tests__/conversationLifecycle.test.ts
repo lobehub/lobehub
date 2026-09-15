@@ -10,6 +10,8 @@ import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type {
@@ -29,9 +31,6 @@ import { useUserStore } from '@/store/user';
 import { useChatStore } from '../../../../store';
 import { createMockAgentConfig, createMockMessage, TEST_CONTENT, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
-
-// Keep zustand mock as it's needed globally
-vi.mock('zustand/traditional');
 
 const executeHeterogeneousAgentMock = vi.hoisted(() => vi.fn());
 const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
@@ -54,8 +53,21 @@ vi.mock('../transports/hetero/heterogeneousAgentExecutor', () => ({
   executeHeterogeneousAgent: (...args: any[]) => executeHeterogeneousAgentMock(...args),
 }));
 
+const getGeneralAccessMock = vi.hoisted(() => vi.fn());
+vi.mock('@/services/resourcePermission', () => ({
+  resourcePermissionService: { getGeneralAccess: getGeneralAccessMock },
+}));
+
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: mockLocalFileService,
+}));
+
+vi.mock('@/store/tool/slices/builtin/loadBuiltinSkills', () => ({
+  loadBuiltinSkill: async (identifier: string) =>
+    toolStoreModule
+      .getToolStoreState()
+      .builtinSkills.find((skill: any) => skill.identifier === identifier),
+  loadBuiltinSkills: async () => toolStoreModule.getToolStoreState().builtinSkills,
 }));
 
 // Mock lambdaClient to prevent network requests
@@ -1515,6 +1527,18 @@ describe('ConversationLifecycle actions', () => {
       it('should snapshot the agent model onto the newTopic (top-level) when the send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        let loaded = false;
+        vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
+        vi.spyOn(useAiInfraStore.getState(), 'ensureModelReasoningConfig').mockImplementation(
+          async () => {
+            await Promise.resolve();
+            loaded = true;
+          },
+        );
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'high',
+        }));
         const newTopicId = TEST_IDS.NEW_TOPIC_ID;
 
         act(() => {
@@ -1558,6 +1582,7 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageInServerSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             newTopic: expect.objectContaining({
+              metadata: expect.objectContaining({ reasoningConfig: { reasoningEffort: 'high' } }),
               model: expect.any(String),
               provider: expect.any(String),
             }),
@@ -1874,6 +1899,7 @@ describe('ConversationLifecycle actions', () => {
             model: expect.any(String),
             provider: expect.any(String),
             metadata: {
+              executionConfig: { inheritWorkspaceScope: true },
               repos: [selectedRepo],
               workingDirectory: selectedRepo,
               workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
@@ -1886,6 +1912,7 @@ describe('ConversationLifecycle actions', () => {
               model: expect.any(String),
               provider: expect.any(String),
               metadata: {
+                executionConfig: { inheritWorkspaceScope: true },
                 repos: [selectedRepo],
                 workingDirectory: selectedRepo,
                 workingDirectoryConfig: { path: selectedRepo, repoType: 'github' },
@@ -1975,6 +2002,11 @@ describe('ConversationLifecycle actions', () => {
         // run executes in); the config keeps the SOURCE repo, which is what
         // By-Project groups on.
         const expectedMetadata = {
+          executionConfig: {
+            boundDeviceId: deviceId,
+            executionTarget: 'local',
+            inheritWorkspaceScope: true,
+          },
           workingDirectory: worktreePath,
           workingDirectoryConfig: {
             git: { activeWorktree: worktreePath },
@@ -2041,6 +2073,11 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             optimisticTopic: expect.objectContaining({
               metadata: {
+                executionConfig: {
+                  boundDeviceId: deviceId,
+                  executionTarget: 'device',
+                  inheritWorkspaceScope: true,
+                },
                 workingDirectory: '/repo/default',
                 workingDirectoryConfig: { path: '/repo/default' },
               },
@@ -2094,6 +2131,11 @@ describe('ConversationLifecycle actions', () => {
           expect.objectContaining({
             newTopic: expect.objectContaining({
               metadata: {
+                executionConfig: {
+                  boundDeviceId: deviceId,
+                  executionTarget: 'local',
+                  inheritWorkspaceScope: true,
+                },
                 workingDirectory: '/repo/lobehub',
                 workingDirectoryConfig: { path: '/repo/lobehub' },
               },
@@ -2146,7 +2188,15 @@ describe('ConversationLifecycle actions', () => {
 
         expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
           expect.objectContaining({
-            optimisticTopic: expect.not.objectContaining({ metadata: expect.anything() }),
+            optimisticTopic: expect.objectContaining({
+              metadata: {
+                executionConfig: {
+                  boundDeviceId: deviceId,
+                  executionTarget: 'local',
+                  inheritWorkspaceScope: true,
+                },
+              },
+            }),
           }),
         );
       });
@@ -2205,6 +2255,16 @@ describe('ConversationLifecycle actions', () => {
           window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
         });
 
+        it('snapshots the heterogeneous effort into the first-send topic', async () => {
+          const sendSpy = setupHeteroRun({
+            heterogeneousProvider: { command: 'codex', effort: 'high', type: 'codex' },
+          });
+          await sendHeteroMessage();
+          expect(sendSpy.mock.calls[0][0].newTopic?.metadata).toMatchObject({
+            heteroEffort: 'high',
+          });
+        });
+
         it('prefers the bound device defaultCwd over the desktop fallback', async () => {
           const sendMessageInServerSpy = setupHeteroRun();
           act(() => {
@@ -2231,6 +2291,11 @@ describe('ConversationLifecycle actions', () => {
             expect.objectContaining({
               newTopic: expect.objectContaining({
                 metadata: {
+                  executionConfig: {
+                    boundDeviceId: HETERO_DEVICE_ID,
+                    executionTarget: 'local',
+                    inheritWorkspaceScope: true,
+                  },
                   workingDirectory: '/repo/device-default',
                   workingDirectoryConfig: { path: '/repo/device-default' },
                 },
@@ -3905,13 +3970,17 @@ describe('ConversationLifecycle actions', () => {
         expect(executeHeterogeneousAgentMock).not.toHaveBeenCalled();
       });
 
-      it('uses the owner target and ignores a retained member override for a private Workspace Agent', async () => {
+      // The owner's own `local` pick lives in the per-user override even on a
+      // private Workspace Agent (the shared row must never reference a
+      // personal device — the server rejects it), so a `local` override must
+      // keep routing the owner's run to the in-process desktop runtime.
+      it("applies the owner's own local override for a private Workspace Agent", async () => {
         mockConstEnv.isDesktop = true;
         setupMockSelectors({
           agentConfig: {
             agencyConfig: {
-              boundDeviceId: 'owner-device',
-              executionTarget: 'local',
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
               executionTargetSelectionPolicy: 'fixed',
               heterogeneousProvider: { command: 'codex', type: 'codex' },
             },
@@ -3922,8 +3991,8 @@ describe('ConversationLifecycle actions', () => {
           workspaceUserPreference: {
             agentDeviceOverrides: {
               [TEST_IDS.SESSION_ID]: {
-                boundDeviceId: 'stale-workspace-device',
-                executionTarget: 'device',
+                boundDeviceId: 'owner-desktop',
+                executionTarget: 'local',
               },
             },
           },
@@ -3955,6 +4024,146 @@ describe('ConversationLifecycle actions', () => {
 
         expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
         expect(executeGatewayAgent).not.toHaveBeenCalled();
+      });
+
+      // A workspace admin who is not the author can store a personal `local`
+      // override (the picker and server both recognize management access), and
+      // runtime resolution must honor it even under a `fixed` selection
+      // policy — otherwise the send silently routes to the gateway instead of
+      // the admin's own desktop.
+      it("applies a workspace admin's local override under a fixed selection policy", async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { agentByIdSelectors } = await import('@/store/agent/selectors');
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () =>
+            ({ userId: 'author-user', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
+        const { rememberAgentManagementAccess, clearAgentManagementAccessCache } =
+          await import('@/helpers/agentManagementAccess');
+        useUserStore.setState({
+          user: { id: 'admin-user' } as any,
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'admin-desktop',
+                executionTarget: 'local',
+              },
+            },
+          },
+        });
+        rememberAgentManagementAccess('admin-user', TEST_IDS.SESSION_ID, true);
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        try {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              message: TEST_CONTENT.USER_MESSAGE,
+              context: createTestContext(),
+            });
+          });
+
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+          expect(executeGatewayAgent).not.toHaveBeenCalled();
+        } finally {
+          clearAgentManagementAccessCache();
+          useUserStore.setState({ user: undefined as any });
+        }
+      });
+
+      // Same scenario on a COLD cache: the picker's hook never ran, so the
+      // send path must resolve management access from the server itself
+      // before choosing a runtime.
+      it("resolves an unprimed admin's access from the server before dispatch", async () => {
+        mockConstEnv.isDesktop = true;
+        setupMockSelectors({
+          agentConfig: {
+            agencyConfig: {
+              boundDeviceId: 'shared-workspace-device',
+              executionTarget: 'device',
+              executionTargetSelectionPolicy: 'fixed',
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+          },
+        });
+        const { agentByIdSelectors } = await import('@/store/agent/selectors');
+        vi.spyOn(agentByIdSelectors, 'getAgentById').mockReturnValue(
+          () =>
+            ({ userId: 'author-user', visibility: 'public', workspaceId: 'workspace-1' }) as any,
+        );
+        const { clearAgentManagementAccessCache } = await import('@/helpers/agentManagementAccess');
+        clearAgentManagementAccessCache();
+        getGeneralAccessMock.mockResolvedValue({ canManage: true });
+        useUserStore.setState({
+          user: { id: 'admin-user' } as any,
+          workspaceUserPreference: {
+            agentDeviceOverrides: {
+              [TEST_IDS.SESSION_ID]: {
+                boundDeviceId: 'admin-desktop',
+                executionTarget: 'local',
+              },
+            },
+          },
+        });
+
+        const executeGatewayAgent = vi.fn().mockResolvedValue(undefined);
+        act(() => {
+          useChatStore.setState({ executeGatewayAgent });
+        });
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          messages: [
+            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+          ],
+          topicId: TEST_IDS.TOPIC_ID,
+          topics: [],
+          userMessageId: TEST_IDS.USER_MESSAGE_ID,
+        } as any);
+        executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+
+        try {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              message: TEST_CONTENT.USER_MESSAGE,
+              context: createTestContext(),
+            });
+          });
+
+          expect(getGeneralAccessMock).toHaveBeenCalledWith('agent', TEST_IDS.SESSION_ID);
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledTimes(1);
+          expect(executeGatewayAgent).not.toHaveBeenCalled();
+        } finally {
+          clearAgentManagementAccessCache();
+          getGeneralAccessMock.mockReset();
+          useUserStore.setState({ user: undefined as any });
+        }
       });
 
       it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {

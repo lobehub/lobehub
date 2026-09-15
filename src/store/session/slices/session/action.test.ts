@@ -30,7 +30,8 @@ vi.mock('@/services/chatGroup', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   toast: {
     error: vi.fn(),
     loading: vi.fn(() => ({ close: vi.fn() })),

@@ -16,15 +16,25 @@ const userState = {
   },
 };
 
-vi.mock('@lobehub/ui', () => ({
-  Avatar: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} />,
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
+const mockConfirmModal = vi.fn();
+
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Select: ({
+    classNames,
+    options,
+  }: {
+    classNames?: { value?: string };
+    options: { label: ReactNode; value: string }[];
+  }) => (
+    <div data-testid="scope-select" data-value-class={classNames?.value}>
+      {options.map((option) => (
+        <div data-testid={`scope-option-${option.value}`} key={option.value}>
+          {option.label}
+        </div>
+      ))}
+    </div>
   ),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span />,
-  Skeleton: () => <span />,
   Tag: ({ children }: { children?: ReactNode }) => (
     <span data-testid="personal-tag">{children}</span>
   ),
@@ -45,49 +55,11 @@ vi.mock('@lobehub/ui', () => ({
       {children}
     </span>
   ),
-}));
-
-const mockConfirmModal = vi.fn();
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Select: ({
-    classNames,
-    options,
-  }: {
-    classNames?: { value?: string };
-    options: { label: ReactNode; value: string }[];
-  }) => (
-    <div data-testid="scope-select" data-value-class={classNames?.value}>
-      {options.map((option) => (
-        <div data-testid={`scope-option-${option.value}`} key={option.value}>
-          {option.label}
-        </div>
-      ))}
-    </div>
-  ),
   confirmModal: (...args: unknown[]) => mockConfirmModal(...args),
 }));
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({ message: { error: vi.fn(), success: vi.fn() } }),
-  },
-}));
-
-vi.mock('antd-style', () => ({
+vi.mock('antd-style', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createStaticStyles: () => ({
     backButton: 'backButton',
     card: 'card',
@@ -122,10 +94,6 @@ vi.mock('swr', () => ({
         : undefined,
     isLoading: false,
   }),
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/services/messenger', () => ({

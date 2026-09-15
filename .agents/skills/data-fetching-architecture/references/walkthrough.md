@@ -1,244 +1,93 @@
-# Walkthrough: Adding a New Feature End-to-End
+# Parent-Keyed Lists
 
-This is a worked example of the canonical 6-step recipe applied to a new entity (`Dataset`), showing a variant of the main skill's pattern: **a list keyed by a parent id** (`datasetMap[benchmarkId]`), useful when the same shape appears under different parents.
+Use this variant when the store needs to retain separate lists for multiple parents,
+such as datasets under different benchmarks. A single visible list does not need a
+parent-keyed map merely because its request has a parent parameter.
 
-If you only need the canonical (single-array) pattern, the main `SKILL.md` already shows it for `Benchmark`. Read this file when you need the parent-keyed Map variant, or when you want a checklist-style walkthrough.
+The request key and store bucket must identify the same parent. If filters or pages
+also need independent retained state, include them in the bucket identity as well as
+the SWR key; otherwise a response can overwrite another view's data.
 
-## Step 1: Add Service methods
+## Store pattern
 
-```typescript
-class AgentEvalService {
-  async listDatasets(benchmarkId: string) {
-    return lambdaClient.agentEval.listDatasets.query({ benchmarkId });
-  }
-  async getDataset(id: string) {
-    return lambdaClient.agentEval.getDataset.query({ id });
-  }
-  async createDataset(params: CreateDatasetParams) {
-    return lambdaClient.agentEval.createDataset.mutate(params);
-  }
-  // updateDataset / deleteDataset follow the same shape
-}
-```
-
-## Step 2: Reducer (optimistic updates)
+The following is an illustrative action-class method. `DatasetListItem` denotes the
+domain's shared list-item type; use the real service return shape when implementing it.
+The domain key factory and service call are shared with ordinary list fetching.
 
 ```typescript
-// src/store/eval/slices/dataset/reducer.ts
-export type DatasetDispatch =
-  | { type: 'addDataset'; value: Dataset }
-  | { type: 'updateDataset'; id: string; value: Partial<Dataset> }
-  | { type: 'deleteDataset'; id: string };
-
-export const datasetReducer = (state: Dataset[] = [], payload: DatasetDispatch): Dataset[] =>
-  produce(state, (draft) => {
-    switch (payload.type) {
-      case 'addDataset':
-        draft.unshift(payload.value);
-        break;
-      case 'updateDataset': {
-        const i = draft.findIndex((item) => item.id === payload.id);
-        if (i !== -1) draft[i] = { ...draft[i], ...payload.value };
-        break;
-      }
-      case 'deleteDataset': {
-        const i = draft.findIndex((item) => item.id === payload.id);
-        if (i !== -1) draft.splice(i, 1);
-        break;
-      }
-    }
-  });
-```
-
-## Step 3: Store slice
-
-```typescript
-// src/store/eval/slices/dataset/initialState.ts
-export interface DatasetData {
-  currentPage: number;
-  hasMore: boolean;
-  isLoading: boolean;
-  items: Dataset[];
-  pageSize: number;
-  total: number;
+interface DatasetSliceState {
+  datasetListMap: Record<string, DatasetListItem[]>;
 }
 
-export interface DatasetSliceState {
-  // Map keyed by benchmarkId — multiple parent contexts share the slice
-  datasetMap: Record<string, DatasetData>;
-  // Single item for modal display
-  datasetDetail: Dataset | null;
-  isLoadingDatasetDetail: boolean;
-  loadingDatasetIds: string[];
-}
+useFetchDatasets = (benchmarkId?: string) =>
+  useClientDataSWR(
+    benchmarkId ? evalKeys.datasets(benchmarkId) : null,
+    () => agentEvalService.listDatasets(benchmarkId!),
+    {
+      onSuccess: (items) => {
+        this.#set((state) => ({
+          datasetListMap: {
+            ...state.datasetListMap,
+            [benchmarkId!]: items,
+          },
+        }));
+      },
+    },
+  );
 
-export const datasetInitialState: DatasetSliceState = {
-  datasetMap: {},
-  datasetDetail: null,
-  isLoadingDatasetDetail: false,
-  loadingDatasetIds: [],
+refreshDatasets = async (benchmarkId: string) => {
+  await mutate(evalKeys.datasets(benchmarkId));
 };
 ```
 
-```typescript
-// src/store/eval/slices/dataset/action.ts
-const FETCH_DATASETS_KEY = 'FETCH_DATASETS';
-const FETCH_DATASET_DETAIL_KEY = 'FETCH_DATASET_DETAIL';
+Capture the request's parent id in the callback rather than reading the currently
+selected parent when the response arrives. Preserve other buckets during updates.
+Add pagination metadata only if the endpoint and surface use it; derive totals and
+`hasMore` from the response rather than guessing from the loaded array length.
 
-export const createDatasetSlice: StateCreator<EvalStore, any, [], DatasetAction> = (set, get) => ({
-  // Cache key includes benchmarkId so each parent has its own SWR entry
-  useFetchDatasets: (benchmarkId) =>
-    useClientDataSWR(
-      benchmarkId ? [FETCH_DATASETS_KEY, benchmarkId] : null,
-      () => agentEvalService.listDatasets(benchmarkId!),
-      {
-        onSuccess: (data) => {
-          set({
-            datasetMap: {
-              ...get().datasetMap,
-              [benchmarkId!]: {
-                currentPage: 1,
-                hasMore: false,
-                isLoading: false,
-                items: data,
-                pageSize: data.length,
-                total: data.length,
-              },
-            },
-          });
-        },
-      },
-    ),
+## Component request state
 
-  useFetchDatasetDetail: (id) =>
-    useClientDataSWR(
-      id ? [FETCH_DATASET_DETAIL_KEY, id] : null,
-      () => agentEvalService.getDataset(id!),
-      {
-        onSuccess: (data) => set({ datasetDetail: data, isLoadingDatasetDetail: false }),
-      },
-    ),
-
-  refreshDatasets: (benchmarkId) => mutate([FETCH_DATASETS_KEY, benchmarkId]),
-  refreshDatasetDetail: (id) => mutate([FETCH_DATASET_DETAIL_KEY, id]),
-
-  // CREATE with optimistic update — note the temp id pattern
-  createDataset: async (params) => {
-    const tmpId = Date.now().toString();
-    const { benchmarkId } = params;
-
-    get().internal_dispatchDataset(
-      { type: 'addDataset', value: { ...params, id: tmpId, createdAt: Date.now() } as any },
-      benchmarkId,
-    );
-    get().internal_updateDatasetLoading(tmpId, true);
-
-    try {
-      const result = await agentEvalService.createDataset(params);
-      await get().refreshDatasets(benchmarkId);
-      return result;
-    } finally {
-      get().internal_updateDatasetLoading(tmpId, false);
-    }
-  },
-
-  // UPDATE / DELETE follow the same optimistic + refresh pattern as BenchmarkSlice
-  // (see the main SKILL.md)
-
-  // Internal — dispatch reducer scoped to a parent
-  internal_dispatchDataset: (payload, benchmarkId) => {
-    const currentData = get().datasetMap[benchmarkId];
-    const nextItems = datasetReducer(currentData?.items, payload);
-
-    // Skip set when nothing changed — avoids unnecessary re-renders
-    if (isEqual(nextItems, currentData?.items)) return;
-
-    set({
-      datasetMap: {
-        ...get().datasetMap,
-        [benchmarkId]: {
-          ...currentData,
-          currentPage: currentData?.currentPage ?? 1,
-          hasMore: currentData?.hasMore ?? false,
-          isLoading: false,
-          items: nextItems,
-          pageSize: currentData?.pageSize ?? nextItems.length,
-          total: currentData?.total ?? nextItems.length,
-        },
-      },
-    });
-  },
-
-  internal_updateDatasetLoading: (id, loading) => {
-    set((state) => ({
-      loadingDatasetIds: loading
-        ? [...state.loadingDatasetIds, id]
-        : state.loadingDatasetIds.filter((i) => i !== id),
-    }));
-  },
-});
-```
-
-## Step 4: Wire into the store
-
-```typescript
-// src/store/eval/store.ts
-export type EvalStore = EvalStoreState & BenchmarkAction & DatasetAction & RunAction;
-
-const createStore: StateCreator<EvalStore, [['zustand/devtools', never]]> = (set, get, store) => ({
-  ...initialState,
-  ...createBenchmarkSlice(set, get, store),
-  ...createDatasetSlice(set, get, store),
-  ...createRunSlice(set, get, store),
-});
-
-// src/store/eval/initialState.ts
-export const initialState: EvalStoreState = {
-  ...benchmarkInitialState,
-  ...datasetInitialState,
-  ...runInitialState,
-};
-```
-
-## Step 5: Selectors (optional but recommended)
-
-```typescript
-export const datasetSelectors = {
-  getDatasetData: (benchmarkId: string) => (s: EvalStore) => s.datasetMap[benchmarkId],
-  getDatasets: (benchmarkId: string) => (s: EvalStore) => s.datasetMap[benchmarkId]?.items ?? [],
-  isLoadingDataset: (id: string) => (s: EvalStore) => s.loadingDatasetIds.includes(id),
-};
-```
-
-## Step 6: Use in component
+Read the matching bucket, but use the hook response to distinguish loading, failure,
+and a settled result. The example assumes `benchmarkId` is present for the mounted list.
 
 ```tsx
-// List scoped to a parent
 const DatasetList = ({ benchmarkId }: { benchmarkId: string }) => {
   const useFetchDatasets = useEvalStore((s) => s.useFetchDatasets);
-  const datasets = useEvalStore(datasetSelectors.getDatasets(benchmarkId));
-  const datasetData = useEvalStore(datasetSelectors.getDatasetData(benchmarkId));
+  const items = useEvalStore((s) => s.datasetListMap[benchmarkId]);
+  const { data, error, isLoading, mutate } = useFetchDatasets(benchmarkId);
 
-  useFetchDatasets(benchmarkId);
-
-  if (datasetData?.isLoading) return <Loading />;
   return (
-    <div>
-      <h2>Total: {datasetData?.total ?? 0}</h2>
-      <List data={datasets} />
-    </div>
+    <AsyncBoundary
+      data={data}
+      empty={<EmptyState />}
+      error={error}
+      isEmpty={data?.length === 0}
+      isLoading={isLoading}
+      onRetry={() => {
+        void mutate();
+      }}
+    >
+      <DatasetCards items={items ?? []} />
+    </AsyncBoundary>
   );
 };
-
-// Single item for modal — conditional fetching pattern
-const DatasetImportModal = ({ open, datasetId }: Props) => {
-  const useFetchDatasetDetail = useEvalStore((s) => s.useFetchDatasetDetail);
-  const dataset = useEvalStore((s) => s.datasetDetail);
-  const isLoading = useEvalStore((s) => s.isLoadingDatasetDetail);
-
-  // Only fetch when modal is open AND id present
-  useFetchDatasetDetail(open && datasetId ? datasetId : undefined);
-
-  return <Modal open={open}>{isLoading ? <Loading /> : <div>{dataset?.name}</div>}</Modal>;
-};
 ```
+
+`EmptyState` and `DatasetCards` stand for the surface's existing renderers. Do not
+replace the boundary's `data` with `items ?? []`: an uninitialized bucket would look
+like a successful empty result and hide the first-load error.
+
+## Mutation and detail boundaries
+
+Refresh the affected parent after a write, and both parents if an item moves between
+them. If a reducer updates the list, dispatch into that same parent bucket. Delete
+only after server success; optimistic create/update must recover on failure as
+described in the [main skill](../SKILL.md#mutations).
+
+Keep item details keyed by item id, following [Zustand data structures](../../zustand/references/data-structures.md), rather than
+introducing one shared `datasetDetail` slot that can display the previous item's data.
+For a conditional detail request, pass `undefined` while the surface is inactive and
+map it to a `null` SWR key. When active, consume its error/retry state just as for a list.
+
+Use the `zustand` skill for class composition and `flattenActions`; this cache variant
+does not require a separate store-wiring or reducer recipe.

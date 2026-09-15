@@ -1,5 +1,6 @@
 import { resolveCCSubagentType } from '@lobechat/builtin-tool-claude-code/client';
-import { Avatar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';

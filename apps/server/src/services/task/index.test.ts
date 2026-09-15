@@ -23,6 +23,11 @@ vi.mock('@/database/models/agent', () => ({
 
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(),
+  taskActivityActor: (actor: { agentId?: string | null; userId?: string | null }) => ({
+    actorAgentId: actor.agentId ?? null,
+    actorKind: actor.agentId ? 'agent' : actor.userId ? 'user' : 'system',
+    actorUserId: actor.agentId ? null : (actor.userId ?? null),
+  }),
 }));
 
 vi.mock('@/database/models/taskTopic', () => ({
@@ -45,27 +50,21 @@ vi.mock('@/database/models/user', () => ({
   UserModel: { findByIds: vi.fn().mockResolvedValue([]) },
 }));
 
-const { goalCreate, goalFindBySubject } = vi.hoisted(() => ({
-  goalCreate: vi.fn(),
-  goalFindBySubject: vi.fn().mockResolvedValue(undefined),
-}));
-
 const { resolveTaskAcceptance } = vi.hoisted(() => ({
   resolveTaskAcceptance: vi.fn(),
-}));
-
-vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ create: goalCreate, findBySubject: goalFindBySubject })),
 }));
 
 vi.mock('@/server/services/verify/taskAcceptance', () => ({ resolveTaskAcceptance }));
 
 // AiAgentService pulls in ~14 sub-dependencies in its constructor; mock it so
 // the running-status branch in updateStatus doesn't drag them in.
+const { interruptTaskMock } = vi.hoisted(() => ({ interruptTaskMock: vi.fn() }));
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    interruptTask: vi.fn(),
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      interruptTask: interruptTaskMock,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/taskScheduler', () => ({
@@ -93,11 +92,18 @@ describe('TaskService', () => {
   };
 
   const mockTaskModel = {
+    addActivities: vi.fn(),
+    addActivity: vi.fn(),
+    findSubtasks: vi.fn(),
+    lockForStatusChange: vi.fn(),
+    updateStatusForIds: vi.fn(),
+    updateWithLog: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
     findById: vi.fn(),
     findByIds: vi.fn(),
     findAllDescendants: vi.fn(),
+    getActivities: vi.fn().mockResolvedValue([]),
     getCheckpointConfig: vi.fn(),
     getComments: vi.fn(),
     getCommentFileIdsMap: vi.fn().mockResolvedValue({}),
@@ -116,6 +122,7 @@ describe('TaskService', () => {
 
   const mockTaskTopicModel = {
     cancelIfRunning: vi.fn(),
+    cancelRunningByTaskIds: vi.fn(),
     findByTaskId: vi.fn(),
     findRunningByTaskIds: vi.fn().mockResolvedValue([]),
     findWithHandoff: vi.fn(),
@@ -137,16 +144,30 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    interruptTaskMock.mockReset().mockResolvedValue({ success: true });
     cancelScheduled.mockResolvedValue(undefined);
     scheduleNextTopic.mockResolvedValue('tick-new');
     resolveTaskAcceptance.mockResolvedValue(undefined);
     mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
-    (AgentModel as any).mockImplementation(() => mockAgentModel);
-    (TaskModel as any).mockImplementation(() => mockTaskModel);
-    (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
-    (BriefModel as any).mockImplementation(() => mockBriefModel);
-    (RbacModel as any).mockImplementation(() => mockRbacModel);
-    (WorkspaceMemberModel as any).mockImplementation(() => mockWorkspaceMemberModel);
+    mockTaskModel.getActivities.mockResolvedValue([]);
+    (AgentModel as any).mockImplementation(function () {
+      return mockAgentModel;
+    });
+    (TaskModel as any).mockImplementation(function () {
+      return mockTaskModel;
+    });
+    (TaskTopicModel as any).mockImplementation(function () {
+      return mockTaskTopicModel;
+    });
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (RbacModel as any).mockImplementation(function () {
+      return mockRbacModel;
+    });
+    (WorkspaceMemberModel as any).mockImplementation(function () {
+      return mockWorkspaceMemberModel;
+    });
   });
 
   describe('assertAssigneeUserAssignable', () => {
@@ -1445,6 +1466,24 @@ describe('TaskService', () => {
     });
   });
 
+  describe('confirmed execution stop', () => {
+    it.each([{ success: true, deviceCancellationConfirmed: false }, { success: false }])(
+      'keeps a live Task and topic unchanged when cancellation is unconfirmed: %j',
+      async (result) => {
+        mockTaskModel.resolve.mockResolvedValue({ id: 'task-live', status: 'running' });
+        mockTaskTopicModel.findByTaskId.mockResolvedValue([
+          { topicId: 'topic-live', operationId: 'op-live', status: 'running' },
+        ]);
+        interruptTaskMock.mockResolvedValueOnce(result);
+        await expect(
+          new TaskService(db, userId).updateStatus({ id: 'task-live', status: 'paused' }),
+        ).rejects.toThrow('Task interruption was not confirmed');
+        expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+        expect(mockTaskTopicModel.cancelIfRunning).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('updateStatus / scheduleStartedAt', () => {
     const baseTask = (overrides: Partial<Record<string, unknown>> = {}) => ({
       automationMode: 'schedule',
@@ -1581,6 +1620,40 @@ describe('TaskService', () => {
       expect(mockTaskModel.update).toHaveBeenCalledWith('task-1', { context: {} });
     });
 
+    it('logs the undo when a person-made start is rolled back after the tick fails', async () => {
+      const prev = baseTask({
+        automationMode: 'heartbeat',
+        context: {},
+        heartbeatInterval: 3600,
+        status: 'paused',
+      });
+      const next = baseTask({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        status: 'scheduled',
+      });
+      mockTaskModel.resolve.mockResolvedValue(prev);
+      mockTaskModel.updateWithLog.mockResolvedValue(next);
+      scheduleNextTopic.mockRejectedValueOnce(new Error('qstash unavailable'));
+
+      const service = new TaskService(db, userId);
+      const actor = { userId };
+
+      await expect(
+        service.updateStatus({ id: 'T-1', status: 'scheduled' as any }, actor),
+      ).rejects.toThrow('qstash unavailable');
+
+      // The paused→scheduled row is already committed; restoring through the
+      // plain writer would leave it orphaned, so the restore is logged too.
+      expect(mockTaskModel.updateWithLog).toHaveBeenNthCalledWith(
+        2,
+        'task-1',
+        { status: 'paused' },
+        actor,
+      );
+      expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+
     it('does NOT stamp when the new status is not scheduled', async () => {
       const prev = baseTask({ status: 'backlog' });
       const next = baseTask({ status: 'paused' });
@@ -1680,57 +1753,6 @@ describe('TaskService', () => {
     });
   });
 
-  describe('createTask goal binding', () => {
-    beforeEach(() => {
-      mockTaskModel.create.mockResolvedValue({
-        assigneeAgentId: 'agent-1',
-        id: 'task_goal_1',
-        identifier: 'T-9',
-        instruction: 'reach the goal',
-        name: 'Goal task',
-        projectId: null,
-      });
-      mockTaskModel.delete.mockResolvedValue(true);
-      goalCreate.mockReset();
-    });
-
-    it('creates the bound goals row and returns it on the task', async () => {
-      goalCreate.mockResolvedValue({ id: 'goal-1', status: 'planning' });
-
-      const service = new TaskService(db, userId);
-      const result = await service.createTask({
-        goal: { maxRounds: 4, maxTotalCost: 10, requirement: 'done means done' },
-        instruction: 'reach the goal',
-      });
-
-      expect(goalCreate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          maxRounds: 4,
-          maxTotalCost: 10,
-          requirement: 'done means done',
-          subjectId: 'task_goal_1',
-          subjectType: 'task',
-        }),
-      );
-      expect((result as any).goal).toEqual({ id: 'goal-1', status: 'planning' });
-      expect(mockTaskModel.delete).not.toHaveBeenCalled();
-    });
-
-    it('compensates a failed goal insert by deleting the just-created task', async () => {
-      // Regression (codex review): a task committed without its promised goal
-      // is a user-visible ghost — it never lists on goal surfaces, and a retry
-      // stacks another plain task.
-      goalCreate.mockRejectedValue(new Error('db down'));
-
-      const service = new TaskService(db, userId);
-      await expect(
-        service.createTask({ goal: { maxRounds: 3 }, instruction: 'reach the goal' }),
-      ).rejects.toThrow('db down');
-
-      expect(mockTaskModel.delete).toHaveBeenCalledWith('task_goal_1');
-    });
-  });
-
   describe('parent ↔ child visibility compat', () => {
     beforeEach(() => {
       mockTaskModel.create.mockImplementation(async (data: any) => ({
@@ -1785,6 +1807,311 @@ describe('TaskService', () => {
     it('assertParentVisibilityCompat allows public child under public parent', () => {
       const service = new TaskService(db, userId, 'ws-1');
       expect(() => service.assertParentVisibilityCompat('public', 'public')).not.toThrow();
+    });
+  });
+
+  describe('updateStatusCascade activity log', () => {
+    const baseTask = (overrides: Record<string, unknown>) => ({
+      context: {},
+      parentTaskId: null,
+      ...overrides,
+    });
+    it('writes one status row per family member a person cascaded', async () => {
+      const parent = baseTask({ id: 'task-p', identifier: 'P-1', status: 'running' });
+      const openChild = baseTask({ id: 'task-c1', identifier: 'C-1', status: 'backlog' });
+      // Already finished: not part of the cascade, so no row.
+      const doneChild = baseTask({ id: 'task-c2', identifier: 'C-2', status: 'completed' });
+      mockTaskModel.resolve.mockResolvedValue(parent);
+      mockTaskModel.findSubtasks.mockResolvedValue([openChild, doneChild]);
+      mockTaskModel.updateStatusForIds.mockResolvedValue([
+        { ...parent, status: 'canceled' },
+        { ...openChild, status: 'canceled' },
+      ]);
+      // What each task is *leaving* comes from the locked read inside the
+      // transaction, not the dialog-time snapshot: the child moved backlog →
+      // paused in between, and the log must say so.
+      mockTaskModel.lockForStatusChange.mockResolvedValue([
+        { id: 'task-p', status: 'running', visibility: 'public' },
+        { id: 'task-c1', status: 'paused', visibility: 'private' },
+      ]);
+      mockTaskTopicModel.cancelRunningByTaskIds.mockResolvedValue([]);
+      (db as any).transaction = async (fn: (tx: unknown) => Promise<void>) => fn(db);
+
+      const service = new TaskService(db, userId);
+      await service.updateStatusCascade({ id: 'P-1', status: 'canceled' }, { userId });
+
+      expect(mockTaskModel.lockForStatusChange).toHaveBeenCalledWith(['task-p', 'task-c1']);
+      expect(mockTaskModel.addActivities).toHaveBeenCalledTimes(1);
+      expect(mockTaskModel.addActivities).toHaveBeenCalledWith([
+        {
+          actorAgentId: null,
+          actorUserId: userId,
+          payload: { actorKind: 'user', from: 'running', to: 'canceled' },
+          taskId: 'task-p',
+          type: 'status',
+          visibility: 'public',
+        },
+        {
+          actorAgentId: null,
+          actorUserId: userId,
+          payload: { actorKind: 'user', from: 'paused', to: 'canceled' },
+          taskId: 'task-c1',
+          type: 'status',
+          visibility: 'private',
+        },
+      ]);
+    });
+
+    it('stays silent for a system cascade', async () => {
+      const parent = baseTask({ id: 'task-p', identifier: 'P-1', status: 'running' });
+      mockTaskModel.resolve.mockResolvedValue(parent);
+      mockTaskModel.findSubtasks.mockResolvedValue([]);
+      mockTaskModel.updateStatusForIds.mockResolvedValue([{ ...parent, status: 'canceled' }]);
+      mockTaskTopicModel.cancelRunningByTaskIds.mockResolvedValue([]);
+      (db as any).transaction = async (fn: (tx: unknown) => Promise<void>) => fn(db);
+
+      await new TaskService(db, userId).updateStatusCascade({ id: 'P-1', status: 'canceled' });
+
+      expect(mockTaskModel.lockForStatusChange).not.toHaveBeenCalled();
+      expect(mockTaskModel.addActivities).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('assignee activity log', () => {
+    it('renders a status log as a property activity', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        createdAt: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: 'Do something',
+        lastHeartbeatAt: null,
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'completed',
+      });
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
+      mockTaskModel.getActivities.mockResolvedValue([
+        {
+          actorAgentId: null,
+          actorUserId: 'user_alice',
+          createdAt: new Date('2024-01-01T00:05:00Z'),
+          id: 'tac_s1',
+          payload: { from: 'backlog', to: 'completed' },
+          type: 'status',
+        },
+      ]);
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([]);
+      vi.mocked(UserModel.findByIds).mockResolvedValue([
+        { avatar: null, fullName: 'Alice', id: 'user_alice' } as any,
+      ]);
+
+      const result = await new TaskService(db, userId, 'ws-1').getTaskDetail('TASK-1');
+      const [status] = result?.activities?.filter((a) => a.type === 'property') ?? [];
+
+      expect(status).toMatchObject({
+        author: { id: 'user_alice', name: 'Alice', type: 'user' },
+        propertyChange: { field: 'status', from: 'backlog', to: 'completed' },
+        time: '2024-01-01T00:05:00.000Z',
+      });
+    });
+
+    it('keeps a deleted actor as a person, not the system, via the payload tombstone', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        createdAt: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: 'Do something',
+        lastHeartbeatAt: null,
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+      });
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
+      mockTaskModel.getActivities.mockResolvedValue([
+        // The actor columns are ON DELETE SET NULL: after the member is
+        // deleted only the payload remembers a person did this.
+        {
+          actorAgentId: null,
+          actorUserId: null,
+          createdAt: new Date('2024-01-01T00:05:00Z'),
+          id: 'tac_1',
+          payload: { actorKind: 'user', from: 'backlog', to: 'todo' },
+          type: 'status',
+        },
+        // A row written with no actor at all is the runner's system fallback.
+        {
+          actorAgentId: null,
+          actorUserId: null,
+          createdAt: new Date('2024-01-01T01:05:00Z'),
+          id: 'tac_2',
+          payload: { actorKind: 'system', fromId: null, toId: 'agt_inbox' },
+          type: 'assignee_agent',
+        },
+      ]);
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([]);
+      vi.mocked(UserModel.findByIds).mockResolvedValue([]);
+
+      const result = await new TaskService(db, userId, 'ws-1').getTaskDetail('TASK-1');
+      const [status] = result?.activities?.filter((a) => a.type === 'property') ?? [];
+      const [assignment] = result?.activities?.filter((a) => a.type === 'assignment') ?? [];
+
+      expect(status?.author).toEqual({ id: '', name: null, type: 'user', unresolved: true });
+      expect(assignment?.author).toBeUndefined();
+    });
+
+    it('keeps the actor identity when the agent is invisible to this viewer', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        createdAt: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: 'Do something',
+        lastHeartbeatAt: null,
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+      });
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
+      mockTaskModel.getActivities.mockResolvedValue([
+        {
+          actorAgentId: 'agt_private_to_someone_else',
+          actorUserId: null,
+          createdAt: new Date('2024-01-01T00:05:00Z'),
+          id: 'tac_1',
+          payload: { fromId: null, toId: 'agt_x' },
+          type: 'assignee_agent',
+        },
+      ]);
+      // `getAgentAvatarsByIds` filters by ownership, so another member's
+      // private agent resolves to nothing here.
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([]);
+      vi.mocked(UserModel.findByIds).mockResolvedValue([]);
+
+      const result = await new TaskService(db, userId, 'ws-1').getTaskDetail('TASK-1');
+      const [assignment] = result?.activities?.filter((a) => a.type === 'assignment') ?? [];
+
+      // An absent author means the SYSTEM acted. An agent we simply cannot see
+      // must not borrow that meaning.
+      expect(assignment?.author).toEqual({
+        id: 'agt_private_to_someone_else',
+        name: null,
+        type: 'agent',
+        unresolved: true,
+      });
+    });
+
+    it('routes the update through the transactional logging path with the actor', async () => {
+      mockTaskModel.updateWithLog.mockResolvedValue({ id: 'task_001' });
+
+      await new TaskService(db, userId, 'ws-1').updateTaskWithAssigneeLock(
+        'task_001',
+        { assigneeAgentId: 'agt_new' },
+        { agentId: 'agt_actor', userId: 'user_actor' },
+      );
+
+      // The diff + insert live inside the model's transaction, so the service
+      // must not fall back to the plain `update` that skips them.
+      expect(mockTaskModel.update).not.toHaveBeenCalled();
+      expect(mockTaskModel.updateWithLog).toHaveBeenCalledWith(
+        'task_001',
+        { assigneeAgentId: 'agt_new' },
+        { agentId: 'agt_actor', userId: 'user_actor' },
+      );
+    });
+
+    it('renders assignment logs as activities with both sides resolved', async () => {
+      mockTaskModel.resolve.mockResolvedValue({
+        createdAt: null,
+        heartbeatInterval: null,
+        heartbeatTimeout: null,
+        id: 'task_001',
+        identifier: 'TASK-1',
+        instruction: 'Do something',
+        lastHeartbeatAt: null,
+        parentTaskId: null,
+        priority: 'normal',
+        status: 'todo',
+      });
+      mockTaskModel.findAllDescendants.mockResolvedValue([]);
+      mockTaskModel.getDependencies.mockResolvedValue([]);
+      mockTaskTopicModel.findWithHandoff.mockResolvedValue([]);
+      mockTaskModel.getComments.mockResolvedValue([]);
+      mockTaskModel.getTreePinnedDocuments.mockResolvedValue({ nodeMap: {}, tree: [] });
+      mockTaskModel.findByIds.mockResolvedValue([]);
+      mockTaskModel.getCheckpointConfig.mockReturnValue({});
+      mockTaskModel.getVerifyConfig.mockReturnValue(undefined);
+      mockTaskModel.getActivities.mockResolvedValue([
+        {
+          actorAgentId: null,
+          actorUserId: 'user_alice',
+          createdAt: new Date('2024-01-01T00:05:00Z'),
+          id: 'tac_1',
+          payload: { fromId: null, toId: 'user_bob' },
+          type: 'assignee_user',
+        },
+        {
+          actorAgentId: null,
+          actorUserId: 'user_alice',
+          createdAt: new Date('2024-01-01T00:06:00Z'),
+          id: 'tac_2',
+          payload: { fromId: 'agt_gone', toId: null },
+          type: 'assignee_agent',
+        },
+      ]);
+      mockAgentModel.getAgentAvatarsByIds.mockResolvedValue([]);
+      vi.mocked(UserModel.findByIds).mockResolvedValue([
+        { avatar: null, fullName: 'Alice', id: 'user_alice' } as any,
+        { avatar: null, fullName: 'Bob', id: 'user_bob' } as any,
+      ]);
+
+      const result = await new TaskService(db, userId, 'ws-1').getTaskDetail('TASK-1');
+
+      const assignments = result?.activities?.filter((a) => a.type === 'assignment');
+      expect(assignments).toHaveLength(2);
+      expect(assignments?.[0]).toMatchObject({
+        assignment: {
+          from: null,
+          kind: 'member',
+          to: { id: 'user_bob', name: 'Bob', type: 'user' },
+        },
+        author: { id: 'user_alice', name: 'Alice', type: 'user' },
+        time: '2024-01-01T00:05:00.000Z',
+      });
+      // An unresolvable id keeps a stub instead of collapsing to null, so a
+      // reassignment away from a deleted agent is not read as "never assigned".
+      // The stub is flagged `unresolved` so the renderers can tell "gone or
+      // invisible to me" apart from a live participant with an empty name.
+      expect(assignments?.[1]?.assignment).toEqual({
+        from: { id: 'agt_gone', name: null, type: 'agent', unresolved: true },
+        kind: 'agent',
+        to: null,
+      });
     });
   });
 });

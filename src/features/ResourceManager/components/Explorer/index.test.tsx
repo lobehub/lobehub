@@ -2,6 +2,7 @@ import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ViewMode } from '@/features/ResourceManager/store/initialState';
 import { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
 
 import ResourceExplorer from './index';
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
     sorter: 'createdAt' as const,
     sortType: 'desc' as SortType,
     sourceFilter: undefined as ResourceSourceFilter | undefined,
-    viewMode: 'list' as const,
+    viewMode: 'list' as ViewMode,
   },
   useFetchResources: vi.fn(),
 }));
@@ -98,10 +99,21 @@ describe('ResourceExplorer', () => {
     expect(mocks.useFetchResources).toHaveBeenCalledWith(
       expect.objectContaining({
         category: FilesTabs.All,
+        includeContentPreview: false,
         libraryId: undefined,
         parentId: null,
         showFilesInKnowledgeBase: false,
       }),
+    );
+  });
+
+  it('requests a server-generated content preview only for masonry cards', () => {
+    mocks.resourceManagerState.viewMode = 'masonry';
+
+    render(<ResourceExplorer />);
+
+    expect(mocks.useFetchResources).toHaveBeenCalledWith(
+      expect.objectContaining({ includeContentPreview: true }),
     );
   });
 

@@ -2,6 +2,7 @@ import debug from 'debug';
 import type { Context } from 'hono';
 
 import { getBotMessageRouter } from '@/server/services/bot';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 const log = debug('lobe-server:bot:webhook-route');
 
@@ -26,5 +27,5 @@ export async function platformWebhook(c: Context): Promise<Response> {
 
   const router = getBotMessageRouter();
   const handler = router.getWebhookHandler(platform, appId);
-  return handler(c.req.raw);
+  return handler(c.req.raw, { waitUntil: (task) => after(() => task) });
 }

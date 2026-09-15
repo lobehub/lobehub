@@ -9,6 +9,7 @@ import { detectTruncatedJSON, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
+import { isShareBlockedBuiltinDispatch } from '@/server/services/aiAgent/shareGate';
 import { ComposioService } from '@/server/services/composio';
 import { MarketService } from '@/server/services/market';
 
@@ -115,6 +116,27 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     }
 
     const args = parsed || {};
+
+    // Share-visitor gate at the ACTUAL dispatch site. The assembly-time tool-set
+    // trim (`applyShareGateToToolSet`) only shapes what the model is offered —
+    // this executor runs whatever call reaches it, so a resume path, recovery
+    // hint, or future tool-discovery route that bypasses assembly must still
+    // clear the FULL gate here: master default-deny allowlist, the owner's
+    // `toolGrants` picker, humanIntervention policy (re-read from the
+    // unstripped manifest), and the per-API data-tool rules. Non-builtin
+    // identifiers pass through (governed by the share's `toolGrants` at
+    // assembly). Fail closed: block, never throw open.
+    if (
+      context.agentShareVisitor &&
+      isShareBlockedBuiltinDispatch(context.agentShareVisitor, identifier, apiName, args)
+    ) {
+      log('Share gate blocked builtin dispatch: %s:%s', identifier, apiName);
+      return {
+        content: `The tool API ${identifier}:${apiName} is not available in this shared conversation.`,
+        error: { code: 'SHARE_GATE_BLOCKED', message: 'Tool call blocked by agent share gate' },
+        success: false,
+      };
+    }
 
     log(
       'Executing builtin tool: %s:%s (source: %s) with args: %O',

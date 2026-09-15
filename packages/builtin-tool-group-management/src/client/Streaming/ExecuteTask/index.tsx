@@ -2,7 +2,8 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinStreamingProps } from '@lobechat/types';
-import { Avatar, Flexbox, Markdown } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui/base-ui';
 import { createStaticStyles, useTheme } from 'antd-style';
 import { memo } from 'react';
 

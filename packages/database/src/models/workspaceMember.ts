@@ -1,15 +1,28 @@
 import { INVITATION_EXPIRY_DAYS } from '@lobechat/const';
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
-import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, asc, count, eq, exists, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid/non-secure';
 
 import { devices } from '../schemas/device';
+import { messengerAccountLinks } from '../schemas/messengerAccountLink';
 import { tasks } from '../schemas/task';
+import { users } from '../schemas/user';
 import { workspaceInvitations, workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { ResourcePermissionModel } from './resourcePermission';
 
 type MemberRole = 'admin' | 'member' | 'viewer';
+
+// The built-in roles a `workspace_members.role` row can hold; narrowed at load
+// time to the ones that may own a task so the directory lookup can gate on the
+// column in SQL instead of filtering every row after the fact.
+const ASSIGNABLE_MEMBER_ROLES = (['owner', 'admin', 'member', 'viewer'] as const).filter((role) =>
+  canWorkspaceRoleBeTaskAssignee(role),
+);
+
+const escapeLike = (value: string): string => value.replaceAll(/[\\%_]/g, (c) => `\\${c}`);
+const containsIgnoreCase = (column: unknown, needle: string) =>
+  sql<boolean>`${column} ILIKE ${`%${escapeLike(needle)}%`} ESCAPE '\\'`;
 
 export class WorkspaceMemberModel {
   private readonly db: LobeChatDatabase;
@@ -74,6 +87,72 @@ export class WorkspaceMemberModel {
         ? eq(workspaceMembers.workspaceId, workspaceId)
         : and(eq(workspaceMembers.workspaceId, workspaceId), isNull(workspaceMembers.deletedAt)),
     });
+  };
+
+  /**
+   * Bounded assignee directory: active members whose role may own a task,
+   * optionally narrowed by `query` — an exact (case-folded) user id, or a
+   * case-insensitive part of the display name, @handle, email, or a messenger
+   * identity linked under this workspace's scope — and capped by `limit`.
+   * The narrowing and the cap run in SQL so a large workspace costs one page
+   * plus a count, never a full member scan on the application side. `total`
+   * is the number of matches before the cap.
+   */
+  searchAssignableMembers = async (
+    workspaceId: string,
+    options: { limit: number; query?: string },
+  ): Promise<{ rows: Array<{ role: string; userId: string }>; total: number }> => {
+    const { limit, query } = options;
+    if (ASSIGNABLE_MEMBER_ROLES.length === 0 || limit <= 0) return { rows: [], total: 0 };
+
+    const matchesQuery = query
+      ? or(
+          sql`lower(${users.id}) = ${query}`,
+          containsIgnoreCase(users.fullName, query),
+          containsIgnoreCase(users.username, query),
+          containsIgnoreCase(users.email, query),
+          // Same scope rule as `MessengerAccountLinkModel.findByUserIds`: only
+          // identities active under this workspace take part in resolution.
+          exists(
+            this.db
+              .select({ one: sql`1` })
+              .from(messengerAccountLinks)
+              .where(
+                and(
+                  eq(messengerAccountLinks.userId, workspaceMembers.userId),
+                  eq(messengerAccountLinks.workspaceId, workspaceId),
+                  or(
+                    containsIgnoreCase(messengerAccountLinks.platformUsername, query),
+                    sql`lower(${messengerAccountLinks.platformUserId}) = ${query}`,
+                  ),
+                ),
+              ),
+          ),
+        )
+      : undefined;
+    const where = and(
+      eq(workspaceMembers.workspaceId, workspaceId),
+      isNull(workspaceMembers.deletedAt),
+      inArray(workspaceMembers.role, ASSIGNABLE_MEMBER_ROLES),
+      matchesQuery,
+    );
+
+    const [rows, [{ total }]] = await Promise.all([
+      this.db
+        .select({ role: workspaceMembers.role, userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(where)
+        .orderBy(asc(users.fullName), asc(users.username), asc(workspaceMembers.userId))
+        .limit(limit),
+      this.db
+        .select({ total: count() })
+        .from(workspaceMembers)
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(where),
+    ]);
+
+    return { rows, total: Number(total) };
   };
 
   removeMember = async (workspaceId: string, userId: string) => {

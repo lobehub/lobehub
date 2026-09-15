@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, Text } from '@lobehub/ui';
+import { Center } from '@lobehub/ui';
+import { Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';

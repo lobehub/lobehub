@@ -3,6 +3,7 @@ import type {
   TaskWorkListItem,
   TaskWorkSummaryItem,
   WorkDisplayField,
+  WorkItem,
   WorkListBaseItem,
   WorkListItem,
   WorkSummaryItem,
@@ -14,6 +15,7 @@ import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
+import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import { taskOwnership, type WorkContext, workOwnership } from './context';
@@ -172,10 +174,12 @@ export const eventWorkListFields = {
 
 export interface TaskWorkSummaryQueryRow {
   event: WorkSummaryVersionPreview;
-  /** Live-coalesced task columns; `deleted` flags a missing live row. */
-  task: TaskWorkListItem['task'] & { deleted: TaskWorkListItem['taskDeleted'] };
+  /** See {@link WorkListBaseItem.resourceDeleted}; derived by the query, not a column. */
+  resourceDeleted: boolean;
+  /** Live-coalesced task columns, falling back to the snapshot on a LEFT JOIN miss. */
+  task: TaskWorkListItem['task'];
   version: TaskWorkSummaryItem['version'];
-  work: WorkListBaseItem;
+  work: WorkItem;
 }
 
 /**
@@ -184,19 +188,21 @@ export interface TaskWorkSummaryQueryRow {
  */
 export type DisplayWorkType = 'document' | 'external' | 'file';
 
-/** Version-event row for display-backed types (each mutation event, no live join). */
+/** Version-event row for display-backed types (each mutation event). */
 export interface DisplayVersionEventRow {
+  /** See {@link WorkListBaseItem.resourceDeleted}; constant `false` for external / file. */
+  resourceDeleted: boolean;
   version: WorkVersionPreview;
-  work: WorkListBaseItem;
+  work: WorkItem;
 }
 
 /**
  * Current-card task projection. Live task columns take priority; a LEFT JOIN
- * miss falls back to the Work's current-version cache/snapshot.
+ * miss falls back to the Work's current-version cache/snapshot and is reported
+ * separately through {@link taskDeletedField}.
  */
 export const currentTaskSummaryFields = {
   task: {
-    deleted: sql<boolean>`${tasks.id} is null`,
     identifier: sql<string | null>`coalesce(${tasks.identifier}, ${works.identifier})`,
     instruction: sql<string | null>`coalesce(${tasks.instruction}, ${works.description})`,
     name: sql<string | null>`coalesce(${tasks.name}, ${works.title})`,
@@ -208,7 +214,6 @@ export const currentTaskSummaryFields = {
 /** Historical task-event projection with fallback to that event's immutable snapshot. */
 export const eventTaskSummaryFields = {
   task: {
-    deleted: sql<boolean>`${tasks.id} is null`,
     identifier: sql<string | null>`coalesce(${tasks.identifier}, ${workVersions.identifier})`,
     instruction: sql<string | null>`coalesce(${tasks.instruction}, ${workVersions.description})`,
     name: sql<string | null>`coalesce(${tasks.name}, ${workVersions.title})`,
@@ -227,6 +232,39 @@ export const taskSummaryJoin = (ctx: WorkContext) =>
   and(eq(works.resourceType, 'task'), eq(works.resourceId, tasks.id), taskOwnership(ctx));
 
 /**
+ * LEFT JOIN condition pairing a Work row to its live `documents` row (document
+ * type only). Existence-only, and deliberately WITHOUT the ownership predicate
+ * {@link taskSummaryJoin} carries: the single thing read through this join is
+ * `documents.id is null`, and which Work rows are visible at all is already
+ * decided by `workOwnership`'s `documentVisibilityGuard`. Filtering by owner
+ * here would instead make another member's live, public document look deleted.
+ */
+export const documentSummaryJoin = and(
+  eq(works.resourceType, 'document'),
+  eq(works.resourceId, documents.id),
+);
+
+/** `resourceDeleted` for a task-only query (the `tasks` LEFT JOIN missed). */
+export const taskDeletedField = sql<boolean>`${tasks.id} is null`;
+
+/** `resourceDeleted` for a document-only query (the `documents` LEFT JOIN missed). */
+export const documentDeletedField = sql<boolean>`${documents.id} is null`;
+
+/**
+ * `resourceDeleted` for the Work types with no local backing row (`external`,
+ * `file`): there is nothing to join, so the flag is a constant `false`.
+ */
+export const resourceNeverDeletedField = sql<boolean>`false`;
+
+/**
+ * `resourceDeleted` for the cross-type queries that LEFT JOIN BOTH backing
+ * tables (workspace gallery, root-operation summaries). Switching on
+ * `works.resourceType` keeps each type reading only its own join, and short-
+ * circuits `external` / `file` to `false` instead of misreading a NULL join.
+ */
+export const resourceDeletedField = sql<boolean>`case ${works.resourceType} when 'task' then ${tasks.id} is null when 'document' then ${documents.id} is null else false end`;
+
+/**
  * Shared version-event query for display-backed work types; `task` keeps its
  * own variant because it additionally joins the tasks table.
  */
@@ -235,17 +273,26 @@ export const listDisplayVersionEventRows = (
   type: DisplayWorkType,
   filters: SQL[],
   limit: number,
-): Promise<DisplayVersionEventRow[]> =>
-  ctx.db
+): Promise<DisplayVersionEventRow[]> => {
+  const query = ctx.db
     .select({
+      resourceDeleted: type === 'document' ? documentDeletedField : resourceNeverDeletedField,
       version: versionEventSelection,
       work: eventWorkListFields,
     })
     .from(workVersions)
     .innerJoin(works, and(eq(workVersions.workId, works.id), workOwnership(ctx)))
+    .$dynamic();
+
+  // `document` is the only display-backed type with a local backing row, so it
+  // is the only one that pays for the join; the others answer with a constant.
+  const joined = type === 'document' ? query.leftJoin(documents, documentSummaryJoin) : query;
+
+  return joined
     .where(and(...filters, eq(works.type, type)))
     .orderBy(desc(workVersions.createdAt))
     .limit(limit);
+};
 
 /**
  * One current-version row surfaced by the conversation-scoped list query,
@@ -269,9 +316,11 @@ export interface WorkConversationRowParams {
  */
 export interface WorkspaceSummaryQueryRow {
   event: WorkSummaryVersionPreview;
+  /** See {@link WorkListBaseItem.resourceDeleted}; derived by {@link resourceDeletedField}. */
+  resourceDeleted: boolean;
   task: TaskWorkSummaryQueryRow['task'];
   version: TaskWorkSummaryItem['version'];
-  work: WorkListBaseItem;
+  work: WorkItem;
 }
 
 /**

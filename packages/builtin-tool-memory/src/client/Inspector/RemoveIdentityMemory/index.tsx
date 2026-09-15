@@ -27,8 +27,10 @@ export const RemoveIdentityMemoryInspector = memo<
   // Initial streaming state
   if (isArgumentsStreaming && !id) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-user-memory.apiName.removeIdentityMemory')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-user-memory.apiName.removeIdentityMemory')}
+        </span>
       </div>
     );
   }
@@ -36,13 +38,10 @@ export const RemoveIdentityMemoryInspector = memo<
   const isSuccess = pluginState?.identityId;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-user-memory.apiName.removeIdentityMemory')}</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-user-memory.apiName.removeIdentityMemory')}
+      </span>
       {id && (
         <>
           :<span className={highlightTextStyles.warning}>{id}</span>

@@ -9,6 +9,7 @@ import {
   POST_ONBOARDING_HOME_TASK_URL,
   resolvePostOnboardingTargetUrl,
   stashOnboardingCallbackUrl,
+  toAbsoluteAuthCallbackUrl,
 } from './onboardingRedirect';
 
 beforeEach(() => {
@@ -31,6 +32,26 @@ describe('isSafeRedirectPath', () => {
     expect(isSafeRedirectPath('/\\evil.com')).toBe(false);
     expect(isSafeRedirectPath('/\\/evil.com')).toBe(false);
     expect(isSafeRedirectPath('/foo\\bar')).toBe(false);
+  });
+});
+
+describe('toAbsoluteAuthCallbackUrl', () => {
+  const authOrigin = 'https://auth.example.com';
+
+  it('should bind safe relative paths to the current auth origin', () => {
+    expect(toAbsoluteAuthCallbackUrl('/', authOrigin)).toBe(`${authOrigin}/`);
+    expect(toAbsoluteAuthCallbackUrl('/workspace?tab=members', authOrigin)).toBe(
+      `${authOrigin}/workspace?tab=members`,
+    );
+  });
+
+  it.each([
+    'https://app.example.com/workspace',
+    'com.lobehub.app:///auth/callback',
+    '//evil.com/callback',
+    '/\\evil.com',
+  ])('should preserve non-relative callback %s', (callbackUrl) => {
+    expect(toAbsoluteAuthCallbackUrl(callbackUrl, authOrigin)).toBe(callbackUrl);
   });
 });
 

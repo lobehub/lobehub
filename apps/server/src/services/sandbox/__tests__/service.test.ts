@@ -5,6 +5,51 @@ import type { MarketService } from '@/server/services/market';
 
 import type { SandboxProvider } from '../types';
 
+describe('normalizeSandboxCommandResult', () => {
+  it('preserves recreation when the command fails inside a successful response', async () => {
+    const { normalizeSandboxCommandResult } = await import('../service');
+
+    expect(
+      normalizeSandboxCommandResult({
+        result: { exitCode: 1, stderr: 'missing input file', stdout: '' },
+        sessionExpiredAndRecreated: true,
+        success: true,
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: '',
+      sessionExpiredAndRecreated: true,
+      stderr: 'missing input file',
+      success: false,
+    });
+  });
+
+  it.each([undefined, false])('does not report recreation for flag %s', async (flag) => {
+    const { normalizeSandboxCommandResult } = await import('../service');
+
+    expect(
+      normalizeSandboxCommandResult({
+        result: { exitCode: 0, stdout: 'output' },
+        sessionExpiredAndRecreated: flag,
+        success: true,
+      }),
+    ).toEqual({ exitCode: 0, output: 'output', stderr: undefined, success: true });
+  });
+
+  it.each([true, false])('preserves recreation when transport success is %s', async (success) => {
+    const { normalizeSandboxCommandResult } = await import('../service');
+
+    expect(
+      normalizeSandboxCommandResult({
+        error: success ? undefined : { message: 'missing file' },
+        result: { exitCode: 0, stdout: 'output' },
+        sessionExpiredAndRecreated: true,
+        success,
+      }),
+    ).toMatchObject({ sessionExpiredAndRecreated: true, success });
+  });
+});
+
 describe('SandboxMiddlewareService', () => {
   beforeEach(() => {
     vi.resetModules();

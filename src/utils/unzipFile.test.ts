@@ -1,5 +1,5 @@
 import { zip } from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { unzipFile } from './unzipFile';
 
@@ -124,6 +124,18 @@ describe('unzipFile', () => {
     });
 
     await expect(unzipFile(invalidFile)).rejects.toThrow();
+  });
+
+  it('should reject oversized ZIP files before reading them into memory', async () => {
+    const largeFile = new File([], 'large.zip', { type: 'application/zip' });
+    const arrayBuffer = vi.fn();
+    Object.defineProperties(largeFile, {
+      arrayBuffer: { value: arrayBuffer },
+      size: { value: 64 * 1024 * 1024 + 1 },
+    });
+
+    await expect(unzipFile(largeFile)).rejects.toThrow('too large');
+    expect(arrayBuffer).not.toHaveBeenCalled();
   });
 
   it('should handle various image file types with correct MIME types', async () => {

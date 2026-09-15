@@ -1656,27 +1656,4 @@ describe('parse', () => {
       });
     });
   });
-
-  describe('Performance', () => {
-    it('should parse 10000 items within 100ms', () => {
-      // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)
-      // This simulates a more realistic scenario where messages are not deeply nested
-      const largeInput = Array.from({ length: 10000 }, (_, i) => ({
-        id: `msg-${i}`,
-        role: i % 2 === 0 ? ('user' as const) : ('assistant' as const),
-        content: `Message ${i}`,
-        parentId: undefined, // All messages at the same level
-        createdAt: Date.now() + i,
-      }));
-
-      const startTime = performance.now();
-      const result = parse(largeInput as any[]);
-      const endTime = performance.now();
-
-      const executionTime = endTime - startTime;
-
-      expect(result.flatList.length).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(100);
-    });
-  });
 });

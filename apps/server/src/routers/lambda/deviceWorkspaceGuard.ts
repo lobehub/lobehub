@@ -62,15 +62,25 @@ export const assertWorkspaceRootApproved = async (
  * `deviceId` input: a workspace-scoped call against a device hidden from the
  * caller fails closed with the same NOT_FOUND an unknown device produces.
  *
- * Personal deviceIds are never in the hidden set (different hash domain), and
- * transient gateway-only devices (no DB row) are public by definition.
+ * The visible registry row is also the workspace execution authority. A live
+ * Gateway connection without that row can be a stale process that missed an
+ * Unshare RPC, so it must fail exactly like an unknown or private device.
+ *
+ * Use when:
+ * - A workspace-scoped RPC accepts a client-supplied logical device ID
+ *
+ * Expects:
+ * - `deviceModel` is already scoped to the authorized workspace and caller
+ *
+ * Returns:
+ * - Nothing for a visible registered device; otherwise throws `NOT_FOUND`
  */
 export const assertWorkspaceDeviceVisible = async (
   deviceModel: DeviceModel,
   deviceId: string,
 ): Promise<void> => {
-  const hiddenIds = await deviceModel.queryWorkspaceHiddenDeviceIds();
-  if (hiddenIds.includes(deviceId)) {
+  const device = await deviceModel.findWorkspaceDeviceById(deviceId);
+  if (!device) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
   }
 };

@@ -98,10 +98,33 @@ describe('hasVisibleRailWidget', () => {
   it('keeps a column that hosts needs-you and unread on the same hidden set', () => {
     expect(hasVisibleRailWidget({ hiddenWidgets: ['running', 'news', 'suggestions'] })).toBe(true);
   });
+
+  // The usage widget is a business slot: it must hold the rail open only where
+  // the slot actually renders something, or an OSS page hiding the other rail
+  // widgets would keep an empty rail on screen.
+  it('counts the usage widget only while its slot is active', () => {
+    const everythingElseHidden = {
+      ...railColumn,
+      hiddenWidgets: ['goals', 'running', 'news', 'suggestions'],
+    };
+
+    expect(hasVisibleRailWidget(everythingElseHidden)).toBe(false);
+    expect(hasVisibleRailWidget({ ...everythingElseHidden, usageActive: true })).toBe(true);
+  });
+
+  it('drops the rail once an active usage widget is switched off with the rest', () => {
+    expect(
+      hasVisibleRailWidget({
+        ...railColumn,
+        hiddenWidgets: ['goals', 'running', 'news', 'suggestions', 'usage'],
+        usageActive: true,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('resolveInboxScopeToggleSection', () => {
-  const populated = { needsYouCount: 2, runningCount: 1, unreadCount: 3 };
+  const populated = { needsYouCount: 2, unreadCount: 3 };
 
   it('keeps the scope toggle on needs-you while that widget is visible', () => {
     expect(resolveInboxScopeToggleSection({ ...populated, hiddenWidgets: [] })).toBe('needsYou');
@@ -113,10 +136,10 @@ describe('resolveInboxScopeToggleSection', () => {
     );
   });
 
-  it('falls through to running when both leading widgets are hidden', () => {
+  it('hides the scope toggle when both titled topic widgets are hidden', () => {
     expect(
       resolveInboxScopeToggleSection({ ...populated, hiddenWidgets: ['needsYou', 'unread'] }),
-    ).toBe('running');
+    ).toBeNull();
   });
 
   it('gives up the scope toggle only once every host widget is hidden', () => {
@@ -128,7 +151,7 @@ describe('resolveInboxScopeToggleSection', () => {
     ).toBeNull();
   });
 
-  it('suppresses a section through the task-mode props as well as the hidden set', () => {
+  it('suppresses titled sections through the task-mode props as well as the hidden set', () => {
     expect(
       resolveInboxScopeToggleSection({
         ...populated,
@@ -136,7 +159,7 @@ describe('resolveInboxScopeToggleSection', () => {
         hideNeedsYou: true,
         hideUnread: true,
       }),
-    ).toBe('running');
+    ).toBeNull();
   });
 
   it('still leads with unread in the main column when needs-you is hidden', () => {
@@ -164,7 +187,6 @@ describe('resolveInboxScopeToggleSection', () => {
       resolveInboxScopeToggleSection({
         hiddenWidgets: [],
         needsYouCount: 0,
-        runningCount: 0,
         unreadCount: 4,
       }),
     ).toBe('unread');

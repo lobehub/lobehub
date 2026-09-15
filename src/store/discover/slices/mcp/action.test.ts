@@ -6,8 +6,6 @@ import { globalHelpers } from '@/store/global/helpers';
 
 import { useDiscoverStore as useStore } from '../../store';
 
-vi.mock('zustand/traditional');
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
