@@ -88,6 +88,8 @@ export const trashItems = pgTable(
       .on(t.expiresAt)
       .where(sql`${t.rootId} IS NULL`),
     index('trash_items_root_id_idx').on(t.rootId),
+    index('trash_items_user_id_idx').on(t.userId),
+    index('trash_items_deleted_by_user_id_idx').on(t.deletedByUserId),
   ],
 );
 

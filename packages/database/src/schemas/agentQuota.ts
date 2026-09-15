@@ -201,6 +201,7 @@ export const agentQuotaSnapshots = pgTable(
     index('agent_quota_snapshots_account_captured_idx').on(t.accountId, t.capturedAt),
     index('agent_quota_snapshots_resets_at_idx').on(t.resetsAt),
     index('agent_quota_snapshots_workspace_id_idx').on(t.workspaceId),
+    index('agent_quota_snapshots_user_id_idx').on(t.userId),
   ],
 );
 
@@ -264,6 +265,7 @@ export const agentQuotaUsageLedger = pgTable(
     index('agent_quota_usage_ledger_message_id_idx').on(t.messageId),
     index('agent_quota_usage_ledger_operation_id_idx').on(t.operationId),
     index('agent_quota_usage_ledger_workspace_id_idx').on(t.workspaceId),
+    index('agent_quota_usage_ledger_user_id_idx').on(t.userId),
     uniqueIndex('agent_quota_usage_ledger_external_event_unique')
       .on(t.externalEventId)
       .where(sql`${t.externalEventId} IS NOT NULL`),
@@ -320,6 +322,7 @@ export const agentQuotaCalibrations = pgTable(
       t.calibratedAt,
     ),
     index('agent_quota_calibrations_workspace_id_idx').on(t.workspaceId),
+    index('agent_quota_calibrations_user_id_idx').on(t.userId),
   ],
 );
 
