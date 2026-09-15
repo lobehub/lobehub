@@ -83,6 +83,28 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns false for a remote media download timeout mislabeled as invalid_value', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: {
+          code: 'invalid_value',
+          error: {
+            code: 'invalid_value',
+            message:
+              'Unable to download content from the provided URL before the timeout. Check that the URL is publicly accessible and responds promptly, or upload the file and provide a file_id instead.',
+            param: 'url',
+            type: 'invalid_request_error',
+          },
+          param: 'url',
+          status: 400,
+          type: 'invalid_request_error',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: 'azure',
+      }),
+    ).toBe(false);
+  });
+
   it('returns true for provider request-body-too-large context errors', () => {
     expect(
       isNonRetryableRequestError({

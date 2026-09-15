@@ -81,6 +81,8 @@ vi.mock('@lobechat/model-runtime', async () => {
   // retry path and these tests share a single class identity for instanceof.
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  const { isRemoteMediaDownloadTimeoutError } =
+    await import('../../../../../../packages/model-runtime/src/utils/isNonRetryableRequestError');
   // Same treatment: the reasoning-config merge is pure, and the replay gate
   // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
   // implementation instead of a drifting stub.
@@ -106,6 +108,7 @@ vi.mock('@lobechat/model-runtime', async () => {
     isDeepSeekV4FamilyModel: (model: string) =>
       typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
     isEmptyModelCompletion,
+    isRemoteMediaDownloadTimeoutError,
     isKimiAlwaysPreserveThinkingModel: (model: string) =>
       /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
     ModelEmptyError,
@@ -5555,6 +5558,78 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
         ),
       ).toBe(false);
+    });
+
+    it('should retry a branding-provider remote media download timeout', async () => {
+      vi.useFakeTimers();
+
+      const mediaDownloadTimeout = {
+        error: {
+          code: 'invalid_value',
+          error: {
+            code: 'invalid_value',
+            message:
+              'Unable to download content from the provided URL before the timeout. Check that the URL is publicly accessible and responds promptly, or upload the file and provide a file_id instead.',
+            param: 'url',
+            type: 'invalid_request_error',
+          },
+          param: 'url',
+          status: 400,
+          type: 'invalid_request_error',
+        },
+        errorType: 'ProviderBizError',
+        provider: 'azure',
+      };
+      const mockChat = vi
+        .fn()
+        .mockRejectedValueOnce(mediaDownloadTimeout)
+        .mockImplementationOnce(async (_payload: any, options: any) => {
+          await options.callback.onText?.('recovered');
+          await options.callback.onCompletion?.({
+            finishReason: 'stop',
+            usage: { totalInputTokens: 10, totalOutputTokens: 2, totalTokens: 12 },
+          });
+          return new Response('done');
+        });
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-6-astra',
+          parentMessageId: 'parent-msg-123',
+          provider: 'lobehub',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+
+        await vi.runOnlyPendingTimersAsync();
+
+        const result = await resultPromise;
+
+        expect(mockChat).toHaveBeenCalledTimes(2);
+        expect(result.nextContext?.phase).toBe('llm_result');
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'msg-123',
+          expect.objectContaining({ content: 'recovered' }),
+        );
+        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining({
+            data: expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 4 }),
+            type: 'stream_retry',
+          }),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should retry a no-usage empty completion caused by a network error once', async () => {
