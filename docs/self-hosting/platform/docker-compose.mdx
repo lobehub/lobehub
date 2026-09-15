@@ -345,13 +345,14 @@ The `gateway` service lets agent runs execute on the LobeHub server instead of i
 
 - `AGENT_GATEWAY_URL`: the gateway address as reached by the browser, such as `https://gateway.example.com` or `http://your_server_ip:8787`. The browser opens a WebSocket connection to it, so a reverse proxy in front of it must allow WebSocket upgrades and long read timeouts. The LobeHub server reaches the gateway at `http://gateway:8787` inside the Compose network.
 - `GATEWAY_SERVICE_TOKEN`: a random token shared by LobeHub and the gateway.
-- `JWKS_KEY`: the RS256 key set LobeHub signs internal JWTs with; the gateway verifies browser sessions with its public half. Every deployment must use its own key.
+- `JWKS_KEY`: the RS256 key set LobeHub signs internal JWTs with. Every deployment must use its own key, and it stays in the `lobe` container.
+- `JWKS_PUBLIC_KEY`: the same key without its private fields. Only this value is passed to the gateway, which verifies browser sessions with it.
 
 ```sh
 # GATEWAY_SERVICE_TOKEN
 openssl rand -hex 32
-# JWKS_KEY
-docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("crypto");const {privateKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});console.log(JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"}]}))'
+# JWKS_KEY and JWKS_PUBLIC_KEY (paste both lines into .env)
+docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("crypto");const {privateKey,publicKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});const meta={alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"};console.log("JWKS_KEY="+JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),...meta}]}));console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[{...publicKey.export({format:"jwk"}),...meta}]}))'
 ```
 
 <Callout type="warning">
@@ -388,11 +389,17 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
   GATEWAY_SERVICE_TOKEN=
   ```
 
+  Then add `JWKS_PUBLIC_KEY`, the public half of your existing `JWKS_KEY`, by running this in the directory that holds `.env` and pasting its output:
+
+  ```sh
+  docker run --rm -e JWKS_KEY="$(grep '^JWKS_KEY=' .env | cut -d= -f2-)" --entrypoint /bin/node lobehub/lobehub -e 'const {d,p,q,dp,dq,qi,...pub}=JSON.parse(process.env.JWKS_KEY).keys[0];console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[pub]}))'
+  ```
+
   In domain mode, also reverse proxy the gateway domain to port `8787` with WebSocket upgrades enabled.
 
   ### Replace the example `JWKS_KEY`
 
-  If `JWKS_KEY` in `.env` is still the value shipped in the old `.env.example` (its `kid` is `6823046760c5d460`), anyone can forge tokens your deployment accepts. Generate a new key with the command in [Necessary Configuration](#necessary-configuration) and replace it. Desktop and CLI clients may need to sign in again afterwards.
+  If `JWKS_KEY` in `.env` is still the value shipped in the old `.env.example` (its `kid` is `6823046760c5d460`), anyone can forge tokens your deployment accepts. Generate a new key pair with the command in [Necessary Configuration](#necessary-configuration) and replace both `JWKS_KEY` and `JWKS_PUBLIC_KEY`. Desktop and CLI clients may need to sign in again afterwards.
 
   ### Recreate the stack
 

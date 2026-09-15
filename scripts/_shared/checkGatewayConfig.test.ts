@@ -6,13 +6,15 @@ import {
   PUBLIC_EXAMPLE_JWKS_KID,
 } from './checkGatewayConfig.js';
 
-const jwks = (kid: string) => JSON.stringify({ keys: [{ alg: 'RS256', kid, kty: 'RSA' }] });
+const jwks = (kid: string, fields: Record<string, string> = {}) =>
+  JSON.stringify({ keys: [{ alg: 'RS256', e: 'AQAB', kid, kty: 'RSA', n: 'modulus', ...fields }] });
 
 const configured = {
   AGENT_GATEWAY_SERVICE_TOKEN: 'token',
   AGENT_GATEWAY_URL: 'http://localhost:8787',
   ENABLE_AGENT_GATEWAY: '1',
-  JWKS_KEY: jwks('fresh-key'),
+  JWKS_KEY: jwks('fresh-key', { d: 'private-exponent' }),
+  JWKS_PUBLIC_KEY: jwks('fresh-key'),
 };
 
 describe('collectGatewayConfigIssues', () => {
@@ -31,7 +33,12 @@ describe('collectGatewayConfigIssues', () => {
     });
 
     expect(issues).toHaveLength(1);
-    expect(issues[0].vars).toEqual(['AGENT_GATEWAY_URL', 'GATEWAY_SERVICE_TOKEN', 'JWKS_KEY']);
+    expect(issues[0].vars).toEqual([
+      'AGENT_GATEWAY_URL',
+      'GATEWAY_SERVICE_TOKEN',
+      'JWKS_KEY',
+      'JWKS_PUBLIC_KEY',
+    ]);
   });
 
   it('treats setup.sh placeholders as missing', () => {
@@ -39,9 +46,10 @@ describe('collectGatewayConfigIssues', () => {
       ...configured,
       AGENT_GATEWAY_SERVICE_TOKEN: 'YOUR_GATEWAY_SERVICE_TOKEN',
       JWKS_KEY: 'YOUR_JWKS_KEY',
+      JWKS_PUBLIC_KEY: 'YOUR_JWKS_PUBLIC_KEY',
     });
 
-    expect(issues[0].vars).toEqual(['GATEWAY_SERVICE_TOKEN', 'JWKS_KEY']);
+    expect(issues[0].vars).toEqual(['GATEWAY_SERVICE_TOKEN', 'JWKS_KEY', 'JWKS_PUBLIC_KEY']);
   });
 
   it('flags a JWKS_KEY that is not valid JSON', () => {
@@ -54,6 +62,24 @@ describe('collectGatewayConfigIssues', () => {
     const issues = collectGatewayConfigIssues({ JWKS_KEY: jwks(PUBLIC_EXAMPLE_JWKS_KID) });
 
     expect(issues.map((issue) => issue.name)).toEqual(['Public example JWKS_KEY']);
+  });
+
+  it('flags an upgrade that still passes the full JWKS_KEY to the gateway', () => {
+    const issues = collectGatewayConfigIssues({
+      ...configured,
+      JWKS_PUBLIC_KEY: configured.JWKS_KEY,
+    });
+
+    expect(issues.map((issue) => issue.name)).toEqual(['JWKS_PUBLIC_KEY contains the private key']);
+  });
+
+  it('flags a JWKS_PUBLIC_KEY derived from a different key', () => {
+    const issues = collectGatewayConfigIssues({
+      ...configured,
+      JWKS_PUBLIC_KEY: jwks('fresh-key', { n: 'another-modulus' }),
+    });
+
+    expect(issues.map((issue) => issue.name)).toEqual(['JWKS_PUBLIC_KEY does not match JWKS_KEY']);
   });
 });
 

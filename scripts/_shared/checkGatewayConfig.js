@@ -15,12 +15,16 @@ const UPGRADE_DOC_URL =
  */
 const PUBLIC_EXAMPLE_JWKS_KID = '6823046760c5d460';
 
+/** JWK members that only a private RSA key carries. */
+const PRIVATE_JWK_FIELDS = ['d', 'p', 'q', 'dp', 'dq', 'qi'];
+
 const isUnset = (value) => !value || value.startsWith('YOUR_');
 
-const readJwksKid = (raw) => {
+/** First key of a JWKS JSON string, `null` for valid JSON without keys, `undefined` if unparsable. */
+const readFirstJwk = (raw) => {
   try {
-    const kid = JSON.parse(raw)?.keys?.[0]?.kid;
-    return typeof kid === 'string' ? kid : null;
+    const key = JSON.parse(raw)?.keys?.[0];
+    return key && typeof key === 'object' ? key : null;
   } catch {
     return undefined;
   }
@@ -32,9 +36,9 @@ const readJwksKid = (raw) => {
  */
 function collectGatewayConfigIssues(env = process.env) {
   const issues = [];
-  const jwksKid = isUnset(env.JWKS_KEY) ? undefined : readJwksKid(env.JWKS_KEY);
+  const privateJwk = isUnset(env.JWKS_KEY) ? undefined : readFirstJwk(env.JWKS_KEY);
 
-  if (jwksKid === PUBLIC_EXAMPLE_JWKS_KID) {
+  if (privateJwk?.kid === PUBLIC_EXAMPLE_JWKS_KID) {
     issues.push({
       message:
         'JWKS_KEY is the example key that was published in .env.example. Anyone can forge tokens this server and its gateway accept. Generate a new key and replace it in .env.',
@@ -50,7 +54,11 @@ function collectGatewayConfigIssues(env = process.env) {
   if (isUnset(env.AGENT_GATEWAY_URL)) missing.push('AGENT_GATEWAY_URL');
   if (isUnset(env.AGENT_GATEWAY_SERVICE_TOKEN)) missing.push('GATEWAY_SERVICE_TOKEN');
   if (isUnset(env.JWKS_KEY)) missing.push('JWKS_KEY');
-  else if (jwksKid === undefined) missing.push('JWKS_KEY (not valid JWKS JSON)');
+  else if (privateJwk === undefined) missing.push('JWKS_KEY (not valid JWKS JSON)');
+
+  const publicJwk = isUnset(env.JWKS_PUBLIC_KEY) ? undefined : readFirstJwk(env.JWKS_PUBLIC_KEY);
+  if (isUnset(env.JWKS_PUBLIC_KEY)) missing.push('JWKS_PUBLIC_KEY');
+  else if (publicJwk === undefined) missing.push('JWKS_PUBLIC_KEY (not valid JWKS JSON)');
 
   if (missing.length > 0) {
     issues.push({
@@ -58,6 +66,24 @@ function collectGatewayConfigIssues(env = process.env) {
         'docker-compose.yml enables Gateway Mode, but .env is missing its settings. The gateway container cannot start and agent runs fall back to the browser. Add the variables to .env, then run `docker compose up -d --force-recreate`.',
       name: 'Gateway Mode is not configured',
       vars: missing,
+    });
+  }
+
+  if (publicJwk && PRIVATE_JWK_FIELDS.some((field) => field in publicJwk)) {
+    issues.push({
+      message:
+        'JWKS_PUBLIC_KEY is passed to the gateway container, but it includes the private key. Anyone who can read the gateway environment could forge tokens. Replace it with the public half of JWKS_KEY.',
+      name: 'JWKS_PUBLIC_KEY contains the private key',
+      vars: ['JWKS_PUBLIC_KEY'],
+    });
+  }
+
+  if (privateJwk?.n && publicJwk?.n && privateJwk.n !== publicJwk.n) {
+    issues.push({
+      message:
+        'JWKS_PUBLIC_KEY is not the public half of JWKS_KEY, so the gateway rejects every browser session and agent runs fall back to the browser. Derive it again from JWKS_KEY.',
+      name: 'JWKS_PUBLIC_KEY does not match JWKS_KEY',
+      vars: ['JWKS_PUBLIC_KEY'],
     });
   }
 

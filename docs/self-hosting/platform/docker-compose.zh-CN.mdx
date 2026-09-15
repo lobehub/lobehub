@@ -339,13 +339,14 @@ INTERNAL_APP_URL=http://localhost:3210
 
 - `AGENT_GATEWAY_URL`：浏览器访问网关的地址，例如 `https://gateway.example.com` 或 `http://your_server_ip:8787`。浏览器会向该地址建立 WebSocket 连接，因此其前面的反向代理需要允许 WebSocket 升级并设置较长的读取超时。LobeHub 服务端则在 Compose 网络内通过 `http://gateway:8787` 访问网关。
 - `GATEWAY_SERVICE_TOKEN`：LobeHub 与网关共享的随机 Token。
-- `JWKS_KEY`：LobeHub 签发内部 JWT 使用的 RS256 密钥，网关用其公钥部分校验浏览器会话。每个部署都必须使用自己的密钥。
+- `JWKS_KEY`：LobeHub 签发内部 JWT 使用的 RS256 密钥。每个部署都必须使用自己的密钥，且只保留在 `lobe` 容器中。
+- `JWKS_PUBLIC_KEY`：同一密钥去掉私钥字段后的公钥。只有它会传给网关，用于校验浏览器会话。
 
 ```sh
 # GATEWAY_SERVICE_TOKEN
 openssl rand -hex 32
-# JWKS_KEY
-docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("crypto");const {privateKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});console.log(JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"}]}))'
+# JWKS_KEY 与 JWKS_PUBLIC_KEY（把输出的两行都填入 .env）
+docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("crypto");const {privateKey,publicKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});const meta={alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"};console.log("JWKS_KEY="+JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),...meta}]}));console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[{...publicKey.export({format:"jwk"}),...meta}]}))'
 ```
 
 <Callout type="warning">
@@ -382,11 +383,17 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
   GATEWAY_SERVICE_TOKEN=
   ```
 
+  然后在 `.env` 所在目录运行下面的命令，从现有 `JWKS_KEY` 导出公钥，并把输出的 `JWKS_PUBLIC_KEY` 填入 `.env`：
+
+  ```sh
+  docker run --rm -e JWKS_KEY="$(grep '^JWKS_KEY=' .env | cut -d= -f2-)" --entrypoint /bin/node lobehub/lobehub -e 'const {d,p,q,dp,dq,qi,...pub}=JSON.parse(process.env.JWKS_KEY).keys[0];console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[pub]}))'
+  ```
+
   域名模式下，还需要为网关域名配置反向代理到 `8787` 端口，并开启 WebSocket 升级。
 
   ### 替换示例 `JWKS_KEY`
 
-  如果 `.env` 中的 `JWKS_KEY` 仍是旧版 `.env.example` 自带的值（其 `kid` 为 `6823046760c5d460`），任何人都能伪造你的部署会接受的令牌。请使用 [必要配置](#必要配置) 中的命令生成新密钥并替换，替换后桌面端和 CLI 可能需要重新登录。
+  如果 `.env` 中的 `JWKS_KEY` 仍是旧版 `.env.example` 自带的值（其 `kid` 为 `6823046760c5d460`），任何人都能伪造你的部署会接受的令牌。请使用 [必要配置](#必要配置) 中的命令生成新的密钥对，同时替换 `JWKS_KEY` 与 `JWKS_PUBLIC_KEY`，替换后桌面端和 CLI 可能需要重新登录。
 
   ### 重建服务
 

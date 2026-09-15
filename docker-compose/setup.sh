@@ -753,20 +753,21 @@ fi
 # The .env template only carries placeholders for these, so they are generated
 # regardless of the answer above. JWKS_KEY must be unique per deployment: the
 # gateway trusts every browser session JWT signed with it.
-generate_jwks_key() {
-    local script='const c=require("crypto");const {privateKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});console.log(JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"}]}))'
-    local key=""
+generate_jwks_key_pair() {
+    # Prints the private key set, then the same key without its private fields for the gateway
+    local script='const c=require("crypto");const {privateKey,publicKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});const meta={alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"};console.log(JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),...meta}]}));console.log(JSON.stringify({keys:[{...publicKey.export({format:"jwk"}),...meta}]}))'
+    local keys=""
     if command -v node &> /dev/null ; then
-        key=$(node -e "$script" 2>/dev/null)
+        keys=$(node -e "$script" 2>/dev/null)
     fi
     # Fall back to the Node.js runtime inside the LobeHub image
-    if [[ "$key" != '{"keys":'* ]] && command -v docker &> /dev/null ; then
-        key=$(docker run --rm --entrypoint /bin/node lobehub/lobehub -e "$script" 2>/dev/null)
+    if [[ "$keys" != '{"keys":'* ]] && command -v docker &> /dev/null ; then
+        keys=$(docker run --rm --entrypoint /bin/node lobehub/lobehub -e "$script" 2>/dev/null)
     fi
-    if [[ "$key" != '{"keys":'* ]]; then
+    if [[ "$keys" != '{"keys":'*$'\n''{"keys":'* ]]; then
         return 1
     fi
-    echo "$key"
+    echo "$keys"
 }
 
 section_generate_gateway_secrets() {
@@ -779,11 +780,14 @@ section_generate_gateway_secrets() {
         sed "${SED_INPLACE_ARGS[@]}" "s#^GATEWAY_SERVICE_TOKEN=.*#GATEWAY_SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN}#" .env
     fi
 
-    JWKS_KEY=$(generate_jwks_key)
+    JWKS_KEYS=$(generate_jwks_key_pair)
     if [ $? -ne 0 ]; then
         echo $(show_message "tips_generate_jwks_failed")
     else
+        JWKS_KEY=${JWKS_KEYS%%$'\n'*}
+        JWKS_PUBLIC_KEY=${JWKS_KEYS#*$'\n'}
         sed "${SED_INPLACE_ARGS[@]}" "s#^JWKS_KEY=.*#JWKS_KEY=${JWKS_KEY}#" .env
+        sed "${SED_INPLACE_ARGS[@]}" "s#^JWKS_PUBLIC_KEY=.*#JWKS_PUBLIC_KEY=${JWKS_PUBLIC_KEY}#" .env
     fi
 }
 section_generate_gateway_secrets

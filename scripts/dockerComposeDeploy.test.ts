@@ -332,4 +332,37 @@ describe('setup.sh one-click install', () => {
     const wgetOnly = createStubPath({ wget: 'echo wget > "$3"' });
     expect(runInBash(script, wgetOnly)).toBe('wget');
   });
+
+  it('generates a matching key pair whose public half carries no private key fields', () => {
+    const bin = createStubPath({});
+    symlinkSync(process.execPath, path.join(bin, 'node'));
+
+    const output = runInBash(
+      `${extractFunction('generate_jwks_key_pair')}\ngenerate_jwks_key_pair`,
+      bin,
+    );
+    const [privateKey, publicKey] = output.split('\n').map((line) => JSON.parse(line).keys[0]);
+
+    expect(privateKey).toMatchObject({ alg: 'RS256', kty: 'RSA' });
+    expect(privateKey.d).toBeTruthy();
+    for (const field of ['d', 'p', 'q', 'dp', 'dq', 'qi']) {
+      expect(publicKey).not.toHaveProperty(field);
+    }
+    expect(publicKey).toMatchObject({
+      alg: 'RS256',
+      kid: privateKey.kid,
+      kty: 'RSA',
+      n: privateKey.n,
+    });
+  });
+
+  it('passes only the public key to the gateway container', () => {
+    const { gateway } = compose.services;
+
+    expect(gateway.environment).toContain('JWKS_PUBLIC_KEY=${JWKS_PUBLIC_KEY:-}');
+    expect(gateway.environment?.join('\n')).not.toMatch(/\$\{JWKS_KEY\b/);
+    for (const envExample of envExamples) {
+      expect(envExample).toContain('JWKS_PUBLIC_KEY=YOUR_JWKS_PUBLIC_KEY\n');
+    }
+  });
 });

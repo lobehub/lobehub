@@ -63,8 +63,8 @@ services:
       - '${DEVICE_GATEWAY_PORT:-8788}:8788'
     environment:
       - 'SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN:-}'
-      # The gateway only reads the public half (kty/alg/n/e) of the key set.
-      - 'JWKS_PUBLIC_KEY=${JWKS_KEY:-}'
+      # Public key only: the private JWKS_KEY stays in the lobe container
+      - 'JWKS_PUBLIC_KEY=${JWKS_PUBLIC_KEY:-}'
       - 'LOBE_API_BASE_URL=http://lobe:3210'
     restart: always
     networks:
