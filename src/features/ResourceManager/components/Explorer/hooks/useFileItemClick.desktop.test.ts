@@ -24,7 +24,8 @@ const { getOrCreateTabRouter, getTabRouter, resetTabRouterManager } =
   await import('@/features/Electron/TabHost/tabRouterManager');
 const { useElectronStore } = await import('@/store/electron');
 const { useResourceManagerStore } = await import('@/features/ResourceManager/store');
-const { useFileItemClick } = await import('./useFileItemClick');
+const { DETAIL_PANEL_OPEN_DELAY_MS, useFileItemClick, useFileItemDoubleClick } =
+  await import('./useFileItemClick');
 
 const TAB_ID = 'tab-1';
 const TAB_URL = '/resource/library/kb_1?view=grid';
@@ -58,12 +59,25 @@ const setupActiveTab = (url: string) => {
   getOrCreateTabRouter(TAB_ID, url, createRouter);
 };
 
+const flushPanelOpenDelay = () =>
+  act(async () => {
+    vi.advanceTimersByTime(DETAIL_PANEL_OPEN_DELAY_MS);
+  });
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   setupActiveTab(TAB_URL);
+  useResourceManagerStore.setState({
+    currentViewItemId: undefined,
+    detailPanelId: undefined,
+    detailPanelIsPage: false,
+    mode: 'explorer',
+  });
 });
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   resetTabRouterManager();
   useElectronStore.setState({ activeTabId: null, tabs: [] });
 });
@@ -81,6 +95,7 @@ describe('useFileItemClick (desktop shell)', () => {
     await act(async () => {
       result.current();
     });
+    await flushPanelOpenDelay();
 
     // A plain click is an in-context preview: it must not write `?file=`,
     // which doubles as the fullscreen deep-link on restore.
@@ -90,8 +105,70 @@ describe('useFileItemClick (desktop shell)', () => {
     expect(useResourceManagerStore.getState().detailPanelIsPage).toBe(false);
   });
 
+  it('waits out the double-click window before expanding a closed panel', async () => {
+    const { result } = renderFileClick({
+      id: 'file_1',
+      isFolder: false,
+      isPage: false,
+      libraryId: 'kb_1',
+      openInPanel: true,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    // Expanding the panel reflows the explorer, so it must not happen between
+    // the two clicks of a double click.
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
+
+    await flushPanelOpenDelay();
+
+    expect(useResourceManagerStore.getState().detailPanelId).toBe('file_1');
+  });
+
+  it('switches an already open panel immediately', async () => {
+    useResourceManagerStore.setState({ detailPanelId: 'file_1' });
+    const { result } = renderFileClick({
+      id: 'file_2',
+      isFolder: false,
+      isPage: false,
+      libraryId: 'kb_1',
+      openInPanel: true,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    expect(useResourceManagerStore.getState().detailPanelId).toBe('file_2');
+  });
+
+  it('never opens the panel when the click turns into a double click', async () => {
+    const { result: clickResult } = renderFileClick({
+      id: 'file_1',
+      isFolder: false,
+      isPage: false,
+      libraryId: 'kb_1',
+      openInPanel: true,
+    });
+    const { result: doubleClickResult } = renderHook(
+      () => useFileItemDoubleClick({ id: 'file_1', isPage: false }),
+      { wrapper: shellWrapper },
+    );
+
+    await act(async () => {
+      clickResult.current();
+      clickResult.current();
+      doubleClickResult.current();
+    });
+    await flushPanelOpenDelay();
+
+    expect(useResourceManagerStore.getState().mode).toBe('editor');
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
+  });
+
   it('opens a page in the inline detail panel instead of the page editor', async () => {
-    useResourceManagerStore.setState({ mode: 'explorer' });
     const { result } = renderFileClick({
       id: 'page_1',
       isFolder: false,
@@ -103,6 +180,7 @@ describe('useFileItemClick (desktop shell)', () => {
     await act(async () => {
       result.current();
     });
+    await flushPanelOpenDelay();
 
     expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid');
     expect(useResourceManagerStore.getState().mode).toBe('explorer');
@@ -111,7 +189,6 @@ describe('useFileItemClick (desktop shell)', () => {
   });
 
   it('opens the page editor on double click of a page', async () => {
-    const { useFileItemDoubleClick } = await import('./useFileItemClick');
     const { result } = renderHook(() => useFileItemDoubleClick({ id: 'page_1', isPage: true }), {
       wrapper: shellWrapper,
     });
@@ -126,7 +203,6 @@ describe('useFileItemClick (desktop shell)', () => {
   });
 
   it('keeps the sidebar tree click opening the fullscreen file editor', async () => {
-    useResourceManagerStore.setState({ detailPanelId: undefined, mode: 'explorer' });
     const { result } = renderFileClick({
       id: 'file_2',
       isFolder: false,
@@ -144,18 +220,6 @@ describe('useFileItemClick (desktop shell)', () => {
   });
 
   it('fullscreen editor on double click writes ?file= to the tab router', async () => {
-    const { result: clickResult } = renderFileClick({
-      id: 'file_1',
-      isFolder: false,
-      isPage: false,
-      libraryId: 'kb_1',
-      openInPanel: true,
-    });
-    await act(async () => {
-      clickResult.current();
-    });
-
-    const { useFileItemDoubleClick } = await import('./useFileItemClick');
     const { result } = renderHook(() => useFileItemDoubleClick({ id: 'file_1', isPage: false }), {
       wrapper: shellWrapper,
     });

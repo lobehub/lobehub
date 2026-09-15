@@ -21,6 +21,22 @@ export interface UseFileItemClickOptions {
 }
 
 /**
+ * How long a first click waits before expanding a closed detail panel. Expanding
+ * the panel narrows the explorer (the masonry drops columns), which can move the
+ * clicked card before a second click lands and swallow the double click.
+ */
+export const DETAIL_PANEL_OPEN_DELAY_MS = 250;
+
+let pendingPanelOpen: ReturnType<typeof setTimeout> | undefined;
+
+const cancelPendingPanelOpen = () => {
+  if (pendingPanelOpen === undefined) return;
+
+  clearTimeout(pendingPanelOpen);
+  pendingPanelOpen = undefined;
+};
+
+/**
  * Shared hook for handling file item click across different view modes (list/masonry)
  */
 export const useFileItemClick = ({
@@ -79,8 +95,22 @@ export const useFileItemClick = ({
       // A plain click is a "look at this" gesture — the promise of the explorer
       // is to keep the working list visible. Fullscreen focus stays available as
       // the explicit double click (see `useFileItemDoubleClick`).
-      openDetailPanel(id, isPage);
-      onOpen?.(id);
+      const open = () => {
+        openDetailPanel(id, isPage);
+        onOpen?.(id);
+      };
+
+      cancelPendingPanelOpen();
+      // Switching an already open panel keeps the layout, so it can be instant.
+      if (useResourceManagerStore.getState().detailPanelId) {
+        open();
+        return;
+      }
+
+      pendingPanelOpen = setTimeout(() => {
+        pendingPanelOpen = undefined;
+        open();
+      }, DETAIL_PANEL_OPEN_DELAY_MS);
       return;
     }
 
@@ -121,6 +151,8 @@ export const useFileItemDoubleClick = ({ id, isPage }: { id: string; isPage: boo
   const navigate = useWorkspaceAwareNavigate();
 
   return useCallback(() => {
+    // Both clicks of the double click scheduled a panel open; drop it.
+    cancelPendingPanelOpen();
     closeDetailPanel();
     setCurrentViewItemId(id);
     setMode(isPage ? 'page' : 'editor');
