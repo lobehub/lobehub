@@ -484,6 +484,8 @@ docker compose logs rustfs
 docker compose logs rustfs-init
 ```
 
+`rustfs-init` 同时会为存储桶配置浏览器直传所需的 CORS 规则。如果浏览器上传时报网络错误，可以执行 `docker compose up -d --force-recreate rustfs-init` 重新配置。
+
 确认 bucket 是否已创建：`docker compose exec rustfs ls /data/lobe`
 
 **磁盘空间不足**

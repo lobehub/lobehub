@@ -490,6 +490,8 @@ docker compose logs rustfs
 docker compose logs rustfs-init
 ```
 
+`rustfs-init` also applies the bucket CORS rule that browser uploads need. If uploads fail in the browser with a network error, re-run it with `docker compose up -d --force-recreate rustfs-init`.
+
 Verify the bucket was created: `docker compose exec rustfs ls /data/lobe`
 
 **Running out of disk space**

@@ -50,15 +50,22 @@ services:
       - '5432:5432'
     volumes:
       - './data:/var/lib/postgresql/data'
-    command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
+    # Keep the image's default preload list: its first-start bootstrap creates the pg_cron
+    # extension and aborts initialization when pg_cron is missing from this list.
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_search,pg_cron,pg_stat_statements']
     environment:
       - 'POSTGRES_DB=${LOBE_DB_NAME}'
       - 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      # Probe over TCP: during first-time initialization the image runs a temporary server that
+      # only listens on the Unix socket, so a socket probe reports ready while LobeHub's TCP
+      # connections are still refused.
+      test: ['CMD-SHELL', 'pg_isready -U postgres -h 127.0.0.1']
       interval: 5s
       timeout: 5s
       retries: 5
+      # TCP stays closed until initialization finishes, which can outlast the retries above
+      start_period: 60s
     restart: always
     networks:
       - lobe-network
@@ -119,7 +126,8 @@ services:
     volumes:
       - ./bucket.config.json:/bucket.config.json:ro
     entrypoint: /bin/sh
-    command: -c ' set -eux; echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}"; rc --version; rc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; rc ls rustfs || true; rc mb "rustfs/lobe" --ignore-existing; rc admin info cluster rustfs || true; rc anonymous set-json "/bucket.config.json" "rustfs/lobe"; '
+    # Browsers upload through presigned URLs on the RustFS origin, so the bucket also needs a CORS rule
+    command: -c ' set -eux; echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}"; rc --version; rc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; rc ls rustfs || true; rc mb "rustfs/lobe" --ignore-existing; rc admin info cluster rustfs || true; rc anonymous set-json "/bucket.config.json" "rustfs/lobe"; printf "%s" "<CORSConfiguration><CORSRule><AllowedOrigin>*</AllowedOrigin><AllowedMethod>GET</AllowedMethod><AllowedMethod>PUT</AllowedMethod><AllowedMethod>HEAD</AllowedMethod><AllowedHeader>*</AllowedHeader><ExposeHeader>ETag</ExposeHeader><MaxAgeSeconds>3600</MaxAgeSeconds></CORSRule></CORSConfiguration>" | rc bucket cors set "rustfs/lobe" -; '
     restart: 'no'
     networks:
       - lobe-network
