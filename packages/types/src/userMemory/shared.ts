@@ -58,6 +58,7 @@ export enum TypesEnum {
   Activity = 'activity',
   Context = 'context',
   Event = 'event',
+  Experience = 'experience',
   Fact = 'fact',
   Location = 'location',
   Other = 'other',
