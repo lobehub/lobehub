@@ -208,6 +208,12 @@ class ChatService {
       }
     }
 
+    // The context builder reads the agent's knowledge files straight from the
+    // config and skips any whose parse has not run, so an unparsed file would be
+    // missing from the prompt without a trace. Hydrate those first; the call
+    // resolves even when an individual parse fails.
+    await getAgentStoreState().ensureAgentFileContents(targetAgentId, options?.signal);
+
     if (isAgentBuilderEnabled) {
       const activeAgentId = getChatStoreState().activeAgentId || '';
       const baseContext =

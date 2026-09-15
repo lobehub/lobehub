@@ -88,6 +88,9 @@ export class ClientContextBuilder implements ContextBuilder {
       {
         initialContext: this.context.runtimeContext?.initialContext,
         metadata: this.context.metadata,
+        // Context assembly can await a knowledge file parse, so Stop has to reach
+        // it too — not just the model call that follows.
+        signal: operation.abortController.signal,
         stepContext: this.context.runtimeContext?.stepContext,
         trace: chatService.mapChatTrace({
           traceId: operation.metadata?.traceId,
