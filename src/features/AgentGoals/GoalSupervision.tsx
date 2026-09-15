@@ -1,7 +1,8 @@
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { copyToClipboard, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Text, toast } from '@lobehub/ui/base-ui';
-import { CopyIcon, MoreHorizontal, PanelRightCloseIcon } from 'lucide-react';
+import { CopyIcon, ExternalLink, MoreHorizontal, PanelRightCloseIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +10,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { ChatList } from '@/features/Conversation';
 import MessageItem from '@/features/Conversation/Messages';
 import NavHeader from '@/features/NavHeader';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -35,10 +37,18 @@ export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSu
     (index: number, id: string) => <MessageItem disableEditing id={id} index={index} />,
     [],
   );
-  // The supervision record is referenced from elsewhere (`lh topic view`, a
-  // bug report), so its id is one click away like a task run's.
+  const navigate = useWorkspaceAwareNavigate();
+  // This panel is a read-only view of the manager's conversation. Opening it in
+  // the agent's own chat is how you continue it; the id is one click away for
+  // referencing it elsewhere (`lh topic view`, a bug report), like a task run's.
   const menuItems = useMemo<DropdownItem[]>(
     () => [
+      {
+        icon: ExternalLink,
+        key: 'openAgentTopic',
+        label: t('taskDetail.topicMenu.openAgentTopic'),
+        onClick: () => navigate(AGENT_CHAT_TOPIC_URL(agentId, topicId)),
+      },
       {
         icon: CopyIcon,
         key: 'copyTopicId',
@@ -49,7 +59,7 @@ export const GoalSupervision = ({ agentId, goalId, onCollapse, topicId }: GoalSu
         },
       },
     ],
-    [t, topicId],
+    [agentId, navigate, t, topicId],
   );
 
   return (
