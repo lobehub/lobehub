@@ -581,8 +581,22 @@ export const setupTurn = async (
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
     }
 
-    /** A group topic pins its owning agent; member runs keep their own model and effort. */
-    const canUseTopicPin = !existingTopic?.groupId || existingTopic.agentId === resolvedAgentId;
+    /**
+     * A topic's model pin belongs to the agent that topic is for. A group topic
+     * pins its owning agent; member runs keep their own model and effort. A
+     * `callAgent` child is the same shape without a group: it runs in an
+     * isolation thread on the CALLER's topic and passes no model override, so
+     * the caller's pin decided the callee's model and the callee's own
+     * model/provider never took part in resolution at all (#19542) — it only
+     * ran on its own model when it was the root run.
+     *
+     * Both halves are kept on purpose. The agent check alone would start
+     * pinning a legacy group topic that has no `agentId` of its own, and the
+     * group check alone is what missed the one-to-one case.
+     */
+    const canUseTopicPin =
+      (!existingTopic?.groupId || existingTopic.agentId === resolvedAgentId) &&
+      (!existingTopic?.agentId || existingTopic.agentId === resolvedAgentId);
     const pinnedModel = canUseTopicPin ? existingTopic?.model : undefined;
     if (pinnedModel) {
       model = modelOverride || pinnedModel;
