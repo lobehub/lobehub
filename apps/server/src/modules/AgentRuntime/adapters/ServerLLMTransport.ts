@@ -18,6 +18,7 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type ChatStreamPayload,
   consumeStreamUntilDone,
+  isRemoteMediaDownloadTimeoutError,
   ModelEmptyError,
   type ModelRuntime,
 } from '@lobechat/model-runtime';
@@ -58,6 +59,8 @@ const SERVER_LLM_RETRY_POLICY = {
 
 const NETWORK_EMPTY_COMPLETION_MAX_RETRIES = 3;
 const NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS = NETWORK_EMPTY_COMPLETION_MAX_RETRIES + 1;
+const REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_RETRIES = 3;
+const REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_ATTEMPTS = REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_RETRIES + 1;
 
 /**
  * A stream that died on the transport before the model produced anything: no
@@ -94,7 +97,7 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
 
   classifyError(error: unknown) {
     const classified = classifyLLMError(error);
-    return isRetryableNetworkEmptyCompletion(error)
+    return isRetryableNetworkEmptyCompletion(error) || isRemoteMediaDownloadTimeoutError(error)
       ? { ...classified, kind: 'retry' as const }
       : classified;
   }
@@ -110,6 +113,7 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
     return Math.max(
       resolveLLMMaxAttempts(provider, SERVER_LLM_RETRY_POLICY),
       NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS,
+      REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_ATTEMPTS,
     );
   }
 
@@ -134,6 +138,9 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
 
   resolveRetryBudget(provider: string, error: unknown) {
     if (isRetryableNetworkEmptyCompletion(error)) return NETWORK_EMPTY_COMPLETION_MAX_RETRIES;
+    if (isRemoteMediaDownloadTimeoutError(error)) {
+      return REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_RETRIES;
+    }
     return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
   }
 
