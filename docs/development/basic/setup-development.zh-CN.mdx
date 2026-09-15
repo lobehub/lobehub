@@ -96,7 +96,7 @@ bun run dev:docker
 可以通过运行以下命令检查所有 Docker 服务运行状态：
 
 ```bash
-docker compose -f docker-compose/dev/docker-compose.yml ps
+docker compose --env-file docker-compose/dev/.env -f docker-compose/dev/docker-compose.yml ps
 ```
 
 #### 5. 运行数据库迁移
@@ -166,11 +166,11 @@ bun run dev:docker:reset
 
 ```bash
 # 检查端口使用情况
-lsof -i :5432  # PostgreSQL
-lsof -i :6379  # Redis
-lsof -i :9000  # RustFS API
-lsof -i :9001  # RustFS 控制台
-lsof -i :8180  # SearXNG
+lsof -i :5432 # PostgreSQL
+lsof -i :6379 # Redis
+lsof -i :9000 # RustFS API
+lsof -i :9001 # RustFS 控制台
+lsof -i :8180 # SearXNG
 ```
 
 ### 数据库迁移

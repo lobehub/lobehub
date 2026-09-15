@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import debug from 'debug';
 
-import { SOCK_FILE, SOCK_INFO_FILE, WINDOW_PIPE_FILE } from './const';
+import { MAX_IPC_MESSAGE_BUFFER_BYTES, SOCK_FILE, SOCK_INFO_FILE, WINDOW_PIPE_FILE } from './const';
 
 const log = debug('electron-server-ipc:client');
 
@@ -84,6 +84,11 @@ export class ElectronIpcClient {
 
           // Add new data to buffer
           this.dataBuffer += dataStr;
+          if (Buffer.byteLength(this.dataBuffer, 'utf8') > MAX_IPC_MESSAGE_BUFFER_BYTES) {
+            console.error('IPC response buffer exceeded maximum size; closing connection');
+            this.socket?.destroy();
+            return;
+          }
 
           // Split messages by newline
           const messages = this.dataBuffer.split('\n');

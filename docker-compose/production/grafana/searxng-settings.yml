@@ -1,3 +1,4 @@
+# eslint-disable yml/no-empty-mapping-value
 general:
   # Debug mode, only for development. Is overwritten by ${SEARXNG_DEBUG}
   debug: false
@@ -95,7 +96,7 @@ server:
   # If your instance owns a /etc/searxng/settings.yml file, then set the following
   # values there.
 
-  secret_key: '779c5b69fe650f147be9012abca6b44a8697acdb2817b46353f4779bb07d81d1' # Is overwritten by ${SEARXNG_SECRET}
+  secret_key: 'change-me' # Docker Compose requires SEARXNG_SECRET and overwrites this value.
   # Proxy image results through SearXNG. Is overwritten by ${SEARXNG_IMAGE_PROXY}
   image_proxy: false
   # 1.0 and 1.1 are supported

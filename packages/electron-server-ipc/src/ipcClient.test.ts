@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -32,6 +33,7 @@ describe('ElectronIpcClient', () => {
 
   // Mock socket
   const mockSocket = {
+    destroy: vi.fn(),
     on: vi.fn(),
     write: vi.fn(),
     end: vi.fn(),
@@ -124,9 +126,10 @@ describe('ElectronIpcClient', () => {
       // Reset socket mocks for each test
       mockSocket.on.mockReset();
       mockSocket.write.mockReset();
+      mockSocket.destroy.mockReset();
 
       // Default implementation for socket.on
-      mockSocket.on.mockImplementation((event, callback) => {
+      mockSocket.on.mockImplementation((_event, _callback) => {
         return mockSocket;
       });
 
@@ -629,6 +632,48 @@ describe('ElectronIpcClient', () => {
       expect(result).toBe('/path');
     });
 
+    it('should close the connection when the IPC response buffer is too large', async () => {
+      let connectionCallback: Function | undefined;
+      let dataCallback: Function | undefined;
+      let closeCallback: Function | undefined;
+
+      vi.mocked(net.createConnection).mockImplementation((path, callback) => {
+        connectionCallback = callback as Function;
+        return mockSocket as unknown as net.Socket;
+      });
+
+      mockSocket.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          dataCallback = callback as Function;
+        }
+        if (event === 'close') {
+          closeCallback = callback as Function;
+        }
+        return mockSocket;
+      });
+
+      mockSocket.destroy.mockImplementation(() => {
+        closeCallback?.();
+        return mockSocket;
+      });
+
+      const requestPromise = client.sendRequest('getDatabasePath');
+      void requestPromise.catch(() => {});
+
+      await vi.runAllTimersAsync();
+      if (connectionCallback) connectionCallback();
+      await new Promise((resolve) => process.nextTick(resolve));
+      expect(mockSocket.write).toHaveBeenCalled();
+
+      if (dataCallback) {
+        dataCallback(Buffer.alloc(10 * 1024 * 1024 + 1, 'a'));
+      }
+
+      expect(mockSocket.destroy).toHaveBeenCalledTimes(1);
+      expect((client as any).connectionAttempts).toBe(1);
+      await expect(requestPromise).rejects.toThrow('Connection to Electron IPC server lost');
+    });
+
     it('should handle connection attempt on already connected client', async () => {
       let connectionCallback: Function | undefined;
 
@@ -791,7 +836,7 @@ describe('ElectronIpcClient', () => {
       });
 
       // Start request
-      const requestPromise = client.sendRequest('getDatabasePath').catch(() => {});
+      void client.sendRequest('getDatabasePath').catch(() => {});
 
       // Immediately resolve connection
       if (connectionCallback) connectionCallback();
@@ -876,7 +921,7 @@ describe('ElectronIpcClient', () => {
       });
 
       // Start request
-      const requestPromise = client.sendRequest('getDatabasePath').catch(() => {});
+      void client.sendRequest('getDatabasePath').catch(() => {});
 
       // Allow request to start
       await vi.runAllTimersAsync();
@@ -916,7 +961,7 @@ describe('ElectronIpcClient', () => {
       client = new ElectronIpcClient(appId);
 
       // Setup socket.on
-      mockSocket.on.mockImplementation((event, callback) => {
+      mockSocket.on.mockImplementation((_event, _callback) => {
         return mockSocket;
       });
     });
@@ -930,7 +975,7 @@ describe('ElectronIpcClient', () => {
       });
 
       // Start a request to establish connection (but don't wait for it)
-      const requestPromise = client.sendRequest('getDatabasePath').catch(() => {}); // Ignore any errors
+      void client.sendRequest('getDatabasePath').catch(() => {}); // Ignore any errors
 
       // Simulate connection
       if (connectionCallback) connectionCallback();
@@ -967,7 +1012,7 @@ describe('ElectronIpcClient', () => {
       });
 
       // Start request and trigger error to set up reconnection
-      const requestPromise = client.sendRequest('getDatabasePath').catch(() => {});
+      void client.sendRequest('getDatabasePath').catch(() => {});
 
       // Allow promise to start
       await vi.runAllTimersAsync();

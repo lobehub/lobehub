@@ -1,3 +1,5 @@
+import { PassThrough } from 'node:stream';
+
 // @ts-ignore
 import fetch from 'node-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -342,6 +344,42 @@ describe('ssrfSafeFetch', () => {
 
       expect(mockResponse.arrayBuffer).toHaveBeenCalledTimes(1);
       expect(await response.text()).toBe('legacy path');
+    });
+  });
+
+  describe('stream response mode', () => {
+    it('returns the protected upstream body without buffering it first', async () => {
+      const body = new PassThrough();
+      const arrayBuffer = vi.fn().mockRejectedValue(new Error('body must not be buffered'));
+      mockFetch.mockResolvedValue({
+        arrayBuffer,
+        body,
+        headers: new Map([['content-type', 'video/mp4']]),
+        status: 200,
+        statusText: 'OK',
+      });
+
+      const response = await ssrfSafeFetch(
+        'https://cdn.example.com/video.mp4',
+        {},
+        { responseMode: 'stream' },
+      );
+
+      expect(arrayBuffer).not.toHaveBeenCalled();
+      body.end('streamed-video');
+      await expect(response.text()).resolves.toBe('streamed-video');
+    });
+
+    it('rejects an ambiguous buffer cap before starting the request', async () => {
+      await expect(
+        ssrfSafeFetch(
+          'https://cdn.example.com/video.mp4',
+          {},
+          { maxContentLength: 1024, responseMode: 'stream' },
+        ),
+      ).rejects.toThrow('maxContentLength cannot be combined with responseMode: stream');
+
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 

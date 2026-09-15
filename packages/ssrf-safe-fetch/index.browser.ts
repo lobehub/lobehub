@@ -15,6 +15,8 @@ export interface SSRFOptions {
   allowPrivateIPAddress?: boolean;
   /** Maximum response body size in bytes (server-only; ignored in browser) */
   maxContentLength?: number;
+  /** Response body mode (server-only; native browser fetch already streams) */
+  responseMode?: 'buffer' | 'stream';
 }
 
 /**

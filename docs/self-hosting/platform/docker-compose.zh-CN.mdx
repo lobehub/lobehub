@@ -257,6 +257,8 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.zh-CN.example
 mv .env.zh-CN.example .env
+sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env
+rm .env.bak
 ```
 
 ### 预备知识

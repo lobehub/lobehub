@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
 import { type LobeChatDatabase } from '@lobechat/database';
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import debug from 'debug';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
@@ -177,10 +178,18 @@ export class VideoGenerationService {
     const tempVideoPath = path.join(os.tmpdir(), `lobe-video-${nanoid()}${ext}`);
     log('Downloading video to: %s', tempVideoPath);
 
-    const response = await fetch(url, {
-      headers: options?.headers,
-      signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
-    });
+    // Provider-returned video URLs are not trusted input. Keep this path aligned
+    // with image generation downloads and route it through the SSRF guard instead
+    // of raw global fetch, otherwise a compromised/malicious provider response can
+    // make the server fetch link-local metadata or private network services.
+    const response = await ssrfSafeFetch(
+      url,
+      {
+        headers: options?.headers,
+        signal: AbortSignal.timeout(VideoGenerationService.DOWNLOAD_TIMEOUT_MS),
+      },
+      { responseMode: 'stream' },
+    );
     if (!response.ok) {
       throw new Error(`Failed to download video: ${response.status} ${response.statusText}`);
     }

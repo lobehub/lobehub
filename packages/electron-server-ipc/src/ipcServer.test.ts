@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -29,6 +30,7 @@ describe('ElectronIPCServer', () => {
   };
 
   const mockSocket = {
+    destroy: vi.fn(),
     on: vi.fn(),
     write: vi.fn(),
   };
@@ -52,11 +54,11 @@ describe('ElectronIPCServer', () => {
     vi.mocked(net.createServer).mockReturnValue(mockServer as unknown as net.Server);
 
     // Mock socket path for different platforms
-    const originalPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'darwin' });
 
     // Mock fs functions
     vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.chmodSync).mockReturnValue(undefined);
     vi.mocked(fs.unlinkSync).mockReturnValue(undefined);
     vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
@@ -88,24 +90,54 @@ describe('ElectronIPCServer', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         mockSocketInfoPath,
         JSON.stringify({ socketPath: mockSocketPath }),
-        'utf8',
+        { encoding: 'utf8', mode: 0o600 },
       );
+      expect(fs.chmodSync).toHaveBeenCalledWith(mockSocketPath, 0o600);
+      expect(fs.chmodSync).toHaveBeenCalledWith(mockSocketInfoPath, 0o600);
     });
 
-    it('should remove existing socket file if it exists', async () => {
+    it('should reapply owner-only mode after replacing an existing socket-info file', async () => {
+      let existingSocketInfoMode: number | string = 0o644;
+      mockServer.listen.mockImplementation((path, callback) => {
+        callback?.();
+        return mockServer;
+      });
+      vi.mocked(fs.chmodSync).mockImplementation((file, mode) => {
+        if (file === mockSocketInfoPath) existingSocketInfoMode = mode;
+      });
+
+      const server = new ElectronIPCServer(appId, mockEventHandler as any);
+      await server.start();
+
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockSocketInfoPath,
+        JSON.stringify({ socketPath: mockSocketPath }),
+        { encoding: 'utf8', mode: 0o600 },
+      );
+      expect(fs.chmodSync).toHaveBeenCalledWith(mockSocketInfoPath, 0o600);
+      expect(existingSocketInfoMode).toBe(0o600);
+    });
+
+    it('should remove stale socket file atomically if it exists', async () => {
       // Setup
-      vi.mocked(fs.existsSync).mockReturnValue(true);
       mockServer.listen.mockImplementation((path, callback) => {
         callback?.();
         return mockServer;
       });
 
       // Execute
-      const server = new ElectronIPCServer(appId, mockEventHandler as any);
+      new ElectronIPCServer(appId, mockEventHandler as any);
 
       // Verify
-      expect(fs.existsSync).toHaveBeenCalledWith(mockSocketPath);
       expect(fs.unlinkSync).toHaveBeenCalledWith(mockSocketPath);
+    });
+
+    it('should ignore missing stale socket files during cleanup', () => {
+      vi.mocked(fs.unlinkSync).mockImplementation(() => {
+        throw Object.assign(new Error('not found'), { code: 'ENOENT' });
+      });
+
+      expect(() => new ElectronIPCServer(appId, mockEventHandler as any)).not.toThrow();
     });
 
     it('should handle server start error', async () => {
@@ -133,6 +165,7 @@ describe('ElectronIPCServer', () => {
       mockServer.on.mockReset();
       mockSocket.on.mockReset();
       mockSocket.write.mockReset();
+      mockSocket.destroy.mockReset();
 
       vi.mocked(net.createServer).mockImplementation((handler) => {
         connectionHandler = handler as any;
@@ -362,7 +395,7 @@ describe('ElectronIPCServer', () => {
       try {
         const pendingHandlerPromise = mockEventHandler.testMethod.mock.results[0].value;
         await pendingHandlerPromise;
-      } catch (error) {
+      } catch {
         // 错误预期会被捕获
       }
 
@@ -372,6 +405,20 @@ describe('ElectronIPCServer', () => {
           '{"error":"Failed to handle method(testMethod): Handler error","id":"test-id"}\n\n',
         ),
       );
+    });
+
+    it('should close connections that exceed the IPC message buffer limit', async () => {
+      await server.start();
+      connectionHandler(mockSocket);
+
+      const dataHandlerCall = mockSocket.on.mock.calls.find((call) => call[0] === 'data');
+      expect(dataHandlerCall).toBeDefined();
+      const dataHandler = dataHandlerCall![1];
+
+      await dataHandler(Buffer.alloc(10 * 1024 * 1024 + 1, 'a'));
+
+      expect(mockSocket.destroy).toHaveBeenCalledTimes(1);
+      expect(mockEventHandler.testMethod).not.toHaveBeenCalled();
     });
   });
 

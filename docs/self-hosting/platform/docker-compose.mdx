@@ -262,6 +262,8 @@ This section mainly introduces the configurations that need to be modified to cu
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml
 curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/.env.example
 mv .env.example .env
+sed -i.bak "s/^SEARXNG_SECRET=.*/SEARXNG_SECRET=$(openssl rand -hex 32)/" .env
+rm .env.bak
 ```
 
 ### Prerequisites

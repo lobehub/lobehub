@@ -4,6 +4,7 @@ import { SUPPORT_TEXT_LIST } from '../file';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../splitter';
 import { type DocumentChunk, type FileLoaderType } from '../types';
 import { CodeLoader } from './code';
+import { assertWithinLoaderLimit, MAX_DOCUMENT_CHUNKS, MAX_DOCUMENT_INPUT_BYTES } from './config';
 import { CsVLoader } from './csv';
 import { DocxLoader } from './docx';
 import { EPubLoader } from './epub';
@@ -23,56 +24,68 @@ class DocumentLoaderError extends Error {
 export class ChunkingLoader {
   partitionContent = async (filename: string, content: Uint8Array): Promise<DocumentChunk[]> => {
     try {
-      const fileBlob = new Blob([Buffer.from(content)]);
-      const txt = this.uint8ArrayToString(content);
+      assertWithinLoaderLimit(content.byteLength, MAX_DOCUMENT_INPUT_BYTES, 'Document input size');
 
       const type = this.getType(filename?.toLowerCase());
+      let documents: DocumentChunk[];
 
       switch (type) {
         case 'code': {
           const ext = filename.split('.').pop();
-          return await CodeLoader(txt, ext!);
+          documents = await CodeLoader(this.uint8ArrayToString(content), ext!);
+          break;
         }
 
         case 'ppt': {
-          return await PPTXLoader(fileBlob);
+          documents = await PPTXLoader(this.toBlob(content));
+          break;
         }
 
         case 'latex': {
-          return await LatexLoader(txt);
+          documents = await LatexLoader(this.uint8ArrayToString(content));
+          break;
         }
 
         case 'pdf': {
-          return await PdfLoader(fileBlob);
+          documents = await PdfLoader(this.toBlob(content));
+          break;
         }
 
         case 'markdown': {
-          return await MarkdownLoader(txt);
+          documents = await MarkdownLoader(this.uint8ArrayToString(content));
+          break;
         }
 
         case 'doc': {
-          return await DocxLoader(fileBlob);
+          documents = await DocxLoader(this.toBlob(content));
+          break;
         }
 
         case 'text': {
-          return await TextLoader(txt);
+          documents = await TextLoader(this.uint8ArrayToString(content));
+          break;
         }
 
         case 'csv': {
-          return await CsVLoader(fileBlob);
+          documents = await CsVLoader(this.toBlob(content));
+          break;
         }
 
         case 'epub': {
-          return await EPubLoader(content);
+          documents = await EPubLoader(content);
+          break;
         }
 
         case 'ipynb': {
           // Notebook JSON → markdown so chunks carry semantic text instead
           // of base64 payloads; non-nbformat-v4 files fall back to raw text.
-          const markdown = convertIpynbToMarkdown(txt);
-          return markdown === null
-            ? await TextLoader(scrubIpynbFallbackText(txt))
-            : await MarkdownLoader(markdown);
+          const text = this.uint8ArrayToString(content);
+          const markdown = convertIpynbToMarkdown(text);
+          documents =
+            markdown === null
+              ? await TextLoader(scrubIpynbFallbackText(text))
+              : await MarkdownLoader(markdown);
+          break;
         }
 
         default: {
@@ -81,6 +94,10 @@ export class ChunkingLoader {
           );
         }
       }
+
+      assertWithinLoaderLimit(documents.length, MAX_DOCUMENT_CHUNKS, 'Document chunk count');
+
+      return documents;
     } catch (e) {
       throw new DocumentLoaderError((e as Error).message);
     }
@@ -131,5 +148,9 @@ export class ChunkingLoader {
   private uint8ArrayToString(uint8Array: Uint8Array) {
     const decoder = new TextDecoder();
     return decoder.decode(uint8Array);
+  }
+
+  private toBlob(content: Uint8Array) {
+    return new Blob([Buffer.from(content)]);
   }
 }
