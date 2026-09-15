@@ -24,6 +24,7 @@ describe('getPortalViewMinWidth', () => {
       PortalViewType.AcceptanceCheck,
       PortalViewType.AgentDetail,
       PortalViewType.Artifact,
+      PortalViewType.Goal,
       PortalViewType.GoalMetric,
       PortalViewType.GoalNode,
       PortalViewType.TaskDetail,

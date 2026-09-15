@@ -13,7 +13,7 @@ import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/fi
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
-import { useFileItemClick } from '../../hooks/useFileItemClick';
+import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
@@ -240,8 +240,10 @@ const FileListItem = ({
     isFolder,
     isPage,
     libraryId: resourceManagerState.libraryId,
+    openInPanel: true,
     slug,
   });
+  const handleItemDoubleClick = useFileItemDoubleClick({ id, isPage });
   const { menuItems } = useFileItemDropdown({
     fileId,
     fileType,
@@ -297,6 +299,7 @@ const FileListItem = ({
           userSelect: 'none',
         }}
         onClick={handleItemClick}
+        onDoubleClick={handleItemDoubleClick}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}

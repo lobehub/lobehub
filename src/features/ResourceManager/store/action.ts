@@ -195,6 +195,14 @@ export class ResourceManagerStoreActionImpl {
     this.#set({ currentViewItemId });
   };
 
+  closeDetailPanel = (): void => {
+    this.#set({ detailPanelId: undefined, detailPanelIsPage: false });
+  };
+
+  openDetailPanel = (detailPanelId: string, isPage = false): void => {
+    this.#set({ detailPanelId, detailPanelIsPage: isPage });
+  };
+
   setLibraryId = (libraryId?: string): void => {
     if (this.#get().libraryId === libraryId) return;
     // A sidebar search is scoped to one library; carrying it over to the next

@@ -40,6 +40,33 @@ import { createLocalTraceStore } from '../utils/traceStore';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
 export const SUPPORTED_AGENT_TYPES = new Set<string>(LOCAL_HETEROGENEOUS_AGENT_TYPES);
+
+/**
+ * Extra env for the spawned agent process.
+ *
+ * In server-ingest mode the run's operation and conversation arrive as CLI
+ * arguments, not env, so the agent's own shell could not name them. Commands it
+ * runs on behalf of this conversation — `lh goal create --conversation` for
+ * `/goal`, evidence ingests — read `LOBEHUB_OPERATION_ID` / `LOBEHUB_TOPIC_ID`,
+ * so they are echoed into the child. A standalone run has no server identity
+ * and passes none.
+ */
+export const buildAgentProcessEnv = ({
+  operationId,
+  pathEnv,
+  topicId,
+}: {
+  operationId?: string;
+  pathEnv?: string;
+  topicId?: string;
+}): Record<string, string> | undefined => {
+  const env: Record<string, string> = {
+    ...(pathEnv ? { PATH: pathEnv } : {}),
+    ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+    ...(topicId ? { LOBEHUB_TOPIC_ID: topicId } : {}),
+  };
+  return Object.keys(env).length > 0 ? env : undefined;
+};
 const SUPPORTED_AGENT_TITLES = HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title).join(' / ');
 const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
   ({ defaultCommand }) => `\`${defaultCommand}\``,
@@ -897,7 +924,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
   // ENOENT on a stale global install. Custom commands are used verbatim.
   const resolvedCommand = await resolveHeteroSpawnCommand(agentType, options.command);
-  const commandEnv = resolvedCommand.pathEnv ? { PATH: resolvedCommand.pathEnv } : undefined;
+  const commandEnv = buildAgentProcessEnv({
+    operationId: serverIngest ? operationId : undefined,
+    pathEnv: resolvedCommand.pathEnv,
+    topicId: options.topic,
+  });
   // Devin ACP's `--permission-mode` is a global flag; default to bypass so
   // headless connected-device runs do not block on permission prompts. The mode
   // response must not overwrite the model selected by `initialModel`.

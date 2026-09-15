@@ -183,14 +183,17 @@ const styles = createStaticStyles(({ css }) => ({
 type GraphViewMode = 'stage' | 'all';
 
 interface GraphProps {
+  /** Header actions after the legend — e.g. a host without fullscreen links out to the goal page. */
+  extra?: ReactNode;
   /**
    * Fullscreen is owned by the page: the overlay replaces the page's Portal
    * panel with its own, and only the owner can keep exactly one of the two
-   * mounted at a time.
+   * mounted at a time. A host that cannot give up its panel (the Portal itself)
+   * omits `onFullscreenChange`, and the map stays inline.
    */
-  fullscreen: boolean;
+  fullscreen?: boolean;
   graph: GoalGraphView;
-  onFullscreenChange: (fullscreen: boolean) => void;
+  onFullscreenChange?: (fullscreen: boolean) => void;
   onSelect: (nodeId: string) => void;
   /** The coordinator is still decomposing: show ghost task cards under the problem. */
   planning?: boolean;
@@ -691,7 +694,7 @@ const Canvas = memo<
 
 Canvas.displayName = 'GoalGraphCanvas';
 
-const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) => {
+const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange, ...props }) => {
   const { t } = useTranslation('chat');
   const navigation = useExplorationNavigation(props.graph.goal.id, {
     nodes: props.graph.nodes.map((item) => item.node),
@@ -835,7 +838,7 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
       })}
     </Flexbox>
   );
-  const toggle = (
+  const toggle = onFullscreenChange && (
     <ActionIcon
       icon={fullscreen ? X : Maximize2}
       size={'small'}
@@ -912,6 +915,7 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={12}>
           {legend}
+          {extra}
           {toggle}
         </Flexbox>
       </Flexbox>

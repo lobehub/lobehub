@@ -433,6 +433,39 @@ describe('hetero exec command', () => {
     expect(call.includePartialMessages).toBe(true);
   });
 
+  it("echoes the run's operation and conversation into a server-ingest agent's env", async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      '/goal ship the report',
+      '--topic',
+      'tpc_conversation',
+      '--operation-id',
+      'op_conversation_run',
+    ]);
+
+    // `lh goal create --conversation` inside the agent's shell reads these.
+    expect(mockSpawnAgent.mock.calls[0][0].env).toMatchObject({
+      LOBEHUB_OPERATION_ID: 'op_conversation_run',
+      LOBEHUB_TOPIC_ID: 'tpc_conversation',
+    });
+  });
+
+  it('gives a standalone run no conversation identity', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'claude-code', '--prompt', 'hi']);
+
+    const env = mockSpawnAgent.mock.calls[0][0].env ?? {};
+    expect(env).not.toHaveProperty('LOBEHUB_OPERATION_ID');
+    expect(env).not.toHaveProperty('LOBEHUB_TOPIC_ID');
+  });
+
   it('does not request Claude partial-message framing for other heterogeneous agents', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 

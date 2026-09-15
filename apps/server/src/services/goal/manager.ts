@@ -54,6 +54,8 @@ const activeStatuses = new Set(['planning', 'running']);
 const terminalOperations = new Set(['done', 'error', 'interrupted']);
 const terminalNodes = new Set(['resolved', 'retired', 'rejected']);
 const TIMEOUT_MS = 20 * 60_000;
+/** Source message id prefix of a dispatched planning turn; the suffix is its token. */
+const MANAGER_SOURCE_MESSAGE_PREFIX = 'msg_goal_manager_';
 
 /** Excludes only the manager's own receipt. Concurrent policy/graph changes invalidate its plan. */
 export const managerSnapshot = (graph: GoalGraphSnapshot) => {
@@ -108,17 +110,88 @@ export class GoalManagerService {
   ) {}
 
   usage = async (state?: GoalManagerState) => {
-    const operations = state
-      ? await new AgentOperationModel(this.db, this.userId, this.workspaceId).listByTopic(
-          state.topicId,
-          100,
-        )
-      : [];
+    // The planning topic can be the user's own conversation (`/goal`), so only
+    // manager turns count as management spend: the dispatched ones by their
+    // server-minted source message, the adopted one by its operation id. The
+    // rest of that conversation is the user's chat, not the goal's budget.
+    if (!state) return { totalCost: 0, totalTokens: 0 };
+    const model = new AgentOperationModel(this.db, this.userId, this.workspaceId);
+    // Later receipts replace `adopted` / `operationId`, so the adopted run is
+    // read from the id every receipt carries forward.
+    const adoptedId = state.adoptedOperationId ?? (state.adopted ? state.operationId : undefined);
+    const operations = (await model.listByTopic(state.topicId, 100)).filter(
+      (op) =>
+        op.appContext?.sourceMessageId?.startsWith(MANAGER_SOURCE_MESSAGE_PREFIX) ||
+        op.id === adoptedId,
+    );
+    // A handoff moves later turns to the new agent's topic; the adopted run
+    // stays on the original conversation and still counts.
+    if (adoptedId && !operations.some((op) => op.id === adoptedId)) {
+      const adoptedRun = await model.findById(adoptedId);
+      if (adoptedRun) operations.push(adoptedRun);
+    }
     return {
       totalCost: operations.reduce((sum, op) => sum + (Number(op.totalCost) || 0), 0),
       totalTokens: operations.reduce((sum, op) => sum + (op.totalTokens ?? 0), 0),
     };
   };
+
+  /**
+   * The operation that is the current planning turn. A dispatched turn is found
+   * by the source message the manager minted for it; an adopted turn — the
+   * conversation run that created the goal — never had one, so it is the
+   * operation recorded at adoption.
+   */
+  private turnOperation = async (operations: AgentOperationModel, state: GoalManagerState) =>
+    state.adopted
+      ? state.operationId
+        ? ((await operations.findById(state.operationId)) ?? undefined)
+        : undefined
+      : operations.findByTopicSourceMessage(
+          state.topicId,
+          `${MANAGER_SOURCE_MESSAGE_PREFIX}${state.token}`,
+        );
+
+  /**
+   * Make the conversation run that created this goal its first planning turn.
+   *
+   * `/goal` in a conversation asks the agent already running there to supervise:
+   * it creates the goal and plans it in the same run, so the user watches both
+   * happen in their conversation. Dispatching a separate first turn would wait on
+   * that very run to release the topic. The receipt carries the same snapshot and
+   * review hash a dispatched turn would, so `submit` validates the plan the same
+   * way; only the operation lookup differs (`adopted`).
+   */
+  adoptConversationTurn = async (goalId: string, run: { operationId: string; topicId: string }) =>
+    this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const goal = await model.lockById(goalId);
+      if (!goal?.config?.manager) throw new Error('Goal has no main Agent policy to adopt a turn');
+      if (goal.config.managerState) throw new Error('Goal already has a planning turn');
+      // A local desktop run has no server operation row; the caller already
+      // matched its conversation to the goal agent. A recorded run must match too.
+      const operation = await new AgentOperationModel(db, this.userId, this.workspaceId).findById(
+        run.operationId,
+      );
+      if (operation && (operation.topicId !== run.topicId || operation.agentId !== goal.agentId))
+        throw new Error('The adopted run does not belong to the goal agent');
+      const graph = await this.graph(db).getGraph(goalId);
+      if (!graph) throw new Error('Goal not found');
+      const state: GoalManagerState = {
+        adopted: true,
+        adoptedOperationId: run.operationId,
+        operationId: run.operationId,
+        reviewSnapshot: (await this.reviews(graph, db)).hash,
+        snapshot: managerSnapshot(graph),
+        startedAt: new Date().toISOString(),
+        token: randomUUID(),
+        topicId: run.topicId,
+        turns: 1,
+      };
+      await this.save(db, goalId, state);
+      if (goal.status === 'planning') await model.updateStatus(goalId, 'running');
+      return state;
+    });
 
   private save = async (db: LobeChatDatabase, id: string, state: GoalManagerState) => {
     // Caller holds the owned Goal row lock. Do not overwrite concurrent policy namespaces.
@@ -287,12 +360,14 @@ export class GoalManagerService {
     const { goal } = graph;
     const state = goal.config?.managerState;
     if (state && !state.consumed) {
-      const operation = await new AgentOperationModel(
-        this.db,
-        this.userId,
-        this.workspaceId,
-      ).findByTopicSourceMessage(state.topicId, `msg_goal_manager_${state.token}`);
-      if (!operation || !terminalOperations.has(operation.status)) {
+      const operation = await this.turnOperation(
+        new AgentOperationModel(this.db, this.userId, this.workspaceId),
+        state,
+      );
+      // An adopted local desktop run has no server operation to watch exit; its
+      // submitted plan is the only settlement the server can observe.
+      const settledLocally = !!state.adopted && !operation && !!state.submitted;
+      if (!settledLocally && (!operation || !terminalOperations.has(operation.status))) {
         if (operation?.status === 'waiting_for_human') {
           await this.wait(goal.id, 'Main Agent is waiting for a human decision');
           return {
@@ -317,7 +392,7 @@ export class GoalManagerService {
         ) {
           await this.save(db, goal.id, {
             ...fresh.config.managerState,
-            operationId: operation.id,
+            operationId: operation?.id ?? state.operationId,
             consumed: true,
           });
         }
@@ -442,6 +517,7 @@ export class GoalManagerService {
               ...(problem.taskId && { problemTaskId: problem.taskId }),
             }
           : {}),
+        ...(state?.adoptedOperationId && { adoptedOperationId: state.adoptedOperationId }),
         reviewSnapshot: reviews.hash,
         topicId,
         turns: (state?.turns ?? 0) + 1,
@@ -502,15 +578,17 @@ export class GoalManagerService {
           code: 'FORBIDDEN',
           message: 'This planning turn does not own the Goal',
         });
-      const op = await new AgentOperationModel(
-        db,
-        this.userId,
-        this.workspaceId,
-      ).findByTopicSourceMessage(state.topicId, `msg_goal_manager_${token}`);
+      const op = await this.turnOperation(
+        new AgentOperationModel(db, this.userId, this.workspaceId),
+        state,
+      );
       // Bound to the goal agent as it is NOW: a turn dispatched before a handoff
       // no longer speaks for the goal.
       const agentId = goal.agentId;
-      if (op?.id !== operationId || op.agentId !== agentId)
+      // An adopted local desktop run has no server operation row; it is the run
+      // whose id the conversation environment carried when the goal was created.
+      const localAdoptedRun = !!state.adopted && !op && operationId === state.operationId;
+      if (!localAdoptedRun && (op?.id !== operationId || op.agentId !== agentId))
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Unrelated main Agent operation' });
       const graph = await this.graph(db).getGraph(goalId);
       if (
@@ -523,7 +601,11 @@ export class GoalManagerService {
           message: 'Goal stopped or awaiting human decision',
         });
       if (state.submitted) return { duplicate: true, plan: state.submitted };
-      if (state.consumed || op.status !== 'running' || managerSnapshot(graph) !== state.snapshot)
+      if (
+        state.consumed ||
+        (op && op.status !== 'running') ||
+        managerSnapshot(graph) !== state.snapshot
+      )
         throw new TRPCError({ code: 'CONFLICT', message: 'Stale planning input; no plan applied' });
       if (state.reviewSnapshot && (await this.reviews(graph, db)).hash !== state.reviewSnapshot)
         throw new TRPCError({
