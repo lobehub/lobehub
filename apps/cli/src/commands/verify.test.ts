@@ -652,7 +652,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
     mockTrpcClient.acceptance = {
       attachRun: { mutate: vi.fn() },
       ensure: { mutate: vi.fn().mockResolvedValue({ id: 'acceptance-1' }) },
-      getBundle: { query: vi.fn() },
+      getBundle: { query: vi.fn().mockResolvedValue({}) },
     };
     mockTrpcClient.workspace = {
       getById: { query: vi.fn().mockResolvedValue({ id: 'workspace-1' }) },
@@ -782,6 +782,78 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
         plan: [expect.objectContaining({ id: 'stable-check', sourceCriterionId: 'criterion-1' })],
       }),
     );
+  });
+
+  it('reuses criteria when the round reaches its acceptance through the subject', async () => {
+    // Regression: only `--acceptance` read the existing checks, so re-ingesting
+    // a topic's report minted fresh criteria and duplicated every check row.
+    mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+      checks: [{ id: 'criterion-1', planItem: { id: '1', sourceCriterionId: 'criterion-1' } }],
+    });
+    writeFileSync(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [{ id: '1', name: '标题可编辑', status: 'pass' }],
+        plan: [{ id: '1', title: '标题可编辑' }],
+      }),
+    );
+
+    await run(['ingest-report', dir, '--json']);
+
+    expect(mockTrpcClient.acceptance.getBundle.query).toHaveBeenCalledWith({ id: 'acceptance-1' });
+    expect(mockTrpcClient.verify.createRun.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: [expect.objectContaining({ id: '1', sourceCriterionId: 'criterion-1' })],
+      }),
+    );
+  });
+
+  describe('identical re-ingest', () => {
+    const publishedRound = (content: string) => ({
+      report: { content, summary: '全部通过' },
+      run: { id: 'run-r1', plan: [{ id: '1', title: '标题可编辑' }], roundIndex: 1 },
+    });
+
+    beforeEach(() => {
+      (mockTrpcClient.verify as Record<string, any>).ingestResult = {
+        mutate: vi.fn().mockResolvedValue({ id: 'result-1' }),
+      };
+      writeFileSync(path.join(dir, 'report.md'), '## 备注\n\n首次发布');
+      writeFileSync(
+        path.join(dir, 'result.json'),
+        JSON.stringify({
+          cases: [{ id: '1', name: '标题可编辑', status: 'pass' }],
+          plan: [{ id: '1', title: '标题可编辑' }],
+          summary: { conclusion: '全部通过', failed: 0, passed: 1, total: 1 },
+        }),
+      );
+    });
+
+    it('refuses to stack a round identical to the latest one', async () => {
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        rounds: [publishedRound('## 备注\n\n首次发布')],
+      });
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`process.exit ${code}`);
+      }) as never);
+
+      try {
+        await expect(run(['ingest-report', dir, '--json'])).rejects.toThrow('process.exit 1');
+        expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+      } finally {
+        exitSpy.mockRestore();
+      }
+    });
+
+    it('publishes the next round once the report actually changed', async () => {
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        rounds: [publishedRound('## 备注\n\n上一轮的报告')],
+      });
+
+      await run(['ingest-report', dir, '--json']);
+
+      expect(mockTrpcClient.verify.createRun.mutate).toHaveBeenCalled();
+    });
   });
 
   it.each([null, 'workspace-1'])(

@@ -24,6 +24,7 @@ describe('acceptance publication with missing evidence', () => {
     acceptance: {
       attachRun: { mutate: vi.fn() },
       ensure: { mutate: vi.fn() },
+      getBundle: { query: vi.fn() },
     },
     verify: {
       createRun: { mutate: vi.fn() },
@@ -50,6 +51,7 @@ describe('acceptance publication with missing evidence', () => {
     );
     vi.mocked(uploadLocalFile).mockResolvedValue({ id: 'file-1', url: 'https://files.test/1' });
     client.acceptance.ensure.mutate.mockResolvedValue({ id: 'acceptance-1' });
+    client.acceptance.getBundle.query.mockResolvedValue({});
     client.acceptance.attachRun.mutate.mockResolvedValue({ id: 'run-1', roundIndex: 2 });
     client.verify.createRun.mutate.mockResolvedValue({ id: 'run-1' });
     client.verify.ingestResult.mutate.mockImplementation(async (input) => ({
