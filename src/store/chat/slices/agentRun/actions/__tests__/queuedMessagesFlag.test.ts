@@ -6,6 +6,8 @@ import type { QueuedMessage } from '@/store/chat/slices/operation/types';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { flagQueuedMessagesOnRunStart } from '../transports/gateway/queuedMessagesFlag';
+
 const context = { agentId: 'agent-1', scope: 'main' as const, threadId: null, topicId: 'topic-1' };
 const contextKey = messageMapKey(context);
 
@@ -88,6 +90,25 @@ describe('queued messages flag', () => {
     useChatStore.getState().enqueueMessage(contextKey, queued('q1'), 'gw');
 
     expect(setShareQueuedMessages).toHaveBeenCalledWith('share-1', 'topic-1', 'server-gw', true);
+    expect(setQueuedMessages).not.toHaveBeenCalled();
+  });
+
+  it('flags a run that starts with messages already queued', () => {
+    seedOperations([operation('gw')]);
+    useChatStore.setState({ queuedMessages: { [contextKey]: [queued('q1')] } });
+
+    flagQueuedMessagesOnRunStart(useChatStore.getState, contextKey);
+
+    expect(setQueuedMessages).toHaveBeenCalledWith({ operationId: 'server-gw', pending: true });
+  });
+
+  // Regression: every Gateway run used to send a `pending: false` request on
+  // start, even though nothing was ever queued behind it.
+  it('sends nothing when a run starts with an empty queue', () => {
+    seedOperations([operation('gw')]);
+
+    flagQueuedMessagesOnRunStart(useChatStore.getState, contextKey);
+
     expect(setQueuedMessages).not.toHaveBeenCalled();
   });
 

@@ -46,3 +46,14 @@ export const syncQueuedMessagesFlag = (get: () => ChatStore, contextKey: string)
     });
   }
 };
+
+/**
+ * Flag a Gateway run that has just started, but only when messages were already
+ * queued while it was being created. A run starts unflagged, so an empty queue
+ * needs no request.
+ */
+export const flagQueuedMessagesOnRunStart = (get: () => ChatStore, contextKey: string): void => {
+  if (!get().queuedMessages?.[contextKey]?.length) return;
+
+  syncQueuedMessagesFlag(get, contextKey);
+};
