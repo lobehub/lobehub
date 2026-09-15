@@ -18,6 +18,7 @@ const ProgressIcon = memo<ProgressIconProps>(({ showInfo, format, percent, ...re
       segments={5}
       showInfo={false}
       size={12}
+      style={{ flex: 'none', width: 18 }}
       variant="segments"
       {...rest}
     />

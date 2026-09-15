@@ -253,7 +253,7 @@ const SearchUserMemoryRender = memo<BuiltinRenderProps<SearchMemoryParams, Searc
           gap={0}
           items={items}
           styles={{
-            header: { paddingBlock: 8, paddingInline: 12 },
+            trigger: { paddingInline: 12 },
           }}
         />
       </Flexbox>

@@ -105,6 +105,7 @@ export const ContextMemoryCard = memo<ContextMemoryCardProps>(({ data, loading }
                     showInfo={false}
                     size={12}
                     strokeColor={item.strokeColor}
+                    style={{ flex: 'none', width: 18 }}
                     variant="segments"
                   />
                   <Text fontSize={12} type={'secondary'}>

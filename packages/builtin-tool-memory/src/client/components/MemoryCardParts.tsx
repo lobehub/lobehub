@@ -176,7 +176,6 @@ export const SummaryAccordion = memo<SummaryAccordionProps>(({ details, summary,
         },
       ]}
       styles={{
-        header: { paddingBlock: 8, paddingInline: 8 },
         item: { marginBlock: 4, marginInline: 4 },
       }}
     />

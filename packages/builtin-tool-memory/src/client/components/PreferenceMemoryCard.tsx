@@ -187,7 +187,6 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                 },
               ]}
               styles={{
-                header: { paddingBlock: 8, paddingInline: 8 },
                 item: { marginBlock: 4, marginInline: 4 },
               }}
             />
@@ -239,9 +238,6 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                   ),
                 },
               ]}
-              styles={{
-                header: { paddingBlock: 8, paddingInline: 8 },
-              }}
             />
           )}
 
@@ -291,9 +287,6 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                   ),
                 },
               ]}
-              styles={{
-                header: { paddingBlock: 8, paddingInline: 8 },
-              }}
             />
           )}
 

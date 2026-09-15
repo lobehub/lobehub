@@ -113,6 +113,7 @@ export const IdentityMemoryCard = memo<IdentityMemoryCardProps>(
                       segments={5}
                       showInfo={false}
                       size={12}
+                      style={{ flex: 'none', width: 18 }}
                       variant="segments"
                     />
                     <Text fontSize={12} type={'secondary'}>
