@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} فایل",
   "agentProfile.knowledgeBases_one": "{{count}} پایگاه‌دانش",
   "agentProfile.knowledgeBases_other": "{{count}} پایگاه‌دانش",
+  "agentProfile.runtime": "اجرا شده بر روی {{name}}",
   "agentProfile.skills_one": "{{count}} مهارت",
   "agentProfile.skills_other": "{{count}} مهارت",
   "agentSignal.receipts.agentSignalLabel": "سیگنال نماینده",

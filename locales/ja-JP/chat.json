@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} 件のファイル",
   "agentProfile.knowledgeBases_one": "{{count}} 件のナレッジベース",
   "agentProfile.knowledgeBases_other": "{{count}} 件のナレッジベース",
+  "agentProfile.runtime": "{{name}} で実行されます",
   "agentProfile.skills_one": "{{count}} 件のスキル",
   "agentProfile.skills_other": "{{count}} 件のスキル",
   "agentSignal.receipts.agentSignalLabel": "エージェントシグナル",

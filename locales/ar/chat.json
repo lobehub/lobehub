@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} ملفات",
   "agentProfile.knowledgeBases_one": "{{count}} قاعدة معرفة",
   "agentProfile.knowledgeBases_other": "{{count}} قواعد معرفة",
+  "agentProfile.runtime": "يعمل على {{name}}",
   "agentProfile.skills_one": "{{count}} مهارة",
   "agentProfile.skills_other": "{{count}} مهارات",
   "agentSignal.receipts.agentSignalLabel": "إشارة الوكيل",

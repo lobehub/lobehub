@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} 個檔案",
   "agentProfile.knowledgeBases_one": "{{count}} 個知識庫",
   "agentProfile.knowledgeBases_other": "{{count}} 個知識庫",
+  "agentProfile.runtime": "運行於 {{name}}",
   "agentProfile.skills_one": "{{count}} 項技能",
   "agentProfile.skills_other": "{{count}} 項技能",
   "agentSignal.receipts.agentSignalLabel": "代理信號",

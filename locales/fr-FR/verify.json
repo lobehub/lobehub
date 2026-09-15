@@ -766,6 +766,7 @@
   "workspace.loadError": "Une erreur s'est produite lors du chargement de vos rapports.",
   "workspace.loadErrorTitle": "Impossible de charger les rapports",
   "workspace.loadMoreError": "Impossible de charger plus de rapports",
+  "workspace.pin": "Épingler la liste des rapports",
   "workspace.renameEmpty": "Le titre du rapport ne peut pas être vide",
   "workspace.renameError": "Échec du renommage du rapport",
   "workspace.renameSuccess": "Rapport renommé",

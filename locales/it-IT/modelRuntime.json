@@ -38,6 +38,7 @@
   "ProviderServiceUnavailable": "Il provider è temporaneamente sovraccarico o non disponibile. Riprova tra poco.",
   "QuotaLimitReached": "Spiacenti, l'utilizzo dei token o il numero di richieste ha raggiunto il limite di quota per questa chiave. Aumenta la quota della chiave o riprova più tardi.",
   "RateLimitExceeded": "Spiacenti, l'utilizzo dei token o il numero di richieste ha raggiunto il limite di velocità per questa chiave. Riprova più tardi o aumenta la quota della chiave.",
+  "RequestBodyTooLarge": "Questa richiesta è troppo grande per il fornitore del modello. Compatta la conversazione o riduci il contenuto allegato, quindi riprova.",
   "StateStorePersistError": "Un problema temporaneo con l'archiviazione dello stato della conversazione ha interrotto questa operazione. Riprova; se il problema persiste, contatta l'assistenza.",
   "StateStoreReadError": "Questa operazione non può essere ripresa perché lo stato della sessione non è disponibile. Riapri la conversazione per continuare; se il problema persiste, contatta il supporto.",
   "StreamChunkError": "Errore durante l'analisi del frammento di messaggio della richiesta in streaming. Controlla se l'interfaccia API corrente è conforme alle specifiche standard o contatta il tuo provider API per ricevere assistenza.",

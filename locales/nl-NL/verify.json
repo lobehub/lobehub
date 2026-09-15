@@ -766,6 +766,7 @@
   "workspace.loadError": "Er is iets misgegaan bij het laden van je rapporten.",
   "workspace.loadErrorTitle": "Kon rapporten niet laden",
   "workspace.loadMoreError": "Kon geen extra rapporten laden",
+  "workspace.pin": "Rapportlijst vastzetten",
   "workspace.renameEmpty": "Rapporttitel mag niet leeg zijn",
   "workspace.renameError": "Rapport hernoemen mislukt",
   "workspace.renameSuccess": "Rapport hernoemd",

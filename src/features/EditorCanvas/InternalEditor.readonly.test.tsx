@@ -19,6 +19,8 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 const editorProps = vi.hoisted(() => ({
   last: undefined as any,
   image: undefined as any,
+  /** Props of the `<InlineToolbar>` handed to the toolbar plugin, if any. */
+  toolbar: undefined as any,
 }));
 
 vi.mock('@lobehub/editor/react', () => ({
@@ -30,6 +32,7 @@ vi.mock('@lobehub/editor/react', () => ({
     {
       withProps: (plugin: unknown, props: any) => {
         if (props?.defaultBlockImage) editorProps.image = props;
+        if (props?.children?.props?.floating) editorProps.toolbar = props.children.props;
         return plugin;
       },
     },
@@ -139,6 +142,54 @@ describe('InternalEditor readonly state', () => {
     render(<InternalEditor disabled editor={editor} />);
 
     expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+  });
+
+  describe('readonly selection items', () => {
+    const commentItem = { key: 'comment', label: 'Comment', onClick: () => {} };
+    const askItem = { key: 'ask', label: 'Ask', onClick: () => {} };
+
+    beforeEach(() => {
+      editorProps.toolbar = undefined;
+    });
+
+    it('keeps selection actions reachable on a locked page through a selection-only toolbar', () => {
+      render(
+        <InternalEditor editable={false} editor={editor} readonlySelectionItems={[commentItem]} />,
+      );
+
+      expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+      expect(editorProps.toolbar).toMatchObject({
+        extraItems: [commentItem],
+        floating: true,
+        selectionOnly: true,
+      });
+    });
+
+    it('offers the formatting toolbar with its own extras while editable', () => {
+      render(
+        <InternalEditor
+          editor={editor}
+          readonlySelectionItems={[commentItem]}
+          toolbarExtraItems={[askItem, commentItem]}
+        />,
+      );
+
+      expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+      expect(editorProps.toolbar).toMatchObject({ extraItems: [askItem, commentItem] });
+      expect(editorProps.toolbar?.selectionOnly).toBeUndefined();
+    });
+
+    it('registers nothing when not editable and there is nothing to act on', () => {
+      render(<InternalEditor editable={false} editor={editor} readonlySelectionItems={[]} />);
+
+      expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+    });
+
+    it('never surfaces a toolbar while disabled', () => {
+      render(<InternalEditor disabled editor={editor} readonlySelectionItems={[commentItem]} />);
+
+      expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+    });
   });
 
   it('renders the current file upload percentage', () => {

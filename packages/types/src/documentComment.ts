@@ -55,6 +55,8 @@ export interface DocumentCommentItem {
   parentCommentId: string | null;
   replyTo: { author: DocumentCommentAuthor; id: string } | null;
   replyToCommentId: string | null;
+  /** Body anchor for a root comment created from a selection; null = whole-document comment. */
+  selectionAnchor: DocumentCommentSelectionAnchor | null;
   updatedAt: Date;
   workspaceId: string;
 }
@@ -67,6 +69,20 @@ export interface DocumentCommentDetail extends DocumentCommentItem {
 export interface DocumentCommentThread {
   replyCount: number;
   root: DocumentCommentItem;
+}
+
+/**
+ * One anchored root, as served by `listAnchors`. Body highlights are painted
+ * from this list rather than from the paginated thread cards, so every
+ * anchored run is discoverable from the document before its card has loaded.
+ */
+export interface DocumentCommentAnchorItem {
+  id: string;
+  selectionAnchor: DocumentCommentSelectionAnchor;
+}
+
+export interface DocumentCommentAnchorList {
+  items: DocumentCommentAnchorItem[];
 }
 
 export interface DocumentCommentThreadPage {
@@ -90,6 +106,8 @@ export interface CreateDocumentCommentInput {
   documentId: string;
   editorData?: DocumentCommentJson;
   parentCommentId?: string;
+  /** Only accepted on a root comment — a reply inherits its thread's anchor. */
+  selectionAnchor?: DocumentCommentSelectionAnchor;
 }
 
 export interface UpdateDocumentCommentInput {

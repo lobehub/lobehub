@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "클릭하여 복사",
   "unknownError.desc": "예기치 않은 오류가 발생했습니다. 다시 시도하거나 보고할 수 있습니다.",
   "unknownError.retry": "다시 시도",
+  "unknownError.sharedDesc": "이 문제를 보고해 주세요",
+  "unknownError.sharedTitle": "이 답변을 생성할 수 없습니다",
   "unknownError.title": "이런, 요청이 잠시 쉬고 있습니다",
   "unknownError.traceIdLabel": "추적 ID:",
   "unlock.addProxyUrl": "OpenAI 프록시 주소 추가(선택 사항)",

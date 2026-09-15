@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} fichiers",
   "agentProfile.knowledgeBases_one": "{{count}} base de connaissances",
   "agentProfile.knowledgeBases_other": "{{count}} bases de connaissances",
+  "agentProfile.runtime": "S'exécute sur {{name}}",
   "agentProfile.skills_one": "{{count}} compétence",
   "agentProfile.skills_other": "{{count}} compétences",
   "agentSignal.receipts.agentSignalLabel": "Signal de l'agent",

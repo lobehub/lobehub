@@ -124,6 +124,7 @@ const InternalEditor = memo<InternalEditorProps>(
     onPressEnter,
     placeholder,
     plugins: customPlugins,
+    readonlySelectionItems,
     slashItems,
     style,
     toolbarExtraItems,
@@ -183,10 +184,12 @@ const InternalEditor = memo<InternalEditorProps>(
         ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
         : [...STATIC_PLUGINS, imagePlugin, filePlugin];
 
-      // Add toolbar only when the editor is actually editable — a locked /
-      // read-only page must not surface the floating formatting toolbar on
-      // text selection (its buttons would dispatch commands that never save).
-      if (floatingToolbar && editable && !disabled) {
+      if (!floatingToolbar || disabled) return basePlugins;
+
+      // The formatting toolbar only when the editor is actually editable — a
+      // locked / read-only page must not surface it on text selection (its
+      // buttons would dispatch commands that never save).
+      if (editable) {
         return [
           ...basePlugins,
           Editor.withProps(ReactToolbarPlugin, {
@@ -196,6 +199,26 @@ const InternalEditor = memo<InternalEditorProps>(
                 editor={editor}
                 editorState={editorState}
                 extraItems={toolbarExtraItems}
+              />
+            ),
+          }),
+        ];
+      }
+
+      // A read-only body can still be selected; selection-scoped actions that
+      // never edit (comment on it, ask about it) stay reachable through a
+      // toolbar that carries nothing else.
+      if (readonlySelectionItems?.length) {
+        return [
+          ...basePlugins,
+          Editor.withProps(ReactToolbarPlugin, {
+            children: (
+              <InlineToolbar
+                floating
+                selectionOnly
+                editor={editor}
+                editorState={editorState}
+                extraItems={readonlySelectionItems}
               />
             ),
           }),
@@ -214,6 +237,7 @@ const InternalEditor = memo<InternalEditorProps>(
       handleFileUpload,
       handleImageUpload,
       handlePickFile,
+      readonlySelectionItems,
       toolbarExtraItems,
     ]);
 

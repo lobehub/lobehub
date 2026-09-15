@@ -766,6 +766,7 @@
   "workspace.loadError": "Произошла ошибка при загрузке ваших отчетов.",
   "workspace.loadErrorTitle": "Не удалось загрузить отчеты",
   "workspace.loadMoreError": "Не удалось загрузить больше отчетов",
+  "workspace.pin": "Закрепить список отчетов",
   "workspace.renameEmpty": "Название отчета не может быть пустым",
   "workspace.renameError": "Не удалось переименовать отчет",
   "workspace.renameSuccess": "Отчет переименован",

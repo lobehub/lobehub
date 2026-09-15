@@ -33,6 +33,48 @@ export const styles = createStaticStyles(({ css }) => ({
     padding-block-start: 8px;
     color: ${cssVar.colorTextTertiary};
   `,
+  /**
+   * The quoted run a comment is attached to. Shared by the card and the
+   * composer; each host adds its own framing, because what marks the text as
+   * quoted differs between them — see `cardAnchor` and `composerAnchor`.
+   */
+  anchorQuote: css`
+    min-width: 0;
+    color: ${cssVar.colorTextSecondary};
+  `,
+  /**
+   * Hover fills the row rather than recolouring the rule: the fill is what
+   * shows how far the hit area actually reaches, which a 2px rule cannot.
+   * Resting stays unfilled so a card with a quote doesn't read as two stacked
+   * blocks.
+   */
+  anchorQuoteClickable: css`
+    cursor: pointer;
+    transition:
+      background-color ${cssVar.motionDurationFast},
+      color ${cssVar.motionDurationFast};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillQuaternary};
+    }
+  `,
+  /** Names what the run is; the run itself is the content, so this stays quieter. */
+  anchorQuoteLabel: css`
+    flex: none;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  /** The quoted run is gone from the body: readable, but no longer a jump target. */
+  anchorQuoteOrphaned: css`
+    border-inline-start-style: dashed;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  /** `flex: 1` + `min-width: 0` is what lets the quote actually shrink and ellipsise in the row. */
+  anchorQuoteText: css`
+    flex: 1;
+    min-width: 0;
+    color: inherit;
+  `,
   body: css`
     margin-inline-start: 40px;
     padding-block-start: 8px;
@@ -49,6 +91,18 @@ export const styles = createStaticStyles(({ css }) => ({
     @media (prefers-reduced-motion: reduce) {
       transition: none;
     }
+  `,
+  /**
+   * On a card the quote floats in open space, so it carries the quote rule
+   * itself. Indented past the comment body's own inset so it reads as the
+   * thing being replied to rather than as another paragraph of the comment.
+   */
+  cardAnchor: css`
+    margin-block-start: 8px;
+    margin-inline-start: 40px;
+    padding-block: 4px;
+    padding-inline-start: 10px;
+    border-inline-start: 2px solid ${cssVar.colorBorder};
   `,
   commentContent: css`
     /* Published comments render images as left-aligned thumbnails: the
@@ -137,6 +191,21 @@ export const styles = createStaticStyles(({ css }) => ({
       border-color: ${cssVar.colorPrimary};
       box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
     }
+  `,
+  /**
+   * In the composer the input's own border already frames the quote, so it
+   * takes a bottom hairline instead of a quote rule — a rule here would sit
+   * flush against that border and read as a rendering artifact rather than as
+   * a quote mark.
+   *
+   * ChatInput gives its header slot no horizontal padding while the body sits
+   * at 12px (ChatInput) + 16px (`commentEditor`), so the inset is restated
+   * here; without it the quote hangs left of the comment being written.
+   */
+  composerAnchor: css`
+    padding-block: 8px;
+    padding-inline: 28px 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   composerAvatar: css`
     flex: none;

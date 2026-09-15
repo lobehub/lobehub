@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}}개 파일",
   "agentProfile.knowledgeBases_one": "{{count}}개 지식 베이스",
   "agentProfile.knowledgeBases_other": "{{count}}개 지식 베이스",
+  "agentProfile.runtime": "{{name}}에서 실행됩니다",
   "agentProfile.skills_one": "{{count}}개 스킬",
   "agentProfile.skills_other": "{{count}}개 스킬",
   "agentSignal.receipts.agentSignalLabel": "에이전트 신호",

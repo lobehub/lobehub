@@ -232,6 +232,7 @@ const Thread = memo<ThreadProps>(
       <Fragment key={reply.id}>
         <CommentCard
           comment={reply}
+          focusScroll={focus?.scroll}
           focusToken={focusedReplyId === reply.id ? focus?.token : undefined}
           replying={replyTargetId === reply.id}
           variant={'reply'}
@@ -255,6 +256,7 @@ const Thread = memo<ThreadProps>(
       <Flexbox className={styles.thread} ref={containerRef}>
         <CommentCard
           comment={root}
+          focusScroll={focus?.scroll}
           focusToken={focus && focus.commentId === root.id ? focus.token : undefined}
           replying={replyTargetId === root.id}
           onMutated={onMutated}

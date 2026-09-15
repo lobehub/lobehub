@@ -38,15 +38,23 @@ export interface InlineToolbarProps {
    */
   extraItems?: ChatInputActionsProps['items'];
   floating?: boolean;
+  /**
+   * Show only `extraItems` — no formatting controls. For a read-only body,
+   * where a selection can still be acted on (commented, asked about) but must
+   * never be formatted, since those commands would edit content that never
+   * saves.
+   */
+  selectionOnly?: boolean;
   style?: CSSProperties;
 }
 
 const InlineToolbar = memo<InlineToolbarProps>(
-  ({ floating, style, className, editor, editorState, extraItems }) => {
+  ({ floating, style, className, editor, editorState, extraItems, selectionOnly }) => {
     const { t } = useTranslation('editor');
 
     const items: ChatInputActionsProps['items'] = useMemo(() => {
       if (!editorState) return [];
+      if (selectionOnly) return extraItems ?? [];
 
       const baseItems = [
         // Extra items (like "Ask Copilot") come first
@@ -202,7 +210,7 @@ const InlineToolbar = memo<InlineToolbarProps>(
       ];
 
       return baseItems.filter(Boolean) as ChatInputActionsProps['items'];
-    }, [editor, editorState, extraItems, floating, t]);
+    }, [editor, editorState, extraItems, floating, selectionOnly, t]);
 
     if (!editorState) return null;
 

@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Нажмите, чтобы скопировать",
   "unknownError.desc": "Произошла неожиданная ошибка. Вы можете повторить попытку или сообщить об этом",
   "unknownError.retry": "Повторить",
+  "unknownError.sharedDesc": "Пожалуйста, сообщите об этой проблеме на",
+  "unknownError.sharedTitle": "Не удалось сгенерировать этот ответ",
   "unknownError.title": "Упс, запрос вздремнул",
   "unknownError.traceIdLabel": "Идентификатор трассировки:",
   "unlock.addProxyUrl": "Добавить прокси-URL OpenAI (необязательно)",
