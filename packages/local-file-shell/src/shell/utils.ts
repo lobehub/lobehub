@@ -198,6 +198,21 @@ export const findGitBash = async (): Promise<string | undefined> => {
   );
 };
 
+/**
+ * Locate `cmd.exe`, preferring `%ComSpec%` over the System32 default.
+ * Commands are spawned with `shell: false`, so a bare `cmd.exe` would be
+ * resolved against `PATH` — which fails on hosts whose inherited `PATH`
+ * lacks `System32`.
+ */
+const findCmd = async (): Promise<string | undefined> => {
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+
+  return firstExisting([
+    ...(process.env.ComSpec ? [process.env.ComSpec] : []),
+    path.join(systemRoot, 'System32', 'cmd.exe'),
+  ]);
+};
+
 /** Locate the built-in Windows PowerShell 5.1 (`powershell.exe`). */
 const findWindowsPowerShell = async (): Promise<string | undefined> => {
   const systemRoot = process.env.SystemRoot || 'C:\\Windows';
@@ -283,7 +298,7 @@ const resolveWindowsShell = async (): Promise<WindowsShellInfo> => {
   }
 
   // Extremely unlikely: neither PowerShell edition is present. Fall back to cmd.
-  return { displayName: 'cmd.exe', path: 'cmd.exe', type: 'cmd' };
+  return { displayName: 'cmd.exe', path: (await findCmd()) ?? 'cmd.exe', type: 'cmd' };
 };
 
 /**

@@ -135,6 +135,37 @@ describe('getShellConfig', () => {
   it('should fall back to cmd.exe /c when neither PowerShell edition exists', async () => {
     setPlatform('win32');
     process.env.PATH = 'C:\\Tools';
+    // %ComSpec% takes priority over the System32 default, which may live on
+    // another drive.
+    process.env.ComSpec = 'D:\\Windows\\System32\\cmd.exe';
+    process.env.SystemRoot = 'C:\\Windows';
+    mockExisting(process.env.ComSpec, path.join('C:\\Windows', 'System32', 'cmd.exe'));
+
+    const config = await getShellConfig('dir');
+
+    expect(config.cmd).toBe('D:\\Windows\\System32\\cmd.exe');
+    expect(config.args).toEqual(['/c', 'dir']);
+  });
+
+  it('should resolve cmd.exe under %SystemRoot% when %ComSpec% is unset', async () => {
+    setPlatform('win32');
+    process.env.PATH = 'C:\\Tools';
+    process.env.SystemRoot = 'C:\\Windows';
+    delete process.env.ComSpec;
+    const systemCmd = path.join('C:\\Windows', 'System32', 'cmd.exe');
+    mockExisting(systemCmd);
+
+    const config = await getShellConfig('dir');
+
+    expect(config.cmd).toBe(systemCmd);
+    expect(config.args).toEqual(['/c', 'dir']);
+  });
+
+  it('should keep the bare cmd.exe when no cmd.exe candidate exists on disk', async () => {
+    setPlatform('win32');
+    process.env.PATH = 'C:\\Tools';
+    delete process.env.ComSpec;
+    delete process.env.SystemRoot;
     mockExisting();
 
     const config = await getShellConfig('dir');
