@@ -123,6 +123,7 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
           {/* Collapsed Summary */}
           {(summary || safeTags.length > 0) && (
             <Accordion
+              defaultValue={['summary']}
               gap={0}
               items={[
                 {
@@ -148,7 +149,6 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
                 },
               ]}
               styles={{
-                content: { paddingBlock: 8, paddingInline: 8 },
                 header: { paddingBlock: 8, paddingInline: 8 },
                 item: { marginBlock: 4, marginInline: 4 },
               }}
@@ -201,7 +201,6 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
               },
             ]}
             styles={{
-              content: { paddingBlock: 8, paddingInline: 8 },
               header: { paddingBlock: 8, paddingInline: 8 },
             }}
           />

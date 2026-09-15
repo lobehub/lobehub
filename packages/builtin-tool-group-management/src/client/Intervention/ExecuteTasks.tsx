@@ -114,8 +114,8 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
   }, [index, onDelete]);
 
   return (
-    <AccordionRoot defaultValue={[String(index)]} variant={'borderless'}>
-      <AccordionItem value={String(index)}>
+    <AccordionRoot defaultValue={['task']} variant={'borderless'}>
+      <AccordionItem value={'task'}>
         <AccordionHeader style={{ paddingBlock: 4, paddingInline: 2 }}>
           <AccordionTrigger>
             <Flexbox horizontal align={'center'} gap={8}>

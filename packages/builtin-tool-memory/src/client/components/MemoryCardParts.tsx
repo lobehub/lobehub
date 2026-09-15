@@ -150,6 +150,7 @@ export const SummaryAccordion = memo<SummaryAccordionProps>(({ details, summary,
 
   return (
     <Accordion
+      defaultValue={['summary']}
       gap={0}
       items={[
         {
@@ -175,7 +176,6 @@ export const SummaryAccordion = memo<SummaryAccordionProps>(({ details, summary,
         },
       ]}
       styles={{
-        content: { paddingBlock: 8, paddingInline: 8 },
         header: { paddingBlock: 8, paddingInline: 8 },
         item: { marginBlock: 4, marginInline: 4 },
       }}
