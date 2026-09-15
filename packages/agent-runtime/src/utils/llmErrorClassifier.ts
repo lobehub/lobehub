@@ -48,6 +48,7 @@ const STOP_KEYWORDS = [
   '403',
   'context window',
   'api key',
+  'arrears',
   'billing',
   'forbidden',
   'insufficient quota',
@@ -196,6 +197,9 @@ const createKindClassifier = (options: LLMErrorClassifierOptions = {}) => {
   const { retry: retryErrorTypes, stop: stopErrorTypes } = buildErrorTypeSets(options);
 
   return ({ code, errorType, message, status }: LLMErrorSignal): LLMErrorKind => {
+    if (code?.includes('ARREARAGE')) return 'stop';
+    if (message === 'canceled' || message === 'cancelled') return 'stop';
+
     if (errorType === 'ProviderBizError') {
       if (status === 400 || status === 422) return 'stop';
       if (message.includes('invalid_request_error') || message.includes('invalid request')) {
