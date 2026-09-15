@@ -80,6 +80,38 @@ Please rescan the listing.`,
     expect(classification.isSubmission).toBe(false);
   });
 
+  it('still classifies actual market-cli list failures as CLI feedback', () => {
+    const classification = classify(
+      'market-cli list fails for my MCP server',
+      'I ran market-cli list my-server and got Error: request failed.',
+    );
+
+    expect(classification).toMatchObject({
+      isSubmission: false,
+      reason: 'looks like CLI/publishing feedback',
+    });
+  });
+
+  it('classifies owner verification and metadata refresh failures as listing requests', () => {
+    const classification = classify(
+      '[Bug] MCP owner verification and metadata refresh fail: Workflow trigger is not configured',
+      `Both owner verification and metadata refresh fail for our public MCP listing with the same server-side error:
+
+Workflow trigger is not configured
+
+Listing: https://lobehub.com/mcp/sallim-app-korea-realty
+Repository: https://github.com/sallim-app/korea-realty
+
+Could you check the workflow trigger configuration for this marketplace listing and re-enable verification/rescan?`,
+    );
+
+    expect(classification).toMatchObject({
+      isSubmission: true,
+      reason: 'existing marketplace listing rescan/refresh request',
+      repoUrl: 'https://github.com/sallim-app/korea-realty',
+    });
+  });
+
   it('still treats a plain rescan (no CLI failure) as a listing request', () => {
     const classification = classify(
       '[Request] Rescan elecz MCP listing to v1.9.6',
