@@ -115,6 +115,7 @@ Use this scan to identify applicable checks, then read the linked module for its
 - [ ] Keep populated lists visible beneath persistent composers; cap or collapse growing editors.
 - [ ] Status labels describe every member accurately.
 - [ ] Embedded documents collapse to titled rows and expand to full text with subordinate typography.
+- [ ] Agent tool result cards have one job (evidence or artifact), don't restate the reply, show the agent's reading when extraction can be wrong, fold verification into the result, and label guarantee strength honestly. An artifact card carries the whole artifact, leads with its brief, puts refinement on the card, and the prompt stops the reply from restating it.
 
 **Edit — entering & changing content** ([edit.md](references/edit.md))
 
@@ -134,6 +135,7 @@ Use this scan to identify applicable checks, then read the linked module for its
 - [ ] Give each surface one visually dominant primary action.
 - [ ] Provide the lifecycle operations appropriate to each entity's source; honor pin/keep/lock on every removal path.
 - [ ] Show the acting identity and an account-switch or re-authentication path.
+- [ ] When an agent must change something the user explicitly asked for (budget, required option, dates), offer the options as choices before applying one.
 - [ ] Require a deliberate gesture for unrecoverable or broad destructive actions and report partial failure.
 - [ ] Reveal newly minted secrets once with Copy, hash them at rest, and mask subsequent views.
 - [ ] User-memory/profile stores support correction, retaining without use, export, and undo or soft-delete.
@@ -145,7 +147,7 @@ Use this scan to identify applicable checks, then read the linked module for its
 - [ ] Loading and load-more failures have visible recovery paths; failed items persist rather than auto-dismiss.
 - [ ] Dependent-fetch gates release on settled data, absence, or error; error/not-found branches remain reachable.
 - [ ] Failed awaited writes release busy controls; autosave exposes saving, saved, and failed states with retry.
-- [ ] Write localized, human-readable errors; keep internal IDs in structured inspection fields and lead with the remedy for deterministic failures.
+- [ ] Write localized, human-readable errors and result labels; keep internal IDs, JSON paths, snake\_case keys and raw enums out of rendered copy, and lead with the remedy for deterministic failures.
 - [ ] Capability warnings are reactive and wait for resolved configuration; distinguish model choices from platform limitations.
 
 **Grow — discoverability & progressive disclosure** ([grow.md](references/grow.md))

@@ -72,6 +72,11 @@ export interface ToolRuleRequest {
    * group or page scope); enabled like pinned plugins in agent mode.
    */
   runtimePluginIds?: readonly string[];
+  /**
+   * The deployment has a constraint-solver service configured. The tool is
+   * unusable without one, so a host without it drops the manifest entirely.
+   */
+  solverServiceEnabled?: boolean;
   /** The application's web-browsing tool should serve search for this model. */
   useApplicationBuiltinSearchTool?: boolean;
 }

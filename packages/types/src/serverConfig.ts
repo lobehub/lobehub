@@ -115,6 +115,13 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  /**
+   * Whether the constraint-solver service is configured server-side
+   * (`SOLVER_SERVICE_URL` + `SOLVER_SERVICE_API_KEY`). Drives the client-side
+   * gate for the `builtin-solver` builtin tool: when false, the tool is dropped
+   * from the client tools engine instead of failing at call time.
+   */
+  enableSolverService?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   memory?: GlobalMemoryConfig;

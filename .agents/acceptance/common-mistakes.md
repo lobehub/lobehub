@@ -64,6 +64,8 @@ the next free number of that prefix.
 - **L-S20** Read the managed containers' host ports from `docker ps` and pass `DB_PORT`/`REDIS_PORT` to every `init-dev-env.sh` subcommand; `auth_failed` on migrate is a port mismatch.
 - **L-S21** In a worktree, invoke scripts by absolute path and prove the SPA's identity (Vite pid cwd, changed module from the Vite origin) before trusting any gate or evidence.
 - **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
+- **L-S23** Local CLI commands run as `env -u LOBEHUB_JWT` — the harness-exported production JWT overrides the seeded API key and fails local auth.
+- **L-S24** Extract single vars from a sibling repo's `.env`; sourcing it re-keys `KEY_VAULTS_SECRET` and every LLM call then fails `InvalidProviderAPIKey`.
 
 ## Entries
 
@@ -569,3 +571,31 @@ authenticates as the seeded runtime user, still held three.
 the `user_id` on the seeded API key row) and clear the cap for _that_ id before
 and between rounds. A quota error mid-round is an environment fact until the
 account has been checked; do not debug it as product behaviour.
+
+### L-S23 — Letting the harness-injected LOBEHUB\_JWT override the seeded CLI API key
+
+`since 2026-09-15` · `holds-while: the agent shell exports LOBEHUB_JWT (desktop harness) and apps/cli getAuthAndServer prefers it over LOBEHUB_CLI_API_KEY`
+
+**Trap:** every local `lh` / CLI command authenticates with the production JWT
+against the local dev server, failing with UNAUTHORIZED (`JWT token validation
+failed: signature verification failed`), while `setup-auth.sh status --surface
+cli` stays green because it probes with the API key.
+
+**Rule:** run local CLI commands as `env -u LOBEHUB_JWT bun src/index.ts ...`.
+When local CLI auth fails while the surface check is green, check
+`env | grep LOBEHUB_JWT` before touching credentials.
+
+### L-S24 — Sourcing another repo's .env for one key silently re-keys the vault
+
+`since 2026-09-15` · `holds-while: agent-testing scripts default KEY_VAULTS_SECRET to their own value and sibling-repo .env files carry a different one`
+
+**Trap:** `set -a; source <other-repo>/.env` to grab one API key also exports
+that repo's `KEY_VAULTS_SECRET`; provider rows written afterwards encrypt under
+the wrong key, and the dev server (default secret) reads them as `{}` — every
+LLM call dies with `InvalidProviderAPIKey`, indistinguishable from a bad key.
+
+**Rule:** extract single variables (`grep '^DEEPSEEK_API_KEY=' .env | cut -d= -f2-`)
+instead of sourcing the whole file, or pin `KEY_VAULTS_SECRET` to the dev
+server's value when writing key\_vaults rows. Verify with a decrypt round-trip
+through the server's WebCrypto layout (`iv:authTag:ciphertext`, hex) before
+running.

@@ -120,6 +120,9 @@ export const getServerGlobalConfig = async () => {
     enableMultimodalUnderstanding: !!(
       toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
     ),
+    // builtin-solver availability flag for the client tools engine — the URL and
+    // key themselves stay server-only.
+    enableSolverService: !!(toolsEnv.SOLVER_SERVICE_URL && toolsEnv.SOLVER_SERVICE_API_KEY),
     ...(toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
       ? {
           multimodalUnderstanding: {

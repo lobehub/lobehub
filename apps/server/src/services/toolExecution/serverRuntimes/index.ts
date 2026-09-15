@@ -40,6 +40,7 @@ import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
+import { solverRuntime } from './solver';
 import { taskRuntime } from './task';
 import { topicReferenceRuntime } from './topicReference';
 import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
@@ -76,6 +77,7 @@ registerRuntimes([
   notebookRuntime,
   skillStoreRuntime,
   skillsRuntime,
+  solverRuntime,
   memoryRuntime,
   activatorRuntime,
   messageRuntime,

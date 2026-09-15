@@ -1,4 +1,5 @@
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { SolverManifest } from '@lobechat/builtin-tool-solver';
 import { groupSupervisorToolIds } from '@lobechat/builtin-tools';
 import { describe, expect, it } from 'vitest';
 
@@ -117,7 +118,9 @@ describe('resolveToolRules', () => {
       }),
     );
     expect(noGateway.rules['lobe-remote-device']).toBe(false);
-    expect(noGateway.excludedIdentifiers).toEqual(new Set());
+    // The solver service is unconfigured in this request, so its tool is walled
+    // off everywhere; the device walls are what this case is about.
+    expect(noGateway.excludedIdentifiers).toEqual(new Set([SolverManifest.identifier]));
 
     const open = resolveToolRules(
       request({
@@ -151,6 +154,7 @@ describe('resolveToolRules', () => {
     expect(denied.excludedIdentifiers).toEqual(
       new Set([
         'my-plugin',
+        SolverManifest.identifier,
         'lobe-local-system',
         'lobe-remote-device',
         'lobe-browser',
@@ -204,5 +208,27 @@ describe('filterAllowedBuiltinTools', () => {
       'lobe-remote-device',
       'lobe-web-browsing',
     ]);
+  });
+
+  it('offers the solver only when the host configured a service and the agent pinned it', () => {
+    const unconfigured = resolveToolRules(
+      request({ agent: { chatConfig: {}, plugins: [SolverManifest.identifier] } }),
+    );
+    expect(unconfigured.rules[SolverManifest.identifier]).toBe(false);
+    // Physical wall, so explicit activation cannot resurrect an unusable tool.
+    expect(unconfigured.excludedIdentifiers.has(SolverManifest.identifier)).toBe(true);
+
+    const unpinned = resolveToolRules(request({ solverServiceEnabled: true }));
+    expect(unpinned.rules[SolverManifest.identifier]).toBe(false);
+    expect(unpinned.excludedIdentifiers.has(SolverManifest.identifier)).toBe(false);
+
+    const pinned = resolveToolRules(
+      request({
+        agent: { chatConfig: {}, plugins: [SolverManifest.identifier] },
+        solverServiceEnabled: true,
+      }),
+    );
+    expect(pinned.rules[SolverManifest.identifier]).toBe(true);
+    expect(pinned.excludedIdentifiers.has(SolverManifest.identifier)).toBe(false);
   });
 });
