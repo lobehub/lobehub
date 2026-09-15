@@ -262,6 +262,18 @@ const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | u
     return (node as any).lastMessageId;
   }
 
+  // Priority 3.5: For agentCouncil, recursively find the last message ID of the last member
+  if (node.role === 'agentCouncil' && (node as any).members) {
+    const members = (node as any).members;
+    if (members.length > 0) {
+      const lastMember = members.at(-1);
+      return findLastMessageIdRecursive(lastMember);
+    }
+    if ((node as any).extra?.parentMessageId) {
+      return (node as any).extra.parentMessageId;
+    }
+  }
+
   // Priority 4: Return self ID
   return node.id;
 };
