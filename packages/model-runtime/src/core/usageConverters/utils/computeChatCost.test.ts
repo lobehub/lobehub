@@ -1155,6 +1155,64 @@ describe('computeChatPricing', () => {
     );
   });
 
+  describe('OpenAI Pro range-priced cards', () => {
+    // Scoped to OpenAI: the Pro cards have no AiHubMix counterpart.
+    const findPricing = (id: string) =>
+      (openaiChatModels as { id: string; pricing?: Pricing }[]).find((m) => m.id === id)?.pricing;
+
+    it.each([{ id: 'gpt-5.5-pro' }, { id: 'gpt-5.4-pro' }])(
+      'prices $id at 30/180 up to the 272K boundary and 60/270 above it',
+      ({ id }) => {
+        const pricing = findPricing(id);
+        expect(pricing).toBeDefined();
+
+        const usageAt272K: ModelTokensUsage = {
+          inputCacheMissTokens: 272_000,
+          inputTextTokens: 272_000,
+          outputTextTokens: 1_000,
+          totalInputTokens: 272_000,
+          totalOutputTokens: 1_000,
+          totalTokens: 273_000,
+        };
+
+        const lower = computeChatCost(pricing, usageAt272K);
+        expect(lower?.issues).toHaveLength(0);
+        expect(lower?.breakdown.find((item) => item.unit.name === 'textInput')?.segments).toEqual([
+          { credits: 272_000 * 30, quantity: 272_000, rate: 30 },
+        ]);
+        expect(lower?.breakdown.find((item) => item.unit.name === 'textOutput')?.segments).toEqual([
+          { credits: 1_000 * 180, quantity: 1_000, rate: 180 },
+        ]);
+
+        const usageAbove272K: ModelTokensUsage = {
+          ...usageAt272K,
+          inputCacheMissTokens: 272_001,
+          inputTextTokens: 272_001,
+          totalInputTokens: 272_001,
+          totalTokens: 273_001,
+        };
+
+        const higher = computeChatCost(pricing, usageAbove272K);
+        expect(higher?.issues).toHaveLength(0);
+        expect(higher?.breakdown.find((item) => item.unit.name === 'textInput')?.segments).toEqual([
+          { credits: 272_001 * 60, quantity: 272_001, rate: 60 },
+        ]);
+        expect(higher?.breakdown.find((item) => item.unit.name === 'textOutput')?.segments).toEqual(
+          [{ credits: 1_000 * 270, quantity: 1_000, rate: 270 }],
+        );
+      },
+    );
+
+    it.each([{ id: 'gpt-5.5-pro' }, { id: 'gpt-5.4-pro' }])(
+      'declares no cached-input unit for $id',
+      ({ id }) => {
+        const pricing = findPricing(id);
+        expect(pricing).toBeDefined();
+        expect(pricing?.units.map((unit) => unit.name).sort()).toEqual(['textInput', 'textOutput']);
+      },
+    );
+  });
+
   describe('MiniMax', () => {
     it('uses total input tokens to select tiered rates for MiniMax-M3', () => {
       const pricing = minimaxChatModels.find(
