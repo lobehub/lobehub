@@ -222,6 +222,14 @@ export const ModelParamsMetaSchema = z.object({
     })
     .optional(),
 
+  thinkingLevel: z
+    .object({
+      default: z.string(),
+      description: z.string().optional(),
+      enum: z.array(z.string()),
+      type: z.literal('string').optional(),
+    })
+    .optional(),
   promptExtend: z
     .object({
       default: z.union([z.boolean(), z.string()]),
