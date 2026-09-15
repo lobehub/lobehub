@@ -316,3 +316,43 @@ describe('AiAgentService.execAgent - user turn spine anchoring', () => {
     expect(userMessageCall()![0]).toMatchObject({ parentId: 'thread-spine-1' });
   });
 });
+
+describe('AiAgentService.execAgent - queued follow-up steer mark', () => {
+  let service: AiAgentService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMessageCreate.mockImplementation(async (payload: { role: string }) => ({
+      id: payload.role === 'user' ? 'user-msg-1' : 'assistant-msg-1',
+    }));
+    mockGetLatestSpineMessageId.mockResolvedValue('spine-head-1');
+    mockGetLatestNonToolMessageId.mockResolvedValue(undefined);
+    mockTryReserve.mockResolvedValue(true);
+    mockReleaseReservation.mockResolvedValue(undefined);
+
+    service = new AiAgentService({} as any, 'test-user-id');
+  });
+
+  // Regression: the gateway path persisted a queued follow-up without its steer
+  // mark, so it rendered as a new turn instead of a continuation.
+  it('persists the steer mark on the user turn', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Follow up',
+      steer: true,
+    });
+
+    expect(userMessageCall()![0].metadata).toMatchObject({ steer: true });
+  });
+
+  it('leaves an ordinary user turn unmarked', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(userMessageCall()![0].metadata?.steer).toBeUndefined();
+  });
+});

@@ -271,8 +271,39 @@ describe('AgentStateManager', () => {
         'agent_runtime_steps:op-del',
         'agent_runtime_meta:op-del',
         'agent_runtime_interrupt:op-del',
+        'agent_runtime_queued_messages:op-del',
         'agent_runtime_inline_resume:op-del',
       );
+    });
+  });
+
+  describe('queued messages flag', () => {
+    it('setQueuedMessages(true) writes a small key with the state TTL', async () => {
+      await stateManager.setQueuedMessages('op-q', true);
+
+      expect(redisMock.setex).toHaveBeenCalledWith(
+        'agent_runtime_queued_messages:op-q',
+        2 * 3600,
+        '1',
+      );
+    });
+
+    it('setQueuedMessages(false) deletes the key', async () => {
+      await stateManager.setQueuedMessages('op-q', false);
+
+      expect(redisMock.del).toHaveBeenCalledWith('agent_runtime_queued_messages:op-q');
+      expect(redisMock.setex).not.toHaveBeenCalled();
+    });
+
+    it('hasQueuedMessages checks key existence instead of loading the state blob', async () => {
+      redisMock.exists.mockResolvedValueOnce(1);
+      expect(await stateManager.hasQueuedMessages('op-q')).toBe(true);
+
+      redisMock.exists.mockResolvedValueOnce(0);
+      expect(await stateManager.hasQueuedMessages('op-q')).toBe(false);
+
+      expect(redisMock.exists).toHaveBeenCalledWith('agent_runtime_queued_messages:op-q');
+      expect(redisMock.get).not.toHaveBeenCalled();
     });
   });
 

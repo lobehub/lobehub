@@ -63,6 +63,7 @@ import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEvent
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
 import { type GatewayMuxIdentity, getGatewayMux } from './muxRegistry';
+import { flagQueuedMessagesOnRunStart, syncQueuedMessagesFlag } from './queuedMessagesFlag';
 
 /**
  * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
@@ -546,6 +547,14 @@ export class GatewayActionImpl {
   };
 
   /**
+   * Mirror whether a conversation still has messages queued behind its running
+   * Gateway run. See {@link syncQueuedMessagesFlag}.
+   */
+  internal_syncQueuedMessagesFlag = (contextKey: string): void => {
+    syncQueuedMessagesFlag(this.#get, contextKey);
+  };
+
+  /**
    * Get the connection status for a specific operation.
    */
   getGatewayConnectionStatus = (operationId: string): ConnectionStatus | undefined => {
@@ -628,7 +637,7 @@ export class GatewayActionImpl {
      */
     messageContext?: ConversationContext;
     /** Request metadata carried from the originating user message. */
-    metadata?: Pick<MessageMetadata, 'trigger'>;
+    metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
     /** Called when the gateway session completes (agent finished running) */
@@ -805,6 +814,7 @@ export class GatewayActionImpl {
               clientIds,
               prompt: message,
               shareId: agentShareId,
+              steer: metadata?.steer,
               topicId: executionContext.topicId,
             },
             { signal: abortSignal },
@@ -870,6 +880,9 @@ export class GatewayActionImpl {
               resumeApprovals,
               resumeToolResult,
               selectedToolIds,
+              // A queued follow-up keeps its continuation mark on the row the
+              // server persists, which replaces the optimistic one.
+              steer: metadata?.steer,
               trigger: metadata?.trigger,
               userInterventionConfig,
             },
@@ -1048,6 +1061,10 @@ export class GatewayActionImpl {
       parentOperationId,
       type: 'execServerAgentRuntime',
     });
+
+    // A follow-up may have been queued while execAgentTask was still in flight,
+    // before this run had a server operation id to flag.
+    flagQueuedMessagesOnRunStart(this.#get, messageMapKey(resolvedMessageContext));
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);

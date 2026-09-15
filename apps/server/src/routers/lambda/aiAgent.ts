@@ -1097,6 +1097,12 @@ const ExecAgentSchema = z
      * messages are the dominant caller. Pass a more specific value (`'cli'`,
      * `'openapi'`, `'eval'`, …) to override.
      */
+    /**
+     * The prompt was queued while the previous turn was still running. The
+     * persisted user message carries `metadata.steer` so it renders as a
+     * continuation of that turn instead of a new one.
+     */
+    steer: z.boolean().optional(),
     trigger: z
       .string()
       .refine((value) => value !== RequestTrigger.Bot, {
@@ -1328,6 +1334,15 @@ const UpdateClientTaskThreadStatusSchema = z.object({
   resultContent: z.string().optional(),
   /** The Thread ID */
   threadId: z.string(),
+});
+
+/**
+ * Schema for setQueuedMessages - flag queued follow-ups on a running operation
+ */
+const SetQueuedMessagesSchema = z.object({
+  operationId: z.string(),
+  /** Whether the composer still holds user messages queued behind the run. */
+  pending: z.boolean(),
 });
 
 /**
@@ -2134,6 +2149,7 @@ export const aiAgentRouter = router({
       resumeApprovals,
       resumeToolResult,
       selectedToolIds,
+      steer,
       trigger,
       userInterventionConfig,
     } = input;
@@ -2330,6 +2346,7 @@ export const aiAgentRouter = router({
         resumeToolResult,
         selectedToolIds,
         slug,
+        steer,
         trigger: trigger ?? RequestTrigger.Chat,
         userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
@@ -3063,6 +3080,20 @@ export const aiAgentRouter = router({
         }
         throw error;
       }
+    }),
+
+  /**
+   * Tell a running server operation whether the composer still holds user
+   * messages queued behind it. The run reads the flag at its next step
+   * boundary and ends the turn early, so the queued follow-up starts as the
+   * next turn instead of waiting for the whole run to finish.
+   */
+  setQueuedMessages: aiAgentWriteProcedure
+    .input(SetQueuedMessagesSchema)
+    .mutation(async ({ input, ctx }) => {
+      log('setQueuedMessages: operationId=%s, pending=%s', input.operationId, input.pending);
+
+      return ctx.aiAgentService.setQueuedMessages(input);
     }),
 
   /**

@@ -136,6 +136,8 @@ export interface ExecAgentTaskParams {
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
   selectedToolIds?: string[];
   slug?: string;
+  /** The prompt was queued behind a running turn and renders as its continuation. */
+  steer?: boolean;
   /**
    * Override what initiated this operation. Server defaults to `'chat'` when
    * omitted. Pass a more specific value (`'cli'`, `'openapi'`, …) so the
@@ -289,6 +291,14 @@ class AiAgentService {
    */
   async interruptTask(params: InterruptTaskParams) {
     return await lambdaClient.aiAgent.interruptTask.mutate(params);
+  }
+
+  /**
+   * Tell a running server operation whether user messages are queued behind it,
+   * so it hands the turn back at its next step boundary.
+   */
+  async setQueuedMessages(params: { operationId: string; pending: boolean }) {
+    return await lambdaClient.aiAgent.setQueuedMessages.mutate(params);
   }
 
   /**

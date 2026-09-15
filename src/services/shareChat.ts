@@ -7,6 +7,8 @@ export interface ShareChatExecParams {
   clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
   prompt: string;
   shareId: string;
+  /** The prompt was queued behind a running turn and renders as its continuation. */
+  steer?: boolean;
   /** Absent → the server creates a new visitor topic (counted against the topic cap). */
   topicId?: string | null;
 }
@@ -43,6 +45,18 @@ class ShareChatService {
    */
   async interruptTask(shareId: string, topicId: string, operationId: string) {
     return await lambdaClient.shareChat.interruptTask.mutate({ operationId, shareId, topicId });
+  }
+
+  /**
+   * The visitor counterpart of `aiAgentService.setQueuedMessages`.
+   */
+  async setQueuedMessages(shareId: string, topicId: string, operationId: string, pending: boolean) {
+    return await lambdaClient.shareChat.setQueuedMessages.mutate({
+      operationId,
+      pending,
+      shareId,
+      topicId,
+    });
   }
 
   async refreshGatewayToken(shareId: string, topicId: string): Promise<{ token: string }> {
