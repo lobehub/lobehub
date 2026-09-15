@@ -98,11 +98,7 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { idGenerator } from '../utils/idGenerator';
 import { inJsonStringArray } from '../utils/inJsonStringArray';
 import { searchableMessage } from '../utils/searchableMessage';
-import {
-  notShareVisitorMessage,
-  notShareVisitorTopicRef,
-  shareVisitorOwnedFile,
-} from '../utils/shareVisitor';
+import { notShareVisitorMessage, notShareVisitorTopicRef } from '../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { recomputeTopicUsage } from './topicUsage';
 import { WorkModel } from './work';
@@ -960,20 +956,6 @@ export class MessageModel {
    */
   private notShareVisitor = () => (this.includeShareVisitor ? undefined : notShareVisitorMessage());
 
-  /**
-   * Visibility guard for a `files` row joined from `messages_files`. The base
-   * guard is the viewer's own scope (anti-leak tombstone for files the viewer
-   * lost access to). In a visitor-inclusive read it is widened with
-   * {@link shareVisitorOwnedFile}: visitor attachments are owned by the
-   * VISITOR, not the creator the message rows are stored under, and would
-   * otherwise tombstone on every share surface — the visitor page, and the
-   * runtime history the next turn is built from.
-   */
-  private messageFileGuard = (allowShareVisitor: boolean) => {
-    const base = buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files);
-    return allowShareVisitor ? or(base, shareVisitorOwnedFile()) : base;
-  };
-
   private ownership = () => and(this.workspaceScope(), this.notShareVisitor());
 
   /**
@@ -1552,12 +1534,7 @@ export class MessageModel {
       worksByMessageId,
     ] = await Promise.all([
       messageGroupNodesPromise,
-      this.queryMessageFileRelations(
-        messageIds,
-        postProcessUrl,
-        timing,
-        allowShareVisitor || this.includeShareVisitor,
-      ),
+      this.queryMessageFileRelations(messageIds, postProcessUrl, timing),
       this.queryMessageChunkRelations(messageIds, timing),
       this.queryMessageQueryRelations(messageIds, timing),
       this.queryMessageThreadRelations(taskMessageIds, timing),
@@ -1787,7 +1764,6 @@ export class MessageModel {
     messageIds: string[],
     postProcessUrl: QueryMessagesOptions['postProcessUrl'],
     timing?: ModelTimingContext,
-    allowShareVisitor = false,
   ): Promise<MessageFileRelations> => {
     if (messageIds.length === 0) return { documentsMap: {}, relatedFileList: [] };
 
@@ -1814,7 +1790,10 @@ export class MessageModel {
           // reads in agent.ts.
           .leftJoin(
             files,
-            and(eq(files.id, messagesFiles.fileId), this.messageFileGuard(allowShareVisitor)),
+            and(
+              eq(files.id, messagesFiles.fileId),
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+            ),
           )
           .where(inArray(messagesFiles.messageId, messageIds)),
       { messageCount: messageIds.length },
@@ -2176,7 +2155,7 @@ export class MessageModel {
           files,
           and(
             eq(files.id, messagesFiles.fileId),
-            this.messageFileGuard(options.allowShareVisitor || this.includeShareVisitor),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
           ),
         )
         .where(inArray(messagesFiles.messageId, messageIds)),

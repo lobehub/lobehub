@@ -58,13 +58,25 @@ export const SHARE_VISITOR_PROMPT_MAX_LENGTH = 20_000;
 /**
  * Upper bound on attachments a share visitor may pin to one turn.
  *
- * Attachments are uploaded through the VISITOR's own account (their storage,
- * their quota), so storage abuse is self-limiting — this cap only bounds the
- * per-turn work the CREATOR pays for: every attached document is parsed and
- * injected into the creator-billed model call, and every image rides along
- * as vision input. Ten mirrors what a single owner turn realistically carries.
+ * Visitor attachments are stored under the CREATOR's account (the creator's
+ * storage quota pays for them, like every other share artifact), and every
+ * attached document is parsed and injected into the creator-billed model call
+ * while every image rides along as vision input. This cap bounds that per-turn
+ * cost; together with {@link SHARE_VISITOR_MAX_FILE_SIZE} it bounds how much
+ * storage one visitor turn can put on the creator. Ten mirrors what a single
+ * owner turn realistically carries.
  */
 export const SHARE_VISITOR_MAX_FILES_PER_TURN = 10;
+
+/**
+ * Largest single file a share visitor may upload, in bytes.
+ *
+ * Far below the owner's own `MAX_UPLOAD_FILE_SIZE` (2 GB): the bytes land on
+ * the CREATOR's storage quota and a visitor is an untrusted party. Also kept
+ * under the client's multipart threshold (64 MB) so the share upload path is
+ * a single reserved PUT — no multipart session to abort or resume.
+ */
+export const SHARE_VISITOR_MAX_FILE_SIZE = 32 * 1024 * 1024;
 
 /**
  * Validates `AgentShareConfig.slug`: lowercase alphanumerics and hyphens

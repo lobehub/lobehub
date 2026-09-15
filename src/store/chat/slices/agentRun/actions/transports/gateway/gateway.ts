@@ -689,7 +689,7 @@ export class GatewayActionImpl {
 
     // Agent-share visitor surface: dispatch through the share-authorized mirror.
     // It accepts only the share-safe subset (prompt / topic / clientIds /
-    // visitor-owned fileIds) — everything else (tools, devices, mentions) is
+    // the visitor's share-uploaded fileIds) — everything else (tools, devices, mentions) is
     // decided server-side by the share config, never by this client.
     const agentShareId = executionContext.agentShareId;
 

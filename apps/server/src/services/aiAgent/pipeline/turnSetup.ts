@@ -147,12 +147,10 @@ const resolveRunAttachments = async (
   {
     attachedFileIds,
     files,
-    shareGate,
     throwIfAborted,
   }: {
     attachedFileIds?: string[];
     files?: InternalExecAgentParams['files'];
-    shareGate?: AgentShareGate;
     throwIfAborted: (stage: string) => Promise<void>;
   },
 ): Promise<RunAttachments> => {
@@ -272,17 +270,11 @@ const resolveRunAttachments = async (
     await throwIfAborted('file resolution');
 
     try {
-      // A share visitor's attachments live in the VISITOR's own account (the
-      // upload went through their `file.createFile`), while `deps.userId` is
-      // the CREATOR the run executes as. Resolve under the visitor so the
-      // creator-scoped `FileModel` doesn't drop every id as "not found"; the
-      // router already proved the ids are the visitor's own. Sharing is
-      // personal-only, so no workspace scope applies either way.
       const resolved = await resolveAttachmentsByFileIds({
         db: deps.db,
         fileIds: attachedFileIds,
-        userId: shareGate?.visitorUserId ?? deps.userId,
-        workspaceId: shareGate ? undefined : deps.workspaceId,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
       });
 
       warnings.push(...resolved.warnings);
@@ -686,7 +678,6 @@ export const setupTurn = async (
   const runAttachments = await resolveRunAttachments(deps, {
     attachedFileIds,
     files,
-    shareGate,
     throwIfAborted: throwIfExecutionAborted,
   });
 

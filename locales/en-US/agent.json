@@ -422,6 +422,8 @@
   "share.visitor.topics.new": "New conversation",
   "share.visitor.topics.title": "Conversations",
   "share.visitor.topics.untitled": "Untitled conversation",
+  "share.visitor.upload.creatorStorageBlocked": "This agent's storage is full. Ask its creator to free up space.",
+  "share.visitor.upload.fileTooLarge": "Files must be under {{max}}.",
   "share.visitor.upload.tooManyFiles": "You can attach up to {{max}} files per message.",
   "transfer.button": "Move",
   "transfer.confirm.botChannels": "Bot channel connections may need to be refreshed after moving",

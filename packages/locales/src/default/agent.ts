@@ -540,6 +540,9 @@ export default {
   'share.visitor.profile.terms.visibilityCreator':
     'The creator has turned on session review, so they can read this conversation.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your conversations.',
+  'share.visitor.upload.creatorStorageBlocked':
+    "This agent's storage is full. Ask its creator to free up space.",
+  'share.visitor.upload.fileTooLarge': 'Files must be under {{max}}.',
   'share.visitor.upload.tooManyFiles': 'You can attach up to {{max}} files per message.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
   'share.visitor.topics.empty': 'No conversations yet',

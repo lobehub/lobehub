@@ -224,10 +224,11 @@ describe('AiAgentService.execAgent - share-visitor attachment scope', () => {
     );
   });
 
-  it('resolves attachments under the VISITOR on a share-visitor run and attaches them to the turn', async () => {
-    // The upload went through the visitor's own `file.createFile`, so the file
-    // row belongs to the visitor; resolving under the creator (the account the
-    // run executes as) would drop every id as "not found".
+  it('resolves attachments under the CREATOR on a share-visitor run too, and attaches them to the turn', async () => {
+    // Share uploads are creator-owned rows (`shareChat.createFile` writes them
+    // under the creator with share provenance), so the run resolves them in
+    // the same scope it executes in — never under the visitor, whose own
+    // account holds no share files at all.
     await service.execAgent({
       agentId: 'agent-1',
       fileIds: ['file-visitor'],
@@ -241,11 +242,10 @@ describe('AiAgentService.execAgent - share-visitor attachment scope', () => {
     });
 
     expect(mockResolveAttachmentsByFileIds).toHaveBeenCalledWith(
-      expect.objectContaining({
-        fileIds: ['file-visitor'],
-        userId: visitorId,
-        workspaceId: undefined,
-      }),
+      expect.objectContaining({ fileIds: ['file-visitor'], userId: creatorId }),
+    );
+    expect(mockResolveAttachmentsByFileIds).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: visitorId }),
     );
     // The resolved ids are stamped on the visitor's user message row (persisted
     // under the creator via the turn reservation), so the message-file

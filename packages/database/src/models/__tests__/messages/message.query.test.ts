@@ -1557,67 +1557,6 @@ describe('MessageModel Query Tests', () => {
       expect(result.map((item) => item.id)).toEqual(['visitor-direct-msg']);
     });
 
-    // A visitor's attachment is uploaded through the VISITOR's own account, so
-    // the file row is theirs while the message row (and the message-file
-    // relation) is the creator's. The plain file guard would drop it in every
-    // scope; `shareVisitorOwnedFile()` widens the join only for files whose
-    // owner is the sender of the message's topic.
-    it('joins a visitor-owned file onto the visitor message in visitor-inclusive scopes', async () => {
-      await serverDB.insert(users).values({ id: visitorUserId });
-      await serverDB.insert(files).values({
-        fileType: 'image/png',
-        id: 'f-visitor',
-        name: 'cat.png',
-        size: 10,
-        url: 'cat.png',
-        userId: visitorUserId,
-      });
-      await serverDB
-        .insert(messagesFiles)
-        .values({ fileId: 'f-visitor', messageId: 'visitor-direct-msg', userId });
-
-      try {
-        const visitorView = await messageModel.queryForVisitor({ topicId: visitorTopicId });
-        expect(visitorView[0].imageList?.map((item) => item.id)).toEqual(['f-visitor']);
-
-        const runtimeModel = new MessageModel(serverDB, userId, undefined, undefined, {
-          includeShareVisitor: true,
-        });
-        const runtimeView = await runtimeModel.query({ topicId: visitorTopicId });
-        expect(runtimeView[0].imageList?.map((item) => item.id)).toEqual(['f-visitor']);
-      } finally {
-        await serverDB.delete(users).where(eq(users.id, visitorUserId));
-      }
-    });
-
-    it('does not widen the file join for a foreign file attached to a non-visitor message', async () => {
-      await serverDB.insert(users).values({ id: visitorUserId });
-      await serverDB.insert(files).values({
-        fileType: 'image/png',
-        id: 'f-visitor',
-        name: 'cat.png',
-        size: 10,
-        url: 'cat.png',
-        userId: visitorUserId,
-      });
-      // Same foreign file, but hung on the creator's own message: the topic
-      // has no sender, so the widening predicate must not match.
-      await serverDB
-        .insert(messagesFiles)
-        .values({ fileId: 'f-visitor', messageId: 'creator-direct-msg', userId });
-
-      try {
-        const runtimeModel = new MessageModel(serverDB, userId, undefined, undefined, {
-          includeShareVisitor: true,
-        });
-        const result = await runtimeModel.query({ topicId: 'topic-creator-own' });
-        expect(result).toHaveLength(1);
-        expect(result[0].imageList ?? []).toHaveLength(0);
-      } finally {
-        await serverDB.delete(users).where(eq(users.id, visitorUserId));
-      }
-    });
-
     it('honours an explicit allowShareVisitor opt-in (agent runtime path)', async () => {
       const result = await messageModel.query(
         { topicId: visitorTopicId },

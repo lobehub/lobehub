@@ -1,6 +1,6 @@
 import { type AnyColumn, isNull, sql } from 'drizzle-orm';
 
-import { files, messages, messagesFiles, topics } from '../schemas';
+import { messages, topics } from '../schemas';
 
 /**
  * Agent-share visitor topics carry the creator's `userId` (billing/data
@@ -37,25 +37,3 @@ export function notShareVisitorTopicRef(topicIdColumn: AnyColumn) {
   // immune to the outer alias rewriting.
   return sql`NOT EXISTS (SELECT 1 FROM ${topics} WHERE ${sql.raw('"topics"."id"')} = ${topicIdColumn} AND ${sql.raw('"topics"."sender_id"')} IS NOT NULL)`;
 }
-
-/**
- * Accept a `files` row joined from `messages_files` when it was attached by
- * the agent-share VISITOR of the message's topic.
- *
- * Share visitor turns persist under the CREATOR's `userId` (only
- * `topics.senderId` marks the visitor), but the files a visitor attaches are
- * uploaded through the visitor's own account, so `files.user_id` is the
- * visitor. Creator-scoped file guards (`files.user_id = creator`) would
- * therefore tombstone every visitor attachment — no name, no url, and no
- * parsed content for the next model turn. This predicate OR-ed onto that
- * guard lets a file through exactly when the topic's `sender_id` is the file
- * owner: the visitor sees and re-feeds their own uploads, and a creator-owned
- * file still resolves through the base guard. Only for visitor-inclusive
- * scopes; creator-facing reads never reach visitor topics in the first place.
- *
- * Correlated on `messages_files.message_id` / `files.user_id` of the outer
- * join, with the inner references hard-coded via `sql.raw` for the same
- * alias-rewriting reason as {@link notShareVisitorTopicRef}.
- */
-export const shareVisitorOwnedFile = () =>
-  sql`EXISTS (SELECT 1 FROM ${messages} INNER JOIN ${topics} ON ${sql.raw('"topics"."id"')} = ${sql.raw('"messages"."topic_id"')} WHERE ${sql.raw('"messages"."id"')} = ${messagesFiles.messageId} AND ${sql.raw('"topics"."sender_id"')} = ${files.userId})`;

@@ -422,6 +422,8 @@
   "share.visitor.topics.new": "新建会话",
   "share.visitor.topics.title": "会话",
   "share.visitor.topics.untitled": "未命名会话",
+  "share.visitor.upload.creatorStorageBlocked": "这个智能体的存储空间已满，请联系创建者清理后再试。",
+  "share.visitor.upload.fileTooLarge": "单个文件不能超过 {{max}}。",
   "share.visitor.upload.tooManyFiles": "每条消息最多可附加 {{max}} 个文件。",
   "transfer.button": "移动",
   "transfer.confirm.botChannels": "移动后可能需要重新刷新机器人频道连接",
