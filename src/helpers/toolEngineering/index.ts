@@ -2,16 +2,9 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { BrowserManifest } from '@lobechat/builtin-tool-browser';
-import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
-import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
-import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
-import { MemoryManifest } from '@lobechat/builtin-tool-memory';
-import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { alwaysOnToolIds, chatModeAllowedToolIds, defaultToolIds } from '@lobechat/builtin-tools';
 import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
+import { resolveToolRules } from '@lobechat/mecha';
 import {
   type BuiltinToolManifest,
   type BuiltinToolResolveContext,
@@ -25,7 +18,11 @@ import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
 import { getAgentStoreState } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentChatConfigSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import {
@@ -221,67 +218,44 @@ export const createAgentToolsEngine = (
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
-  // `currentAgentPlugins` already resolves to pinned-only identifiers — disabled
-  // entries never reach the tools-engine whitelist.
-  const userPlugins = agentSelectors.currentAgentPlugins(agentState);
-  const disabledPluginIds = agentSelectors.currentAgentDisabledPlugins(agentState);
-  const isChatMode =
-    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false ||
-    !isCanUseFC(workingModel.model, workingModel.provider);
+  const activeAgentId = agentState.activeAgentId || '';
+  const chatConfig = agentChatConfigSelectors.currentChatConfig(agentState);
 
-  // Each entry below still respects its own runtime gate; in chat mode this
-  // is the entire whitelist. `allowExplicitActivation` and user plugins /
-  // `alwaysOnToolIds` are deliberately omitted in chat mode so the activator
-  // can't smuggle additional tools in.
-  const kbEnabled = agentSelectors.hasEnabledKnowledgeBases(agentState);
-  const memoryEnabled =
-    agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
-    settingsSelectors.memoryEnabled(useUserStore.getState());
-  const webBrowsingEnabled = searchConfig.useApplicationBuiltinSearchTool;
-  // Chat mode no longer auto-injects image generation (token cost + unwanted
-  // tool calls). Users opt in by pinning `lobe-image-generation`. Models with
-  // native imageOutput still skip the fallback tool entirely.
-  const imageGenerationCapable =
-    isCanUseFC(workingModel.model, workingModel.provider) &&
-    !aiModelSelectors.isModelSupportImageOutput(
-      workingModel.model,
-      workingModel.provider,
-    )(getAiInfraStoreState());
-  const imageGenerationEnabled =
-    imageGenerationCapable && userPlugins.includes(ImageGenerationManifest.identifier);
-
-  const chatModeRules = {
-    [ImageGenerationManifest.identifier]: imageGenerationEnabled,
-    [KnowledgeBaseManifest.identifier]: kbEnabled,
-    [MemoryManifest.identifier]: memoryEnabled,
-    [WebBrowsingManifest.identifier]: webBrowsingEnabled,
-  };
-
-  const agentModeRules = {
-    // Runtime-resolved plugins (from agentConfigResolver for the effective agent,
-    // may include sub-agent/group/page scope plugins not on the active agent)
-    ...(pluginIds && Object.fromEntries(pluginIds.map((id) => [id, true]))),
-    // User-selected plugins (from the active agent)
-    ...Object.fromEntries(userPlugins.map((id) => [id, true])),
-    // Always-on builtin tools
-    ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
-    // System-level rules (may override user selection for specific tools)
-    // Browser rides the same local-runtime gate as local-system because the
-    // control IPC only exists in the desktop main process.
-    [BrowserManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
-    [CloudSandboxManifest.identifier]: agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
-    [KnowledgeBaseManifest.identifier]: kbEnabled,
-    [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
-    [MemoryManifest.identifier]: memoryEnabled,
-    [WebBrowsingManifest.identifier]: webBrowsingEnabled,
-  };
+  // The rules — mode, per-tool enablement and defaults — are shared with the
+  // server runtime through `@lobechat/mecha`; the browser only assembles its
+  // facts. It has no device gateway, so no device walls apply here and the
+  // remaining platform gate stays in `platformFilter` below.
+  const resolved = resolveToolRules({
+    agent: {
+      chatConfig,
+      // `currentAgentPlugins` already resolves to pinned-only identifiers.
+      plugins: agentSelectors.currentAgentPlugins(agentState),
+    },
+    disabledPluginIds: agentSelectors.currentAgentDisabledPlugins(agentState),
+    executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
+    hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),
+    // A `local` target only resolves on the desktop, where the host itself is
+    // the machine: local tools are always reachable there.
+    localExecutionReady: true,
+    memoryEnabled:
+      chatConfig.memory?.enabled ?? settingsSelectors.memoryEnabled(useUserStore.getState()),
+    model: {
+      canUseFC: isCanUseFC(workingModel.model, workingModel.provider),
+      hasImageOutput: aiModelSelectors.isModelSupportImageOutput(
+        workingModel.model,
+        workingModel.provider,
+      )(getAiInfraStoreState()),
+    },
+    runtimePluginIds: pluginIds,
+    useApplicationBuiltinSearchTool: searchConfig.useApplicationBuiltinSearchTool,
+  });
 
   return createToolsEngine({
-    defaultToolIds: isChatMode ? chatModeAllowedToolIds : defaultToolIds,
-    disabledPluginIds,
+    defaultToolIds: resolved.defaultToolIds,
+    disabledPluginIds: [...resolved.excludedIdentifiers],
     manifestContext,
     enableChecker: createEnableChecker({
-      allowExplicitActivation: !isChatMode,
+      allowExplicitActivation: resolved.allowExplicitActivation,
       platformFilter: ({ pluginId }) => {
         const toolStoreState = getToolStoreState();
         const installedPlugin = pluginSelectors.getInstalledPluginById(pluginId)(toolStoreState);
@@ -296,7 +270,7 @@ export const createAgentToolsEngine = (
 
         return undefined; // fall through to rules
       },
-      rules: isChatMode ? chatModeRules : agentModeRules,
+      rules: resolved.rules,
     }),
   });
 };
