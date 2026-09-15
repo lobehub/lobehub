@@ -805,6 +805,18 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       expect(Array.isArray(routers[2].models)).toBe(true);
     });
 
+    it('should route grok-4.6 through the xai router', () => {
+      mockDetectModelProvider.mockImplementation((id: string) => {
+        if (id.includes('grok')) return 'xai';
+        return 'openai';
+      });
+
+      const options = { apiKey: 'test', baseURL: 'https://custom.com' };
+      const routers = params.routers(options, { model: 'grok-4.6' });
+
+      expect(routers[2].models).toContain('grok-4.6');
+    });
+
     it('should handle missing baseURL by using empty string', () => {
       const options = { apiKey: 'test' }; // No baseURL
       const routers = params.routers(options);
