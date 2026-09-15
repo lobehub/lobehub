@@ -1,6 +1,10 @@
+import { execFile } from 'node:child_process';
+
+import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import {
   PI_RPC_DEFAULT_REQUEST_TIMEOUT_MS,
   PI_RPC_HANDSHAKE_TIMEOUT_MS,
+  PI_RPC_MIN_CLI_VERSION,
   type PiExtensionUiRequest,
   type PiExtensionUiResponse,
   type PiRpcCommand,
@@ -42,6 +46,7 @@ export interface PiRpcClientOptions {
   env: NodeJS.ProcessEnv;
   /** Startup handshake timeout (`get_state`). */
   handshakeTimeoutMs?: number;
+  onError?: (error: PiRpcConnectionError) => void;
   /**
    * Invoked for every parsed agent event from stdout. Events never carry an
    * `id`; the host correlates them to the active run itself.
@@ -82,7 +87,8 @@ export class PiRpcClient {
   private readonly options: PiRpcClientOptions;
   private handshakeResolved = false;
   private handshakeSessionId?: string;
-  private started = false;
+  private startPromise?: Promise<void>;
+  private readonly probeAbort = new AbortController();
 
   constructor(options: PiRpcClientOptions) {
     this.options = options;
@@ -93,6 +99,7 @@ export class PiRpcClient {
       cwd: options.cwd,
       env: options.env,
       isResponse: (message) => message?.type === 'response',
+      onError: (error) => options.onError?.(this.toConnectionError(error)),
       onMessage: (message) => this.handleNonResponse(message),
       onStderr: options.onStderr,
       requestTimeoutMs: options.requestTimeoutMs,
@@ -130,10 +137,14 @@ export class PiRpcClient {
    * unsupported / broken pi install surfaces as a clear error instead of a
    * silent hang.
    */
-  async start(): Promise<void> {
-    if (this.started) return;
-    this.started = true;
+  start(): Promise<void> {
+    this.startPromise ??= this.startProcess();
+    return this.startPromise;
+  }
+
+  private async startProcess(): Promise<void> {
     try {
+      await this.checkVersion();
       await this.transport.start();
       await this.performHandshake();
     } catch (error) {
@@ -142,6 +153,52 @@ export class PiRpcClient {
         /* best-effort */
       });
       throw error instanceof PiRpcConnectionError ? error : this.toConnectionError(error);
+    }
+  }
+
+  private async checkVersion(): Promise<void> {
+    const plan = await resolveCliSpawnPlan(this.options.commandPath, ['--version']);
+    let version: string;
+    try {
+      version = await new Promise<string>((resolve, reject) => {
+        execFile(
+          plan.command,
+          plan.args,
+          {
+            cwd: this.options.cwd,
+            env: this.options.env,
+            killSignal: 'SIGKILL',
+            signal: this.probeAbort.signal,
+            timeout: 5000,
+            windowsHide: true,
+          },
+          (error, stdout) => {
+            if (error) reject(error);
+            else resolve(stdout.trim());
+          },
+        );
+      });
+    } catch {
+      throw new PiRpcConnectionError(
+        `Cannot verify Pi version. Pi >= ${PI_RPC_MIN_CLI_VERSION} is required; upgrade pi or check the install.`,
+        { phase: 'spawn' },
+      );
+    }
+    // Require a stable CLI release. get_state alone is not capability
+    // negotiation: older releases answer it but never emit agent_settled.
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:\+[\dA-Za-z.-]+)?$/.exec(version);
+    const minimum = PI_RPC_MIN_CLI_VERSION.split('.').map(Number);
+    const difference =
+      match
+        ?.slice(1)
+        .map(Number)
+        .map((part, index) => part - minimum[index])
+        .find((part) => part !== 0) ?? 0;
+    if (!match || difference < 0) {
+      throw new PiRpcConnectionError(
+        `Pi >= ${PI_RPC_MIN_CLI_VERSION} (stable) is required; upgrade pi to use RPC.`,
+        { phase: 'spawn' },
+      );
     }
   }
 
@@ -187,6 +244,7 @@ export class PiRpcClient {
    * Resolves when the child is gone (or was never spawned).
    */
   close(): Promise<void> {
+    this.probeAbort.abort();
     return this.transport.close();
   }
 

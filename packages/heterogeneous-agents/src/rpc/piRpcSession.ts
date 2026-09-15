@@ -62,6 +62,8 @@ export interface PiRpcSessionCallbacks {
   onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
   onSessionId: (sessionId: string) => void;
   onStderr: (data: string) => void | Promise<void>;
+  operationId: string;
+  sessionId: string;
 }
 
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -80,36 +82,10 @@ const isTerminalAbortedEvent = (event: PiRpcEvent): boolean => {
   return false;
 };
 
-const isTerminalErrorEvent = (event: PiRpcEvent): boolean => {
-  if (event.type !== 'message_update') return false;
-  const update = (event as PiMessageUpdateEvent).assistantMessageEvent;
-  if (update?.type !== 'error') return false;
-  // Aborts are handled separately (not errors).
-  return update.reason !== ABORTED_REASON && update.error?.stopReason !== ABORTED_REASON;
-};
-
-const getTerminalErrorMessage = (event: PiRpcEvent): string | undefined => {
-  if (event.type !== 'message_update') return;
-  const error = (event as PiMessageUpdateEvent).assistantMessageEvent?.error;
-  if (typeof error?.errorMessage === 'string' && error.errorMessage) return error.errorMessage;
-  if (typeof error?.message === 'string' && error.message) return error.message;
-  return;
-};
-
 /**
- * A single run of pi over the RPC transport.
- *
- * Spawns `pi --mode rpc` (or reuses nothing — one session = one process,
- * matching the desktop per-run lifecycle), sends the prompt command, and maps
- * every raw RPC event through the shared `AgentStreamPipeline` (JSONL →
- * PiAdapter → `AgentStreamEvent`) so consumers see the exact same wire shape
- * as the legacy `--mode json` path. The run resolves when pi reports
- * `agent_settled` (no retry / compaction / queued continuation remains), or
- * when the run is aborted / errored / the process dies. The process is closed
- * gracefully (`stdin.end()` → pi exits 0) at run end.
- *
- * Hard-fail semantics: an unsupported or broken pi install rejects the run
- * with a classified error — there is no silent degradation.
+ * One Pi RPC process, optionally reused across sequential prompt runs.
+ * AgentStreamPipeline owns retry/error semantics; only agent_settled releases
+ * the process for reuse. Connection failures close it instead.
  */
 export class PiRpcSession {
   private callbacks: PiRpcSessionCallbacks;
@@ -121,9 +97,10 @@ export class PiRpcSession {
   private inactivityTimer?: NodeJS.Timeout;
   private resolveRun?: (result: { aborted: boolean }) => void;
   private rejectRun?: (error: Error) => void;
-  private runPromise?: Promise<{ aborted: boolean }>;
   private runStarted = false;
-  private started = false;
+  private startPromise?: Promise<void>;
+  private closePromise?: Promise<void>;
+  private closed = false;
 
   constructor(private readonly options: PiRpcSessionOptions) {
     this.callbacks = options;
@@ -139,6 +116,7 @@ export class PiRpcSession {
       commandPath: options.commandPath,
       cwd: options.cwd,
       env: options.env,
+      onError: (error) => this.failRun(error),
       onEvent: (event) => this.handleEvent(event),
       onExtensionUiRequest: options.onExtensionUiRequest,
       onStderr: (data) => this.callbacks.onStderr(data),
@@ -155,6 +133,7 @@ export class PiRpcSession {
    * spawned the process.
    */
   rebind(callbacks: PiRpcSessionCallbacks): void {
+    if (this.runStarted) throw new Error('PiRpcSession already has an active run');
     this.callbacks = callbacks;
   }
 
@@ -162,7 +141,7 @@ export class PiRpcSession {
     return new AgentStreamPipeline({
       agentType: 'pi',
       cwd: this.options.cwd,
-      operationId: this.options.operationId,
+      operationId: this.callbacks.operationId,
       uploadImage: this.options.uploadImage,
     });
   }
@@ -172,89 +151,84 @@ export class PiRpcSession {
     return this.runStarted;
   }
 
+  get isReusable(): boolean {
+    return !this.closed && !this.runStarted && this.client.isReady;
+  }
+
   /**
    * Start the RPC process and handshake. Idempotent. Rejects with a
    * `PiRpcConnectionError` on spawn/handshake failure (hard-fail).
    */
-  async start(): Promise<void> {
-    if (this.started) return;
-    this.started = true;
-    await this.client.start();
-    // RPC mode does not emit the json-mode `{type:'session'}` header — the
-    // native session id comes from the get_state handshake. Report it so the
-    // host can key the pool / persist the resume id.
-    const sessionId = this.client.sessionId;
-    if (sessionId) this.callbacks.onSessionId(sessionId);
-    this.emitStatus('idle');
+  start(): Promise<void> {
+    if (this.closed) return Promise.reject(new PiRpcConnectionError('Pi RPC session is closed'));
+    this.startPromise ??= this.client.start().then(() => {
+      if (this.closed) throw new PiRpcConnectionError('Pi RPC session is closed');
+      const sessionId = this.client.sessionId;
+      if (sessionId) this.callbacks.onSessionId(sessionId);
+      this.emitStatus('idle');
+    });
+    return this.startPromise;
   }
 
   /**
    * Run one prompt to completion. Resolves `{ aborted: false }` on
    * `agent_settled`; `{ aborted: true }` when the run was interrupted;
-   * rejects on error / process death. Always closes the process afterwards.
+   * rejects on error / process death. Failed runs always close the process.
    */
   async run(prompt: PiRpcPromptInput): Promise<{ aborted: boolean }> {
-    try {
-      await this.start();
-    } catch (error) {
-      // start() failure (spawn / handshake) must still recycle the process.
-      await this.close().catch(() => {
-        /* best-effort */
-      });
-      throw error;
-    }
-    if (this.runPromise) throw new Error('PiRpcSession already has an active run');
-
-    // The PiAdapter is a state machine that settles after one run — a reused
-    // process must start each run with a fresh pipeline (new adapter), or
-    // every second-turn event would be dropped.
+    if (this.runStarted) throw new Error('PiRpcSession already has an active run');
+    if (this.closed) throw new PiRpcConnectionError('Pi RPC session is closed');
+    // Reserve before awaiting startup. Each turn needs a fresh PiAdapter.
     this.pipeline = this.createPipeline();
     this.runStarted = true;
     this.aborted = false;
-    this.runPromise = new Promise<{ aborted: boolean }>((resolve, reject) => {
+    const completion = new Promise<{ aborted: boolean }>((resolve, reject) => {
       this.resolveRun = resolve;
       this.rejectRun = reject;
     });
-    this.armInactivityTimer();
-    this.emitStatus('running');
-
-    const command: PiRpcCommand = {
-      type: 'prompt',
-      message: prompt.text,
-      ...(prompt.images?.length ? { images: prompt.images } : {}),
-    };
-    try {
+    const sendPrompt = async () => {
+      await this.start();
+      if (this.closed) throw new PiRpcConnectionError('Pi RPC session is closed');
+      this.armInactivityTimer();
+      this.emitStatus('running');
+      const command: PiRpcCommand = {
+        type: 'prompt',
+        message: prompt.text,
+        ...(prompt.images?.length ? { images: prompt.images } : {}),
+      };
       const response = await this.client.command(command);
       if (!response.success) {
         throw new PiRpcResponseError('prompt', response.error ?? 'Unknown error');
       }
+      if (this.aborted) await this.client.abort();
+    };
+    let failed = false;
+    try {
+      // Observe both promises immediately: process death may precede the ACK,
+      // and agent_settled may arrive before command() resumes.
+      const [result] = await Promise.all([completion, sendPrompt()]);
+      return result;
     } catch (error) {
-      // The command was never accepted — no run to settle.
-      this.runPromise = undefined;
+      failed = true;
+      throw error;
+    } finally {
+      this.clearInactivityTimer();
       this.resolveRun = undefined;
       this.rejectRun = undefined;
-      throw error;
-    }
-    // The command response only means "accepted" — the run's outcome
-    // arrives as events (settled / aborted / error).
-    try {
-      return await this.runPromise;
-    } finally {
-      // A run is done once it settles; the process lifecycle depends on the
-      // host: per-run recycles here, pooled sessions survive for reuse.
-      this.clearInactivityTimer();
-      this.runStarted = false;
-      if (this.options.autoCloseOnSettle !== false) {
+      if (failed || this.options.autoCloseOnSettle !== false) {
         await this.close().catch(() => {
           /* best-effort cleanup */
         });
       }
+      this.runStarted = false;
     }
   }
 
   /** Gracefully interrupt the current run (sends `abort`, closes afterwards). */
   async abort(): Promise<void> {
+    if (!this.runStarted) return;
     this.aborted = true;
+    if (!this.client.isReady) return;
     try {
       await this.client.abort();
     } catch (error) {
@@ -264,11 +238,15 @@ export class PiRpcSession {
   }
 
   /** Close the underlying process (graceful EOF → escalate). */
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.closePromise) return this.closePromise;
+    this.closed = true;
     this.clearInactivityTimer();
-    await this.client.close();
-    this.settleRun({ aborted: this.aborted });
-    this.emitStatus('closed');
+    this.closePromise = this.client.close().finally(() => {
+      this.settleRun({ aborted: true });
+      this.emitStatus('closed');
+    });
+    return this.closePromise;
   }
 
   /** Send a follow-up message while the process is (briefly) alive. */
@@ -294,8 +272,8 @@ export class PiRpcSession {
   }
 
   private async handleEvent(event: PiRpcEvent): Promise<void> {
+    if (this.closed) return;
     this.lastEventAt = Date.now();
-    this.armInactivityTimer();
 
     // Capture the pipeline for THIS event — `run()` swaps in a fresh pipeline
     // (new PiAdapter per run) after start(), and push + flush must stay on
@@ -309,48 +287,33 @@ export class PiRpcSession {
       return;
     }
 
-    if (event.type === 'agent_settled') {
-      // The whole prompt (incl. retry/compaction/queued continuations) is
-      // done — the run is complete.
-      await this.pushEvent(event, pipeline);
-      this.settleRun({ aborted: this.aborted });
-      return;
-    }
-
-    if (isTerminalAbortedEvent(event)) {
-      this.aborted = true;
-      await this.pushEvent(event, pipeline);
-      this.settleRun({ aborted: true });
-      return;
-    }
-
-    if (isTerminalErrorEvent(event)) {
-      await this.pushEvent(event, pipeline);
-      // PiAdapter defers terminal errors until flush — materialize the error
-      // + runtime-end events so the renderer can render the failure.
-      const flushed = await pipeline.flush();
-      await this.callbacks.onEvents(flushed);
-      this.failRun(new Error(getTerminalErrorMessage(event) ?? 'Pi run failed'));
-      return;
-    }
-
-    await this.pushEvent(event, pipeline);
+    if (!this.runStarted) return;
+    this.armInactivityTimer();
+    if (isTerminalAbortedEvent(event)) this.aborted = true;
+    const events = await this.pushEvent(event, pipeline);
+    if (event.type !== 'agent_settled') return;
+    const error = events.find((item) => item.type === 'error');
+    if (error) this.failRun(new Error(error.data.message ?? 'Pi run failed'));
+    else this.settleRun({ aborted: this.aborted });
   }
 
-  private async pushEvent(event: PiRpcEvent, pipeline: AgentStreamPipeline): Promise<void> {
+  private async pushEvent(
+    event: PiRpcEvent,
+    pipeline: AgentStreamPipeline,
+  ): Promise<AgentStreamEvent[]> {
     // Serialize back to a JSONL line and reuse the same pipeline the legacy
     // CLI path uses — PiAdapter consumes the identical event shapes.
     const line = `${JSON.stringify(event)}\n`;
     const events = await pipeline.push(line);
     if (pipeline.sessionId) this.callbacks.onSessionId(pipeline.sessionId);
     await this.callbacks.onEvents(events);
+    return events;
   }
 
   private settleRun(result: { aborted: boolean }): void {
     const resolve = this.resolveRun;
     this.resolveRun = undefined;
     this.rejectRun = undefined;
-    this.runPromise = undefined;
     resolve?.(result);
   }
 
@@ -358,7 +321,6 @@ export class PiRpcSession {
     const reject = this.rejectRun;
     this.resolveRun = undefined;
     this.rejectRun = undefined;
-    this.runPromise = undefined;
     reject?.(error);
   }
 
@@ -389,8 +351,8 @@ export class PiRpcSession {
     this.callbacks.onRuntimeStatus({
       activeTasks: [],
       lastEventAt: this.lastEventAt,
-      operationId: this.options.operationId,
-      sessionId: this.options.sessionId,
+      operationId: this.callbacks.operationId,
+      sessionId: this.callbacks.sessionId,
       state,
       transport: 'pi-rpc',
     });

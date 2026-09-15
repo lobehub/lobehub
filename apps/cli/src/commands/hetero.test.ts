@@ -140,6 +140,7 @@ describe('hetero exec command', () => {
     exitSpy.mockRestore();
     stdoutSpy.mockRestore();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   /** Build a fresh program with the hetero command registered. */
@@ -564,6 +565,10 @@ describe('hetero exec command', () => {
   });
 
   it('runs Pi over the RPC transport with model, resume, and native args while ignoring effort and speed', async () => {
+    vi.stubEnv('HOME', '/pi-test-home');
+    vi.stubEnv('PI_CODING_AGENT_DIR', '/pi-test-config');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-only-key');
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'pi', pathEnv: '/pi-custom-bin' });
     mockCreatePiRpcAgentHandle.mockResolvedValue(createFakeHandle());
 
     await runCmd([
@@ -591,6 +596,12 @@ describe('hetero exec command', () => {
       expect.objectContaining({
         args: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
         commandPath: 'pi',
+        env: expect.objectContaining({
+          HOME: '/pi-test-home',
+          PI_CODING_AGENT_DIR: '/pi-test-config',
+          ANTHROPIC_API_KEY: 'test-only-key',
+          PATH: '/pi-custom-bin',
+        }),
         operationId: expect.any(String),
         resumeSessionId: 'pi-session-1',
       }),

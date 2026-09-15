@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 
@@ -53,6 +54,8 @@ export interface RpcStdioClientOptions {
    * `method`); pi passes `(m) => m?.type === 'response'`.
    */
   isResponse?: (message: Record<string, unknown>) => boolean;
+  /** Fatal transport errors, including exits after a command was accepted. */
+  onError?: (error: Error) => void;
   /**
    * Invoked for every parsed message that is NOT the response to a pending
    * request — i.e. notifications, events, and server-initiated requests.
@@ -75,10 +78,13 @@ export class RpcStdioClient {
   private child?: ChildProcess;
   private closePromise?: Promise<void>;
   private closed = false;
+  private exited = false;
   private fatalError?: Error;
   private messageQueue: Promise<void> = Promise.resolve();
   private nextRequestId = 0;
   private readonly stderrChunks: string[] = [];
+  private readonly stderrDecoder = new StringDecoder('utf8');
+  private readonly stdoutDecoder = new StringDecoder('utf8');
   private stdoutBuffer = '';
 
   constructor(private readonly options: RpcStdioClientOptions) {}
@@ -88,7 +94,7 @@ export class RpcStdioClient {
   }
 
   get isClosed(): boolean {
-    return this.closed;
+    return this.closed || this.exited || !!this.fatalError;
   }
 
   get stderrText(): string {
@@ -103,6 +109,7 @@ export class RpcStdioClient {
     if (this.child || this.closed) return;
 
     const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
+    if (this.closed) return;
     const child = spawn(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32',
@@ -118,13 +125,9 @@ export class RpcStdioClient {
     child.stdout?.once('end', () => this.consumeRemainingStdout());
     child.stdout?.once('error', (error) => this.fail(this.toError(error)));
     child.stderr?.on('data', (chunk: Buffer) => {
-      this.stderrChunks.push(chunk.toString('utf8'));
-      void Promise.resolve()
-        .then(() => {
-          if (!this.closed) return this.options.onStderr(chunk.toString('utf8'));
-        })
-        .catch((error) => this.fail(this.toError(error)));
+      this.consumeStderr(this.stderrDecoder.write(chunk));
     });
+    child.stderr?.once('end', () => this.consumeStderr(this.stderrDecoder.end()));
     child.once('error', (error) => {
       this.fail(
         new RpcStdioConnectionError(`Failed to start RPC process: ${error.message}`, {
@@ -133,6 +136,7 @@ export class RpcStdioClient {
       );
     });
     child.once('close', (code, signal) => {
+      this.exited = true;
       if (this.closed) return;
       const error = new RpcStdioConnectionError(
         `RPC process exited unexpectedly (code ${code ?? 'null'}, signal ${signal ?? 'null'})`,
@@ -200,7 +204,7 @@ export class RpcStdioClient {
    * 'closed by host'. Resolves once the child is gone (or was never spawned).
    */
   close(): Promise<void> {
-    if (this.closed) return Promise.resolve();
+    if (this.closePromise) return this.closePromise;
     this.closed = true;
     this.rejectPendingRequests(new RpcStdioConnectionError('RPC client closed by host'));
     this.closePromise ??= this.shutdown();
@@ -209,7 +213,7 @@ export class RpcStdioClient {
 
   private consumeStdout(chunk: Buffer): void {
     if (this.closed) return;
-    this.stdoutBuffer += chunk.toString('utf8');
+    this.stdoutBuffer += this.stdoutDecoder.write(chunk);
 
     let newlineIndex: number;
     while ((newlineIndex = this.stdoutBuffer.indexOf('\n')) !== -1) {
@@ -219,11 +223,20 @@ export class RpcStdioClient {
     }
   }
 
+  private consumeStderr(text: string): void {
+    if (!text) return;
+    this.stderrChunks.push(text);
+    void Promise.resolve()
+      .then(() => this.options.onStderr(text))
+      .catch((error) => this.fail(this.toError(error)));
+  }
+
   private consumeRemainingStdout(): void {
     if (this.closed) {
       this.stdoutBuffer = '';
       return;
     }
+    this.stdoutBuffer += this.stdoutDecoder.end();
     if (!this.stdoutBuffer) return;
     const line = this.stdoutBuffer;
     this.stdoutBuffer = '';
@@ -275,38 +288,40 @@ export class RpcStdioClient {
 
   private async shutdown(): Promise<void> {
     const child = this.child;
-    if (!child?.stdin) return;
+    if (!child || this.exited) return;
 
-    const exitPromise = new Promise<void>((resolve) => {
-      const onClose = () => resolve();
-      child.once('close', onClose);
-      setTimeout(() => {
-        child.off('close', onClose);
+    await new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout>;
+      const onClose = () => {
+        clearTimeout(timer);
         resolve();
-      }, this.options.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS).unref?.();
-    });
-
-    try {
-      child.stdin.end();
-    } catch {
-      // stdin already broken — fall through to signal escalation.
-    }
-    await exitPromise;
-
-    if (!child.killed && child.exitCode === null && child.signalCode === null) {
-      this.terminateChild(child, 'SIGTERM');
-      setTimeout(() => {
-        if (!child.killed && child.exitCode === null && child.signalCode === null) {
+      };
+      child.once('close', onClose);
+      timer = setTimeout(() => {
+        this.terminateChild(child, 'SIGTERM');
+        if (this.exited) return;
+        timer = setTimeout(() => {
           this.terminateChild(child, 'SIGKILL');
-        }
-      }, ESCALATE_KILL_MS).unref?.();
-    }
+          if (this.exited) return;
+          timer = setTimeout(() => {
+            child.off('close', onClose);
+            reject(new RpcStdioConnectionError('RPC process did not exit after SIGKILL'));
+          }, ESCALATE_KILL_MS);
+        }, ESCALATE_KILL_MS);
+      }, this.options.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS);
+      try {
+        child.stdin?.end();
+      } catch {
+        // A broken stdin still needs the signal escalation above.
+      }
+    });
   }
 
   private fail(error: Error): void {
-    if (this.closed) return;
-    this.fatalError ??= error;
+    if (this.closed || this.fatalError) return;
+    this.fatalError = error;
     this.rejectPendingRequests(error);
+    this.options.onError?.(error);
   }
 
   /**
@@ -327,17 +342,26 @@ export class RpcStdioClient {
   }
 
   private terminateChild(child: ChildProcess, signal: NodeJS.Signals): void {
-    if (!child.pid || child.killed) return;
+    if (!child.pid || this.exited) return;
 
     if (process.platform === 'win32') {
-      try {
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-      } catch {
+      const killChild = () => {
         try {
           child.kill(signal);
         } catch {
-          /* already gone */
+          // The exit event may still be draining.
         }
+      };
+      try {
+        const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+          stdio: 'ignore',
+        });
+        killer.once('error', killChild);
+        killer.once('exit', (code) => {
+          if (code !== 0) killChild();
+        });
+      } catch {
+        killChild();
       }
       return;
     }

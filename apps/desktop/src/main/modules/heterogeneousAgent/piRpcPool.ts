@@ -1,5 +1,9 @@
 import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('PiRpcPool');
+
 /**
  * Cross-turn process pool for pi RPC runs.
  *
@@ -24,6 +28,8 @@ import type { PiRpcSession } from '@lobechat/heterogeneous-agents/rpc';
 export class PiRpcPool {
   private readonly entries = new Map<string, PiRpcPoolEntry>();
   private readonly bySession = new Map<PiRpcSession, PiRpcPoolEntry>();
+  private readonly closing = new Set<Promise<void>>();
+  private shuttingDown = false;
 
   constructor(
     private readonly options: {
@@ -40,6 +46,10 @@ export class PiRpcPool {
     // A process spawned under different runtime options (command path, args,
     // env) must not be reused — mirrors Codex app-server's canReuseFor.
     if (!entry || entry.session.isRunning) return undefined;
+    if (!entry.session.isReusable) {
+      this.reap(entry, 'removed');
+      return undefined;
+    }
     if (spawnFingerprint !== undefined && entry.spawnFingerprint !== spawnFingerprint) {
       return undefined;
     }
@@ -54,6 +64,10 @@ export class PiRpcPool {
 
   /** Hand a freshly spawned process to the pool under `key`. */
   register(key: string, session: PiRpcSession, spawnFingerprint?: string): void {
+    if (this.shuttingDown || !session.isReusable) {
+      this.closeSession(session);
+      return;
+    }
     const existing = this.entries.get(key);
     if (existing && existing.session !== session) {
       // A replacement under the same key only happens after the previous
@@ -72,6 +86,10 @@ export class PiRpcPool {
   release(session: PiRpcSession): void {
     const entry = this.bySession.get(session);
     if (!entry) return;
+    if (!session.isReusable) {
+      this.reap(entry, 'removed');
+      return;
+    }
     entry.lastUsedAt = Date.now();
     if (entry.idleTimer) clearTimeout(entry.idleTimer);
     entry.idleTimer = setTimeout(() => this.reap(entry, 'idle'), this.options.idleTimeoutMs);
@@ -84,17 +102,17 @@ export class PiRpcPool {
     if (!entry) {
       // Never registered — a fresh process that failed before the success
       // handoff. Close it directly or the pi child would outlive the run.
-      void session.close().catch(() => {
-        /* best-effort */
-      });
+      this.closeSession(session);
       return;
     }
     this.reap(entry, 'removed');
   }
 
   /** Close every pooled process (before-quit). */
-  closeAll(): void {
+  async closeAll(): Promise<void> {
+    this.shuttingDown = true;
     for (const entry of this.entries.values()) this.reap(entry, 'shutdown');
+    while (this.closing.size > 0) await Promise.all(this.closing);
   }
 
   private reap(entry: PiRpcPoolEntry, reason: 'idle' | 'replaced' | 'removed' | 'shutdown'): void {
@@ -105,9 +123,19 @@ export class PiRpcPool {
     if (this.entries.get(entry.key) === entry) this.entries.delete(entry.key);
     if (this.bySession.get(entry.session) === entry) this.bySession.delete(entry.session);
     this.options.onReap?.(entry.key, reason);
-    void entry.session.close().catch(() => {
-      /* best-effort */
-    });
+    this.closeSession(entry.session);
+  }
+
+  private closeSession(session: PiRpcSession): void {
+    const closing = session
+      .close()
+      .catch((error) => {
+        logger.warn('Failed to close Pi RPC process:', error);
+      })
+      .finally(() => {
+        this.closing.delete(closing);
+      });
+    this.closing.add(closing);
   }
 }
 

@@ -3,10 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PiRpcPool } from './piRpcPool';
 
+vi.mock('@/utils/logger', () => ({ createLogger: () => ({ warn: vi.fn() }) }));
+
 const createSession = (running = false) => {
   const close = vi.fn().mockResolvedValue(undefined);
   const session = {
     close,
+    isReusable: !running,
     isRunning: running,
   } as unknown as PiRpcSession;
   return { close, session };
@@ -20,6 +23,41 @@ describe('PiRpcPool', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('evicts an idle process that died rather than returning it', () => {
+    const pool = new PiRpcPool({ idleTimeoutMs: 100 });
+    const { session, close } = createSession();
+    pool.register('dead', session);
+    Object.defineProperty(session, 'isReusable', { value: false });
+    expect(pool.acquire('dead')).toBeUndefined();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('awaits in-progress closes and prevents late registration during shutdown', async () => {
+    const pool = new PiRpcPool({ idleTimeoutMs: 100 });
+    const { session, close } = createSession();
+    let finish!: () => void;
+    close.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    pool.register('first', session);
+    pool.remove(session);
+    const finished = vi.fn();
+    const shutdown = pool.closeAll();
+    void Promise.resolve(shutdown).then(finished);
+    await Promise.resolve();
+    expect(finished).not.toHaveBeenCalled();
+    const late = createSession();
+    pool.register('late', late.session);
+    expect(late.close).toHaveBeenCalledOnce();
+    expect(pool.acquire('late')).toBeUndefined();
+    finish();
+    await shutdown;
+    expect(finished).toHaveBeenCalledOnce();
   });
 
   it('acquires the idle pooled process for the same key and never mixes keys', () => {
@@ -113,14 +151,14 @@ describe('PiRpcPool', () => {
     expect(pool.acquire('cwd::sess-a')).toBe(a1);
   });
 
-  it('closeAll shuts down every pooled process', () => {
+  it('closeAll shuts down every pooled process', async () => {
     const pool = new PiRpcPool({ idleTimeoutMs: 60_000 });
     const { close: closeA, session: a1 } = createSession();
     const { close: closeB, session: b1 } = createSession();
 
     pool.register('cwd::sess-a', a1);
     pool.register('cwd::sess-b', b1);
-    pool.closeAll();
+    await pool.closeAll();
 
     expect(closeA).toHaveBeenCalledTimes(1);
     expect(closeB).toHaveBeenCalledTimes(1);

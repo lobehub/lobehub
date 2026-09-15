@@ -90,16 +90,12 @@ export const toPiRpcPrompt = async (
       if (block.text) text.push(block.text);
       continue;
     }
-    try {
-      const image = await normalizeImage(block.source, options);
-      images.push({
-        data: image.buffer.toString('base64'),
-        mimeType: image.mediaType,
-        type: 'image',
-      });
-    } catch {
-      // One broken attachment must not fail the whole run — the text still goes.
-    }
+    const image = await normalizeImage(block.source, options);
+    images.push({
+      data: image.buffer.toString('base64'),
+      mimeType: image.mediaType,
+      type: 'image',
+    });
   }
 
   return {
@@ -154,9 +150,9 @@ export const createPiRpcAgentHandle = async (
       stderr.end();
       return { code: 0, signal: null as NodeJS.Signals | null };
     })
-    .catch(() => {
+    .catch((error) => {
       queue.close();
-      stderr.end();
+      stderr.end(`${error instanceof Error ? error.message : String(error)}\n`);
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
 

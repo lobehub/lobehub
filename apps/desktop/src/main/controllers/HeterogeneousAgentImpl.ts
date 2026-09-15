@@ -512,6 +512,7 @@ export default class HeterogeneousAgentCtr {
   private codexAppServerClient?: CodexAppServerClient;
   /** Cross-turn pi RPC process pool (reuse + idle reaping). */
   private readonly piRpcPool: PiRpcPool;
+  private shuttingDown = false;
   // Fresh window sits under the renderer's 2-minute auto-refresh so each
   // scheduled poll reaches the usage API instead of a cache echo.
   private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>({
@@ -1885,8 +1886,11 @@ export default class HeterogeneousAgentCtr {
   private buildPiRpcCallbacks(
     session: AgentSession,
     traceSession: CliTraceSession | undefined,
+    operationId: string,
   ): PiRpcSessionCallbacks {
     return {
+      operationId,
+      sessionId: session.sessionId,
       onEvents: async (events) => {
         for (const event of events) {
           this.broadcast('heteroAgentEvent', {
@@ -1908,10 +1912,8 @@ export default class HeterogeneousAgentCtr {
   /**
    * Pi over the RPC transport — the only pi execution path (no json fallback).
    *
-   * One run owns one `pi --mode rpc` process: the session spawns on the first
-   * prompt, streams events through the shared `AgentStreamPipeline` (PiAdapter)
-   * exactly like the legacy json path, and recycles the process (EOF) when the
-   * run settles. Follow-up turns resume the native session via `--session-id`.
+   * The first prompt spawns a process; settled runs hand it to the pool for
+   * follow-up turns. A pool miss resumes the native session via --session-id.
    */
   private async sendPromptWithPiRpc(
     params: SendPromptParams,
@@ -1973,6 +1975,7 @@ export default class HeterogeneousAgentCtr {
       JSON.stringify(session.args ?? []),
       JSON.stringify(Object.entries(spawnEnv).sort()),
     ].join('::');
+    if (this.shuttingDown) throw new Error('Application is shutting down');
     const pooledSession = poolKey ? this.piRpcPool.acquire(poolKey, spawnFingerprint) : undefined;
     const rpcSession =
       pooledSession ??
@@ -1981,18 +1984,17 @@ export default class HeterogeneousAgentCtr {
         commandPath,
         cwd,
         env: spawnEnv,
-        operationId: params.operationId,
         resumeSessionId: session.agentSessionId,
-        sessionId: session.sessionId,
         // The pool owns the process lifecycle — never auto-close on settle.
         autoCloseOnSettle: false,
         uploadImage: this.uploadResultImage,
-        ...this.buildPiRpcCallbacks(session, traceSession),
+        ...this.buildPiRpcCallbacks(session, traceSession, params.operationId),
       });
     // A pooled process carries the callbacks of the run that spawned it —
     // rebind to THIS run's IPC session / trace or events would broadcast to
     // a stale sessionId.
-    if (pooledSession) pooledSession.rebind(this.buildPiRpcCallbacks(session, traceSession));
+    if (pooledSession)
+      pooledSession.rebind(this.buildPiRpcCallbacks(session, traceSession, params.operationId));
     session.piRpcSession = rpcSession;
 
     logger.info(pooledSession ? 'Reusing pooled Pi RPC process:' : 'Starting Pi RPC session:', {
@@ -2633,9 +2635,20 @@ export default class HeterogeneousAgentCtr {
    * harnesses, OS shutdown) where Electron's lifecycle events never fire.
    */
   afterAppReady() {
-    electronApp.on('before-quit', () => {
+    let quitReady = false;
+    electronApp.on('before-quit', (event) => {
+      if (quitReady) return;
+      event.preventDefault();
+      if (this.shuttingDown) return;
+      this.shuttingDown = true;
+      const piClosing: Promise<void>[] = [];
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
+        // First-turn processes have not reached the pool yet.
+        if (session.piRpcSession) {
+          session.cancelledByUs = true;
+          piClosing.push(session.piRpcSession.close());
+        }
         if (session.grokAcpSession) {
           session.cancelledByUs = true;
           session.grokAcpSession.close();
@@ -2660,7 +2673,7 @@ export default class HeterogeneousAgentCtr {
       this.codexAppServerClient?.close();
       this.codexAppServerClient = undefined;
       // Pooled pi processes outlive their IPC sessions — reap them on quit.
-      this.piRpcPool.closeAll();
+      piClosing.push(this.piRpcPool.closeAll());
       this.sessions.clear();
       // The exit handlers will tear each per-op intervention down, but if
       // CC's stdio close races shutdown we'd leave the MCP server bound to
@@ -2668,6 +2681,13 @@ export default class HeterogeneousAgentCtr {
       // `session_ended` and closes the listener.
       void this.builtinMcpServer?.stop().catch((err) => {
         logger.warn('AskUserQuestion MCP server stop error:', err);
+      });
+      void Promise.allSettled(piClosing).then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') logger.warn('Pi RPC shutdown failed:', result.reason);
+        }
+        quitReady = true;
+        electronApp.quit();
       });
     });
 
@@ -2681,10 +2701,11 @@ export default class HeterogeneousAgentCtr {
         /* during late shutdown app.quit may throw — fine */
       }
       // Last-resort exit if Electron is wedged and won't quit on its own.
-      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 1000).unref();
+      // Allow EOF → TERM → KILL (up to seven seconds) to complete first.
+      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 10_000).unref();
     };
-    process.on('SIGTERM', onSignal);
-    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', () => onSignal('SIGTERM'));
+    process.on('SIGINT', () => onSignal('SIGINT'));
   }
 
   /**

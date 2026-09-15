@@ -1,5 +1,5 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PiRpcEvent } from './piRpcProtocol';
 import { PiRpcSession } from './piRpcSession';
@@ -29,6 +29,9 @@ vi.mock('./piRpcClient', async (importOriginal) => {
       }
       get isClosed() {
         return false;
+      }
+      get isReady() {
+        return true;
       }
       get sessionId() {
         return mocks.clientSessionId.value;
@@ -66,6 +69,11 @@ const emit = (session: PiRpcSession, event: PiRpcEvent) => {
   return client.onEvent!(event);
 };
 
+beforeEach(() => {
+  mocks.start.mockResolvedValue(undefined);
+  mocks.close.mockResolvedValue(undefined);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   mocks.clientInstances.length = 0;
@@ -74,9 +82,86 @@ afterEach(() => {
   mocks.command.mockReset();
   mocks.close.mockReset();
   mocks.abort.mockReset();
+  vi.useRealTimers();
 });
 
 describe('PiRpcSession', () => {
+  it('waits for recovery after assistant errors and resolves the recovered run', async () => {
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    const run = session.run({ text: 'recover' });
+    const finished = vi.fn();
+    void run.then(finished, finished);
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await emit(session, {
+      type: 'message_update',
+      assistantMessageEvent: {
+        type: 'error',
+        error: { stopReason: 'error', errorMessage: 'overflow' },
+      },
+    });
+    await emit(session, { type: 'agent_end' });
+    await emit(session, { type: 'auto_retry_start', attempt: 1, delayMs: 10, maxAttempts: 3 });
+    expect(finished).not.toHaveBeenCalled();
+    expect(session.isRunning).toBe(true);
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    await emit(session, { type: 'turn_start' });
+    await emit(session, {
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'stop',
+        content: [{ type: 'text', text: 'recovered' }],
+      },
+    });
+    await emit(session, { type: 'agent_settled' });
+    await expect(run).resolves.toEqual({ aborted: false });
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    await session.close();
+  });
+
+  it('rejects immediately on transport death after prompt acknowledgement', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    const run = session.run({ text: 'hello' });
+    const result = expect(run).rejects.toThrow('process died');
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    mocks.clientInstances.at(-1).options.onError(new Error('process died'));
+    await result;
+    expect(session.isRunning).toBe(false);
+    expect(session.isReusable).toBe(false);
+    expect(mocks.close).toHaveBeenCalled();
+  });
+
+  it('cleans up a rejected prompt in pooled mode', async () => {
+    vi.useFakeTimers();
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockRejectedValue(new Error('prompt rejected'));
+    await expect(session.run({ text: 'hello' })).rejects.toThrow('prompt rejected');
+    expect(session.isRunning).toBe(false);
+    expect(mocks.close).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reserves the session during startup and closes safely before startup finishes', async () => {
+    let finishStart!: () => void;
+    mocks.start.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishStart = resolve;
+        }),
+    );
+    const { session } = createSession({ autoCloseOnSettle: false });
+    const run = session.run({ text: 'first' });
+    void run.catch(() => {});
+    expect(session.isRunning).toBe(true);
+    await expect(session.run({ text: 'second' })).rejects.toThrow('active run');
+    await session.close();
+    finishStart();
+    await expect(run).rejects.toThrow('closed');
+    expect(mocks.command).not.toHaveBeenCalled();
+  });
+
   it('runs a prompt and resolves on agent_settled, broadcasting stream events', async () => {
     const { events, session, sessionIds } = createSession();
     mocks.clientSessionId.value = 'pi-sess-1';
@@ -119,8 +204,8 @@ describe('PiRpcSession', () => {
     expect(mocks.close).toHaveBeenCalled();
   });
 
-  it('resolves aborted when the run is interrupted', async () => {
-    const { session } = createSession();
+  it('waits for cancellation to settle before accepting the next pooled turn', async () => {
+    const { session, events } = createSession({ autoCloseOnSettle: false });
     mocks.start.mockResolvedValue(undefined);
     mocks.command.mockImplementation((command: { type: string }) => {
       if (command.type === 'get_state')
@@ -134,7 +219,42 @@ describe('PiRpcSession', () => {
       assistantMessageEvent: { reason: 'aborted', type: 'error' },
       type: 'message_update',
     });
+    expect(session.isRunning).toBe(true);
+    await expect(session.run({ text: 'too early' })).rejects.toThrow('active run');
+    await emit(session, { type: 'agent_end' });
+    await emit(session, { type: 'agent_settled' });
     await expect(runPromise).resolves.toEqual({ aborted: true });
+    const next = session.run({ text: 'next turn' });
+    await emit(session, {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'next reply' },
+    });
+    await emit(session, { type: 'agent_settled' });
+    await expect(next).resolves.toEqual({ aborted: false });
+    expect(
+      events.some((event) => event.type === 'stream_chunk' && event.data.content === 'next reply'),
+    ).toBe(true);
+    expect(session.isReusable).toBe(true);
+    await session.close();
+  });
+
+  it('keeps the settled result when it arrives before the prompt ACK', async () => {
+    let acknowledge!: (response: { success: boolean }) => void;
+    mocks.command.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          acknowledge = resolve;
+        }),
+    );
+    const { session } = createSession();
+    const run = session.run({ text: 'fast reply' });
+    const finished = vi.fn();
+    void run.then(finished);
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await emit(session, { type: 'agent_settled' });
+    expect(finished).not.toHaveBeenCalled();
+    acknowledge({ success: true });
+    await expect(run).resolves.toEqual({ aborted: false });
   });
 
   it('rejects on a terminal error event and still recycles the process', async () => {
@@ -155,6 +275,7 @@ describe('PiRpcSession', () => {
       },
       type: 'message_update',
     });
+    await emit(session, { type: 'agent_settled' });
     await expect(runPromise).rejects.toThrow('usage limit reached');
     expect(mocks.close).toHaveBeenCalled();
     expect(events.some((e) => e.type === 'error')).toBe(true);
@@ -208,9 +329,15 @@ describe('PiRpcSession', () => {
     mocks.close.mockResolvedValue(undefined);
 
     const rebound: string[] = [];
+    const onRuntimeStatus = vi.fn();
     session.rebind({
-      onEvents: (batch) => void rebound.push(...batch.map((e) => e.type)),
-      onRuntimeStatus: vi.fn(),
+      operationId: 'op-2',
+      sessionId: 'lobe-session-2',
+      onEvents: (batch) => {
+        for (const event of batch) expect(event.operationId).toBe('op-2');
+        rebound.push(...batch.map((e) => e.type));
+      },
+      onRuntimeStatus,
       onSessionId: vi.fn(),
       onStderr: vi.fn(),
     });
@@ -225,6 +352,14 @@ describe('PiRpcSession', () => {
 
     // Events flow to the rebound callback, not the original one.
     expect(rebound).toContain('stream_chunk');
+    expect(onRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op-2',
+        sessionId: 'lobe-session-2',
+        state: 'running',
+      }),
+    );
+    await session.close();
   });
 
   it('keeps the process alive across runs when autoCloseOnSettle is false', async () => {

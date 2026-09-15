@@ -1,16 +1,19 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
 import type { PiRpcEvent } from './piRpcProtocol';
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+const { execFileMock, spawnMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  spawnMock: vi.fn(),
+}));
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, spawn: spawnMock };
+  return { ...actual, execFile: execFileMock, spawn: spawnMock };
 });
 
 const originalPlatform = process.platform;
@@ -70,13 +73,73 @@ const createReadyClient = async (
   return { child, client, events, stdout, writes };
 };
 
+beforeEach(() => {
+  execFileMock.mockImplementation((_command, _args, _options, callback) => {
+    callback(null, '0.80.5\n', '');
+  });
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
+  execFileMock.mockReset();
   spawnMock.mockReset();
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
 });
 
 describe('PiRpcClient', () => {
+  it.each(['0.79.0', '0.80.4', '0.80.5-rc.1', 'unknown'])(
+    'rejects unsupported Pi %s before spawning RPC',
+    async (version) => {
+      execFileMock.mockImplementation((_command, _args, _options, callback) =>
+        callback(null, version, ''),
+      );
+      const client = new PiRpcClient({
+        args: [],
+        commandPath: 'pi',
+        cwd: '/workspace',
+        env: { ...process.env },
+        onEvent: vi.fn(),
+        onStderr: vi.fn(),
+      });
+      await expect(client.start()).rejects.toThrow(/0\.80\.5.*upgrade/i);
+      expect(spawnMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['0.80.5', 'v0.81.0', '1.0.0', '0.80.5+build.1'])(
+    'accepts supported Pi %s using the spawn environment',
+    async (version) => {
+      execFileMock.mockImplementation((_command, _args, _options, callback) =>
+        callback(null, version, ''),
+      );
+      const { client } = await createReadyClient({
+        env: { ...process.env, PATH: '/custom', HOME: '/test-home' },
+      });
+      expect(execFileMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining(['--version']),
+        expect.objectContaining({
+          cwd: '/workspace',
+          env: expect.objectContaining({ PATH: '/custom', HOME: '/test-home' }),
+          timeout: 5000,
+        }),
+        expect.any(Function),
+      );
+      await client.start();
+      expect(execFileMock).toHaveBeenCalledTimes(1);
+      await client.close();
+    },
+  );
+
+  it('notifies the session of idle process death and revokes readiness', async () => {
+    const onError = vi.fn();
+    const { child, client } = await createReadyClient({ onError });
+    child.emit('close', 1, null);
+    expect(client.isReady).toBe(false);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(expect.any(PiRpcConnectionError)));
+    await client.close();
+  });
+
   it('spawns `pi --mode rpc` with LF-only framing and correlates responses', async () => {
     const { child, client, stdout, writes } = await createReadyClient();
 
@@ -195,8 +258,11 @@ describe('PiRpcClient', () => {
 
   it('gracefully closes via stdin EOF and escalates only when exit stalls', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' });
-    vi.spyOn(process, 'kill').mockImplementation(() => true);
     const { child, client } = await createReadyClient({ closeGraceMs: 50 });
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      setTimeout(() => child.emit('close', null, 'SIGTERM'), 1);
+      return true;
+    });
     // Override the simulated clean-exit so the process lingers.
     child.stdin.end = vi.fn(() => {
       /* no exit */

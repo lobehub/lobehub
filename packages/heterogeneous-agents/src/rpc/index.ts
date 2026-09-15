@@ -15,7 +15,7 @@ export { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcCl
 export {
   PI_RPC_DEFAULT_REQUEST_TIMEOUT_MS,
   PI_RPC_HANDSHAKE_TIMEOUT_MS,
-  PI_RPC_MIN_PROTOCOL_VERSION,
+  PI_RPC_MIN_CLI_VERSION,
   type PiAgentSettledEvent,
   type PiExtensionUiDialogMethod,
   type PiExtensionUiFireAndForgetMethod,

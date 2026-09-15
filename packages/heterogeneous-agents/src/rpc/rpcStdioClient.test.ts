@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RpcStdioClient, RpcStdioConnectionError } from './rpcStdioClient';
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+const originalPlatform = process.platform;
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -38,7 +39,9 @@ const createProcess = () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   spawnMock.mockReset();
+  Object.defineProperty(process, 'platform', { value: originalPlatform });
 });
 
 /**
@@ -47,6 +50,152 @@ afterEach(() => {
  * protocol can ride it unchanged. pi supplies its own `isResponse`.
  */
 describe('RpcStdioClient (generic transport)', () => {
+  it('decodes UTF-8 across byte boundaries without treating Unicode separators as framing', async () => {
+    const { child, stdout } = createProcess();
+    spawnMock.mockReturnValue(child);
+    const onMessage = vi.fn();
+    const onStderr = vi.fn();
+    const client = new RpcStdioClient({
+      args: [],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onMessage,
+      onStderr,
+    });
+    await client.start();
+    const message = { text: '中文🙂\u2028next\u2029line' };
+    for (const byte of Buffer.from(`${JSON.stringify(message)}\r\n`))
+      stdout.write(Buffer.from([byte]));
+    for (const byte of Buffer.from('错误🙂')) child.stderr.write(Buffer.from([byte]));
+    child.stderr.end();
+    await vi.waitFor(() => expect(onMessage).toHaveBeenCalledWith(message));
+    expect(onMessage).toHaveBeenCalledTimes(1);
+    expect(onStderr.mock.calls.map(([text]) => text).join('')).toBe('错误🙂');
+    expect(client.stderrText).toBe('错误🙂');
+    await client.close();
+  });
+
+  it('reports a fatal exit once even without pending requests and becomes unusable', async () => {
+    const { child } = createProcess();
+    spawnMock.mockReturnValue(child);
+    const onError = vi.fn();
+    const client = new RpcStdioClient({
+      args: [],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onError,
+      onMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+    child.stderr.write('process crashed');
+    child.emit('close', 1, null);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError.mock.calls[0][0].message).toContain('exited unexpectedly');
+    expect(client.isClosed).toBe(true);
+    child.emit('error', new Error('late error'));
+    expect(onError).toHaveBeenCalledTimes(1);
+    await client.close();
+    expect(child.stdin.end).not.toHaveBeenCalled();
+  });
+
+  it('shares close completion and waits for SIGKILL and the actual close event', async () => {
+    vi.useFakeTimers();
+    const { child } = createProcess();
+    child.stdin.end.mockImplementation(() => {});
+    spawnMock.mockReturnValue(child);
+    // Exercise the direct-child fallback: killed means signalled, not exited.
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw new Error('no process group');
+    });
+    child.kill.mockImplementation(() => {
+      child.killed = true;
+      return true;
+    });
+    const client = new RpcStdioClient({
+      args: [],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: { ...process.env },
+      closeGraceMs: 50,
+      onMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+    const close = client.close();
+    expect(client.close()).toBe(close);
+    const finished = vi.fn();
+    void close.then(finished);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(finished).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(finished).not.toHaveBeenCalled();
+    child.emit('close', null, 'SIGKILL');
+    await close;
+    expect(finished).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['error', 'nonzero'])(
+    'falls back when Windows taskkill fails asynchronously (%s)',
+    async (failure) => {
+      vi.useFakeTimers();
+      const { child } = createProcess();
+      child.stdin.end.mockImplementation(() => {});
+      spawnMock.mockReturnValue(child);
+      const client = new RpcStdioClient({
+        args: [],
+        commandPath: 'agent',
+        cwd: '/workspace',
+        env: { ...process.env },
+        closeGraceMs: 50,
+        onMessage: vi.fn(),
+        onStderr: vi.fn(),
+      });
+      await client.start();
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      const killer = new EventEmitter();
+      spawnMock.mockReturnValue(killer);
+      child.kill.mockImplementation(() => {
+        child.emit('close', null, 'SIGTERM');
+        return true;
+      });
+      const closed = client.close();
+      await vi.advanceTimersByTimeAsync(50);
+      if (failure === 'error') killer.emit('error', new Error('taskkill unavailable'));
+      else killer.emit('exit', 1);
+      await closed;
+      expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it('rejects bounded shutdown if no close follows SIGKILL', async () => {
+    vi.useFakeTimers();
+    const { child } = createProcess();
+    child.stdin.end.mockImplementation(() => {});
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockReturnValue(true);
+    const client = new RpcStdioClient({
+      args: [],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      env: { ...process.env },
+      closeGraceMs: 50,
+      onMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+    const result = expect(client.close()).rejects.toThrow('did not exit after SIGKILL');
+    await vi.advanceTimersByTimeAsync(4050);
+    await result;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('correlates JSON-RPC-2.0-shaped responses by id and routes notifications to onMessage', async () => {
     const { child, stdout, writes } = createProcess();
     spawnMock.mockReturnValue(child);

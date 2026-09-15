@@ -168,8 +168,8 @@ export interface PiMessageEndEvent extends PiRpcEvent {
   type: 'message_end';
 }
 
-/** pi RPC protocol version floor the client is built against. */
-export const PI_RPC_MIN_PROTOCOL_VERSION = '0.16.0';
+/** First npm release with agent_settled, idle abort and --session-id open-or-create. */
+export const PI_RPC_MIN_CLI_VERSION = '0.80.5';
 
 /** Default timeout for a command response (pi resolves `prompt` on accept). */
 export const PI_RPC_DEFAULT_REQUEST_TIMEOUT_MS = 30_000;

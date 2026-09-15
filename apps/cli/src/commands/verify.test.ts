@@ -1075,6 +1075,18 @@ describe('originFromEnv — in-app provenance', () => {
     });
   });
 
+  it('retains conversation provenance for persistent Pi without an authoring operation', () => {
+    process.env.LOBEHUB_AGENT_ID = 'agt_pi';
+    process.env.LOBEHUB_TOPIC_ID = 'tpc_pi';
+    delete process.env.LOBEHUB_OPERATION_ID;
+
+    expect(originFromEnv()).toEqual({
+      agentId: 'agt_pi',
+      operationId: undefined,
+      topicId: 'tpc_pi',
+    });
+  });
+
   it('never takes its operationId from --operation, which names the run under TEST', () => {
     // `--operation` links the session to the Agent Run being verified; origin is
     // the run that AUTHORED the report. Conflating them attributes the report to

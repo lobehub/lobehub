@@ -25,6 +25,9 @@ vi.mock('./piRpcClient', async (importOriginal) => {
       get pid() {
         return 123_456;
       }
+      get isReady() {
+        return true;
+      }
       get sessionId() {
         return undefined;
       }
@@ -51,6 +54,15 @@ afterEach(() => {
 });
 
 describe('toPiRpcPrompt', () => {
+  it('rejects unreadable attachments instead of silently sending an incomplete prompt', async () => {
+    await expect(
+      toPiRpcPrompt([
+        { type: 'text', text: 'describe this' },
+        { type: 'image', source: { type: 'path', path: '/nonexistent-pi-test-image.png' } },
+      ]),
+    ).rejects.toThrow();
+  });
+
   it('joins text blocks and leaves image-less prompts image-free', async () => {
     await expect(toPiRpcPrompt('hello')).resolves.toEqual({ text: 'hello' });
     await expect(
@@ -63,6 +75,27 @@ describe('toPiRpcPrompt', () => {
 });
 
 describe('createPiRpcAgentHandle', () => {
+  it('preserves prompt failure diagnostics in stderr and exits nonzero', async () => {
+    mocks.start.mockResolvedValue(undefined);
+    mocks.close.mockResolvedValue(undefined);
+    mocks.command.mockRejectedValue(new Error('prompt rejected: invalid model'));
+    const handle = await createPiRpcAgentHandle({
+      args: [],
+      commandPath: 'pi',
+      cwd: '/workspace',
+      env: { ...process.env },
+      operationId: 'op-error',
+      prompt: { text: 'x' },
+    });
+    let stderr = '';
+    handle.stderr.on('data', (data) => {
+      stderr += data;
+    });
+    await expect(handle.exit).resolves.toEqual({ code: 1, signal: null });
+    expect(stderr).toContain('prompt rejected: invalid model');
+    expect(mocks.close).toHaveBeenCalled();
+  });
+
   it('streams adapted events, resolves exit on settle, and reports the native session id', async () => {
     mocks.start.mockResolvedValue(undefined);
     mocks.command.mockImplementation((command: { type: string }) => {
@@ -139,5 +172,7 @@ describe('createPiRpcAgentHandle', () => {
 
     handle.kill('SIGINT');
     expect(mocks.abort).toHaveBeenCalled();
+    await emit({ type: 'agent_settled' });
+    await handle.exit;
   });
 });
