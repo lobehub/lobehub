@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { FileSource } from '@lobechat/types';
+import { FileSource, LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -1484,7 +1484,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
               ],
               must_not: expect.arrayContaining([
                 { term: { file_type: 'custom/document' } },
-                { terms: { source: [FileSource.Acceptance] } },
+                { terms: { source: LIBRARY_HIDDEN_FILE_SOURCES } },
                 { terms: { knowledge_base_ids: ['file-kb-restricted'] } },
               ]),
             }),
