@@ -100,11 +100,13 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
         key: 'select',
         render: (_: any, record: ResumableCase) => (
           <Tooltip title={record.canResume ? undefined : record.reason}>
-            <Checkbox
-              checked={selectedIds.includes(record.testCaseId)}
-              disabled={!record.canResume}
-              onChange={(checked) => handleToggleRow(record.testCaseId, checked)}
-            />
+            <span style={{ display: 'inline-flex' }}>
+              <Checkbox
+                checked={selectedIds.includes(record.testCaseId)}
+                disabled={!record.canResume}
+                onChange={(checked) => handleToggleRow(record.testCaseId, checked)}
+              />
+            </span>
           </Tooltip>
         ),
         title: (
@@ -141,7 +143,9 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
         key: 'status',
         render: (_: any, record: ResumableCase) => (
           <Tooltip title={record.canResume ? undefined : record.reason}>
-            <StatusLabel status={record.resumeStatus} />
+            <span style={{ display: 'inline-flex' }}>
+              <StatusLabel status={record.resumeStatus} />
+            </span>
           </Tooltip>
         ),
         title: t('table.columns.status'),
