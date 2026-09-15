@@ -132,17 +132,21 @@ Render strictly per [`../report-template.md`](../report-template.md), including 
 sources and workflow feedback, optional consolidation, statistics, and PR-mode merge verdict. Run
 the pre-send self-check.
 
-## Step 6 — Offer the safe batch
+## Step 6 — Fix directly
 
-When non-empty, use `request_user_input` once:
-`"Safe to fix now" has N low-risk findings — apply them all in one pass?`
-with `Fix all` / `Not now`; free text covers partial picks. Apply tests where `need_test: true`.
+Do not ask before fixing. Right after the report, apply every in-scope confirmed finding that
+[`../fix-policy.md`](../fix-policy.md) marks **fix now**: all P0/P1 except the high-risk ones that
+need a discussion, plus every quick P2. Order P0 → P1 → P2, blocking first. Never touch legacy
+hand-offs. Add tests where `need_test: true`, run the repo quality check on the changed files, and
+record the outcome under `Fixed this round`. A fix that fails a check or grows beyond its estimate
+stops, leaves the code green, and moves to `Needs decision` with the reason.
 
-## Step 7 — Walk remaining decisions
+## Step 7 — Walk the decisions
 
-Ask one finding at a time for confirmed `can_auto_fix: false` items and `needsContext`, ordered P0 →
-P1 → P2 and blocking first. Exclude legacy hand-offs. Skip low-likelihood, non-blocking items on
-repeat review unless requested.
+Use `request_user_input` one finding at a time for the high-risk P0/P1 items under
+`Needs decision` and for `needsContext`, ordered P0 → P1 → P2 and blocking first. Slow P2s only
+when requested. Exclude legacy hand-offs. Skip low-likelihood, non-blocking items on repeat review
+unless requested.
 
 ## Step 8 — Offer legacy hand-off issues
 
