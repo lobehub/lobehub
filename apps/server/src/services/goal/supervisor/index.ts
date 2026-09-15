@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { TopicTrigger } from '@/const/topic';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
@@ -102,6 +103,7 @@ export class GoalSupervisorService {
       const topic = await new TopicModel(tx, this.userId, this.workspaceId).create({
         agentId: agent.id,
         title: `Supervision: ${goal.title}`,
+        trigger: TopicTrigger.GoalSupervision,
       });
       const state = await model.updateSupervisorState(goal.id, 0, {
         agentId: agent.id,

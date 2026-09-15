@@ -12,6 +12,7 @@ import { TRPCError } from '@trpc/server';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { TopicTrigger } from '@/const/topic';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -428,6 +429,9 @@ export class GoalManagerService {
               await topicModel.create({
                 agentId,
                 title: `Goal management: ${goal.title}`,
+                // Read from the goal page's supervision panel; keeps the planning
+                // conversation out of the agent's chat sidebar and Recent.
+                trigger: TopicTrigger.GoalSupervision,
               })
             ).id;
       const reviews = await this.reviews(current, db);

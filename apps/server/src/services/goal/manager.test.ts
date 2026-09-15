@@ -306,6 +306,10 @@ describe('CLI main Agent planning', () => {
     expect(next.topicId).not.toBe(state.topicId);
     const [topic] = await db.select().from(topics).where(eq(topics.id, next.topicId));
     expect(topic?.agentId).toBe('next-supervisor');
+    // Both management topics stay out of the agent's chat sidebar.
+    const [first] = await db.select().from(topics).where(eq(topics.id, state.topicId));
+    expect(first?.trigger).toBe('goal_supervision');
+    expect(topic?.trigger).toBe('goal_supervision');
     const nextOp = await ops().findByTopicSourceMessage(
       next.topicId,
       `msg_goal_manager_${next.token}`,
