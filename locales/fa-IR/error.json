@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "برای کپی کلیک کنید",
   "unknownError.desc": "یک خطای غیرمنتظره رخ داد. می‌توانید دوباره تلاش کنید یا گزارش دهید در",
   "unknownError.retry": "تلاش مجدد",
+  "unknownError.sharedDesc": "لطفاً این مشکل را در اینجا گزارش دهید",
+  "unknownError.sharedTitle": "قادر به تولید این پاسخ نیست",
   "unknownError.title": "اوه، درخواست به خواب رفت",
   "unknownError.traceIdLabel": "شناسه ردیابی:",
   "unlock.addProxyUrl": "افزودن آدرس پراکسی OpenAI (اختیاری)",

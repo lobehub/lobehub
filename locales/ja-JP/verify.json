@@ -766,6 +766,7 @@
   "workspace.loadError": "レポートの読み込み中に問題が発生しました。",
   "workspace.loadErrorTitle": "レポートを読み込めませんでした",
   "workspace.loadMoreError": "さらに多くのレポートを読み込めませんでした",
+  "workspace.pin": "レポートリストをピン留め",
   "workspace.renameEmpty": "レポートタイトルは空にできません",
   "workspace.renameError": "レポートの名前変更に失敗しました",
   "workspace.renameSuccess": "レポートの名前が変更されました",

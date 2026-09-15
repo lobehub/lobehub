@@ -38,6 +38,24 @@ const editorDataSchema = z
   .refine((value) => Buffer.byteLength(JSON.stringify(value), 'utf8') <= MAX_EDITOR_DATA_BYTES, {
     message: 'editorData must not exceed 128 KiB',
   });
+/** Generous enough for a paragraph-sized selection, short enough to stay an excerpt. */
+const ANCHOR_QUOTE_MAX = 2000;
+const ANCHOR_CONTEXT_MAX = 100;
+const selectionAnchorSchema = z
+  .object({
+    end: z.number().int().min(0),
+    prefix: z.string().max(ANCHOR_CONTEXT_MAX).optional(),
+    quote: z.string().min(1).max(ANCHOR_QUOTE_MAX),
+    start: z.number().int().min(0),
+    suffix: z.string().max(ANCHOR_CONTEXT_MAX).optional(),
+  })
+  // The offsets are only a hint for re-location — the quote is what actually
+  // finds the run — but an inconsistent pair means the client measured against
+  // something other than the text it sent, so reject it rather than store a
+  // hint that will mis-rank every candidate.
+  .refine(({ end, quote, start }) => end === start + quote.length, {
+    message: 'selectionAnchor end must equal start + quote.length',
+  });
 const pageSchema = z.object({
   cursor: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(50).optional(),
@@ -375,8 +393,19 @@ export const documentCommentRouter = router({
           documentId: idSchema,
           editorData: editorDataSchema.optional(),
           parentCommentId: idSchema.optional(),
+          selectionAnchor: selectionAnchorSchema.optional(),
         })
-        .superRefine(validateCommentBody),
+        .superRefine(validateCommentBody)
+        .superRefine((value, ctx) => {
+          // A reply belongs to its thread's anchor; accepting a second one
+          // would split a thread across two runs of the body.
+          if (!value.parentCommentId || !value.selectionAnchor) return;
+          ctx.addIssue({
+            code: 'custom',
+            message: 'A reply cannot carry its own selectionAnchor',
+            path: ['selectionAnchor'],
+          });
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_CREATE');

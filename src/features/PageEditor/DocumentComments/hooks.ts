@@ -2,6 +2,7 @@ import type {
   DocumentCommentDetail,
   DocumentCommentItem,
   DocumentCommentReplyPage,
+  DocumentCommentSelectionAnchor,
   DocumentCommentSummary,
   DocumentCommentThreadPage,
 } from '@lobechat/types';
@@ -91,6 +92,7 @@ export const useOptimisticDocumentComment = () => {
       editorData,
       parentCommentId,
       replyTo,
+      selectionAnchor,
     }: {
       clientId: string;
       content: string;
@@ -98,6 +100,7 @@ export const useOptimisticDocumentComment = () => {
       editorData: DocumentCommentItem['editorData'];
       parentCommentId?: string;
       replyTo?: DocumentCommentItem['replyTo'];
+      selectionAnchor?: DocumentCommentSelectionAnchor;
     }) => {
       if (!workspaceId) throw new Error('Workspace is required for document comments');
 
@@ -115,6 +118,7 @@ export const useOptimisticDocumentComment = () => {
         editorData,
         parentCommentId,
         replyTo,
+        selectionAnchor,
         userId: user?.id ?? null,
         workspaceId,
       });

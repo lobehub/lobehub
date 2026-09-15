@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Clique para copiar",
   "unknownError.desc": "Ocorreu um erro inesperado. Você pode tentar novamente ou relatar o problema.",
   "unknownError.retry": "Tentar Novamente",
+  "unknownError.sharedDesc": "Por favor, reporte este problema em",
+  "unknownError.sharedTitle": "Não foi possível gerar esta resposta",
   "unknownError.title": "Ops, a solicitação tirou uma soneca",
   "unknownError.traceIdLabel": "ID de Rastreamento:",
   "unlock.addProxyUrl": "Adicionar URL de proxy do OpenAI (opcional)",

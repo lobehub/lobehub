@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} файлов",
   "agentProfile.knowledgeBases_one": "{{count}} база знаний",
   "agentProfile.knowledgeBases_other": "{{count}} базы знаний",
+  "agentProfile.runtime": "Работает на {{name}}",
   "agentProfile.skills_one": "{{count}} навык",
   "agentProfile.skills_other": "{{count}} навыков",
   "agentSignal.receipts.agentSignalLabel": "Сигнал агента",

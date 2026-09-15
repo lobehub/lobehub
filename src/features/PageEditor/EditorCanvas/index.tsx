@@ -12,6 +12,7 @@ import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 
 import { usePageEditorStore } from '../store';
 import { usePageEditable } from '../usePageEditable';
+import { useAddCommentItem } from './useAddCommentItem';
 import { useAskCopilotItem } from './useAskCopilotItem';
 import { useDocumentMentionOption } from './useDocumentMentionOption';
 import { useSlashItems } from './useSlashItems';
@@ -31,7 +32,12 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
 
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
+  const addCommentItem = useAddCommentItem(editor, documentId);
   const mentionOption = useDocumentMentionOption();
+  const toolbarExtraItems = useMemo(
+    () => [...(askCopilotItem ?? []), ...(addCommentItem ?? [])],
+    [addCommentItem, askCopilotItem],
+  );
 
   const extraPlugins = useMemo(
     () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 })],
@@ -49,7 +55,7 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
       placeholder={placeholder || t('pageEditor.editorPlaceholder')}
       slashItems={slashItems}
       style={style}
-      toolbarExtraItems={editable ? askCopilotItem : undefined}
+      toolbarExtraItems={editable ? toolbarExtraItems : undefined}
       unsavedChangesGuard={{
         enabled: true,
         message: t('form.unsavedWarning', { ns: 'ui' }),

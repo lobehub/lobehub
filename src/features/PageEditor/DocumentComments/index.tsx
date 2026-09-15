@@ -2,7 +2,7 @@
 
 import { Center, Flexbox } from '@lobehub/ui';
 import { Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -10,6 +10,9 @@ import AsyncError from '@/components/AsyncError';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { documentCommentService } from '@/services/documentComment';
 
+import { DocumentCommentAnchorsProvider } from './anchor/context';
+import DocumentCommentHighlightStyle from './anchor/HighlightStyle';
+import { useDocumentCommentAnchors } from './anchor/useDocumentCommentAnchors';
 import Composer from './Composer';
 import {
   useDocumentCommentDetail,
@@ -62,8 +65,14 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
     [mutateThreads],
   );
   const handleCreate = useCallback(
-    async ({ clientId, content, editorData }: DocumentCommentSubmitInput) => {
-      const optimisticComment = createOptimistic({ clientId, content, documentId, editorData });
+    async ({ clientId, content, editorData, selectionAnchor }: DocumentCommentSubmitInput) => {
+      const optimisticComment = createOptimistic({
+        clientId,
+        content,
+        documentId,
+        editorData,
+        selectionAnchor,
+      });
       await Promise.all([
         mutateThreads((pages) => appendOptimisticThread(pages, optimisticComment), {
           revalidate: false,
@@ -78,6 +87,7 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
           content,
           documentId,
           editorData,
+          selectionAnchor,
         });
         if (!created) throw new Error('Document comment creation returned no result');
       } catch (error) {
@@ -146,10 +156,20 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
     Boolean(focusedRootData) &&
     !focusedRootData?.parentCommentId &&
     focusedRootData?.documentId === documentId;
-  const pinnedThread =
-    focus && !hasFocusedThread && focusedRootData && isFocusedRootUsable
-      ? { replyCount: focusedRootData.replyCount, root: focusedRootData }
-      : undefined;
+  const pinnedThread = useMemo(
+    () =>
+      focus && !hasFocusedThread && focusedRootData && isFocusedRootUsable
+        ? { replyCount: focusedRootData.replyCount, root: focusedRootData }
+        : undefined,
+    [focus, focusedRootData, hasFocusedThread, isFocusedRootUsable],
+  );
+  // The pinned thread is not on a loaded page yet, so it has to be resolved
+  // alongside the list or its quote would render as a dead jump target.
+  const anchorThreads = useMemo(
+    () => (pinnedThread ? [pinnedThread, ...threads.items] : threads.items),
+    [pinnedThread, threads.items],
+  );
+  const anchors = useDocumentCommentAnchors(anchorThreads);
   const isFocusedRootMissing =
     Boolean(focusRootCommentId) &&
     (focusedRoot.isNotFound || (Boolean(focusedRootData) && !isFocusedRootUsable));
@@ -216,106 +236,109 @@ const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
   if (!workspaceId) return null;
 
   return (
-    <Flexbox
-      data-document-comments
-      className={styles.section}
-      gap={24}
-      onClick={(event) => event.stopPropagation()}
-    >
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-        {isHeaderLoading ? (
-          <>
-            <Skeleton height={28} width={48} />
-            <Skeleton height={20} width={16} />
-          </>
-        ) : (
-          <>
-            <Text as={'h2'} fontSize={20} weight={600}>
-              {t('pageEditor.comments.title')}
-            </Text>
-            {summary.data && (
-              <Text className={styles.meta} fontSize={14}>
-                {summary.data.total}
+    <DocumentCommentAnchorsProvider value={anchors}>
+      <DocumentCommentHighlightStyle />
+      <Flexbox
+        data-document-comments
+        className={styles.section}
+        gap={24}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+          {isHeaderLoading ? (
+            <>
+              <Skeleton height={28} width={48} />
+              <Skeleton height={20} width={16} />
+            </>
+          ) : (
+            <>
+              <Text as={'h2'} fontSize={20} weight={600}>
+                {t('pageEditor.comments.title')}
               </Text>
-            )}
-          </>
-        )}
-      </Flexbox>
-
-      {/* The pinned deep-link thread renders on its own, so a pending or failed list
-          request never hides a target that was already fetched. */}
-      {threads.isInitialError ||
-      threads.isLoadingInitial ||
-      threads.items.length > 0 ||
-      pinnedThread ? (
-        <Flexbox className={styles.threadList}>
-          {pinnedThread && (
-            <Thread
-              documentId={documentId}
-              focus={focus}
-              key={pinnedThread.root.id}
-              replyCount={pinnedThread.replyCount}
-              root={pinnedThread.root}
-              onFocusMissing={handleReplyFocusMissing}
-              onMutated={refreshPinned}
-              onReplyCountChange={updatePinnedReplyCount}
-              onRootUpdate={handlePinnedRootUpdate}
-              onSummaryChange={updateSummaryTotal}
-            />
-          )}
-          {threads.isInitialError ? (
-            <AsyncError
-              error={threads.error}
-              variant={'block'}
-              onRetry={() => void threads.reload()}
-            />
-          ) : threads.isLoadingInitial ? (
-            <SurfaceSkeleton header={false} variant={'list'} />
-          ) : (
-            threads.items.map(({ replyCount, root }) => (
-              <Thread
-                documentId={documentId}
-                focus={focus?.rootCommentId === root.id ? focus : undefined}
-                key={root.id}
-                replyCount={replyCount}
-                root={root}
-                onFocusMissing={handleReplyFocusMissing}
-                onMutated={refresh}
-                onReplyCountChange={updateReplyCount}
-                onRootUpdate={handleUpdate}
-                onSummaryChange={updateSummaryTotal}
-              />
-            ))
-          )}
-          {threads.error && !threads.isInitialError ? (
-            <AsyncError
-              error={threads.error}
-              retrying={threads.isRetrying}
-              variant={'inline'}
-              onRetry={() => void threads.reload()}
-            />
-          ) : (
-            threads.hasMore && (
-              <Center paddingBlock={12}>
-                <Button
-                  loading={threads.isLoadingMore}
-                  type={'text'}
-                  onClick={() => void threads.loadMore()}
-                >
-                  {t('pageEditor.comments.loadMore')}
-                </Button>
-              </Center>
-            )
+              {summary.data && (
+                <Text className={styles.meta} fontSize={14}>
+                  {summary.data.total}
+                </Text>
+              )}
+            </>
           )}
         </Flexbox>
-      ) : null}
 
-      {/* While the thread list is still skeleton-loading the composer would
+        {/* The pinned deep-link thread renders on its own, so a pending or failed list
+          request never hides a target that was already fetched. */}
+        {threads.isInitialError ||
+        threads.isLoadingInitial ||
+        threads.items.length > 0 ||
+        pinnedThread ? (
+          <Flexbox className={styles.threadList}>
+            {pinnedThread && (
+              <Thread
+                documentId={documentId}
+                focus={focus}
+                key={pinnedThread.root.id}
+                replyCount={pinnedThread.replyCount}
+                root={pinnedThread.root}
+                onFocusMissing={handleReplyFocusMissing}
+                onMutated={refreshPinned}
+                onReplyCountChange={updatePinnedReplyCount}
+                onRootUpdate={handlePinnedRootUpdate}
+                onSummaryChange={updateSummaryTotal}
+              />
+            )}
+            {threads.isInitialError ? (
+              <AsyncError
+                error={threads.error}
+                variant={'block'}
+                onRetry={() => void threads.reload()}
+              />
+            ) : threads.isLoadingInitial ? (
+              <SurfaceSkeleton header={false} variant={'list'} />
+            ) : (
+              threads.items.map(({ replyCount, root }) => (
+                <Thread
+                  documentId={documentId}
+                  focus={focus?.rootCommentId === root.id ? focus : undefined}
+                  key={root.id}
+                  replyCount={replyCount}
+                  root={root}
+                  onFocusMissing={handleReplyFocusMissing}
+                  onMutated={refresh}
+                  onReplyCountChange={updateReplyCount}
+                  onRootUpdate={handleUpdate}
+                  onSummaryChange={updateSummaryTotal}
+                />
+              ))
+            )}
+            {threads.error && !threads.isInitialError ? (
+              <AsyncError
+                error={threads.error}
+                retrying={threads.isRetrying}
+                variant={'inline'}
+                onRetry={() => void threads.reload()}
+              />
+            ) : (
+              threads.hasMore && (
+                <Center paddingBlock={12}>
+                  <Button
+                    loading={threads.isLoadingMore}
+                    type={'text'}
+                    onClick={() => void threads.loadMore()}
+                  >
+                    {t('pageEditor.comments.loadMore')}
+                  </Button>
+                </Center>
+              )
+            )}
+          </Flexbox>
+        ) : null}
+
+        {/* While the thread list is still skeleton-loading the composer would
           float against placeholder content — reveal it with the real list. */}
-      {!threads.isLoadingInitial && (
-        <Composer documentId={documentId} key={`root:${documentId}`} onSubmit={handleCreate} />
-      )}
-    </Flexbox>
+        {!threads.isLoadingInitial && (
+          <Composer documentId={documentId} key={`root:${documentId}`} onSubmit={handleCreate} />
+        )}
+      </Flexbox>
+    </DocumentCommentAnchorsProvider>
   );
 });
 

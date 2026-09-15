@@ -1,4 +1,4 @@
-import type { DocumentCommentJson } from '@lobechat/types';
+import type { DocumentCommentJson, DocumentCommentSelectionAnchor } from '@lobechat/types';
 import { and, asc, count, eq, getTableColumns, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { DocumentCommentItem } from '../schemas/documentComment';
@@ -36,6 +36,8 @@ export interface CreateDocumentCommentParams {
   /** Validated active Workspace members parsed from editorData by the router. */
   mentionedUserIds?: string[];
   parentCommentId?: string;
+  /** Body anchor for a root comment; ignored for replies, which share the thread's anchor. */
+  selectionAnchor?: DocumentCommentSelectionAnchor;
 }
 
 export interface CreateDocumentCommentResult {
@@ -180,6 +182,10 @@ export class DocumentCommentModel {
           editorData: params.editorData,
           parentCommentId,
           replyToCommentId,
+          // The thread's anchor lives on its root row (enforced by
+          // `document_comments_reply_has_no_anchor`), so a reply drops any
+          // anchor the caller sent instead of failing the insert.
+          selectionAnchor: parentCommentId ? null : params.selectionAnchor,
           workspaceId,
         })
         .onConflictDoNothing({

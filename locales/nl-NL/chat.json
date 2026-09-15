@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} bestanden",
   "agentProfile.knowledgeBases_one": "{{count}} kennisbank",
   "agentProfile.knowledgeBases_other": "{{count}} kennisbanken",
+  "agentProfile.runtime": "Draait op {{name}}",
   "agentProfile.skills_one": "{{count}} vaardigheid",
   "agentProfile.skills_other": "{{count}} vaardigheden",
   "agentSignal.receipts.agentSignalLabel": "Agent Signaal",

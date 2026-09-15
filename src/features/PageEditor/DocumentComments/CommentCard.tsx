@@ -19,6 +19,8 @@ import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { documentCommentService } from '@/services/documentComment';
 
+import AnchorQuote from './anchor/AnchorQuote';
+import { useCommentAnchors } from './anchor/context';
 import DocumentCommentEditor, {
   type DocumentCommentEditorRef,
   type DocumentCommentEditorValue,
@@ -79,6 +81,9 @@ const CommentCard = memo<CommentCardProps>(
       false,
     );
     const [mutating, setMutating] = useState(false);
+    const { locateInBody, orphanedRootIds, setHoveredRootId } = useCommentAnchors();
+    const anchor = comment.selectionAnchor;
+    const anchorOrphaned = Boolean(anchor) && orphanedRootIds.has(comment.id);
     const deleted = Boolean(comment.deletedAt);
     const optimistic = isOptimisticDocumentComment(comment);
     const authorName =
@@ -172,6 +177,12 @@ const CommentCard = memo<CommentCardProps>(
         className={`${styles.card} ${variant === 'reply' ? styles.replyCard : ''}`}
         data-document-comment-id={comment.id}
         ref={cardRef}
+        onMouseEnter={anchor && !anchorOrphaned ? () => setHoveredRootId(comment.id) : undefined}
+        onMouseLeave={
+          anchor && !anchorOrphaned
+            ? () => setHoveredRootId((current) => (current === comment.id ? null : current))
+            : undefined
+        }
       >
         <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
           <Avatar
@@ -205,6 +216,15 @@ const CommentCard = memo<CommentCardProps>(
             </Text>
           )}
         </Flexbox>
+
+        {anchor && (
+          <AnchorQuote
+            anchor={anchor}
+            className={styles.cardAnchor}
+            orphaned={anchorOrphaned}
+            onLocate={() => locateInBody(comment.id)}
+          />
+        )}
 
         <div className={`${styles.body} ${variant === 'reply' ? styles.replyBody : ''}`}>
           {deleted ? (
