@@ -613,6 +613,36 @@ export class AgentRuntimeService {
     return true;
   }
 
+  /**
+   * Record whether the client still holds user messages queued behind a run.
+   * Only the run's owner may flag it; an unknown or foreign operation is a
+   * no-op, so a caller cannot touch another user's run by guessing its id.
+   *
+   * @returns true when the flag was written
+   */
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<boolean> {
+    const metadata = await this.coordinator.getOperationMetadata(operationId);
+    if (!metadata || metadata.userId !== this.userId) return false;
+
+    await this.coordinator.setQueuedMessages(operationId, pending);
+    log('[%s] Queued messages flag set to %s', operationId, pending);
+    return true;
+  }
+
+  /**
+   * Read the queued-messages flag for a step. A failed read keeps the run
+   * going: the follow-up still starts once the run ends, exactly as it did
+   * before the flag existed, instead of failing the step.
+   */
+  private async readQueuedMessagesFlag(operationId: string, stepIndex: number): Promise<boolean> {
+    try {
+      return await this.coordinator.hasQueuedMessages(operationId);
+    } catch (error) {
+      log('[%s][%d] Queued messages flag read failed: %O', operationId, stepIndex, error);
+      return false;
+    }
+  }
+
   /** Load the authoritative runtime state for a deterministic intervention continuation. */
   async loadInterventionContinuationState(operationId: string): Promise<AgentState | null> {
     return this.coordinator.loadAgentState(operationId);
@@ -1956,6 +1986,20 @@ export class AgentRuntimeService {
               stepIndex,
               deviceContext.activeDeviceId,
             );
+          }
+        }
+
+        // Queued follow-ups live in the client's composer, not in this state.
+        // The client mirrors them into a flag; the agent reads it from the step
+        // context and hands the turn back at its next decision point, so the
+        // follow-up starts as the next turn instead of after the whole run.
+        if (currentContext && !forcedFinishState) {
+          const hasQueuedMessages = await this.readQueuedMessagesFlag(operationId, stepIndex);
+          if (hasQueuedMessages) {
+            currentContext = {
+              ...currentContext,
+              stepContext: { ...currentContext.stepContext, hasQueuedMessages: true },
+            };
           }
         }
 

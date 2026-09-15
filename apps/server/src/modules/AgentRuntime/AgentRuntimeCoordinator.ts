@@ -263,6 +263,20 @@ export class AgentRuntimeCoordinator {
   }
 
   /**
+   * Record whether the client holds user messages queued behind the operation.
+   */
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<void> {
+    return this.stateManager.setQueuedMessages(operationId, pending);
+  }
+
+  /**
+   * Check the client's queued-messages flag.
+   */
+  async hasQueuedMessages(operationId: string): Promise<boolean> {
+    return this.stateManager.hasQueuedMessages(operationId);
+  }
+
+  /**
    * Get operation metadata
    */
   async getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null> {

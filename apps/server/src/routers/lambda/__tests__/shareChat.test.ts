@@ -98,10 +98,12 @@ vi.mock('@/database/models/user', () => ({
 
 const mockExecAgent = vi.fn();
 const mockInterruptTask = vi.fn();
+const mockSetQueuedMessages = vi.fn();
 const AiAgentServiceMock = vi.fn(function () {
   return {
     execAgent: mockExecAgent,
     interruptTask: mockInterruptTask,
+    setQueuedMessages: mockSetQueuedMessages,
   };
 });
 vi.mock('@/server/services/aiAgent', () => ({
@@ -166,6 +168,7 @@ describe('shareChatRouter', () => {
     mockMessageQuery.mockResolvedValue([]);
     mockExecAgent.mockResolvedValue({ operationId: 'op-1', success: true });
     mockInterruptTask.mockResolvedValue({ operationId: 'op-1', success: true });
+    mockSetQueuedMessages.mockResolvedValue({ success: true });
     mockSignUserJWT.mockResolvedValue('visitor-jwt');
     mockSpendGate.mockResolvedValue({ allowed: true });
   });
@@ -459,6 +462,55 @@ describe('shareChatRouter', () => {
         expect(error.message).not.toContain('operations_internal');
         expect(error.message).not.toContain('pg driver');
       });
+    });
+  });
+
+  describe('setQueuedMessages', () => {
+    it('flags the running operation through the creator-scoped service', async () => {
+      const caller = await createCaller();
+
+      await expect(
+        caller.setQueuedMessages({
+          operationId: 'op-1',
+          pending: true,
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).resolves.toEqual({ success: true });
+
+      expect(AiAgentServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER, {
+        includeShareVisitor: true,
+      });
+      expect(mockSetQueuedMessages).toHaveBeenCalledWith({ operationId: 'op-1', pending: true });
+    });
+
+    it('rejects an operationId that does not match the topic’s current running operation', async () => {
+      const caller = await createCaller();
+
+      await expect(
+        caller.setQueuedMessages({
+          operationId: 'op-someone-elses',
+          pending: true,
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockSetQueuedMessages).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when the topic is not the visitor's own share topic", async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, senderId: 'someone-else' });
+      const caller = await createCaller();
+
+      await expect(
+        caller.setQueuedMessages({
+          operationId: 'op-1',
+          pending: false,
+          shareId: 'share-1',
+          topicId: 'tpc_visitor',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockSetQueuedMessages).not.toHaveBeenCalled();
     });
   });
 

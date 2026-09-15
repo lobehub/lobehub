@@ -1577,6 +1577,17 @@ export class AiAgentService {
     return this.interventionController.interruptTask(params);
   }
 
+  /**
+   * Flags whether the composer still holds user messages queued behind a run.
+   * Delegates to {@link InterventionController}.
+   */
+  async setQueuedMessages(params: {
+    operationId: string;
+    pending: boolean;
+  }): Promise<{ success: boolean }> {
+    return this.interventionController.setQueuedMessages(params);
+  }
+
   /** Settle a parked approval batch and terminate its operation. */
   stopPendingApproval(params: {
     approvalResolutionRequestId?: string;

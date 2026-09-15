@@ -29,6 +29,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
       createAgentOperation: vi.fn(),
       getOperationMetadata: vi.fn(),
       isInterrupted: vi.fn().mockResolvedValue(false),
+      hasQueuedMessages: vi.fn().mockResolvedValue(false),
       tryClaimStep: vi.fn().mockResolvedValue(true),
       releaseStepLock: vi.fn().mockResolvedValue(undefined),
       refreshStepLock: vi.fn().mockResolvedValue(true),
@@ -1856,5 +1857,71 @@ describe('AgentRuntimeService.executeStep - Agent Share authorization revoked mi
 
     emitSignalEvents.mockRestore();
     dispatchHooks.mockRestore();
+  });
+});
+
+describe('AgentRuntimeService.executeStep - queued messages flag', () => {
+  const runStep = async (readFlag: () => Promise<boolean>) => {
+    const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
+    const coordinator = (service as any).coordinator;
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      metadata: {},
+      status: 'running',
+      stepCount: 1,
+    });
+    coordinator.hasQueuedMessages = vi.fn(readFlag);
+    vi.spyOn((service as any).completionLifecycle, 'registerFileWorks').mockResolvedValue(
+      undefined,
+    );
+    vi.spyOn((service as any).completionLifecycle, 'emitSignalEvents').mockResolvedValue([]);
+    vi.spyOn((service as any).completionLifecycle, 'dispatchHooks').mockResolvedValue(undefined);
+    const step = vi.fn().mockResolvedValue({
+      events: [],
+      newState: {
+        lastModified: new Date().toISOString(),
+        messages: [],
+        metadata: {},
+        status: 'done',
+        stepCount: 2,
+      },
+      nextContext: undefined,
+    });
+    (service as any).createAgentRuntime = vi.fn().mockResolvedValue({ runtime: { step } });
+
+    await service.executeStep({
+      context: { payload: {}, phase: 'tools_batch_result' } as any,
+      operationId: 'op-queued',
+      stepIndex: 1,
+    });
+
+    return { hasQueuedMessages: coordinator.hasQueuedMessages, step };
+  };
+
+  // Regression: queued follow-ups only ever reached the step context in the
+  // browser runtime, so a server run never took the agent's early hand-back
+  // and the follow-up waited for every remaining step.
+  it('hands the flag to the agent through the step context', async () => {
+    const { hasQueuedMessages, step } = await runStep(async () => true);
+
+    expect(hasQueuedMessages).toHaveBeenCalledWith('op-queued');
+    expect(step.mock.calls[0][1].stepContext).toEqual(
+      expect.objectContaining({ hasQueuedMessages: true }),
+    );
+  });
+
+  it('leaves the step context untouched when nothing is queued', async () => {
+    const { step } = await runStep(async () => false);
+
+    expect(step.mock.calls[0][1].stepContext?.hasQueuedMessages).toBeUndefined();
+  });
+
+  it('keeps the run going when the flag cannot be read', async () => {
+    const { step } = await runStep(async () => {
+      throw new Error('redis down');
+    });
+
+    expect(step).toHaveBeenCalledTimes(1);
+    expect(step.mock.calls[0][1].stepContext?.hasQueuedMessages).toBeUndefined();
   });
 });

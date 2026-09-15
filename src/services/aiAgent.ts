@@ -292,6 +292,14 @@ class AiAgentService {
   }
 
   /**
+   * Tell a running server operation whether user messages are queued behind it,
+   * so it hands the turn back at its next step boundary.
+   */
+  async setQueuedMessages(params: { operationId: string; pending: boolean }) {
+    return await lambdaClient.aiAgent.setQueuedMessages.mutate(params);
+  }
+
+  /**
    * Stop a run parked on tool approval: settle the pending tool rows and end
    * the operation without running anything or continuing the model.
    *

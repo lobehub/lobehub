@@ -1331,6 +1331,15 @@ const UpdateClientTaskThreadStatusSchema = z.object({
 });
 
 /**
+ * Schema for setQueuedMessages - flag queued follow-ups on a running operation
+ */
+const SetQueuedMessagesSchema = z.object({
+  operationId: z.string(),
+  /** Whether the composer still holds user messages queued behind the run. */
+  pending: z.boolean(),
+});
+
+/**
  * Schema for interruptTask - interrupt a running task
  */
 const InterruptTaskSchema = z
@@ -3063,6 +3072,20 @@ export const aiAgentRouter = router({
         }
         throw error;
       }
+    }),
+
+  /**
+   * Tell a running server operation whether the composer still holds user
+   * messages queued behind it. The run reads the flag at its next step
+   * boundary and ends the turn early, so the queued follow-up starts as the
+   * next turn instead of waiting for the whole run to finish.
+   */
+  setQueuedMessages: aiAgentWriteProcedure
+    .input(SetQueuedMessagesSchema)
+    .mutation(async ({ input, ctx }) => {
+      log('setQueuedMessages: operationId=%s, pending=%s', input.operationId, input.pending);
+
+      return ctx.aiAgentService.setQueuedMessages(input);
     }),
 
   /**

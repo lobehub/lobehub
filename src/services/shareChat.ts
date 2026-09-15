@@ -45,6 +45,18 @@ class ShareChatService {
     return await lambdaClient.shareChat.interruptTask.mutate({ operationId, shareId, topicId });
   }
 
+  /**
+   * The visitor counterpart of `aiAgentService.setQueuedMessages`.
+   */
+  async setQueuedMessages(shareId: string, topicId: string, operationId: string, pending: boolean) {
+    return await lambdaClient.shareChat.setQueuedMessages.mutate({
+      operationId,
+      pending,
+      shareId,
+      topicId,
+    });
+  }
+
   async refreshGatewayToken(shareId: string, topicId: string): Promise<{ token: string }> {
     return await lambdaClient.shareChat.refreshGatewayToken.query({ shareId, topicId });
   }

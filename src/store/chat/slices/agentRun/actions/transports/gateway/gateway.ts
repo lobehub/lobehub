@@ -63,6 +63,7 @@ import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEvent
 import { createGatewayEventRouter } from './gatewayEventRouter';
 import { createGatewayMemberStreamHandler } from './gatewayMemberStreamHandler';
 import { type GatewayMuxIdentity, getGatewayMux } from './muxRegistry';
+import { syncQueuedMessagesFlag } from './queuedMessagesFlag';
 
 /**
  * Interrupts a gateway operation and rejects when its physical shutdown is unconfirmed.
@@ -543,6 +544,14 @@ export class GatewayActionImpl {
     if (!conn) return;
 
     conn.client.sendInterrupt();
+  };
+
+  /**
+   * Mirror whether a conversation still has messages queued behind its running
+   * Gateway run. See {@link syncQueuedMessagesFlag}.
+   */
+  internal_syncQueuedMessagesFlag = (contextKey: string): void => {
+    syncQueuedMessagesFlag(this.#get, contextKey);
   };
 
   /**
@@ -1048,6 +1057,10 @@ export class GatewayActionImpl {
       parentOperationId,
       type: 'execServerAgentRuntime',
     });
+
+    // A follow-up may have been queued while execAgentTask was still in flight,
+    // before this run had a server operation id to flag.
+    syncQueuedMessagesFlag(this.#get, messageMapKey(resolvedMessageContext));
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
