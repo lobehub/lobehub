@@ -411,7 +411,9 @@ export const prepareOperation = async (
       // instead of the new PowerShell default.
       const defaultShell =
         systemInfo.defaultShell ?? (device?.platform === 'win32' ? 'cmd.exe' : '/bin/sh');
-      return {
+      // Optional folders the device could not resolve must stay absent so the
+      // template falls back to '(not reported)' instead of rendering undefined.
+      const reported = {
         arch: systemInfo.arch,
         defaultShell,
         desktopPath: systemInfo.desktopPath,
@@ -433,6 +435,9 @@ export const prepareOperation = async (
         // persisted device row in resolveWorkspaceInit and written onto
         // deviceSystemInfo.workingDirectory at the call site below.
       };
+      return Object.fromEntries(
+        Object.entries(reported).filter(([, value]) => value !== undefined),
+      ) as Record<string, string>;
     } catch (error) {
       log('execAgent: failed to fetch device system info: %O', error);
       return {};

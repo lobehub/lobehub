@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
+  DeviceSystemInfo,
   GatewayClient,
   GatewayMcpParams,
   MessageApiRequestMessage,
@@ -25,6 +26,7 @@ import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
 import { createLogger } from '@/utils/logger';
 import { getDesktopUserAgent } from '@/utils/user-agent';
+import { safeGetPath } from '@/utils/user-path';
 
 import { ServiceModule } from './index';
 
@@ -444,7 +446,7 @@ export default class GatewayConnectionService extends ServiceModule {
     });
 
     client.on('system_info_request', (request) => {
-      this.handleSystemInfoRequest(client, request);
+      void this.handleSystemInfoRequest(client, request);
     });
 
     client.on('rpc_request', (request) => {
@@ -697,28 +699,36 @@ export default class GatewayConnectionService extends ServiceModule {
    */
   private async handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
     logger.info(`Received system_info_request: requestId=${request.requestId}`);
+    try {
+      client.sendSystemInfoResponse({
+        requestId: request.requestId,
+        result: { success: true, systemInfo: await this.collectSystemInfo() },
+      });
+    } catch (error) {
+      // The gateway keeps the agent run parked until a correlated reply arrives,
+      // so a failed collection must still answer instead of only logging.
+      logger.error(`system_info_request failed: requestId=${request.requestId}`, error);
+      client.sendSystemInfoResponse({ requestId: request.requestId, result: { success: false } });
+    }
+  }
+
+  private async collectSystemInfo(): Promise<DeviceSystemInfo> {
     const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
-    client.sendSystemInfoResponse({
-      requestId: request.requestId,
-      result: {
-        success: true,
-        systemInfo: {
-          supportedTools: ['lobe-computer-use'],
-          arch: os.arch(),
-          // Tell the server-side prompt builder which shell runCommand spawns here.
-          defaultShell: (await getShellInfo()).displayName,
-          desktopPath: app.getPath('desktop'),
-          documentsPath: app.getPath('documents'),
-          downloadsPath: app.getPath('downloads'),
-          homePath: app.getPath('home'),
-          musicPath: app.getPath('music'),
-          picturesPath: app.getPath('pictures'),
-          userDataPath: app.getPath('userData'),
-          videosPath: app.getPath('videos'),
-          workingDirectory: process.cwd(),
-        },
-      },
-    });
+    return {
+      supportedTools: ['lobe-computer-use'],
+      arch: os.arch(),
+      // Tell the server-side prompt builder which shell runCommand spawns here.
+      defaultShell: (await getShellInfo()).displayName,
+      desktopPath: app.getPath('desktop'),
+      documentsPath: app.getPath('documents'),
+      downloadsPath: safeGetPath('downloads'),
+      homePath: app.getPath('home'),
+      musicPath: safeGetPath('music'),
+      picturesPath: safeGetPath('pictures'),
+      userDataPath: app.getPath('userData'),
+      videosPath: safeGetPath('videos'),
+      workingDirectory: process.cwd(),
+    };
   }
 
   // ─── Generic Device RPC ───
