@@ -68,6 +68,7 @@ describe('ClientContextBuilder', () => {
           provider: 'test-provider',
           tools: resolvedAgentConfig.tools,
         },
+        replayAssistantReasoning: false,
       }));
     const builder = new ClientContextBuilder({
       agentConfig,

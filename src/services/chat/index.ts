@@ -1,3 +1,4 @@
+import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
 import {
   REQUEST_AGENT_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
@@ -23,12 +24,9 @@ import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
-import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
-import { getChatStoreState } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
   settingsSelectors,
@@ -47,7 +45,7 @@ import {
   contextEngineering,
   getTargetAgentId,
   initializeWithClientStore,
-  resolveModelExtendParams,
+  resolveBrowserModelParams,
 } from './mecha';
 import { type FetchOptions } from './types';
 
@@ -76,6 +74,10 @@ export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload
 export interface PreparedAssistantMessageContext {
   options: FetchOptions;
   params: Partial<ChatStreamPayload>;
+  /** Forced or configured `preserveThinking` for the payload, when the model supports it. */
+  preserveThinking?: boolean;
+  /** Whether the assistant reasoning in history is replayed to the model. */
+  replayAssistantReasoning: boolean;
 }
 
 type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
@@ -160,8 +162,32 @@ class ChatService {
     const userMemorySettings = settingsSelectors.currentMemorySettings(getUserStoreState());
     const effectiveMemoryEffort =
       chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
-    const enableAgentMode =
-      chatConfig.enableAgentMode !== false && isCanUseFC(payload.model, payload.provider!);
+
+    // =================== 1.2 resolve model parameters =================== //
+
+    // Make sure the user's saved model-instance reasoning config is loaded
+    // before the synchronous store reads below — after a reload the
+    // ReasoningConfigLoader SWR fetch may still be in flight when the user
+    // sends the first message. No-op once cached; failures fall back to
+    // level defaults.
+    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
+
+    // Which extend params apply, where the reasoning effort comes from,
+    // whether assistant reasoning is replayed, the history window and the
+    // stream flag are decided by the shared rules — the same ones the server
+    // runtime applies — over the browser's stores.
+    const modelParams = await resolveBrowserModelParams({
+      agentId: targetAgentId,
+      chatConfig,
+      model: payload.model,
+      provider: payload.provider!,
+      searchDecision: searchConfig,
+      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
+      topicId,
+    });
+    const messagesForContext = modelParams.shouldReplayAssistantReasoning
+      ? messages
+      : stripAssistantReasoningForReplay(messages);
 
     // Apply context engineering with preprocessing configuration
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
@@ -170,19 +196,21 @@ class ChatService {
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
       disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
-      enableAgentMode,
+      // The stored mode passes through: a model without function calling is
+      // not demoted to chat mode here, matching the server runtime.
+      enableAgentMode: modelParams.enableAgentMode,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
       groupId,
       additionalContexts,
-      // historyCount is number of history messages; add 1 for current user message
-      historyCount: (chatConfig.historyCount ?? 20) + 1,
+      // History messages + the current turn; unset means no truncation.
+      historyCount: modelParams.historyCount,
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
       manifests: enabledManifests,
-      messages,
+      messages: messagesForContext,
       model: payload.model,
       plugins,
       provider: payload.provider!,
@@ -196,55 +224,19 @@ class ChatService {
       },
     });
 
-    // ============  3. process extend params   ============ //
-
-    // Make sure the user's saved model-instance reasoning config is loaded
-    // before the synchronous resolution below — after a reload the
-    // ReasoningConfigLoader SWR fetch may still be in flight when the user
-    // sends the first message. No-op once cached; failures fall back to
-    // level defaults.
-    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
-
-    const extendParams = resolveModelExtendParams({
-      chatConfig,
-      model: payload.model,
-      provider: payload.provider!,
-      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
-      // The topic's own effort pin (only when pinned for this very model — a
-      // sub-agent modelOverride must not inherit the parent topic's effort).
-      topicReasoningConfig: topicId
-        ? topicSelectors.getTopicReasoningConfigForModel(
-            topicId,
-            payload.model,
-            payload.provider!,
-          )(getChatStoreState())
-        : undefined,
-    });
-
-    // For models governed by the reasoning extend-params family the user-level
-    // model-instance config is the single source of truth, so drop the legacy
-    // per-agent Advanced `params.reasoning_effort` — otherwise a stale agent
-    // value would leak into the payload whenever no instance value overlays it.
-    if (
-      aiModelSelectors.isModelHasReasoningExtendParams(
-        payload.model,
-        payload.provider!,
-      )(getAiInfraStoreState())
-    ) {
-      delete (params as Record<string, unknown>).reasoning_effort;
-    }
-
     return {
       options: { ...options, agentId: targetAgentId, topicId },
       params: {
         ...params,
-        ...extendParams,
-        enabledSearch: searchConfig.enabledSearch && searchConfig.useModelSearch ? true : undefined,
+        ...modelParams.resolvedExtendParams,
+        // Always present on the browser payload, even when unset.
+        enabledSearch: modelParams.resolvedExtendParams?.enabledSearch,
         messages: modelMessages,
-        // Use the chatConfig from the target agent for streaming preference
-        stream: chatConfig.enableStreaming !== false,
+        stream: modelParams.stream,
         tools,
       },
+      preserveThinking: modelParams.preserveThinkingForPayload,
+      replayAssistantReasoning: modelParams.shouldReplayAssistantReasoning,
     };
   };
 

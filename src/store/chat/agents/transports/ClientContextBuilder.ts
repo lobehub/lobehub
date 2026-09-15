@@ -65,7 +65,6 @@ export class ClientContextBuilder implements ContextBuilder {
       enabledToolIds: resolvedTools.enabledToolIds,
       tools: resolvedTools.tools.length > 0 ? resolvedTools.tools : undefined,
     };
-    const { agentConfig } = promptAgentConfig;
     const { agentId, groupId, subAgentId, topicId } = operation.context;
     const effectiveAgentId = groupId && subAgentId ? subAgentId : agentId;
     const assistantMessageId = (input.payload as { assistantMessageId?: string })
@@ -83,7 +82,6 @@ export class ClientContextBuilder implements ContextBuilder {
         provider: input.provider,
         resolvedAgentConfig: promptAgentConfig,
         topicId: topicId ?? undefined,
-        ...agentConfig.params,
       },
       {
         initialContext: this.context.runtimeContext?.initialContext,
@@ -104,11 +102,8 @@ export class ClientContextBuilder implements ContextBuilder {
         options: prepared.options,
         params,
       } satisfies ClientLLMModelParameters,
-      preserveThinking:
-        typeof prepared.params.preserveThinking === 'boolean'
-          ? prepared.params.preserveThinking
-          : undefined,
-      replayAssistantReasoning: true,
+      preserveThinking: prepared.preserveThinking,
+      replayAssistantReasoning: prepared.replayAssistantReasoning ?? false,
       resolvedTools,
     };
   }
