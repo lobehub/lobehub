@@ -2,7 +2,6 @@ import type { AiModelReasoningConfig } from 'model-bank';
 import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
-import type { LobeAgentAgencyConfig } from '../agent';
 import type { HeterogeneousReasoningEffort } from '../agent/heteroSelectorCapabilities';
 import type { SerializedAgentHook } from '../agentHook';
 import { serializedAgentHookSchema } from '../agentHook';
@@ -114,43 +113,6 @@ export interface OnboardingSessionSnapshot {
   version: number;
 }
 
-/** Execution routing belongs to a conversation; Agent config supplies defaults only. */
-export const topicExecutionConfigSchema = z.object({
-  /** Automatic snapshots retain the workspace default's execution restrictions. */
-  inheritWorkspaceScope: z.boolean().optional(),
-  boundDeviceId: z.string().optional(),
-  executionTarget: z.enum(['auto', 'device', 'local', 'none', 'sandbox']).optional(),
-  localSandbox: z.boolean().optional(),
-  localSandboxNetwork: z.boolean().optional(),
-});
-
-export type TopicExecutionConfig = z.infer<typeof topicExecutionConfigSchema>;
-
-/** Replace routing as a unit so an absent device never inherits an Agent's device. */
-export const applyTopicExecutionConfig = (
-  defaults: LobeAgentAgencyConfig | undefined,
-  execution: TopicExecutionConfig | null | undefined,
-): LobeAgentAgencyConfig | undefined => {
-  if (!execution || defaults?.executionTargetSelectionPolicy === 'fixed') return defaults;
-  return {
-    ...defaults,
-    boundDeviceId: execution.boundDeviceId,
-    executionTarget: execution.executionTarget,
-    localSandbox: execution.localSandbox,
-    localSandboxNetwork: execution.localSandboxNetwork,
-  };
-};
-
-export const snapshotTopicExecutionConfig = (
-  config: LobeAgentAgencyConfig | undefined,
-): TopicExecutionConfig => ({
-  inheritWorkspaceScope: true,
-  boundDeviceId: config?.boundDeviceId,
-  executionTarget: config?.executionTarget,
-  localSandbox: config?.localSandbox,
-  localSandboxNetwork: config?.localSandboxNetwork,
-});
-
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
@@ -186,7 +148,6 @@ export interface ChatTopicMetadata {
   editingGroupId?: string;
   /** Restored-history tail used as the source message for eval attempt threads. */
   evalHistoryTailMessageId?: string;
-  executionConfig?: TopicExecutionConfig;
   /**
    * Scoped pointer to the currently active assistant message for a running
    * heterogeneous agent operation. Includes `operationId` so cold-start
@@ -535,7 +496,6 @@ export const parseTopicScheduledRun = (raw: unknown): TopicScheduledRun | null =
 };
 
 export const chatTopicMetadataUpdateSchema = z.object({
-  executionConfig: topicExecutionConfigSchema.optional(),
   boundDeviceId: z.string().optional(),
   heteroEffort: z
     .custom<HeterogeneousReasoningEffort>((value) => typeof value === 'string')
@@ -625,11 +585,10 @@ export const chatTopicMetadataUpdateSchema = z.object({
 });
 
 /**
- * Metadata a client may seed when creating a topic: execution routing and the
- * reasoning snapshot taken alongside the pinned model (see `snapshotAgentModel`).
+ * Metadata a client may seed when creating a topic: the pinned reasoning
+ * snapshot taken alongside the pinned model (see `snapshotAgentModel`).
  */
 export const chatTopicCreateMetadataSchema = chatTopicMetadataUpdateSchema.pick({
-  executionConfig: true,
   heteroEffort: true,
   reasoningConfig: true,
 });

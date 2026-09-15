@@ -203,24 +203,6 @@ describe('AiAgentService.execAgent - topic history loading', () => {
     mockTopicFindById.mockClear();
   });
 
-  it('keeps a continued topic on its snapshotted execution target', async () => {
-    mockTopicFindById.mockResolvedValue({
-      id: 'topic-existing',
-      metadata: { executionConfig: { executionTarget: 'none' } },
-    });
-    mockMessageQuery.mockResolvedValue([]);
-    await service.execAgent({
-      agentId: 'agent-1',
-      appContext: { topicId: 'topic-existing' },
-      prompt: 'Continue',
-      deviceId: 'another-desktop',
-    });
-    expect(mockCreateOperation).toHaveBeenCalled();
-    expect(mockCreateOperation.mock.calls[0][0].agentConfig.agencyConfig).toMatchObject({
-      executionTarget: 'none',
-    });
-  });
-
   describe('when topicId is provided (follow-up message in existing thread)', () => {
     it('should load history messages from the topic and include them in initialMessages', async () => {
       // Simulate existing conversation history in the topic

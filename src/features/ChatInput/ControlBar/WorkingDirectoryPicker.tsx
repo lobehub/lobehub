@@ -29,7 +29,7 @@ import {
   getWorkingDirectoryName,
   getWorkingDirectoryPathString,
 } from '@/helpers/workingDirectoryPath';
-import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
@@ -304,7 +304,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   // Effective config (shared row + this member's device override)
   // so recents / default cwd / the selected-repo label all resolve against the
   // device THIS member's run actually targets.
-  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,

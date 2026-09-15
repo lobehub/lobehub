@@ -4,7 +4,6 @@ import { resolveAgentAgencyConfig } from '@lobechat/types';
 
 import { getRuntimeCanManageAgent } from '@/helpers/agentManagementAccess';
 import { isLocalSandboxEnabled, resolveExecutionTarget } from '@/helpers/executionTarget';
-import { getTopicAgencyConfig } from '@/helpers/topicExecutionConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useUserStore } from '@/store/user';
@@ -57,10 +56,7 @@ const isFenced = (agencyConfig: LobeAgentAgencyConfig | undefined): boolean =>
  * relaxation, by contrast, follows only the resolved reading: it widens what
  * a fenced command can reach, so it must match what the user's picker showed.
  */
-export const resolveClientLocalSandbox = (
-  agentId?: string,
-  topicId?: string | null,
-): ClientLocalSandboxDecision => {
+export const resolveClientLocalSandbox = (agentId?: string): ClientLocalSandboxDecision => {
   if (!isDesktop || !agentId) return unfenced;
 
   const state = useAgentStore.getState();
@@ -75,20 +71,14 @@ export const resolveClientLocalSandbox = (
     currentUserId: userProfileSelectors.userId(userState),
   });
   const context = { visibility: agent?.visibility, workspaceId: agent?.workspaceId ?? undefined };
-  const resolved = getTopicAgencyConfig(
-    resolveAgentAgencyConfig(sharedAgencyConfig, override, {
-      ...context,
-      canManage,
-    }),
-    topicId,
-  );
-  const otherRole = getTopicAgencyConfig(
-    resolveAgentAgencyConfig(sharedAgencyConfig, override, {
-      ...context,
-      canManage: !canManage,
-    }),
-    topicId,
-  );
+  const resolved = resolveAgentAgencyConfig(sharedAgencyConfig, override, {
+    ...context,
+    canManage,
+  });
+  const otherRole = resolveAgentAgencyConfig(sharedAgencyConfig, override, {
+    ...context,
+    canManage: !canManage,
+  });
 
   const fenced = isFenced(resolved) || isFenced(otherRole);
   if (!fenced) return unfenced;

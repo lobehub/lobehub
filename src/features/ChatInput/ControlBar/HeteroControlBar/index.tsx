@@ -19,7 +19,7 @@ import WorkspaceControls from '@/features/ChatInput/ControlBar/WorkspaceControls
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useTopicAgencyConfig } from '@/hooks/useTopicAgencyConfig';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
@@ -142,7 +142,7 @@ const HeteroControlBar = memo(() => {
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
   // Effective config = shared row + this member's device override,
   // so the quota badges gate on where THIS member's run actually executes.
-  const { agencyConfig, workspaceScoped } = useTopicAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
 
   const heteroProvider = agencyConfig?.heterogeneousProvider;
   const executionTarget = resolveExecutionTarget(agencyConfig, {

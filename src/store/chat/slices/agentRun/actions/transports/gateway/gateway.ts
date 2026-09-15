@@ -27,7 +27,6 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import { resolveExecutionTarget, resolveWorkspaceScoped } from '@/helpers/executionTarget';
-import { getTopicAgencyConfig, getTopicWorkspaceScoped } from '@/helpers/topicExecutionConfig';
 import {
   aiAgentService,
   type ResumeApprovalParam,
@@ -112,7 +111,6 @@ const interruptGatewayTaskOrThrow = async (
  */
 const resolveDesktopDeviceHints = async (
   agentId?: string,
-  topicId?: string | null,
 ): Promise<{ deviceId?: string; localDeviceId?: string }> => {
   if (!isDesktop || !agentId) return {};
 
@@ -152,27 +150,20 @@ const resolveDesktopDeviceHints = async (
   const deviceOverride = agent?.workspaceId
     ? userState.workspaceUserPreference.agentDeviceOverrides?.[agentId]
     : undefined;
-  const agencyConfig = getTopicAgencyConfig(
-    resolveAgentAgencyConfig(
-      agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
-      deviceOverride,
-      {
-        canManage,
-        visibility: agent?.visibility,
-        workspaceId: agent?.workspaceId,
-      },
-    ),
-    topicId,
+  const agencyConfig = resolveAgentAgencyConfig(
+    agentByIdSelectors.getAgencyConfigById(agentId)(agentState),
+    deviceOverride,
+    {
+      canManage,
+      visibility: agent?.visibility,
+      workspaceId: agent?.workspaceId,
+    },
   );
   const isPlatformTask = isRemoteHeterogeneousType(agencyConfig?.heterogeneousProvider?.type ?? '');
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: true,
     isHetero: !!agencyConfig?.heterogeneousProvider,
-    workspaceScoped: getTopicWorkspaceScoped(
-      agencyConfig,
-      topicId,
-      resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
-    ),
+    workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
   });
   // Platform hints are capability claims, not routing overrides. Always send
   // this desktop best-effort and let the server's authoritative execution plan
@@ -184,7 +175,7 @@ const resolveDesktopDeviceHints = async (
     if (!info?.deviceId) return {};
     return isPlatformTask
       ? { localDeviceId: info.deviceId }
-      : { deviceId: agencyConfig?.boundDeviceId ?? info.deviceId, localDeviceId: info.deviceId };
+      : { deviceId: info.deviceId, localDeviceId: info.deviceId };
   } catch {
     return {};
   }
@@ -795,10 +786,7 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const desktopDeviceHints = await resolveDesktopDeviceHints(
-      executionContext.agentId,
-      executionContext.topicId,
-    );
+    const desktopDeviceHints = await resolveDesktopDeviceHints(executionContext.agentId);
     const userInterventionConfig = {
       approvalMode: toolInterventionSelectors.approvalMode(useUserStore.getState()),
       allowList: toolInterventionSelectors.allowList(useUserStore.getState()),

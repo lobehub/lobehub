@@ -1,4 +1,3 @@
-import type { ChatTopicMetadata } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -113,7 +112,6 @@ vi.mock('@/database/models/topic', () => ({
       create: mockTopicCreate,
       armScheduledRun: vi.fn().mockResolvedValue(undefined),
       findById: mockTopicFindById,
-      updateMetadata: vi.fn(async (_id: string, metadata: ChatTopicMetadata) => [{ metadata }]),
     };
   }),
 }));

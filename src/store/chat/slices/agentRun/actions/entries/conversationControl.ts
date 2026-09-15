@@ -10,7 +10,6 @@ import {
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
-import { getTopicAgencyConfig } from '@/helpers/topicExecutionConfig';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
@@ -201,12 +200,11 @@ export class ConversationControlActionImpl {
     const agentConfig = context.agentId
       ? agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState())
       : undefined;
-    const agencyConfig = getTopicAgencyConfig(agentConfig?.agencyConfig, context.topicId);
     return (
       selectRuntimeType({
-        boundDeviceId: agencyConfig?.boundDeviceId,
-        executionTarget: agencyConfig?.executionTarget,
-        heterogeneousProvider: agencyConfig?.heterogeneousProvider,
+        boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
+        executionTarget: agentConfig?.agencyConfig?.executionTarget,
+        heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
         isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
       }) === 'gateway'
     );

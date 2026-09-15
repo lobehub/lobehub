@@ -35,7 +35,6 @@ import {
 import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
-import { getTopicAgencyConfig } from '@/helpers/topicExecutionConfig';
 import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
@@ -185,11 +184,6 @@ export class StreamingExecutorActionImpl {
       isSubAgent, // Filter out lobe-agent in sub-agent context
       scope, // Pass scope from operation context
     });
-
-    resolvedAgentConfig.agentConfig = {
-      ...resolvedAgentConfig.agentConfig,
-      agencyConfig: getTopicAgencyConfig(resolvedAgentConfig.agentConfig.agencyConfig, topicId),
-    };
 
     // Resolve the effective model/provider, in precedence order:
     // 1. `modelOverride` — forced by the spawn site (see runClientSubAgent); not

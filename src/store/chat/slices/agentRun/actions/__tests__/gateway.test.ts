@@ -9,7 +9,6 @@ import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import * as serverConfigStore from '@/store/serverConfig';
-import type { ChatTopic } from '@/types/topic';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
@@ -126,16 +125,6 @@ vi.mock('@/store/agent/selectors', () => ({
   },
 }));
 
-// The action is constructed with a test store; Topic routing must not initialize
-// the real singleton (which would recursively construct GatewayActionImpl).
-const mockChatState = vi.hoisted(() => ({
-  topicDataMap: {},
-  topicDetailMap: {} as Record<string, ChatTopic>,
-}));
-vi.mock('@/store/chat', () => ({
-  useChatStore: { getState: () => mockChatState },
-}));
-
 // ─── Mock Client Factory ───
 
 function createMockClient(): GatewayConnection['client'] & {
@@ -190,7 +179,6 @@ function createTestAction() {
 
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
-    mockChatState.topicDetailMap = {};
     moveChatContextSelections.mockClear();
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
@@ -2153,40 +2141,6 @@ describe('GatewayActionImpl', () => {
             localDeviceId: 'device-local-1',
           }),
           expect.anything(),
-        );
-      });
-
-      it('uses the Topic device after the Agent default switches to sandbox', async () => {
-        mockEnv.isDesktop = true;
-        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'this-desktop' });
-        mockChatState.topicDetailMap['topic-1'] = {
-          id: 'topic-1',
-          metadata: {
-            executionConfig: { executionTarget: 'local', boundDeviceId: 'topic-device' },
-          },
-        } as ChatTopic;
-
-        await send();
-
-        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-          expect.objectContaining({ deviceId: 'topic-device', localDeviceId: 'this-desktop' }),
-          expect.anything(),
-        );
-      });
-
-      it('does not activate this desktop when the Topic selects sandbox', async () => {
-        mockEnv.isDesktop = true;
-        mockRuntime.isLocal = true;
-        mockChatState.topicDetailMap['topic-1'] = {
-          id: 'topic-1',
-          metadata: { executionConfig: { executionTarget: 'sandbox' } },
-        } as ChatTopic;
-
-        await send();
-
-        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
-        expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
-          'deviceId',
         );
       });
 

@@ -573,16 +573,7 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
 
       expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBeUndefined();
       expect(topicMock.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          metadata: {
-            boundDeviceId: undefined,
-            executionConfig: {
-              boundDeviceId: undefined,
-              executionTarget: 'sandbox',
-              inheritWorkspaceScope: true,
-            },
-          },
-        }),
+        expect.objectContaining({ metadata: undefined }),
         undefined,
       );
     });

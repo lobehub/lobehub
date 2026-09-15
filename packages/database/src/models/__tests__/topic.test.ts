@@ -1138,24 +1138,6 @@ describe('TopicModel', () => {
   });
 
   describe('updateMetadata', () => {
-    it('does not overwrite a user selection when initializing a legacy topic', async () => {
-      const topic = await topicModel.create({ title: 'execution' });
-      await topicModel.updateMetadata(topic.id, {
-        executionConfig: { executionTarget: 'device', boundDeviceId: 'chosen' },
-      });
-      const [updated] = await topicModel.updateMetadata(
-        topic.id,
-        {
-          executionConfig: { executionTarget: 'sandbox' },
-        },
-        { executionConfigIfAbsent: true },
-      );
-      expect(updated.metadata?.executionConfig).toEqual({
-        executionTarget: 'device',
-        boundDeviceId: 'chosen',
-      });
-    });
-
     it('merges new metadata into existing metadata', async () => {
       const topic = await topicModel.create({
         metadata: { model: 'gpt-4', provider: 'openai' },

@@ -10,11 +10,9 @@ import type {
   HeterogeneousTopicPin,
 } from '@lobechat/types';
 import {
-  applyTopicExecutionConfig,
   ChatErrorType,
   RequestTrigger,
   resolveHeterogeneousProviderTopicModel,
-  snapshotTopicExecutionConfig,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -426,8 +424,10 @@ export const setupTurn = async (
     !!deps.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
   const isFixedDeviceTarget =
     isFixedExecutionTargetSelection && agentConfig.agencyConfig?.executionTarget === 'device';
-  let effectiveRequestedDeviceId = isFixedExecutionTargetSelection ? undefined : requestedDeviceId;
-  let topicBoundDeviceId = isFixedDeviceTarget
+  const effectiveRequestedDeviceId = isFixedExecutionTargetSelection
+    ? undefined
+    : requestedDeviceId;
+  const topicBoundDeviceId = isFixedDeviceTarget
     ? agentConfig.agencyConfig?.boundDeviceId
     : isFixedExecutionTargetSelection
       ? undefined
@@ -472,25 +472,30 @@ export const setupTurn = async (
     // never be attributed afterwards, which is why it is stamped even though
     // nothing filters on it yet.
     const { editingAgentId, editingGroupId } = appContext ?? {};
-    const metadata = {
-      bot: botContext,
-      executionConfig: snapshotTopicExecutionConfig({
-        ...agentConfig.agencyConfig,
-        ...(effectiveRequestedDeviceId && { boundDeviceId: effectiveRequestedDeviceId }),
-      }),
-      boundDeviceId: topicBoundDeviceId,
-      cronJobId: cronJobId || undefined,
-      ...(editingAgentId && { editingAgentId }),
-      ...(editingGroupId && { editingGroupId }),
-      taskId: operationTaskId,
-      ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
-      ...(initialTopicMeta?.workingDirectory && {
-        workingDirectory: initialTopicMeta.workingDirectory,
-      }),
-      ...(initialTopicMeta?.workingDirectoryConfig && {
-        workingDirectoryConfig: initialTopicMeta.workingDirectoryConfig,
-      }),
-    };
+    const metadata =
+      cronJobId ||
+      operationTaskId ||
+      botContext ||
+      topicBoundDeviceId ||
+      initialTopicMeta ||
+      editingGroupId ||
+      editingAgentId
+        ? {
+            bot: botContext,
+            boundDeviceId: topicBoundDeviceId,
+            cronJobId: cronJobId || undefined,
+            ...(editingAgentId && { editingAgentId }),
+            ...(editingGroupId && { editingGroupId }),
+            taskId: operationTaskId,
+            ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
+            ...(initialTopicMeta?.workingDirectory && {
+              workingDirectory: initialTopicMeta.workingDirectory,
+            }),
+            ...(initialTopicMeta?.workingDirectoryConfig && {
+              workingDirectoryConfig: initialTopicMeta.workingDirectoryConfig,
+            }),
+          }
+        : undefined;
 
     const fallbackTitleSource = markdownToTxt(prompt);
     const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
@@ -574,33 +579,6 @@ export const setupTurn = async (
     // `findVisitorTopicOrThrow` in `shareChat.ts` — and must keep working.
     if (!shareGate && existingTopic?.senderId) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
-    }
-
-    if (existingTopic && !shareGate) {
-      let executionConfig = existingTopic.metadata?.executionConfig;
-      if (!executionConfig) {
-        const fallback = snapshotTopicExecutionConfig({
-          ...agentConfig.agencyConfig,
-          ...(effectiveRequestedDeviceId && { boundDeviceId: effectiveRequestedDeviceId }),
-        });
-        const rows = await deps.topicModel.updateMetadata(
-          topicId,
-          { executionConfig: fallback },
-          {
-            executionConfigIfAbsent: true,
-          },
-        );
-        executionConfig = rows?.[0]?.metadata?.executionConfig ?? fallback;
-      }
-      agentConfig.agencyConfig = applyTopicExecutionConfig(
-        agentConfig.agencyConfig,
-        executionConfig,
-      );
-      // A client hint cannot redirect a conversation pinned by another surface.
-      effectiveRequestedDeviceId = isFixedExecutionTargetSelection
-        ? undefined
-        : agentConfig.agencyConfig?.boundDeviceId;
-      topicBoundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
     }
 
     /** A group topic pins its owning agent; member runs keep their own model and effort. */
