@@ -354,6 +354,8 @@ export interface AiProviderDetailItem {
    */
   homeUrl?: string;
   id: string;
+  /** Stable identity for the persisted provider row. */
+  identity?: string;
   keyVaults?: Record<string, any>;
   logo?: string;
   /**

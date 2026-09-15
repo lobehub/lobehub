@@ -62,6 +62,20 @@ describe('AiModelService', () => {
       expect(result.map((model) => model.id)).toEqual(['deepseek-v4-pro']);
     });
   });
+
+  describe('batchUpdateAiModels', () => {
+    it('passes an explicitly forced model type to the server', async () => {
+      const models = [{ enabled: true, id: 'example-model', type: 'chat' as const }];
+
+      await aiModelService.batchUpdateAiModels('example-provider', models, { forceType: 'chat' });
+
+      expect(mockLambdaClient.aiModel.batchUpdateAiModels.mutate).toHaveBeenCalledWith({
+        forceType: 'chat',
+        id: 'example-provider',
+        models,
+      });
+    });
+  });
 });
 
 describe('Default model configuration', () => {
