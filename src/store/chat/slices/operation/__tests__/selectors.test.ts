@@ -169,6 +169,102 @@ describe('Operation Selectors', () => {
     });
   });
 
+  describe('getRunningInputLoadingOperationIds', () => {
+    it('stops a member-owned group run from the supervisor conversation context', () => {
+      const { result } = renderHook(() => useChatStore());
+      const operationContext = {
+        agentId: 'member-agent',
+        groupId: 'group-1',
+        topicId: 'topic-1',
+      };
+      const visibleContext = {
+        agentId: 'supervisor-agent',
+        groupId: 'group-1',
+        scope: 'group' as const,
+        topicId: 'topic-1',
+      };
+      let rootId = '';
+      let childId = '';
+      let otherTopicId = '';
+      let rootSignal: AbortSignal;
+      let childSignal: AbortSignal;
+
+      act(() => {
+        const root = result.current.startOperation({
+          context: operationContext,
+          type: 'execAgentRuntime',
+        });
+        rootId = root.operationId;
+        rootSignal = root.abortController.signal;
+
+        const child = result.current.startOperation({
+          parentOperationId: rootId,
+          type: 'toolCalling',
+        });
+        childId = child.operationId;
+        childSignal = child.abortController.signal;
+
+        otherTopicId = result.current.startOperation({
+          context: { ...operationContext, topicId: 'topic-2' },
+          type: 'execAgentRuntime',
+        }).operationId;
+      });
+
+      expect(messageMapKey(operationContext)).toBe(messageMapKey(visibleContext));
+
+      // This is the field-by-field filter previously used by stopGenerating.
+      // It misses the operation because agentId and scope differ, even though the
+      // input loading state and operation index resolve both contexts to one bucket.
+      let exactFilterMatches: string[] = [];
+      act(() => {
+        exactFilterMatches = result.current.cancelOperations({
+          agentId: visibleContext.agentId,
+          groupId: visibleContext.groupId,
+          scope: visibleContext.scope,
+          status: 'running',
+          topicId: visibleContext.topicId,
+          type: INPUT_LOADING_OPERATION_TYPES,
+        });
+      });
+      expect(exactFilterMatches).toEqual([]);
+      expect(rootSignal!.aborted).toBe(false);
+
+      const operationIds = operationSelectors.getRunningInputLoadingOperationIds(visibleContext)(
+        result.current,
+      );
+      expect(operationIds).toEqual([rootId]);
+
+      act(() => {
+        operationIds.forEach((operationId) => {
+          result.current.cancelOperation(operationId, 'User stopped generation');
+        });
+      });
+
+      expect(rootSignal!.aborted).toBe(true);
+      expect(childSignal!.aborted).toBe(true);
+      expect(result.current.operations[rootId].status).toBe('cancelled');
+      expect(result.current.operations[childId].status).toBe('cancelled');
+      expect(result.current.operations[otherTopicId].status).toBe('running');
+    });
+
+    it('includes a pending automatic retry', () => {
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: 'agent-1', topicId: 'topic-1' };
+      let retryId = '';
+
+      act(() => {
+        retryId = result.current.startOperation({
+          context,
+          type: 'autoRetryPending',
+        }).operationId;
+      });
+
+      expect(
+        operationSelectors.getRunningInputLoadingOperationIds(context)(result.current),
+      ).toEqual([retryId]);
+    });
+  });
+
   describe('getOperationsByType', () => {
     it('should return operations of specific type', () => {
       const { result } = renderHook(() => useChatStore());
