@@ -103,6 +103,12 @@ const startServer = async () => {
   server.listen(port, host, () => {
     console.info(`Hono runtime ready at http://${host}:${port}`);
   });
+
+  // Local queue mode: re-arm heartbeat ticks whose setTimeout timers died
+  // with the previous process. No-op in QStash mode (ticks persist there).
+  void import('@/server/services/taskRunner/heartbeatRecovery')
+    .then((m) => m.scheduleHeartbeatRecoveryOnce())
+    .catch((error) => console.error('[heartbeat-recovery] failed to start:', error));
 };
 
 void startServer().catch((error) => {

@@ -2511,6 +2511,53 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('static findRunnableHeartbeatTasks', () => {
+    it('returns only started (scheduled) heartbeat tasks with a positive interval', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const armed = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 30,
+        instruction: 'Armed',
+        status: 'scheduled',
+      });
+      // Configured but never started: recovery must not auto-start it
+      const neverStarted = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 30,
+        instruction: 'Never started',
+      });
+      // Paused requires user attention
+      const paused = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 30,
+        instruction: 'Paused',
+        status: 'scheduled',
+      });
+      await model.updateStatus(paused.id, 'paused');
+      // Terminal
+      const done = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 30,
+        instruction: 'Completed',
+        status: 'scheduled',
+      });
+      await model.updateStatus(done.id, 'completed', { completedAt: new Date() });
+      // No positive interval
+      await model.create({
+        automationMode: 'heartbeat',
+        instruction: 'No interval',
+        status: 'scheduled',
+      });
+
+      const result = await TaskModel.findRunnableHeartbeatTasks(serverDB);
+      const ids = result.map((t) => t.id);
+      expect(ids).toContain(armed.id);
+      expect(ids).not.toContain(neverStarted.id);
+      expect(ids).not.toContain(paused.id);
+      expect(ids).not.toContain(done.id);
+    });
+  });
+
   describe('updateComment', () => {
     it('should update comment content and editorData', async () => {
       const model = new TaskModel(serverDB, userId);
