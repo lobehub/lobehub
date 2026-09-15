@@ -101,7 +101,7 @@ describe('connect daemon startup', () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).not.toContain('Daemon started');
-    expect(result.stderr).toContain('ConnectionRefused');
+    expect(result.stderr).toContain('Unable to transform response from server');
   }, 15_000);
 
   it('does not report startup readiness before workspace registration succeeds', async () => {
