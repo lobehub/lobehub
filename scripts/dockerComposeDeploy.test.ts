@@ -207,9 +207,9 @@ describe('deploy docker-compose optional Elasticsearch', () => {
     }
   });
 
-  it('keeps the in-network Elasticsearch URL on plain HTTP when setup.sh switches to HTTPS', () => {
+  it('keeps in-network URLs on plain HTTP when setup.sh switches to HTTPS', () => {
     const sedExpression =
-      "'/^#\\{0,1\\} \\{0,1\\}[A-Za-z0-9_]*=/{/ES_URL=/!s|http://|https://|;}' .env";
+      "'/^#\\{0,1\\} \\{0,1\\}[A-Za-z0-9_]*=/{/ES_URL=/!{/DEVICE_GATEWAY_URL=/!s|http://|https://|;};}' .env";
     expect(setupScript).toContain(sedExpression);
     // The rewrite must only touch assignments: the warning comment that tells operators not to
     // pair ES_API_KEY with an http:// URL has to keep saying http://.
@@ -217,12 +217,17 @@ describe('deploy docker-compose optional Elasticsearch', () => {
       const rewritten = envExample
         .split('\n')
         .map((line) =>
-          /^#? ?\w*=/.test(line) && !line.includes('ES_URL=')
+          /^#? ?\w*=/.test(line) &&
+          !line.includes('ES_URL=') &&
+          !line.includes('DEVICE_GATEWAY_URL=')
             ? line.replace('http://', 'https://')
             : line,
         )
         .join('\n');
       expect(rewritten).toContain('# ES_URL=http://elasticsearch:9200\n');
+      // The device gateway is reached by the server over the Compose network, never through TLS.
+      expect(rewritten).toContain('DEVICE_GATEWAY_URL=http://gateway:8788\n');
+      expect(rewritten).toContain('AGENT_GATEWAY_URL=https://localhost:8787\n');
       expect(rewritten).toContain('http:// ');
       expect(rewritten).not.toContain('https:// ');
     }

@@ -21,6 +21,8 @@ services:
       - 'ES_REINDEX_STATE_DIR=/app/.elasticsearch-reindex'
       - 'INTERNAL_APP_URL=http://localhost:3210'
       - 'S3_ENDPOINT=${S3_ENDPOINT}'
+      # S3_ENDPOINT is opened by browsers; server-side S3 requests stay on the Compose network
+      - 'S3_INTERNAL_ENDPOINT=http://rustfs:9000'
       - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
       - 'S3_ENABLE_PATH_STYLE=1'
       - 'S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}'
@@ -32,10 +34,38 @@ services:
       - 'REDIS_URL=redis://redis:6379'
       - 'REDIS_PREFIX=lobechat'
       - 'REDIS_TLS=0'
+      # Gateway Mode: agent runs execute on the server and stream to the browser
+      # through the gateway service below. The browser-facing AGENT_GATEWAY_URL
+      # comes from .env; server-to-gateway traffic stays on the Compose network.
+      - 'ENABLE_AGENT_GATEWAY=1'
+      - 'AGENT_GATEWAY_INTERNAL_URL=http://gateway:8787'
+      - 'AGENT_GATEWAY_SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN:-}'
+      - 'DEVICE_GATEWAY_SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN:-}'
     env_file:
       - .env
     volumes:
       - 'fts-search-reindex-state:/app/.elasticsearch-reindex'
+    restart: always
+    networks:
+      - lobe-network
+
+  # Single-instance LobeHub gateway (https://github.com/lobehub/lobehub-gateway):
+  # - 8787 agent gateway: relays Gateway Mode runs to browsers over WebSocket,
+  #   so AGENT_GATEWAY_URL in .env must be reachable from the browser.
+  # - 8788 device gateway: routes tool calls to devices joined with
+  #   `lh connect --gateway <url>`.
+  # State is kept in memory: runs in flight are lost when this container restarts.
+  gateway:
+    image: ghcr.io/lobehub/lobehub-gateway:0.3.2
+    container_name: lobe-gateway
+    ports:
+      - '${AGENT_GATEWAY_PORT:-8787}:8787'
+      - '${DEVICE_GATEWAY_PORT:-8788}:8788'
+    environment:
+      - 'SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN:-}'
+      # The gateway only reads the public half (kty/alg/n/e) of the key set.
+      - 'JWKS_PUBLIC_KEY=${JWKS_KEY:-}'
+      - 'LOBE_API_BASE_URL=http://lobe:3210'
     restart: always
     networks:
       - lobe-network

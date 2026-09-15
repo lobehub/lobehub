@@ -220,13 +220,23 @@ show_message() {
                 ;;
             esac
         ;;
-        tips_regen_jwks)
+        tips_generating_gateway_secrets)
             case $LANGUAGE in
                 zh_CN)
-                    echo "在完成部署测试后，请前往 https://lobehub.com/zh/docs/self-hosting/environment-variables/auth#jwks_key 生成新的 JWKS_KEY 并替换 .env 中的值，以确保安全性。"
+                    echo "正在生成 JWKS_KEY 与网关 Token（本机没有 Node.js 时会借助 lobehub/lobehub 镜像生成）..."
                 ;;
                 *)
-                    echo "After completing the deployment test, please go to https://lobehub.com/docs/self-hosting/environment-variables/auth#jwks_key to generate a new JWKS_KEY and replace the value in .env to ensure security."
+                    echo "Generating JWKS_KEY and the gateway token (uses the lobehub/lobehub image when Node.js is not installed)..."
+                ;;
+            esac
+        ;;
+        tips_generate_jwks_failed)
+            case $LANGUAGE in
+                zh_CN)
+                    echo "无法生成 JWKS_KEY，请前往 https://lobehub.com/zh/docs/self-hosting/environment-variables/auth#jwks_key 生成后替换 .env 中的值。"
+                ;;
+                *)
+                    echo "Failed to generate JWKS_KEY. Please generate one at https://lobehub.com/docs/self-hosting/environment-variables/auth#jwks_key and replace the value in .env."
                 ;;
             esac
         ;;
@@ -277,10 +287,10 @@ show_message() {
         tips_allow_ports)
             case $LANGUAGE in
                 zh_CN)
-                    echo "请确保服务器以下端口未被占用且能被访问：3210, 9000, 9001"
+                    echo "请确保服务器以下端口未被占用且能被访问：3210, 9000, 9001, 8787, 8788"
                 ;;
                 *)
-                    echo "Please make sure the following ports on the server are not occupied and can be accessed: 3210, 9000, 9001"
+                    echo "Please make sure the following ports on the server are not occupied and can be accessed: 3210, 9000, 9001, 8787, 8788"
                 ;;
             esac
         ;;
@@ -516,6 +526,7 @@ ENV_EXAMPLES=(
 # Default values
 RUSTFS_SECRET_KEY="YOUR_RUSTFS_PASSWORD"
 RUSTFS_HOST="localhost:9000"
+GATEWAY_HOST="localhost:8787"
 PROTOCOL="http"
 
 # If no language is specified, ask the user to choose
@@ -583,8 +594,9 @@ section_configurate_host() {
             PROTOCOL="https"
             # Replace http with https on variable assignments only (commented ones
             # included), so explanatory comments keep their wording, and skip the
-            # in-network Elasticsearch endpoint, which is plain HTTP by design.
-            sed "${SED_INPLACE_ARGS[@]}" '/^#\{0,1\} \{0,1\}[A-Za-z0-9_]*=/{/ES_URL=/!s|http://|https://|;}' .env
+            # in-network Elasticsearch and device gateway endpoints, which are plain
+            # HTTP by design.
+            sed "${SED_INPLACE_ARGS[@]}" '/^#\{0,1\} \{0,1\}[A-Za-z0-9_]*=/{/ES_URL=/!{/DEVICE_GATEWAY_URL=/!s|http://|https://|;};}' .env
         fi
     fi
     
@@ -614,6 +626,10 @@ section_configurate_host() {
             echo "RustFS S3 API" $(show_message "ask_domain" "s3.example.com")
             ask "(s3.example.com)"
             RUSTFS_HOST="$ask_result"
+            # Gateway Mode streams agent runs to the browser over WebSocket
+            echo "Agent Gateway" $(show_message "ask_domain" "gateway.example.com")
+            ask "(gateway.example.com)"
+            GATEWAY_HOST="$ask_result"
         ;;
         1)
             DEPLOY_MODE="ip"
@@ -624,6 +640,7 @@ section_configurate_host() {
             # If user use ip mode, append the port to the host
             LOBE_HOST="${HOST}:3210"
             RUSTFS_HOST="${HOST}:9000"
+            GATEWAY_HOST="${HOST}:8787"
         ;;
         *)
             echo "Invalid deploy mode: $ask_result"
@@ -635,6 +652,8 @@ section_configurate_host() {
     sed "${SED_INPLACE_ARGS[@]}" "s#^APP_URL=.*#APP_URL=$PROTOCOL://$LOBE_HOST#" .env
     # s3 related
     sed "${SED_INPLACE_ARGS[@]}" "s#^S3_ENDPOINT=.*#S3_ENDPOINT=$PROTOCOL://$RUSTFS_HOST#" .env
+    # agent gateway, opened by the browser
+    sed "${SED_INPLACE_ARGS[@]}" "s#^AGENT_GATEWAY_URL=.*#AGENT_GATEWAY_URL=$PROTOCOL://$GATEWAY_HOST#" .env
     
 
     # Check if env modified success
@@ -728,6 +747,47 @@ if [[ "$ask_result" == "y" ]]; then
     section_regenerate_secrets
 fi
 
+# ================================
+# === Generate Gateway Secrets ===
+# ================================
+# The .env template only carries placeholders for these, so they are generated
+# regardless of the answer above. JWKS_KEY must be unique per deployment: the
+# gateway trusts every browser session JWT signed with it.
+generate_jwks_key() {
+    local script='const c=require("crypto");const {privateKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});console.log(JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"}]}))'
+    local key=""
+    if command -v node &> /dev/null ; then
+        key=$(node -e "$script" 2>/dev/null)
+    fi
+    # Fall back to the Node.js runtime inside the LobeHub image
+    if [[ "$key" != '{"keys":'* ]] && command -v docker &> /dev/null ; then
+        key=$(docker run --rm --entrypoint /bin/node lobehub/lobehub -e "$script" 2>/dev/null)
+    fi
+    if [[ "$key" != '{"keys":'* ]]; then
+        return 1
+    fi
+    echo "$key"
+}
+
+section_generate_gateway_secrets() {
+    echo $(show_message "tips_generating_gateway_secrets")
+
+    GATEWAY_SERVICE_TOKEN=$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    if [ -z "$GATEWAY_SERVICE_TOKEN" ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "GATEWAY_SERVICE_TOKEN"
+    else
+        sed "${SED_INPLACE_ARGS[@]}" "s#^GATEWAY_SERVICE_TOKEN=.*#GATEWAY_SERVICE_TOKEN=${GATEWAY_SERVICE_TOKEN}#" .env
+    fi
+
+    JWKS_KEY=$(generate_jwks_key)
+    if [ $? -ne 0 ]; then
+        echo $(show_message "tips_generate_jwks_failed")
+    else
+        sed "${SED_INPLACE_ARGS[@]}" "s#^JWKS_KEY=.*#JWKS_KEY=${JWKS_KEY}#" .env
+    fi
+}
+section_generate_gateway_secrets
+
 section_init_database() {
     if ! command -v docker &> /dev/null ; then
         echo "docker" $(show_message "tips_no_executable")
@@ -771,13 +831,15 @@ section_display_configurated_report() {
     echo $(show_message "security_secrect_regenerate_report")
 
     echo -e "LobeHub: \n  - URL: $PROTOCOL://$LOBE_HOST"
-    echo -e "RustFS: \n  - URL: $PROTOCOL://$RUSTFS_HOST \n  - Username: admin\n  - Password: ${RUSTFS_SECRET_KEY}\n"
+    echo -e "RustFS: \n  - URL: $PROTOCOL://$RUSTFS_HOST \n  - Username: admin\n  - Password: ${RUSTFS_SECRET_KEY}"
+    echo -e "Agent Gateway: \n  - URL: $PROTOCOL://$GATEWAY_HOST\n"
 
     # if user run in domain mode, diplay reverse proxy configuration
     if [[ "$DEPLOY_MODE" == "domain" ]]; then
         echo $(show_message "tips_add_reverse_proxy")
         printf "\n%s\t->\t%s\n" "$LOBE_HOST" "127.0.0.1:3210"
         printf "%s\t->\t%s\n" "$RUSTFS_HOST" "127.0.0.1:9000"
+        printf "%s\t->\t%s\n" "$GATEWAY_HOST" "127.0.0.1:8787 (WebSocket)"
     fi
 
     # Display final message
@@ -785,7 +847,6 @@ section_display_configurated_report() {
     printf "\n%s\n\n" "$(show_message "tips_run_command")"
     print_centered "docker compose up --no-attach searxng" "green"
     printf "\n%s\n" "$(show_message "tips_if_run_normally")"
-    printf "\n%s\n" "$(show_message "tips_regen_jwks")"
     printf "\n%s\n\n" "$(show_message "tips_disable_registration")"
     print_centered "docker compose up -d --no-attach searxng" "green"
     printf "\n%s\n" "$(show_message "tips_if_want_searxng_logs")"

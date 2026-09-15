@@ -72,9 +72,11 @@ export const createStreamEventManager = (): IStreamEventManager => {
     );
   }
 
-  // Wrap with Gateway notifier when configured
-  if (appEnv.AGENT_GATEWAY_URL && appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
-    log('Wrapping with GatewayStreamNotifier (%s)', appEnv.AGENT_GATEWAY_URL);
+  // Wrap with Gateway notifier when configured. Server pushes prefer the internal
+  // URL: the public one is what browsers open, which a container may not reach.
+  const gatewayUrl = appEnv.AGENT_GATEWAY_INTERNAL_URL || appEnv.AGENT_GATEWAY_URL;
+  if (gatewayUrl && appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
+    log('Wrapping with GatewayStreamNotifier (%s)', gatewayUrl);
     // Resolver lets a queue worker (which never ran the member op's init) mirror
     // its stream events onto the supervisor channel by reading the persisted
     // `mirrorToOperationId` from op metadata. Shares the same state manager
@@ -82,7 +84,7 @@ export const createStreamEventManager = (): IStreamEventManager => {
     const stateManager = createAgentStateManager();
     return new GatewayStreamNotifier(
       manager,
-      appEnv.AGENT_GATEWAY_URL,
+      gatewayUrl,
       appEnv.AGENT_GATEWAY_SERVICE_TOKEN,
       async (operationId) => {
         const meta = await stateManager.getOperationMetadata(operationId);
