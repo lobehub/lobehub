@@ -222,6 +222,13 @@ vi.mock('node:os', () => ({
 
 vi.mock('@lobechat/device-gateway-client', () => ({
   GatewayClient: MockGatewayClient,
+  PersistentToolCallExecutor: class {
+    execute = vi.fn(async (_requestId: unknown, run: () => Promise<unknown>) => ({
+      result: await run(),
+      status: 'completed',
+    }));
+  },
+  resolveToolCallExecutionResult: (execution: { result: unknown }) => execution.result,
 }));
 
 vi.mock('@/services/imessageBridgeSrv', () => ({
