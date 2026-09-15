@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
+import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
@@ -123,6 +124,30 @@ describe('createBrowserContextFactProviders', () => {
     });
 
     expect(creds?.map((c) => c.key)).toEqual(['ORG_SECRET']);
+  });
+
+  it('attributes a cached topic to the share visitor so the visibility rule can admit it', async () => {
+    useChatStore.setState({
+      topicDataMap: {
+        agt_1: { items: [{ historySummary: 'sum', id: 'tpc_1', title: 'Mine' }] },
+      },
+    } as any);
+    const visitor = { agentId: 'agt_1', shareId: 'share_1', visitorUserId: 'visitor_1' };
+
+    const cached = await createBrowserContextFactProviders().findTopic!('tpc_1');
+    expect(cached).toMatchObject({ id: 'tpc_1', senderId: undefined });
+
+    const asVisitor = await createBrowserContextFactProviders({ shareVisitor: visitor }).findTopic!(
+      'tpc_1',
+    );
+    expect(asVisitor).toMatchObject({ agentId: 'agt_1', id: 'tpc_1', senderId: 'visitor_1' });
+
+    const { messageService } = await import('@/services/message');
+    const getMessages = vi.spyOn(messageService, 'getMessages').mockResolvedValue([]);
+    await createBrowserContextFactProviders({ shareVisitor: visitor }).listTopicMessages!({
+      id: 'tpc_1',
+    });
+    expect(getMessages).toHaveBeenCalledWith(expect.objectContaining({ agentShareId: 'share_1' }));
   });
 
   it('scopes referenced-topic reads to the executing agent and group', async () => {

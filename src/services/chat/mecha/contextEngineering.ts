@@ -12,7 +12,6 @@ import type {
 import { type ContextSnapshot, gatherContextFacts, runContextEngineering } from '@lobechat/mecha';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
-  type AgentShareVisitorContext,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -46,6 +45,7 @@ import {
   isCanUseVision,
 } from '../helper';
 import {
+  type BrowserShareVisitor,
   createBrowserContextFactProviders,
   resolveBrowserConnectorFeatures,
 } from './contextFactProviders';
@@ -98,7 +98,7 @@ interface ContextEngineeringContext {
    * withhold the creator's documents, onboarding profile and workspace links
    * and resolve topic references against the visitor's own conversations.
    */
-  shareVisitor?: Pick<AgentShareVisitorContext, 'agentId' | 'visitorUserId'>;
+  shareVisitor?: BrowserShareVisitor;
   /**
    * Step context from Agent Runtime
    * Contains latest XML structure updated each step
@@ -271,7 +271,7 @@ export const contextEngineering = async ({
       topicId,
       workspaceId: getActiveWorkspaceId() ?? undefined,
     },
-    createBrowserContextFactProviders({ agentId, groupId }),
+    createBrowserContextFactProviders({ agentId, groupId, shareVisitor }),
   );
 
   // Resolve enabled skills (await: pinned DB skills fetch their content on demand).

@@ -1,6 +1,6 @@
 import { AGENT_PLAN_FILE_TYPE, isDesktop } from '@lobechat/const';
 import type { ContextFactProviders, ContextFactRequest, CredentialSummary } from '@lobechat/mecha';
-import { getActivePluginIds } from '@lobechat/types';
+import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/types';
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -33,6 +33,23 @@ export interface BrowserContextFactSource {
   /** Executing agent, used to scope referenced-topic reads. */
   agentId?: string;
   groupId?: string;
+  /** Present only when the browser answers a share visitor. */
+  shareVisitor?: BrowserShareVisitor;
+}
+
+/**
+ * The visitor context a browser caller can supply. `shareId` routes
+ * referenced-topic reads through the share-authorized message endpoint.
+ */
+export type BrowserShareVisitor = Pick<AgentShareVisitorContext, 'agentId' | 'visitorUserId'> & {
+  shareId?: string;
+};
+
+/** The topic row fields the store carries beyond the `ChatTopic` type. */
+interface StoredTopicOwnership {
+  agentId?: string | null;
+  groupId?: string | null;
+  senderId?: string | null;
 }
 
 /** Which connector families this deployment offers, as the server config reports. */
@@ -63,11 +80,24 @@ const toIsoString = (value: Date | string | null | undefined): string =>
 export const createBrowserContextFactProviders = ({
   agentId,
   groupId,
+  shareVisitor,
 }: BrowserContextFactSource = {}): ContextFactProviders => ({
   findTopic: async (topicId) => {
     const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
     if (!topic) return null;
-    return { historySummary: topic.historySummary, id: topic.id, title: topic.title };
+    const stored = topic as typeof topic & StoredTopicOwnership;
+    return {
+      // A visitor's store only ever holds topics the server already scoped to
+      // this visitor and the shared agent (`shareChat.getTopics` queries by
+      // sender + agent), so a cached topic without explicit ownership columns
+      // is the visitor's own — the shared visibility rule must see it as such.
+      agentId: stored.agentId ?? shareVisitor?.agentId,
+      groupId: stored.groupId,
+      historySummary: topic.historySummary,
+      id: topic.id,
+      senderId: stored.senderId ?? shareVisitor?.visitorUserId,
+      title: topic.title,
+    };
   },
 
   getAgentDefinition: async (targetAgentId) => {
@@ -197,7 +227,14 @@ export const createBrowserContextFactProviders = ({
       .map((file) => ({ name: file.name, size: file.size })),
 
   listTopicMessages: async (topic) => {
-    const msgs = await messageService.getMessages({ agentId, groupId, topicId: topic.id });
+    const msgs = await messageService.getMessages({
+      agentId,
+      // Share rows belong to the creator; a visitor must read through the
+      // share-authorized endpoint or the owner-scoped query comes back empty.
+      agentShareId: shareVisitor?.shareId,
+      groupId,
+      topicId: topic.id,
+    });
     return msgs.map((m) => ({
       content: typeof m.content === 'string' ? m.content : '',
       role: m.role,

@@ -1,3 +1,4 @@
+import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createServerContextFactProviders } from './index';
@@ -112,6 +113,27 @@ describe('createServerContextFactProviders', () => {
         state: {} as never,
       }).listUninstalledBuiltinIds!(),
     ).resolves.toEqual(['lobe-personal-gone']);
+  });
+
+  it('falls back to the default uninstalled seed when the scope was never configured', async () => {
+    getUserSettings.mockResolvedValue({
+      tool: { uninstalledBuiltinTools: ['lobe-personal-gone'] },
+    });
+
+    // A workspace without its own slot gets the seed, never the personal list.
+    await expect(
+      createServerContextFactProviders(source({ origin: { workspaceId: 'ws-new' } }))
+        .listUninstalledBuiltinIds!(),
+    ).resolves.toEqual(defaultUninstalledBuiltinTools);
+
+    getUserSettings.mockResolvedValue({});
+    await expect(
+      createServerContextFactProviders({
+        ctx: { serverDB: {}, userId: 'owner-1' } as never,
+        state: {} as never,
+      }).listUninstalledBuiltinIds!(),
+    ).resolves.toEqual(defaultUninstalledBuiltinTools);
+    expect(defaultUninstalledBuiltinTools.length).toBeGreaterThan(0);
   });
 
   it('returns the app origin and the workspace slug when it resolves', async () => {
