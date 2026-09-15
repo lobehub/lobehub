@@ -691,8 +691,8 @@ describe('UserModel', () => {
         const transactionSpy = vi.spyOn(serverDB, 'transaction').mockImplementation((callback) =>
           transaction(async (tx) => {
             const execute = tx.execute.bind(tx);
-            vi.spyOn(tx, 'execute').mockImplementation(async (...args) => {
-              const result = await execute(...args);
+            vi.spyOn(tx, 'execute').mockImplementation((...args) => {
+              const result = execute(...args);
               elapsed += 60;
               return result;
             });
