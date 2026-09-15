@@ -186,6 +186,29 @@ describe('gatherContextFacts', () => {
       expect(summaries).not.toContain('creator secret');
     });
 
+    it('never enumerates the owner’s agents, providers or plugins for a visitor', async () => {
+      const listRecentAgents = vi.fn(async () => [{ id: 'agt_2', title: 'Owner private' }]);
+      const listEnabledProviders = vi.fn(async () => [{ id: 'openai', models: [], name: 'x' }]);
+      const listCustomPlugins = vi.fn(async () => []);
+
+      const facts = await gatherContextFacts(
+        request({
+          // Auto skill mode and even a leaked tool id must not open the door.
+          enabledToolIds: ['lobe-agent-management'],
+          mentionedAgents: [{ id: 'agt_3', title: 'Mentioned' }] as never,
+          shareVisitor: visitor,
+        }),
+        { listCustomPlugins, listEnabledProviders, listRecentAgents },
+      );
+
+      expect(listRecentAgents).not.toHaveBeenCalled();
+      expect(listEnabledProviders).not.toHaveBeenCalled();
+      expect(listCustomPlugins).not.toHaveBeenCalled();
+      expect(facts.step.agentManagementContext).toEqual({
+        mentionedAgents: [{ id: 'agt_3', title: 'Mentioned' }],
+      });
+    });
+
     it('reads user info for the visitor, not the owner', async () => {
       const getUserInfo = vi.fn(async () => ({ language: 'ja-JP', username: 'v' }));
       await gatherContextFacts(request({ shareVisitor: visitor }), { getUserInfo });

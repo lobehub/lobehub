@@ -364,13 +364,17 @@ const gatherGroupAgentBuilderContext = async (
  *   createAgent / updateAgent.
  * - `mentionedAgents` always: an @-mention must carry delegation context even
  *   when the agent has no agent-management tool.
+ * - nothing owner-scoped for a share visitor: the creator's other agents,
+ *   providers and plugins are theirs, and the share gate has already removed
+ *   the tool that could act on them.
  */
 const gatherAgentManagementContext = async (
   request: ContextFactRequest,
   providers: ContextFactProviders,
 ): Promise<AgentManagementContext | undefined> => {
-  const isEnabled = request.enabledToolIds.includes(AgentManagementIdentifier);
-  const isAutoSkillMode = request.agent.chatConfig?.skillActivateMode !== 'manual';
+  const isVisitor = !!request.shareVisitor;
+  const isEnabled = !isVisitor && request.enabledToolIds.includes(AgentManagementIdentifier);
+  const isAutoSkillMode = !isVisitor && request.agent.chatConfig?.skillActivateMode !== 'manual';
   let context: AgentManagementContext | undefined;
 
   if ((isAutoSkillMode || isEnabled) && providers.listRecentAgents) {
