@@ -1,16 +1,24 @@
 import type { DeviceExecutionTarget, LobeAgentChatConfig, RuntimeEnvMode } from '@lobechat/types';
 
-/** What the run knows about its device, when a device gateway is involved. */
+/**
+ * What the run knows about its device through a device gateway. Present only
+ * when a gateway exists: without one no device can be dispatched, so the
+ * picker never exists regardless of the target.
+ */
 export interface ToolRuleDeviceFacts {
   /** A device was auto-routed for this run. */
   autoActivated?: boolean;
-  /** The run's access policy allows a device at all. */
-  canUseDevice: boolean;
-  /** The run is committed to one device (routed, or bound but offline). */
-  deviceLocked: boolean;
   deviceOnline?: boolean;
   /** Tools the routed device reports supporting (Computer Use opts in). */
   supportedTools?: readonly string[];
+}
+
+/** The run's device policy and plan, independent of whether a gateway exists. */
+export interface ToolRuleDeviceAccess {
+  /** The run's access policy allows a device at all (external senders do not). */
+  canUseDevice: boolean;
+  /** The run is committed to one device (routed, or bound but offline). */
+  deviceLocked: boolean;
 }
 
 /** Everything the tool rules read about the run. Assembled by the host. */
@@ -21,11 +29,17 @@ export interface ToolRuleRequest {
     plugins?: readonly string[] | null;
   };
   /**
-   * Device facts when the run goes through a device gateway. A host without
-   * a gateway (the browser runtime) leaves this out: no device walls apply
-   * and the device picker never exists.
+   * Gateway device facts. A host without a gateway (the browser runtime, a
+   * self-hosted server without one) leaves this out: the device picker never
+   * exists and Computer Use is not gated on device support.
    */
   device?: ToolRuleDeviceFacts;
+  /**
+   * Device policy and plan. A host that resolves an execution plan supplies
+   * it so the walls apply even without a gateway; the browser runtime leaves
+   * it out and applies no walls.
+   */
+  deviceAccess?: ToolRuleDeviceAccess;
   /** Plugin identifiers the agent explicitly disabled. */
   disabledPluginIds?: readonly string[];
   /**

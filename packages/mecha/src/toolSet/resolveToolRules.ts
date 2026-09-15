@@ -27,12 +27,13 @@ const enableAll = (ids: readonly string[]) => Object.fromEntries(ids.map((id) =>
 
 /** The wall parameters for a run's device facts; no device means no walls. */
 export const deviceToolWallParams = (request: ToolRuleRequest): DeviceToolWallParams | undefined =>
-  request.device
+  request.deviceAccess
     ? {
-        canUseDevice: request.device.canUseDevice,
-        deviceLocked: request.device.deviceLocked,
+        canUseDevice: request.deviceAccess.canUseDevice,
+        deviceLocked: request.deviceAccess.deviceLocked,
         disableLocalSystem: request.disableLocalSystem,
-        supportedDeviceTools: request.device.supportedTools,
+        // Only a gateway device can report what it supports.
+        supportedDeviceTools: request.device ? (request.device.supportedTools ?? []) : undefined,
       }
     : undefined;
 
@@ -43,14 +44,14 @@ export const deviceToolWallParams = (request: ToolRuleRequest): DeviceToolWallPa
  * and feed the result to the tools engine's enable checker.
  */
 export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules => {
-  const { agent, device, executionTarget, model } = request;
+  const { agent, device, deviceAccess, executionTarget, model } = request;
   const pinnedPluginIds = agent.plugins ?? [];
   const toolMode = resolveToolMode(agent.chatConfig);
   const runtimeMode = executionTargetToRuntimeMode(executionTarget);
   // Device tools only exist for device-capable targets: `none` means no
   // device, and `sandbox` and devices are mutually exclusive.
   const deviceCapable = executionTarget === 'local' || executionTarget === 'device';
-  const deviceLocked = device?.deviceLocked ?? false;
+  const deviceLocked = deviceAccess?.deviceLocked ?? false;
 
   const searchMode = agent.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = request.useApplicationBuiltinSearchTool ?? searchMode !== 'off';
@@ -99,11 +100,13 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
 
+  // Walls follow the policy and the plan, with or without a gateway; the
+  // Computer Use opt-in is a gateway device's own report.
   const excludedIdentifiers = new Set(request.disabledPluginIds ?? []);
-  if (device) {
-    if (!device.supportedTools?.includes(AuvManifest.identifier))
-      excludedIdentifiers.add(AuvManifest.identifier);
-    if (!device.canUseDevice) {
+  if (device && !device.supportedTools?.includes(AuvManifest.identifier))
+    excludedIdentifiers.add(AuvManifest.identifier);
+  if (deviceAccess) {
+    if (!deviceAccess.canUseDevice) {
       for (const identifier of DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
     } else if (deviceLocked) {
       for (const identifier of REMOTE_DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);

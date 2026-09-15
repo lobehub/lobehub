@@ -210,17 +210,17 @@ export const createServerAgentToolsEngine = (
   // assembles the server's facts.
   const resolved = resolveToolRules({
     agent: { chatConfig: agentConfig.chatConfig, plugins: agentConfig.plugins },
-    // Device facts exist only behind a gateway; a plain server run has no
-    // device and therefore no device picker.
+    // Gateway facts exist only behind a gateway: without one nothing can
+    // dispatch to a device, so the picker never exists. The policy / plan
+    // walls apply either way.
     device: hasDeviceProxy
       ? {
           autoActivated: deviceContext?.autoActivated,
-          canUseDevice,
-          deviceLocked,
           deviceOnline: deviceContext?.deviceOnline,
           supportedTools: deviceContext?.supportedTools ?? [],
         }
-      : { canUseDevice, deviceLocked },
+      : undefined,
+    deviceAccess: { canUseDevice, deviceLocked },
     disableLocalSystem,
     disabledPluginIds,
     executionTarget,

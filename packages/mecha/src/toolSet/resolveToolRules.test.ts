@@ -108,31 +108,42 @@ describe('resolveToolRules', () => {
   });
 
   it('offers the device picker only behind a gateway while a device decision remains', () => {
-    const noGateway = resolveToolRules(request({ executionTarget: 'device' }));
+    // A persisted `device` target on a server without a gateway: the policy
+    // allows a device, but nothing could dispatch to one.
+    const noGateway = resolveToolRules(
+      request({
+        deviceAccess: { canUseDevice: true, deviceLocked: false },
+        executionTarget: 'device',
+      }),
+    );
     expect(noGateway.rules['lobe-remote-device']).toBe(false);
     expect(noGateway.excludedIdentifiers).toEqual(new Set());
 
     const open = resolveToolRules(
-      request({ device: { canUseDevice: true, deviceLocked: false }, executionTarget: 'device' }),
+      request({
+        device: { supportedTools: [AuvManifest.identifier] },
+        deviceAccess: { canUseDevice: true, deviceLocked: false },
+        executionTarget: 'device',
+      }),
     );
     expect(open.rules['lobe-remote-device']).toBe(true);
 
     const locked = resolveToolRules(
-      request({ device: { canUseDevice: true, deviceLocked: true }, executionTarget: 'device' }),
+      request({
+        device: { supportedTools: [AuvManifest.identifier] },
+        deviceAccess: { canUseDevice: true, deviceLocked: true },
+        executionTarget: 'device',
+      }),
     );
     expect(locked.rules['lobe-remote-device']).toBe(false);
     expect(locked.excludedIdentifiers.has('lobe-remote-device')).toBe(true);
     expect(locked.excludedIdentifiers.has('lobe-local-system')).toBe(false);
   });
 
-  it('walls every device tool off for a run whose policy denies devices', () => {
+  it('walls every device tool off for a run whose policy denies devices, gateway or not', () => {
     const denied = resolveToolRules(
       request({
-        device: {
-          canUseDevice: false,
-          deviceLocked: false,
-          supportedTools: [AuvManifest.identifier],
-        },
+        deviceAccess: { canUseDevice: false, deviceLocked: false },
         disabledPluginIds: ['my-plugin'],
         executionTarget: 'none',
       }),
@@ -148,7 +159,11 @@ describe('resolveToolRules', () => {
     );
     // Computer Use also disappears when the routed device does not support it.
     const unsupported = resolveToolRules(
-      request({ device: { canUseDevice: true, deviceLocked: false }, executionTarget: 'local' }),
+      request({
+        device: {},
+        deviceAccess: { canUseDevice: true, deviceLocked: false },
+        executionTarget: 'local',
+      }),
     );
     expect(unsupported.excludedIdentifiers.has(AuvManifest.identifier)).toBe(true);
   });
