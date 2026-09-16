@@ -12,19 +12,25 @@ const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? 'auto' : 
  * Flash a comment card, the same landing treatment a notification deep link
  * gets (see `CommentCard`'s `focusToken` effect).
  *
- * `scroll` is opt-in because the two callers want different things: a deep
- * link has to bring the card into view, while a click in the body must not
- * move the reader's viewport at all.
+ * `scroll: false` requests skipping the scroll a deep link otherwise gets,
+ * for a click in the body whose card sits in a gutter beside the run — but
+ * it's only honoured there; a card with no gutter to sit in can be anywhere
+ * on the page, so it is always scrolled into view or the click would land on
+ * nothing visible.
  */
 export const focusCommentCard = (commentId: string, { scroll = true } = {}): boolean => {
   if (typeof document === 'undefined') return false;
   const card = document.querySelector<HTMLElement>(`[data-document-comment-id="${commentId}"]`);
   if (!card) return false;
 
-  if (scroll) card.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
-  // A card in the panel is already pulled level with its run; a tinted flash
-  // on top of that reads as a second, unrelated highlight.
-  if (card.closest('[data-document-comment-gutter]')) return true;
+  // A card in the panel is already pulled level with its run — a click there
+  // must not move the viewport at all. Without a panel (e.g. AgentDocumentPage's
+  // rightPanel={false}) the same click's card lives in the flat list below the
+  // document, anywhere on the page; `scroll: false` only opts out of the
+  // panel's redundant motion, never out of bringing an off-screen card into view.
+  const inGutter = Boolean(card.closest('[data-document-comment-gutter]'));
+  if (scroll || !inGutter) card.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+  if (inGutter) return true;
   card.classList.add(styles.highlighted);
   setTimeout(() => card.classList.remove(styles.highlighted), LOCATE_FLASH_DURATION);
   return true;
