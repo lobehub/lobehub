@@ -142,9 +142,12 @@ const Composer = memo<ComposerProps>(
     const isGutterComposer = isRootComposer && anchorMode === 'gutter';
     const isPlain = isGutterComposer || plain;
     const adoptsAnchor = isRootComposer && anchorMode !== 'none';
-    // The gutter composer and the document-level composer can be open at the
-    // same time, so each keeps its own draft.
-    const draftScope = parentCommentId ?? (isGutterComposer ? 'anchored' : 'root');
+    // An anchor-adopting composer (gutter or inline) and the document-level
+    // composer beside it can be open at the same time, so each keeps its own
+    // draft; gutter and inline never coexist (inline only exists without a
+    // gutter), so they safely share the same scope across that layout switch
+    // instead of stranding one side's content when it happens.
+    const draftScope = parentCommentId ?? (adoptsAnchor ? 'anchored' : 'root');
     const draftKey = getDraftKey(workspaceId, documentId, draftScope);
     const [draft, setDraft] = useLocalStorageState<Draft>(draftKey, {
       clientId: nanoid(),
