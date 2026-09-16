@@ -18,7 +18,6 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type ChatStreamPayload,
   consumeStreamUntilDone,
-  isRemoteMediaDownloadTimeoutError,
   ModelEmptyError,
   type ModelRuntime,
 } from '@lobechat/model-runtime';
@@ -34,7 +33,8 @@ import {
   chatSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { toAgentShareVisitorIds } from '@lobechat/types';
+import { AgentRuntimeErrorType, toAgentShareVisitorIds } from '@lobechat/types';
+import { toRecord } from '@lobechat/utils';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -59,8 +59,11 @@ const SERVER_LLM_RETRY_POLICY = {
 
 const NETWORK_EMPTY_COMPLETION_MAX_RETRIES = 3;
 const NETWORK_EMPTY_COMPLETION_MAX_ATTEMPTS = NETWORK_EMPTY_COMPLETION_MAX_RETRIES + 1;
-const REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_RETRIES = 3;
+const REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_RETRIES = 1;
 const REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_ATTEMPTS = REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_RETRIES + 1;
+
+const isRemoteMediaDownloadTimeout = (error: unknown) =>
+  toRecord(error)?.errorType === AgentRuntimeErrorType.RemoteMediaDownloadTimeout;
 
 /**
  * A stream that died on the transport before the model produced anything: no
@@ -97,14 +100,14 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
 
   classifyError(error: unknown) {
     const classified = classifyLLMError(error);
-    return isRetryableNetworkEmptyCompletion(error) || isRemoteMediaDownloadTimeoutError(error)
+    return isRetryableNetworkEmptyCompletion(error)
       ? { ...classified, kind: 'retry' as const }
       : classified;
   }
 
   /**
    * The executor fixes the attempt ceiling before any error exists, so it has to
-   * leave room for the error-driven network-empty budget below. Providers that
+   * leave room for the error-driven retry budgets below. Providers that
    * already allow more keep their own ceiling; only a no-retry provider is
    * lifted, and `resolveRetryBudget` still refuses every other error of theirs
    * at the first attempt.
@@ -138,7 +141,7 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
 
   resolveRetryBudget(provider: string, error: unknown) {
     if (isRetryableNetworkEmptyCompletion(error)) return NETWORK_EMPTY_COMPLETION_MAX_RETRIES;
-    if (isRemoteMediaDownloadTimeoutError(error)) {
+    if (isRemoteMediaDownloadTimeout(error)) {
       return REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MAX_RETRIES;
     }
     return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);

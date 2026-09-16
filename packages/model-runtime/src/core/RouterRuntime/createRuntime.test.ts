@@ -954,6 +954,54 @@ describe('createRouterRuntime', () => {
       expect(attemptedKeys).toEqual(['key-1', 'key-2']);
     });
 
+    it('should fallback after a structured remote media download timeout', async () => {
+      const attemptedKeys: string[] = [];
+
+      class RemoteMediaRuntime implements LobeRuntimeAI {
+        private readonly apiKey: string;
+
+        constructor(options: { apiKey: string }) {
+          this.apiKey = options.apiKey;
+        }
+
+        chat = vi.fn().mockImplementation(async () => {
+          attemptedKeys.push(this.apiKey);
+
+          if (this.apiKey === 'key-1') {
+            throw {
+              error: {
+                code: 'invalid_value',
+                message: 'Unable to download content from the provided URL before the timeout.',
+                param: 'url',
+                type: 'invalid_request_error',
+              },
+              errorType: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+              provider: 'azure',
+              status: 400,
+            };
+          }
+
+          return 'success';
+        });
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['gpt-4o'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: RemoteMediaRuntime as any,
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(runtime.chat({ model: 'gpt-4o', messages: [] })).resolves.toBe('success');
+      expect(attemptedKeys).toEqual(['key-1', 'key-2']);
+    });
+
     it('should throw error when options array is empty', async () => {
       const Runtime = createRouterRuntime({
         id: 'test-runtime',

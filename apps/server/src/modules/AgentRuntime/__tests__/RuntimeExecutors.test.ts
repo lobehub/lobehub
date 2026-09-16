@@ -83,13 +83,18 @@ vi.mock('@lobechat/model-runtime', async () => {
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
   const { ModelRefusalError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
-  const { isRemoteMediaDownloadTimeoutError } =
-    await import('../../../../../../packages/model-runtime/src/utils/isNonRetryableRequestError');
   // Same treatment: the reasoning-config merge is pure, and the replay gate
   // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
   // implementation instead of a drifting stub.
   const { resolveEffectiveReasoningChatConfig } =
     await import('../../../../../../packages/model-runtime/src/utils/modelExtendParams');
+  const errorCodeSpecs = {
+    RemoteMediaDownloadTimeout: {
+      code: 'RemoteMediaDownloadTimeout',
+      retryable: true,
+    },
+  };
+
   return {
     // The executor resolves extend params via this helper; an empty result keeps
     // the runtime payload unchanged, matching this suite's pre-existing behavior.
@@ -98,11 +103,12 @@ vi.mock('@lobechat/model-runtime', async () => {
     }),
     resolveEffectiveReasoningChatConfig,
     consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
-    // `llmErrorClassification.ts` reads these at module-load time; an empty
-    // spec map is fine here because this suite never exercises the runtime
-    // retry classifier path.
-    ERROR_CODE_SPECS: {},
-    getErrorCodeSpec: () => undefined,
+    // `llmErrorClassification.ts` reads these at module-load time. Keep the
+    // retryable media-timeout contract available to the executor test below.
+    ERROR_CODE_SPECS: errorCodeSpecs,
+    getErrorCodeSpec: (code: string) =>
+      errorCodeSpecs[code as keyof typeof errorCodeSpecs] as
+        (typeof errorCodeSpecs)[keyof typeof errorCodeSpecs] | undefined,
     isDeepSeekThinkingEligibleModel: (model: string) =>
       typeof model === 'string' &&
       (model.toLowerCase().includes('deepseek-reasoner') ||
@@ -110,7 +116,6 @@ vi.mock('@lobechat/model-runtime', async () => {
     isDeepSeekV4FamilyModel: (model: string) =>
       typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
     isEmptyModelCompletion,
-    isRemoteMediaDownloadTimeoutError,
     isKimiAlwaysPreserveThinkingModel: (model: string) =>
       /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
     ModelEmptyError,
@@ -5563,7 +5568,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       ).toBe(false);
     });
 
-    it('should retry a branding-provider remote media download timeout', async () => {
+    it('should retry a structured branding-provider remote media download timeout once', async () => {
       vi.useFakeTimers();
 
       const mediaDownloadTimeout = {
@@ -5580,7 +5585,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           status: 400,
           type: 'invalid_request_error',
         },
-        errorType: 'ProviderBizError',
+        errorType: 'RemoteMediaDownloadTimeout',
         provider: 'azure',
       };
       const mockChat = vi
@@ -5630,6 +5635,53 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             type: 'stream_retry',
           }),
         );
+        expect(
+          mockStreamManager.publishStreamEvent.mock.calls.filter(
+            ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+          ),
+        ).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should stop after one retry when remote media download timeouts continue', async () => {
+      vi.useFakeTimers();
+
+      const mediaDownloadTimeout = {
+        errorType: 'RemoteMediaDownloadTimeout',
+        message: 'Provider timed out downloading remote media.',
+      };
+      const mockChat = vi.fn().mockRejectedValue(mediaDownloadTimeout);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-6-astra',
+          parentMessageId: 'parent-msg-123',
+          provider: 'lobehub',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      try {
+        const resultPromise = executors.call_llm!(instruction, state);
+        const rejection = expect(resultPromise).rejects.toEqual(mediaDownloadTimeout);
+
+        await vi.runOnlyPendingTimersAsync();
+        await rejection;
+
+        expect(mockChat).toHaveBeenCalledTimes(2);
+        expect(
+          mockStreamManager.publishStreamEvent.mock.calls.filter(
+            ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+          ),
+        ).toHaveLength(1);
       } finally {
         vi.useRealTimers();
       }

@@ -17,7 +17,7 @@ export class ServerBlobStore implements BlobStore {
   }
 
   async resolveUrl(ref: BlobRef) {
-    return this.getFileService().getDirectFileUrl(ref);
+    return this.getFileService().getFileAccessUrl(ref);
   }
 
   private getFileService() {

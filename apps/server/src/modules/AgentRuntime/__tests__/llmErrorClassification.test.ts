@@ -85,6 +85,7 @@ describe('classifyLLMError', () => {
     it.each([
       ['ProviderServiceUnavailable', 'upstream temporarily overloaded'],
       ['ProviderNetworkError', 'connection timed out'],
+      ['RemoteMediaDownloadTimeout', 'provider timed out downloading remote media'],
       ['RateLimitExceeded', 'tokens per minute (TPM)'],
     ])('classifies %s as retry (no HTTP status)', (errorType, message) => {
       expect(classifyLLMError({ errorType, message }).kind).toBe('retry');

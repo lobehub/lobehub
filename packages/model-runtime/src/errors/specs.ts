@@ -367,6 +367,17 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Connection timeout / network drop talking to the provider.',
   },
+  [AgentRuntimeErrorType.RemoteMediaDownloadTimeout]: {
+    code: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+    numericId: 6002,
+    category: 'network',
+    severity: 'warning',
+    attribution: 'system',
+    httpStatus: 504,
+    retryable: true,
+    countAsFailure: false,
+    description: 'Provider timed out while downloading a remote image or file URL.',
+  },
 
   // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
   [AgentRuntimeErrorType.StreamChunkError]: {

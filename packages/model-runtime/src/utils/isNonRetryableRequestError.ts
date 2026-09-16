@@ -11,6 +11,7 @@ const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
   // Avoid amplifying an oversized payload across channels, accepting that proxy limits can differ.
   AgentRuntimeErrorType.RequestBodyTooLarge,
 ]);
+const RETRYABLE_ERROR_TYPES = new Set<string>([AgentRuntimeErrorType.RemoteMediaDownloadTimeout]);
 const RETRYABLE_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
 const RETRYABLE_ERROR_CODES = new Set([
   'accountdeactivated',
@@ -54,10 +55,6 @@ const RETRYABLE_MESSAGE_PATTERNS = [
   'timed out',
   'too many requests',
   'unauthorized',
-];
-
-const REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MESSAGE_PATTERNS = [
-  'unable to download content from the provided url before the timeout',
 ];
 
 const IMAGE_DECODING_MESSAGE_PATTERNS = [
@@ -173,24 +170,6 @@ const collectStatusCodes = (
   return result;
 };
 
-const hasRemoteMediaDownloadTimeout = (combined: string) =>
-  REMOTE_MEDIA_DOWNLOAD_TIMEOUT_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern));
-
-/**
- * Detects a provider-side timeout while it fetches a remote image or file URL.
- * Azure labels this transient fetch failure as `400 invalid_value`, although the
- * same public URL can succeed on a later attempt.
- *
- * @see https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/gpt-with-vision
- */
-export const isRemoteMediaDownloadTimeoutError = (error: unknown): boolean => {
-  const combined = collectErrorStrings(error)
-    .map((value) => value.toLowerCase())
-    .join('\n');
-
-  return hasRemoteMediaDownloadTimeout(combined);
-};
-
 export const isImageDecodingRequestError = (error: unknown): boolean => {
   const combined = collectErrorStrings(error)
     .map((value) => value.toLowerCase())
@@ -205,7 +184,10 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
 
   if (error && typeof error === 'object') {
     const errorType = (error as { errorType?: unknown }).errorType;
-    if (typeof errorType === 'string' && NON_RETRYABLE_ERROR_TYPES.has(errorType)) return true;
+    if (typeof errorType === 'string') {
+      if (RETRYABLE_ERROR_TYPES.has(errorType)) return false;
+      if (NON_RETRYABLE_ERROR_TYPES.has(errorType)) return true;
+    }
   }
 
   if (isErrorCausedByContentFilter(error)) return true;
@@ -218,13 +200,9 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
 
   if (normalizedStrings.some((value) => RETRYABLE_ERROR_CODES.has(value))) return false;
 
-  const combined = normalizedStrings.join('\n');
-  // Provider media fetching happens before inference and can recover without
-  // changing the request. It must outrank generic `invalid_value` / 400 labels.
-  if (hasRemoteMediaDownloadTimeout(combined)) return false;
-
   if (normalizedStrings.some((value) => NON_RETRYABLE_ERROR_CODES.has(value))) return true;
 
+  const combined = normalizedStrings.join('\n');
   if (RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
   if (NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return true;
 

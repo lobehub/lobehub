@@ -127,51 +127,10 @@ export const createStreamExecutionError = (errorData: unknown) => {
   return error;
 };
 
-const resolveProviderImageUrls = async (
-  chatPayload: ChatStreamPayload,
-  blobStore?: BlobStore,
-): Promise<ChatStreamPayload> => {
-  if (!blobStore) return chatPayload;
-
-  let changed = false;
-  const messages = await Promise.all(
-    chatPayload.messages.map(async (message) => {
-      if (!Array.isArray(message.content)) return message;
-
-      const content = await Promise.all(
-        message.content.map(async (part) => {
-          if (part.type !== 'image_url' || !/^https?:\/\//i.test(part.image_url.url)) return part;
-
-          try {
-            const url = await blobStore.resolveUrl({ url: part.image_url.url });
-            if (!url || url === part.image_url.url) return part;
-
-            changed = true;
-            return { ...part, image_url: { ...part.image_url, url } };
-          } catch (error) {
-            // Keep the stable proxy as a fallback when direct URL resolution is
-            // unavailable; the provider may still support the redirect itself.
-            console.error(
-              'Failed to resolve a direct provider image URL:',
-              error instanceof Error ? error.name : typeof error,
-            );
-            return part;
-          }
-        }),
-      );
-
-      return { ...message, content };
-    }),
-  );
-
-  return changed ? { ...chatPayload, messages } : chatPayload;
-};
-
 export class ServerCallLlmAttempt {
   private answerSalvagedFromReasoning = false;
   private readonly attempt: number;
   private readonly base64ImageEvents: Base64ImageData[] = [];
-  private readonly blobStore?: BlobStore;
   private readonly chatPayload: ChatStreamPayload;
   private completion?: OnFinishData;
   private readonly contentPartEvents: ContentPartData[] = [];
@@ -221,7 +180,6 @@ export class ServerCallLlmAttempt {
     userAgent,
   }: CreateServerCallLlmAttemptInput) {
     this.attempt = attempt;
-    this.blobStore = blobStore;
     this.chatPayload = chatPayload;
     this.ctx = ctx;
     this.maxAttempts = maxAttempts;
@@ -282,8 +240,7 @@ export class ServerCallLlmAttempt {
       this.chatPayload.tools?.length ?? 0,
     );
 
-    const chatPayload = await resolveProviderImageUrls(this.chatPayload, this.blobStore);
-    const response = await this.modelRuntime.chat(chatPayload, {
+    const response = await this.modelRuntime.chat(this.chatPayload, {
       callback: {
         onBase64Image: async ({ image }) => {
           this.onFirstChunk();
