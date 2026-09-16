@@ -344,6 +344,25 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     expect(fake.inserted.get(expertiseLessons)?.[0].exampleCount).toBe(1);
   });
 
+  it('stores what a standard rests on as columns, not as prose in its body', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [
+      observation({
+        reasonKind: 'taste',
+        reasonSource: 'inferred',
+        reasoning: '属主不接受多余分割线',
+      }),
+    ]);
+
+    const lesson = fake.inserted.get(expertiseLessons)?.[0];
+    // The compile step refuses to compile taste, and it cannot do that by matching a phrase: the
+    // body is written in whatever language the reviewer used.
+    expect(lesson).toMatchObject({ reasonKind: 'taste', reasonSource: 'inferred' });
+    expect(
+      (lesson?.sections as { body: string; key: string }[]).find((s) => s.key === 'why'),
+    ).toEqual({ body: '属主不接受多余分割线', key: 'why' });
+  });
+
   it('keeps the limits section only when the model stated one', async () => {
     const withLimits = createTx([]);
     await persistRun(withLimits, [observation({ limits: 'Not inside chart internals' })]);

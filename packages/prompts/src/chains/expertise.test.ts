@@ -117,6 +117,22 @@ describe('chainExpertiseRejectionIngestion', () => {
 });
 
 describe('chainExpertiseRejectionIngestion reason provenance', () => {
+  it('lets a standard admit it is taste instead of fabricating a mechanism', () => {
+    // Not every standard has a mechanism under it. Forced to find one, the model returns a synonym
+    // of the objection — "visual noise" for "untidy" — which reads as objective and would be
+    // enforced as if it were. Turning that failure into the detector split the same replayed round
+    // into 4 mechanism / 3 taste, and the 3 are exactly the ones that used to fake a mechanism.
+    const system = chainExpertiseRejectionIngestion({ domains: [], rejections: '' }).messages[0]
+      .content as string;
+
+    expect(system).toContain('Use your own failure as the detector');
+    expect(system).toContain('A fabricated mechanism is worse than an admitted preference');
+    // A taste reason still has to tell the next delivery what to do instead.
+    expect(system).toContain(
+      'State the preference plainly and in a form the next delivery can act on',
+    );
+  });
+
   it('judges a reason by whether it can settle a case the round never described', () => {
     // "Harms visual tidiness" is the objection in nicer words — tidiness is the judgement under
     // review, so it settles nothing. Naming the transfer test moved 5 of 7 reasons from verdict

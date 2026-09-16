@@ -52,6 +52,7 @@ const VISUAL_REJECTION_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
 
 /** Normalized 0-1 region coordinates read better to a model as percentages. */
 const pct = (value: number) => `${Math.round(value * 100)}%`;
+
 const LESSON_CODE_PATTERN = /^P-\d+$/;
 const AnalysisSchema = z.object({
   domains: z.array(
@@ -92,6 +93,7 @@ const RejectionAnalysisSchema = z.object({
             existingLessonCode: z.string(),
             layer: z.string(),
             limits: z.string(),
+            reasonKind: z.enum(['mechanism', 'taste']),
             reasoning: z.string(),
             reasonSource: z.enum(['reviewer', 'inferred']),
             sourceRefs: z.array(z.string()),
@@ -167,6 +169,13 @@ interface PersistableObservation {
   limits?: string | null;
   outcome: 'pass' | 'violation';
   reasoning: string;
+  /**
+   * Whether the standard rests on something observable or on the owner's preference. A taste
+   * standard is legitimate — a reviewer is allowed to just want things a certain way — but it has
+   * no objective test, so the compile step must not turn it into a criterion that blocks a
+   * delivery on its own.
+   */
+  reasonKind?: 'mechanism' | 'taste';
   /**
    * Whether the reviewer gave the reason or the distillation supplied the mechanism. An inferred
    * reason is still worth keeping — it is what lets a standard transfer to a screen nobody has
@@ -833,6 +842,10 @@ export class ExpertiseIngestionService {
             lastHitRunId: runId,
             originRunId: runId,
             polarity: 'rule',
+            // Columns, not a sentence appended to the body: the compile step has to be able to
+            // refuse a taste standard, and the body is written in the reviewer's own language.
+            reasonKind: observation.reasonKind,
+            reasonSource: observation.reasonSource,
             sections: [
               {
                 body: observation.subject?.trim()
@@ -840,13 +853,7 @@ export class ExpertiseIngestionService {
                   : observation.title,
                 key: 'rule' as const,
               },
-              {
-                body:
-                  observation.reasonSource === 'inferred'
-                    ? `${observation.reasoning}\n\n（原因为推断，评审者未说明）`
-                    : observation.reasoning,
-                key: 'why' as const,
-              },
+              { body: observation.reasoning, key: 'why' as const },
               { body: observation.example, key: 'how' as const },
               ...(observation.limits?.trim()
                 ? [{ body: observation.limits.trim(), key: 'limits' as const }]

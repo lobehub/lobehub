@@ -212,6 +212,11 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   existingLessonCode: { type: 'string' },
                   layer: { type: 'string' },
                   limits: { type: 'string' },
+                  // Whether the standard rests on something observable or on the owner's
+                  // preference. Orthogonal to `reasonSource` (who supplied the reason) and load
+                  // bearing downstream: a taste standard has no objective test, so it must not be
+                  // compiled into a criterion that blocks a delivery on its own.
+                  reasonKind: { enum: ['mechanism', 'taste'], type: 'string' },
                   reasoning: { type: 'string' },
                   // Self-classified provenance. The model may explain the mechanism — that is what
                   // makes a standard transferable — but an explanation it invented must never read
@@ -228,6 +233,7 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   'existingLessonCode',
                   'layer',
                   'limits',
+                  'reasonKind',
                   'reasonSource',
                   'reasoning',
                   'sourceRefs',
@@ -280,6 +286,9 @@ For each observation return:
   The mechanism is what lets a standard transfer to a screen nobody has built yet, so judge your own sentence by exactly that: could someone facing a situation this round never described settle it using your reason alone? If not, you have not written a mechanism. Restating the objection in more flattering words always fails this test — "harms visual tidiness", "feels inelegant", "hurts consistency", "adds cognitive load" are verdicts wearing a reason's clothes, because tidiness and elegance are the very judgement in question. Replace every such phrase with the observable consequence underneath it: what does a person fail to see, misread, mis-click, or have to do twice?
 
   Write the mechanism even when the reviewer only pointed at something — that is what reasonSource is for;
+- reasonKind — "mechanism" when the reason above survives that transfer test, "taste" when it does not. Not every standard has a mechanism underneath it, and that is legitimate: some of what a reviewer requires is simply what they prefer. Use your own failure as the detector — if the only reason you can produce is a synonym of the objection ("untidy", "visual noise", "inelegant", "not clean"), stop trying and answer "taste".
+
+  For "taste", do not dress the verdict up. State the preference plainly and in a form the next delivery can act on: "the owner does not accept dividers that were not asked for; regions are separated by spacing and container edges alone" is a complete and honest reason. A fabricated mechanism is worse than an admitted preference, because it reads as objective and gets enforced as if it were;
 - reasonSource — where that reason came from, decided by one test you can actually run: does the reviewer's own text state a consequence or a cause, not just an instruction? "the cyan is too light, I can't see it" states a consequence → "reviewer". "put it in one row, annotations left, actions right" and "there's an extra line here" are instructions with no cause → "inferred", however obvious the cause seems. So is "this is ugly" / "this is wrong" / "this doesn't work". When in doubt answer "inferred": over-claiming the reviewer said something is the one failure this field exists to prevent, and under-claiming costs nothing;
 - example — how it showed up this time, concretely enough to recognise again;
 - limits — the boundary THE REVIEWER drew. Fill it only when they said where the standard stops, or when another rejection in this same round contradicts it. Otherwise answer exactly "边界未由评审者说明" (or the same sentence in their language). An invented exemption is worse than an empty one: it silently narrows a standard the reviewer stated without limit;
