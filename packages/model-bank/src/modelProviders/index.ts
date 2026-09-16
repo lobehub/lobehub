@@ -49,6 +49,7 @@ import NebiusProvider from './nebius';
 import NewAPIProvider from './newapi';
 import NovitaProvider from './novita';
 import NvidiaProvider from './nvidia';
+import OfoxAIProvider from './ofoxai';
 import OllamaProvider from './ollama';
 import OllamaCloudProvider from './ollamacloud';
 import OpenAIProvider from './openai';
@@ -222,6 +223,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   ReplicateProvider,
   NebiusProvider,
   CometAPIProvider,
+  OfoxAIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
   ZenMuxProvider,
@@ -305,6 +307,7 @@ export { default as NebiusProviderCard } from './nebius';
 export { default as NewAPIProviderCard } from './newapi';
 export { default as NovitaProviderCard } from './novita';
 export { default as NvidiaProviderCard } from './nvidia';
+export { default as OfoxAIProviderCard } from './ofoxai';
 export { default as OllamaProviderCard } from './ollama';
 export { default as OllamaCloudProviderCard } from './ollamacloud';
 export { default as OpenAIProviderCard } from './openai';
