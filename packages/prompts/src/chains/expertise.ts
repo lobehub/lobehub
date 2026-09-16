@@ -188,7 +188,7 @@ export const chainExpertiseTopicIngestion = (input: {
   ],
 });
 
-export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v2';
+export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v3';
 
 export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
   name: 'expertise_rejection_ingestion',
@@ -213,6 +213,10 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   layer: { type: 'string' },
                   limits: { type: 'string' },
                   reasoning: { type: 'string' },
+                  // Self-classified provenance. The model may explain the mechanism — that is what
+                  // makes a standard transferable — but an explanation it invented must never read
+                  // as something the reviewer stated.
+                  reasonSource: { enum: ['reviewer', 'inferred'], type: 'string' },
                   sourceRefs: { items: { type: 'string' }, minItems: 1, type: 'array' },
                   // Naming the abstracted subject is what forces the climb: a model that cannot
                   // say what the concrete thing is an example of has not generalized at all.
@@ -224,6 +228,7 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   'existingLessonCode',
                   'layer',
                   'limits',
+                  'reasonSource',
                   'reasoning',
                   'sourceRefs',
                   'subject',
@@ -270,7 +275,8 @@ Attaching to an existing lesson is the default; a new lesson is the exception:
 For each observation return:
 - title — the standard as one imperative sentence, stated about \`subject\` rather than about the screen it happened on;
 - subject — what the standard is really about, once the concrete names are replaced by what they exemplify;
-- reasoning — the reviewer's own reason, and ONLY theirs. Quote or paraphrase what they wrote. If they gave no reason — and "this is ugly", "this is wrong", "this doesn't work" are not reasons — answer exactly "评审者未说明理由" (or the same sentence in the language they used). Never supply a rationale from design common sense: a reason you invented will later be enforced as if the reviewer had said it;
+- reasoning — WHY this standard holds: the mechanism, not a restatement of the complaint. "A pale line disappears against a white background, so the reader cannot tell which region was circled" is a reason; "the reviewer said the cyan is too light" is not — it is the evidence, and it already lives elsewhere. The mechanism is what lets the standard transfer to a screen nobody has built yet, so write it even when the reviewer only pointed;
+- reasonSource — where that reason came from, decided by one test you can actually run: does the reviewer's own text state a consequence or a cause, not just an instruction? "the cyan is too light, I can't see it" states a consequence → "reviewer". "put it in one row, annotations left, actions right" and "there's an extra line here" are instructions with no cause → "inferred", however obvious the cause seems. So is "this is ugly" / "this is wrong" / "this doesn't work". When in doubt answer "inferred": over-claiming the reviewer said something is the one failure this field exists to prevent, and under-claiming costs nothing;
 - example — how it showed up this time, concretely enough to recognise again;
 - limits — the boundary THE REVIEWER drew. Fill it only when they said where the standard stops, or when another rejection in this same round contradicts it. Otherwise answer exactly "边界未由评审者说明" (or the same sentence in their language). An invented exemption is worse than an empty one: it silently narrows a standard the reviewer stated without limit;
 - sourceRefs — the reference labels (for example "R2") of every rejection supporting it. Never invent a label that is not listed.

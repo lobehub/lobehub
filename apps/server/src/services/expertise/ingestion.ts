@@ -93,6 +93,7 @@ const RejectionAnalysisSchema = z.object({
             layer: z.string(),
             limits: z.string(),
             reasoning: z.string(),
+            reasonSource: z.enum(['reviewer', 'inferred']),
             sourceRefs: z.array(z.string()),
             subject: z.string(),
             title: z.string(),
@@ -166,6 +167,13 @@ interface PersistableObservation {
   limits?: string | null;
   outcome: 'pass' | 'violation';
   reasoning: string;
+  /**
+   * Whether the reviewer gave the reason or the distillation supplied the mechanism. An inferred
+   * reason is still worth keeping — it is what lets a standard transfer to a screen nobody has
+   * built yet — but it must never read as something the reviewer said, because the compile step
+   * downstream turns a lesson's reason into an enforced criterion.
+   */
+  reasonSource?: 'inferred' | 'reviewer';
   /**
    * The rejections this observation was distilled from. One standard can be violated several
    * times in a single round, and each violation is its own hit — that is what makes "sourced from
@@ -832,7 +840,13 @@ export class ExpertiseIngestionService {
                   : observation.title,
                 key: 'rule' as const,
               },
-              { body: observation.reasoning, key: 'why' as const },
+              {
+                body:
+                  observation.reasonSource === 'inferred'
+                    ? `${observation.reasoning}\n\n（原因为推断，评审者未说明）`
+                    : observation.reasoning,
+                key: 'why' as const,
+              },
               { body: observation.example, key: 'how' as const },
               ...(observation.limits?.trim()
                 ? [{ body: observation.limits.trim(), key: 'limits' as const }]

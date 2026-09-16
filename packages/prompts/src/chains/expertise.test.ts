@@ -115,3 +115,19 @@ describe('chainExpertiseRejectionIngestion', () => {
     expect(result.messages[1].content).toContain('(none)');
   });
 });
+
+describe('chainExpertiseRejectionIngestion reason provenance', () => {
+  it('gives reasonSource a test the model can run, not a judgement call', () => {
+    // Asking for "did the reviewer say why" produced 3 of 7 marked `reviewer` on rejections that
+    // were pure instructions ("put it in one row", "there's an extra line here"). Naming the
+    // observable — a stated consequence or cause — fixed all three, so the wording is the fix.
+    const system = chainExpertiseRejectionIngestion({ domains: [], rejections: '' }).messages[0]
+      .content as string;
+
+    expect(system).toContain("does the reviewer's own text state a consequence or a cause");
+    expect(system).toContain('When in doubt answer "inferred"');
+    // The mechanism must still be written even when the reviewer only pointed — a reason-free
+    // lesson cannot transfer to a screen nobody has built yet.
+    expect(system).toContain('so write it even when the reviewer only pointed');
+  });
+});
