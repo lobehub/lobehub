@@ -23,6 +23,12 @@ export interface Action {
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
   setCommentsPanelOpen: (open: boolean) => void;
+  /**
+   * The store outlives a document switch (the resource manager swaps `pageId`
+   * on a mounted PageEditor), so a panel left open on the previous document
+   * would otherwise show the next one's gutter with nothing selected.
+   */
+  setDocumentId: (documentId: string | undefined) => void;
   setEmoji: (emoji: string | undefined) => void;
   /**
    * Mirror the lock health from {@link useEditLock} into the store so banners and
@@ -193,6 +199,13 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
 
       setCommentsPanelOpen: (commentsPanelOpen) => {
         if (get().commentsPanelOpen !== commentsPanelOpen) set({ commentsPanelOpen });
+      },
+
+      setDocumentId: (documentId) => {
+        if (get().documentId === documentId) return;
+        // A restored anchored draft or a fresh pick reopens it for the new
+        // document; nothing here to show it for should not carry over.
+        set({ commentsPanelOpen: false, documentId });
       },
 
       setEmoji: (emoji: string | undefined) => {
