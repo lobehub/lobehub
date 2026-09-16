@@ -146,6 +146,9 @@ describe('isSafeSandboxCwd', () => {
     expect(isSafeSandboxCwd('a')).toBe(true);
     // A space is a legal directory name, not something to tidy away.
     expect(isSafeSandboxCwd('my notes/draft 1')).toBe(true);
+    // Only the TOP-level `.sandbox` is reserved — one the user made deeper in
+    // their own tree is an ordinary directory.
+    expect(isSafeSandboxCwd('projects/.sandbox')).toBe(true);
     // Interior whitespace is an ordinary directory name, not a hazard.
     expect(isSafeSandboxCwd('a b/c d')).toBe(true);
   });
@@ -171,6 +174,10 @@ describe('isSafeSandboxCwd', () => {
       'drafts ',
       ' drafts',
       'projects/atlas ',
+      // The platform's own state lives here; a working directory pointed at it
+      // would let an agent trample the store its environment is restored from.
+      '.sandbox',
+      '.sandbox/envs',
       'x'.repeat(1025),
     ]) {
       expect(isSafeSandboxCwd(value)).toBe(false);
