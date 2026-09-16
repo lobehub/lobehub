@@ -10,6 +10,8 @@ import {
   getGitWorkingTreePatches,
   getGitWorkingTreeStatus,
   getLinkedPullRequest,
+  getPullRequestDetail,
+  type GitPullRequestAction,
   listGitBranches,
   listGitRemoteBranches,
   listGitWorktrees,
@@ -18,6 +20,7 @@ import {
   removeGitWorktree,
   renameGitBranch,
   revertGitFile,
+  runPullRequestAction,
 } from '@lobechat/local-file-shell/git';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
@@ -69,6 +72,8 @@ export const DEVICE_RPC_METHODS = [
   'writeLocalFile',
   'getGitBranch',
   'getLinkedPullRequest',
+  'getPullRequestDetail',
+  'runPullRequestAction',
   'getGitWorkingTreeStatus',
   'getGitWorkingTreeFiles',
   'getGitWorkingTreePatches',
@@ -199,6 +204,16 @@ export const executeDeviceRpc = async (
     case 'getLinkedPullRequest': {
       return getLinkedPullRequest(
         params as { branch: string; path: string; pullRequestNumber?: number },
+      );
+    }
+
+    case 'getPullRequestDetail': {
+      return getPullRequestDetail(params as { number: number; path: string });
+    }
+
+    case 'runPullRequestAction': {
+      return runPullRequestAction(
+        params as { action: GitPullRequestAction; number: number; path: string },
       );
     }
 

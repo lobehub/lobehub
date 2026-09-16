@@ -860,6 +860,15 @@ export const deviceKeys = {
       ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
     ],
   ),
+  gitPullRequestDetail: def(
+    'device:gitPullRequestDetail',
+    (deviceId: string, path: string, number: number) => [
+      'device:gitPullRequestDetail',
+      deviceId,
+      path,
+      number,
+    ],
+  ),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
     deviceId,

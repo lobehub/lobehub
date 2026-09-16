@@ -9,6 +9,9 @@ import {
   type GitDeleteBranchResult,
   type GitFileRevertResult,
   type GitLinkedPullRequestResult,
+  type GitPullRequestAction,
+  type GitPullRequestActionResult,
+  type GitPullRequestDetailResult,
   type GitPullResult,
   type GitPushResult,
   type GitRemoteBranchListItem,
@@ -46,6 +49,21 @@ class ElectronGitService {
     pullRequestNumber?: number;
   }): Promise<GitLinkedPullRequestResult> {
     return this.ipc.git.getLinkedPullRequest(params);
+  }
+
+  async getPullRequestDetail(params: {
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestDetailResult> {
+    return this.ipc.git.getPullRequestDetail(params);
+  }
+
+  async runPullRequestAction(params: {
+    action: GitPullRequestAction;
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestActionResult> {
+    return this.ipc.git.runPullRequestAction(params);
   }
 
   async listGitBranches(dirPath: string): Promise<GitBranchListItem[]> {

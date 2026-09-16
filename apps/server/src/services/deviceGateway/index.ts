@@ -23,6 +23,9 @@ import type {
   DeviceGitDeleteBranchResult,
   DeviceGitFileRevertResult,
   DeviceGitLinkedPullRequestResult,
+  DeviceGitPullRequestAction,
+  DeviceGitPullRequestActionResult,
+  DeviceGitPullRequestDetailResult,
   DeviceGitRemoteBranchListItem,
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
@@ -457,6 +460,24 @@ export class DeviceGateway {
     });
   }
 
+  /** Full detail of a pull request in a directory on a remote device. */
+  gitPullRequestDetail(params: {
+    deviceId: string;
+    number: number;
+    path: string;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<DeviceGitPullRequestDetailResult>(
+      'getPullRequestDetail',
+      { ...params, timeout: 20_000 },
+      {
+        number: params.number,
+        path: params.path,
+      },
+    );
+  }
+
   /** Working-tree dirty-file counts for a directory on a remote device. */
   gitWorkingTreeStatus(params: {
     deviceId: string;
@@ -846,6 +867,42 @@ export class DeviceGateway {
     } catch (error) {
       log('pushGitBranch: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Push failed', success: false };
+    }
+  }
+
+  /**
+   * Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a
+   * directory on a remote device via the `runPullRequestAction` device RPC.
+   * Merge can take a while, so it gets the same 65s budget as push/pull.
+   */
+  async runGitPullRequestAction(params: {
+    action: DeviceGitPullRequestAction;
+    deviceId: string;
+    number: number;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceGitPullRequestActionResult> {
+    const { userId, deviceId, path, number, action, timeout = 65_000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitPullRequestActionResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'runPullRequestAction', params: { action, number, path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('runGitPullRequestAction: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Pull request action failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('runGitPullRequestAction: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Pull request action failed', success: false };
     }
   }
 

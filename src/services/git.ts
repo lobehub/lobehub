@@ -13,6 +13,9 @@ import type {
   DeviceGitDeleteBranchResult,
   DeviceGitLinkedPullRequest,
   DeviceGitLinkedPullRequestLookupStatus,
+  DeviceGitPullRequestAction,
+  DeviceGitPullRequestActionResult,
+  DeviceGitPullRequestDetailResult,
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
@@ -229,6 +232,41 @@ class GitService {
       pullRequestStatus: pr.status,
       upstream: pr.upstream,
     };
+  }
+
+  /** Full detail of a pull request in a working directory. */
+  async getPullRequestDetail({
+    deviceId,
+    number,
+    path,
+  }: {
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestDetailResult> {
+    return deviceId
+      ? ((await lambdaClient.device.gitPullRequestDetail.query({ deviceId, number, path })) ?? {
+          detail: null,
+          status: 'error',
+        })
+      : electronGitService.getPullRequestDetail({ number, path });
+  }
+
+  /** Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a pull request. */
+  async runPullRequestAction({
+    action,
+    deviceId,
+    number,
+    path,
+  }: {
+    action: DeviceGitPullRequestAction;
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestActionResult> {
+    return deviceId
+      ? lambdaClient.device.runGitPullRequestAction.mutate({ action, deviceId, number, path })
+      : electronGitService.runPullRequestAction({ action, number, path });
   }
 
   /** Working-tree dirty-file counts for a working directory. */

@@ -255,6 +255,21 @@ export const deviceRouter = router({
       return result ?? null;
     }),
 
+  gitPullRequestDetail: deviceProcedure
+    .input(
+      z.object({ deviceId: z.string(), number: z.number().int().positive(), path: z.string() }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.gitPullRequestDetail({
+        deviceId: input.deviceId,
+        number: input.number,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
   gitWorkingTreeStatus: deviceProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -521,6 +536,45 @@ export const deviceRouter = router({
     .mutation(async ({ ctx, input }) =>
       deviceGateway.pushGitBranch({
         deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
+  /**
+   * Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a
+   * directory on a remote device, via the device's `runPullRequestAction` RPC.
+   */
+  runGitPullRequestAction: deviceProcedure
+    .input(
+      z.object({
+        action: z.discriminatedUnion('type', [
+          z.object({
+            admin: z.boolean().optional(),
+            deleteBranch: z.boolean().optional(),
+            method: z.enum(['squash', 'merge', 'rebase']),
+            type: z.literal('merge'),
+          }),
+          z.object({ method: z.enum(['squash', 'merge', 'rebase']), type: z.literal('autoMerge') }),
+          z.object({ type: z.literal('disableAutoMerge') }),
+          z.object({ method: z.enum(['merge', 'rebase']), type: z.literal('updateBranch') }),
+          z.object({ type: z.literal('ready') }),
+          z.object({ body: z.string(), type: z.literal('comment') }),
+          z.object({ type: z.literal('close') }),
+          z.object({ type: z.literal('reopen') }),
+          z.object({ head: z.string(), type: z.literal('deleteBranch') }),
+        ]),
+        deviceId: z.string(),
+        number: z.number().int().positive(),
+        path: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.runGitPullRequestAction({
+        action: input.action,
+        deviceId: input.deviceId,
+        number: input.number,
         path: input.path,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
