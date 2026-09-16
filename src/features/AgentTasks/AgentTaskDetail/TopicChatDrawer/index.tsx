@@ -139,6 +139,7 @@ const TopicChatDrawer = memo(() => {
   const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const showArtifactPortal = useTopicDrawerArtifactPortal();
+  const closeArtifact = useChatStore((s) => s.closeArtifact);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
   const { allowed: canEditTask } = usePermission('create_content');
@@ -357,7 +358,7 @@ const TopicChatDrawer = memo(() => {
         {open &&
           (showArtifactPortal ? (
             <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-              <PortalContent />
+              <PortalContent onClose={closeArtifact} />
             </Flexbox>
           ) : (
             <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />

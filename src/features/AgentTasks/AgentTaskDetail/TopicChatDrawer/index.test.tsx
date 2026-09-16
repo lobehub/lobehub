@@ -15,12 +15,13 @@ const mocks = vi.hoisted(() => ({
     useHydrateAgentConfig: vi.fn(),
   },
   chatState: {
+    closeArtifact: vi.fn(),
     clearPortalStack: vi.fn(),
     dbMessagesMap: {
       'topic-chat-key': [{ id: 'message-1' }],
     } as Record<string, { id: string }[]>,
     messagesMap: {} as Record<string, { id: string }[]>,
-    portalStack: [] as { artifact?: { id: string }; type: string }[],
+    portalStack: [] as { artifact?: { id: string }; taskId?: string; type: string }[],
     replaceMessages: vi.fn(),
     showPortal: false,
   },
@@ -187,8 +188,8 @@ vi.mock('@/features/Conversation/Markdown/plugins/Task', () => ({
 }));
 
 vi.mock('@/features/Portal/router', () => ({
-  PortalContent: () => (
-    <button data-testid="artifact-portal" onClick={() => mocks.chatState.clearPortalStack()}>
+  PortalContent: ({ onClose }: { onClose?: () => void }) => (
+    <button data-testid="artifact-portal" onClick={onClose}>
       artifact portal
     </button>
   ),
@@ -270,6 +271,10 @@ describe('TopicChatDrawer', () => {
     mocks.chatState.replaceMessages.mockClear();
     mocks.chatState.portalStack = [];
     mocks.chatState.showPortal = false;
+    mocks.chatState.closeArtifact.mockClear();
+    mocks.chatState.closeArtifact.mockImplementation(() => {
+      mocks.chatState.portalStack = mocks.chatState.portalStack.slice(0, -1);
+    });
     mocks.chatState.clearPortalStack.mockClear();
     mocks.chatState.clearPortalStack.mockImplementation(() => {
       mocks.chatState.portalStack = [];
@@ -409,8 +414,11 @@ describe('TopicChatDrawer', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_assignee/topic-1');
   });
 
-  it('previews an artifact inside the run drawer and returns to its conversation', () => {
-    mocks.chatState.portalStack = [{ artifact: { id: 'message-1' }, type: 'artifact' }];
+  it('closes an artifact inside the run drawer without clearing its parent task portal', () => {
+    mocks.chatState.portalStack = [
+      { taskId: 'T-1', type: 'taskDetail' },
+      { artifact: { id: 'message-1' }, type: 'artifact' },
+    ];
     mocks.chatState.showPortal = true;
 
     const view = render(<TopicChatDrawer />);
@@ -421,7 +429,8 @@ describe('TopicChatDrawer', () => {
     expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
 
     fireEvent.click(view.getByTestId('artifact-portal'));
-    expect(mocks.chatState.clearPortalStack).toHaveBeenCalledOnce();
+    expect(mocks.chatState.closeArtifact).toHaveBeenCalledOnce();
+    expect(mocks.chatState.clearPortalStack).not.toHaveBeenCalled();
 
     view.unmount();
     const conversationView = render(<TopicChatDrawer />);

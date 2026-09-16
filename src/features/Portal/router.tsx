@@ -68,6 +68,7 @@ const HomeImpl: PortalImpl = {
 };
 
 interface PortalContentProps {
+  onClose?: () => void;
   renderBody?: (body: React.ReactNode) => React.ReactNode;
   viewType?: PortalViewType | null;
 }
@@ -77,7 +78,7 @@ interface PortalContentProps {
  * Uses the view stack to determine which component to render
  */
 export const PortalContent = memo<PortalContentProps>(
-  ({ renderBody, viewType: viewTypeOverride }) => {
+  ({ onClose, renderBody, viewType: viewTypeOverride }) => {
     const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
     const viewType = viewTypeOverride ?? currentViewType;
     const ViewImpl = viewType ? VIEW_COMPONENTS[viewType] : HomeImpl;
@@ -87,7 +88,11 @@ export const PortalContent = memo<PortalContentProps>(
     const Body = ViewImpl?.Body || HomeBody;
     const Title = ViewImpl?.Title || HomeTitle;
 
-    const headerContent = CustomHeader ? <CustomHeader /> : <Header title={<Title />} />;
+    const headerContent = CustomHeader ? (
+      <CustomHeader />
+    ) : (
+      <Header title={<Title />} onClose={onClose} />
+    );
     const bodyContent = <Body />;
 
     return (
