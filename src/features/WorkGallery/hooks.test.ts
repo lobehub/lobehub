@@ -96,4 +96,35 @@ describe('useWorkspaceWorksInfinite', () => {
     unmount();
     consoleError.mockRestore();
   });
+
+  it('waits for the gallery refresh when another cache refresh fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { unmount } = renderHook(() => useWorkspaceWorksInfinite('all'));
+    let resolveGalleryRefresh!: () => void;
+    mocks.infiniteMutate.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveGalleryRefresh = resolve;
+        }),
+    );
+    mocks.globalMutate.mockRejectedValueOnce(new Error('refresh failed'));
+
+    let deletionSettled = false;
+    const deletion = documentService.deleteDocument('doc-1').finally(() => {
+      deletionSettled = true;
+    });
+    await vi.waitFor(() => expect(mocks.infiniteMutate).toHaveBeenCalledTimes(1));
+
+    expect(deletionSettled).toBe(false);
+    resolveGalleryRefresh();
+    await expect(deletion).resolves.toBeUndefined();
+
+    expect(deletionSettled).toBe(true);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[DocumentService] Failed to refresh Works after document deletion:',
+      expect.any(Error),
+    );
+    unmount();
+    consoleError.mockRestore();
+  });
 });

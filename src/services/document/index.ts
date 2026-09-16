@@ -138,13 +138,21 @@ const autosavedOnceIds = new Set<string>();
  * the mounted SWR Infinite galleries before the delete interaction settles.
  */
 const refreshWorksAfterDocumentDelete = async () => {
-  try {
-    await Promise.all([workService.refreshAllConversations(), workService.refreshWorkspaceLists()]);
-  } catch (error) {
-    // The document is already deleted at this point. A cache refresh failure
-    // must not make callers roll the optimistic document state back to a row
-    // that no longer exists on the server.
-    console.error('[DocumentService] Failed to refresh Works after document deletion:', error);
+  const results = await Promise.allSettled([
+    workService.refreshAllConversations(),
+    workService.refreshWorkspaceLists(),
+  ]);
+
+  // The document is already deleted at this point. Cache refresh failures must
+  // not make callers roll the optimistic document state back to a row that no
+  // longer exists on the server, but every refresh still needs time to settle.
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error(
+        '[DocumentService] Failed to refresh Works after document deletion:',
+        result.reason,
+      );
+    }
   }
 };
 
