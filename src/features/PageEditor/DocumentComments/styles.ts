@@ -89,8 +89,15 @@ export const styles = createStaticStyles(({ css }) => ({
   blockMarker: css`
     position: absolute;
     z-index: 1;
-    inset-inline-end: 0;
-    transform: translateX(100%);
+
+    /*
+     * A physical transform (translateX) can't flip with direction, so
+     * "just past the inline-end edge" is expressed purely with insets
+     * instead of inset-inline-end + translateX(100%): pinning the
+     * inline-start edge at 100% of the container's width places the box
+     * flush against, and extending from, the inline-end edge either way.
+     */
+    inset-inline-start: 100%;
 
     padding-inline-start: 4px;
 

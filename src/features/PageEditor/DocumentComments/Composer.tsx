@@ -28,7 +28,7 @@ import type { DocumentCommentSubmitInput } from './optimistic';
 import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
 import { useGutterComposerFocus } from './useGutterComposerFocus';
 
-interface Draft {
+export interface Draft {
   clientId: string;
   content: string;
   editorData: DocumentCommentJson | null;
@@ -58,6 +58,27 @@ export const readAnchoredDraftAnchor = (
     return (JSON.parse(raw) as Draft).selectionAnchor;
   } catch {
     return undefined;
+  }
+};
+
+/**
+ * Moves a stranded document-level draft's full contents — not just its
+ * anchor — into the gutter's own scope. The anchor alone would leave the
+ * gutter's draft empty while the text and attachments stay behind in the
+ * now-unanchored document-level box.
+ */
+export const migrateDraftToAnchoredScope = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+  draft: Draft,
+): void => {
+  try {
+    window.localStorage.setItem(
+      getDraftKey(workspaceId, documentId, 'anchored'),
+      JSON.stringify(draft),
+    );
+  } catch {
+    // ignore write failures (private mode, quota)
   }
 };
 
@@ -178,21 +199,26 @@ const Composer = memo<ComposerProps>(
     }, [adoptsAnchor, anchor, documentId, pendingAnchor, setPendingCommentAnchor]);
 
     // A document-level composer next to a gutter never sends an anchor. One
-    // left in its draft (from a narrower pane) is handed to the gutter
-    // composer through the store rather than silently dropped.
+    // left in its draft (from a narrower pane, before a gutter existed) is
+    // handed to the gutter composer completely — text and attachments
+    // included, not just the anchor — since the anchor alone would leave the
+    // gutter's draft empty while the words stay behind in this now-unanchored
+    // box, publishable as an unrelated document-level comment.
     useEffect(() => {
       if (anchorMode !== 'none' || !isRootComposer || !draft.selectionAnchor) return;
-      const stranded = draft.selectionAnchor;
-      setDraft((current) => ({ ...current, selectionAnchor: undefined }));
-      if (!pendingAnchor) setPendingCommentAnchor({ anchor: stranded, documentId });
+      const anchor = draft.selectionAnchor;
+      migrateDraftToAnchoredScope(workspaceId, documentId, draft);
+      persistDraft({ clientId: nanoid(), content: '', editorData: null });
+      if (!pendingAnchor) setPendingCommentAnchor({ anchor, documentId });
     }, [
       anchorMode,
       documentId,
-      draft.selectionAnchor,
+      draft,
       isRootComposer,
       pendingAnchor,
-      setDraft,
+      persistDraft,
       setPendingCommentAnchor,
+      workspaceId,
     ]);
 
     // The inline composer sits below the body, so a selection made further up

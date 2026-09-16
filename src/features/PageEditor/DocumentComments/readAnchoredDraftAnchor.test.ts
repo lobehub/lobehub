@@ -1,7 +1,7 @@
 import type { DocumentCommentSelectionAnchor } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { readAnchoredDraftAnchor } from './Composer';
+import { migrateDraftToAnchoredScope, readAnchoredDraftAnchor } from './Composer';
 
 const DOCUMENT_ID = 'doc-1';
 const WORKSPACE_ID = 'ws-1';
@@ -54,5 +54,22 @@ describe('readAnchoredDraftAnchor', () => {
     );
 
     expect(readAnchoredDraftAnchor(undefined, DOCUMENT_ID)).toEqual(anchor);
+  });
+});
+
+describe('migrateDraftToAnchoredScope', () => {
+  it('moves the full draft — content and attachments included, not just the anchor', () => {
+    const draft = {
+      clientId: 'c1',
+      content: 'a comment started before a gutter existed',
+      editorData: { root: { children: [] } } as never,
+      selectionAnchor: anchor,
+    };
+
+    migrateDraftToAnchoredScope(WORKSPACE_ID, DOCUMENT_ID, draft);
+
+    const raw = window.localStorage.getItem(KEY);
+    expect(raw && JSON.parse(raw)).toEqual(draft);
+    expect(readAnchoredDraftAnchor(WORKSPACE_ID, DOCUMENT_ID)).toEqual(anchor);
   });
 });
