@@ -455,6 +455,68 @@ describe('selectRuntimeType', () => {
     });
   });
 
+  // #19526: LM Studio's connectivity check passes (it always runs through
+  // `chatService` on this device) while the conversation dies with a bare
+  // "Connection error." because the Gateway executes the run on the server,
+  // where `http://127.0.0.1:1234/v1` is the server's own loopback.
+  describe('local-only model provider', () => {
+    it('downgrades gateway to client', () => {
+      expect(
+        selectRuntimeType(
+          { isGatewayMode: true, modelProviderIsLocalOnly: true },
+          { isDesktop: false },
+        ),
+      ).toBe('client');
+      expect(
+        selectRuntimeType(
+          { isGatewayMode: true, modelProviderIsLocalOnly: true },
+          { isDesktop: true },
+        ),
+      ).toBe('client');
+    });
+
+    it('keeps gateway for a reachable provider', () => {
+      expect(
+        selectRuntimeType(
+          { isGatewayMode: true, modelProviderIsLocalOnly: false },
+          { isDesktop: false },
+        ),
+      ).toBe('gateway');
+    });
+
+    it('does not affect heterogeneous routing, which carries its own provider binding', () => {
+      expect(
+        selectRuntimeType(
+          {
+            heterogeneousProvider: heteroProvider,
+            isGatewayMode: true,
+            modelProviderIsLocalOnly: true,
+          },
+          { isDesktop: false },
+        ),
+      ).toBe('gateway');
+      expect(
+        selectRuntimeType(
+          {
+            heterogeneousProvider: remoteHeteroProvider,
+            isGatewayMode: true,
+            modelProviderIsLocalOnly: true,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('gateway');
+    });
+
+    it('still yields to an explicit parentRuntime so a gateway run keeps its children server-side', () => {
+      expect(
+        selectRuntimeType(
+          { isGatewayMode: true, modelProviderIsLocalOnly: true, parentRuntime: 'gateway' },
+          { isDesktop: false },
+        ),
+      ).toBe('gateway');
+    });
+  });
+
   describe('parentRuntime override', () => {
     it('parentRuntime wins over every other signal', () => {
       expect(

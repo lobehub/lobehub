@@ -42,6 +42,7 @@ import {
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { isLocalOnlyModelProvider } from '@/helpers/localModelProvider';
 import { agentService } from '@/services/agent';
 import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -464,6 +465,7 @@ export class ConversationLifecycleActionImpl {
       heterogeneousProvider,
       isGatewayMode,
       isWorkspaceAgent: !!agent?.workspaceId,
+      modelProviderIsLocalOnly: isLocalOnlyModelProvider(agentConfig?.provider),
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
