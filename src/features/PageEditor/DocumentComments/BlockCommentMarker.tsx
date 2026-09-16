@@ -38,21 +38,35 @@ const caretAt = (doc: Document, x: number, y: number): CaretPoint | null => {
 };
 
 /**
+ * Two caret points ordered by document position. On an RTL line the visual
+ * left edge is the *later* point in the DOM (RTL reads right to left), so the
+ * left/right caret pair can't be assigned to start/end by which is which —
+ * only by which comes first in the document.
+ */
+const orderPoints = (doc: Document, a: CaretPoint, b: CaretPoint): [CaretPoint, CaretPoint] => {
+  const probe = doc.createRange();
+  probe.setStart(a.node, a.offset);
+  probe.collapse(true);
+  return probe.comparePoint(b.node, b.offset) < 0 ? [b, a] : [a, b];
+};
+
+/**
  * The visual line of `block` at viewport height `y`: the run between the
  * caret positions at the block's left and right edges on that line. Falls
  * back to the whole block when the edges cannot be resolved (an image, an
  * embed), so the marker still offers something to comment on.
  */
-const lineAt = (block: HTMLElement, y: number): Range | null => {
+export const lineAt = (block: HTMLElement, y: number): Range | null => {
   const doc = block.ownerDocument;
   const rect = block.getBoundingClientRect();
-  const start = caretAt(doc, rect.left + 1, y);
-  const end = caretAt(doc, rect.right - 1, y);
+  const left = caretAt(doc, rect.left + 1, y);
+  const right = caretAt(doc, rect.right - 1, y);
   const range = doc.createRange();
-  if (start && end && block.contains(start.node) && block.contains(end.node)) {
+  if (left && right && block.contains(left.node) && block.contains(right.node)) {
     try {
-      range.setStart(start.node, start.offset);
-      range.setEnd(end.node, end.offset);
+      const [from, to] = orderPoints(doc, left, right);
+      range.setStart(from.node, from.offset);
+      range.setEnd(to.node, to.offset);
       if (!range.collapsed && range.toString().trim()) return range;
     } catch {
       /* fall through to the whole block */
