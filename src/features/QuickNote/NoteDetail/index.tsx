@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
 import { lazy, memo, Suspense } from 'react';
 
 import ContentLoading from '@/components/Loading/ContentLoading';
@@ -10,7 +11,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import NotePlaceholder from '../NotePlaceholder';
-import AnnotationPanel from './AnnotationPanel';
+import AiPanel from './AiPanel';
 import EditorArea from './EditorArea';
 
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
@@ -30,8 +31,12 @@ const NoteDetail = memo<{ id: string }>(({ id }) => {
   return (
     <Flexbox horizontal height={'100%'} width={'100%'}>
       <EditorArea noteId={id} />
-      <RightPanel expand={panelExpanded} onExpandChange={toggleAnnotationPanel}>
-        <AnnotationPanel noteId={id} />
+      <RightPanel
+        backgroundColor={cssVar.colorFillQuaternary}
+        expand={panelExpanded}
+        onExpandChange={toggleAnnotationPanel}
+      >
+        <AiPanel noteId={id} />
       </RightPanel>
       {topicDrawerOpen && (
         <Suspense>

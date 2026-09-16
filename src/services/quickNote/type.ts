@@ -67,6 +67,7 @@ export interface QuickNoteResource {
   selector?: Record<string, unknown> | null;
   /** Task identifier used by the task detail route when applicable. */
   taskIdentifier?: string | null;
+  taskStatus?: string | null;
 }
 
 /** Agent-owned sidecar data shown beside a Quick Note source Document. */

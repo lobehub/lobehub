@@ -62,7 +62,7 @@ const AnalyzeSettings = memo(() => {
       placement={'bottomRight'}
       trigger={['click']}
       content={
-        <Flexbox gap={14} padding={12} style={{ width: 300 }}>
+        <Flexbox gap={16} width={300}>
           <Text weight={500}>{t('analyzeSettings.title')}</Text>
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Flexbox gap={2}>
@@ -73,7 +73,6 @@ const AnalyzeSettings = memo(() => {
             </Flexbox>
             <Switch
               checked={settings.autoAnalyze.enabled}
-              size={'small'}
               onChange={(enabled) =>
                 void updateSettings({
                   ...settings,
@@ -86,7 +85,6 @@ const AnalyzeSettings = memo(() => {
             <Text fontSize={13}>{t('analyzeSettings.agent')}</Text>
             <Select
               options={options}
-              size={'small'}
               value={selectedValue}
               onChange={(value: string) =>
                 void updateSettings({
@@ -98,7 +96,6 @@ const AnalyzeSettings = memo(() => {
           </Flexbox>
           <Button
             disabled={!selectedAgentId}
-            size={'small'}
             onClick={() => {
               if (!selectedAgentId) return;
               setOpen(false);
@@ -114,7 +111,6 @@ const AnalyzeSettings = memo(() => {
       <ActionIcon
         aria-label={t('analyzeSettings.title')}
         icon={Settings2Icon}
-        size={'small'}
         title={t('analyzeSettings.title')}
       />
     </Popover>

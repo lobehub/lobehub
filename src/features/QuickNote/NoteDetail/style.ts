@@ -19,18 +19,18 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     inset: 0;
     transform: rotate(-90deg);
   `,
+  columnHeader: css`
+    flex: none;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
   editorColumn: css`
     width: 100%;
     max-width: 720px;
     margin-inline: auto;
   `,
-  proposalCard: css`
-    padding: 10px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  sectionHeader: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  section: css`
+    padding-block: 12px;
+    padding-inline: 16px;
   `,
   sidecarCard: css`
     padding-block: 8px;

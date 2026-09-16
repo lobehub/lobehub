@@ -6,7 +6,6 @@ import { Outlet } from 'react-router';
 
 import { useQuickNoteStore } from '@/store/quickNote';
 
-import NoteList from '../NoteList';
 import Sidebar from './Sidebar';
 import { styles } from './style';
 import { useQuickNotePersistenceLifecycle } from './useQuickNotePersistenceLifecycle';
@@ -23,11 +22,13 @@ const NoteLayout: FC = () => {
   return (
     <>
       <Sidebar />
-      <Flexbox horizontal className={styles.mainContainer} flex={1} height={'100%'}>
-        <NoteList />
-        <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-          <Outlet />
-        </Flexbox>
+      <Flexbox
+        className={styles.mainContainer}
+        flex={1}
+        height={'100%'}
+        style={{ overflow: 'hidden' }}
+      >
+        <Outlet />
       </Flexbox>
     </>
   );

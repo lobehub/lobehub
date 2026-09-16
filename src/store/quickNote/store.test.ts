@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type QuickNoteItem, quickNoteService } from '@/services/quickNote';
+import { type QuickNoteItem, type QuickNoteProposal, quickNoteService } from '@/services/quickNote';
 
 import {
   ANALYZE_POLL_INTERVAL,
@@ -80,6 +80,40 @@ describe('quickNoteSelectors', () => {
       { count: 1, name: '截图' },
       { count: 1, name: '表达' },
     ]);
+  });
+
+  it('pendingProposalsById returns only pending proposals', () => {
+    const createProposal = (patch: Partial<QuickNoteProposal>): QuickNoteProposal => ({
+      content: '',
+      createdAt: 1000,
+      decisionStatus: 'pending',
+      id: 'proposal-1',
+      kind: 'task',
+      updatedAt: 1000,
+      validity: 'current',
+      ...patch,
+    });
+    const withDetails = {
+      ...state,
+      agenticDetailMap: {
+        a: {
+          comments: [],
+          proposals: [
+            createProposal({ decisionStatus: 'pending', id: 'p1' }),
+            createProposal({ decisionStatus: 'accepted', id: 'p2' }),
+            createProposal({ decisionStatus: 'dismissed', id: 'p3' }),
+          ],
+          resources: [],
+        },
+      },
+    } as QuickNoteState;
+
+    expect(
+      quickNoteSelectors
+        .pendingProposalsById('a')(withDetails)
+        .map((p) => p.id),
+    ).toEqual(['p1']);
+    expect(quickNoteSelectors.pendingProposalsById('missing')(withDetails)).toEqual([]);
   });
 });
 
@@ -273,6 +307,7 @@ describe('quickNote actions', () => {
       vi.mocked(quickNoteService.analyze).mock.invocationCallOrder[0],
     );
     expect(useQuickNoteStore.getState().notes[0].run?.status).toBe('pending');
+    expect(useQuickNoteStore.getState().notes[0].run?.trigger).toBe('manual');
   });
 
   /** @example Continuing to type cancels the countdown for the previously saved revision. */

@@ -1,24 +1,26 @@
 'use client';
 
-import { Editor, useEditor } from '@lobehub/editor/react';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text, toast } from '@lobehub/ui/base-ui';
+import { HotkeyEnum } from '@lobechat/const/hotkeys';
+import { useEditor } from '@lobehub/editor/react';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { FileTextIcon, PanelRightClose, PanelRightOpen, Sparkles } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { EllipsisIcon, PanelRightOpen, Trash } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useEditorDocumentChange } from '@/hooks/useEditorDocumentChange';
-import {
-  ANALYZE_SETTLE_DELAY,
-  getQuickNoteStoreState,
-  quickNoteSelectors,
-  useQuickNoteStore,
-} from '@/store/quickNote';
+import { EditorCanvas } from '@/features/EditorCanvas';
+import ToggleLeftPanelButton, { isMacDesktop } from '@/features/NavPanel/ToggleLeftPanelButton';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
+import { getQuickNoteStoreState, quickNoteSelectors, useQuickNoteStore } from '@/store/quickNote';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
-import { resolveNoteEditorContent } from '../utils';
-import AnalyzeSettings from './AnalyzeSettings';
+import { formatNoteMeta } from '../utils';
 import { styles } from './style';
+import { useNoteContentSync } from './useNoteContentSync';
 
 const SaveIndicator = memo(() => {
   const { t } = useTranslation('note');
@@ -43,157 +45,94 @@ const SaveIndicator = memo(() => {
 
 SaveIndicator.displayName = 'QuickNoteSaveIndicator';
 
-const AnalyzeAction = ({ noteId }: { noteId: string }) => {
-  const { t } = useTranslation('note');
+const EditorArea = memo<{ noteId: string }>(({ noteId }) => {
+  const { t } = useTranslation(['note', 'common']);
+  const navigate = useWorkspaceAwareNavigate();
+  const editor = useEditor();
+  const removeNote = useQuickNoteStore((s) => s.removeNote);
+  const panelExpanded = useQuickNoteStore((s) => s.annotationPanelExpanded);
+  const toggleAnnotationPanel = useQuickNoteStore((s) => s.toggleAnnotationPanel);
   const note = useQuickNoteStore(quickNoteSelectors.noteById(noteId));
-  const requesting = useQuickNoteStore(quickNoteSelectors.isAnalyzing(noteId));
-  const analyzeNote = useQuickNoteStore((s) => s.analyzeNote);
-  const [now, setNow] = useState(Date.now());
+  const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
+  const toggleRightPanelHotkey = useUserStore(
+    settingsSelectors.getHotkeyById(HotkeyEnum.ToggleRightPanel),
+  );
 
-  const run = note?.run;
-  const runActive = Boolean(run && ['pending', 'running'].includes(run.status));
-  const dueAt = runActive ? undefined : note?.analyzeDueAt;
+  const editorData = useMemo(() => {
+    const currentNote = quickNoteSelectors.noteById(noteId)(getQuickNoteStoreState());
+    return { content: currentNote?.content, editorData: currentNote?.editorData };
+  }, [noteId]);
 
-  useEffect(() => {
-    if (!dueAt || dueAt <= Date.now()) return;
+  const onContentChange = useNoteContentSync(noteId, editor);
 
-    setNow(Date.now());
-    const interval = window.setInterval(() => setNow(Date.now()), 100);
-    return () => window.clearInterval(interval);
-  }, [dueAt]);
+  const menuItems = [
+    {
+      danger: true,
+      icon: <Icon icon={Trash} />,
+      key: 'delete',
+      label: t('editor.deleteNote'),
+      onClick: () =>
+        confirmModal({
+          cancelText: t('cancel', { ns: 'common' }),
+          content: t('feed.deleteConfirm'),
+          okButtonProps: { danger: true },
+          okText: t('delete', { ns: 'common' }),
+          onOk: async () => {
+            try {
+              await removeNote(noteId);
+              navigate('/note');
+            } catch {
+              toast.error(t('agentic.actionFailed'));
+            }
+          },
+        }),
+    },
+  ];
 
   if (!note) return null;
-
-  const remaining = dueAt ? Math.max(0, dueAt - now) : 0;
-  const scheduled = remaining > 0;
-  const circumference = 2 * Math.PI * 12;
-  const progress = Math.min(1, remaining / ANALYZE_SETTLE_DELAY);
-  const status = run?.kind === 'analyze' ? run.status : undefined;
-  const loading = requesting || status === 'pending' || status === 'running';
-  const title =
-    status === 'pending'
-      ? t('editor.analyzePending')
-      : status === 'running'
-        ? t('editor.analyzeRunning')
-        : status === 'failed'
-          ? t('editor.analyzeFailed')
-          : scheduled
-            ? t('editor.analyzeScheduled', { seconds: Math.max(1, Math.ceil(remaining / 1000)) })
-            : t('editor.analyze');
-
-  return (
-    <span className={styles.analyzeAction}>
-      <ActionIcon
-        aria-label={title}
-        disabled={!note.content.trim() || runActive}
-        icon={Sparkles}
-        loading={loading}
-        size={'small'}
-        title={title}
-        style={{
-          color:
-            status === 'failed'
-              ? cssVar.colorError
-              : status === 'pending'
-                ? cssVar.colorWarning
-                : status === 'running'
-                  ? cssVar.colorInfo
-                  : undefined,
-        }}
-        onClick={() => {
-          void analyzeNote(noteId).catch(() => toast.error(t('agentic.actionFailed')));
-        }}
-      />
-      {scheduled && (
-        <svg
-          aria-hidden
-          className={styles.analyzeProgress}
-          height={28}
-          viewBox={'0 0 28 28'}
-          width={28}
-        >
-          <circle
-            cx={14}
-            cy={14}
-            fill={'none'}
-            r={12}
-            stroke={cssVar.colorPrimary}
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * (1 - progress)}
-            strokeLinecap={'round'}
-            strokeWidth={1.5}
-            style={{ transition: 'stroke-dashoffset 100ms linear' }}
-          />
-        </svg>
-      )}
-    </span>
-  );
-};
-
-const EditorArea = memo<{ noteId: string }>(({ noteId }) => {
-  const { t } = useTranslation('note');
-  const editor = useEditor();
-  const updateNoteContent = useQuickNoteStore((s) => s.updateNoteContent);
-  const [panelExpanded, toggleAnnotationPanel] = useQuickNoteStore((s) => [
-    s.annotationPanelExpanded,
-    s.toggleAnnotationPanel,
-  ]);
-
-  const initial = useMemo(
-    () =>
-      resolveNoteEditorContent(
-        quickNoteSelectors.noteById(noteId)(getQuickNoteStoreState())?.content ?? '',
-      ),
-    [noteId],
-  );
-
-  useEditorDocumentChange({
-    documentKey: noteId,
-    editor,
-    onContentChange: (currentEditor) =>
-      updateNoteContent(
-        noteId,
-        String(currentEditor.getDocument('markdown') ?? ''),
-        (currentEditor.getDocument('json') ?? {}) as Record<string, unknown>,
-      ),
-  });
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.sectionHeader}
+        className={styles.columnHeader}
+        height={44}
         justify={'space-between'}
-        paddingBlock={12}
         paddingInline={16}
       >
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Icon icon={FileTextIcon} size={'small'} />
-          <Text weight={500}>{t('editor.title')}</Text>
+        <Flexbox horizontal align={'center'} gap={4}>
+          {!showLeftPanel && !isMacDesktop && <ToggleLeftPanelButton />}
+          <Text color={cssVar.colorTextTertiary} fontSize={12}>
+            {formatNoteMeta(note)}
+          </Text>
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={8}>
           <SaveIndicator />
-          <AnalyzeSettings />
-          <AnalyzeAction noteId={noteId} />
-          <ActionIcon
-            active={panelExpanded}
-            icon={panelExpanded ? PanelRightClose : PanelRightOpen}
-            size={'small'}
-            title={t('annotation.togglePanel')}
-            onClick={() => toggleAnnotationPanel()}
-          />
+          <DropdownMenu items={menuItems} nativeButton={false}>
+            <ActionIcon icon={EllipsisIcon} size={'small'} />
+          </DropdownMenu>
+          {!panelExpanded && (
+            <ActionIcon
+              icon={PanelRightOpen}
+              size={'small'}
+              title={t('annotation.togglePanel')}
+              tooltipProps={{ hotkey: toggleRightPanelHotkey }}
+              onClick={() => toggleAnnotationPanel(true)}
+            />
+          )}
         </Flexbox>
       </Flexbox>
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         <Flexbox className={styles.editorColumn} paddingBlock={24} paddingInline={24}>
-          <Editor
-            autoFocus
-            content={initial.content}
+          <EditorCanvas
             editor={editor}
-            key={noteId}
+            editorData={editorData}
+            entityId={noteId}
             placeholder={t('editor.placeholder')}
-            type={initial.type}
+            style={{ minHeight: 320 }}
+            onContentChange={onContentChange}
+            onInit={(initializedEditor) => initializedEditor.focus()}
           />
         </Flexbox>
       </Flexbox>

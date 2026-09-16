@@ -515,6 +515,7 @@ export class QuickNoteModel {
         sourceEditorData: documentHistories.editorData,
         taskIdentifier: tasks.identifier,
         taskName: tasks.name,
+        taskStatus: tasks.status,
         topicContent: topics.content,
         topicTitle: topics.title,
       })

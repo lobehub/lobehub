@@ -68,6 +68,11 @@ const isEditingComment = (id: string) => (s: QuickNoteState) => s.editingComment
 const isProcessingProposal = (id: string) => (s: QuickNoteState) =>
   s.processingProposalIds.includes(id);
 
+const pendingProposalsById = (id: string) => (s: QuickNoteState) =>
+  (s.agenticDetailMap[id]?.proposals ?? []).filter(
+    (proposal) => proposal.decisionStatus === 'pending',
+  );
+
 export const quickNoteSelectors = {
   activeNote,
   agenticDetailsById,
@@ -79,6 +84,7 @@ export const quickNoteSelectors = {
   isEditingComment,
   isProcessingProposal,
   noteById,
+  pendingProposalsById,
   tags,
   totalCount,
   uncategorizedCount,

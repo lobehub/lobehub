@@ -358,6 +358,7 @@ export class QuickNoteActionImpl {
                     operationId: result.run.operationId,
                     status: result.run.status,
                     threadId: result.run.threadId,
+                    trigger,
                   },
                 }
               : item,
@@ -426,10 +427,6 @@ export class QuickNoteActionImpl {
       false,
       'toggleAnnotationPanel',
     );
-  };
-
-  toggleListCollapsed = () => {
-    this.#set({ listCollapsed: !this.#get().listCollapsed }, false, 'toggleListCollapsed');
   };
 
   retrySave = () => {

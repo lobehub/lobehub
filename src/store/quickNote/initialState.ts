@@ -18,7 +18,6 @@ export interface QuickNoteState {
   divingNoteIds: string[];
   /** Comment identifiers whose latest edit is being persisted. */
   editingCommentIds: string[];
-  listCollapsed: boolean;
   notes: QuickNoteItem[];
   notesInit: boolean;
   /** Whether the latest initial note-list request failed and can be retried. */
@@ -38,7 +37,6 @@ export const initialState: QuickNoteState = {
   creatingCommentNoteIds: [],
   divingNoteIds: [],
   editingCommentIds: [],
-  listCollapsed: false,
   notes: [],
   notesInit: false,
   notesLoadError: false,
