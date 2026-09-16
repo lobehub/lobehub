@@ -1,4 +1,5 @@
-export type ModelCompletionFailureReason = 'empty_completion' | 'refusal';
+export type ModelCompletionFailureReason =
+  'empty_completion' | 'provider_error' | 'refusal' | 'stream_error';
 
 export interface ModelCompletionFailureRuntimeEvidence {
   provider?: unknown;
