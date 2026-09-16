@@ -41,6 +41,9 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
   } = state;
   const isLoadingInitial = documentThreads.isLoadingInitial || isAnchoredLoading;
   const isHeaderLoading = isLoadingInitial || (summary.isLoading && !summary.data);
+  // The document and anchored queries are independent; one failing or still
+  // loading must not hide comments the other already fetched successfully.
+  const hasAnyItems = listThreads.length > 0 || Boolean(pinnedThreadInList);
 
   return (
     <Flexbox
@@ -91,21 +94,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               onSummaryChange={updateSummaryTotal}
             />
           )}
-          {documentThreads.isInitialError ? (
-            <AsyncError
-              error={documentThreads.error}
-              variant={'block'}
-              onRetry={() => void documentThreads.reload()}
-            />
-          ) : isAnchoredInitialError ? (
-            <AsyncError
-              error={anchoredError}
-              variant={'block'}
-              onRetry={() => void reloadAnchored()}
-            />
-          ) : isLoadingInitial ? (
-            <SurfaceSkeleton header={false} variant={'list'} />
-          ) : (
+          {hasAnyItems ? (
             listThreads.map(({ replyCount, root }) => (
               <Thread
                 documentId={documentId}
@@ -120,6 +109,38 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
                 onSummaryChange={updateSummaryTotal}
               />
             ))
+          ) : documentThreads.isInitialError ? (
+            <AsyncError
+              error={documentThreads.error}
+              variant={'block'}
+              onRetry={() => void documentThreads.reload()}
+            />
+          ) : isAnchoredInitialError ? (
+            <AsyncError
+              error={anchoredError}
+              variant={'block'}
+              onRetry={() => void reloadAnchored()}
+            />
+          ) : (
+            isLoadingInitial && <SurfaceSkeleton header={false} variant={'list'} />
+          )}
+          {/* Shown alongside whichever branch rendered above: a query that
+              failed its initial load must not hide comments the other query
+              already fetched successfully. */}
+          {hasAnyItems && documentThreads.isInitialError && (
+            <AsyncError
+              error={documentThreads.error}
+              variant={'inline'}
+              onRetry={() => void documentThreads.reload()}
+            />
+          )}
+          {hasAnyItems && isAnchoredInitialError && (
+            <AsyncError
+              error={anchoredError}
+              retrying={isAnchoredRetrying}
+              variant={'inline'}
+              onRetry={() => void reloadAnchored()}
+            />
           )}
           {documentThreads.error && !documentThreads.isInitialError ? (
             <AsyncError
