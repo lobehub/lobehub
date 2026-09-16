@@ -4,12 +4,14 @@ import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  mockGetSkillCategories,
   mockGetSkillComments,
   mockGetSkillDetail,
   mockGetSkillDownloadUrl,
   mockGetSkillRatingDistribution,
   mockSearchSkill,
 } = vi.hoisted(() => ({
+  mockGetSkillCategories: vi.fn(),
   mockGetSkillComments: vi.fn(),
   mockGetSkillDetail: vi.fn(),
   mockGetSkillDownloadUrl: vi.fn(),
@@ -34,6 +36,7 @@ vi.mock('@/libs/trpc/lambda/middleware', () => ({
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
     return {
+      getSkillCategories: mockGetSkillCategories,
       getSkillComments: mockGetSkillComments,
       getSkillDetail: mockGetSkillDetail,
       getSkillDownloadUrl: mockGetSkillDownloadUrl,
@@ -256,4 +259,22 @@ describe('skillRouter.getSkillList error mapping', () => {
     expect(error.code).toBe('INTERNAL_SERVER_ERROR');
     expect(error.message).toBe('Failed to fetch skill list');
   });
+});
+
+describe('skillRouter.getSkillCategories', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([{ locale: 'zh-CN', q: 'meeting' }, undefined])(
+    'should preserve category query parameters: %j',
+    async (params) => {
+      const categories = [{ category: 'productivity-tasks', count: 2 }];
+      mockGetSkillCategories.mockResolvedValue(categories);
+      const caller = await createCaller();
+
+      expect(await caller.getSkillCategories(params)).toEqual(categories);
+      if (params) expect(mockGetSkillCategories).toHaveBeenCalledWith(params);
+    },
+  );
 });
