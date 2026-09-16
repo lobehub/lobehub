@@ -128,6 +128,7 @@ export default {
   'pageEditor.comments.edit': 'Edit',
   'pageEditor.comments.edited': '(edited)',
   'pageEditor.comments.gutterEmpty': 'Select text in the document to comment on it.',
+  'pageEditor.comments.gutterEmptyReadOnly': 'No comments yet.',
   'pageEditor.comments.hideReplies': 'Hide replies',
   'pageEditor.comments.loadMore': 'Load more comments',
   'pageEditor.comments.loadMoreReplies': 'Load more replies',

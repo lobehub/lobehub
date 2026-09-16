@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "編集",
   "pageEditor.comments.edited": "（編集済み）",
   "pageEditor.comments.gutterEmpty": "ドキュメント内のテキストを選択してコメントしてください。",
+  "pageEditor.comments.gutterEmptyReadOnly": "まだコメントがありません。",
   "pageEditor.comments.hideReplies": "返信を非表示",
   "pageEditor.comments.loadMore": "さらにコメントを読み込む",
   "pageEditor.comments.loadMoreReplies": "さらに返信を読み込む",

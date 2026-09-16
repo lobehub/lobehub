@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "Düzenle",
   "pageEditor.comments.edited": "(düzenlendi)",
   "pageEditor.comments.gutterEmpty": "Belgede metni seçerek yorum yapabilirsiniz.",
+  "pageEditor.comments.gutterEmptyReadOnly": "Henüz yorum yok.",
   "pageEditor.comments.hideReplies": "Yanıtları gizle",
   "pageEditor.comments.loadMore": "Daha fazla yorum yükle",
   "pageEditor.comments.loadMoreReplies": "Daha fazla yanıt yükle",

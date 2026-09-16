@@ -56,7 +56,10 @@ export const useForwardWheel = (
     const host = hostRef.current;
     if (!host) return;
     const handleWheel = (event: WheelEvent) => {
-      if (event.deltaY === 0 || event.defaultPrevented) return;
+      // Ctrl+wheel is the browser's zoom gesture (and how a trackpad pinch is
+      // reported); hijacking it into a document scroll would block zooming
+      // whenever the pointer happens to be over the panel.
+      if (event.deltaY === 0 || event.defaultPrevented || event.ctrlKey) return;
       if (innerScrollerTakesIt(event.target, host, event.deltaY)) return;
       event.preventDefault();
       scrollBy(deltaToPixels(event, host));

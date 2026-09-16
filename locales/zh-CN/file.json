@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "编辑",
   "pageEditor.comments.edited": "（已编辑）",
   "pageEditor.comments.gutterEmpty": "在正文中划选文字即可评论。",
+  "pageEditor.comments.gutterEmptyReadOnly": "暂无评论。",
   "pageEditor.comments.hideReplies": "收起回复",
   "pageEditor.comments.loadMore": "加载更多评论",
   "pageEditor.comments.loadMoreReplies": "加载更多回复",

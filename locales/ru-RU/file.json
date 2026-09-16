@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "Редактировать",
   "pageEditor.comments.edited": "(отредактировано)",
   "pageEditor.comments.gutterEmpty": "Выберите текст в документе, чтобы прокомментировать его.",
+  "pageEditor.comments.gutterEmptyReadOnly": "Комментариев пока нет.",
   "pageEditor.comments.hideReplies": "Скрыть ответы",
   "pageEditor.comments.loadMore": "Загрузить больше комментариев",
   "pageEditor.comments.loadMoreReplies": "Загрузить больше ответов",

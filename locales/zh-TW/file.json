@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "編輯",
   "pageEditor.comments.edited": "（已編輯）",
   "pageEditor.comments.gutterEmpty": "選取文件中的文字以進行評論。",
+  "pageEditor.comments.gutterEmptyReadOnly": "尚無評論。",
   "pageEditor.comments.hideReplies": "隱藏回覆",
   "pageEditor.comments.loadMore": "載入更多評論",
   "pageEditor.comments.loadMoreReplies": "載入更多回覆",

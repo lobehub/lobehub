@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "Editar",
   "pageEditor.comments.edited": "(editado)",
   "pageEditor.comments.gutterEmpty": "Selecione o texto no documento para comentar sobre ele.",
+  "pageEditor.comments.gutterEmptyReadOnly": "Ainda não há comentários.",
   "pageEditor.comments.hideReplies": "Ocultar respostas",
   "pageEditor.comments.loadMore": "Carregar mais comentários",
   "pageEditor.comments.loadMoreReplies": "Carregar mais respostas",

@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "ویرایش",
   "pageEditor.comments.edited": "(ویرایش شده)",
   "pageEditor.comments.gutterEmpty": "برای نظر دادن، متنی را در سند انتخاب کنید.",
+  "pageEditor.comments.gutterEmptyReadOnly": "هنوز نظری وجود ندارد.",
   "pageEditor.comments.hideReplies": "پنهان کردن پاسخ‌ها",
   "pageEditor.comments.loadMore": "بارگذاری نظرات بیشتر",
   "pageEditor.comments.loadMoreReplies": "بارگذاری پاسخ‌های بیشتر",

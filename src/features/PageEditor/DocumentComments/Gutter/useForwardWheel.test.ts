@@ -19,6 +19,9 @@ const setup = () => {
 
 const wheel = (target: Element, init: WheelEventInit) => {
   const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...init });
+  // happy-dom's WheelEvent constructor doesn't forward ctrlKey from its init
+  // dict (unlike plain MouseEvent), so set it directly when a test needs it.
+  if (init.ctrlKey) Object.defineProperty(event, 'ctrlKey', { value: true });
   target.dispatchEvent(event);
   return event;
 };
@@ -73,6 +76,15 @@ describe('useForwardWheel', () => {
     const { host, pane } = setup();
 
     const event = wheel(host, { deltaX: 40, deltaY: 0 });
+
+    expect(pane.scrollTop).toBe(100);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('leaves a ctrl-modified wheel (browser zoom / trackpad pinch) to the browser', () => {
+    const { host, pane } = setup();
+
+    const event = wheel(host, { ctrlKey: true, deltaY: 40 });
 
     expect(pane.scrollTop).toBe(100);
     expect(event.defaultPrevented).toBe(false);

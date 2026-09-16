@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "Chỉnh sửa",
   "pageEditor.comments.edited": "(đã chỉnh sửa)",
   "pageEditor.comments.gutterEmpty": "Chọn văn bản trong tài liệu để bình luận về nó.",
+  "pageEditor.comments.gutterEmptyReadOnly": "Chưa có bình luận nào.",
   "pageEditor.comments.hideReplies": "Ẩn phản hồi",
   "pageEditor.comments.loadMore": "Tải thêm bình luận",
   "pageEditor.comments.loadMoreReplies": "Tải thêm phản hồi",

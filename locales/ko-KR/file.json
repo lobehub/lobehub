@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "편집",
   "pageEditor.comments.edited": "(편집됨)",
   "pageEditor.comments.gutterEmpty": "문서에서 텍스트를 선택하여 댓글을 달아보세요.",
+  "pageEditor.comments.gutterEmptyReadOnly": "아직 댓글이 없습니다.",
   "pageEditor.comments.hideReplies": "답글 숨기기",
   "pageEditor.comments.loadMore": "댓글 더 보기",
   "pageEditor.comments.loadMoreReplies": "답글 더 보기",

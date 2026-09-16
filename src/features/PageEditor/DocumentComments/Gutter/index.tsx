@@ -12,6 +12,7 @@ import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import NavHeader from '@/features/NavHeader';
 import RightPanel from '@/features/RightPanel';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
+import { usePermission } from '@/hooks/usePermission';
 
 import { usePageAgentPanelControl } from '../../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../../store';
@@ -48,6 +49,7 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
     updateSummaryTotal,
   } = state;
   const { selectedRootId, selectRoot } = useCommentAnchors();
+  const { allowed: canComment } = usePermission('create_content');
   const hasPending = usePageEditorStore((s) =>
     Boolean(s.pendingCommentAnchor && s.pendingCommentAnchor.documentId === documentId),
   );
@@ -100,8 +102,12 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
         isEmpty && (
           <Flexbox align={'center'} className={styles.gutterEmpty} justify={'center'}>
             <Empty
-              description={t('pageEditor.comments.gutterEmpty')}
               icon={MessageSquareTextIcon}
+              description={t(
+                canComment
+                  ? 'pageEditor.comments.gutterEmpty'
+                  : 'pageEditor.comments.gutterEmptyReadOnly',
+              )}
             />
           </Flexbox>
         )

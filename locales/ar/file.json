@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "تعديل",
   "pageEditor.comments.edited": "(تم التعديل)",
   "pageEditor.comments.gutterEmpty": "حدد نصًا في المستند للتعليق عليه.",
+  "pageEditor.comments.gutterEmptyReadOnly": "لا توجد تعليقات حتى الآن.",
   "pageEditor.comments.hideReplies": "إخفاء الردود",
   "pageEditor.comments.loadMore": "تحميل المزيد من التعليقات",
   "pageEditor.comments.loadMoreReplies": "تحميل المزيد من الردود",

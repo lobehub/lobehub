@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "Редактирай",
   "pageEditor.comments.edited": "(редактирано)",
   "pageEditor.comments.gutterEmpty": "Изберете текст в документа, за да добавите коментар.",
+  "pageEditor.comments.gutterEmptyReadOnly": "Все още няма коментари.",
   "pageEditor.comments.hideReplies": "Скрий отговорите",
   "pageEditor.comments.loadMore": "Зареди още коментари",
   "pageEditor.comments.loadMoreReplies": "Зареди още отговори",

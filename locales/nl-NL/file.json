@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "Bewerken",
   "pageEditor.comments.edited": "(bewerkt)",
   "pageEditor.comments.gutterEmpty": "Selecteer tekst in het document om erop te reageren.",
+  "pageEditor.comments.gutterEmptyReadOnly": "Nog geen opmerkingen.",
   "pageEditor.comments.hideReplies": "Antwoorden verbergen",
   "pageEditor.comments.loadMore": "Meer reacties laden",
   "pageEditor.comments.loadMoreReplies": "Meer antwoorden laden",

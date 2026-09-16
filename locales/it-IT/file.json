@@ -115,6 +115,7 @@
   "pageEditor.comments.edit": "Modifica",
   "pageEditor.comments.edited": "(modificato)",
   "pageEditor.comments.gutterEmpty": "Seleziona il testo nel documento per commentarlo.",
+  "pageEditor.comments.gutterEmptyReadOnly": "Nessun commento ancora.",
   "pageEditor.comments.hideReplies": "Nascondi risposte",
   "pageEditor.comments.loadMore": "Carica più commenti",
   "pageEditor.comments.loadMoreReplies": "Carica più risposte",
