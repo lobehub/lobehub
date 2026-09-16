@@ -136,6 +136,13 @@ export interface DocumentCommentAnchorsValue {
 
 export interface DocumentCommentAnchorsOptions {
   /**
+   * Whether a gutter exists for this document (it may currently be closed —
+   * a click still opens it). A run picked in the body must not scroll the
+   * body when it does: at click time the gutter's own card may not be
+   * mounted yet, so the DOM alone can't say whether one is coming.
+   */
+  hasGutter?: boolean;
+  /**
    * A run was picked in the body but its card is not mounted — the thread is
    * on a page the list has not loaded yet. The caller brings it into view
    * (the same pinning a notification deep link uses).
@@ -158,7 +165,7 @@ export interface DocumentCommentAnchorsOptions {
  */
 export const useDocumentCommentAnchors = (
   anchors: readonly DocumentCommentAnchorItem[],
-  { onPickUnloaded }: DocumentCommentAnchorsOptions = {},
+  { hasGutter, onPickUnloaded }: DocumentCommentAnchorsOptions = {},
 ): DocumentCommentAnchorsValue => {
   const editor = usePageEditorStore((s) => s.editor);
   // A quote captured before a document switch belongs to the previous body;
@@ -193,6 +200,8 @@ export const useDocumentCommentAnchors = (
   anchorsRef.current = anchors;
   const onPickUnloadedRef = useRef(onPickUnloaded);
   onPickUnloadedRef.current = onPickUnloaded;
+  const hasGutterRef = useRef(hasGutter);
+  hasGutterRef.current = hasGutter;
 
   const anchorSignature = useMemo(
     () =>
@@ -295,7 +304,8 @@ export const useDocumentCommentAnchors = (
 
       // The card may sit on a thread page the list has not loaded yet — the
       // highlight exists because anchors are fetched for the whole document.
-      if (!focusCommentCard(hitId, { scroll: false })) onPickUnloadedRef.current?.(hitId);
+      if (!focusCommentCard(hitId, { hasGutter: hasGutterRef.current, scroll: false }))
+        onPickUnloadedRef.current?.(hitId);
     };
 
     element.addEventListener('click', handleClick);

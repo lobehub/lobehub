@@ -249,7 +249,10 @@ export const useDocumentCommentsState = ({
     }
     return [...byId.values()];
   }, [anchorList.data, pinnedThread, anchoredThreads.items]);
-  const anchors = useDocumentCommentAnchors(anchorItems, { onPickUnloaded: focusThread });
+  const anchors = useDocumentCommentAnchors(anchorItems, {
+    hasGutter: panelAvailable,
+    onPickUnloaded: focusThread,
+  });
   const { orphanedRootIds } = anchors;
 
   const isFocusedRootMissing =

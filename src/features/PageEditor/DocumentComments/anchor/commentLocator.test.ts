@@ -71,4 +71,16 @@ describe('focusCommentCard', () => {
     expect(gutterCopy.scrollIntoView).not.toHaveBeenCalled();
     expect(flatCopy.className).toBe('');
   });
+
+  it('does not scroll away when a gutter exists but has not mounted its card yet (a closed panel about to open)', () => {
+    // Only the flat-list copy exists at this instant — the gutter is mounting
+    // in the same tick as a separate effect that opens the panel, so the DOM
+    // alone can't yet say a gutter is coming.
+    const flatCopy = mountCard('a', { inGutter: false });
+
+    const result = focusCommentCard('a', { hasGutter: true, scroll: false });
+
+    expect(result).toBe(true);
+    expect(flatCopy.scrollIntoView).not.toHaveBeenCalled();
+  });
 });
