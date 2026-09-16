@@ -117,6 +117,18 @@ describe('chainExpertiseRejectionIngestion', () => {
 });
 
 describe('chainExpertiseRejectionIngestion reason provenance', () => {
+  it('judges a reason by whether it can settle a case the round never described', () => {
+    // "Harms visual tidiness" is the objection in nicer words — tidiness is the judgement under
+    // review, so it settles nothing. Naming the transfer test moved 5 of 7 reasons from verdict
+    // to mechanism on replay ("must click to enlarge", "retries a network error that never was").
+    const system = chainExpertiseRejectionIngestion({ domains: [], rejections: '' }).messages[0]
+      .content as string;
+
+    expect(system).toContain('could someone facing a situation this round never described settle');
+    expect(system).toContain('verdicts wearing a reason');
+    expect(system).toContain('which property of the delivery causes what concrete consequence');
+  });
+
   it('gives reasonSource a test the model can run, not a judgement call', () => {
     // Asking for "did the reviewer say why" produced 3 of 7 marked `reviewer` on rejections that
     // were pure instructions ("put it in one row", "there's an extra line here"). Naming the
@@ -128,6 +140,6 @@ describe('chainExpertiseRejectionIngestion reason provenance', () => {
     expect(system).toContain('When in doubt answer "inferred"');
     // The mechanism must still be written even when the reviewer only pointed — a reason-free
     // lesson cannot transfer to a screen nobody has built yet.
-    expect(system).toContain('so write it even when the reviewer only pointed');
+    expect(system).toContain('Write the mechanism even when the reviewer only pointed');
   });
 });
