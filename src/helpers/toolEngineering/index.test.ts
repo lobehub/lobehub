@@ -181,9 +181,12 @@ vi.mock('@/store/agent/selectors', () => ({
   },
   agentChatConfigSelectors: {
     currentChatConfig: () => mockCurrentChatConfig,
-    isCloudSandboxEnabled: () => false,
-    isLocalSystemEnabled: () => desktopEnv.enabled,
     isMemoryToolEnabled: () => false,
+  },
+  chatConfigByIdSelectors: {
+    // A local target only resolves on the desktop; elsewhere the run has no
+    // execution environment.
+    getExecutionTargetById: () => () => (desktopEnv.enabled ? 'local' : 'none'),
   },
 }));
 
@@ -485,7 +488,7 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).not.toContain('lobe-agent');
     });
 
-    it('should use chat-mode defaults when the model does not support function calling', () => {
+    it('should keep agent-mode defaults and mark every tool incompatible when the model cannot call functions', () => {
       mockIsCanUseFC = false;
 
       const toolsEngine = createAgentToolsEngine({
@@ -499,8 +502,11 @@ describe('toolEngineering', () => {
         toolIds: [],
       });
 
+      // The stored mode is not demoted to chat mode for a non-FC model (same
+      // rule as the server runtime); the engine reports the incompatibility
+      // per tool instead.
       expect(result.enabledToolIds).toEqual([]);
-      expect(result.filteredTools).not.toContainEqual({
+      expect(result.filteredTools).toContainEqual({
         id: 'lobe-agent',
         reason: 'incompatible',
       });
