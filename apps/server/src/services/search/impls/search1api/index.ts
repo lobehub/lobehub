@@ -1,14 +1,10 @@
-import {
-  type SearchParams,
-  type UniformSearchResponse,
-  type UniformSearchResult,
-} from '@lobechat/types';
+import type { SearchParams, UniformSearchResponse, UniformSearchResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { type SearchServiceImpl } from '../type';
-import { type Search1ApiRawResponse, type TimeRange } from './type';
+import type { SearchServiceImpl } from '../type';
+import type { Search1ApiRawResponse, SearchService, TimeRange } from './type';
 
 const timeRangeMapping: Record<string, TimeRange | undefined> = {
   day: 'day',
@@ -25,6 +21,7 @@ interface Search1APIQueryParams {
   language?: string;
   max_results: number;
   query: string;
+  search_service: SearchService;
   time_range?: string;
 }
 
@@ -35,8 +32,6 @@ const log = debug('lobe-search:search1api');
  * Primarily used for web crawling
  */
 export class Search1APIImpl implements SearchServiceImpl {
-  readonly useAutoSearchEngineSelection = true;
-
   private get apiKey(): string | undefined {
     return process.env.SEARCH1API_SEARCH_API_KEY || process.env.SEARCH1API_API_KEY;
   }
@@ -55,6 +50,7 @@ export class Search1APIImpl implements SearchServiceImpl {
       image: false,
       max_results: 15, // Default max results
       query,
+      search_service: 'google',
     };
 
     const body: Search1APIQueryParams[] = [
@@ -67,10 +63,10 @@ export class Search1APIImpl implements SearchServiceImpl {
       },
     ];
 
-    // Search1API's auto mode chooses the search service per query. Forwarding
-    // searchEngines expands one query into multiple service calls.
-    // Note: Other SearchParams like searchCategories and Search1API specific
-    // params like include_sites, exclude_sites, language are not currently mapped.
+    // Use a deterministic general web-search engine so ambiguous leading keywords
+    // do not redirect multi-keyword queries to an unrelated vertical search.
+    // Note: searchCategories, searchEngines, and Search1API-specific params like
+    // include_sites, exclude_sites, and language are not currently mapped.
 
     log('Constructed request body: %o', body);
 
