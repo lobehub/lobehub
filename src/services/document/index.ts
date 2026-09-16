@@ -14,6 +14,7 @@ import type {
   UpdateDocumentInput,
   UpdateDocumentOutput,
 } from '@/server/routers/lambda/_schema/documentHistory';
+import { workService } from '@/services/work';
 
 import { abortableRequest } from '../utils/abortableRequest';
 
@@ -131,6 +132,22 @@ export interface DocumentHistoryClientSurface {
 
 const autosavedOnceIds = new Set<string>();
 
+/**
+ * A deleted document leaves its Work history intact but changes every card
+ * that points at it into an orphan. Revalidate both ordinary Work caches and
+ * the mounted SWR Infinite galleries before the delete interaction settles.
+ */
+const refreshWorksAfterDocumentDelete = async () => {
+  try {
+    await Promise.all([workService.refreshAllConversations(), workService.refreshWorkspaceLists()]);
+  } catch (error) {
+    // The document is already deleted at this point. A cache refresh failure
+    // must not make callers roll the optimistic document state back to a row
+    // that no longer exists on the server.
+    console.error('[DocumentService] Failed to refresh Works after document deletion:', error);
+  }
+};
+
 export class DocumentService {
   async createDocument(params: CreateDocumentParams): Promise<DocumentItem> {
     return lambdaClient.document.createDocument.mutate(params);
@@ -213,10 +230,12 @@ export class DocumentService {
 
   async deleteDocument(id: string): Promise<void> {
     await lambdaClient.document.deleteDocument.mutate({ id });
+    await refreshWorksAfterDocumentDelete();
   }
 
   async deleteDocuments(ids: string[]): Promise<void> {
     await lambdaClient.document.deleteDocuments.mutate({ ids });
+    await refreshWorksAfterDocumentDelete();
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
