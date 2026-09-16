@@ -284,9 +284,13 @@ const Composer = memo<ComposerProps>(
       // the gutter composer, releasing the selection unmounts the box, and
       // the optimistic card takes its place beside the text at once; a box
       // still showing the same words with a spinner would read as a
-      // duplicate that failed to close.
+      // duplicate that failed to close. The store's pending anchor is shared
+      // by the whole document, so only the composer that captured it — a
+      // reply or the unanchored document-level composer never did — may
+      // release it; otherwise a reply's or that composer's own submit would
+      // strand an unrelated in-progress gutter draft.
       persistDraft({ clientId: nanoid(), content: '', editorData: null });
-      setPendingCommentAnchor(undefined);
+      if (adoptsAnchor && anchor) setPendingCommentAnchor(undefined);
       editorRef.current?.clean();
       try {
         await onSubmit({
@@ -313,6 +317,7 @@ const Composer = memo<ComposerProps>(
         setSubmitting(false);
       }
     }, [
+      adoptsAnchor,
       anchor,
       canCreate,
       documentId,

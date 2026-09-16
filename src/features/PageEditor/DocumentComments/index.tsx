@@ -17,6 +17,7 @@ import type { DocumentCommentsState } from './useDocumentCommentsState';
 const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) => {
   const { t } = useTranslation('file');
   const {
+    anchoredError,
     documentId,
     documentThreads,
     focus,
@@ -24,12 +25,15 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
     handlePinnedRootUpdate,
     handleReplyFocusMissing,
     handleUpdate,
+    isAnchoredInitialError,
     isAnchoredLoading,
+    isAnchoredRetrying,
     listThreads,
     panelAvailable,
     pinnedThreadInList,
     refresh,
     refreshPinned,
+    reloadAnchored,
     summary,
     updatePinnedReplyCount,
     updateReplyCount,
@@ -68,6 +72,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
       {/* The pinned deep-link thread renders on its own, so a pending or failed list
           request never hides a target that was already fetched. */}
       {documentThreads.isInitialError ||
+      isAnchoredInitialError ||
       isLoadingInitial ||
       listThreads.length > 0 ||
       pinnedThreadInList ? (
@@ -91,6 +96,12 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               error={documentThreads.error}
               variant={'block'}
               onRetry={() => void documentThreads.reload()}
+            />
+          ) : isAnchoredInitialError ? (
+            <AsyncError
+              error={anchoredError}
+              variant={'block'}
+              onRetry={() => void reloadAnchored()}
             />
           ) : isLoadingInitial ? (
             <SurfaceSkeleton header={false} variant={'list'} />
@@ -116,6 +127,13 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               retrying={documentThreads.isRetrying}
               variant={'inline'}
               onRetry={() => void documentThreads.reload()}
+            />
+          ) : anchoredError && !isAnchoredInitialError ? (
+            <AsyncError
+              error={anchoredError}
+              retrying={isAnchoredRetrying}
+              variant={'inline'}
+              onRetry={() => void reloadAnchored()}
             />
           ) : (
             documentThreads.hasMore && (
