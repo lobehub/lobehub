@@ -187,3 +187,91 @@ export const chainExpertiseTopicIngestion = (input: {
     },
   ],
 });
+
+export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v1';
+
+export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
+  name: 'expertise_rejection_ingestion',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      domains: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            domainId: { type: 'string' },
+            matches: { type: 'boolean' },
+            observations: {
+              items: {
+                additionalProperties: false,
+                properties: {
+                  example: { type: 'string' },
+                  existingLessonCode: { type: ['string', 'null'] },
+                  layer: { type: ['string', 'null'] },
+                  limits: { type: ['string', 'null'] },
+                  reasoning: { type: 'string' },
+                  sourceRefs: { items: { type: 'string' }, minItems: 1, type: 'array' },
+                  title: { type: 'string' },
+                },
+                required: [
+                  'example',
+                  'existingLessonCode',
+                  'layer',
+                  'limits',
+                  'reasoning',
+                  'sourceRefs',
+                  'title',
+                ],
+                type: 'object',
+              },
+              maxItems: 8,
+              type: 'array',
+            },
+          },
+          required: ['domainId', 'matches', 'observations'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    required: ['domains'],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_REJECTION_INGESTION_SYSTEM_PROMPT = `You maintain a reviewer's delivery standards from the checks they rejected.
+
+Every entry below is one rejected acceptance check: what was promised, and what the reviewer said was wrong with it. The reviewer's own words are the evidence — never soften, reinterpret, or argue with them.
+
+First apply each domainFilter and outOfScope literally. If none of the rejections fall inside a domain, return matches=false and no observations for it. One rejection may legitimately land in several domains.
+
+Then generalize. A rejection is an instance; a lesson is the standard behind it. "This divider isn't needed" is the instance — "decorative dividers are not added unless they separate a semantic level" is the standard. Restating a single rejection verbatim produces a rule that never fires again, which is the failure mode this whole pipeline exists to avoid.
+
+Attaching to an existing lesson is the default; a new lesson is the exception:
+
+- Attach whenever a listed lesson already carries the same standard, even when this rejection words it differently or hits another screen. Put that lesson's code in existingLessonCode, copied character for character from its \`code\` field (for example "P-07").
+- existingLessonCode holds a lesson code and nothing else. Never put a check title, a file path, or any identifier taken from the rejections there — those all read as "no existing lesson" and silently fork a duplicate.
+- Only when no listed lesson carries the standard, set existingLessonCode to null and propose one. Before doing so, state to yourself what it adds that every listed lesson misses; if you cannot, attach instead.
+- Prefer one lesson supported by several rejections over several near-identical lessons. Cite every rejection that supports it in sourceRefs.
+
+For each observation return:
+- title — the standard as one imperative sentence, with the screen, component and task names removed;
+- reasoning — why the reviewer holds it, grounded in what they actually wrote;
+- example — how it showed up this time, concretely enough to recognise again;
+- limits — when the standard does NOT apply, or null when you genuinely cannot tell. A standard with no stated limit is applied everywhere and becomes noise;
+- sourceRefs — the reference labels (for example "R2") of every rejection supporting it. Never invent a label that is not listed.
+
+Use only declared layer keys. Write human-facing text in the language the reviewer used.`;
+
+export const chainExpertiseRejectionIngestion = (input: {
+  domains: readonly unknown[];
+  rejections: string;
+}): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_REJECTION_INGESTION_SYSTEM_PROMPT, role: 'system' },
+    {
+      content: `DOMAINS\n${JSON.stringify(input.domains)}\n\nREJECTED CHECKS (one acceptance round)\n${input.rejections}`,
+      role: 'user',
+    },
+  ],
+});

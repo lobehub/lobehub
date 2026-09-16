@@ -5,6 +5,7 @@ import { AcceptanceService } from '../acceptanceService';
 
 const mocks = vi.hoisted(() => ({
   attachToAcceptance: vi.fn(),
+  distilRejections: vi.fn(),
   findById: vi.fn(),
   findOwnTopicById: vi.fn(),
   findPolicyById: vi.fn(),
@@ -60,6 +61,9 @@ vi.mock('@/database/models/topic', () => ({
 }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/server/services/task', () => ({ TaskService: vi.fn() }));
+vi.mock('@/server/workflows/expertiseRejection', () => ({
+  ExpertiseRejectionWorkflow: { trigger: mocks.distilRejections },
+}));
 
 const service = () => new AcceptanceService({} as any, 'user-1');
 
@@ -168,6 +172,44 @@ describe('AcceptanceService decision gating', () => {
       acceptanceId: 'acc-1',
     });
     expect(mocks.attachToAcceptance).toHaveBeenCalledWith('run-2', 'acc-1', undefined);
+  });
+
+  it('distils the previous round once a new one lands', async () => {
+    mocks.findById.mockResolvedValue(acceptance('rejected'));
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2' });
+    mocks.listByAcceptance.mockResolvedValue([
+      { id: 'run-1', planConfirmedAt: new Date(), roundIndex: 1, status: 'failed' },
+    ]);
+    mocks.attachToAcceptance.mockResolvedValue({
+      acceptanceId: 'acc-1',
+      id: 'run-2',
+      roundIndex: 2,
+    });
+
+    await service().attachRun('run-2', 'acc-1');
+
+    // The settled round is the previous one, never the round that just landed.
+    expect(mocks.distilRejections).toHaveBeenCalledWith({
+      acceptanceId: 'acc-1',
+      userId: 'user-1',
+      verifyRunId: 'run-1',
+      workspaceId: undefined,
+    });
+  });
+
+  it('does not distil when the incoming run only folds into a draft round', async () => {
+    mocks.findById.mockResolvedValue(acceptance('planned'));
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2', plan: [] });
+    mocks.listByAcceptance.mockResolvedValue([
+      { id: 'run-1', planConfirmedAt: null, roundIndex: 1, status: 'planned', userDecision: null },
+    ]);
+    mocks.foldIntoRound.mockResolvedValue({ acceptanceId: 'acc-1', id: 'run-1', roundIndex: 1 });
+
+    await service().attachRun('run-2', 'acc-1');
+
+    // No new round opened, so nothing settled — distilling here would read a round the
+    // reviewer is still working on.
+    expect(mocks.distilRejections).not.toHaveBeenCalled();
   });
 
   it('folds a new run into the draft round instead of opening another', async () => {

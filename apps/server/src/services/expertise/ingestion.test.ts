@@ -247,8 +247,10 @@ const createTx = (persistedLessons: Record<string, unknown>[]): TxFake => {
     inserted,
     tx: {
       insert: (table: unknown) => ({
-        values: async (value: Record<string, unknown>) => {
-          inserted.set(table, [...(inserted.get(table) ?? []), value]);
+        // Drizzle accepts one row or many; hit writes fan out, so flatten both into one list.
+        values: async (value: Record<string, unknown> | Record<string, unknown>[]) => {
+          const rows = Array.isArray(value) ? value : [value];
+          inserted.set(table, [...(inserted.get(table) ?? []), ...rows]);
         },
       }),
       select: selectChain,
@@ -285,11 +287,17 @@ const persistRun = async (
     'user_1',
   );
   await service['persistDomainRun']({
-    agentId: 'agent_1',
     domain: { id: 'domain_1' },
     observations: observations as never,
-    operationId: 'operation_1',
-    topicId: 'topic_1',
+    run: {
+      actorId: 'agent_1',
+      actorType: 'agent',
+      hadHumanInLoop: false,
+      operationId: 'operation_1',
+      reflectionKey: 'topic:topic_1:operation:operation_1',
+      subjectId: 'topic_1',
+      subjectType: 'topic',
+    },
   });
 };
 
@@ -316,6 +324,41 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     const hit = fake.inserted.get(expertiseHits)?.[0];
     expect(run?.id).toMatch(/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i);
     expect(hit?.runId).toBe(run?.id);
+  });
+
+  it('writes one hit per rejection a standard was distilled from', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [
+      observation({
+        outcome: 'violation',
+        sourceCheckResultIds: ['check_a', 'check_b', 'check_c'],
+      }),
+    ]);
+
+    // hitCount has to read as "violated three times", not "analysed once", or the frequency
+    // the standards list ranks by is a count of analysis passes.
+    const hits = fake.inserted.get(expertiseHits) ?? [];
+    expect(hits).toHaveLength(3);
+    expect(hits.map((hit) => hit.sourceCheckResultId)).toEqual(['check_a', 'check_b', 'check_c']);
+    expect(fake.inserted.get(expertiseLessons)?.[0].hitCount).toBe(3);
+    expect(fake.inserted.get(expertiseLessons)?.[0].exampleCount).toBe(1);
+  });
+
+  it('keeps the limits section only when the model stated one', async () => {
+    const withLimits = createTx([]);
+    await persistRun(withLimits, [observation({ limits: 'Not inside chart internals' })]);
+    expect(withLimits.inserted.get(expertiseLessons)?.[0].sections).toContainEqual({
+      body: 'Not inside chart internals',
+      key: 'limits',
+    });
+
+    const withoutLimits = createTx([]);
+    await persistRun(withoutLimits, [observation({ limits: '   ' })]);
+    expect(
+      (withoutLimits.inserted.get(expertiseLessons)?.[0].sections as { key: string }[]).map(
+        (section) => section.key,
+      ),
+    ).toEqual(['rule', 'why', 'how']);
   });
 
   it('attaches by code when the model returns a real lesson code', async () => {

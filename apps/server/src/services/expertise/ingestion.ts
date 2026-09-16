@@ -2,16 +2,22 @@ import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import {
+  acceptances,
   expertiseDomains,
   expertiseDomainSnapshots,
   expertiseHits,
   expertiseLessons,
   expertiseRuns,
   messages,
+  projects,
   topics,
+  verifyCheckResults,
 } from '@lobechat/database/schemas';
 import {
+  chainExpertiseRejectionIngestion,
   chainExpertiseTopicIngestion,
+  EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA,
+  EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION,
   EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from '@lobechat/prompts';
@@ -44,6 +50,32 @@ const AnalysisSchema = z.object({
             layer: z.string().nullable(),
             outcome: z.enum(['pass', 'violation']),
             reasoning: z.string(),
+            title: z.string(),
+          }),
+        )
+        .max(8),
+    }),
+  ),
+});
+
+/**
+ * Same shape as {@link AnalysisSchema}, minus `outcome` (a rejection is always a violation) and
+ * plus the rejections each observation was distilled from.
+ */
+const RejectionAnalysisSchema = z.object({
+  domains: z.array(
+    z.object({
+      domainId: z.string(),
+      matches: z.boolean(),
+      observations: z
+        .array(
+          z.object({
+            example: z.string(),
+            existingLessonCode: z.string().nullable(),
+            layer: z.string().nullable(),
+            limits: z.string().nullable(),
+            reasoning: z.string(),
+            sourceRefs: z.array(z.string()),
             title: z.string(),
           }),
         )
@@ -89,6 +121,39 @@ interface ExpertiseCompletionInput {
   operationId?: string;
   serializedContext?: string;
   topicId: string;
+}
+
+/**
+ * One practice run, as the caller defines it. A topic completion and an acceptance round are both
+ * "a complete judgement of one object", so they share the whole write path below and differ only
+ * in these fields — notably `reflectionKey`, which is what makes a replayed ingestion a no-op.
+ */
+interface ExpertiseRunDescriptor {
+  actorId: string;
+  actorType: 'agent' | 'system' | 'user';
+  hadHumanInLoop: boolean;
+  operationId?: string;
+  reflectionKey: string;
+  subjectId: string;
+  subjectType: 'document' | 'standalone' | 'task' | 'topic';
+}
+
+/** An observation ready to persist, after whichever analysis produced it. */
+interface PersistableObservation {
+  example: string;
+  existingLessonCode: string | null;
+  layer: string | null;
+  /** When the lesson does not apply — kept out of the prompt-facing sections when absent. */
+  limits?: string | null;
+  outcome: 'pass' | 'violation';
+  reasoning: string;
+  /**
+   * The rejections this observation was distilled from. One standard can be violated several
+   * times in a single round, and each violation is its own hit — that is what makes "sourced from
+   * N rejections" a real count rather than a count of analysis passes.
+   */
+  sourceCheckResultIds?: string[];
+  title: string;
 }
 
 /**
@@ -334,15 +399,186 @@ export class ExpertiseIngestionService {
       const domain = domains.find((item) => item.id === result.domainId);
       if (!domain || !result.matches) continue;
       await this.persistDomainRun({
-        ...input,
         domain,
-        hadHumanInLoop: topicContext.hadHumanInLoop,
         observations: result.observations,
+        run: {
+          actorId: input.agentId,
+          actorType: 'agent',
+          hadHumanInLoop: topicContext.hadHumanInLoop,
+          operationId: input.operationId,
+          reflectionKey: input.ingestionKey
+            ? `topic:${input.topicId}:${input.ingestionKey}`
+            : `topic:${input.topicId}:operation:${input.operationId}`,
+          subjectId: input.topicId,
+          subjectType: 'topic',
+        },
       });
       ingested += 1;
     }
 
     return { ingested, reason: ingested > 0 ? 'matched' : 'no-match' } as const;
+  };
+
+  /**
+   * Distils one settled acceptance round's rejections into delivery standards.
+   *
+   * Called when the NEXT round lands (or the acceptance completes), because that is the first
+   * moment the reviewer's judgement on this round is certainly final: the product's own reject
+   * flow ends at a clipboard copy, so no server-side event marks "I finished reviewing".
+   */
+  ingestAcceptanceRound = async (input: { acceptanceId: string; verifyRunId: string }) => {
+    const [acceptance] = await this.db
+      .select({
+        id: acceptances.id,
+        projectId: acceptances.projectId,
+        subjectId: acceptances.subjectId,
+        subjectType: acceptances.subjectType,
+      })
+      .from(acceptances)
+      .where(and(eq(acceptances.id, input.acceptanceId), eq(acceptances.userId, this.userId)))
+      .limit(1);
+    if (!acceptance) return { ingested: 0, reason: 'no-acceptance' } as const;
+
+    const rejections = await this.db
+      .select({
+        detail: verifyCheckResults.userDecisionDetail,
+        id: verifyCheckResults.id,
+        title: verifyCheckResults.checkItemTitle,
+      })
+      .from(verifyCheckResults)
+      .where(
+        and(
+          eq(verifyCheckResults.verifyRunId, input.verifyRunId),
+          eq(verifyCheckResults.userDecision, 'rejected'),
+        ),
+      )
+      .orderBy(asc(verifyCheckResults.checkItemIndex), asc(verifyCheckResults.createdAt));
+    if (rejections.length === 0) return { ingested: 0, reason: 'no-rejections' } as const;
+
+    const labelled = rejections.map((rejection, index) => ({
+      ...rejection,
+      ref: `R${index + 1}`,
+    }));
+    const byRef = new Map(labelled.map((rejection) => [rejection.ref, rejection.id]));
+    const rendered = labelled
+      .map((rejection) => {
+        const notes = (rejection.detail?.annotations ?? [])
+          .map((annotation) => annotation.comment?.trim())
+          .filter(Boolean);
+        return [
+          `[${rejection.ref}] promised: ${rejection.title ?? '(untitled check)'}`,
+          rejection.detail?.comment?.trim() && `  said: ${rejection.detail.comment.trim()}`,
+          ...notes.map((note) => `  circled: ${note}`),
+        ]
+          .filter(Boolean)
+          .join('\n');
+      })
+      .join('\n\n')
+      .slice(0, MAX_CONTEXT_CHARS);
+
+    const expertiseModel = new ExpertiseModel(this.db, this.userId, this.workspaceId);
+    const listDomains = () =>
+      acceptance.projectId
+        ? expertiseModel.listDomainsForProject(acceptance.projectId)
+        : expertiseModel.listDomainsForOwner();
+
+    let bound = await listDomains();
+    if (bound.length === 0) {
+      await this.createDeliveryStandardsDomain(acceptance.projectId);
+      bound = await listDomains();
+      if (bound.length === 0) return { ingested: 0, reason: 'no-domains' } as const;
+    }
+
+    const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
+    const domains = await Promise.all(
+      bound.map(async ({ domain }) => ({
+        domainFilter: domain.domainFilter,
+        id: domain.id,
+        layers: domain.layers,
+        lessons: (await expertiseModel.listLessons(domain.id)).map((lesson) => ({
+          code: lesson.code,
+          layer: lesson.layer,
+          why: lesson.sections.find((section) => section.key === 'why')?.body ?? null,
+          title: lesson.title,
+        })),
+        outOfScope: domain.outOfScope,
+        title: domain.title,
+      })),
+    );
+
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
+    const raw = await ai.generateObject(
+      {
+        ...chainExpertiseRejectionIngestion({ domains, rejections: rendered }),
+        ...modelConfig,
+        schema: EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA,
+      },
+      {
+        metadata: { trigger: 'expertise_rejection_ingestion' },
+        tracing: {
+          promptVersion: EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.ExpertiseRejectionIngestion,
+          schemaName: EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA.name,
+        },
+      },
+    );
+    const analysis = RejectionAnalysisSchema.parse(raw);
+
+    let ingested = 0;
+    for (const result of analysis.domains) {
+      const domain = domains.find((item) => item.id === result.domainId);
+      if (!domain || !result.matches || result.observations.length === 0) continue;
+      await this.persistDomainRun({
+        domain,
+        observations: result.observations.map((observation) => ({
+          ...observation,
+          // A rejection is a violation by construction — never let the model relabel it a pass.
+          outcome: 'violation' as const,
+          // Hallucinated refs are dropped rather than failing the round: losing one provenance
+          // link is cheaper than losing the whole distillation.
+          sourceCheckResultIds: observation.sourceRefs
+            .map((ref) => byRef.get(ref))
+            .filter((id): id is string => Boolean(id)),
+        })),
+        run: {
+          actorId: this.userId,
+          actorType: 'user',
+          hadHumanInLoop: true,
+          reflectionKey: `acceptance:${acceptance.id}:run:${input.verifyRunId}`,
+          subjectId: acceptance.subjectId,
+          subjectType: acceptance.subjectType,
+        },
+      });
+      ingested += 1;
+    }
+
+    return { ingested, reason: ingested > 0 ? 'matched' : 'no-match' } as const;
+  };
+
+  /**
+   * The domain a project's rejections land in before anyone has authored one.
+   *
+   * Owned by the user (never by the project — a project mounts standards, it does not own them),
+   * so the same domain can later be mounted by a sibling project without being copied.
+   */
+  private createDeliveryStandardsDomain = async (projectId: null | string) => {
+    const [project] = projectId
+      ? await this.db
+          .select({ name: projects.name })
+          .from(projects)
+          .where(eq(projects.id, projectId))
+          .limit(1)
+      : [];
+    const scope = project?.name ?? 'my work';
+
+    return new ExpertiseModel(this.db, this.userId, this.workspaceId).createDomain({
+      brief: `Delivery standards distilled from rejected acceptance checks on ${scope}.`,
+      carrier: projectId ? { id: projectId, type: 'project' } : { type: 'user' },
+      domainFilter: `Strip the screen names, component names and this task's name out of the requirement — does it still hold for any delivery on ${scope}? Only then is it mine.`,
+      outOfScope:
+        'One-off facts about a single screen, and anything that stops being true once the task changes.',
+      title: `${scope} delivery standards`,
+    });
   };
 
   private readTopicContext = async (topicId: string) => {
@@ -369,15 +605,12 @@ export class ExpertiseIngestionService {
     };
   };
 
-  private persistDomainRun = async (
-    input: ExpertiseCompletionInput & {
-      domain: { id: string };
-      observations: z.infer<typeof AnalysisSchema>['domains'][number]['observations'];
-    },
-  ) => {
-    const reflectionKey = input.ingestionKey
-      ? `topic:${input.topicId}:${input.ingestionKey}`
-      : `topic:${input.topicId}:operation:${input.operationId}`;
+  private persistDomainRun = async (input: {
+    domain: { id: string };
+    observations: PersistableObservation[];
+    run: ExpertiseRunDescriptor;
+  }) => {
+    const { reflectionKey } = input.run;
     await this.db.transaction(async (tx) => {
       await tx
         .select({ id: expertiseDomains.id })
@@ -406,16 +639,16 @@ export class ExpertiseIngestionService {
       let instanceCount = 0;
 
       await tx.insert(expertiseRuns).values({
-        actorId: input.agentId,
-        actorType: 'agent',
+        actorId: input.run.actorId,
+        actorType: input.run.actorType,
         completedAt: new Date(),
         domainId: input.domain.id,
-        hadHumanInLoop: input.hadHumanInLoop ?? false,
+        hadHumanInLoop: input.run.hadHumanInLoop,
         id: runId,
         reflectionKey,
         runIndex,
-        subjectId: input.topicId,
-        subjectType: 'topic',
+        subjectId: input.run.subjectId,
+        subjectType: input.run.subjectType,
         userId: this.userId,
         workspaceId: this.workspaceId,
       });
@@ -445,6 +678,27 @@ export class ExpertiseIngestionService {
       }
       const countedLessonIds = new Set<string>();
 
+      // One observation yields one hit per rejection it cites, so hitCount stays a count of real
+      // violations; an observation with no cited source (the topic path) still yields one.
+      const writeHits = async (lessonId: string, observation: PersistableObservation) => {
+        const sources = observation.sourceCheckResultIds?.length
+          ? observation.sourceCheckResultIds
+          : [undefined];
+        await tx.insert(expertiseHits).values(
+          sources.map((sourceCheckResultId) => ({
+            domainId: input.domain.id,
+            example: observation.example,
+            lessonId,
+            note: observation.reasoning,
+            operationId: input.run.operationId,
+            outcome: observation.outcome,
+            runId,
+            sourceCheckResultId,
+          })),
+        );
+        return sources.length;
+      };
+
       for (const observation of input.observations) {
         const matchedId = matchLesson(observation, { byCode, byTitle });
         if (!matchedId) {
@@ -458,7 +712,7 @@ export class ExpertiseIngestionService {
             domainId: input.domain.id,
             id: lessonId,
             exampleCount: 1,
-            hitCount: 1,
+            hitCount: observation.sourceCheckResultIds?.length || 1,
             hitRunCount: 1,
             layer: observation.layer,
             lastHitAt: new Date(),
@@ -466,42 +720,29 @@ export class ExpertiseIngestionService {
             originRunId: runId,
             polarity: 'rule',
             sections: [
-              { body: observation.title, key: 'rule' },
-              { body: observation.reasoning, key: 'why' },
-              { body: observation.example, key: 'how' },
+              { body: observation.title, key: 'rule' as const },
+              { body: observation.reasoning, key: 'why' as const },
+              { body: observation.example, key: 'how' as const },
+              ...(observation.limits?.trim()
+                ? [{ body: observation.limits.trim(), key: 'limits' as const }]
+                : []),
             ],
             title: observation.title,
           });
           byCode.set(code, lessonId);
           byTitle.set(normalizeLessonTitle(observation.title), lessonId);
           countedLessonIds.add(lessonId);
-          await tx.insert(expertiseHits).values({
-            domainId: input.domain.id,
-            example: observation.example,
-            lessonId,
-            note: observation.reasoning,
-            operationId: input.operationId,
-            outcome: observation.outcome,
-            runId,
-          });
+          await writeHits(lessonId, observation);
         } else {
           instanceCount += 1;
-          await tx.insert(expertiseHits).values({
-            domainId: input.domain.id,
-            example: observation.example,
-            lessonId: matchedId,
-            note: observation.reasoning,
-            operationId: input.operationId,
-            outcome: observation.outcome,
-            runId,
-          });
+          const hits = await writeHits(matchedId, observation);
           const firstHitThisRun = !countedLessonIds.has(matchedId);
           countedLessonIds.add(matchedId);
           await tx
             .update(expertiseLessons)
             .set({
               exampleCount: sql`${expertiseLessons.exampleCount} + 1`,
-              hitCount: sql`${expertiseLessons.hitCount} + 1`,
+              hitCount: sql`${expertiseLessons.hitCount} + ${hits}`,
               hitRunCount: firstHitThisRun
                 ? sql`${expertiseLessons.hitRunCount} + 1`
                 : expertiseLessons.hitRunCount,

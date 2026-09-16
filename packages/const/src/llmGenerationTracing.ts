@@ -12,6 +12,7 @@ export const TRACING_SCENARIOS = {
   BuilderSuggestion: 'builder_suggestion',
   DocumentToSkillMeta: 'document_to_skill_meta',
   ExpertiseDomainDraft: 'expertise_domain_draft',
+  ExpertiseRejectionIngestion: 'expertise_rejection_ingestion',
   ExpertiseTopicIngestion: 'expertise_topic_ingestion',
   FollowUp: 'follow_up',
   GoalCriteriaGen: 'goal_criteria_gen',

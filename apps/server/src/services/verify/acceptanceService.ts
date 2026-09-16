@@ -36,6 +36,7 @@ import type {
 } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
+import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejection';
 
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
 import { computeFalseFlags } from './feedbackService';
@@ -711,6 +712,19 @@ export class AcceptanceService {
     const run = await this.runModel.attachToAcceptance(runId, acceptanceId, acceptance.visibility);
     await this.recomputeStatus(acceptanceId);
     log('run %s attached to acceptance %s as round %d', runId, acceptanceId, run.roundIndex);
+
+    // A new round landing is the first server-side proof that the reviewer is done with the
+    // previous one: rejecting a check ends at a clipboard copy, so nothing else marks "I finished
+    // reviewing". Fire-and-forget — the distillation must never hold up or fail the attach.
+    if (latest) {
+      void ExpertiseRejectionWorkflow.trigger({
+        acceptanceId,
+        userId: this.userId,
+        verifyRunId: latest.id,
+        workspaceId: this.workspaceId,
+      });
+    }
+
     return run;
   };
 

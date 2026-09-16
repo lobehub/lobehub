@@ -128,8 +128,8 @@ describe('ExpertiseDomainService', () => {
 
     expect(createDomain).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentId: 'agent_1',
         canonEntries: draft.canonEntries,
+        carrier: { id: 'agent_1', type: 'agent' },
         layerCanonRef: 'Google SRE incident lifecycle',
         layerSource: 'canonical',
         layers: [
