@@ -396,6 +396,9 @@ export default {
   'share.entry': 'Share this Agent',
   'share.settings.limits.desc':
     'Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.',
+  'share.settings.limits.maxFileStorage': 'File storage limit (MB)',
+  'share.settings.limits.maxFileStorageHint':
+    'Files visitors attach are stored on your account. Uploads stop once they reach this total; set 0 to turn attachments off.',
   'share.settings.limits.maxTopicsPerVisitor': 'Conversations per visitor',
   'share.settings.limits.maxTopicsPerVisitorHint':
     'How many separate conversations each signed-in visitor can start.',
@@ -452,6 +455,9 @@ export default {
   'share.settings.title': 'Share Agent',
   'share.settings.usage.conversations': 'Conversations',
   'share.settings.usage.desc': 'What this share has attracted, and what it has cost you.',
+  'share.settings.usage.fileStorage': 'File storage',
+  'share.settings.usage.fileStorageOfLimit': '{{used}} of {{limit}}',
+  'share.settings.usage.fileStorageOff': '{{used}} · attachments off',
   'share.settings.usage.loadFailed': 'Usage could not be loaded',
   'share.settings.usage.monthlySpend': 'This month’s spend',
   'share.settings.usage.spendOfLimit': '${{spend}} of ${{limit}}',
@@ -484,6 +490,8 @@ export default {
   'share.visitor.access.signInDesc':
     'Sign in to start chatting with this shared agent. Your conversations stay tied to your account.',
   'share.visitor.access.signInTitle': 'Sign in to continue',
+  'share.visitor.errors.fileUnavailable':
+    'One of the attachments is no longer available. Remove it and try again.',
   'share.visitor.errors.generic': 'Failed to send the message. Please try again.',
   'share.visitor.errors.heterogeneousUnsupported':
     "This shared agent isn't available for visitor chat yet. Please contact its owner.",
@@ -535,6 +543,9 @@ export default {
   'share.visitor.profile.terms.tools_other': '{{count}} tools are open to visitors.',
   'share.visitor.profile.terms.topics': 'You can open up to {{count}} conversations.',
   'share.visitor.profile.terms.turns': 'Each conversation allows up to {{count}} turns.',
+  'share.visitor.profile.terms.uploads':
+    'You can attach files; this Agent has {{size}} of file storage for visitors.',
+  'share.visitor.profile.terms.uploadsOff': 'Attachments are turned off.',
   'share.visitor.profile.terms.visibilityCreator':
     'The creator has turned on session review, so they can read this conversation.',
   'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your conversations.',
@@ -543,6 +554,10 @@ export default {
   'share.visitor.topics.new': 'New conversation',
   'share.visitor.topics.title': 'Conversations',
   'share.visitor.topics.untitled': 'Untitled conversation',
+  'share.visitor.upload.creatorStorageBlocked':
+    "This Agent's upload space is full. Ask its creator to free up room or raise the cap.",
+  'share.visitor.upload.fileTooLarge': 'Files must be under {{max}}.',
+  'share.visitor.upload.tooManyFiles': 'You can attach up to {{max}} files per message.',
 
   'transfer.title': 'Move',
   'transfer.copyTo': 'Copy to…',

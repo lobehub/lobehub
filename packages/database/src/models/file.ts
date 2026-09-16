@@ -1,5 +1,5 @@
 import type { QueryFileListParams } from '@lobechat/types';
-import { FilesTabs, LIBRARY_HIDDEN_FILE_SOURCES, SortType } from '@lobechat/types';
+import { FileSource, FilesTabs, LIBRARY_HIDDEN_FILE_SOURCES, SortType } from '@lobechat/types';
 import {
   and,
   asc,
@@ -167,7 +167,21 @@ export class FileModel {
     };
   };
 
-  delete = async (id: string, removeGlobalFile: boolean = true, trx?: Transaction) => {
+  /**
+   * Delete a file row. Returns the row only when the caller should also
+   * remove the stored object: by default that is when the row's `fileHash`
+   * was the last reference to its `global_files` entry (content-deduplicated
+   * uploads share one object per hash). A row created outside that dedup
+   * graph (`insertToGlobalFiles: false`, no `fileHash`, its own object under
+   * `url`) is never counted there, so pass `exclusiveStorage: true` to get the
+   * row back whenever it was deleted — otherwise its object is orphaned.
+   */
+  delete = async (
+    id: string,
+    removeGlobalFile: boolean = true,
+    trx?: Transaction,
+    options?: { exclusiveStorage?: boolean },
+  ) => {
     const executeInTransaction = async (tx: Transaction) => {
       // In pglite environment, non-transactional operations cannot be used within a transaction as it will block
       const file = await this.findById(id, tx);
@@ -204,7 +218,7 @@ export class FileModel {
       // 4. Delete file record
       await tx.delete(files).where(and(eq(files.id, id), this.ownership()));
 
-      if (!fileHash) return;
+      if (!fileHash) return options?.exclusiveStorage ? file : undefined;
 
       const result = await tx
         .select({ count: count() })
@@ -220,6 +234,8 @@ export class FileModel {
 
         return file;
       }
+
+      return options?.exclusiveStorage ? file : undefined;
     };
 
     return await (trx ? executeInTransaction(trx) : this.db.transaction(executeInTransaction));
@@ -229,8 +245,16 @@ export class FileModel {
    * Delete a transient upload only while no persisted message or session references it.
    * Locking the file row serializes this cleanup with foreign-key inserts, so a late send either
    * wins ownership and preserves the file or observes the deletion and fails atomically.
+   *
+   * Resolves to the row only when its stored object should be deleted too —
+   * see {@link delete} for the `exclusiveStorage` rule; `undefined` covers both
+   * "still referenced, kept" and "deleted, object still shared".
    */
-  deleteUnreferenced = async (id: string, removeGlobalFile: boolean = true) => {
+  deleteUnreferenced = async (
+    id: string,
+    removeGlobalFile: boolean = true,
+    options?: { exclusiveStorage?: boolean },
+  ) => {
     return this.db.transaction(async (trx) => {
       const [file] = await trx
         .select({ id: files.id })
@@ -254,7 +278,7 @@ export class FileModel {
         .limit(1);
       if (sessionReference) return;
 
-      return this.delete(id, removeGlobalFile, trx);
+      return this.delete(id, removeGlobalFile, trx, options);
     });
   };
 
@@ -272,6 +296,28 @@ export class FileModel {
       .where(this.ownership());
 
     return parseInt(result[0].totalSize!) || 0;
+  };
+
+  /**
+   * Bytes occupied by one agent share's visitor uploads: this user's
+   * `agent_share` rows whose provenance names `shareId`. Backs the share's
+   * `maxFileStorage` cap (`shareChat.createUploadUrl`), so it accepts the
+   * reservation transaction to be counted inside it.
+   */
+  countAgentShareUsage = async (shareId: string, trx?: Transaction) => {
+    const db = trx ?? this.db;
+    const [row] = await db
+      .select({ totalSize: sum(files.size) })
+      .from(files)
+      .where(
+        and(
+          this.ownership(),
+          eq(files.source, FileSource.AgentShare),
+          sql`${files.metadata} -> 'agentShare' ->> 'shareId' = ${shareId}`,
+        ),
+      );
+
+    return Number(row?.totalSize ?? 0);
   };
 
   deleteMany = async (

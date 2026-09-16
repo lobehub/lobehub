@@ -9,6 +9,11 @@ import type { ShareVisibility } from '../topic';
 export interface SharedAgentTerms {
   /** Whether the creator opted into reading visitor conversations. */
   allowCreatorViewSessions: boolean;
+  /**
+   * Total upload space (bytes) the creator opened to visitor attachments on
+   * this share; `0` means attachments are off and the composer hides them.
+   */
+  maxFileStorage: number;
   /** Maximum conversations this visitor may open against the share. */
   maxTopicsPerVisitor: number;
   /** Maximum message turns allowed inside one shared conversation. */
@@ -26,6 +31,12 @@ export interface SharedAgentStats {
 }
 
 /** Agent metadata exposed to signed-in visitors of an agent share. */
+export interface SharedAgentUploadAbility {
+  audio: boolean;
+  image: boolean;
+  video: boolean;
+}
+
 export interface SharedAgentData {
   agentId: string;
   agentMeta: {
@@ -67,6 +78,13 @@ export interface SharedAgentData {
    * — never the granted API list, which is owner-facing configuration.
    */
   toolGrants: string[];
+  /**
+   * Which media the visitor composer may attach, derived server-side from
+   * the agent's model abilities so the model itself stays hidden (it is
+   * owner-facing unless `showModelInfo` opts in). Documents are always
+   * allowed; these only gate direct media input.
+   */
+  uploadAbility: SharedAgentUploadAbility;
   visibility: ShareVisibility;
 }
 

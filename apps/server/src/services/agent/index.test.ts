@@ -480,6 +480,53 @@ describe('AgentService', () => {
     });
   });
 
+  describe('resolveModelSelection', () => {
+    it("layers the user's default over the server default for an agent without a model", async () => {
+      (parseAgentConfig as any).mockReturnValue({ model: 'server-model', provider: 'server' });
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'user-preferred-model', provider: 'user-provider' },
+      });
+
+      await expect(service.resolveModelSelection({ model: null, provider: null })).resolves.toEqual(
+        { model: 'user-preferred-model', provider: 'user-provider' },
+      );
+    });
+
+    it('falls back to the server default, then the hardcoded default, without a user default', async () => {
+      (parseAgentConfig as any).mockReturnValue({ model: 'server-model' });
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce(undefined);
+
+      await expect(service.resolveModelSelection({})).resolves.toEqual({
+        model: 'server-model',
+        provider: DEFAULT_AGENT_CONFIG.provider,
+      });
+    });
+
+    it("keeps the agent's own model over every default", async () => {
+      (parseAgentConfig as any).mockReturnValue({ model: 'server-model', provider: 'server' });
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'user-preferred-model', provider: 'user-provider' },
+      });
+
+      await expect(
+        service.resolveModelSelection({ model: 'claude-3-opus', provider: 'anthropic' }),
+      ).resolves.toEqual({ model: 'claude-3-opus', provider: 'anthropic' });
+    });
+
+    it('does not let a workspace agent inherit a personal default model', async () => {
+      (parseAgentConfig as any).mockReturnValue({});
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'user-preferred-model', provider: 'user-provider' },
+      });
+      const workspaceService = new AgentService(mockDb, mockUserId, mockWorkspaceId);
+
+      await expect(workspaceService.resolveModelSelection({})).resolves.toEqual({
+        model: DEFAULT_AGENT_CONFIG.model,
+        provider: DEFAULT_AGENT_CONFIG.provider,
+      });
+    });
+  });
+
   describe('getAgentConfigById', () => {
     it('should return null if agent does not exist', async () => {
       const mockAgentModel = {

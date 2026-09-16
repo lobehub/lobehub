@@ -63,6 +63,13 @@ vi.mock('@/database/models/topic', () => ({
   }),
 }));
 
+const mockCountAgentShareUsage = vi.fn();
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(function () {
+    return { countAgentShareUsage: mockCountAgentShareUsage };
+  }),
+}));
+
 const mockGetAgentShareMonthlySpend = vi.fn();
 vi.mock('@/business/server/agent-share/spendGate', () => ({
   getAgentShareMonthlySpend: (...args: unknown[]) => mockGetAgentShareMonthlySpend(...args),
@@ -97,6 +104,7 @@ describe('agentShareRouter', () => {
     });
     mockUpdateVisibility.mockResolvedValue(share);
     mockCountShareVisitors.mockResolvedValue({ topicCount: 7, visitorCount: 3 });
+    mockCountAgentShareUsage.mockResolvedValue(0);
     mockGetAgentShareMonthlySpend.mockResolvedValue(null);
     mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
   });
@@ -402,9 +410,13 @@ describe('agentShareRouter', () => {
         userViewCount: 42,
       });
       mockGetAgentShareMonthlySpend.mockResolvedValue(2.5);
+      mockCountAgentShareUsage.mockResolvedValue(3 * 1024 * 1024);
       const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
       await expect(caller.getShareStats({ agentId: 'agent-1' })).resolves.toEqual({
+        fileStorageUsed: 3 * 1024 * 1024,
+        // Cap missing from a share saved before the field existed → default.
+        maxFileStorage: 512 * 1024 * 1024,
         monthlySpend: 2.5,
         monthlySpendLimit: 10,
         topicCount: 7,
@@ -412,10 +424,25 @@ describe('agentShareRouter', () => {
         visitorCount: 3,
       });
       expect(mockCountShareVisitors).toHaveBeenCalledWith({ agentId: 'agent-1' });
+      // Keyed by the share INSTANCE, not the agent: a share that was turned
+      // off and re-created must not inherit the old instance's bytes.
+      expect(mockCountAgentShareUsage).toHaveBeenCalledWith('share-1');
       expect(mockGetAgentShareMonthlySpend).toHaveBeenCalledWith({
         agentId: 'agent-1',
         ownerUserId: 'user-1',
       });
+    });
+
+    it('reports the configured upload cap when the owner has set one', async () => {
+      mockGetByAgentId.mockResolvedValue({
+        ...share,
+        shareConfig: { ...share.shareConfig, maxFileStorage: 0 },
+      });
+      const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
+
+      const stats = await caller.getShareStats({ agentId: 'agent-1' });
+
+      expect(stats.maxFileStorage).toBe(0);
     });
 
     it('reports unknown spend as null rather than zero', async () => {
