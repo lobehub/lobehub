@@ -339,6 +339,7 @@ export const useDocumentCommentsState = ({
   const pinnedInGutter = Boolean(pinnedThread) && isGutterThread(pinnedThread!);
 
   return {
+    anchoredError: anchoredThreads.error,
     anchors,
     documentId,
     documentThreads,
@@ -349,7 +350,9 @@ export const useDocumentCommentsState = ({
     handlePinnedRootUpdate,
     handleReplyFocusMissing,
     handleUpdate,
+    isAnchoredInitialError: anchoredThreads.isInitialError,
     isAnchoredLoading: anchoredThreads.isLoadingInitial,
+    isAnchoredRetrying: anchoredThreads.isRetrying,
     listThreads,
     paneRef,
     panelAvailable,
@@ -358,6 +361,7 @@ export const useDocumentCommentsState = ({
     pinnedThreadInList: pinnedThread,
     refresh,
     refreshPinned,
+    reloadAnchored,
     summary,
     updatePinnedReplyCount,
     updateReplyCount,

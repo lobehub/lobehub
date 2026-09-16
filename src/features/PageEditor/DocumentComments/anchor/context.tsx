@@ -19,6 +19,7 @@ const FALLBACK: DocumentCommentAnchorsValue = {
   getPendingAnchorRange: nullValue,
   locateInBody: noop,
   orphanedRootIds: new Set(),
+  pickTick: 0,
   resolvedAt: 0,
   selectedRootId: null,
   selectRoot: noop,

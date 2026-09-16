@@ -7,6 +7,8 @@ import { MessageSquareTextIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import NavHeader from '@/features/NavHeader';
 import RightPanel from '@/features/RightPanel';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
@@ -25,6 +27,7 @@ import { PENDING_CARD_ID, useGutterLayout } from './useGutterLayout';
 const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
   const { t } = useTranslation('file');
   const {
+    anchoredError,
     documentId,
     focus,
     gutterThreads,
@@ -32,10 +35,14 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
     handlePinnedRootUpdate,
     handleReplyFocusMissing,
     handleUpdate,
+    isAnchoredInitialError,
+    isAnchoredLoading,
+    isAnchoredRetrying,
     paneRef,
     pinnedThreadInGutter,
     refresh,
     refreshPinned,
+    reloadAnchored,
     updatePinnedReplyCount,
     updateReplyCount,
     updateSummaryTotal,
@@ -60,7 +67,8 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
   });
   // The panel is not a scroll container; a wheel over it scrolls the document.
   useForwardWheel(hostRef, scrollBy);
-  const isEmpty = threads.length === 0 && !hasPending;
+  const isEmpty =
+    threads.length === 0 && !hasPending && !isAnchoredLoading && !isAnchoredInitialError;
 
   const renderCard = (id: string, active: boolean, children: React.ReactNode) => {
     const top = tops.get(id);
@@ -84,10 +92,27 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
 
   return (
     <div data-document-comment-gutter className={styles.gutter} ref={hostRef}>
-      {isEmpty && (
-        <Flexbox align={'center'} className={styles.gutterEmpty} justify={'center'}>
-          <Empty description={t('pageEditor.comments.gutterEmpty')} icon={MessageSquareTextIcon} />
-        </Flexbox>
+      {isAnchoredInitialError ? (
+        <AsyncError error={anchoredError} variant={'block'} onRetry={() => void reloadAnchored()} />
+      ) : isAnchoredLoading ? (
+        <SurfaceSkeleton header={false} variant={'list'} />
+      ) : (
+        isEmpty && (
+          <Flexbox align={'center'} className={styles.gutterEmpty} justify={'center'}>
+            <Empty
+              description={t('pageEditor.comments.gutterEmpty')}
+              icon={MessageSquareTextIcon}
+            />
+          </Flexbox>
+        )
+      )}
+      {anchoredError && !isAnchoredInitialError && (
+        <AsyncError
+          error={anchoredError}
+          retrying={isAnchoredRetrying}
+          variant={'inline'}
+          onRetry={() => void reloadAnchored()}
+        />
       )}
       <div className={styles.gutterTrack} ref={trackRef}>
         {hasPending &&

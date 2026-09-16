@@ -119,6 +119,8 @@ export interface DocumentCommentAnchorsValue {
   locateInBody: (rootCommentId: string) => void;
   /** Threads whose quoted run no longer exists in the body. */
   orphanedRootIds: ReadonlySet<string>;
+  /** Ticks on every body-click pick, even a repeat pick of the same thread. */
+  pickTick: number;
   /**
    * Ticks every time anchors are re-resolved against the body. Anything that
    * measured a range (card positions) is stale once this changes.
@@ -170,6 +172,10 @@ export const useDocumentCommentAnchors = (
 
   const [hoveredRootId, setHoveredRootId] = useState<string | null>(null);
   const [selectedRootId, setSelectedRootId] = useState<string | null>(null);
+  // `selectedRootId` alone can't signal a repeated pick of the same run: React
+  // bails out of the state update, so a listener keyed on it never re-fires.
+  // This ticks on every body-click pick regardless of whether the id changed.
+  const [pickTick, setPickTick] = useState(0);
   const activeRootId = hoveredRootId ?? selectedRootId;
   const [orphanedRootIds, setOrphanedRootIds] = useState<ReadonlySet<string>>(() => new Set());
   const [resolvedAt, setResolvedAt] = useState(0);
@@ -281,6 +287,7 @@ export const useDocumentCommentAnchors = (
       }
       setSelectedRootId(hitId);
       if (!hitId) return;
+      setPickTick((tick) => tick + 1);
 
       // The card may sit on a thread page the list has not loaded yet — the
       // highlight exists because anchors are fetched for the whole document.
@@ -300,6 +307,7 @@ export const useDocumentCommentAnchors = (
       getPendingAnchorRange,
       locateInBody,
       orphanedRootIds,
+      pickTick,
       resolvedAt,
       selectedRootId,
       selectRoot: setSelectedRootId,
@@ -313,6 +321,7 @@ export const useDocumentCommentAnchors = (
       getPendingAnchorRange,
       locateInBody,
       orphanedRootIds,
+      pickTick,
       resolvedAt,
       selectedRootId,
     ],

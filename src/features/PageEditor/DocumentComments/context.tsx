@@ -36,20 +36,20 @@ const DocumentCommentsStateProvider = ({
   const state = useDocumentCommentsState({ documentId, gutterEnabled, paneRef, panelAvailable });
 
   // A selection being commented on, or a run picked in the body, is answered
-  // in the comments panel: open it on demand. Keyed on the pick counter — the
-  // store compares values by content, so a repeated pick of the same run
-  // would otherwise look like no change — so picking again after the panel
-  // was closed opens it again, while closing it is never undone by the pick
-  // that opened it.
+  // in the comments panel: open it on demand. Keyed on tick counters, not the
+  // picked value itself — both the store and `selectedRootId` compare by
+  // content, so a repeated pick of the same run would otherwise look like no
+  // change — so picking again after the panel was closed opens it again,
+  // while closing it is never undone by the pick that opened it.
   const pickVersion = usePageEditorStore((s) =>
     s.pendingCommentAnchor?.documentId === documentId ? s.pendingCommentAnchorVersion : 0,
   );
-  const { selectedRootId } = state.anchors;
+  const { pickTick, selectedRootId } = state.anchors;
   useEffect(() => {
-    if (!panelAvailable || !(pickVersion || selectedRootId)) return;
+    if (!panelAvailable || !(pickVersion || pickTick || selectedRootId)) return;
     setCommentsPanelOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickVersion, selectedRootId]);
+  }, [pickVersion, pickTick, selectedRootId]);
 
   return (
     <DocumentCommentsContext value={state}>

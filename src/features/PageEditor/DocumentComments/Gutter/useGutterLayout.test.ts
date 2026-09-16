@@ -45,6 +45,7 @@ const anchors = (
   getPendingAnchorRange: () => null,
   locateInBody: () => {},
   orphanedRootIds: new Set(),
+  pickTick: 0,
   resolvedAt: 1,
   selectedRootId: null,
   selectRoot: () => {},
@@ -81,7 +82,7 @@ describe('useGutterLayout', () => {
         }),
       {
         wrapper: ({ children }: { children: ReactNode }) =>
-          createElement(DocumentCommentAnchorsProvider, { value }, children),
+          createElement(DocumentCommentAnchorsProvider, { children, value }),
       },
     );
     act(() => result.current.registerCard('a')(card));
