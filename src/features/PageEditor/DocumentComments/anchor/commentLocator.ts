@@ -20,7 +20,14 @@ const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? 'auto' : 
  */
 export const focusCommentCard = (commentId: string, { scroll = true } = {}): boolean => {
   if (typeof document === 'undefined') return false;
-  const card = document.querySelector<HTMLElement>(`[data-document-comment-id="${commentId}"]`);
+  const selector = `[data-document-comment-id="${commentId}"]`;
+  // An anchored thread with a gutter open renders in both the gutter and the
+  // flat list below the document (the list is the complete record). Prefer
+  // the gutter's copy — the one a body click is actually about — and only
+  // fall back to the list's when there is no gutter copy to prefer.
+  const card =
+    document.querySelector<HTMLElement>(`[data-document-comment-gutter] ${selector}`) ??
+    document.querySelector<HTMLElement>(selector);
   if (!card) return false;
 
   // A card in the panel is already pulled level with its run — a click there

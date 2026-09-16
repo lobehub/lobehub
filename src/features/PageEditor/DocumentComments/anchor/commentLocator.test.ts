@@ -54,4 +54,21 @@ describe('focusCommentCard', () => {
     expect(gutterCard.className).toBe('');
     expect(flatCard.className).not.toBe('');
   });
+
+  it('prefers the gutter copy when the same thread renders in both the flat list and the gutter', () => {
+    // The flat list is the document's complete record and always includes
+    // anchored threads too, so an open gutter renders the same thread twice —
+    // the list copy first in DOM order.
+    const flatCopy = mountCard('a', { inGutter: false });
+    const gutterCopy = mountCard('a', { inGutter: true });
+
+    const result = focusCommentCard('a', { scroll: false });
+
+    expect(result).toBe(true);
+    // Must not throw the viewport down to the flat-list copy when the
+    // gutter's own copy is already visible beside the clicked run.
+    expect(flatCopy.scrollIntoView).not.toHaveBeenCalled();
+    expect(gutterCopy.scrollIntoView).not.toHaveBeenCalled();
+    expect(flatCopy.className).toBe('');
+  });
 });
