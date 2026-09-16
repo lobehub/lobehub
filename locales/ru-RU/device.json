@@ -13,7 +13,6 @@
   "workingDirectory.branchesLoadFailed": "Не удалось загрузить ветки",
   "workingDirectory.branchesLoading": "Загрузка веток…",
   "workingDirectory.branchesNoMatch": "Нет совпадающих веток",
-  "workingDirectory.branchesTruncated": "{{count}} ещё — введите текст для фильтрации",
   "workingDirectory.browseDescription": "Выберите папку на подключенном устройстве.",
   "workingDirectory.browseFolders": "Просмотреть папки",
   "workingDirectory.cancel": "Отмена",

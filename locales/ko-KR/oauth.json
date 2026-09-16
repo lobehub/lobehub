@@ -6,7 +6,7 @@
   "consent.error.sessionInvalid.title": "유효하지 않은 인증 세션",
   "consent.error.title": "오류 발생",
   "consent.error.unknown.message": "권한 세부 정보를 가져오는 중 알 수 없는 오류가 발생했습니다",
-  "consent.error.unsupportedInteraction.message": "지원되지 않는 상호작용 유형: {promptName}",
+  "consent.error.unsupportedInteraction.message": "지원되지 않는 상호작용 유형: {{promptName}}",
   "consent.error.unsupportedInteraction.title": "지원되지 않는 상호작용 유형",
   "consent.permissionsTitle": "다음 권한을 요청합니다:",
   "consent.redirectUri": "인증이 완료되면 다음으로 리디렉션됩니다:",
