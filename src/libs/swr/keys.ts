@@ -211,12 +211,13 @@ export const documentCommentKeys = {
   ]),
   threads: def(
     'documentComment:threads',
-    (workspaceId: string | null, documentId: string, cursor?: string) => [
-      'documentComment:threads',
-      workspaceId ?? '',
-      documentId,
-      cursor ?? '',
-    ],
+    (
+      workspaceId: string | null,
+      documentId: string,
+      cursor?: string,
+      /** `'anchored'` / `'document'` page one subset; `'all'` pages every root. */
+      scope: 'all' | 'anchored' | 'document' = 'all',
+    ) => ['documentComment:threads', workspaceId ?? '', documentId, cursor ?? '', scope],
   ),
 };
 

@@ -22,6 +22,7 @@ export interface Action {
   handleTitleSubmit: () => Promise<void>;
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
+  setCommentsPanelOpen: (open: boolean) => void;
   setEmoji: (emoji: string | undefined) => void;
   /**
    * Mirror the lock health from {@link useEditLock} into the store so banners and
@@ -190,6 +191,10 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         }
       },
 
+      setCommentsPanelOpen: (commentsPanelOpen) => {
+        if (get().commentsPanelOpen !== commentsPanelOpen) set({ commentsPanelOpen });
+      },
+
       setEmoji: (emoji: string | undefined) => {
         const { lastSavedEmoji, metaReadOnly, triggerDebouncedMetaSave } = get();
 
@@ -226,7 +231,14 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       },
 
       setPendingCommentAnchor: (pendingCommentAnchor) => {
-        set({ pendingCommentAnchor });
+        set((state) => ({
+          pendingCommentAnchor,
+          // `?? 0` guards a store instance hydrated before this counter existed
+          // (a hot reload keeps the old state), which would otherwise tick to NaN.
+          pendingCommentAnchorVersion: pendingCommentAnchor
+            ? (state.pendingCommentAnchorVersion ?? 0) + 1
+            : (state.pendingCommentAnchorVersion ?? 0),
+        }));
       },
 
       setRightPanelMode: (rightPanelMode) => {

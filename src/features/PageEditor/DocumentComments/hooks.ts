@@ -7,7 +7,7 @@ import type {
   DocumentCommentSummary,
   DocumentCommentThreadPage,
 } from '@lobechat/types';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -25,12 +25,21 @@ import {
 } from './optimistic';
 
 const PAGE_SIZE = 20;
+/**
+ * The gutter needs every anchored thread mounted at once (each card sits at
+ * its own height), so its pages are fetched at the router's cap and drained
+ * in the background rather than behind a "load more" button.
+ */
+const ANCHORED_PAGE_SIZE = 50;
 
-const fetchThreads = ([, , documentId, cursor]: readonly string[]) =>
+export type DocumentCommentThreadScope = 'all' | 'anchored' | 'document';
+
+const fetchThreads = ([, , documentId, cursor, scope]: readonly string[]) =>
   documentCommentService.listThreads({
+    anchored: scope === 'all' ? undefined : scope === 'anchored',
     cursor: cursor || undefined,
     documentId,
-    limit: PAGE_SIZE,
+    limit: scope === 'anchored' ? ANCHORED_PAGE_SIZE : PAGE_SIZE,
   });
 
 const fetchReplies = ([, , rootCommentId, cursor]: readonly string[]) =>
@@ -142,7 +151,10 @@ export const useDocumentCommentAnchorList = (documentId?: string | null) => {
   );
 };
 
-export const useDocumentCommentThreads = (documentId?: string | null) => {
+export const useDocumentCommentThreads = (
+  documentId?: string | null,
+  scope: DocumentCommentThreadScope = 'all',
+) => {
   const workspaceId = useActiveWorkspaceId();
   const getKey = useCallback(
     (_index: number, previous: DocumentCommentThreadPage | null) => {
@@ -151,25 +163,36 @@ export const useDocumentCommentThreads = (documentId?: string | null) => {
         workspaceId,
         documentId,
         previous?.nextCursor ?? undefined,
+        scope,
       );
     },
-    [documentId, workspaceId],
+    [documentId, scope, workspaceId],
   );
   const response = useSWRInfinite<DocumentCommentThreadPage>(getKey, fetchThreads, {
     revalidateFirstPage: false,
   });
+  const pagination = getPaginationState(
+    response.data,
+    response.error,
+    response.isLoading,
+    response.isValidating,
+    response.size,
+  );
+  const { setSize } = response;
+  const { hasMore, isLoadingMore } = pagination;
+
+  // Anchored threads are drained eagerly: a card the gutter has not loaded is
+  // a highlight with nothing beside it.
+  useEffect(() => {
+    if (scope !== 'anchored' || !hasMore || isLoadingMore) return;
+    void setSize((current) => current + 1);
+  }, [hasMore, isLoadingMore, scope, setSize]);
 
   return {
     ...response,
-    ...getPaginationState(
-      response.data,
-      response.error,
-      response.isLoading,
-      response.isValidating,
-      response.size,
-    ),
+    ...pagination,
     items: flattenDocumentCommentThreads(response.data),
-    loadMore: () => response.setSize((current) => current + 1),
+    loadMore: () => setSize((current) => current + 1),
     reload: () => response.mutate(),
   };
 };

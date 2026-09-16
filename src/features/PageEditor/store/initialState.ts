@@ -35,6 +35,13 @@ export interface PublicState {
 }
 
 export interface State extends PublicState {
+  /**
+   * Whether the comments panel beside the body is open. It is its own panel,
+   * not a mode of the page-agent panel, so opening it never displaces the
+   * copilot and vice versa. Not persisted: a fresh document starts closed
+   * and a selection opens it on demand.
+   */
+  commentsPanelOpen: boolean;
   documentId: string | undefined;
   editor?: IEditor;
   /** True until the first lock peek resolves; the editor stays read-only until then. */
@@ -80,11 +87,19 @@ export interface State extends PublicState {
    * composer, or published against it.
    */
   pendingCommentAnchor?: PendingCommentAnchor;
+  /**
+   * Ticks every time a selection is captured. The store compares selected
+   * values by content, so two picks of the same run look identical to a
+   * subscriber; this counter is what tells them apart (the composer takes
+   * the caret again on every pick).
+   */
+  pendingCommentAnchorVersion: number;
   rightPanelMode: RightPanelMode;
 }
 
 export const initialState: State = {
   autoSave: true,
+  commentsPanelOpen: false,
   documentId: undefined,
   emoji: undefined,
   // Start pending (read-only) so the editor never flashes editable before the
@@ -100,6 +115,7 @@ export const initialState: State = {
   lockOwnerId: undefined,
   metaSaveStatus: 'idle',
   pendingCommentAnchor: undefined,
+  pendingCommentAnchorVersion: 0,
   rightPanelMode: 'copilot',
   title: undefined,
 };

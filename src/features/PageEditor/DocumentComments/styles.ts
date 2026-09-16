@@ -1,5 +1,7 @@
 import { createStaticStyles, cssVar } from 'antd-style';
 
+import { GUTTER_INSET_END, GUTTER_INSET_START } from './Gutter/constants';
+
 /** Max rendered height of an image inside the comment composer / edit box. */
 export const COMMENT_EDITOR_IMAGE_MAX_HEIGHT = 400;
 /** Max rendered height of an image inside a published comment. */
@@ -32,6 +34,10 @@ export const styles = createStaticStyles(({ css }) => ({
     margin-inline-start: 40px;
     padding-block-start: 8px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  actionsCompact: css`
+    margin-inline-start: 0;
+    padding-block-start: 4px;
   `,
   /**
    * The quoted run a comment is attached to. Shared by the card and the
@@ -75,10 +81,31 @@ export const styles = createStaticStyles(({ css }) => ({
     min-width: 0;
     color: inherit;
   `,
+  /**
+   * The margin marker: sits in the body's right margin at the height of the
+   * block under the pointer. Hidden until hover, so a reading column stays
+   * clean; the gutter beside it is where the marker's comment will land.
+   */
+  blockMarker: css`
+    position: absolute;
+    z-index: 1;
+    inset-inline-end: 0;
+    transform: translateX(100%);
+
+    padding-inline-start: 4px;
+
+    color: ${cssVar.colorTextTertiary};
+  `,
   body: css`
     margin-inline-start: 40px;
     padding-block-start: 8px;
     line-height: 1.7;
+  `,
+  bodyCompact: css`
+    margin-inline-start: 0;
+    padding-block-start: 6px;
+    font-size: 14px;
+    line-height: 1.6;
   `,
   card: css`
     margin-inline: -12px;
@@ -103,6 +130,21 @@ export const styles = createStaticStyles(({ css }) => ({
     padding-block: 4px;
     padding-inline-start: 10px;
     border-inline-start: 2px solid ${cssVar.colorBorder};
+  `,
+  /**
+   * In the gutter the quote is the card's heading: it names the run the card
+   * sits beside, so it goes above the author rather than under it.
+   */
+  cardAnchorCompact: css`
+    margin-block-end: 8px;
+    padding-block: 2px;
+    padding-inline-start: 8px;
+    border-inline-start: 2px solid ${cssVar.colorBorder};
+  `,
+  /** A card in the gutter: the surface around it is the card, so the card itself is flush. */
+  cardCompact: css`
+    margin-inline: 0;
+    padding: 0;
   `,
   commentContent: css`
     /* Published comments render images as left-aligned thumbnails: the
@@ -181,6 +223,13 @@ export const styles = createStaticStyles(({ css }) => ({
       max-height: ${COMMENT_EDITOR_IMAGE_MAX_HEIGHT}px;
     }
   `,
+  /**
+   * Beside the text the box is narrow and the caret should start where the
+   * action bar's first icon starts: ChatInput's own 12px is the whole inset.
+   */
+  commentEditorFlush: css`
+    padding-inline: 0;
+  `,
   composer: css`
     min-width: 0;
     transition:
@@ -207,6 +256,10 @@ export const styles = createStaticStyles(({ css }) => ({
     padding-inline: 28px 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  /** The box beside the text: a quiet input, no focus ring — the card around it is the frame. */
+  composerPlain: css`
+    min-width: 0;
+  `,
   composerAvatar: css`
     flex: none;
     align-self: flex-start;
@@ -214,6 +267,72 @@ export const styles = createStaticStyles(({ css }) => ({
   deleted: css`
     font-style: italic;
     color: ${cssVar.colorTextTertiary};
+  `,
+  /**
+   * The comments panel body. It clips a track that mirrors the document's
+   * scroll position (see `useGutterLayout`), so cards placed in document
+   * coordinates appear beside the text they quote.
+   */
+  gutter: css`
+    position: relative;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+  `,
+  gutterCard: css`
+    cursor: default;
+
+    position: absolute;
+    inset-inline: ${GUTTER_INSET_START}px ${GUTTER_INSET_END}px;
+
+    padding-block: 10px;
+    padding-inline: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    /* Unmeasured cards wait off-screen at the top rather than flashing at 0. */
+    visibility: hidden;
+    background: ${cssVar.colorBgElevated};
+  `,
+  /**
+   * The card holding the composer is lifted by a shadow instead of framed:
+   * the input draws its own frame, and a border around it would read as a
+   * box inside a box. Published cards are framed, not lifted.
+   */
+  gutterCardComposer: css`
+    border-color: transparent;
+    box-shadow: ${cssVar.boxShadowSecondary};
+  `,
+  /**
+   * The picked card lifts off the column with the same shadow as the composer
+   * card, so the two states the reader is acting on read alike, and wins the
+   * stacking order so the lift is not cut by its neighbours.
+   */
+  gutterCardActive: css`
+    z-index: 1;
+    box-shadow: ${cssVar.boxShadowSecondary};
+  `,
+  /** Cards glide to a new stack position and ease into the lift; the first placement is instant. */
+  gutterCardPositioned: css`
+    visibility: visible;
+    transition:
+      inset-block-start ${cssVar.motionDurationMid} ${cssVar.motionEaseOut},
+      box-shadow ${cssVar.motionDurationMid} ${cssVar.motionEaseOut};
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  gutterEmpty: css`
+    height: 100%;
+    padding: 24px;
+  `,
+  /** Rides along with the document: translated by the body's scroll offset. */
+  gutterTrack: css`
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    height: 0;
   `,
   editComposer: css`
     min-width: 0;
@@ -225,6 +344,10 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   header: css`
     min-height: 32px;
+  `,
+  /** A narrow card stacks name over time beside the avatar. */
+  headerCompact: css`
+    min-height: 28px;
   `,
   /* Applied briefly when a notification deep link lands on the card. */
   highlighted: css`
@@ -246,6 +369,13 @@ export const styles = createStaticStyles(({ css }) => ({
     margin-inline-start: 40px;
     padding-block: 4px;
     padding-inline-start: 16px;
+  `,
+  /** Replies in a panel card list flat under the root, separated by rhythm alone. */
+  replyListCompact: css`
+    margin-block-start: 4px;
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+    border-inline-start: 0;
   `,
   replyTargetIcon: css`
     flex: none;
@@ -269,6 +399,11 @@ export const styles = createStaticStyles(({ css }) => ({
     &:last-child {
       border-block-end: 0;
     }
+  `,
+  threadCompact: css`
+    gap: 4px;
+    padding-block-end: 0;
+    border-block-end: 0;
   `,
   threadList: css`
     gap: 8px;

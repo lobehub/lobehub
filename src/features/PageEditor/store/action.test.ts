@@ -18,6 +18,18 @@ describe('PageEditorStore - rightPanelMode', () => {
   });
 });
 
+describe('PageEditorStore - commentsPanelOpen', () => {
+  it('starts closed and toggles on demand', () => {
+    const store = createStore();
+
+    expect(store.getState().commentsPanelOpen).toBe(false);
+    store.getState().setCommentsPanelOpen(true);
+    expect(store.getState().commentsPanelOpen).toBe(true);
+    store.getState().setCommentsPanelOpen(false);
+    expect(store.getState().commentsPanelOpen).toBe(false);
+  });
+});
+
 describe('PageEditorStore - metaReadOnly', () => {
   it('ignores setTitle when meta is read-only (manual UI, AI, or extraction)', () => {
     const store = createStore({ metaReadOnly: true, title: 'Skill name' });

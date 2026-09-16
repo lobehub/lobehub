@@ -107,10 +107,27 @@ export interface DocumentCommentAnchorsValue {
    * emphasised, so arriving at a quote does not immediately lose it again.
    */
   activeRootId: string | null;
+  /** The rendered body, for surfaces that position themselves against it. */
+  bodyElement: HTMLElement | null;
+  /** Where a thread's quote sits in the flattened body text; `null` when orphaned. */
+  getAnchorMatch: (rootCommentId: string) => AnchorMatch | null;
+  /** A live DOM range over a thread's quote; `null` when orphaned or not yet resolved. */
+  getAnchorRange: (rootCommentId: string) => Range | null;
+  /** A live DOM range over the selection being composed, if any. */
+  getPendingAnchorRange: () => Range | null;
   /** Scroll the body to a thread's anchor and select it. No-op for an orphaned anchor. */
   locateInBody: (rootCommentId: string) => void;
   /** Threads whose quoted run no longer exists in the body. */
   orphanedRootIds: ReadonlySet<string>;
+  /**
+   * Ticks every time anchors are re-resolved against the body. Anything that
+   * measured a range (card positions) is stale once this changes.
+   */
+  resolvedAt: number;
+  /** The thread the reader last deliberately picked, from either side. */
+  selectedRootId: string | null;
+  /** Pick a thread (or clear the pick with `null`). */
+  selectRoot: (rootCommentId: string | null) => void;
   /** Transient emphasis while the pointer is over a card. */
   setHoveredRootId: Dispatch<SetStateAction<string | null>>;
 }
@@ -159,6 +176,7 @@ export const useDocumentCommentAnchors = (
 
   const flatRef = useRef<FlattenedText>(EMPTY_FLATTENED_TEXT);
   const matchesRef = useRef<ReadonlyMap<string, AnchorMatch>>(EMPTY_MATCHES);
+  const pendingMatchRef = useRef<AnchorMatch | null>(null);
   // See `resolveAnchors`: results are reused while the body text is unchanged,
   // so a formatting-only update never re-scans for orphaned quotes.
   const resolveCacheRef = useRef<AnchorResolveCache>(EMPTY_ANCHOR_RESOLVE_CACHE);
@@ -173,11 +191,8 @@ export const useDocumentCommentAnchors = (
   const anchorSignature = useMemo(
     () =>
       anchors
-        .map(
-          ({ id, selectionAnchor }) =>
-            `${id}\u0001${selectionAnchor.start}\u0001${selectionAnchor.quote}`,
-        )
-        .join('\u0000'),
+        .map(({ id, selectionAnchor }) => `${id}${selectionAnchor.start}${selectionAnchor.quote}`)
+        .join(' '),
     [anchors],
   );
   const hasPendingAnchor = Boolean(pendingAnchor);
@@ -197,16 +212,34 @@ export const useDocumentCommentAnchors = (
     setResolvedAt((current) => current + 1);
   }, [anchorSignature, element, hasPendingAnchor, revision]);
 
+  // The pending selection is re-located on the same schedule as the stored
+  // anchors, so the composer beside it and its highlight never disagree.
   useEffect(() => {
+    pendingMatchRef.current = pendingAnchor ? locateAnchor(flatRef.current, pendingAnchor) : null;
     paintCommentHighlights({
       activeRootId,
       flat: flatRef.current,
       matches: matchesRef.current,
-      pending: pendingAnchor ? locateAnchor(flatRef.current, pendingAnchor) : null,
+      pending: pendingMatchRef.current,
     });
   }, [activeRootId, pendingAnchor, resolvedAt]);
 
   useEffect(() => () => clearCommentHighlights(), []);
+
+  const getAnchorMatch = useCallback(
+    (rootCommentId: string) => matchesRef.current.get(rootCommentId) ?? null,
+    [],
+  );
+
+  const getAnchorRange = useCallback((rootCommentId: string) => {
+    const match = matchesRef.current.get(rootCommentId);
+    return match ? buildAnchorRange(flatRef.current, match) : null;
+  }, []);
+
+  const getPendingAnchorRange = useCallback(() => {
+    const match = pendingMatchRef.current;
+    return match ? buildAnchorRange(flatRef.current, match) : null;
+  }, []);
 
   const locateInBody = useCallback((rootCommentId: string) => {
     const match = matchesRef.current.get(rootCommentId);
@@ -220,15 +253,10 @@ export const useDocumentCommentAnchors = (
     setSelectedRootId(rootCommentId);
   }, []);
 
-  // Clicking a run selects its thread. Selecting moves nothing, so unlike the
-  // old jump-to-the-comment behaviour it can't interrupt someone mid-edit and
-  // needs no "is the reader typing?" guard — that guard was what made a second
-  // click inside the body do nothing at all once the editor held focus.
-  //
-  // It deliberately does NOT scroll to the card: the comment list lives below
-  // the body, so scrolling would throw the reader to the bottom of the page
-  // just for pointing at a sentence. LOBE-14151 (cards beside the text) turns
-  // this into focusing the card in place.
+  // Clicking a run selects its thread. Its card sits beside the text, so the
+  // pick is answered in place — the card is emphasised and, in the gutter,
+  // pulled level with the run — and the viewport never moves. That is also why
+  // no "is the reader typing?" guard is needed: selecting interrupts nothing.
   useEffect(() => {
     if (!element) return;
 
@@ -264,7 +292,29 @@ export const useDocumentCommentAnchors = (
   }, [element]);
 
   return useMemo(
-    () => ({ activeRootId, locateInBody, orphanedRootIds, setHoveredRootId }),
-    [activeRootId, locateInBody, orphanedRootIds],
+    () => ({
+      activeRootId,
+      bodyElement: element,
+      getAnchorMatch,
+      getAnchorRange,
+      getPendingAnchorRange,
+      locateInBody,
+      orphanedRootIds,
+      resolvedAt,
+      selectedRootId,
+      selectRoot: setSelectedRootId,
+      setHoveredRootId,
+    }),
+    [
+      activeRootId,
+      element,
+      getAnchorMatch,
+      getAnchorRange,
+      getPendingAnchorRange,
+      locateInBody,
+      orphanedRootIds,
+      resolvedAt,
+      selectedRootId,
+    ],
   );
 };

@@ -517,7 +517,7 @@ export const documentCommentRouter = router({
     }),
 
   listThreads: documentCommentProcedure
-    .input(pageSchema.extend({ documentId: idSchema }))
+    .input(pageSchema.extend({ anchored: z.boolean().optional(), documentId: idSchema }))
     .query(async ({ ctx, input }) => {
       const { grantedPermissions } = await assertPermission(ctx, 'DOCUMENT_COMMENT_READ');
       await assertDocumentView(ctx, input.documentId, grantedPermissions);

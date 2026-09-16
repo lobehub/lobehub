@@ -22,6 +22,9 @@ export const focusCommentCard = (commentId: string, { scroll = true } = {}): boo
   if (!card) return false;
 
   if (scroll) card.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+  // A card in the panel is already pulled level with its run; a tinted flash
+  // on top of that reads as a second, unrelated highlight.
+  if (card.closest('[data-document-comment-gutter]')) return true;
   card.classList.add(styles.highlighted);
   setTimeout(() => card.classList.remove(styles.highlighted), LOCATE_FLASH_DURATION);
   return true;
