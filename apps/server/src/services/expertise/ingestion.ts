@@ -22,6 +22,7 @@ import {
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { VerifyCheckDecisionDetail } from '@lobechat/types';
+import debug from 'debug';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
@@ -37,8 +38,12 @@ import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 import { resolveModelReadableFrameUrl } from '@/server/services/verify/modelFrames';
 
+import type { ConsolidationResult } from './consolidation';
+import { ExpertiseConsolidationService } from './consolidation';
 import { resolveExpertiseModelConfig } from './modelConfig';
 import { isProviderAccountError } from './providerAccountError';
+
+const log = debug('lobe-server:expertise-ingestion');
 
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
@@ -577,10 +582,11 @@ export class ExpertiseIngestionService {
     const analysis = RejectionAnalysisSchema.parse(raw);
 
     let ingested = 0;
+    const consolidated: ConsolidationResult[] = [];
     for (const result of analysis.domains) {
       const domain = domains.find((item) => item.id === result.domainId);
       if (!domain || !result.matches || result.observations.length === 0) continue;
-      await this.persistDomainRun({
+      const touched = await this.persistDomainRun({
         domain,
         observations: result.observations.map((observation) => ({
           ...observation,
@@ -604,9 +610,43 @@ export class ExpertiseIngestionService {
         },
       });
       ingested += 1;
+      consolidated.push(...(await this.consolidateTouched(domain.id, touched)));
     }
 
-    return { ingested, reason: ingested > 0 ? 'matched' : 'no-match' } as const;
+    return {
+      consolidated,
+      ingested,
+      reason: ingested > 0 ? 'matched' : 'no-match',
+    } as const;
+  };
+
+  /**
+   * Restates the standards this round pushed past the instance threshold.
+   *
+   * Deliberately after the write, not inside it: consolidation reads frames and calls a model, and
+   * a round of rejections that is safely recorded must not be rolled back because the rewrite of
+   * an unrelated standard failed. For the same reason a failure here is logged, not thrown — the
+   * standard keeps the wording it already had, which is exactly the state before this pass existed.
+   */
+  private consolidateTouched = async (domainId: string, lessonIds: string[]) => {
+    if (lessonIds.length === 0) return [];
+    const service = new ExpertiseConsolidationService(this.db, this.userId, this.workspaceId);
+    const due = await service.dueForConsolidation(domainId, lessonIds);
+
+    return (
+      await pMap(
+        due,
+        async (lessonId) => {
+          try {
+            return await service.consolidate(lessonId);
+          } catch (error) {
+            log('consolidation failed for lesson %s: %O', lessonId, error);
+            return null;
+          }
+        },
+        { concurrency: 2 },
+      )
+    ).filter((result): result is ConsolidationResult => Boolean(result));
   };
 
   /**
@@ -732,9 +772,9 @@ export class ExpertiseIngestionService {
     domain: { id: string };
     observations: PersistableObservation[];
     run: ExpertiseRunDescriptor;
-  }) => {
+  }): Promise<string[]> => {
     const { reflectionKey } = input.run;
-    await this.db.transaction(async (tx) => {
+    return this.db.transaction(async (tx) => {
       await tx
         .select({ id: expertiseDomains.id })
         .from(expertiseDomains)
@@ -750,7 +790,7 @@ export class ExpertiseIngestionService {
           ),
         )
         .limit(1);
-      if (existingRun) return;
+      if (existingRun) return [];
 
       const [prior] = await tx
         .select({ value: max(expertiseRuns.runIndex) })
@@ -800,6 +840,7 @@ export class ExpertiseIngestionService {
         if (!byTitle.has(key)) byTitle.set(key, lesson.id);
       }
       const countedLessonIds = new Set<string>();
+      const touchedLessonIds = new Set<string>();
 
       // One observation yields one hit per rejection it cites, so hitCount stays a count of real
       // violations; an observation with no cited source (the topic path) still yields one.
@@ -864,12 +905,14 @@ export class ExpertiseIngestionService {
           byCode.set(code, lessonId);
           byTitle.set(normalizeLessonTitle(observation.title), lessonId);
           countedLessonIds.add(lessonId);
+          touchedLessonIds.add(lessonId);
           await writeHits(lessonId, observation);
         } else {
           instanceCount += 1;
           const hits = await writeHits(matchedId, observation);
           const firstHitThisRun = !countedLessonIds.has(matchedId);
           countedLessonIds.add(matchedId);
+          touchedLessonIds.add(matchedId);
           await tx
             .update(expertiseLessons)
             .set({
@@ -922,6 +965,8 @@ export class ExpertiseIngestionService {
         runId,
         runIndex,
       });
+
+      return [...touchedLessonIds];
     });
   };
 }

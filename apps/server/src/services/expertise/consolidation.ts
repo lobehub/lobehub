@@ -1,0 +1,418 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import {
+  expertiseHits,
+  expertiseLessonRevisions,
+  expertiseLessons,
+  verifyCheckResults,
+} from '@lobechat/database/schemas';
+import {
+  chainExpertiseConsolidation,
+  EXPERTISE_CONSOLIDATION_JSON_SCHEMA,
+  EXPERTISE_CONSOLIDATION_PROMPT_VERSION,
+} from '@lobechat/prompts';
+import type { ExpertiseLessonSection, VerifyCheckDecisionDetail } from '@lobechat/types';
+import debug from 'debug';
+import { and, desc, eq, gt, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import pMap from 'p-map';
+import { z } from 'zod';
+
+import { FileModel } from '@/database/models/file';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
+import type { LobeChatDatabase } from '@/database/type';
+import { AiGenerationService } from '@/server/services/aiGeneration';
+import { FileService } from '@/server/services/file';
+import { resolveModelReadableFrameUrl } from '@/server/services/verify/modelFrames';
+
+import { resolveExpertiseModelConfig } from './modelConfig';
+
+const log = debug('lobe-server:expertise-consolidation');
+
+/**
+ * Instances a standard needs before it is worth restating.
+ *
+ * Two is a coincidence — the second rejection can attach to the first on wording alone. Measured
+ * on this owner's 898 circled rejections, grouping by the standard behind them puts 40% of the
+ * "unrequested decoration" complaints and 62% of the spacing ones into groups of 2+ (largest: 12),
+ * while placement complaints reach only 11%. So the material exists, and most of it arrives in
+ * threes and up.
+ */
+const MIN_INSTANCES = 3;
+
+/** Instances read per pass. Beyond this the frames, not the reasoning, are what caps the request. */
+const MAX_INSTANCES = 8;
+
+/**
+ * Accepted deliveries offered as the contrast set.
+ *
+ * This is the only input that can justify a `limits`, so it is not optional padding: without it
+ * the pass can restate a standard but can never bound one. Measured on 23 accepted deliveries,
+ * standards distilled this way fired on 39% of them — every one of those is a boundary the
+ * reviewer drew and nobody wrote down.
+ */
+const MAX_SHIPPED = 6;
+
+/** Total frames inlined. Each is a full base64 body, so this is a payload budget. */
+const MAX_FRAMES = 10;
+
+const pct = (value: number) => `${Math.round(value * 100)}%`;
+
+const ConsolidationSchema = z.object({
+  generalized: z.boolean(),
+  limits: z.string(),
+  note: z.string(),
+  reasonKind: z.enum(['mechanism', 'taste']),
+  reasoning: z.string(),
+  subject: z.string(),
+  title: z.string(),
+});
+
+export interface ConsolidationResult {
+  generalized: boolean;
+  lessonId: string;
+  note: string;
+  reason?: 'below-threshold' | 'no-instances' | 'no-lesson' | 'nothing-new';
+  title?: string;
+}
+
+/**
+ * Restates a standard at the level its instances share, once it has several.
+ *
+ * Ingestion writes a lesson from the first rejection that produced it and, on every rejection
+ * after that, only bumps its counters — so a standard that has fired eight times is still worded
+ * for the screen it was born on, and still carries no boundary. Both gaps are measurable: of 44
+ * rejections in the same category as a distilled standard but from other acceptances, the standard
+ * reproduced the reviewer's actual objection on 4, while firing on 39% of deliveries they had
+ * accepted. A rule written from one case and bounded by nothing does both of those.
+ *
+ * This pass is the missing half. It reads every instance at once (so the wording can climb to what
+ * they share instead of what one of them said) together with deliveries the reviewer accepted (so
+ * a limit can be read off a case they let through, rather than invented).
+ */
+export class ExpertiseConsolidationService {
+  constructor(
+    private readonly db: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
+  ) {}
+
+  /**
+   * Standards in this domain that have taken on instances since they were last restated.
+   *
+   * The "since" is read off the revision log rather than a counter column: a lesson consolidated
+   * at three instances and sitting at three has nothing to learn, while the same lesson at four
+   * does. Comparing timestamps keeps that true without a column that can drift out of step.
+   */
+  dueForConsolidation = async (domainId: string, lessonIds?: string[]): Promise<string[]> => {
+    const lastGeneralized = this.db
+      .select({
+        at: sql<Date>`max(${expertiseLessonRevisions.createdAt})`.as('at'),
+        lessonId: expertiseLessonRevisions.lessonId,
+      })
+      .from(expertiseLessonRevisions)
+      .where(eq(expertiseLessonRevisions.kind, 'generalize'))
+      .groupBy(expertiseLessonRevisions.lessonId)
+      .as('last_generalized');
+
+    const rows = await this.db
+      .select({
+        id: expertiseLessons.id,
+        pending: sql<number>`count(${expertiseHits.id}) filter (
+          where ${lastGeneralized.at} is null or ${expertiseHits.createdAt} > ${lastGeneralized.at}
+        )::int`,
+        total: sql<number>`count(${expertiseHits.id})::int`,
+      })
+      .from(expertiseLessons)
+      .leftJoin(expertiseHits, eq(expertiseHits.lessonId, expertiseLessons.id))
+      .leftJoin(lastGeneralized, eq(lastGeneralized.lessonId, expertiseLessons.id))
+      .where(
+        and(
+          eq(expertiseLessons.domainId, domainId),
+          eq(expertiseLessons.status, 'active'),
+          lessonIds?.length ? inArray(expertiseLessons.id, lessonIds) : undefined,
+        ),
+      )
+      .groupBy(expertiseLessons.id);
+
+    return rows.filter((row) => row.total >= MIN_INSTANCES && row.pending > 0).map((row) => row.id);
+  };
+
+  consolidate = async (lessonId: string): Promise<ConsolidationResult> => {
+    const [lesson] = await this.db
+      .select({
+        code: expertiseLessons.code,
+        domainId: expertiseLessons.domainId,
+        id: expertiseLessons.id,
+        reasonKind: expertiseLessons.reasonKind,
+        sections: expertiseLessons.sections,
+        title: expertiseLessons.title,
+      })
+      .from(expertiseLessons)
+      .where(eq(expertiseLessons.id, lessonId))
+      .limit(1);
+    if (!lesson) return { generalized: false, lessonId, note: '', reason: 'no-lesson' };
+
+    const instances = await this.loadInstances(lessonId);
+    if (instances.length === 0)
+      return { generalized: false, lessonId, note: '', reason: 'no-instances' };
+    if (instances.length < MIN_INSTANCES)
+      return { generalized: false, lessonId, note: '', reason: 'below-threshold' };
+
+    const shipped = await this.loadShipped(instances.map((instance) => instance.id));
+    const { visuals, withheld } = await this.resolveFrames(instances, shipped);
+    const frameLabel = new Map(visuals.map((visual, index) => [visual.key, `frame ${index + 1}`]));
+
+    const section = (key: string) => lesson.sections.find((entry) => entry.key === key)?.body ?? '';
+    const rendered = [
+      `code: ${lesson.code}`,
+      `title: ${lesson.title}`,
+      section('why') && `reasoning: ${section('why')}`,
+      section('limits') && `limits: ${section('limits')}`,
+      `reasonKind: ${lesson.reasonKind ?? 'unknown'}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
+    const modelConfig = await resolveExpertiseModelConfig(this.db, this.userId);
+    const raw = await ai.generateObject(
+      {
+        ...chainExpertiseConsolidation({
+          instances: instances
+            .map((instance, index) => this.renderDelivery(`I${index + 1}`, instance, frameLabel))
+            .join('\n\n'),
+          lesson: rendered,
+          shipped: shipped
+            .map((delivery, index) => this.renderDelivery(`S${index + 1}`, delivery, frameLabel))
+            .join('\n\n'),
+          visuals: visuals.map(({ accessUrl, label }) => ({ accessUrl, label })),
+          withheldEvidence: withheld,
+        }),
+        ...modelConfig,
+        schema: EXPERTISE_CONSOLIDATION_JSON_SCHEMA,
+      },
+      {
+        metadata: { trigger: 'expertise_consolidation' },
+        tracing: {
+          promptVersion: EXPERTISE_CONSOLIDATION_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.ExpertiseConsolidation,
+          schemaName: EXPERTISE_CONSOLIDATION_JSON_SCHEMA.name,
+        },
+      },
+    );
+    const result = ConsolidationSchema.parse(raw);
+
+    // A refusal is still a pass: recording it is what stops the same instances being re-read on
+    // every subsequent rejection, and "these do not share a standard" is the honest answer for a
+    // category like placement, where only 11% of complaints repeat.
+    if (!result.generalized || !result.title.trim()) {
+      await this.recordRevision(lesson, lesson.sections, result.note, { generalized: false });
+      return { generalized: false, lessonId, note: result.note, reason: 'nothing-new' };
+    }
+
+    const sections: ExpertiseLessonSection[] = [
+      {
+        body: result.subject.trim()
+          ? `${result.title.trim()}\n\n适用对象：${result.subject.trim()}`
+          : result.title.trim(),
+        key: 'rule',
+      },
+      { body: result.reasoning, key: 'why' },
+      // The worked example is the one section this pass has no better source for than the lesson
+      // already has, so it is carried over rather than regenerated.
+      ...lesson.sections.filter((entry) => entry.key === 'how'),
+      ...(result.limits.trim() ? [{ body: result.limits.trim(), key: 'limits' as const }] : []),
+    ];
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(expertiseLessons)
+        .set({ reasonKind: result.reasonKind, sections, title: result.title.trim() })
+        .where(eq(expertiseLessons.id, lessonId));
+      await this.recordRevision(lesson, sections, result.note, { generalized: true, tx });
+    });
+
+    log('consolidated %s: %s -> %s', lesson.code, lesson.title, result.title);
+    return { generalized: true, lessonId, note: result.note, title: result.title.trim() };
+  };
+
+  /** The rejected deliveries behind this standard, newest first so a growing rule reads current. */
+  private loadInstances = async (lessonId: string) => {
+    const rows = await this.db
+      .select({
+        detail: verifyCheckResults.userDecisionDetail,
+        example: expertiseHits.example,
+        id: verifyCheckResults.id,
+        title: verifyCheckResults.checkItemTitle,
+      })
+      .from(expertiseHits)
+      .innerJoin(verifyCheckResults, eq(verifyCheckResults.id, expertiseHits.sourceCheckResultId))
+      .where(eq(expertiseHits.lessonId, lessonId))
+      .orderBy(desc(expertiseHits.createdAt))
+      .limit(MAX_INSTANCES);
+
+    // One check can back a standard through several hits; reading it twice would let a single
+    // delivery look like agreement between two.
+    const seen = new Set<string>();
+    return rows.filter((row) => !seen.has(row.id) && seen.add(row.id));
+  };
+
+  /**
+   * Deliveries the same reviewer accepted, excluding the instances themselves.
+   *
+   * Deterministic per owner rather than newest-first: a boundary that appears only because the
+   * sample moved is not a boundary, and a re-run has to be comparable with the last one.
+   */
+  private loadShipped = async (excludeIds: string[]) => {
+    const scope = this.workspaceId
+      ? eq(verifyCheckResults.workspaceId, this.workspaceId)
+      : and(eq(verifyCheckResults.userId, this.userId), isNull(verifyCheckResults.workspaceId));
+
+    return this.db
+      .select({
+        detail: verifyCheckResults.userDecisionDetail,
+        example: sql<null>`null`,
+        id: verifyCheckResults.id,
+        title: verifyCheckResults.checkItemTitle,
+      })
+      .from(verifyCheckResults)
+      .where(
+        and(
+          scope,
+          eq(verifyCheckResults.userDecision, 'accepted'),
+          excludeIds.length > 0 ? notInArray(verifyCheckResults.id, excludeIds) : undefined,
+          gt(sql`length(coalesce(${verifyCheckResults.checkItemTitle}, ''))`, 0),
+        ),
+      )
+      .orderBy(sql`md5(${verifyCheckResults.id}::text)`)
+      .limit(MAX_SHIPPED);
+  };
+
+  private renderDelivery = (
+    ref: string,
+    delivery: {
+      detail: VerifyCheckDecisionDetail | null;
+      example?: null | string;
+      id: string;
+      title: null | string;
+    },
+    frameLabel: Map<string, string>,
+  ) => {
+    const regions = (delivery.detail?.annotations ?? []).map((annotation) => {
+      const frame = frameLabel.get(`${delivery.id}:${annotation.evidenceId}`);
+      const at = annotation.rect
+        ? ` at ${pct(annotation.rect.x)},${pct(annotation.rect.y)} sized ${pct(annotation.rect.width)}×${pct(annotation.rect.height)}`
+        : '';
+      return `  circled${frame ? ` on ${frame}` : ''}${at}: ${annotation.comment?.trim() || '(no note)'}`;
+    });
+    const frames = [...frameLabel]
+      .filter(([key]) => key.startsWith(`${delivery.id}:`))
+      .map(([, label]) => label);
+
+    return [
+      `[${ref}] promised: ${delivery.title ?? '(untitled check)'}`,
+      delivery.detail?.comment?.trim() && `  said: ${delivery.detail.comment.trim()}`,
+      ...regions,
+      regions.length === 0 && frames.length > 0 && `  shown on ${frames.join(', ')}`,
+      delivery.example?.trim() && `  recorded as: ${delivery.example.trim()}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  /**
+   * Frames for both sets, instances first.
+   *
+   * The order is the budget: dropping a shipped frame costs a boundary this pass might have
+   * found, while dropping an instance frame costs the restatement itself.
+   */
+  private resolveFrames = async (
+    instances: { detail: VerifyCheckDecisionDetail | null; id: string }[],
+    shipped: { detail: VerifyCheckDecisionDetail | null; id: string }[],
+  ) => {
+    const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
+    const fileService = new FileService(this.db, this.userId, this.workspaceId);
+    const evidenceModel = new VerifyEvidenceModel(this.db, this.userId, this.workspaceId);
+
+    const collect = async (
+      deliveries: { detail: VerifyCheckDecisionDetail | null; id: string }[],
+      kind: 'instance' | 'shipped',
+    ) => {
+      const out: { fileId: string; key: string; label: string }[] = [];
+      for (const [index, delivery] of deliveries.entries()) {
+        const circled = new Set(
+          (delivery.detail?.annotations ?? []).map((annotation) => annotation.evidenceId),
+        );
+        const rows = await evidenceModel.listByCheckResult(delivery.id);
+        // One frame per delivery on each side: this pass compares many deliveries against one
+        // standard, so breadth buys more than a second angle on any single delivery.
+        const chosen =
+          rows.find((row) => row.type === 'screenshot' && row.fileId && circled.has(row.id)) ??
+          rows.find((row) => row.type === 'screenshot' && row.fileId);
+        if (!chosen?.fileId) continue;
+        out.push({
+          fileId: chosen.fileId,
+          key: `${delivery.id}:${chosen.id}`,
+          label: `${kind === 'instance' ? 'I' : 'S'}${index + 1} — ${kind === 'instance' ? 'rejected' : 'accepted'}`,
+        });
+      }
+      return out;
+    };
+
+    const ordered = [
+      ...(await collect(instances, 'instance')),
+      ...(await collect(shipped, 'shipped')),
+    ];
+    const selected = ordered.slice(0, MAX_FRAMES);
+    const resolved = await pMap(
+      selected,
+      async (item) => {
+        const file = await fileModel.findById(item.fileId);
+        if (!file) return null;
+        return {
+          accessUrl: await resolveModelReadableFrameUrl(fileService, file),
+          key: item.key,
+          label: item.label,
+        };
+      },
+      { concurrency: 4 },
+    );
+
+    const visuals = resolved.filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const dropped = ordered.length - selected.length;
+    return {
+      visuals,
+      withheld:
+        dropped > 0
+          ? `${dropped} further screenshot(s) were not attached. A boundary cannot be read off a frame you were not given, so treat their absence as missing information rather than as proof the subject is not there.`
+          : undefined,
+    };
+  };
+
+  private recordRevision = async (
+    lesson: { id: string; title: string },
+    sections: ExpertiseLessonSection[],
+    note: string,
+    options: { generalized: boolean; tx?: LobeChatDatabase },
+  ) => {
+    const db = options.tx ?? this.db;
+    const [prior] = await db
+      .select({ revision: expertiseLessonRevisions.revision })
+      .from(expertiseLessonRevisions)
+      .where(eq(expertiseLessonRevisions.lessonId, lesson.id))
+      .orderBy(desc(expertiseLessonRevisions.revision))
+      .limit(1);
+
+    await db.insert(expertiseLessonRevisions).values({
+      changedBy: 'system',
+      feedback: note,
+      kind: 'generalize',
+      lessonId: lesson.id,
+      // The title before the rewrite is what makes a pass auditable at a glance; a refusal keeps
+      // the same title on both sides, which is exactly how a refusal should read.
+      prevTitle: lesson.title,
+      revision: (prior?.revision ?? 0) + 1,
+      sections,
+    });
+    log('recorded %s revision for %s', options.generalized ? 'generalize' : 'no-change', lesson.id);
+  };
+}

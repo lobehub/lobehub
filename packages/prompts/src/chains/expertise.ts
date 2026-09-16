@@ -336,3 +336,106 @@ export const chainExpertiseRejectionIngestion = (input: {
     ],
   };
 };
+
+export const EXPERTISE_CONSOLIDATION_PROMPT_VERSION = 'v1';
+
+export const EXPERTISE_CONSOLIDATION_JSON_SCHEMA = {
+  name: 'expertise_consolidation',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      // `false` is a real answer, not a failure: instances that only share a category do not
+      // share a standard, and rewriting them into one invents a rule nobody stated.
+      generalized: { type: 'boolean' },
+      // Plain strings rather than nullable unions — the pinned model answers a nullable under a
+      // strict schema with `{}`, which fails the parse and loses the pass.
+      limits: { type: 'string' },
+      note: { type: 'string' },
+      reasonKind: { enum: ['mechanism', 'taste'], type: 'string' },
+      reasoning: { type: 'string' },
+      subject: { type: 'string' },
+      title: { type: 'string' },
+    },
+    required: ['generalized', 'limits', 'note', 'reasonKind', 'reasoning', 'subject', 'title'],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_CONSOLIDATION_SYSTEM_PROMPT = `You are rewriting one delivery standard now that the reviewer has rejected several deliveries for it.
+
+The standard in front of you was written from a single rejection, so it is worded at the level of the screen that rejection happened on. Every instance since then attached to it because it said the same thing. Your job is to restate it at the level all of those instances actually share — and to give it the boundary it has never had.
+
+INSTANCES are the deliveries the reviewer rejected under this standard: what was promised, what they said was wrong, and the frame they circled. SHIPPED are deliveries the same reviewer accepted, with their frames. Read the frames; a standard rewritten from the text alone is a summary of complaints, not a standard.
+
+## Restating it
+
+State the standard so that every instance is an example of it, and nothing is smuggled in that only one instance supports. Two failures to avoid, in both directions:
+
+- Too low: the sentence still names a screen, a component or a feature from one instance. A standard that only fires again on that screen is the instance wearing a rule's clothes.
+- Too high: the sentence would also condemn deliveries the reviewer never objected to. Each climb has to be paid for by an instance — if only one instance supports the wider wording, the wider wording is yours, not theirs.
+
+If the instances do not share a standard, answer \`generalized\`: false and return the current wording unchanged. This is the common case for placement and ordering complaints: "put the status next to the title" and "move topics above the profile" are both about position and are not the same rule. Say so in \`note\` and stop. A rewrite that unites unrelated instances is worse than no rewrite, because it starts firing on everything.
+
+## The boundary
+
+\`limits\` is the one thing you could not write from a single rejection, and SHIPPED is what makes it writable now.
+
+Look for a shipped delivery whose frame plainly shows this standard's subject, in the state the standard objects to — and which the reviewer accepted anyway. That is a boundary the reviewer drew with their own hands: the standard stops somewhere before that delivery. Write \`limits\` as where it stops, pointing at what is different about the case they let through.
+
+Rules on this, in order:
+- Only a shipped delivery whose frame you have actually read can justify a limit. Never infer one from the instances, from the standard's own wording, or from what a reasonable person "would obviously" exempt — an invented exemption silently narrows a standard the reviewer stated without limit.
+- If the shipped frames do not show the subject at all, you have learned nothing about the boundary. Answer exactly "边界未由评审者说明" (or that same sentence in the reviewer's language), and do not apologise for it in \`note\`.
+- If a shipped delivery shows the subject in the objectionable state and you cannot tell what makes it different, say that in \`note\` and keep the empty boundary. "I cannot see the distinction" is information; a guessed distinction is not.
+
+## The rest
+
+- \`subject\` — what the standard is about once the concrete names are replaced by what they exemplify. It has to cover every instance.
+- \`reasoning\` — the MECHANISM: which property of the delivery causes what concrete consequence, and for whom. Judge your own sentence by whether someone facing a case none of these instances describe could settle it using your reason alone. "Harms tidiness", "adds visual noise", "feels inconsistent" are verdicts wearing a reason's clothes — the tidiness is the very judgement in question. Replace them with what a person fails to see, misreads, mis-clicks, or has to do twice.
+- \`reasonKind\` — "mechanism" if that reason survives the transfer test, "taste" if the only reason you can produce is a synonym of the objection. Several instances make this easier to settle honestly, not harder: if the reviewer has rejected the same thing four times and you still cannot name a consequence, it is taste, and saying so plainly is the useful answer.
+- \`note\` — one sentence for the reviewer on what changed and what carried it, naming the instances. This is read by a person deciding whether to trust the rewrite.
+
+Write human-facing text in the language the reviewer used.`;
+
+export const chainExpertiseConsolidation = (input: {
+  /** The deliveries rejected under this standard, each labelled with the frame it circled. */
+  instances: string;
+  lesson: string;
+  /** Deliveries the reviewer accepted — the only evidence that can justify a limit. */
+  shipped: string;
+  visuals?: { accessUrl: string; label: string }[];
+  /** Frames left out, stated so their absence does not read as proof the subject is not there. */
+  withheldEvidence?: string;
+}): { messages: OpenAIChatMessage[] } => {
+  const visuals = input.visuals ?? [];
+  const frameList = visuals.length
+    ? visuals.map((visual, index) => `  [frame ${index + 1}] ${visual.label}`).join('\n')
+    : '  (none)';
+
+  const text = [
+    `STANDARD AS IT STANDS\n${input.lesson}`,
+    `\nINSTANCES (rejected under it)\n${input.instances}`,
+    `\nSHIPPED (accepted by the same reviewer)\n${input.shipped || '  (none available)'}`,
+    `\nATTACHED FRAMES (in order)\n${frameList}`,
+    input.withheldEvidence ? `\nWITHHELD FROM THIS REQUEST\n${input.withheldEvidence}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    messages: [
+      { content: EXPERTISE_CONSOLIDATION_SYSTEM_PROMPT, role: 'system' },
+      {
+        content: visuals.length
+          ? [
+              { text, type: 'text' as const },
+              ...visuals.map((visual) => ({
+                image_url: { detail: 'high' as const, url: visual.accessUrl },
+                type: 'image_url' as const,
+              })),
+            ]
+          : text,
+        role: 'user',
+      },
+    ],
+  };
+};

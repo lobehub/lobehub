@@ -10,6 +10,8 @@ const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
   resolveExpertiseModelConfig: vi.fn(),
 }));
 const generateObject = vi.fn();
+const dueForConsolidation = vi.fn();
+const consolidate = vi.fn();
 const listDomainsForAgent = vi.fn();
 const listLessons = vi.fn();
 
@@ -25,6 +27,12 @@ vi.mock('@/server/services/aiGeneration', () => ({
   },
 }));
 vi.mock('./modelConfig', () => ({ resolveExpertiseModelConfig }));
+vi.mock('./consolidation', () => ({
+  ExpertiseConsolidationService: class {
+    consolidate = consolidate;
+    dueForConsolidation = dueForConsolidation;
+  },
+}));
 
 const completion = (selfIteration: SelfIterationCompletionPayload) => ({
   agentId: 'agent-signal-reflection',
@@ -279,14 +287,14 @@ const observation = (overrides: Record<string, unknown> = {}) => ({
 const persistRun = async (
   fake: TxFake,
   observations: ReturnType<typeof observation>[],
-): Promise<void> => {
+): Promise<string[]> => {
   const service = new ExpertiseIngestionService(
     {
       transaction: async (callback: (value: unknown) => Promise<void>) => callback(fake.tx),
     } as never,
     'user_1',
   );
-  await service['persistDomainRun']({
+  return service['persistDomainRun']({
     domain: { id: 'domain_1' },
     observations: observations as never,
     run: {
@@ -430,5 +438,45 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     expect(fake.inserted.get(expertiseHits)).toHaveLength(2);
     const runUpdate = fake.updates.find((update) => 'newCount' in update);
     expect(runUpdate).toMatchObject({ instanceCount: 1, newCount: 1 });
+  });
+});
+
+describe('ExpertiseIngestionService.consolidateTouched', () => {
+  it('reports every standard a round touched, whether it was created or attached to', async () => {
+    const fake = createTx([
+      { code: 'P-01', id: 'lesson_existing', status: 'active', title: '既有标准' },
+    ]);
+
+    const touched = await persistRun(fake, [
+      observation({ existingLessonCode: 'P-01' }),
+      observation({ title: '一条新的标准' }),
+    ]);
+
+    // The attached lesson is the one consolidation exists for, so it must survive the round even
+    // though nothing about it was inserted.
+    expect(touched).toContain('lesson_existing');
+    expect(touched).toHaveLength(2);
+  });
+
+  it('keeps a recorded round when restating one of its standards fails', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+    dueForConsolidation.mockResolvedValue(['lesson_1', 'lesson_2']);
+    consolidate
+      .mockRejectedValueOnce(new Error('provider down'))
+      .mockResolvedValueOnce({ generalized: true, lessonId: 'lesson_2', note: '' });
+
+    const results = await service['consolidateTouched']('domain_1', ['lesson_1', 'lesson_2']);
+
+    // The rejections are already committed; a failed rewrite leaves that standard worded as it
+    // was, which is exactly the state before this pass existed.
+    expect(consolidate).toHaveBeenCalledTimes(2);
+    expect(results).toEqual([{ generalized: true, lessonId: 'lesson_2', note: '' }]);
+  });
+
+  it('does not reach for the model when a round touched nothing', async () => {
+    const service = new ExpertiseIngestionService({} as never, 'user_1');
+
+    await expect(service['consolidateTouched']('domain_1', [])).resolves.toEqual([]);
+    expect(dueForConsolidation).not.toHaveBeenCalled();
   });
 });
