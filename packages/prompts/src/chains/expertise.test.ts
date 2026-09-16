@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   chainExpertiseDomainDraft,
+  chainExpertiseRejectionIngestion,
   chainExpertiseTopicIngestion,
   EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
   EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
+  EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from './expertise';
@@ -66,5 +68,50 @@ describe('chainExpertiseTopicIngestion', () => {
     );
     expect(result.messages[1].content).toContain('"id":"domain-1"');
     expect(result.messages[1].content).toContain('[user] 帮我修改这段比喻');
+  });
+});
+
+describe('chainExpertiseRejectionIngestion', () => {
+  it('declares no nullable unions, which the pinned model answers with `{}`', () => {
+    // A live replay against gemini-3.6-flash returned `"existingLessonCode": {}` for every
+    // `['string', 'null']` field under a strict json_schema, and the parse took the whole round
+    // down with it. Empty string is the contract now; this test is the tripwire.
+    const properties =
+      EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA.schema.properties.domains.items.properties
+        .observations.items.properties;
+
+    for (const [name, definition] of Object.entries(properties)) {
+      expect(`${name}:${JSON.stringify((definition as { type: unknown }).type)}`).not.toContain(
+        'null',
+      );
+    }
+  });
+
+  it('attaches the circled frames and names what it withheld', () => {
+    const result = chainExpertiseRejectionIngestion({
+      domains: [{ domainFilter: '交付标准', id: 'domain-1' }],
+      rejections: '[R1] promised: 讨论区\n  circled on frame 1 at 17%,35%: 这个顺序反了',
+      visuals: [{ accessUrl: 'data:image/png;base64,AAAA', label: 'R1 (circled) — 讨论区' }],
+      withheldEvidence: '2 further screenshot(s) from this round were not attached.',
+    });
+
+    const [system, user] = result.messages;
+    expect(system.content).toContain('Most of these rejections are visual');
+    expect(Array.isArray(user.content)).toBe(true);
+    const blocks = user.content as { image_url?: { url: string }; text?: string; type: string }[];
+    expect(blocks.filter((block) => block.type === 'image_url')).toHaveLength(1);
+    expect(blocks[0].text).toContain('[frame 1] R1 (circled)');
+    // Without this line the model reads a missing frame as proof that nothing was wrong there.
+    expect(blocks[0].text).toContain('WITHHELD FROM THIS REQUEST');
+  });
+
+  it('falls back to a plain text message when no frame could be resolved', () => {
+    const result = chainExpertiseRejectionIngestion({
+      domains: [],
+      rejections: '[R1] promised: 后端接口\n  said: 这个字段不对',
+    });
+
+    expect(typeof result.messages[1].content).toBe('string');
+    expect(result.messages[1].content).toContain('(none)');
   });
 });

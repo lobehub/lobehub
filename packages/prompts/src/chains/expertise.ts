@@ -206,9 +206,12 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                 additionalProperties: false,
                 properties: {
                   example: { type: 'string' },
-                  existingLessonCode: { type: ['string', 'null'] },
-                  layer: { type: ['string', 'null'] },
-                  limits: { type: ['string', 'null'] },
+                  // Plain strings, not `['string', 'null']` unions: under a strict json_schema the
+                  // pinned model answers a nullable union with `{}`, which fails the parse and
+                  // loses the whole round. An empty string is the "none" the service reads.
+                  existingLessonCode: { type: 'string' },
+                  layer: { type: 'string' },
+                  limits: { type: 'string' },
                   reasoning: { type: 'string' },
                   sourceRefs: { items: { type: 'string' }, minItems: 1, type: 'array' },
                   title: { type: 'string' },
@@ -241,7 +244,9 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
 
 const EXPERTISE_REJECTION_INGESTION_SYSTEM_PROMPT = `You maintain a reviewer's delivery standards from the checks they rejected.
 
-Every entry below is one rejected acceptance check: what was promised, and what the reviewer said was wrong with it. The reviewer's own words are the evidence — never soften, reinterpret, or argue with them.
+Every entry below is one rejected acceptance check: what was promised, what the reviewer said was wrong with it, and — when they circled a region on a screenshot — the screenshot itself. The reviewer's own words are the evidence; never soften, reinterpret, or argue with them.
+
+Most of these rejections are visual. "This isn't aligned", "this is too big", "the colour is too heavy" cannot be understood from text alone: read the attached frame, find the circled region, and describe what is actually wrong there. A standard written without looking at the frame is a paraphrase of a complaint, not a standard.
 
 First apply each domainFilter and outOfScope literally. If none of the rejections fall inside a domain, return matches=false and no observations for it. One rejection may legitimately land in several domains.
 
@@ -251,27 +256,55 @@ Attaching to an existing lesson is the default; a new lesson is the exception:
 
 - Attach whenever a listed lesson already carries the same standard, even when this rejection words it differently or hits another screen. Put that lesson's code in existingLessonCode, copied character for character from its \`code\` field (for example "P-07").
 - existingLessonCode holds a lesson code and nothing else. Never put a check title, a file path, or any identifier taken from the rejections there — those all read as "no existing lesson" and silently fork a duplicate.
-- Only when no listed lesson carries the standard, set existingLessonCode to null and propose one. Before doing so, state to yourself what it adds that every listed lesson misses; if you cannot, attach instead.
+- Only when no listed lesson carries the standard, set existingLessonCode to "" and propose one. Before doing so, state to yourself what it adds that every listed lesson misses; if you cannot, attach instead.
 - Prefer one lesson supported by several rejections over several near-identical lessons. Cite every rejection that supports it in sourceRefs.
 
 For each observation return:
 - title — the standard as one imperative sentence, with the screen, component and task names removed;
 - reasoning — why the reviewer holds it, grounded in what they actually wrote;
 - example — how it showed up this time, concretely enough to recognise again;
-- limits — when the standard does NOT apply, or null when you genuinely cannot tell. A standard with no stated limit is applied everywhere and becomes noise;
+- limits — when the standard does NOT apply. This field is not optional politeness: a standard with no stated limit gets applied everywhere and turns into noise, so name the case that is genuinely exempt. Only when no exemption exists may you answer "applies to every delivery in this domain";
 - sourceRefs — the reference labels (for example "R2") of every rejection supporting it. Never invent a label that is not listed.
 
-Use only declared layer keys. Write human-facing text in the language the reviewer used.`;
+Leave existingLessonCode, layer and limits as an empty string rather than null when they do not apply — never as an object. Use only declared layer keys. Write human-facing text in the language the reviewer used.`;
 
 export const chainExpertiseRejectionIngestion = (input: {
   domains: readonly unknown[];
   rejections: string;
-}): { messages: OpenAIChatMessage[] } => ({
-  messages: [
-    { content: EXPERTISE_REJECTION_INGESTION_SYSTEM_PROMPT, role: 'system' },
-    {
-      content: `DOMAINS\n${JSON.stringify(input.domains)}\n\nREJECTED CHECKS (one acceptance round)\n${input.rejections}`,
-      role: 'user',
-    },
-  ],
-});
+  /** Frames the reviewer circled, labelled so the text can point at them. */
+  visuals?: { accessUrl: string; label: string }[];
+  /** Frames left out of this request, stated so the model does not read their absence as proof. */
+  withheldEvidence?: string;
+}): { messages: OpenAIChatMessage[] } => {
+  const visuals = input.visuals ?? [];
+  const frameList = visuals.length
+    ? visuals.map((visual, index) => `  [frame ${index + 1}] ${visual.label}`).join('\n')
+    : '  (none)';
+
+  const text = [
+    `DOMAINS\n${JSON.stringify(input.domains)}`,
+    `\nREJECTED CHECKS (one acceptance round)\n${input.rejections}`,
+    `\nATTACHED FRAMES (in order)\n${frameList}`,
+    input.withheldEvidence ? `\nWITHHELD FROM THIS REQUEST\n${input.withheldEvidence}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    messages: [
+      { content: EXPERTISE_REJECTION_INGESTION_SYSTEM_PROMPT, role: 'system' },
+      {
+        content: visuals.length
+          ? [
+              { text, type: 'text' as const },
+              ...visuals.map((visual) => ({
+                image_url: { detail: 'high' as const, url: visual.accessUrl },
+                type: 'image_url' as const,
+              })),
+            ]
+          : text,
+        role: 'user',
+      },
+    ],
+  };
+};

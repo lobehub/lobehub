@@ -21,21 +21,37 @@ import {
   EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA,
   EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION,
 } from '@lobechat/prompts';
+import type { VerifyCheckDecisionDetail } from '@lobechat/types';
 import { and, asc, count, desc, eq, gt, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { AgentSignalReviewContextModel } from '@/database/models/agentSignal/reviewContext';
 import { ExpertiseModel } from '@/database/models/expertise';
+import { FileModel } from '@/database/models/file';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import type { LobeChatDatabase } from '@/database/type';
 import { notShareVisitorMessage, notShareVisitorTopic } from '@/database/utils/shareVisitor';
 import type { CompletionCallbackParams } from '@/server/services/agentSignal/policies/completionPolicy';
 import { AiGenerationService } from '@/server/services/aiGeneration';
+import { FileService } from '@/server/services/file';
+import { resolveModelReadableFrameUrl } from '@/server/services/verify/modelFrames';
 
 import { resolveExpertiseModelConfig } from './modelConfig';
 import { isProviderAccountError } from './providerAccountError';
 
 const MAX_CONTEXT_MESSAGES = 24;
 const MAX_CONTEXT_CHARS = 24_000;
+/**
+ * Frames attached to one round's distillation. A round is a batch, unlike the single-check review
+ * that caps at 3 — but every frame is a full base64 body, so the cap is what keeps a 20-rejection
+ * round from becoming a request no provider will accept.
+ */
+const MAX_REJECTION_FRAMES = 8;
+const VISUAL_REJECTION_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
+
+/** Normalized 0-1 region coordinates read better to a model as percentages. */
+const pct = (value: number) => `${Math.round(value * 100)}%`;
 const LESSON_CODE_PATTERN = /^P-\d+$/;
 const AnalysisSchema = z.object({
   domains: z.array(
@@ -71,9 +87,11 @@ const RejectionAnalysisSchema = z.object({
         .array(
           z.object({
             example: z.string(),
-            existingLessonCode: z.string().nullable(),
-            layer: z.string().nullable(),
-            limits: z.string().nullable(),
+            // Empty string, not null: see the chain's schema comment — a nullable union comes
+            // back from the pinned model as `{}` and takes the whole round down with it.
+            existingLessonCode: z.string(),
+            layer: z.string(),
+            limits: z.string(),
             reasoning: z.string(),
             sourceRefs: z.array(z.string()),
             title: z.string(),
@@ -460,15 +478,24 @@ export class ExpertiseIngestionService {
       ref: `R${index + 1}`,
     }));
     const byRef = new Map(labelled.map((rejection) => [rejection.ref, rejection.id]));
+    const { visuals, withheld } = await this.resolveRejectionFrames(labelled);
+    const frameLabelByEvidence = new Map(
+      visuals.map((visual, index) => [visual.evidenceId, `frame ${index + 1}`]),
+    );
     const rendered = labelled
       .map((rejection) => {
-        const notes = (rejection.detail?.annotations ?? [])
-          .map((annotation) => annotation.comment?.trim())
-          .filter(Boolean);
+        const regions = (rejection.detail?.annotations ?? []).map((annotation) => {
+          const frame = frameLabelByEvidence.get(annotation.evidenceId);
+          // Regions are normalized 0-1; percentages read better to a model than raw floats.
+          const at = annotation.rect
+            ? ` at ${pct(annotation.rect.x)},${pct(annotation.rect.y)} sized ${pct(annotation.rect.width)}×${pct(annotation.rect.height)}`
+            : '';
+          return `  circled${frame ? ` on ${frame}` : ''}${at}: ${annotation.comment?.trim() || '(no note)'}`;
+        });
         return [
           `[${rejection.ref}] promised: ${rejection.title ?? '(untitled check)'}`,
           rejection.detail?.comment?.trim() && `  said: ${rejection.detail.comment.trim()}`,
-          ...notes.map((note) => `  circled: ${note}`),
+          ...regions,
         ]
           .filter(Boolean)
           .join('\n');
@@ -509,7 +536,12 @@ export class ExpertiseIngestionService {
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {
-        ...chainExpertiseRejectionIngestion({ domains, rejections: rendered }),
+        ...chainExpertiseRejectionIngestion({
+          domains,
+          rejections: rendered,
+          visuals,
+          withheldEvidence: withheld,
+        }),
         ...modelConfig,
         schema: EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA,
       },
@@ -532,6 +564,8 @@ export class ExpertiseIngestionService {
         domain,
         observations: result.observations.map((observation) => ({
           ...observation,
+          existingLessonCode: observation.existingLessonCode.trim() || null,
+          layer: observation.layer.trim() || null,
           // A rejection is a violation by construction — never let the model relabel it a pass.
           outcome: 'violation' as const,
           // Hallucinated refs are dropped rather than failing the round: losing one provenance
@@ -553,6 +587,75 @@ export class ExpertiseIngestionService {
     }
 
     return { ingested, reason: ingested > 0 ? 'matched' : 'no-match' } as const;
+  };
+
+  /**
+   * The frames behind one round's rejections, circled ones first.
+   *
+   * Most of these rejections are visual — 616 of this owner's 876 carry a circled region — so a
+   * text-only request asks the model to distil "this isn't aligned" without ever seeing what was
+   * not aligned. Frames are inlined as data URIs rather than linked, because a link makes the
+   * provider fetch from our storage and a local or private bucket is simply unreachable.
+   *
+   * Priority is deliberate rather than first-come: a budget spent in insertion order drops exactly
+   * the circled frames the reviewer pointed at. Whatever does not fit is named in the prompt, so
+   * the model never reads a withheld frame as evidence of absence.
+   */
+  private resolveRejectionFrames = async (
+    rejections: { detail: VerifyCheckDecisionDetail | null; id: string; ref: string }[],
+  ) => {
+    const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
+    const fileService = new FileService(this.db, this.userId, this.workspaceId);
+    const evidenceModel = new VerifyEvidenceModel(this.db, this.userId, this.workspaceId);
+
+    const candidates: { circled: boolean; evidenceId: string; fileId: string; label: string }[] =
+      [];
+    for (const rejection of rejections) {
+      const circled = new Set(
+        (rejection.detail?.annotations ?? []).map((annotation) => annotation.evidenceId),
+      );
+      const rows = await evidenceModel.listByCheckResult(rejection.id);
+      for (const row of rows) {
+        if (!VISUAL_REJECTION_EVIDENCE_TYPES.has(row.type) || !row.fileId) continue;
+        const isCircled = circled.has(row.id);
+        candidates.push({
+          circled: isCircled,
+          evidenceId: row.id,
+          fileId: row.fileId,
+          label: `${rejection.ref}${isCircled ? ' (circled)' : ''} — ${row.description || 'evidence'}`,
+        });
+      }
+    }
+
+    const ordered = [
+      ...candidates.filter((candidate) => candidate.circled),
+      ...candidates.filter((candidate) => !candidate.circled),
+    ];
+    const selected = ordered.slice(0, MAX_REJECTION_FRAMES);
+
+    const resolved = await pMap(
+      selected,
+      async (item) => {
+        const file = await fileModel.findById(item.fileId);
+        if (!file) return null;
+        return {
+          accessUrl: await resolveModelReadableFrameUrl(fileService, file),
+          evidenceId: item.evidenceId,
+          label: item.label,
+        };
+      },
+      { concurrency: 4 },
+    );
+
+    const visuals = resolved.filter((item): item is NonNullable<typeof item> => Boolean(item));
+    const dropped = ordered.length - selected.length;
+    return {
+      visuals,
+      withheld:
+        dropped > 0
+          ? `${dropped} further screenshot(s) from this round were not attached. Absence of a frame is not evidence that nothing was wrong there.`
+          : undefined,
+    };
   };
 
   /**
