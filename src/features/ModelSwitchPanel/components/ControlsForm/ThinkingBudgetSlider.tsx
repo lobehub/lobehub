@@ -93,7 +93,11 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
     const options = useMemo(
       () =>
         ['Auto', 'OFF', '128', '512', '1K', '2K', '4K', '8K', '16K', '24K', '32K'].map(
-          (label, value) => ({ label, value }),
+          (label, value) => ({
+            label,
+            style: { overflowWrap: 'normal' as const, whiteSpace: 'nowrap' as const },
+            value,
+          }),
         ),
       [],
     );
