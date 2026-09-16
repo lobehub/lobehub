@@ -99,6 +99,9 @@ export const deriveSandboxWorkspaceKey = ({
   return key;
 };
 
+/** Workspace subtree the platform reserves for its own state. */
+const RESERVED_WORKSPACE_DIR = '.sandbox';
+
 /** Longest `sandboxCwd` worth sending; far past any real directory nesting. */
 const MAX_SANDBOX_CWD_LENGTH = 1024;
 
@@ -124,6 +127,15 @@ export const isSafeSandboxCwd = (value: string): boolean => {
   if (!value || value.length > MAX_SANDBOX_CWD_LENGTH) return false;
   if (value !== value.trim()) return false;
   if (value.startsWith('/') || value.startsWith('~')) return false;
+  // The platform keeps its own state inside the workspace (environment
+  // snapshots live under `.sandbox/`). Listing APIs hide it, but hiding is not
+  // the same as refusing: a working directory pointed here would put an agent
+  // inside the store its own environment is restored from, and a delete would
+  // take every environment this user has with it. Only the top level is
+  // reserved — a `.sandbox` the user made deeper in their own tree is theirs.
+  if (value === RESERVED_WORKSPACE_DIR || value.startsWith(`${RESERVED_WORKSPACE_DIR}/`)) {
+    return false;
+  }
 
   // Rejects `..` traversal, `.` no-ops, and the empty segments produced by a
   // leading, trailing or doubled slash — none of which come from the picker.
