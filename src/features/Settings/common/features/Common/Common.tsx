@@ -85,7 +85,7 @@ const Common = memo(() => {
         children: (
           <Flexbox horizontal justify={'flex-end'}>
             <Select
-              defaultValue={language}
+              value={language}
               optionRender={(option) => (
                 <span
                   style={{
