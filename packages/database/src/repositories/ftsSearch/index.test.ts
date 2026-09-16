@@ -428,6 +428,14 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
         url: 'file://visitor-secret-file.txt',
         userId,
       });
+
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        name: 'visitor-secret-library-file.txt',
+        size: 100,
+        url: 'file://visitor-secret-library-file.txt',
+        userId,
+      });
     });
 
     it('should filter by agent type', async () => {
@@ -460,7 +468,7 @@ describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
     it('should exclude files carrying agent-share provenance', async () => {
       const results = await ftsSearchRepo.search({ query: 'visitor secret', type: 'file' });
 
-      expect(results).toEqual([]);
+      expect(results.map(({ title }) => title)).toEqual(['visitor-secret-library-file.txt']);
     });
   });
 

@@ -10,12 +10,13 @@ import type { LobeChatDatabase } from '../type';
 export const notAgentShareFile = (metadata: AnyPgColumn) =>
   sql<boolean>`NOT COALESCE(${metadata} ? 'agentShare', false)`;
 
+/** Files whose source belongs in ordinary library surfaces. */
+export const libraryVisibleFileSource = (source: AnyPgColumn) =>
+  or(isNull(source), notInArray(source, LIBRARY_HIDDEN_FILE_SOURCES));
+
 /** Files that belong in ordinary library, knowledge, and search surfaces. */
 export const libraryVisibleFile = (source: AnyPgColumn, metadata: AnyPgColumn) =>
-  and(
-    or(isNull(source), notInArray(source, LIBRARY_HIDDEN_FILE_SOURCES)),
-    notAgentShareFile(metadata),
-  );
+  and(libraryVisibleFileSource(source), notAgentShareFile(metadata));
 
 /** Exclude a document derived from an agent-share attachment. */
 export const notAgentShareFileReference = (

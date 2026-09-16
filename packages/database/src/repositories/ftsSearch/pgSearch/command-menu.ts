@@ -11,7 +11,10 @@ import {
   topics,
 } from '../../../schemas';
 import { sanitizeBm25Query } from '../../../utils/bm25';
-import { libraryVisibleFile } from '../../../utils/fileVisibility';
+import {
+  libraryVisibleFileSource,
+  notAgentShareFileReference,
+} from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
 import { searchableMessageText } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
@@ -349,7 +352,7 @@ export async function searchFiles(
         context.scanScopeWhere(files),
         ne(files.fileType, 'custom/document'),
         // Keep non-library files out of command-menu search.
-        libraryVisibleFile(files.source, files.metadata),
+        libraryVisibleFileSource(files.source),
         sql`${files.name} @@@ ${bm25Query}`,
       ),
     )
@@ -376,6 +379,8 @@ export async function searchFiles(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        // ParadeDB only supports indexed predicates inside its BM25 scan.
+        notAgentShareFileReference(db, hits.id),
         // A file linked to any restricted KB is fully hidden. The subquery
         // avoids leaking it through a different joined membership row.
         excludeKbIds && excludeKbIds.length > 0
