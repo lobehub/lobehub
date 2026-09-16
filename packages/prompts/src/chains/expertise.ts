@@ -188,7 +188,7 @@ export const chainExpertiseTopicIngestion = (input: {
   ],
 });
 
-export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v1';
+export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v2';
 
 export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
   name: 'expertise_rejection_ingestion',
@@ -214,6 +214,9 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   limits: { type: 'string' },
                   reasoning: { type: 'string' },
                   sourceRefs: { items: { type: 'string' }, minItems: 1, type: 'array' },
+                  // Naming the abstracted subject is what forces the climb: a model that cannot
+                  // say what the concrete thing is an example of has not generalized at all.
+                  subject: { type: 'string' },
                   title: { type: 'string' },
                 },
                 required: [
@@ -223,6 +226,7 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   'limits',
                   'reasoning',
                   'sourceRefs',
+                  'subject',
                   'title',
                 ],
                 type: 'object',
@@ -250,7 +254,11 @@ Most of these rejections are visual. "This isn't aligned", "this is too big", "t
 
 First apply each domainFilter and outOfScope literally. If none of the rejections fall inside a domain, return matches=false and no observations for it. One rejection may legitimately land in several domains.
 
-Then generalize. A rejection is an instance; a lesson is the standard behind it. "This divider isn't needed" is the instance — "decorative dividers are not added unless they separate a semantic level" is the standard. Restating a single rejection verbatim produces a rule that never fires again, which is the failure mode this whole pipeline exists to avoid.
+Then generalize, and check how far you got. A rejection is an instance; a lesson is the standard behind it. Restating one rejection verbatim produces a rule that never fires again, which is the failure mode this whole pipeline exists to avoid — but stripping the screen name out of a sentence is not generalizing either.
+
+Apply this test to every title before you return it: could a delivery on a completely unrelated screen violate this standard? If the answer is no, you are still describing the instance. Climb one level: replace the concrete things with what they are an example of, and say it in \`subject\` — "the reaction buttons under a comment" is really "a set of results plus a control that adds to it"; "the annotation border on a screenshot" is really "a thin line drawn over user content".
+
+Do not climb past what the reviewer actually objected to. If they rejected one decorative divider, the standard is about decoration that was not asked for — not about dividers in text inputs, and not about every visual element on the page.
 
 Attaching to an existing lesson is the default; a new lesson is the exception:
 
@@ -260,13 +268,14 @@ Attaching to an existing lesson is the default; a new lesson is the exception:
 - Prefer one lesson supported by several rejections over several near-identical lessons. Cite every rejection that supports it in sourceRefs.
 
 For each observation return:
-- title — the standard as one imperative sentence, with the screen, component and task names removed;
-- reasoning — why the reviewer holds it, grounded in what they actually wrote;
+- title — the standard as one imperative sentence, stated about \`subject\` rather than about the screen it happened on;
+- subject — what the standard is really about, once the concrete names are replaced by what they exemplify;
+- reasoning — the reviewer's own reason, and ONLY theirs. Quote or paraphrase what they wrote. If they gave no reason — and "this is ugly", "this is wrong", "this doesn't work" are not reasons — answer exactly "评审者未说明理由" (or the same sentence in the language they used). Never supply a rationale from design common sense: a reason you invented will later be enforced as if the reviewer had said it;
 - example — how it showed up this time, concretely enough to recognise again;
-- limits — when the standard does NOT apply. This field is not optional politeness: a standard with no stated limit gets applied everywhere and turns into noise, so name the case that is genuinely exempt. Only when no exemption exists may you answer "applies to every delivery in this domain";
+- limits — the boundary THE REVIEWER drew. Fill it only when they said where the standard stops, or when another rejection in this same round contradicts it. Otherwise answer exactly "边界未由评审者说明" (or the same sentence in their language). An invented exemption is worse than an empty one: it silently narrows a standard the reviewer stated without limit;
 - sourceRefs — the reference labels (for example "R2") of every rejection supporting it. Never invent a label that is not listed.
 
-Leave existingLessonCode, layer and limits as an empty string rather than null when they do not apply — never as an object. Use only declared layer keys. Write human-facing text in the language the reviewer used.`;
+Leave existingLessonCode and layer as an empty string rather than null when they do not apply — never as an object. Use only declared layer keys. Write human-facing text in the language the reviewer used.`;
 
 export const chainExpertiseRejectionIngestion = (input: {
   domains: readonly unknown[];

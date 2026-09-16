@@ -94,6 +94,7 @@ const RejectionAnalysisSchema = z.object({
             limits: z.string(),
             reasoning: z.string(),
             sourceRefs: z.array(z.string()),
+            subject: z.string(),
             title: z.string(),
           }),
         )
@@ -171,6 +172,8 @@ interface PersistableObservation {
    * N rejections" a real count rather than a count of analysis passes.
    */
   sourceCheckResultIds?: string[];
+  /** What the standard is really about, once the concrete names are replaced by what they exemplify. */
+  subject?: null | string;
   title: string;
 }
 
@@ -823,7 +826,12 @@ export class ExpertiseIngestionService {
             originRunId: runId,
             polarity: 'rule',
             sections: [
-              { body: observation.title, key: 'rule' as const },
+              {
+                body: observation.subject?.trim()
+                  ? `${observation.title}\n\n适用对象：${observation.subject.trim()}`
+                  : observation.title,
+                key: 'rule' as const,
+              },
               { body: observation.reasoning, key: 'why' as const },
               { body: observation.example, key: 'how' as const },
               ...(observation.limits?.trim()
