@@ -5,6 +5,7 @@ import { useLocation } from 'react-router';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { usePinnedAgentState } from '@/hooks/usePinnedAgentState';
 import { useGlobalStore } from '@/store/global';
+import { useQuickNoteStore } from '@/store/quickNote';
 
 import { useHotkeyById } from './useHotkeyById';
 
@@ -14,6 +15,13 @@ import { useHotkeyById } from './useHotkeyById';
  */
 export const isTaskPanelRoute = (pathname: string) =>
   pathname === '/tasks' || pathname.startsWith('/tasks/') || pathname.startsWith('/task/');
+
+/**
+ * Quick Note routes render their own AI column, whose panel status is
+ * intentionally independent from the generic right panel used by chat routes.
+ */
+export const isQuickNotePanelRoute = (pathname: string) =>
+  /^(?:\/[^/]+)?\/note(?:\/|$)/.test(pathname);
 
 /**
  * Agent profile renders AgentBuilder, whose panel status is intentionally
@@ -60,10 +68,16 @@ export const useToggleRightPanelHotkey = () => {
   ]);
   const isAgentProfileRoute = isAgentProfilePanelRoute(pathname);
   const isTaskRoute = isTaskPanelRoute(pathname);
+  const isQuickNoteRoute = isQuickNotePanelRoute(pathname);
 
   return useHotkeyById(
     HotkeyEnum.ToggleRightPanel,
     () => {
+      if (isQuickNoteRoute) {
+        useQuickNoteStore.getState().toggleAnnotationPanel();
+        return;
+      }
+
       if (isTaskRoute) {
         toggleTaskAgentPanel();
         return;
@@ -81,6 +95,7 @@ export const useToggleRightPanelHotkey = () => {
     },
     [
       isAgentProfileRoute,
+      isQuickNoteRoute,
       isTaskRoute,
       toggleAgentBuilderPanel,
       toggleRightPanel,
