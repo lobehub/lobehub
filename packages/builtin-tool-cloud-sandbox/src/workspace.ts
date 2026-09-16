@@ -190,11 +190,17 @@ export const formatSandboxWorkspacePromptVariables = ({
 
   return {
     sandbox_session_files:
-      '- Files in your working directory persist across sessions; anything else (installed packages, `/tmp`) must be recreated as needed',
+      '- Files in your working directory persist across sessions; anything written outside it may not',
     sandbox_workspace: [
       ...placement,
-      '- It has a storage quota. Keep results, source files and notes there — install dependencies, unpack archives and stage large datasets under `/tmp` instead, which does not count against it.',
-      '- Everything outside the workspace (installed packages, `/tmp`) is still ephemeral and disappears when the session is recycled.',
+      // Deliberately does NOT send installs to `/tmp`. The workspace is network
+      // storage — an order of magnitude slower for the thousands of small files
+      // a package install writes — but the answer is to let them land where the
+      // toolchain normally puts them, not to relocate them somewhere the
+      // platform treats as scratch. Naming a directory here would also outlive
+      // whatever the platform does with those files later.
+      '- The workspace is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes. Install packages and build where the toolchain puts things by default, and keep the workspace for what is worth keeping.',
+      '- It has a storage quota, which covers what you leave in the workspace.',
     ].join('\n'),
   };
 };

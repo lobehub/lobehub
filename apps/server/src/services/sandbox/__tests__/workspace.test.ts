@@ -96,7 +96,11 @@ describe('formatSandboxWorkspacePromptVariables', () => {
 
     for (const key of placeholders) expect(rendered).not.toContain(key);
     expect(vars.sandbox_workspace).toContain('persistent workspace');
-    expect(vars.sandbox_workspace).toContain('/tmp');
+    // Steers heavy work away from the workspace without naming a scratch
+    // directory: where installs land is the platform's business, and a path
+    // written here would outlive whatever it decides to do with them.
+    expect(vars.sandbox_workspace).toContain('network storage');
+    expect(vars.sandbox_workspace).not.toContain('/tmp');
     expect(rendered).not.toContain('temporary and session-specific');
     expect(rendered).not.toContain('Files from previous sessions may not persist');
   });
