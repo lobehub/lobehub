@@ -1,12 +1,4 @@
 {
-  "banner.copy": "Vous aimez cette page ? <strong>Créez la vôtre avec {{appName}}</strong> — espace de travail gratuit pour des documents natifs IA.",
-  "banner.signIn": "Se connecter",
-  "banner.signUp": "Inscrivez-vous gratuitement",
-  "error.notFound.desc": "Cette page n'existe plus ou a été supprimée.",
-  "error.notFound.title": "Page introuvable",
-  "error.private.action": "Se connecter",
-  "error.private.desc": "Connectez-vous si vous êtes le propriétaire, ou demandez l'accès à la personne qui a partagé la page.",
-  "error.private.title": "Page privée",
   "popover.copyLink": "Copier le lien",
   "popover.copyLinkSuccess": "Lien copié",
   "popover.linkHint": "Toute personne disposant du lien peut consulter cette page",
@@ -22,7 +14,6 @@
   "popover.visibilityUpdated": "Visibilité mise à jour",
   "popover.workspaceHint": "Toute personne dans cet espace de travail peut voir cette page",
   "shareButton.label": "Partager",
-  "shell.footer": "Publié sur {{appName}}",
   "shell.sharedBy": "Partagé par {{name}}",
   "shell.updatedAt": "Mis à jour {{relative}}"
 }

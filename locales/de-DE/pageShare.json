@@ -1,12 +1,4 @@
 {
-  "banner.copy": "Gefällt dir diese Seite? <strong>Erstelle deine eigene mit {{appName}}</strong> — kostenloser Arbeitsbereich für KI-native Dokumente.",
-  "banner.signIn": "Anmelden",
-  "banner.signUp": "Kostenlos registrieren",
-  "error.notFound.desc": "Diese Seite existiert nicht mehr oder wurde entfernt.",
-  "error.notFound.title": "Seite nicht gefunden",
-  "error.private.action": "Anmelden",
-  "error.private.desc": "Melde dich an, wenn du der Besitzer bist, oder fordere Zugriff von der Person an, die die Seite geteilt hat.",
-  "error.private.title": "Seite ist privat",
   "popover.copyLink": "Link kopieren",
   "popover.copyLinkSuccess": "Link kopiert",
   "popover.linkHint": "Jeder mit dem Link kann diese Seite ansehen",
@@ -22,7 +14,6 @@
   "popover.visibilityUpdated": "Sichtbarkeit aktualisiert",
   "popover.workspaceHint": "Jeder in diesem Arbeitsbereich kann diese Seite ansehen",
   "shareButton.label": "Teilen",
-  "shell.footer": "Veröffentlicht auf {{appName}}",
   "shell.sharedBy": "Geteilt von {{name}}",
   "shell.updatedAt": "Aktualisiert {{relative}}"
 }

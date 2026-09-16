@@ -1,12 +1,4 @@
 {
-  "banner.copy": "このページが気に入りましたか？<strong>{{appName}}で自分のページを作成しましょう</strong> — AIネイティブドキュメントの無料ワークスペース。",
-  "banner.signIn": "ログイン",
-  "banner.signUp": "無料登録",
-  "error.notFound.desc": "このページは存在しないか、削除されました。",
-  "error.notFound.title": "ページが見つかりません",
-  "error.private.action": "ログイン",
-  "error.private.desc": "所有者の場合はログインしてください。または、このページを共有した人にアクセスを依頼してください。",
-  "error.private.title": "ページは非公開です",
   "popover.copyLink": "リンクをコピー",
   "popover.copyLinkSuccess": "リンクをコピーしました",
   "popover.linkHint": "リンクを知っている人はこのページを閲覧できます",
@@ -22,7 +14,6 @@
   "popover.visibilityUpdated": "公開範囲が更新されました",
   "popover.workspaceHint": "このワークスペース内の誰でもこのページを閲覧できます",
   "shareButton.label": "共有",
-  "shell.footer": "{{appName}}で公開",
   "shell.sharedBy": "{{name}}が共有",
   "shell.updatedAt": "{{relative}}に更新"
 }

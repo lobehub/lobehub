@@ -1,12 +1,4 @@
 {
-  "banner.copy": "Харесвате тази страница? <strong>Създайте своя собствена с {{appName}}</strong> — безплатно пространство за AI-ориентирани документи.",
-  "banner.signIn": "Вход",
-  "banner.signUp": "Регистрация безплатно",
-  "error.notFound.desc": "Тази страница вече не съществува или е била премахната.",
-  "error.notFound.title": "Страницата не е намерена",
-  "error.private.action": "Вход",
-  "error.private.desc": "Влезте, ако сте собственик, или поискайте достъп от човека, който е споделил страницата.",
-  "error.private.title": "Страницата е частна",
   "popover.copyLink": "Копирай линка",
   "popover.copyLinkSuccess": "Линкът е копиран",
   "popover.linkHint": "Всеки с линка може да види тази страница",
@@ -22,7 +14,6 @@
   "popover.visibilityUpdated": "Видимостта е актуализирана",
   "popover.workspaceHint": "Всеки в това работно пространство може да види тази страница",
   "shareButton.label": "Сподели",
-  "shell.footer": "Публикувано на {{appName}}",
   "shell.sharedBy": "Споделено от {{name}}",
   "shell.updatedAt": "Актуализирано {{relative}}"
 }

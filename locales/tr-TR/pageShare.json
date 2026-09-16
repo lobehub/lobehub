@@ -1,12 +1,4 @@
 {
-  "banner.copy": "Bu sayfayı beğendiniz mi? <strong>{{appName}} ile kendi sayfanızı oluşturun</strong> — AI tabanlı belgeler için ücretsiz çalışma alanı.",
-  "banner.signIn": "Giriş yap",
-  "banner.signUp": "Ücretsiz kaydol",
-  "error.notFound.desc": "Bu sayfa artık mevcut değil veya kaldırılmış.",
-  "error.notFound.title": "Sayfa bulunamadı",
-  "error.private.action": "Giriş yap",
-  "error.private.desc": "Eğer sahibiyseniz giriş yapın veya sayfayı paylaşan kişiden erişim isteyin.",
-  "error.private.title": "Sayfa özel",
   "popover.copyLink": "Bağlantıyı Kopyala",
   "popover.copyLinkSuccess": "Bağlantı kopyalandı",
   "popover.linkHint": "Bağlantıya sahip olan herkes bu sayfayı görüntüleyebilir",
@@ -22,7 +14,6 @@
   "popover.visibilityUpdated": "Görünürlük güncellendi",
   "popover.workspaceHint": "Bu çalışma alanındaki herkes bu sayfayı görüntüleyebilir",
   "shareButton.label": "Paylaş",
-  "shell.footer": "{{appName}} üzerinde yayınlandı",
   "shell.sharedBy": "{{name}} tarafından paylaşıldı",
   "shell.updatedAt": "{{relative}} tarihinde güncellendi"
 }

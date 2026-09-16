@@ -1,12 +1,4 @@
 {
-  "banner.copy": "Thích trang này? <strong>Tạo trang của riêng bạn với {{appName}}</strong> — không gian làm việc miễn phí cho tài liệu AI-native.",
-  "banner.signIn": "Đăng nhập",
-  "banner.signUp": "Đăng ký miễn phí",
-  "error.notFound.desc": "Trang này không còn tồn tại hoặc đã bị xóa.",
-  "error.notFound.title": "Không tìm thấy trang",
-  "error.private.action": "Đăng nhập",
-  "error.private.desc": "Đăng nhập nếu bạn là chủ sở hữu, hoặc yêu cầu quyền truy cập từ người đã chia sẻ trang.",
-  "error.private.title": "Trang là riêng tư",
   "popover.copyLink": "Sao chép liên kết",
   "popover.copyLinkSuccess": "Liên kết đã được sao chép",
   "popover.linkHint": "Bất kỳ ai có liên kết đều có thể xem trang này",
@@ -22,7 +14,6 @@
   "popover.visibilityUpdated": "Khả năng hiển thị đã được cập nhật",
   "popover.workspaceHint": "Bất kỳ ai trong không gian làm việc này đều có thể xem trang này",
   "shareButton.label": "Chia sẻ",
-  "shell.footer": "Được xuất bản trên {{appName}}",
   "shell.sharedBy": "Được chia sẻ bởi {{name}}",
   "shell.updatedAt": "Cập nhật {{relative}}"
 }
