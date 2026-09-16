@@ -1,0 +1,73 @@
+---
+title: 使用 FunASR 进行私有语音转文字
+description: 将 LobeHub 连接到自托管的 FunASR OpenAI 兼容转写服务。
+tags:
+  - LobeHub
+  - FunASR
+  - SenseVoice
+  - 语音转文字
+  - 自托管
+---
+
+# 使用 FunASR 进行私有语音转文字
+
+[FunASR](https://github.com/modelscope/FunASR) 是开源语音识别工具包。它的 API 服务提供 OpenAI 兼容的 `/v1/audio/transcriptions` 接口，因此 LobeHub 可以使用自托管的 SenseVoice、Paraformer 或 Fun-ASR-Nano，无需把音频发送给托管转写服务。
+
+## 启动 FunASR API
+
+在运行转写服务的机器上安装 FunASR 和服务依赖：
+
+```bash
+python -m pip install -U "funasr>=1.3.27" fastapi uvicorn python-multipart
+funasr-server --model sensevoice --device cpu
+```
+
+CUDA 主机可改用 `--device cuda`。配置 LobeHub 前，先直接验证接口：
+
+```bash
+curl -L https://isv-data.oss-cn-hangzhou.aliyuncs.com/ics/MaaS/ASR/test_audio/BAC009S0764W0121.wav -o sample.wav
+curl http://localhost:8000/v1/audio/transcriptions \
+  -F file=@sample.wav \
+  -F model=sensevoice \
+  -F response_format=verbose_json
+```
+
+## 连接 LobeHub
+
+打开`设置` > `AI 服务提供商` > `FunASR`，启用该提供商，然后把端点设置为 FunASR API 的基础地址，并保留末尾的 `/v1`。默认的本地 FunASR 服务不需要 API Key。
+
+该地址必须能从 LobeHub 服务端访问。两个服务都在容器中时，应使用共享网络中的服务名，例如 `http://funasr:8000/v1`。只有 Docker 环境确实提供该主机名时，才使用 `http://host.docker.internal:8000/v1`。
+
+也可以通过 LobeHub CLI 完成配置：
+
+```bash
+lh provider toggle funasr --enable
+lh provider config funasr --base-url http://funasr:8000/v1
+lh model toggle sensevoice --provider funasr --enable
+lh generate asr sample.wav --provider funasr --model sensevoice --json
+```
+
+## 模型别名
+
+| 模型              | 适用场景                                       |
+| --------------- | ------------------------------------------ |
+| `sensevoice`    | 需要便于部署的多语种默认模型，以及语言、情感和音频事件检测。             |
+| `paraformer`    | 业务以普通话为主，并需要标点或时间戳。                        |
+| `paraformer-en` | 需要精简的英文识别路径。                               |
+| `fun-asr-nano`  | 有 GPU，并需要面向中文、英文、日文及中文方言和区域口音的 LLM 语音识别模型。 |
+
+只启用当前 FunASR 服务实例已经加载的模型别名。部署取舍可参考 [FunASR 模型选择指南](https://github.com/modelscope/FunASR/blob/main/docs/model_selection.md)。
+
+## 故障排查
+
+### 无法连接
+
+请从 LobeHub 服务或容器内部检查基础地址，而不是只在浏览器中检查。LobeHub 使用容器部署时，`localhost` 指向 LobeHub 容器本身。
+
+### 提供商不支持 ASR
+
+确认已启用 `FunASR`，所选模型属于 FunASR 提供商，并且配置的地址以 `/v1` 结尾。
+
+### 首次请求较慢
+
+首次转写可能包含模型加载和预热时间。测量延迟前，先检查 `GET /health` 并完成一次直接转写。

@@ -23,6 +23,7 @@ import ComfyUIProvider from './comfyui';
 import DeepSeekProvider from './deepseek';
 import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
+import FunASRProvider from './funasr';
 import GiteeAIProvider from './giteeai';
 import GithubProvider from './github';
 import GithubCopilotProvider from './githubCopilot';
@@ -187,6 +188,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   NvidiaProvider,
   TogetherAIProvider,
   FireworksAIProvider,
+  FunASRProvider,
   GroqProvider,
   PerplexityProvider,
   ModelScopeProvider,
@@ -279,6 +281,7 @@ export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
 export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
+export { default as FunASRProviderCard } from './funasr';
 export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';
 export { default as GithubCopilotProviderCard } from './githubCopilot';
