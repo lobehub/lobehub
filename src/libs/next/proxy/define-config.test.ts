@@ -132,3 +132,12 @@ describe('Acceptance installation guide', () => {
     expect(guide).toContain('.agents/skills/acceptance/SKILL.md');
   });
 });
+
+describe('defineConfig middleware matcher', () => {
+  it('includes /project routes so project pages are rewritten by the SPA middleware', async () => {
+    const { config } = await import('@/proxy');
+
+    expect(config.matcher).toContain('/project');
+    expect(config.matcher).toContain('/project(.*)');
+  });
+});
