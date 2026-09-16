@@ -11,12 +11,22 @@ const mockDecrypt = vi.hoisted(() => vi.fn());
 const mockFindById = vi.hoisted(() => vi.fn());
 const mockTopicUpdate = vi.hoisted(() => vi.fn());
 const mockGenerateTopicTitle = vi.hoisted(() => vi.fn());
+const mockGetAgentRuntimeRedisClient = vi.hoisted(() => vi.fn().mockReturnValue(null));
 
 // Unified messenger mock methods (used by all platforms via PlatformClient)
 const mockEditMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockTriggerTyping = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockRemoveReaction = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockCreateMessage = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 'new-msg' }));
+const mockClaimDraftCompletion = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ owner: 'owner-1', status: 'claimed' }),
+);
+const mockClearDraft = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockMarkDraftDelivered = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+const mockReleaseDraftCompletion = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockRenewDraftCompletion = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+const mockRenewDraft = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockUpdateDraft = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockUpdateThreadName = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 // Default replaceReaction fans out to removeReaction so existing '👀' assertions
 // keep describing the effective behaviour (step swap / completion clear) end-to-end.
@@ -30,11 +40,18 @@ const mockReplaceReaction = vi.hoisted(() =>
 const mockGetMessenger = vi.hoisted(() =>
   vi.fn().mockImplementation(function () {
     return {
+      claimDraftCompletion: mockClaimDraftCompletion,
+      clearDraft: mockClearDraft,
       createMessage: mockCreateMessage,
       editMessage: mockEditMessage,
+      markDraftDelivered: mockMarkDraftDelivered,
       removeReaction: mockRemoveReaction,
+      releaseDraftCompletion: mockReleaseDraftCompletion,
+      renewDraftCompletion: mockRenewDraftCompletion,
+      renewDraft: mockRenewDraft,
       replaceReaction: mockReplaceReaction,
       triggerTyping: mockTriggerTyping,
+      updateDraft: mockUpdateDraft,
       updateThreadName: mockUpdateThreadName,
     };
   }),
@@ -103,7 +120,7 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 }));
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
-  getAgentRuntimeRedisClient: vi.fn().mockReturnValue(null),
+  getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
 }));
 
 vi.mock('../AgentBridgeService', () => ({
@@ -238,6 +255,7 @@ describe('BotCallbackService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetAgentRuntimeRedisClient.mockReturnValue(null);
     service = new BotCallbackService(FAKE_DB);
     setupCredentials();
 
@@ -250,11 +268,18 @@ describe('BotCallbackService', () => {
     // Default: getMessenger returns the main messenger mock
     mockGetMessenger.mockImplementation(function () {
       return {
+        claimDraftCompletion: mockClaimDraftCompletion,
+        clearDraft: mockClearDraft,
         createMessage: mockCreateMessage,
         editMessage: mockEditMessage,
+        markDraftDelivered: mockMarkDraftDelivered,
         removeReaction: mockRemoveReaction,
+        releaseDraftCompletion: mockReleaseDraftCompletion,
+        renewDraftCompletion: mockRenewDraftCompletion,
+        renewDraft: mockRenewDraft,
         replaceReaction: mockReplaceReaction,
         triggerTyping: mockTriggerTyping,
+        updateDraft: mockUpdateDraft,
         updateThreadName: mockUpdateThreadName,
       };
     });
@@ -457,6 +482,50 @@ describe('BotCallbackService', () => {
       expect(mockEditMessage).toHaveBeenCalledWith('progress-msg-1', expect.any(String));
     });
 
+    it('renews native drafts when tool-call details are disabled', async () => {
+      setupCredentials(FAKE_CREDENTIALS, { settings: { displayToolCalls: false } });
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockRenewDraft).toHaveBeenCalledWith('draft-42');
+      expect(mockEditMessage).not.toHaveBeenCalled();
+    });
+
+    it('swallows native draft renewal failures when tool-call details are disabled', async () => {
+      setupCredentials(FAKE_CREDENTIALS, { settings: { displayToolCalls: false } });
+      mockRenewDraft.mockRejectedValueOnce(new Error('renew failed'));
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await expect(service.handleCallback(body)).resolves.toBeUndefined();
+      expect(mockRenewDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('updates native drafts for step progress when tool-call details are enabled', async () => {
+      const body = makeTelegramBody({
+        content: 'Thinking...',
+        draftId: 'draft-42',
+        shouldContinue: true,
+        stepType: 'call_llm',
+        type: 'step',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockUpdateDraft).toHaveBeenCalledWith('draft-42', expect.any(String));
+      expect(mockEditMessage).not.toHaveBeenCalled();
+    });
+
     it('should route completion type to handleCompletion', async () => {
       const body = makeBody({
         lastAssistantContent: 'Here is the answer.',
@@ -470,6 +539,238 @@ describe('BotCallbackService', () => {
         'progress-msg-1',
         expect.stringContaining('Here is the answer.'),
       );
+    });
+
+    it('keeps a busy native draft completion retryable without redelivery', async () => {
+      mockClaimDraftCompletion
+        .mockResolvedValueOnce({ owner: 'owner-1', status: 'claimed' })
+        .mockResolvedValueOnce({ status: 'busy' });
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+      await expect(service.handleCallback(body)).rejects.toThrow(
+        'Telegram draft completion is already being delivered',
+      );
+
+      expect(mockClaimDraftCompletion).toHaveBeenCalledTimes(2);
+      expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+      expect(mockClearDraft).toHaveBeenCalledTimes(1);
+      expect(mockClearDraft).toHaveBeenCalledWith('draft-42', 'owner-1');
+      expect(mockMarkDraftDelivered).toHaveBeenCalledWith('draft-42', 'owner-1');
+    });
+
+    it('renews the native draft lease during a long completion delivery', async () => {
+      vi.useFakeTimers();
+      let resolveDelivery!: (value: { id: string }) => void;
+      mockCreateMessage.mockImplementationOnce(
+        () =>
+          new Promise<{ id: string }>((resolve) => {
+            resolveDelivery = resolve;
+          }),
+      );
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      try {
+        const completion = service.handleCallback(body);
+        await vi.waitFor(() => expect(mockCreateMessage).toHaveBeenCalledTimes(1));
+        expect(mockRenewDraftCompletion).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(30_000);
+
+        expect(mockRenewDraftCompletion).toHaveBeenCalledTimes(2);
+        expect(mockRenewDraftCompletion).toHaveBeenLastCalledWith('draft-42', 'owner-1');
+        resolveDelivery({ id: 'new-msg' });
+        await completion;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('fails before delivery when the native draft session is missing', async () => {
+      mockClaimDraftCompletion.mockResolvedValueOnce({ status: 'missing' });
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow(
+        'Telegram draft completion session is missing',
+      );
+
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+      expect(mockMarkDraftDelivered).not.toHaveBeenCalled();
+      expect(mockClearDraft).not.toHaveBeenCalled();
+    });
+
+    it('fails before delivery when a draft messenger cannot claim completion', async () => {
+      mockGetMessenger.mockReturnValueOnce({
+        createMessage: mockCreateMessage,
+        editMessage: mockEditMessage,
+        removeReaction: mockRemoveReaction,
+      });
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow(
+        'Telegram draft completion session is missing',
+      );
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('finalizes a delivered draft without the original owner', async () => {
+      mockClaimDraftCompletion.mockResolvedValueOnce({ status: 'finalize' });
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body);
+
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+      expect(mockClearDraft).toHaveBeenCalledTimes(1);
+      expect(mockClearDraft).toHaveBeenCalledWith('draft-42');
+      expect(mockMarkDraftDelivered).not.toHaveBeenCalled();
+    });
+
+    it('fails the callback when a finalize tombstone is not persisted', async () => {
+      mockClaimDraftCompletion.mockResolvedValueOnce({ status: 'finalize' });
+      mockClearDraft.mockResolvedValueOnce(false);
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow(
+        'Telegram draft completion tombstone was not persisted',
+      );
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('fails the callback when a delivered completion cannot persist its tombstone', async () => {
+      mockClearDraft.mockRejectedValueOnce(new Error('Redis lock timeout'));
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow('Redis lock timeout');
+
+      expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+      expect(mockReleaseDraftCompletion).not.toHaveBeenCalled();
+    });
+
+    it('stops delivery when the native draft lease is lost', async () => {
+      mockRenewDraftCompletion.mockResolvedValueOnce(false);
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow(
+        'Telegram draft delivery lease lost',
+      );
+
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+      expect(mockReleaseDraftCompletion).toHaveBeenCalledWith('draft-42', 'owner-1');
+      expect(mockClearDraft).not.toHaveBeenCalled();
+    });
+
+    it('releases the native draft claim when strict delivery fails', async () => {
+      mockCreateMessage.mockRejectedValueOnce(new Error('Telegram unavailable'));
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body, { strictDelivery: true })).rejects.toThrow(
+        'Telegram unavailable',
+      );
+
+      expect(mockReleaseDraftCompletion).toHaveBeenCalledWith('draft-42', 'owner-1');
+      expect(mockClearDraft).not.toHaveBeenCalled();
+    });
+
+    it('releases the native draft claim when durable delivery cannot initialize', async () => {
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body, { durableDelivery: true })).rejects.toThrow(
+        'missing operationId',
+      );
+
+      expect(mockReleaseDraftCompletion).toHaveBeenCalledWith('draft-42', 'owner-1');
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
+    it('releases the native draft claim when ordinary callback delivery fails', async () => {
+      mockCreateMessage.mockRejectedValueOnce(new Error('Telegram unavailable'));
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow('Telegram unavailable');
+
+      expect(mockReleaseDraftCompletion).toHaveBeenCalledWith('draft-42', 'owner-1');
+      expect(mockClearDraft).not.toHaveBeenCalled();
+    });
+
+    it('still throws when releasing a failed native draft claim also fails', async () => {
+      mockCreateMessage.mockRejectedValueOnce(new Error('Telegram unavailable'));
+      mockReleaseDraftCompletion.mockRejectedValueOnce(new Error('release failed'));
+      const body = makeTelegramBody({
+        draftId: 'draft-42',
+        lastAssistantContent: 'Here is the answer.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body)).rejects.toThrow('Telegram unavailable');
+      expect(mockReleaseDraftCompletion).toHaveBeenCalledWith('draft-42', 'owner-1');
     });
   });
 
@@ -737,9 +1038,8 @@ describe('BotCallbackService', () => {
       );
     });
 
-    it('should fail strict proactive delivery when the platform rejects the reply', async () => {
+    it('does not create a second message after an ambiguous strict edit failure', async () => {
       mockEditMessage.mockRejectedValueOnce(new Error('message to edit not found'));
-      mockCreateMessage.mockRejectedValueOnce(new Error('Discord channel unavailable'));
       const body = makeBody({
         lastAssistantContent: 'A result that must reach the creator.',
         reason: 'completed',
@@ -747,8 +1047,9 @@ describe('BotCallbackService', () => {
       });
 
       await expect(service.handleCallback(body, { strictDelivery: true })).rejects.toThrow(
-        'Discord channel unavailable',
+        'message to edit not found',
       );
+      expect(mockCreateMessage).not.toHaveBeenCalled();
     });
 
     it('should fall back to createMessage when error-state edit fails', async () => {
@@ -825,6 +1126,71 @@ describe('BotCallbackService', () => {
       expect(onChunkDelivered).not.toHaveBeenCalledWith(1);
     });
 
+    it('resumes ordinary callback delivery from its Redis chunk checkpoint', async () => {
+      const get = vi.fn().mockResolvedValue('1');
+      const evalScript = vi.fn().mockResolvedValue(1);
+      mockGetAgentRuntimeRedisClient.mockReturnValue({ eval: evalScript, get });
+      const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000);
+      const body = makeBody({
+        lastAssistantContent: longContent,
+        operationId: 'operation-42',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await service.handleCallback(body, { strictDelivery: true });
+
+      expect(get).toHaveBeenCalledWith('bot-callback:delivery:operation-42');
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).toHaveBeenCalled();
+      expect(evalScript).toHaveBeenCalledWith(
+        expect.stringContaining("redis.call('SET'"),
+        2,
+        'bot-callback:delivery:operation-42',
+        'bot-callback:delivery:operation-42:lease',
+        2,
+        21_600,
+        expect.any(String),
+        90_000,
+      );
+      expect(evalScript.mock.calls.some((call) => call[4] === 1)).toBe(false);
+    });
+
+    it('does not resend a chunk after an ambiguous dispatched failure', async () => {
+      const claimChunkDelivery = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      mockCreateMessage.mockRejectedValueOnce(new Error('Telegram request timed out'));
+      const body = makeBody({
+        lastAssistantContent: 'A result that may already have reached Telegram.',
+        progressMessageId: undefined,
+        reason: 'completed',
+        type: 'completion',
+      });
+      const options = {
+        claimChunkDelivery,
+        deliveredChunkCount: 0,
+        strictDelivery: true,
+      };
+
+      await expect(service.handleCallback(body, options)).rejects.toThrow('timed out');
+      await expect(service.handleCallback(body, options)).resolves.toBeUndefined();
+
+      expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+      expect(claimChunkDelivery).toHaveBeenCalledTimes(2);
+    });
+
+    it('fails closed when a durable callback has no operation identity', async () => {
+      const body = makeBody({
+        lastAssistantContent: 'reply',
+        reason: 'completed',
+        type: 'completion',
+      });
+
+      await expect(service.handleCallback(body, { durableDelivery: true })).rejects.toThrow(
+        'missing operationId',
+      );
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
     it('should not throw when sending interrupted message fails', async () => {
       mockCreateMessage.mockRejectedValueOnce(new Error('Send failed'));
 
@@ -855,8 +1221,8 @@ describe('BotCallbackService', () => {
 
       await service.handleCallback(body);
 
-      expect(mockEditMessage).toHaveBeenCalledWith(
-        'progress-msg-1',
+      expect(mockEditMessage).not.toHaveBeenCalled();
+      expect(mockCreateMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           attachments: [
             expect.objectContaining({

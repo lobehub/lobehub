@@ -36,13 +36,16 @@ vi.mock('@/server/services/gateway/runtimeStatus', () => ({
 const BOT_TOKEN = 'test-bot-token';
 const GUEST_THREAD_ID = 'telegram:guest:-100:bot:test-bot-token:message:10';
 
-const createClient = (credentials: Record<string, string> = {}) =>
+const createClient = (
+  credentials: Record<string, string> = {},
+  settings: Record<string, unknown> = {},
+) =>
   new TelegramClientFactory().createClient(
     {
       applicationId: '8654315085',
       credentials: { botToken: BOT_TOKEN, ...credentials },
       platform: 'telegram',
-      settings: {},
+      settings,
     },
     { appUrl: 'https://cloud.example' },
   );
@@ -640,6 +643,395 @@ describe('TelegramWebhookClient thread ids', () => {
     const client = createClient();
     expect(client.shouldSubscribe?.(GUEST_THREAD_ID)).toBe(false);
     expect(client.shouldSubscribe?.('telegram:-100123')).toBe(true);
+  });
+});
+
+describe('TelegramWebhookClient rich messenger', () => {
+  const okResponse = (body: Record<string, unknown>) =>
+    new Response(JSON.stringify({ ok: true, result: body }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('sends raw Markdown through sendRichMessage', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(okResponse({ message_id: 12 }));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.createMessage('# Title\n\n| A | B |\n| - | - |');
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/sendRichMessage');
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.rich_message.markdown).toContain('| A | B |');
+  });
+
+  it('does not fall back when Rich Messages are unavailable', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          description: 'Bad Request: method is not available',
+          error_code: 400,
+          ok: false,
+        }),
+        { headers: { 'Content-Type': 'application/json' }, status: 200 },
+      ),
+    );
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await expect(messenger.createMessage('**Required**')).rejects.toThrow(
+      'method is not available',
+    );
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/sendRichMessage');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries rejected Rich media as download links without dropping the text', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            description: 'Bad Request: PHOTO_INVALID_DIMENSIONS',
+            error_code: 400,
+            ok: false,
+          }),
+          { headers: { 'Content-Type': 'application/json' }, status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(okResponse({ message_id: 12 }))
+      .mockResolvedValueOnce(okResponse({ message_id: 13 }));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.createMessage({
+      attachments: [{ fetchUrl: 'https://cdn.example/wide.png', name: 'wide.png', type: 'image' }],
+      content: 'caption',
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const fallbackBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
+    expect(fallbackBody.rich_message.markdown).toContain('caption');
+    expect(fallbackBody.rich_message.markdown).toContain(
+      '[wide.png](https://cdn.example/wide.png)',
+    );
+    expect(fallbackBody.rich_message.media).toBeUndefined();
+  });
+
+  it('does not degrade Rich media on a transient transport error', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(Object.assign(new Error('fetch failed'), { name: 'TimeoutError' }));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await expect(
+      messenger.createMessage({
+        attachments: [
+          { fetchUrl: 'https://cdn.example/wide.png', name: 'wide.png', type: 'image' },
+        ],
+        content: 'caption',
+      }),
+    ).rejects.toThrow('fetch failed');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not swallow a rejected data-only attachment as an empty success', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          description: 'Bad Request: DOCUMENT_INVALID',
+          error_code: 400,
+          ok: false,
+        }),
+        { headers: { 'Content-Type': 'application/json' }, status: 200 },
+      ),
+    );
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await expect(
+      messenger.createMessage({
+        attachments: [
+          {
+            data: Buffer.from('pdf').toString('base64'),
+            mimeType: 'application/pdf',
+            name: 'report.pdf',
+            type: 'file',
+          },
+        ],
+        content: '',
+      }),
+    ).rejects.toThrow('DOCUMENT_INVALID');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a rejected data-only attachment alongside the reply text', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            description: 'Bad Request: DOCUMENT_INVALID',
+            error_code: 400,
+            ok: false,
+          }),
+          { headers: { 'Content-Type': 'application/json' }, status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(okResponse({ message_id: 12 }));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.createMessage({
+      attachments: [
+        {
+          data: Buffer.from('pdf').toString('base64'),
+          mimeType: 'application/pdf',
+          name: 'report.pdf',
+          type: 'file',
+        },
+      ],
+      content: 'report attached',
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const fallbackBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
+    expect(fallbackBody.rich_message.markdown).toContain('report attached');
+    expect(fallbackBody.rich_message.markdown).toContain('report.pdf could not be delivered.');
+    expect(fallbackBody.rich_message.media).toBeUndefined();
+  });
+
+  it('does not treat an unsourced data-only attachment as an empty success', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await expect(
+      messenger.createMessage({
+        attachments: [{ name: 'report.pdf', type: 'file' }],
+        content: '',
+      }),
+    ).rejects.toThrow('no deliverable content');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('preserves block HTML body text instead of treating it as empty', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.createMessage('<details><summary>only html</summary>secret</details>');
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.rich_message.markdown).toContain('only html');
+    expect(body.rich_message.markdown).not.toContain('<details');
+  });
+
+  it('creates and updates a native private-chat draft', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => okResponse({}));
+    const client = createClient();
+    const messenger = client.getMessenger('telegram:7');
+
+    const draftId = await messenger.createDraft?.('Thinking…', {
+      userId: 'user-1',
+    });
+    await messenger.updateDraft?.(draftId!, 'Using a tool…');
+
+    expect(draftId).toMatch(/^\d+$/);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const secondBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
+    expect(firstBody.draft_id).toBe(secondBody.draft_id);
+    expect(firstBody.can_stop).toBe(true);
+    expect(secondBody.rich_message.markdown).toBe('Using a tool…');
+  });
+
+  it('does not expose a queue draft without durable storage', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await expect(
+      messenger.createDraft?.('Thinking…', { durable: true, userId: 'user-1' }),
+    ).rejects.toThrow('Durable Telegram draft storage is unavailable');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('applies structural sanitizing to draft updates', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+    const draftId = await messenger.createDraft?.('start', { userId: 'user-1' });
+    const overLimit = Array.from({ length: 501 }, (_, index) => `block ${index}`).join('\n\n');
+
+    await messenger.updateDraft?.(draftId!, overLimit);
+
+    const body = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
+    expect(body.rich_message.markdown).toContain('block 499');
+    expect(body.rich_message.markdown).not.toContain('block 500');
+  });
+
+  it('persists the draft before exposing it so an immediate stop is retained', async () => {
+    const draftSession = await import('./draftSession');
+    draftSession.resetTelegramDraftSessionsForTest();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      const body = JSON.parse((init as RequestInit).body as string);
+      await expect(
+        draftSession.getTelegramDraftSession(BOT_TOKEN, 'telegram:7', body.draft_id),
+      ).resolves.toMatchObject({ content: 'Thinking…', status: 'active' });
+      await draftSession.requestTelegramDraftStop(BOT_TOKEN, 'telegram:7', body.draft_id);
+      return okResponse({});
+    });
+    const messenger = createClient().getMessenger('telegram:7');
+
+    const draftId = await messenger.createDraft?.('Thinking…', { userId: 'user-1' });
+
+    await expect(messenger.setDraftOperation?.(draftId!, 'operation-1')).resolves.toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    draftSession.resetTelegramDraftSessionsForTest();
+  });
+
+  it('ignores draft updates that arrive after completion', async () => {
+    const draftSession = await import('./draftSession');
+    draftSession.resetTelegramDraftSessionsForTest();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+    const draftId = await messenger.createDraft?.('Thinking…', { userId: 'user-1' });
+
+    await messenger.clearDraft?.(draftId!);
+    await messenger.updateDraft?.(draftId!, 'Late update');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    draftSession.resetTelegramDraftSessionsForTest();
+  });
+
+  it('does not fall back when Rich Drafts are unavailable', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          description: 'Bad Request: method is not available',
+          error_code: 400,
+          ok: false,
+        }),
+        { headers: { 'Content-Type': 'application/json' }, status: 200 },
+      ),
+    );
+    const client = createClient();
+    const messenger = client.getMessenger('telegram:7');
+
+    await expect(
+      messenger.createDraft?.('Thinking…', {
+        userId: 'user-1',
+      }),
+    ).rejects.toThrow('method is not available');
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/sendRichMessageDraft');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not expose native drafts for group chats', () => {
+    const messenger = createClient().getMessenger('telegram:-100123');
+    expect(messenger.createDraft).toBeUndefined();
+    expect(messenger.updateDraft).toBeUndefined();
+  });
+
+  it('skips empty Rich Messages', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.createMessage('   ');
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('renews a native draft with the last persisted content', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+    const draftId = await messenger.createDraft?.('Thinking…', { userId: 'user-1' });
+
+    await messenger.renewDraft?.(draftId!);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const renewed = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
+    expect(renewed.rich_message.markdown).toBe('Thinking…');
+    expect(renewed.draft_id).toBe(Number(draftId));
+  });
+
+  it('replaces a Telegram reaction in one request', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.replaceReaction?.('telegram:7:9', '👀', '💭');
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/setMessageReaction');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears a Telegram reaction when the next emoji is empty', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.replaceReaction?.('telegram:7:9', '👀', '');
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/setMessageReaction');
+  });
+
+  it('edits Rich Message text in place', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.editMessage('telegram:7:9', 'updated');
+
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/editMessageText');
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.rich_message.markdown).toBe('updated');
+  });
+
+  it('creates a replacement only when Telegram definitively rejects editing', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            description: 'Bad Request: message to edit not found',
+            error_code: 400,
+            ok: false,
+          }),
+          { headers: { 'Content-Type': 'application/json' }, status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(okResponse({ message_id: 10 }));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await messenger.editMessage('telegram:7:9', 'updated');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/editMessageText');
+    expect(String(fetchSpy.mock.calls[1]![0])).toContain('/sendRichMessage');
+  });
+
+  it('does not create a replacement after an ambiguous edit timeout', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(Object.assign(new Error('fetch failed'), { code: 'ETIMEDOUT' }));
+    const messenger = createClient().getMessenger('telegram:7');
+
+    await expect(messenger.editMessage('telegram:7:9', 'updated')).rejects.toThrow('fetch failed');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('claims and releases a native draft completion', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => okResponse({}));
+    const messenger = createClient().getMessenger('telegram:7');
+    const draftId = await messenger.createDraft?.('Thinking…', { userId: 'user-1' });
+
+    const claimed = await messenger.claimDraftCompletion?.(draftId!);
+    expect(claimed).toMatchObject({ owner: expect.any(String), status: 'claimed' });
+    const owner = claimed && claimed.status === 'claimed' ? claimed.owner : '';
+    await expect(messenger.renewDraftCompletion?.(draftId!, owner)).resolves.toBe(true);
+    await messenger.releaseDraftCompletion?.(draftId!, owner);
+    await expect(messenger.claimDraftCompletion?.(draftId!)).resolves.toMatchObject({
+      status: 'claimed',
+    });
+    expect(fetchSpy).toHaveBeenCalled();
   });
 });
 

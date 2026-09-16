@@ -2,7 +2,11 @@ import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TelegramApi } from './api';
-import { deliverGuestCreate, deliverGuestEdit } from './guestOutbound';
+import {
+  deliverGuestCreate,
+  deliverGuestEdit,
+  messengerContentFromPostable,
+} from './guestOutbound';
 import {
   getTelegramGuestSession,
   resetTelegramGuestSessionsForTest,
@@ -36,469 +40,371 @@ describe('deliverGuestCreate / deliverGuestEdit', () => {
     resetTelegramGuestSessionsForTest();
   });
 
-  it('answers the guest query on the first createMessage', async () => {
+  it('answers the first guest query with Rich Message content', async () => {
     fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-1' }));
     await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
 
-    const api = new TelegramApi(BOT_TOKEN);
-    const sent = await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'hello');
+    const sent = await deliverGuestCreate(
+      new TelegramApi(BOT_TOKEN),
+      SESSION_SCOPE,
+      THREAD_ID,
+      '# Hello',
+    );
 
     expect(sent.id).toBe('guest-inline:inline-1');
-    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/answerGuestQuery');
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(body.guest_query_id).toBe('gq-1');
-    expect(body.result.type).toBe('article');
+    expect(body.result.input_message_content).toEqual({
+      rich_message: { markdown: '# Hello' },
+    });
   });
 
-  it('edits the inline message on a later editMessage', async () => {
+  it('edits later guest replies with Rich Message content', async () => {
     fetchSpy.mockResolvedValueOnce(okResponse({}));
     await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
       guestQueryId: 'gq-1',
       inlineMessageId: 'inline-1',
     });
 
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestEdit(api, SESSION_SCOPE, THREAD_ID, 'guest-inline:inline-1', 'final');
+    await deliverGuestEdit(
+      new TelegramApi(BOT_TOKEN),
+      SESSION_SCOPE,
+      THREAD_ID,
+      'guest-inline:inline-1',
+      '**final**',
+    );
 
-    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/editMessageText');
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.inline_message_id).toBe('inline-1');
-    expect(body.text).toBe('final');
-    expect(body.chat_id).toBeUndefined();
+    expect(body.rich_message).toEqual({ markdown: '**final**' });
+    expect(body.text).toBeUndefined();
   });
 
-  it('answers with an article before replacing it with URL-backed media', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-photo' }))
-      .mockResolvedValueOnce(okResponse({}));
+  it('answers Guest Query attachments as download links, never URL media', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-photo' }));
     await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
 
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
+    await deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, {
       attachments: [
         {
           fetchUrl: 'https://cdn.example/pic.png',
-          mimeType: 'image/png',
+          name: 'Chart',
           type: 'image',
+        },
+        {
+          fetchUrl: 'https://cdn.example/clip.mp4',
+          mimeType: 'video/mp4',
+          name: 'clip.mp4',
+          type: 'video',
+        },
+        {
+          fetchUrl: 'https://cloud.example/f/audio-id',
+          mimeType: 'audio/mpeg',
+          name: 'track.mp3',
+          type: 'audio',
         },
       ],
       content: 'caption',
-    });
-
-    const answerBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(answerBody.result.type).toBe('article');
-
-    const editBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
-    expect(String(fetchSpy.mock.calls[1]![0])).toContain('/editMessageMedia');
-    expect(editBody.inline_message_id).toBe('inline-photo');
-    expect(editBody.media).toMatchObject({
-      caption: 'caption',
-      media: 'https://cdn.example/pic.png',
-      type: 'photo',
-    });
-  });
-
-  it('updates the caption after a guest reply has been converted to a photo', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-photo' }))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'hello');
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [
-        {
-          fetchUrl: 'https://cdn.example/pic.png',
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: 'caption',
-    });
-    await deliverGuestEdit(api, SESSION_SCOPE, THREAD_ID, 'guest-inline:inline-photo', 'final');
-
-    expect(String(fetchSpy.mock.calls[1]![0])).toContain('/editMessageMedia');
-    expect(String(fetchSpy.mock.calls[2]![0])).toContain('/editMessageCaption');
-    expect(String(fetchSpy.mock.calls[2]![0])).not.toContain('/editMessageText');
-    const captionBody = JSON.parse((fetchSpy.mock.calls[2]![1] as RequestInit).body as string);
-    expect(captionBody.inline_message_id).toBe('inline-photo');
-    expect(captionBody.caption).toBe('final');
-    expect(captionBody.chat_id).toBeUndefined();
-  });
-
-  it('updates the caption when the first guest reply was already converted to a photo', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-photo' }))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [
-        {
-          fetchUrl: 'https://cdn.example/pic.png',
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: 'caption',
-    });
-    await deliverGuestEdit(api, SESSION_SCOPE, THREAD_ID, 'guest-inline:inline-photo', 'updated');
-
-    expect(String(fetchSpy.mock.calls[2]![0])).toContain('/editMessageCaption');
-    const captionBody = JSON.parse((fetchSpy.mock.calls[2]![1] as RequestInit).body as string);
-    expect(captionBody.caption).toBe('updated');
-  });
-
-  it('keeps later caption chunks visible after a photo reply hits the 1024-character limit', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-photo' }))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [
-        {
-          fetchUrl: 'https://cdn.example/pic.png',
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: 'caption',
-    });
-    await deliverGuestEdit(
-      api,
-      SESSION_SCOPE,
-      THREAD_ID,
-      'guest-inline:inline-photo',
-      'A'.repeat(1500),
-    );
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'VISIBLE');
-
-    const longCaption = JSON.parse((fetchSpy.mock.calls[2]![1] as RequestInit).body as string);
-    expect(String(fetchSpy.mock.calls[2]![0])).toContain('/editMessageCaption');
-    expect(longCaption.caption).toHaveLength(1024);
-    expect(longCaption.caption).toContain('1024-character');
-    expect(longCaption.caption).not.toContain('4096-character');
-
-    const appendCaption = JSON.parse((fetchSpy.mock.calls[3]![1] as RequestInit).body as string);
-    expect(String(fetchSpy.mock.calls[3]![0])).toContain('/editMessageCaption');
-    expect(appendCaption.caption).toContain('VISIBLE');
-    expect(appendCaption.caption).toContain(
-      'Response truncated because Telegram Guest Mode supports one 1024-character reply.',
-    );
-    expect(appendCaption.caption.length).toBeLessThanOrEqual(1024);
-
-    const session = await getTelegramGuestSession(SESSION_SCOPE, THREAD_ID);
-    expect(session?.lastText).toContain('VISIBLE');
-    expect(session?.lastText?.length).toBeLessThanOrEqual(1024);
-    expect(session?.truncated).toBe(true);
-  });
-
-  it('keeps the truncation notice when a later caption chunk also replaces the photo', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-photo' }))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [
-        {
-          fetchUrl: 'https://cdn.example/first.png',
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: 'caption',
-    });
-    await deliverGuestEdit(
-      api,
-      SESSION_SCOPE,
-      THREAD_ID,
-      'guest-inline:inline-photo',
-      'A'.repeat(1500),
-    );
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [
-        {
-          fetchUrl: 'https://cdn.example/second.png',
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: 'VISIBLE',
-    });
-
-    expect(String(fetchSpy.mock.calls[3]![0])).toContain('/editMessageMedia');
-    const mediaBody = JSON.parse((fetchSpy.mock.calls[3]![1] as RequestInit).body as string);
-    expect(mediaBody.media.caption).toContain('VISIBLE');
-    expect(mediaBody.media.caption).toContain(
-      'Response truncated because Telegram Guest Mode supports one 1024-character reply.',
-    );
-    expect(mediaBody.media.caption).toHaveLength(1024);
-
-    await expect(getTelegramGuestSession(SESSION_SCOPE, THREAD_ID)).resolves.toMatchObject({
-      mediaType: 'photo',
-      truncated: true,
-    });
-  });
-
-  it('does not count a successfully delivered image fallback link against caption budget', async () => {
-    fetchSpy.mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
-      guestQueryId: 'gq-1',
-      inlineMessageId: 'inline-photo',
-      mediaType: 'photo',
-    });
-    const caption = 'A'.repeat(1000);
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestEdit(api, SESSION_SCOPE, THREAD_ID, 'guest-inline:inline-photo', {
-      attachments: [
-        {
-          fetchUrl: `https://cdn.example/${'long-path-'.repeat(20)}photo.png`,
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: caption,
-    });
-
-    const mediaBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/editMessageMedia');
-    expect(mediaBody.media.caption).toBe(caption);
-    await expect(getTelegramGuestSession(SESSION_SCOPE, THREAD_ID)).resolves.toMatchObject({
-      lastText: caption,
-      mediaType: 'photo',
-      truncated: false,
-    });
-  });
-
-  it('clears persisted truncation state when an edit replaces the body with shorter text', async () => {
-    fetchSpy.mockImplementation(async () => okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
-      guestQueryId: 'gq-1',
-      inlineMessageId: 'inline-photo',
-      mediaType: 'photo',
-    });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestEdit(
-      api,
-      SESSION_SCOPE,
-      THREAD_ID,
-      'guest-inline:inline-photo',
-      'A'.repeat(1500),
-    );
-    await deliverGuestEdit(
-      api,
-      SESSION_SCOPE,
-      THREAD_ID,
-      'guest-inline:inline-photo',
-      'complete replacement',
-    );
-
-    const replacementBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
-    expect(replacementBody.caption).toBe('complete replacement');
-    expect(replacementBody.caption).not.toContain('Response truncated');
-    await expect(getTelegramGuestSession(SESSION_SCOPE, THREAD_ID)).resolves.toMatchObject({
-      lastText: 'complete replacement',
-      truncated: false,
-    });
-  });
-
-  it('replaces an existing guest photo with a later image instead of editing text', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-photo' }))
-      .mockResolvedValueOnce(okResponse({}))
-      .mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [
-        {
-          fetchUrl: 'https://cdn.example/first.png',
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: 'first',
-    });
-    await deliverGuestEdit(api, SESSION_SCOPE, THREAD_ID, 'guest-inline:inline-photo', {
-      attachments: [
-        {
-          fetchUrl: 'https://cdn.example/second.png',
-          mimeType: 'image/png',
-          type: 'image',
-        },
-      ],
-      content: 'second',
-    });
-
-    expect(String(fetchSpy.mock.calls[2]![0])).toContain('/editMessageMedia');
-    const mediaBody = JSON.parse((fetchSpy.mock.calls[2]![1] as RequestInit).body as string);
-    expect(mediaBody.media).toMatchObject({
-      caption: 'second',
-      media: 'https://cdn.example/second.png',
-      type: 'photo',
-    });
-  });
-
-  it('keeps the article text when an attachment has only base64 data', async () => {
-    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-data' }));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
-      content: 'text survives',
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const answerBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(answerBody.result.type).toBe('article');
-    expect(answerBody.result.input_message_content.message_text).toContain('text survives');
-    expect(answerBody.result.input_message_content.message_text).toContain(
-      'This attachment can’t be delivered in Telegram Guest Mode.',
-    );
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/answerGuestQuery');
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const rich = body.result.input_message_content.rich_message;
+    expect(rich.markdown).toContain('[Chart](https://cdn.example/pic.png)');
+    expect(rich.markdown).toContain('[clip.mp4](https://cdn.example/clip.mp4)');
+    expect(rich.markdown).toContain('[track.mp3](https://cloud.example/f/audio-id)');
+    expect(rich.markdown).not.toContain('tg://');
+    expect(rich.media).toBeUndefined();
   });
 
-  it('keeps non-image URL attachments as links instead of attempting inline media edits', async () => {
+  it('reports data-only Guest attachments compactly in inline edits', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({}));
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
+      guestQueryId: 'gq-1',
+      inlineMessageId: 'inline-1',
+    });
+
+    await deliverGuestEdit(
+      new TelegramApi(BOT_TOKEN),
+      SESSION_SCOPE,
+      THREAD_ID,
+      'guest-inline:inline-1',
+      {
+        attachments: [
+          {
+            data: Buffer.from('pdf').toString('base64'),
+            mimeType: 'application/pdf',
+            name: 'report.pdf',
+            type: 'file',
+          },
+        ],
+        content: 'final',
+      },
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/editMessageText');
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.inline_message_id).toBe('inline-1');
+    expect(body.rich_message.markdown).toBe(
+      'final\n\n⚠️ **report.pdf** — _Unavailable in Telegram Guest Mode._',
+    );
+    expect(body.rich_message.media).toBeUndefined();
+  });
+
+  it('reports data-only Guest attachments compactly in the initial query response', async () => {
     fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-file' }));
     await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
 
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
+    await deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, {
       attachments: [
         {
-          fetchUrl: 'https://app.example/f/file-id',
+          data: Buffer.from('pdf').toString('base64'),
+          mimeType: 'application/pdf',
           name: 'report.pdf',
           type: 'file',
         },
       ],
-      content: 'Download the report',
+      content: 'File',
     });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const answerBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(answerBody.result.input_message_content.message_text).toContain('Download the report');
-    expect(answerBody.result.input_message_content.message_text).toContain(
-      '<a href="https://app.example/f/file-id">report.pdf</a>',
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.guest_query_id).toBe('gq-1');
+    expect(body.result.input_message_content.rich_message.markdown).toBe(
+      'File\n\n⚠️ **report.pdf** — _Unavailable in Telegram Guest Mode._',
     );
   });
 
-  it('represents every attachment in the single guest reply', async () => {
-    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-many' }));
+  it('keeps Guest Query documents as download links', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-file' }));
     await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
 
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [
-        { fetchUrl: 'https://cdn.example/first.png', name: 'first.png', type: 'image' },
-        { fetchUrl: 'https://cdn.example/second.png', name: 'second.png', type: 'image' },
-      ],
-      content: 'Generated files',
-    });
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const answerBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    const messageText = answerBody.result.input_message_content.message_text;
-    expect(messageText).toContain('<a href="https://cdn.example/first.png">first.png</a>');
-    expect(messageText).toContain('<a href="https://cdn.example/second.png">second.png</a>');
-  });
-
-  it('shows an explicit notice when later chunks exceed the single-reply limit', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-long' }))
-      .mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'A'.repeat(4000));
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'B'.repeat(4000));
-
-    const editBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
-    expect(editBody.text).toHaveLength(4096);
-    expect(editBody.text).toContain(
-      'Response truncated because Telegram Guest Mode supports one 4096-character reply.',
-    );
-  });
-
-  it('keeps accumulated text when the final chunk carries an image', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-image-long' }))
-      .mockResolvedValueOnce(okResponse({}));
-    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
-
-    const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'A'.repeat(4000));
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
+    await deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, {
       attachments: [
         {
-          fetchUrl: 'https://cdn.example/final.png',
-          name: 'final.png',
+          fetchUrl: 'https://cloud.example/f/file-id',
+          name: 'report.pdf',
+          type: 'file',
+        },
+      ],
+      content: 'File',
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const rich = body.result.input_message_content.rich_message;
+    expect(rich.markdown).toBe('File\n\n📎 [report.pdf](https://cloud.example/f/file-id)');
+    expect(rich.media).toBeUndefined();
+  });
+
+  it('appends later Guest attachments as one download link without chat side effects', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({}));
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
+      guestQueryId: 'gq-1',
+      inlineMessageId: 'inline-1',
+      lastText: 'thinking',
+    });
+
+    await deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, {
+      attachments: [
+        {
+          data: Buffer.from('png').toString('base64'),
+          fetchUrl: 'https://cdn.example/chart.png',
+          name: 'chart.png',
           type: 'image',
         },
       ],
-      content: 'B'.repeat(1024),
+      content: 'more',
     });
 
-    expect(String(fetchSpy.mock.calls[1]![0])).toContain('/editMessageText');
-    const editBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
-    expect(editBody.text).toContain('A'.repeat(100));
-    expect(editBody.text).toContain('<a href="https://cdn.example/final.png">final.png</a>');
-    expect(editBody.text).toContain('Response truncated');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain('/editMessageText');
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const rich = body.rich_message;
+    expect(rich.markdown).toContain('thinking\n\nmore');
+    expect(rich.markdown).toContain('📎 [chart.png](https://cdn.example/chart.png)');
+    expect(rich.markdown.match(/\[chart\.png\]/g)).toHaveLength(1);
+    expect(rich.media).toBeUndefined();
   });
 
-  it('localizes guest notices to the summoner locale stored on the session', async () => {
-    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-zh' }));
+  it('appends create chunks and replaces edit chunks', async () => {
+    fetchSpy.mockImplementation(async () => okResponse({}));
     await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
       guestQueryId: 'gq-1',
-      locale: 'zh-CN',
+      inlineMessageId: 'inline-1',
+      lastText: 'first',
     });
 
     const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, {
-      attachments: [{ data: 'aGVsbG8=', mimeType: 'image/png', type: 'image' }],
-      content: 'text survives',
-    });
+    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'second');
+    await deliverGuestEdit(api, SESSION_SCOPE, THREAD_ID, 'guest-inline:inline-1', 'replacement');
 
-    const answerBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-    expect(answerBody.result.input_message_content.message_text).toContain('text survives');
-    expect(answerBody.result.input_message_content.message_text).toContain(
-      '该附件无法通过 Telegram 访客模式送达。',
-    );
-    expect(answerBody.result.input_message_content.message_text).not.toContain(
-      'This attachment can’t be delivered',
-    );
+    const appendBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const replaceBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
+    expect(appendBody.rich_message.markdown).toBe('first\n\nsecond');
+    expect(replaceBody.rich_message.markdown).toBe('replacement');
+    await expect(getTelegramGuestSession(SESSION_SCOPE, THREAD_ID)).resolves.toMatchObject({
+      lastText: 'replacement',
+    });
   });
 
-  it('keeps localizing later edits from the persisted session locale', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-zh-long' }))
-      .mockResolvedValueOnce(okResponse({}));
+  it('does not fall back when Telegram rejects Rich Message content', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ description: 'Bad Request: invalid rich message', ok: false }),
+        { headers: { 'Content-Type': 'application/json' }, status: 400 },
+      ),
+    );
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
+
+    await expect(
+      deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, 'hello'),
+    ).rejects.toThrow('invalid rich message');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the newest chunks visible after the Guest reply reaches the rich-message limit', async () => {
+    fetchSpy.mockImplementation(async () => okResponse({}));
     await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
       guestQueryId: 'gq-1',
-      locale: 'zh-CN',
+      inlineMessageId: 'inline-1',
+      lastText: 'a'.repeat(32_760),
     });
 
     const api = new TelegramApi(BOT_TOKEN);
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'A'.repeat(4000));
-    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'B'.repeat(4000));
+    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'FIRST_TAIL');
+    await deliverGuestCreate(api, SESSION_SCOPE, THREAD_ID, 'LATEST_TAIL');
 
-    const editBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
-    expect(editBody.text).toHaveLength(4096);
-    expect(editBody.text).toContain('回复已被截断：Telegram 访客模式仅支持一条 4096 字符的回复。');
-    expect(editBody.text).not.toContain('Response truncated');
+    const firstBody = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const latestBody = JSON.parse((fetchSpy.mock.calls[1]![1] as RequestInit).body as string);
+    expect(firstBody.rich_message.markdown).toContain('FIRST_TAIL');
+    expect(latestBody.rich_message.markdown).toContain('LATEST_TAIL');
+    expect(Array.from(latestBody.rich_message.markdown)).toHaveLength(32_768);
+    await expect(getTelegramGuestSession(SESSION_SCOPE, THREAD_ID)).resolves.toMatchObject({
+      truncated: true,
+    });
+  });
+
+  it('clears stale truncation state when the final edit replaces the response', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({}));
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
+      guestQueryId: 'gq-1',
+      inlineMessageId: 'inline-1',
+      lastText: 'x'.repeat(32_768),
+      truncated: true,
+    });
+
+    await deliverGuestEdit(
+      new TelegramApi(BOT_TOKEN),
+      SESSION_SCOPE,
+      THREAD_ID,
+      'guest-inline:inline-1',
+      'short final answer',
+    );
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.rich_message.markdown).toBe('short final answer');
+    await expect(getTelegramGuestSession(SESSION_SCOPE, THREAD_ID)).resolves.toMatchObject({
+      lastText: 'short final answer',
+      truncated: false,
+    });
+  });
+
+  it('rejects an empty Guest create', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-1' }));
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
+
+    await expect(
+      deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, '   '),
+    ).rejects.toThrow('Telegram guest rich reply is empty');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('renders Guest attachments without a URL as unavailable copy', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-1' }));
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
+
+    await deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, {
+      attachments: [{ name: 'secret.pdf', type: 'file' }],
+      content: 'File',
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.result.input_message_content.rich_message.markdown).toContain('secret.pdf');
+    expect(body.result.input_message_content.rich_message.markdown).toContain('⚠️');
+    expect(body.result.input_message_content.rich_message.markdown).not.toContain('tg://');
+  });
+
+  it('renders each linked and unavailable attachment exactly once', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({ inline_message_id: 'inline-1' }));
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, { guestQueryId: 'gq-1' });
+
+    await deliverGuestCreate(new TelegramApi(BOT_TOKEN), SESSION_SCOPE, THREAD_ID, {
+      attachments: [
+        {
+          fetchUrl: 'https://cloud.example/f/linked',
+          name: 'linked-report.pdf',
+          type: 'file',
+        },
+        {
+          data: Buffer.from('pdf').toString('base64'),
+          name: 'data-only-report.pdf',
+          type: 'file',
+        },
+      ],
+      content: 'Files',
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const markdown = body.result.input_message_content.rich_message.markdown as string;
+    expect(markdown.match(/linked-report\.pdf/g)).toHaveLength(1);
+    expect(markdown.match(/data-only-report\.pdf/g)).toHaveLength(1);
+    expect(markdown).toContain('📎 [linked-report.pdf](https://cloud.example/f/linked)');
+    expect(markdown).toContain(
+      '⚠️ **data-only-report.pdf** — _Unavailable in Telegram Guest Mode._',
+    );
+  });
+
+  it('rejects an empty Guest edit', async () => {
+    fetchSpy.mockResolvedValueOnce(okResponse({}));
+    await saveTelegramGuestSession(SESSION_SCOPE, THREAD_ID, {
+      guestQueryId: 'gq-1',
+      inlineMessageId: 'inline-1',
+    });
+
+    await expect(
+      deliverGuestEdit(
+        new TelegramApi(BOT_TOKEN),
+        SESSION_SCOPE,
+        THREAD_ID,
+        'guest-inline:inline-1',
+        '   ',
+      ),
+    ).rejects.toThrow('Telegram guest rich edit is empty');
+  });
+
+  it('converts Chat SDK postable payloads into messenger content', () => {
+    expect(messengerContentFromPostable('plain')).toBe('plain');
+    expect(messengerContentFromPostable(null)).toBe('');
+    expect(
+      messengerContentFromPostable({
+        attachments: [
+          { mimeType: 'image/png', name: 'a.png', type: 'image', url: 'https://cdn.example/a.png' },
+          { name: 'skip-me' },
+        ],
+        markdown: 'caption',
+      }),
+    ).toEqual({
+      attachments: [
+        {
+          data: undefined,
+          fetchUrl: 'https://cdn.example/a.png',
+          mimeType: 'image/png',
+          name: 'a.png',
+          size: undefined,
+          type: 'image',
+        },
+      ],
+      content: 'caption',
+    });
   });
 });

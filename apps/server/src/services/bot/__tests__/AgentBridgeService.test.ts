@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGetUserSettings = vi.hoisted(() => vi.fn());
 const mockExecAgent = vi.hoisted(() => vi.fn());
+const mockInterruptTask = vi.hoisted(() => vi.fn());
 const mockFormatPrompt = vi.hoisted(() => vi.fn());
 const mockGetPlatform = vi.hoisted(() => vi.fn());
 const mockIsQueueAgentRuntimeEnabled = vi.hoisted(() => vi.fn());
@@ -52,6 +53,7 @@ vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(function () {
     return {
       execAgent: mockExecAgent,
+      interruptTask: mockInterruptTask,
     };
   }),
 }));
@@ -138,15 +140,41 @@ function createClient() {
   } as any;
 }
 
+function createDraftMessenger(overrides: Record<string, unknown> = {}) {
+  return {
+    clearDraft: vi.fn().mockResolvedValue(undefined),
+    createDraft: vi.fn().mockResolvedValue('draft-42'),
+    createMessage: vi.fn().mockResolvedValue(undefined),
+    renewDraft: vi.fn().mockResolvedValue(undefined),
+    setDraftOperation: vi.fn().mockResolvedValue(false),
+    triggerTyping: vi.fn(),
+    updateDraft: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function localExecResult(overrides: Record<string, unknown> = {}) {
+  return {
+    assistantMessageId: 'assistant-msg-1',
+    createdAt: new Date().toISOString(),
+    operationId: 'op-1',
+    success: true,
+    topicId: 'topic-1',
+    ...overrides,
+  };
+}
+
 describe('AgentBridgeService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    AgentBridgeService.clearActiveThread(THREAD_ID);
     mockExecAgent.mockResolvedValue({
       assistantMessageId: 'assistant-msg-1',
       createdAt: new Date().toISOString(),
       operationId: 'op-1',
       topicId: 'topic-1',
     });
+    mockInterruptTask.mockResolvedValue({ success: true });
     mockFormatPrompt.mockReturnValue('formatted prompt');
     mockGetPlatform.mockReturnValue({ id: 'discord', supportsMessageEdit: true });
     mockGetUserSettings.mockResolvedValue({ general: { timezone: 'UTC' } });
@@ -367,6 +395,549 @@ describe('AgentBridgeService', () => {
     );
   });
 
+  it('keeps a local native draft when final delivery fails', async () => {
+    mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+    const clearDraft = vi.fn().mockResolvedValue(undefined);
+    const sendFinalMessage = vi.fn().mockRejectedValue(new Error('Telegram unavailable'));
+    const client = createClient();
+    client.getMessenger.mockReturnValue({
+      clearDraft,
+      createDraft: vi.fn().mockResolvedValue('draft-42'),
+      createMessage: sendFinalMessage,
+      triggerTyping: vi.fn(),
+    });
+    mockExecAgent.mockImplementationOnce(async (params: any) => {
+      const completion = params.hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+      queueMicrotask(() => {
+        void completion!.handler({
+          attachments: [],
+          lastAssistantContent: 'Final answer',
+          reason: 'completed',
+        });
+      });
+      return {
+        assistantMessageId: 'assistant-msg-1',
+        createdAt: new Date().toISOString(),
+        operationId: 'op-1',
+        success: true,
+        topicId: 'topic-1',
+      };
+    });
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+    const thread = createThread();
+    thread.isDM = true;
+
+    await service.handleMention(thread, createMessage(), {
+      agentId: 'agent-1',
+      botContext: { platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    expect(sendFinalMessage).toHaveBeenCalled();
+    expect(clearDraft).not.toHaveBeenCalled();
+  });
+
+  it('does not fail the run when native draft error delivery fails at startup', async () => {
+    const sendErrorMessage = vi.fn().mockRejectedValue(new Error('Telegram unavailable'));
+    const client = createClient();
+    client.getMessenger.mockReturnValue({
+      createDraft: vi.fn().mockResolvedValue('draft-42'),
+      createMessage: sendErrorMessage,
+      triggerTyping: vi.fn(),
+    });
+    mockExecAgent.mockRejectedValueOnce(new Error('startup boom'));
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+    const thread = createThread();
+    thread.isDM = true;
+
+    await expect(
+      service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(sendErrorMessage).toHaveBeenCalled();
+  });
+
+  describe('native draft local-mode delivery', () => {
+    const runLocalMention = async (
+      messenger: ReturnType<typeof createDraftMessenger>,
+      extra?: { displayToolCalls?: boolean },
+    ) => {
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      thread.isDM = true;
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+        ...extra,
+      });
+      return { thread };
+    };
+
+    const runWithHooks = async (
+      messenger: ReturnType<typeof createDraftMessenger>,
+      fire: (hooks: any[]) => void | Promise<void>,
+      extra?: { displayToolCalls?: boolean; execOverrides?: Record<string, unknown> },
+    ) => {
+      mockExecAgent.mockImplementationOnce(async (params: any) => {
+        queueMicrotask(() => {
+          void fire(params.hooks);
+        });
+        return localExecResult(extra?.execOverrides);
+      });
+      return runLocalMention(messenger, extra);
+    };
+
+    it('falls back to the progress message when native draft creation fails', async () => {
+      const messenger = createDraftMessenger({
+        createDraft: vi.fn().mockRejectedValue(new Error('draft unavailable')),
+      });
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(true);
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(thread.post).toHaveBeenCalled();
+      expect(mockExecAgent).toHaveBeenCalled();
+    });
+
+    it('interrupts a queued run when the native draft already recorded Stop', async () => {
+      mockExecAgent.mockResolvedValueOnce(localExecResult());
+      const messenger = createDraftMessenger({
+        setDraftOperation: vi.fn().mockResolvedValue(true),
+      });
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(true);
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(messenger.createDraft).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ durable: true }),
+      );
+      expect(messenger.setDraftOperation).toHaveBeenCalledWith('draft-42', 'op-1');
+      expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' });
+    });
+
+    it('fails the webhook handoff when deferred stop interrupt fails', async () => {
+      mockExecAgent.mockResolvedValueOnce(localExecResult());
+      mockInterruptTask.mockResolvedValueOnce({ success: false });
+      const messenger = createDraftMessenger({
+        setDraftOperation: vi.fn().mockResolvedValue(true),
+      });
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(true);
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await expect(
+        service.handleMention(thread, createMessage(), {
+          agentId: 'agent-1',
+          botContext: { platformThreadId: THREAD_ID } as any,
+          client,
+        }),
+      ).rejects.toThrow('Failed to interrupt operation op-1');
+
+      expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' });
+    });
+
+    it('renews a native draft on local-mode steps when tool details are hidden', async () => {
+      const messenger = createDraftMessenger();
+      await runWithHooks(messenger, async (hooks) => {
+        const step = hooks.find((hook: { id: string }) => hook.id === 'bot-step-progress');
+        await step.handler({ shouldContinue: true, stepType: 'call_llm' });
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({ lastAssistantContent: 'done', reason: 'completed' });
+      });
+
+      expect(messenger.renewDraft).toHaveBeenCalledWith('draft-42');
+      expect(messenger.updateDraft).not.toHaveBeenCalled();
+    });
+
+    it('keeps going when local-mode draft renewal fails', async () => {
+      const messenger = createDraftMessenger({
+        renewDraft: vi.fn().mockRejectedValue(new Error('renew failed')),
+      });
+      await runWithHooks(messenger, async (hooks) => {
+        const step = hooks.find((hook: { id: string }) => hook.id === 'bot-step-progress');
+        await step.handler({ shouldContinue: true, stepType: 'call_llm' });
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({ lastAssistantContent: 'done', reason: 'completed' });
+      });
+
+      expect(messenger.renewDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('streams local-mode progress into the native draft', async () => {
+      const messenger = createDraftMessenger();
+      await runWithHooks(
+        messenger,
+        async (hooks) => {
+          const step = hooks.find((hook: { id: string }) => hook.id === 'bot-step-progress');
+          await step.handler({
+            content: 'Working…',
+            shouldContinue: true,
+            stepType: 'call_llm',
+          });
+          const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+          await completion.handler({ lastAssistantContent: 'done', reason: 'completed' });
+        },
+        { displayToolCalls: true },
+      );
+
+      expect(messenger.updateDraft).toHaveBeenCalledWith('draft-42', expect.any(String));
+    });
+
+    it('swallows native draft progress update failures', async () => {
+      const messenger = createDraftMessenger({
+        updateDraft: vi.fn().mockRejectedValue(new Error('update failed')),
+      });
+      await runWithHooks(
+        messenger,
+        async (hooks) => {
+          const step = hooks.find((hook: { id: string }) => hook.id === 'bot-step-progress');
+          await step.handler({
+            content: 'Working…',
+            shouldContinue: true,
+            stepType: 'call_llm',
+          });
+          const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+          await completion.handler({ lastAssistantContent: 'done', reason: 'completed' });
+        },
+        { displayToolCalls: true },
+      );
+
+      expect(messenger.updateDraft).toHaveBeenCalled();
+    });
+
+    it('finalizes a native draft on local-mode agent error', async () => {
+      const messenger = createDraftMessenger();
+      await runWithHooks(messenger, async (hooks) => {
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({
+          errorMessage: 'model exploded',
+          errorType: 'unknown',
+          operationId: 'op-1',
+          reason: 'error',
+        });
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('posts a fallback when local-mode error draft delivery fails', async () => {
+      const messenger = createDraftMessenger({
+        createMessage: vi.fn().mockRejectedValue(new Error('Telegram unavailable')),
+      });
+      const { thread } = await runWithHooks(messenger, async (hooks) => {
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({
+          errorMessage: 'model exploded',
+          errorType: 'unknown',
+          operationId: 'op-1',
+          reason: 'error',
+        });
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledWith({ markdown: expect.any(String) });
+      expect(messenger.clearDraft).not.toHaveBeenCalled();
+    });
+
+    it('finalizes a native draft when the run is interrupted', async () => {
+      const messenger = createDraftMessenger();
+      await runWithHooks(messenger, async (hooks) => {
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({ reason: 'interrupted' });
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('posts a fallback when interrupted draft delivery fails', async () => {
+      const messenger = createDraftMessenger({
+        createMessage: vi.fn().mockRejectedValue(new Error('Telegram unavailable')),
+      });
+      const { thread } = await runWithHooks(messenger, async (hooks) => {
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({ reason: 'interrupted' });
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledWith({ markdown: expect.any(String) });
+      expect(messenger.clearDraft).not.toHaveBeenCalled();
+    });
+
+    it('posts native draft chunks and attachments then clears the draft', async () => {
+      const messenger = createDraftMessenger();
+      await runWithHooks(messenger, async (hooks) => {
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({
+          attachments: [
+            {
+              fetchUrl: 'https://cdn.example.com/foo.png',
+              mimeType: 'image/png',
+              name: 'foo.png',
+              type: 'image',
+            },
+          ],
+          lastAssistantContent: 'Final answer',
+          reason: 'completed',
+        });
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalledWith({
+        attachments: [
+          expect.objectContaining({
+            fetchUrl: 'https://cdn.example.com/foo.png',
+            type: 'image',
+          }),
+        ],
+        content: expect.stringContaining('Final answer'),
+      });
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('clears the native draft when completion has no content', async () => {
+      const messenger = createDraftMessenger();
+      await runWithHooks(messenger, async (hooks) => {
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({ attachments: [], reason: 'completed' });
+      });
+
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('finalizes a native draft when local-mode startup reports failure', async () => {
+      const messenger = createDraftMessenger();
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      mockExecAgent.mockResolvedValueOnce(
+        localExecResult({ error: 'provider down', success: false }),
+      );
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('posts a fallback when local-mode startup failure draft delivery fails', async () => {
+      const messenger = createDraftMessenger({
+        createMessage: vi.fn().mockRejectedValue(new Error('Telegram unavailable')),
+      });
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      mockExecAgent.mockResolvedValueOnce(
+        localExecResult({ error: 'provider down', success: false }),
+      );
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledWith({ markdown: expect.any(String) });
+      expect(messenger.clearDraft).not.toHaveBeenCalled();
+    });
+
+    it('finalizes a native draft when local-mode startup aborts', async () => {
+      const messenger = createDraftMessenger();
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      const abortError = new Error('Execution stopped before startup.');
+      abortError.name = 'AbortError';
+      mockExecAgent.mockRejectedValueOnce(abortError);
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('posts a fallback when startup abort draft delivery fails', async () => {
+      const messenger = createDraftMessenger({
+        createMessage: vi.fn().mockRejectedValue(new Error('Telegram unavailable')),
+      });
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      const abortError = new Error('Execution stopped before startup.');
+      abortError.name = 'AbortError';
+      mockExecAgent.mockRejectedValueOnce(abortError);
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledWith({ markdown: expect.any(String) });
+      expect(messenger.clearDraft).not.toHaveBeenCalled();
+    });
+
+    it('finalizes a native draft on a generic local-mode startup error', async () => {
+      const messenger = createDraftMessenger();
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      mockExecAgent.mockRejectedValueOnce(new Error('boom'));
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+
+    it('posts a fallback when generic local-mode startup error draft delivery fails', async () => {
+      const messenger = createDraftMessenger({
+        createMessage: vi.fn().mockRejectedValue(new Error('Telegram unavailable')),
+      });
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      mockExecAgent.mockRejectedValueOnce(new Error('boom'));
+      const client = createClient();
+      client.getMessenger.mockReturnValue(messenger);
+      const thread = createThread();
+      thread.isDM = true;
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledWith({ markdown: expect.any(String) });
+      expect(messenger.clearDraft).not.toHaveBeenCalled();
+    });
+
+    it('swallows native draft cleanup failures after a successful reply', async () => {
+      const messenger = createDraftMessenger({
+        clearDraft: vi.fn().mockRejectedValue(new Error('cleanup failed')),
+      });
+      await runWithHooks(messenger, async (hooks) => {
+        const completion = hooks.find((hook: { id: string }) => hook.id === 'bot-completion');
+        await completion.handler({
+          lastAssistantContent: 'Final answer',
+          reason: 'completed',
+        });
+      });
+
+      expect(messenger.createMessage).toHaveBeenCalledWith(expect.stringContaining('Final answer'));
+      expect(messenger.clearDraft).toHaveBeenCalledWith('draft-42');
+    });
+  });
+
+  it('routes local attachment replies through the platform messenger', async () => {
+    mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+    const messenger = createDraftMessenger({ createDraft: undefined });
+    const client = createClient();
+    client.getMessenger.mockReturnValue(messenger);
+    mockExecAgent.mockImplementationOnce(async (params: any) => {
+      queueMicrotask(() => {
+        const completion = params.hooks.find(
+          (hook: { id: string }) => hook.id === 'bot-completion',
+        );
+        void completion.handler({
+          attachments: [
+            {
+              data: 'cmVwb3J0',
+              mimeType: 'application/pdf',
+              name: 'report.pdf',
+              type: 'file',
+            },
+          ],
+          lastAssistantContent: 'Report attached.',
+          reason: 'completed',
+        });
+      });
+      return localExecResult();
+    });
+    const thread = createThread();
+    thread.isDM = false;
+    const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+    await service.handleMention(thread, createMessage(), {
+      agentId: 'agent-1',
+      botContext: { platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    expect(messenger.createMessage).toHaveBeenCalledWith({
+      attachments: [
+        {
+          data: 'cmVwb3J0',
+          mimeType: 'application/pdf',
+          name: 'report.pdf',
+          type: 'file',
+        },
+      ],
+      content: expect.stringContaining('Report attached.'),
+    });
+    expect(thread.post).toHaveBeenCalledTimes(1);
+  });
+
   describe('stale cached topic recovery', () => {
     // Regression tests for the Discord DM "Agent Execution Failed" with no
     // operation id: the thread state kept a topicId whose row was gone
@@ -455,6 +1026,37 @@ describe('AgentBridgeService', () => {
       expect(postedBodies.join('\n')).not.toContain('Agent Execution Failed');
     });
 
+    it('clears the abandoned native draft before retrying a stale topic in queue mode', async () => {
+      const clearDraft = vi.fn().mockResolvedValue(undefined);
+      const createDraft = vi
+        .fn()
+        .mockResolvedValueOnce('draft-old')
+        .mockResolvedValueOnce('draft-new');
+      const client = createClient();
+      client.getMessenger.mockReturnValue({ clearDraft, createDraft, triggerTyping: vi.fn() });
+      mockExecAgent
+        .mockRejectedValueOnce(new Error('Topic not found: topic-1'))
+        .mockResolvedValueOnce({
+          assistantMessageId: 'assistant-msg-1',
+          createdAt: new Date().toISOString(),
+          operationId: 'op-2',
+          success: true,
+          topicId: 'topic-2',
+        });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      thread.isDM = true;
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(createDraft).toHaveBeenCalledTimes(2);
+      expect(clearDraft).toHaveBeenCalledWith('draft-old');
+    });
+
     it('retries as a fresh mention on Topic not found in local (non-queue) mode too', async () => {
       // Same delete race as above, but with the queue runtime disabled the
       // error surfaces in executeWithCallback's local-mode catch — which used
@@ -482,6 +1084,34 @@ describe('AgentBridgeService', () => {
       // fresh-mention retry (second execAgent call without the dead topicId).
       expect(mockExecAgent).toHaveBeenCalledTimes(2);
       expect(mockExecAgent.mock.calls[1][0].appContext?.topicId).toBeUndefined();
+    });
+
+    it('clears the abandoned native draft before retrying a stale topic in local mode', async () => {
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      const clearDraft = vi.fn().mockResolvedValue(undefined);
+      const createDraft = vi
+        .fn()
+        .mockResolvedValueOnce('draft-old')
+        .mockResolvedValueOnce('draft-new');
+      const client = createClient();
+      client.getMessenger.mockReturnValue({ clearDraft, createDraft, triggerTyping: vi.fn() });
+      const abortError = new Error('Agent execution aborted');
+      abortError.name = 'AbortError';
+      mockExecAgent
+        .mockRejectedValueOnce(new Error('Topic not found: topic-1'))
+        .mockRejectedValueOnce(abortError);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      thread.isDM = true;
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(createDraft).toHaveBeenCalledTimes(2);
+      expect(clearDraft).toHaveBeenCalledWith('draft-old');
     });
   });
 

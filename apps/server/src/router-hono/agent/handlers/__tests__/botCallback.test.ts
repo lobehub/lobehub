@@ -87,7 +87,7 @@ describe('botCallback handler', () => {
 
     expect(res.status).toBe(200);
     expect(getCaptures()[0].body).toEqual({ success: true });
-    expect(mockHandleCallback).toHaveBeenCalledWith(validStepBody);
+    expect(mockHandleCallback).toHaveBeenCalledWith(validStepBody, undefined);
   });
 
   it('accepts type=completion', async () => {
@@ -97,7 +97,10 @@ describe('botCallback handler', () => {
 
     const res = await botCallback(ctx);
     expect(res.status).toBe(200);
-    expect(mockHandleCallback).toHaveBeenCalledWith(body);
+    expect(mockHandleCallback).toHaveBeenCalledWith(body, {
+      durableDelivery: true,
+      strictDelivery: true,
+    });
   });
 
   it('returns 500 with the error message when the service throws', async () => {

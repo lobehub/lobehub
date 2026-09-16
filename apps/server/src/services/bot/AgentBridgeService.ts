@@ -23,7 +23,13 @@ import { deferBotMessages, isDeferredMessagesAvailable } from './deferredMessage
 import { runDeferredReplay, scheduleDeferredReplay } from './deferredReplay';
 import { buildBotSender, formatPrompt as formatPromptUtil } from './formatPrompt';
 import { getSourceMessages } from './mergeMessages';
-import type { BotReplyLocale, PlatformClient } from './platforms';
+import type {
+  BotMessageAttachment,
+  BotReplyLocale,
+  MessengerContent,
+  PlatformClient,
+  PlatformMessenger,
+} from './platforms';
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
@@ -38,6 +44,7 @@ import { buildRecentChannelHistory } from './recentChannelHistory';
 import { renderThrownAgentError } from './renderThrownError';
 import {
   renderAgentError,
+  renderError,
   renderErrorWithDetails,
   renderFinalReply,
   renderStart,
@@ -426,9 +433,64 @@ export class AgentBridgeService {
     log('interruptTrackedOperation: thread=%s, operationId=%s', threadId, operationId);
   }
 
+  private async clearNativeDraft(
+    draftId: string | undefined,
+    messenger: PlatformMessenger | undefined,
+  ): Promise<void> {
+    if (!draftId || !messenger?.clearDraft) return;
+    try {
+      await messenger.clearDraft(draftId);
+    } catch (error) {
+      log('clearNativeDraft: failed for draft=%s: %O', draftId, error);
+    }
+  }
+
+  private async finalizeNativeDraft(
+    draftId: string,
+    messenger: PlatformMessenger,
+    content: MessengerContent,
+  ): Promise<void> {
+    await messenger.createMessage(content);
+    await this.clearNativeDraft(draftId, messenger);
+  }
+
+  private async finalizeDraftOrProgress(
+    draftId: string | undefined,
+    messenger: PlatformMessenger | undefined,
+    progressMessage: SentMessage | undefined,
+    markdown: string,
+  ): Promise<void> {
+    if (draftId && messenger) {
+      await this.finalizeNativeDraft(draftId, messenger, markdown);
+    } else if (progressMessage) {
+      await progressMessage.edit({ markdown });
+    }
+  }
+
+  private async registerOperationAndHandlePendingStop(params: {
+    draftId?: string;
+    messenger?: PlatformMessenger;
+    operationId: string;
+    threadId: string;
+  }): Promise<void> {
+    const { draftId, messenger, operationId, threadId } = params;
+    AgentBridgeService.activeOperations.set(threadId, operationId);
+
+    const draftStopRequested =
+      draftId && messenger?.setDraftOperation
+        ? await messenger.setDraftOperation(draftId, operationId)
+        : false;
+    const localStopRequested = AgentBridgeService.consumeStopRequest(threadId);
+    if (!draftStopRequested && !localStopRequested) return;
+
+    await this.interruptTrackedOperation(threadId, operationId);
+  }
+
   private async finishStartupFailure(params: {
     client?: PlatformClient;
+    draftId?: string;
     error?: unknown;
+    messenger?: PlatformMessenger;
     operationId?: string;
     progressMessage?: SentMessage;
     replyLocale?: BotReplyLocale;
@@ -438,7 +500,9 @@ export class AgentBridgeService {
   }): Promise<void> {
     const {
       client,
+      draftId,
       error,
+      messenger,
       operationId,
       progressMessage,
       replyLocale,
@@ -469,7 +533,13 @@ export class AgentBridgeService {
         : renderThrownAgentError(error, operationId, replyLocale),
     };
 
-    if (progressMessage) {
+    if (draftId && messenger) {
+      try {
+        await this.finalizeNativeDraft(draftId, messenger, errorContent.markdown);
+      } catch (deliveryError) {
+        log('finishStartupFailure: failed to finalize native draft: %O', deliveryError);
+      }
+    } else if (progressMessage) {
       try {
         await progressMessage.edit(errorContent);
       } catch (editError) {
@@ -577,6 +647,7 @@ export class AgentBridgeService {
           log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
         }
       } catch (error) {
+        if (queueMode) throw error;
         const operationId = AgentBridgeService.activeOperations.get(thread.id);
         log('handleMention error: operationId=%s, %O', operationId, error);
         try {
@@ -931,8 +1002,29 @@ export class AgentBridgeService {
     const useGatewayTyping = gwClient.isEnabled && platformSupportsTyping;
 
     let progressMessage: SentMessage | undefined;
+    let draftId: string | undefined;
     let gatewayConnectionId: string | undefined;
-    if (useGatewayTyping) {
+    const messenger =
+      client && botContext?.platformThreadId
+        ? client.getMessenger(botContext.platformThreadId)
+        : undefined;
+    if (thread.isDM === true && botContext && messenger?.createDraft) {
+      try {
+        draftId = await messenger.createDraft(
+          renderStart(userMessage.text, { lng: replyLocale, timezone }),
+          {
+            durable: queueMode,
+            userId: this.userId,
+            workspaceId: this.workspaceId,
+          },
+        );
+      } catch (error) {
+        log('executeWithWebhooks: failed to create native draft, using legacy progress: %O', error);
+      }
+    }
+    if (draftId) {
+      log('executeWithWebhooks: using native platform draft');
+    } else if (useGatewayTyping) {
       log('executeWithWebhooks: using gateway typing, skipping ack message');
 
       // Platform typing (best-effort, must not block AI generation)
@@ -1024,6 +1116,7 @@ export class AgentBridgeService {
       // to read from.
       messengerInstallationKey: botContext?.messengerInstallationKey,
       platformThreadId: botContext?.platformThreadId,
+      draftId,
       progressMessageId: progressMessage?.id,
       // Pass thread name only if it's user-set.
       // Bot-generated threads use "Thread <locale date>" (e.g. "Thread 4/9/2026, 6:00:00 PM"),
@@ -1062,6 +1155,8 @@ export class AgentBridgeService {
         channelContext,
         client,
         files,
+        draftId,
+        messenger,
         progressMessage,
         prompt,
         replyLocale,
@@ -1084,7 +1179,9 @@ export class AgentBridgeService {
       client,
       displayToolCalls,
       files,
+      draftId,
       gatewayConnectionId,
+      messenger,
       progressMessage,
       prompt,
       replyLocale,
@@ -1111,7 +1208,9 @@ export class AgentBridgeService {
       callbackUrl: string;
       channelContext?: DiscordChannelContext;
       client?: PlatformClient;
+      draftId?: string;
       files?: any;
+      messenger?: PlatformMessenger;
       progressMessage?: SentMessage;
       prompt: string;
       replyLocale: BotReplyLocale;
@@ -1129,7 +1228,9 @@ export class AgentBridgeService {
       callbackUrl,
       channelContext,
       client,
+      draftId,
       files,
+      messenger,
       progressMessage,
       prompt,
       replyLocale,
@@ -1203,15 +1304,16 @@ export class AgentBridgeService {
       log('executeWithCallback[queue]: execAgent failed: %O', error);
 
       const errMsg = error instanceof Error ? error.message : String(error);
-      if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
-        throw error;
-      }
       // A cached topicId whose row vanished between the pre-flight check and
       // the topic-start reservation (delete race) surfaces as a plain
       // "Topic not found" error. Rethrow so handleSubscribedMessage can clear
       // the stale topicId and retry as a fresh mention instead of posting a
       // bare "Agent Execution Failed" with no operation id.
-      if (errMsg.includes('Topic not found')) {
+      const isStaleTopic =
+        (errMsg.includes('Failed query') && errMsg.includes('topic_id')) ||
+        errMsg.includes('Topic not found');
+      if (isStaleTopic) {
+        await this.clearNativeDraft(draftId, messenger);
         throw error;
       }
       // The topic-start reservation lost against a still-running operation.
@@ -1223,7 +1325,9 @@ export class AgentBridgeService {
 
       await this.finishStartupFailure({
         client,
+        draftId,
         error,
+        messenger,
         progressMessage,
         replyLocale,
         stopped: isAbortError(error),
@@ -1236,7 +1340,9 @@ export class AgentBridgeService {
     if (!result.success) {
       await this.finishStartupFailure({
         client,
+        draftId,
         error: result.error,
+        messenger,
         operationId: result.operationId,
         progressMessage,
         replyLocale,
@@ -1253,19 +1359,12 @@ export class AgentBridgeService {
     );
 
     if (result.operationId) {
-      AgentBridgeService.activeOperations.set(thread.id, result.operationId);
-
-      if (AgentBridgeService.consumeStopRequest(thread.id)) {
-        try {
-          await this.interruptTrackedOperation(thread.id, result.operationId);
-        } catch (error) {
-          log(
-            'executeWithCallback[queue]: deferred stop failed for thread=%s: %O',
-            thread.id,
-            error,
-          );
-        }
-      }
+      await this.registerOperationAndHandlePendingStop({
+        draftId,
+        messenger,
+        operationId: result.operationId,
+        threadId: thread.id,
+      });
     }
 
     return { reply: '', topicId: result.topicId };
@@ -1287,8 +1386,10 @@ export class AgentBridgeService {
       channelContext?: DiscordChannelContext;
       client?: PlatformClient;
       displayToolCalls?: boolean;
+      draftId?: string;
       files?: any;
       gatewayConnectionId?: string;
+      messenger?: PlatformMessenger;
       progressMessage?: SentMessage;
       prompt: string;
       replyLocale: BotReplyLocale;
@@ -1309,8 +1410,10 @@ export class AgentBridgeService {
       channelContext,
       client,
       displayToolCalls,
+      draftId,
       files,
       gatewayConnectionId,
+      messenger,
       prompt,
       replyLocale,
       toolModeOverride,
@@ -1340,6 +1443,7 @@ export class AgentBridgeService {
     return new Promise<{ reply: string; topicId: string }>((resolve, reject) => {
       const timeout = setTimeout(() => {
         stopGatewayTyping();
+        void this.clearNativeDraft(draftId, messenger);
         reject(new Error(`Agent execution timed out`));
       }, EXECUTION_TIMEOUT);
 
@@ -1371,7 +1475,17 @@ export class AgentBridgeService {
                   await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
                 }
 
-                if (!event.shouldContinue || !progressMessage || displayToolCalls !== true) return;
+                if (!event.shouldContinue) return;
+                if (displayToolCalls !== true) {
+                  if (draftId && messenger?.renewDraft) {
+                    try {
+                      await messenger.renewDraft(draftId);
+                    } catch (error) {
+                      log('executeWithCallback[local]: failed to renew native draft: %O', error);
+                    }
+                  }
+                  return;
+                }
 
                 const msgBody = renderStepProgress(
                   {
@@ -1412,10 +1526,16 @@ export class AgentBridgeService {
                 if (progressBody === lastProgressText) return;
 
                 try {
-                  progressMessage = await progressMessage.edit({ markdown: progressBody });
+                  if (draftId && messenger?.updateDraft) {
+                    await messenger.updateDraft(draftId, progressBody);
+                  } else if (progressMessage) {
+                    progressMessage = await progressMessage.edit({ markdown: progressBody });
+                  } else {
+                    return;
+                  }
                   lastProgressText = progressBody;
                 } catch (error) {
-                  log('executeWithCallback[local]: failed to edit progress message: %O', error);
+                  log('executeWithCallback[local]: failed to update progress: %O', error);
                 }
               },
               id: 'bot-step-progress',
@@ -1455,13 +1575,18 @@ export class AgentBridgeService {
                     // platform's markdown parse_mode (e.g. Telegram `Markdown`,
                     // Slack `mrkdwn`) and converts the body. Plain strings are
                     // sent without parse_mode and would render literal `**`.
-                    if (progressMessage) {
+                    if (draftId && messenger) {
+                      await this.finalizeNativeDraft(draftId, messenger, errorBody);
+                    } else if (progressMessage) {
                       await progressMessage.edit({ markdown: errorBody });
                     } else {
                       await thread.post({ markdown: errorBody });
                     }
-                  } catch {
-                    // ignore send failure
+                  } catch (deliveryError) {
+                    if (draftId) {
+                      reject(deliveryError);
+                      return;
+                    }
                   }
                   // Resolve (not reject) — the friendly error has already been
                   // posted to the user. Rejecting would bubble up to the outer
@@ -1472,13 +1597,17 @@ export class AgentBridgeService {
                 }
 
                 if (reason === 'interrupted') {
-                  if (progressMessage) {
-                    try {
-                      await progressMessage.edit({
-                        markdown: renderStopped(undefined, replyLocale),
-                      });
-                    } catch {
-                      // ignore edit failure
+                  try {
+                    await this.finalizeDraftOrProgress(
+                      draftId,
+                      messenger,
+                      progressMessage,
+                      renderStopped(undefined, replyLocale),
+                    );
+                  } catch (deliveryError) {
+                    if (draftId && messenger) {
+                      reject(deliveryError);
+                      return;
                     }
                   }
                   resolve({ reply: '', topicId: resolvedTopicId });
@@ -1491,6 +1620,7 @@ export class AgentBridgeService {
                   // Attachment shape. Only the *last* chunk carries
                   // attachments so a multi-chunk reply doesn't repeat the
                   // image/file once per chunk.
+                  const rawAttachments = event.attachments as BotMessageAttachment[] | undefined;
                   const lastChunkAttachments = hookEventAttachmentsToChatSdk(
                     event.attachments as any,
                   );
@@ -1528,22 +1658,53 @@ export class AgentBridgeService {
                         : { markdown: chunk };
 
                     try {
-                      if (progressMessage) {
-                        if (chunks[0] !== lastProgressText) {
+                      if (draftId && messenger) {
+                        for (let i = 0; i < chunks.length; i++) {
+                          const isLast = i === lastIdx;
+                          await messenger.createMessage(
+                            isLast && rawAttachments?.length
+                              ? { attachments: rawAttachments, content: chunks[i] }
+                              : chunks[i],
+                          );
+                        }
+                      } else if (progressMessage) {
+                        if (lastIdx === 0 && rawAttachments?.length && messenger) {
+                          await messenger.createMessage({
+                            attachments: rawAttachments,
+                            content: chunks[0],
+                          });
+                        } else if (chunks[0] !== lastProgressText) {
                           await progressMessage.edit(buildPostable(chunks[0], 0));
                           lastProgressText = chunks[0];
                         }
                         for (let i = 1; i < chunks.length; i++) {
-                          await thread.post(buildPostable(chunks[i], i));
+                          if (i === lastIdx && rawAttachments?.length && messenger) {
+                            await messenger.createMessage({
+                              attachments: rawAttachments,
+                              content: chunks[i],
+                            });
+                          } else {
+                            await thread.post(buildPostable(chunks[i], i));
+                          }
                         }
                       } else {
                         for (let i = 0; i < chunks.length; i++) {
-                          await thread.post(buildPostable(chunks[i], i));
+                          if (i === lastIdx && rawAttachments?.length && messenger) {
+                            await messenger.createMessage({
+                              attachments: rawAttachments,
+                              content: chunks[i],
+                            });
+                          } else {
+                            await thread.post(buildPostable(chunks[i], i));
+                          }
                         }
                       }
                     } catch (error) {
                       log('executeWithCallback[local]: failed to send final message: %O', error);
+                      reject(error);
+                      return;
                     }
+                    await this.clearNativeDraft(draftId, messenger);
 
                     log(
                       'executeWithCallback[local]: got response (%d chars, %d chunks, %d attachments)',
@@ -1589,6 +1750,7 @@ export class AgentBridgeService {
                     return;
                   }
 
+                  await this.clearNativeDraft(draftId, messenger);
                   reject(new Error('Agent completed but no response content found'));
                 } catch (error) {
                   reject(error);
@@ -1632,14 +1794,21 @@ export class AgentBridgeService {
               result.error,
             );
 
-            if (progressMessage) {
-              try {
-                await progressMessage.edit({
-                  markdown: renderThrownAgentError(result.error, result.operationId, replyLocale),
-                });
-              } catch (error) {
-                log('executeWithCallback[local]: failed to edit startup error: %O', error);
+            try {
+              await this.finalizeDraftOrProgress(
+                draftId,
+                messenger,
+                progressMessage,
+                draftId && messenger
+                  ? renderError(result.operationId, replyLocale)
+                  : renderThrownAgentError(result.error, result.operationId, replyLocale),
+              );
+            } catch (deliveryError) {
+              if (draftId && messenger) {
+                reject(deliveryError);
+                return;
               }
+              log('executeWithCallback[local]: failed to edit startup error: %O', deliveryError);
             }
 
             resolve({ reply: '', topicId: result.topicId });
@@ -1647,19 +1816,12 @@ export class AgentBridgeService {
           }
 
           if (result.operationId) {
-            AgentBridgeService.activeOperations.set(thread.id, result.operationId);
-
-            if (AgentBridgeService.consumeStopRequest(thread.id)) {
-              try {
-                await this.interruptTrackedOperation(thread.id, result.operationId);
-              } catch (error) {
-                log(
-                  'executeWithCallback[local]: deferred stop failed for thread=%s: %O',
-                  thread.id,
-                  error,
-                );
-              }
-            }
+            await this.registerOperationAndHandlePendingStop({
+              draftId,
+              messenger,
+              operationId: result.operationId,
+              threadId: thread.id,
+            });
           }
 
           log(
@@ -1672,14 +1834,19 @@ export class AgentBridgeService {
           clearTimeout(timeout);
 
           if (isAbortError(error)) {
-            if (progressMessage) {
-              try {
-                await progressMessage.edit({
-                  markdown: renderStopped(error.message, replyLocale),
-                });
-              } catch (editError) {
-                log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
+            try {
+              await this.finalizeDraftOrProgress(
+                draftId,
+                messenger,
+                progressMessage,
+                renderStopped(error.message, replyLocale),
+              );
+            } catch (deliveryError) {
+              if (draftId && messenger) {
+                reject(deliveryError);
+                return;
               }
+              log('executeWithCallback[local]: failed to edit stopped message: %O', deliveryError);
             }
 
             resolve({ reply: '', topicId: topicId ?? '' });
@@ -1699,6 +1866,7 @@ export class AgentBridgeService {
             errMsg.includes('Topic not found')
           ) {
             stopGatewayTyping();
+            await this.clearNativeDraft(draftId, messenger);
             reject(error);
             return;
           }
@@ -1709,14 +1877,21 @@ export class AgentBridgeService {
           // is traceable instead of opaque.
           const fallbackOperationId = AgentBridgeService.activeOperations.get(thread.id);
 
-          if (progressMessage) {
-            try {
-              await progressMessage.edit({
-                markdown: renderThrownAgentError(error, fallbackOperationId, replyLocale),
-              });
-            } catch (editError) {
-              log('executeWithCallback[local]: failed to edit startup error: %O', editError);
+          try {
+            await this.finalizeDraftOrProgress(
+              draftId,
+              messenger,
+              progressMessage,
+              draftId && messenger
+                ? renderError(fallbackOperationId, replyLocale)
+                : renderThrownAgentError(error, fallbackOperationId, replyLocale),
+            );
+          } catch (deliveryError) {
+            if (draftId && messenger) {
+              reject(deliveryError);
+              return;
             }
+            log('executeWithCallback[local]: failed to edit startup error: %O', deliveryError);
           }
 
           resolve({ reply: '', topicId: topicId ?? '' });

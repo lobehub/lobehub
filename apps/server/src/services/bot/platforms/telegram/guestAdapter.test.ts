@@ -1,6 +1,11 @@
 import { Chat } from 'chat';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  getTelegramDraftSession,
+  resetTelegramDraftSessionsForTest,
+  saveTelegramDraftSession,
+} from './draftSession';
 import { LobeTelegramAdapter } from './guestAdapter';
 import {
   getTelegramGuestSession,
@@ -9,9 +14,26 @@ import {
 } from './guestSession';
 import { isGuestTelegramThreadId } from './threadId';
 
+const mockInterruptTask = vi.hoisted(() => vi.fn().mockResolvedValue({ success: true }));
+
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: () => null,
 }));
+
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn(),
+}));
+
+const installAiAgentMock = async () => {
+  const { AiAgentService } = await import('@/server/services/aiAgent');
+  vi.mocked(AiAgentService).mockImplementation(function () {
+    return { interruptTask: mockInterruptTask } as never;
+  });
+};
 
 const GET_ME_RESPONSE = () =>
   new Response(
@@ -28,6 +50,16 @@ const mockGetMe = () => {
 
 const processUpdate = (adapter: LobeTelegramAdapter, update: unknown) => {
   (adapter as unknown as { processUpdate: (value: unknown) => void }).processUpdate(update);
+};
+
+const attachChat = async (adapter: LobeTelegramAdapter) => {
+  const bot = new Chat({
+    adapters: { telegram: adapter },
+    state: createMemoryState() as never,
+    userName: 'mybot',
+  });
+  await bot.initialize();
+  return bot;
 };
 
 const createGuestAdapter = (
@@ -80,12 +112,21 @@ const createMemoryState = () => {
   };
 };
 
-afterEach(() => {
+afterEach(async () => {
+  mockInterruptTask.mockReset();
+  mockInterruptTask.mockResolvedValue({ success: true });
+  resetTelegramDraftSessionsForTest();
   resetTelegramGuestSessionsForTest();
   vi.restoreAllMocks();
+  await installAiAgentMock();
 });
 
 describe('LobeTelegramAdapter Guest Mode', () => {
+  beforeEach(async () => {
+    mockInterruptTask.mockResolvedValue({ success: true });
+    await installAiAgentMock();
+  });
+
   it('exposes processUpdate so Guest Mode can subclass the Chat SDK adapter', () => {
     expect('processUpdate' in LobeTelegramAdapter.prototype).toBe(true);
   });
@@ -153,6 +194,11 @@ describe('LobeTelegramAdapter Guest Mode', () => {
     expect((mentions[0]?.raw as { guest_query_id?: string } | undefined)?.guest_query_id).toBe(
       'gq-42',
     );
+    await expect(
+      getTelegramGuestSession('bot-1', 'telegram:guest:-100123:bot:bot-1:message:11'),
+    ).resolves.toMatchObject({
+      guestQueryId: 'gq-42',
+    });
   });
 
   it('does not dedupe the same Telegram message across guest bots', async () => {
@@ -208,44 +254,6 @@ describe('LobeTelegramAdapter Guest Mode', () => {
     );
   });
 
-  it('captures the summoning user locale into the guest session', async () => {
-    mockGetMe();
-    const adapter = createGuestAdapter('bot-1');
-
-    const bot = new Chat({
-      adapters: { telegram: adapter },
-      state: createMemoryState() as never,
-      userName: 'mybot',
-    });
-    bot.onNewMention(async () => {});
-    await bot.initialize();
-
-    processUpdate(adapter, {
-      guest_message: {
-        chat: { id: -100123, title: 'Room', type: 'supergroup' },
-        date: 1,
-        guest_bot_caller_user: {
-          first_name: 'Ada',
-          id: 7,
-          is_bot: false,
-          language_code: 'zh-hans',
-        },
-        guest_query_id: 'gq-locale',
-        message_id: 13,
-        text: '@mybot 你好',
-      },
-      update_id: 3,
-    });
-
-    await vi.waitFor(async () => {
-      const session = await getTelegramGuestSession(
-        'bot-1',
-        'telegram:guest:-100123:bot:bot-1:message:13',
-      );
-      expect(session).toMatchObject({ guestQueryId: 'gq-locale', locale: 'zh-CN' });
-    });
-  });
-
   it('preserves outbound session state when Telegram redelivers a guest update', async () => {
     mockGetMe();
     const adapter = createGuestAdapter('bot-1');
@@ -280,8 +288,7 @@ describe('LobeTelegramAdapter Guest Mode', () => {
     await saveTelegramGuestSession('bot-1', threadId, {
       guestQueryId: 'gq-duplicate',
       inlineMessageId: 'inline-14',
-      lastText: 'photo reply',
-      mediaType: 'photo',
+      lastText: 'rich reply',
     });
 
     processUpdate(adapter, update);
@@ -290,8 +297,7 @@ describe('LobeTelegramAdapter Guest Mode', () => {
     expect(mentions).toHaveLength(1);
     await expect(getTelegramGuestSession('bot-1', threadId)).resolves.toMatchObject({
       inlineMessageId: 'inline-14',
-      lastText: 'photo reply',
-      mediaType: 'photo',
+      lastText: 'rich reply',
     });
   });
 
@@ -322,5 +328,127 @@ describe('LobeTelegramAdapter Guest Mode', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(mentions).toEqual([]);
+  });
+
+  it('records a scoped early stop request for a native draft', async () => {
+    mockGetMe();
+    const adapter = createGuestAdapter('bot-1');
+    await attachChat(adapter);
+    await saveTelegramDraftSession({
+      applicationId: 'bot-1',
+      content: 'Thinking…',
+      draftId: 42,
+      platformThreadId: 'telegram:7',
+      userId: 'user-1',
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request('https://example.com/webhook', {
+        body: JSON.stringify({
+          stopped_message_generation: {
+            chat: { id: 7, type: 'private' },
+            draft_id: 42,
+          },
+          update_id: 5,
+        }),
+        headers: { 'x-telegram-bot-api-secret-token': 'test-secret' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(getTelegramDraftSession('bot-1', 'telegram:7', 42)).resolves.toMatchObject({
+      stopRequested: true,
+    });
+  });
+
+  it('keeps an interrupted draft claimable until completion delivery', async () => {
+    mockGetMe();
+    const adapter = createGuestAdapter('bot-1');
+    await attachChat(adapter);
+    await saveTelegramDraftSession({
+      applicationId: 'bot-1',
+      content: 'Thinking…',
+      draftId: 42,
+      operationId: 'op-1',
+      platformThreadId: 'telegram:7',
+      userId: 'user-1',
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request('https://example.com/webhook', {
+        body: JSON.stringify({
+          stopped_message_generation: {
+            chat: { id: 7, type: 'private' },
+            draft_id: 42,
+          },
+          update_id: 6,
+        }),
+        headers: { 'x-telegram-bot-api-secret-token': 'test-secret' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' });
+    await expect(getTelegramDraftSession('bot-1', 'telegram:7', 42)).resolves.toMatchObject({
+      status: 'active',
+      stopRequested: true,
+    });
+  });
+
+  it('does not interrupt when Stop arrives for an unknown draft', async () => {
+    mockGetMe();
+    const adapter = createGuestAdapter('bot-1');
+    await attachChat(adapter);
+
+    const response = await adapter.handleWebhook(
+      new Request('https://example.com/webhook', {
+        body: JSON.stringify({
+          stopped_message_generation: {
+            chat: { id: 7, type: 'private' },
+            draft_id: 99,
+          },
+          update_id: 7,
+        }),
+        headers: { 'x-telegram-bot-api-secret-token': 'test-secret' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockInterruptTask).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 when a draft interrupt fails so Telegram can retry', async () => {
+    mockInterruptTask.mockResolvedValueOnce({ success: false });
+    mockGetMe();
+    const adapter = createGuestAdapter('bot-1');
+    await attachChat(adapter);
+    await saveTelegramDraftSession({
+      applicationId: 'bot-1',
+      content: 'Thinking…',
+      draftId: 42,
+      operationId: 'op-1',
+      platformThreadId: 'telegram:7',
+      userId: 'user-1',
+    });
+
+    const response = await adapter.handleWebhook(
+      new Request('https://example.com/webhook', {
+        body: JSON.stringify({
+          stopped_message_generation: {
+            chat: { id: 7, type: 'private' },
+            draft_id: 42,
+          },
+          update_id: 8,
+        }),
+        headers: { 'x-telegram-bot-api-secret-token': 'test-secret' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(mockInterruptTask).toHaveBeenCalledWith({ operationId: 'op-1' });
   });
 });

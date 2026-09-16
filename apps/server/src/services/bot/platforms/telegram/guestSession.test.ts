@@ -58,19 +58,16 @@ describe('telegram guest session (memory fallback)', () => {
       guestQueryId: 'gq-1',
       inlineMessageId: 'inline-1',
       lastText: 'reply',
-      mediaType: 'photo',
     });
 
     await initializeTelegramGuestSession('bot-1', threadId, {
       guestQueryId: 'gq-1',
-      locale: 'zh-CN',
     });
 
     await expect(getTelegramGuestSession('bot-1', threadId)).resolves.toMatchObject({
       guestQueryId: 'gq-1',
       inlineMessageId: 'inline-1',
       lastText: 'reply',
-      mediaType: 'photo',
     });
   });
 
@@ -153,13 +150,11 @@ describe('telegram guest session (Redis-backed)', () => {
     await saveTelegramGuestSession('bot-1', threadId, {
       guestQueryId: 'gq-1',
       inlineMessageId: 'inline-1',
-      mediaType: 'photo',
     });
     resetTelegramGuestSessionsForTest();
 
     await initializeTelegramGuestSession('bot-1', threadId, {
       guestQueryId: 'gq-1',
-      locale: 'zh-CN',
     });
 
     expect(redis.set).toHaveBeenLastCalledWith(
@@ -171,7 +166,6 @@ describe('telegram guest session (Redis-backed)', () => {
     );
     await expect(getTelegramGuestSession('bot-1', threadId)).resolves.toMatchObject({
       inlineMessageId: 'inline-1',
-      mediaType: 'photo',
     });
   });
 

@@ -9,6 +9,11 @@ import { TopicModel } from '@/database/models/topic';
 import { type LobeChatDatabase } from '@/database/type';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  claimDeliveryChunk,
+  getDeliveredChunkCount,
+  releaseDeliveryLease,
+} from '@/server/services/callbackDelivery';
 import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
 import {
   getInstallationStore,
@@ -80,6 +85,7 @@ export interface BotCallbackBody {
   attachments?: BotMessageAttachment[];
   content?: string;
   cost?: number;
+  draftId?: string;
   duration?: number;
   elapsedMs?: number;
   /**
@@ -143,8 +149,11 @@ export interface BotCallbackBody {
 }
 
 export interface BotCallbackOptions {
+  claimChunkDelivery?: (deliveredChunkCount: number) => Promise<boolean>;
   deliveredChunkCount?: number;
+  durableDelivery?: boolean;
   onChunkDelivered?: (deliveredChunkCount: number) => Promise<void>;
+  releaseDeliveryLease?: () => Promise<void>;
   strictDelivery?: boolean;
 }
 
@@ -183,8 +192,16 @@ export class BotCallbackService {
     const replyLocale = getBotReplyLocale(platform);
 
     if (type === 'step') {
-      if (canEdit && progressMessageId && settings.displayToolCalls === true) {
-        await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
+      const canUpdateProgress =
+        (body.draftId && messenger.updateDraft) || (canEdit && progressMessageId);
+      if (settings.displayToolCalls === true && canUpdateProgress) {
+        await this.handleStep(body, messenger, progressMessageId ?? '', client, replyLocale);
+      } else if (body.shouldContinue && body.draftId && messenger.renewDraft) {
+        try {
+          await messenger.renewDraft(body.draftId);
+        } catch (error) {
+          log('handleCallback: failed to renew native draft: %O', error);
+        }
       }
       // Swap the user-message reaction to match the current step type (tool
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
@@ -196,10 +213,60 @@ export class BotCallbackService {
       if (body.shouldContinue) {
         this.renewGatewayTyping(connectionId, platformThreadId);
       }
-    } else if (type === 'completion') {
-      // Stop typing on the gateway
-      this.stopGatewayTyping(connectionId, platformThreadId);
+      return;
+    }
+    if (type !== 'completion') return;
 
+    // Stop typing on the gateway
+    this.stopGatewayTyping(connectionId, platformThreadId);
+    const finishCompletion = async () => {
+      await this.clearStepReaction(body, client, platform);
+      // Queue mode leaves the thread active until completion delivery settles.
+      AgentBridgeService.clearActiveThread(platformThreadId);
+      this.summarizeTopicTitle(
+        { ...body, workspaceId: body.workspaceId ?? workspaceId ?? undefined },
+        messenger,
+      );
+    };
+
+    const draftClaim = body.draftId
+      ? await messenger.claimDraftCompletion?.(body.draftId)
+      : undefined;
+    if (draftClaim?.status === 'busy') {
+      throw new Error('Telegram draft completion is already being delivered');
+    }
+    if (draftClaim?.status === 'completed') {
+      log('handleCallback: native draft completion already finalized, skipping duplicate');
+      return;
+    }
+    if (body.draftId && (!draftClaim || draftClaim.status === 'missing')) {
+      throw new Error('Telegram draft completion session is missing');
+    }
+    if (draftClaim?.status === 'finalize' && body.draftId) {
+      const completed = await messenger.clearDraft?.(body.draftId);
+      if (completed === false) {
+        throw new Error('Telegram draft completion tombstone was not persisted');
+      }
+      await finishCompletion();
+      return;
+    }
+    const leaseOwner = draftClaim?.status === 'claimed' ? draftClaim.owner : undefined;
+    let deliveryOptions: BotCallbackOptions | undefined;
+    try {
+      deliveryOptions = await this.getDeliveryOptions(body.operationId, options);
+    } catch (error) {
+      if (leaseOwner && body.draftId) {
+        try {
+          await messenger.releaseDraftCompletion?.(body.draftId, leaseOwner);
+        } catch (releaseError) {
+          log('handleCallback: failed to release native draft completion claim: %O', releaseError);
+        }
+      }
+      throw error;
+    }
+
+    try {
+      const strictDelivery = deliveryOptions?.strictDelivery ?? Boolean(body.draftId);
       await this.handleCompletion(
         body,
         messenger,
@@ -208,30 +275,50 @@ export class BotCallbackService {
         replyLocale,
         charLimit,
         canEdit,
-        options?.strictDelivery,
-        options?.deliveredChunkCount,
-        options?.onChunkDelivered,
+        strictDelivery,
+        deliveryOptions?.deliveredChunkCount,
+        deliveryOptions?.onChunkDelivered,
+        deliveryOptions?.claimChunkDelivery,
+        body.draftId,
+        leaseOwner,
       );
-      await this.clearStepReaction(body, client, platform);
-      // Clear the active thread tracker so the thread can accept new messages.
-      // In queue mode, the bridge handler's finally block skips this cleanup
-      // to keep the thread marked active while the agent runs on the job queue.
-      AgentBridgeService.clearActiveThread(platformThreadId);
-      this.summarizeTopicTitle(
-        { ...body, workspaceId: body.workspaceId ?? workspaceId ?? undefined },
-        messenger,
-      );
-      // The topic is idle now — replay any follow-up the bridge parked while
-      // this run was executing (WeChat "one image + one sentence" arrives as
-      // two messages; the second used to fail the topic-start reservation).
-      await this.replayDeferredMessages(
-        platform,
-        applicationId,
-        platformThreadId,
-        messengerInstallationKey,
-        body.operationId ?? randomUUID(),
-      );
+    } catch (error) {
+      if (leaseOwner && body.draftId) {
+        try {
+          await messenger.releaseDraftCompletion?.(body.draftId, leaseOwner);
+        } catch (releaseError) {
+          log('handleCallback: failed to release native draft completion claim: %O', releaseError);
+        }
+      }
+      throw error;
+    } finally {
+      try {
+        await deliveryOptions?.releaseDeliveryLease?.();
+      } catch (error) {
+        log('handleCallback: failed to release callback delivery lease: %O', error);
+      }
     }
+    if (body.draftId) {
+      if (leaseOwner && messenger.markDraftDelivered) {
+        const marked = await messenger.markDraftDelivered(body.draftId, leaseOwner);
+        if (!marked) throw new Error('Telegram draft delivery lease lost');
+      }
+      const completed = await messenger.clearDraft?.(body.draftId, leaseOwner);
+      if (completed === false) {
+        throw new Error('Telegram draft completion tombstone was not persisted');
+      }
+    }
+    await finishCompletion();
+    // The topic is idle now — replay any follow-up the bridge parked while
+    // this run was executing (WeChat "one image + one sentence" arrives as
+    // two messages; the second used to fail the topic-start reservation).
+    await this.replayDeferredMessages(
+      platform,
+      applicationId,
+      platformThreadId,
+      messengerInstallationKey,
+      body.operationId ?? randomUUID(),
+    );
   }
 
   private async replayDeferredMessages(
@@ -258,6 +345,36 @@ export class BotCallbackService {
         );
       }
     }
+  }
+
+  private async getDeliveryOptions(
+    operationId: string | undefined,
+    options: BotCallbackOptions | undefined,
+  ): Promise<BotCallbackOptions | undefined> {
+    if (!operationId || options?.deliveredChunkCount !== undefined || options?.onChunkDelivered) {
+      if (options?.durableDelivery && !operationId) {
+        throw new Error('Completion callback is missing operationId');
+      }
+      return options;
+    }
+
+    const redis = getAgentRuntimeRedisClient();
+    if (!redis) {
+      if (options?.durableDelivery) {
+        throw new Error('Durable completion delivery storage is unavailable');
+      }
+      return options;
+    }
+    const key = `bot-callback:delivery:${operationId}`;
+    const deliveredChunkCount = await getDeliveredChunkCount(redis, key);
+    const deliveryOwner = randomUUID();
+
+    return {
+      ...options,
+      claimChunkDelivery: (count) => claimDeliveryChunk(redis, key, count, deliveryOwner),
+      deliveredChunkCount,
+      releaseDeliveryLease: () => releaseDeliveryLease(redis, key, deliveryOwner),
+    };
   }
 
   private async createMessenger(params: {
@@ -448,7 +565,11 @@ export class BotCallbackService {
       body.stepType === 'call_llm' && !body.toolsCalling?.length && body.content;
 
     try {
-      await messenger.editMessage(progressMessageId, progressText);
+      if (body.draftId && messenger.updateDraft) {
+        await messenger.updateDraft(body.draftId, progressText);
+      } else {
+        await messenger.editMessage(progressMessageId, progressText);
+      }
       if (!isLlmFinalResponse) {
         await messenger.triggerTyping?.();
       }
@@ -468,7 +589,43 @@ export class BotCallbackService {
     strictDelivery = false,
     deliveredChunkCount = 0,
     onChunkDelivered?: (deliveredChunkCount: number) => Promise<void>,
+    claimChunkDelivery?: (deliveredChunkCount: number) => Promise<boolean>,
+    draftId?: string,
+    leaseOwner?: string,
   ): Promise<void> {
+    const renewDeliveryLease = async () => {
+      if (!draftId || !leaseOwner || !messenger.renewDraftCompletion) return;
+      const renewed = await messenger.renewDraftCompletion(draftId, leaseOwner);
+      if (!renewed) throw new Error('Telegram draft delivery lease lost');
+    };
+    let deliveryLeaseLost = false;
+    const heartbeat =
+      draftId && leaseOwner && messenger.renewDraftCompletion
+        ? setInterval(() => {
+            void messenger.renewDraftCompletion!(draftId, leaseOwner).then(
+              (renewed) => {
+                if (!renewed) deliveryLeaseLost = true;
+              },
+              () => {
+                deliveryLeaseLost = true;
+              },
+            );
+          }, 30_000)
+        : undefined;
+    heartbeat?.unref?.();
+    const assertDeliveryLease = () => {
+      if (deliveryLeaseLost) throw new Error('Telegram draft delivery lease lost');
+    };
+    const recordChunkDelivered = async (count: number) => {
+      assertDeliveryLease();
+      await renewDeliveryLease();
+      await onChunkDelivered?.(count);
+    };
+    const claimChunk = async (count: number) => {
+      assertDeliveryLease();
+      await renewDeliveryLease();
+      return (await claimChunkDelivery?.(count)) ?? true;
+    };
     const {
       reason,
       lastAssistantContent,
@@ -480,128 +637,134 @@ export class BotCallbackService {
       attachments,
     } = body;
 
-    if (reason === 'error') {
-      log(
-        'handleCompletion: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
-        operationId,
-        errorType,
-        errorMessage,
-      );
-      const errorBody = renderAgentError(
-        errorType,
-        errorMessage,
-        operationId,
-        replyLocale,
-        errorAttribution,
-        errorBudget,
-      );
-      const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
-      if (deliveredChunkCount < 1) {
+    try {
+      if (reason === 'error') {
+        log(
+          'handleCompletion: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
+          operationId,
+          errorType,
+          errorMessage,
+        );
+        const errorBody = renderAgentError(
+          errorType,
+          errorMessage,
+          operationId,
+          replyLocale,
+          errorAttribution,
+          errorBudget,
+        );
+        const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
+        if (deliveredChunkCount < 1 && (await claimChunk(1))) {
+          const delivered = await this.deliverFirstChunk(
+            messenger,
+            progressMessageId,
+            errorText,
+            canEdit,
+            undefined,
+            strictDelivery,
+          );
+          if (delivered) await recordChunkDelivered(1);
+        }
+        return;
+      }
+
+      if (reason === 'interrupted') {
+        if (deliveredChunkCount >= 1 || !(await claimChunk(1))) return;
+        const stoppedText = renderStopped(errorMessage, replyLocale);
+        try {
+          await messenger.createMessage(stoppedText);
+          await recordChunkDelivered(1);
+        } catch (error) {
+          if (strictDelivery) throw error;
+          log('handleCompletion: failed to send interrupted message: %O', error);
+        }
+        return;
+      }
+
+      // Skip only when there's nothing at all to send. An image/file-only reply
+      // (no text, but attachments present) is still a valid reply and must go
+      // through — silently dropping it would mean an agent that answered with
+      // just a generated image gets shown nothing on the user side.
+      //
+      // For the text leg: `!lastAssistantContent` lets whitespace-only strings
+      // ("\n", "  ") through; those collapse to empty text downstream and get
+      // rejected by Telegram as "message text is empty", silently losing the
+      // reply. Trim before testing.
+      const hasText = !!lastAssistantContent?.trim();
+      const hasAttachments = !!attachments?.length;
+      if (!hasText && !hasAttachments) {
+        // console (not debug) — every one of these is a user-facing "bot went
+        // silent": the run completed but the completion event
+        // carried nothing to deliver. Must stay visible in production logs.
+        console.error(
+          `[BotCallbackService] completion had no lastAssistantContent and no attachments, skipping reply (operationId=${operationId}, topicId=${body.topicId}, thread=${body.platformThreadId})`,
+        );
+        if (strictDelivery)
+          throw new Error('Creator callback completed without deliverable content');
+        return;
+      }
+
+      const stats: UsageStats = {
+        elapsedMs: body.duration,
+        llmCalls: body.llmCalls ?? 0,
+        toolCalls: body.toolCalls ?? 0,
+        totalCost: body.cost ?? 0,
+        totalTokens: body.totalTokens ?? 0,
+      };
+
+      // Build the chunk list. Empty text → a single empty chunk so the
+      // attachment-only path still drives `deliverFirstChunk` once.
+      let chunks: string[];
+      if (hasText) {
+        const msgBody = renderFinalReply(lastAssistantContent!);
+        const formattedBody = client.formatMarkdown?.(msgBody) ?? msgBody;
+        const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
+        chunks = splitMessage(finalText, charLimit);
+        if (chunks.length === 0) {
+          log('handleCompletion: all chunks empty after formatting, skipping send');
+          // Even with no text we still want to deliver the attachments.
+          if (!hasAttachments) return;
+          chunks = [''];
+        }
+      } else {
+        chunks = [''];
+      }
+
+      // Attach outbound attachments to the *last* chunk only so we don't send
+      // the same image/file once per chunk.
+      const lastIndex = chunks.length - 1;
+      const firstChunkAttachments = lastIndex === 0 ? attachments : undefined;
+
+      if (deliveredChunkCount < 1 && (await claimChunk(1))) {
         const delivered = await this.deliverFirstChunk(
           messenger,
           progressMessageId,
-          errorText,
+          chunks[0],
           canEdit,
-          undefined,
+          firstChunkAttachments,
           strictDelivery,
         );
-        if (delivered) await onChunkDelivered?.(1);
+        if (delivered) await recordChunkDelivered(1);
       }
-      return;
-    }
-
-    if (reason === 'interrupted') {
-      if (deliveredChunkCount >= 1) return;
-      const stoppedText = renderStopped(errorMessage, replyLocale);
-      try {
-        await messenger.createMessage(stoppedText);
-        await onChunkDelivered?.(1);
-      } catch (error) {
-        if (strictDelivery) throw error;
-        log('handleCompletion: failed to send interrupted message: %O', error);
+      // Each remaining chunk gets its own try/catch so a single transient failure
+      // (rate-limit, network blip) doesn't drop everything that follows.
+      for (let i = Math.max(1, deliveredChunkCount); i < chunks.length; i++) {
+        try {
+          if (!(await claimChunk(i + 1))) continue;
+          const isLast = i === lastIndex;
+          await messenger.createMessage(
+            isLast && attachments?.length ? { attachments, content: chunks[i] } : chunks[i],
+          );
+          await recordChunkDelivered(i + 1);
+        } catch (error) {
+          if (strictDelivery) throw error;
+          console.error(
+            `[BotCallbackService] failed to send reply chunk ${i}/${lastIndex} (thread=${body.platformThreadId}): ${describePlatformError(error)}`,
+          );
+        }
       }
-      return;
-    }
-
-    // Skip only when there's nothing at all to send. An image/file-only reply
-    // (no text, but attachments present) is still a valid reply and must go
-    // through — silently dropping it would mean an agent that answered with
-    // just a generated image gets shown nothing on the user side.
-    //
-    // For the text leg: `!lastAssistantContent` lets whitespace-only strings
-    // ("\n", "  ") through; those collapse to empty text downstream and get
-    // rejected by Telegram as "message text is empty", silently losing the
-    // reply. Trim before testing.
-    const hasText = !!lastAssistantContent?.trim();
-    const hasAttachments = !!attachments?.length;
-    if (!hasText && !hasAttachments) {
-      // console (not debug) — every one of these is a user-facing "bot went
-      // silent": the run completed but the completion event
-      // carried nothing to deliver. Must stay visible in production logs.
-      console.error(
-        `[BotCallbackService] completion had no lastAssistantContent and no attachments, skipping reply (operationId=${operationId}, topicId=${body.topicId}, thread=${body.platformThreadId})`,
-      );
-      if (strictDelivery) throw new Error('Creator callback completed without deliverable content');
-      return;
-    }
-
-    const stats: UsageStats = {
-      elapsedMs: body.duration,
-      llmCalls: body.llmCalls ?? 0,
-      toolCalls: body.toolCalls ?? 0,
-      totalCost: body.cost ?? 0,
-      totalTokens: body.totalTokens ?? 0,
-    };
-
-    // Build the chunk list. Empty text → a single empty chunk so the
-    // attachment-only path still drives `deliverFirstChunk` once.
-    let chunks: string[];
-    if (hasText) {
-      const msgBody = renderFinalReply(lastAssistantContent!);
-      const formattedBody = client.formatMarkdown?.(msgBody) ?? msgBody;
-      const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
-      chunks = splitMessage(finalText, charLimit);
-      if (chunks.length === 0) {
-        log('handleCompletion: all chunks empty after formatting, skipping send');
-        // Even with no text we still want to deliver the attachments.
-        if (!hasAttachments) return;
-        chunks = [''];
-      }
-    } else {
-      chunks = [''];
-    }
-
-    // Attach outbound attachments to the *last* chunk only so we don't send
-    // the same image/file once per chunk.
-    const lastIndex = chunks.length - 1;
-    const firstChunkAttachments = lastIndex === 0 ? attachments : undefined;
-
-    if (deliveredChunkCount < 1) {
-      const delivered = await this.deliverFirstChunk(
-        messenger,
-        progressMessageId,
-        chunks[0],
-        canEdit,
-        firstChunkAttachments,
-        strictDelivery,
-      );
-      if (delivered) await onChunkDelivered?.(1);
-    }
-    // Each remaining chunk gets its own try/catch so a single transient failure
-    // (rate-limit, network blip) doesn't drop everything that follows.
-    for (let i = Math.max(1, deliveredChunkCount); i < chunks.length; i++) {
-      try {
-        const isLast = i === lastIndex;
-        await messenger.createMessage(
-          isLast && attachments?.length ? { attachments, content: chunks[i] } : chunks[i],
-        );
-        await onChunkDelivered?.(i + 1);
-      } catch (error) {
-        if (strictDelivery) throw error;
-        console.error(
-          `[BotCallbackService] failed to send reply chunk ${i}/${lastIndex} (thread=${body.platformThreadId}): ${describePlatformError(error)}`,
-        );
-      }
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
     }
   }
 
@@ -621,25 +784,21 @@ export class BotCallbackService {
   ): Promise<boolean> {
     const payload = attachments && attachments.length > 0 ? { attachments, content: text } : text;
 
-    if (canEdit && progressMessageId) {
+    // Telegram (and several other platforms) keep editMessage text-only.
+    // Sending attachments through edit would silently drop the files.
+    if (canEdit && progressMessageId && !attachments?.length) {
       try {
         await messenger.editMessage(progressMessageId, payload);
-        // Positive delivery record (console, not debug): "we sent it and the
-        // platform accepted it" must be provable from production logs alone —
-        // burned days on inferring delivery from the absence of
-        // error logs while the target thread had been deleted out from under
-        // the bot.
-        console.info(
-          `[BotCallbackService] completion reply delivered via editMessage (message=${progressMessageId})`,
-        );
+        log('completion reply delivered via editMessage: message=%s', progressMessageId);
         return true;
       } catch (error) {
+        if (strictDelivery) throw error;
         log('handleCompletion: editMessage failed, falling back to createMessage: %O', error);
       }
     }
     try {
       await messenger.createMessage(payload);
-      console.info('[BotCallbackService] completion reply delivered via createMessage');
+      log('completion reply delivered via createMessage');
       return true;
     } catch (error) {
       // Last resort failed — the reply is lost. console (not debug) so the
