@@ -75,12 +75,14 @@ vi.mock('@/server/services/message', () => ({
 // @lobechat/model-runtime resolves to @cloud/business-model-runtime which has
 // cloud-specific dependencies that are unavailable in the test environment
 vi.mock('@lobechat/model-runtime', async () => {
-  // ModelEmptyError + isEmptyModelCompletion are pure (they only depend on
+  // Completion errors + isEmptyModelCompletion are pure (they only depend on
   // @lobechat/types), so import the real implementations directly from source —
   // bypassing this cloud-package mock — so the executor's empty-completion
   // retry path and these tests share a single class identity for instanceof.
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
+  const { ModelRefusalError } =
+    await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   // Same treatment: the reasoning-config merge is pure, and the replay gate
   // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
   // implementation instead of a drifting stub.
@@ -109,6 +111,7 @@ vi.mock('@lobechat/model-runtime', async () => {
     isKimiAlwaysPreserveThinkingModel: (model: string) =>
       /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
     ModelEmptyError,
+    ModelRefusalError,
     refineErrorCode: () => undefined,
   };
 });
