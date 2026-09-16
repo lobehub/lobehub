@@ -1,5 +1,7 @@
 'use client';
 
+import { ActionIcon } from '@lobehub/ui/base-ui';
+import { SettingsIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -64,6 +66,15 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
             title={project?.name || t('sidebar.title')}
           />
         </SidebarHeaderSelectPopover>
+      }
+      right={
+        <ActionIcon
+          aria-label={t('settings.title')}
+          icon={SettingsIcon}
+          size="small"
+          title={t('settings.title')}
+          onClick={() => navigate(`/project/${project?.slug ?? project?.id}/settings`)}
+        />
       }
     />
   );

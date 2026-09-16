@@ -49,7 +49,7 @@ import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/route
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { projectsRouteMeta } from '@/features/Projects/routeMeta';
+import { projectDirectoriesRouteMeta, projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
@@ -1005,6 +1005,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         handle: { meta: tasksRouteMeta },
         path: 'tasks',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/settings'),
+          'Desktop > Project Working Directories',
+          { preloadId: 'project-settings' },
+        ),
+        handle: { meta: projectDirectoriesRouteMeta },
+        path: 'settings',
       },
       {
         element: dynamicElement(

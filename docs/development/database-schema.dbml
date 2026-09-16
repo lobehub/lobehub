@@ -2750,6 +2750,7 @@ table project_knowledge_bases {
 table project_working_directories {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   project_id text [not null]
+  environment_instance_id uuid
   device_id uuid
   workspace_id text
   added_by_user_id text
@@ -2766,6 +2767,7 @@ table project_working_directories {
     (project_id, device_id, path) [name: 'project_working_directories_project_device_path_unique', unique]
     project_id [name: 'project_working_directories_project_primary_unique', unique]
     (project_id, sort_order) [name: 'project_working_directories_project_sort_order_idx']
+    (project_id, environment_instance_id) [name: 'project_working_directories_project_instance_unique', unique]
     device_id [name: 'project_working_directories_device_id_idx']
     workspace_id [name: 'project_working_directories_workspace_id_idx']
     

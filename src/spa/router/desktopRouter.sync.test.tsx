@@ -196,7 +196,7 @@ describe('desktop router shared definition', () => {
         ?.map((route) => route.path)
         .filter((routePath): routePath is string => Boolean(routePath));
 
-      expect(projectPaths).toEqual(['tasks', 'goals', 'acceptance']);
+      expect(projectPaths).toEqual(['tasks', 'settings', 'goals', 'acceptance']);
       expect(
         (projectIndexRoute?.element as ReactElement<{ to: string }> | undefined)?.props.to,
       ).toBe('tasks');

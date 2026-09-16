@@ -8,3 +8,9 @@ export const projectsRouteMeta = routeMeta({
   Skeleton: createSurfaceSkeleton('grid'),
   titleKey: 'navigation.projects',
 });
+
+export const projectDirectoriesRouteMeta = routeMeta({
+  icon: FolderClosedIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'project:settings.title',
+});

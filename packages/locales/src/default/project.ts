@@ -1,4 +1,53 @@
 export default {
+  'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
+  'settings.general': 'General',
+  'settings.generalDescription': 'Manage the name people see for this project.',
+  'settings.noRepository': 'No GitHub repository linked',
+  'settings.noDirectories':
+    'Link a working directory from an Agent’s directory menu to start working here.',
+  'settings.title': 'Project settings',
+  'settings.environments': 'Environments',
+  'settings.addEnvironment': 'Add environment',
+  'settings.environmentDescription':
+    'Manage the shared resources used by this project. Bind a device directory from its menu in an Agent sidebar.',
+  'settings.noEnvironments': 'No environments associated yet',
+  'directories.environmentName': 'Environment name',
+  'directories.editEnvironment': 'Configure environment',
+
+  'directories.coordinator': 'Project coordinator',
+  'directories.environment': 'Environment',
+  'directories.newEnvironment': 'Create environment',
+
+  'directories.boundRoot':
+    'This conversation is bound to a project directory. Start a new conversation to use a different directory.',
+  'directories.detectRepository': 'Detect GitHub repository',
+  'directories.unavailable':
+    'Device is offline or the directory is unavailable. Reconnect and retry.',
+
+  'directories.title': 'Working directories',
+  'directories.add': 'Add working directory',
+  'directories.bind': 'Link to project',
+  'directories.bindDescription':
+    'Link an existing directory on a device to a project. Files stay on the device.',
+  'directories.project': 'Select project',
+  'directories.device': 'Select device',
+  'directories.path': 'Absolute directory path',
+  'directories.name': 'Directory name',
+  'directories.repository': 'GitHub repository URL (optional)',
+  'directories.repositoryHint':
+    'This records the source repository. It does not clone or synchronize files. Do not include credentials.',
+  'directories.fileTopics': 'Also file these {{count}} conversations under this project and device',
+  'directories.createProject': 'Create a project',
+  'directories.empty': 'Link a device directory to start working with an Agent in this project.',
+  'directories.start': 'Start work here',
+  'directories.chooseAgent': 'Choose Agent',
+  'directories.conversations': 'Conversations',
+  'directories.noConversations': 'No conversations in this environment yet.',
+  'directories.untitled': 'Untitled conversation',
+  'directories.openProject': 'Open project: {{name}}',
+  'directories.startInProject': 'Start work in {{name}}',
+  'directories.projectBinding': 'Project links',
+
   'acceptance.actions.accept': 'Accept completion',
   'acceptance.actions.reject': 'Request changes',
   'acceptance.actions.reopen': 'Reopen project',

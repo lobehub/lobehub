@@ -1,3 +1,4 @@
+import type { ChatTopic } from '@lobechat/types';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +12,7 @@ const testState = vi.hoisted(() => ({
     updateAgentConfigById: vi.fn(),
     updateAgentRuntimeEnvConfigById: vi.fn(),
   },
+  topic: undefined as ChatTopic | undefined,
   chat: { activeTopicId: undefined as string | undefined, updateTopicMetadata: vi.fn() },
   currentDeviceId: 'this-machine' as string | undefined,
   effective: {
@@ -36,7 +38,7 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
-  topicSelectors: { getTopicById: () => () => undefined },
+  topicSelectors: { getTopicById: () => () => testState.topic },
 }));
 
 vi.mock('@/store/device', () => ({
@@ -56,6 +58,7 @@ vi.mock('@/helpers/heteroSessionByWorkingDirectory', () => ({
 describe('useCommitWorkingDirectory — localTarget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testState.topic = undefined;
     testState.agent.agencyConfig = undefined;
     testState.agent.agentMap = {};
     testState.agent.localAgentWorkingDirectoryMap = {};
@@ -64,6 +67,21 @@ describe('useCommitWorkingDirectory — localTarget', () => {
     testState.chat.activeTopicId = undefined;
     testState.currentDeviceId = 'this-machine';
     testState.effective = { agencyConfig: undefined, workspaceScoped: false };
+  });
+
+  it('keeps a project-bound source directory while allowing worktree selection', async () => {
+    testState.chat.activeTopicId = 'topic';
+    testState.topic = {
+      id: 'topic',
+      projectWorkingDirectoryId: 'directory',
+      metadata: { workingDirectory: '/repo', workingDirectoryConfig: { path: '/repo' } },
+    } as ChatTopic;
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+    await expect(result.current.commit({ path: '/elsewhere' })).rejects.toThrow();
+    await expect(result.current.clear()).rejects.toThrow();
+    expect(testState.chat.updateTopicMetadata).not.toHaveBeenCalled();
+    await result.current.commit({ path: '/repo', git: { activeWorktree: '/repo-worktree' } });
+    expect(testState.chat.updateTopicMetadata).toHaveBeenCalled();
   });
 
   it('files a workspace member’s first sandbox pick against their own machine', async () => {

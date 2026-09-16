@@ -438,3 +438,24 @@ describe('groupTopicsByStatus', () => {
     expect(result.map((g) => g.id)).toEqual(['pending']);
   });
 });
+
+it('keeps project directory bindings and device identities separate', () => {
+  const base = { createdAt: 1, updatedAt: 1, title: 'Work' };
+  const topics: ChatTopic[] = [
+    {
+      ...base,
+      id: 'a',
+      projectWorkingDirectoryId: 'directory-a',
+      metadata: { workingDirectory: '/repo' },
+    },
+    {
+      ...base,
+      id: 'b',
+      projectWorkingDirectoryId: 'directory-b',
+      metadata: { workingDirectory: '/repo' },
+    },
+    { ...base, id: 'c', metadata: { workingDirectory: '/repo', boundDeviceId: 'device-a' } },
+    { ...base, id: 'd', metadata: { workingDirectory: '/repo', boundDeviceId: 'device-b' } },
+  ];
+  expect(groupTopicsByProject(topics, 'updatedAt')).toHaveLength(4);
+});

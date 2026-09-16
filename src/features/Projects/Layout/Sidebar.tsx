@@ -14,6 +14,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
+import { ProjectDirectoryTopics } from '../WorkingDirectories/SidebarTopics';
 import { getProjectAcceptancePath, getProjectGoalsPath, getProjectTasksPath } from './navigation';
 import ProjectHeader from './ProjectHeader';
 
@@ -61,6 +62,12 @@ const ProjectSidebarContent = memo(() => {
             title={t('sections.acceptance')}
             onClick={() => navigate(projectAcceptancePath)}
           />
+          {detail?.project && (
+            <ProjectDirectoryTopics
+              coordinatorAgentId={detail.project.coordinatorAgentId}
+              projectId={detail.project.id}
+            />
+          )}
         </Flexbox>
       }
     />

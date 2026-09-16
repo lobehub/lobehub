@@ -1155,6 +1155,13 @@
       "when": 1789483504676,
       "tag": "0164_document_comment_selection_anchor",
       "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "7",
+      "when": 1789491828335,
+      "tag": "0165_project_directory_environment",
+      "breakpoints": true
     }
   ],
   "version": "6"

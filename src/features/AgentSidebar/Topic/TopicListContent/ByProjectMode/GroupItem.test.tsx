@@ -14,6 +14,30 @@ const routeParamsMock = vi.hoisted(() => ({ aid: 'agent-1' as string | undefined
 const agentStoreStateMock = vi.hoisted(() => ({ activeAgentId: 'agent-1' as string | undefined }));
 const activeWorkspaceSlugMock = vi.hoisted(() => ({ value: 'lobehub' as string | null }));
 
+const directoryRows = vi.hoisted(
+  () =>
+    [] as Array<{
+      id: string;
+      projectName: string;
+      projectSlug: string;
+      projectId: string;
+      projectAvatar: string;
+    }>,
+);
+vi.mock('@/store/projectWorkingDirectory', () => ({
+  useProjectDirectoryStore: (selector: (state: unknown) => unknown) =>
+    selector({ useFetchDirectories: () => ({ data: { data: directoryRows } }) }),
+}));
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => routerPushMock,
+}));
+
+vi.mock('@/features/Projects/WorkingDirectories/AgentDirectoryActions', () => ({
+  AgentDirectoryActions: ({ onLegacyStart }: { onLegacyStart: () => Promise<void> }) => (
+    <button aria-label="actions.addNewTopicInProject:project" onClick={onLegacyStart} />
+  ),
+}));
+
 vi.mock('react-router', () => ({
   useParams: () => routeParamsMock,
 }));
@@ -96,6 +120,7 @@ vi.mock('../../List/Item', () => ({
 
 describe('Project topic group item', () => {
   beforeEach(() => {
+    directoryRows.length = 0;
     commitAgentDefaultMock.mockReset();
     switchTopicMock.mockReset();
     routerPushMock.mockReset();
@@ -172,4 +197,37 @@ describe('Project topic group item', () => {
 
     expect(commitAgentDefaultMock).toHaveBeenCalledWith('/Users/me/project');
   });
+});
+
+it('uses the bound project name and lets the user jump directly to that project', () => {
+  directoryRows.push({
+    id: 'binding-1',
+    projectName: 'Shared Project',
+    projectSlug: 'shared-project',
+    projectId: 'prj-1',
+    projectAvatar: '📦',
+  });
+  render(
+    <AccordionRoot defaultValue={['project:/repo']}>
+      <GroupItem
+        expanded
+        group={{
+          id: 'project:/repo',
+          title: 'repo',
+          children: [
+            {
+              id: 'topic-1',
+              title: 'Work',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              projectWorkingDirectoryId: 'binding-1',
+              metadata: { workingDirectory: '/repo' },
+            },
+          ],
+        }}
+      />
+    </AccordionRoot>,
+  );
+  fireEvent.click(screen.getByRole('link', { name: 'Shared Project' }));
+  expect(routerPushMock).toHaveBeenCalledWith('/project/shared-project');
 });
