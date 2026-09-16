@@ -36,7 +36,6 @@ export interface ShareUploadMetadata {
 
 export interface ShareCreateFileParams {
   fileType: string;
-  hash: string;
   metadata?: ShareUploadMetadata;
   name: string;
   pathname: string;

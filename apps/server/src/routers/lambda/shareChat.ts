@@ -341,15 +341,20 @@ export const shareChatRouter = router({
    * from the creator's library and knowledge listings) plus the
    * `metadata.agentShare` provenance every share read/write path checks.
    *
-   * Deliberately simpler than the owner path: no content-hash dedup against
-   * `global_files`, no knowledge base / parent folder / visibility. A visitor
-   * attachment is only ever reached through the message it was sent with.
+   * Deliberately simpler than the owner path: no knowledge base / parent
+   * folder / visibility, and no content hash at all. Every share upload is its
+   * own object under its own reserved key, so the row must stay OUT of the
+   * hash-keyed `global_files` dedup graph: a row registered there with a hash
+   * some other file already holds would have its object skipped by the
+   * refcount in `FileModel.delete` and orphaned in storage on `removeFile`
+   * (with the visitor never able to see or free it), while its share-cap bytes
+   * were released. A visitor attachment is only ever reached through the
+   * message it was sent with, so nothing needs the hash.
    */
   createFile: shareChatProcedure
     .input(
       z.object({
         fileType: z.string().min(1).max(255),
-        hash: z.string().min(1).max(64),
         metadata: ShareUploadMetadataSchema.optional(),
         name: z.string().min(1).max(255),
         pathname: z.string().min(1),
@@ -401,7 +406,6 @@ export const shareChatRouter = router({
 
         const file = await new FileModel(ctx.serverDB, share.ownerId).create(
           {
-            fileHash: input.hash,
             fileType: input.fileType,
             metadata: {
               ...input.metadata,
@@ -416,7 +420,7 @@ export const shareChatRouter = router({
             source: FileSource.AgentShare,
             url: input.pathname,
           },
-          true,
+          false,
           trx,
         );
 
@@ -932,6 +936,10 @@ export const shareChatRouter = router({
    * Only the uploading visitor's own share files qualify (provenance check),
    * and only while no message references the row — once sent, the attachment
    * is part of a creator-owned conversation and stays put.
+   *
+   * `exclusiveStorage`: share rows are created outside `global_files` (see
+   * `createFile`), so the row's `url` is the only reference to its object and
+   * the object goes whenever the row does.
    */
   removeFile: shareChatProcedure
     .input(z.object({ fileId: z.string().min(1).max(64), shareId: z.string() }))
@@ -945,7 +953,13 @@ export const shareChatRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       }
 
-      const file = await fileModel.deleteUnreferenced(input.fileId, serverDBEnv.REMOVE_GLOBAL_FILE);
+      const file = await fileModel.deleteUnreferenced(
+        input.fileId,
+        serverDBEnv.REMOVE_GLOBAL_FILE,
+        {
+          exclusiveStorage: true,
+        },
+      );
       if (!file) return;
 
       await new FileService(ctx.serverDB, share.ownerId).deleteFile(file.url!);

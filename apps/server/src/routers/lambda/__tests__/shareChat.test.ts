@@ -778,7 +778,6 @@ describe('shareChatRouter', () => {
     const pathname = `files/${OWNER}/agent-share/share-1/abc/cat.png`;
     const input = {
       fileType: 'image/png',
-      hash: 'h'.repeat(64),
       metadata: { height: 2, ratio: 0.5, width: 1 },
       name: 'cat.png',
       pathname,
@@ -804,7 +803,6 @@ describe('shareChatRouter', () => {
       expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
       expect(mockFileCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          fileHash: input.hash,
           fileType: 'image/png',
           metadata: expect.objectContaining({
             agentShare: { shareId: 'share-1', visitorUserId: VISITOR },
@@ -819,10 +817,23 @@ describe('shareChatRouter', () => {
           source: 'agent_share',
           url: pathname,
         }),
-        true,
+        false,
         expect.anything(),
       );
+      // Share rows stay out of the hash-keyed `global_files` graph: no hash is
+      // stored and no global row is registered, so `removeFile` can always
+      // delete the row's own object (see the `exclusiveStorage` test below).
+      expect(mockFileCreate.mock.calls[0][0]).not.toHaveProperty('fileHash');
       expect(mockUploadSettle).toHaveBeenCalledWith('upload-1', 'file-new', expect.anything());
+    });
+
+    it('ignores a client-supplied hash instead of registering the object for dedup', async () => {
+      const caller = await createCaller();
+
+      await caller.createFile({ ...input, hash: 'h'.repeat(64) } as typeof input);
+
+      expect(mockFileCreate.mock.calls[0][0]).not.toHaveProperty('fileHash');
+      expect(mockFileCreate.mock.calls[0][1]).toBe(false);
     });
 
     it('refuses a pathname outside the share prefix (a creator-owned reservation)', async () => {
@@ -919,7 +930,12 @@ describe('shareChatRouter', () => {
       await caller.removeFile({ fileId: 'file-a', shareId: 'share-1' });
 
       expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
-      expect(mockFileDeleteUnreferenced).toHaveBeenCalledWith('file-a', true);
+      // `exclusiveStorage`: the row owns its object outright (never registered
+      // in `global_files`), so the object is deleted whenever the row is, even
+      // if some other file happens to carry the same content hash.
+      expect(mockFileDeleteUnreferenced).toHaveBeenCalledWith('file-a', true, {
+        exclusiveStorage: true,
+      });
       expect(mockDeleteStoredFile).toHaveBeenCalledWith('files/x/cat.png');
     });
 

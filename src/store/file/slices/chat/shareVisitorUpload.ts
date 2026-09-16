@@ -1,6 +1,5 @@
 import { SHARE_UPLOAD_STORAGE_BLOCK_PREFIX, SHARE_VISITOR_MAX_FILE_SIZE } from '@lobechat/const';
 
-import { hashFile } from '@/services/hashFile';
 import { shareChatService } from '@/services/shareChat';
 import { uploadService } from '@/services/upload';
 import type { UploadFileItem } from '@/types/files';
@@ -26,15 +25,17 @@ export const isShareFileTooLarge = (file: File) => file.size > SHARE_VISITOR_MAX
  * Upload one chat attachment as an agent-share VISITOR.
  *
  * The share counterpart of `uploadWithProgress`: same client-side prep
- * (type sniffing, image dimensions, audio duration, content hash) so the
- * attachment renders exactly like an owner upload, but the storage
- * reservation, the file row and any cleanup go through the share-scoped
- * endpoints — the file lands under the CREATOR's account and quota, which the
- * visitor's own `upload.*` / `file.*` procedures could never write to.
+ * (type sniffing, image dimensions, audio duration) so the attachment renders
+ * exactly like an owner upload, but the storage reservation, the file row and
+ * any cleanup go through the share-scoped endpoints — the file lands under the
+ * CREATOR's account and quota, which the visitor's own `upload.*` / `file.*`
+ * procedures could never write to.
  *
- * Deliberately no hash dedup against `checkFileHash`: that lookup is the
+ * Deliberately no content hash: no `checkFileHash` dedup (that lookup is the
  * visitor's own global-file view, and a share file must always be a fresh
- * creator-owned row with share provenance.
+ * creator-owned row with share provenance) and none sent to the server either
+ * — `shareChat.createFile` keeps share rows out of the hash-keyed global-file
+ * graph so each upload's object is deleted with its row.
  */
 export const uploadShareVisitorFile = async ({
   abortController,
@@ -54,18 +55,11 @@ export const uploadShareVisitorFile = async ({
   let fileType = normalizedFile.type || detectedMimeType || 'text/plain';
   if (extensionAudioMime && !fileType.startsWith('audio/')) fileType = extensionAudioMime;
 
-  const [dimensions, durationMs, hash] = await Promise.all([
+  const [dimensions, durationMs] = await Promise.all([
     getImageDimensions(normalizedFile),
     fileType.startsWith('audio/')
       ? getAudioDuration(normalizedFile).catch(() => undefined)
       : undefined,
-    hashFile(normalizedFile, abortController?.signal, (progress) => {
-      onStatusUpdate?.({
-        id: statusId,
-        type: 'updateFile',
-        value: { status: 'pending', uploadState: { progress, restTime: 0, speed: 0 } },
-      });
-    }),
   ]);
 
   const { pathname, url } = await shareChatService.createUploadUrl(shareId, {
@@ -87,7 +81,6 @@ export const uploadShareVisitorFile = async ({
 
     const data = await shareChatService.createFile({
       fileType,
-      hash,
       metadata: {
         ...dimensions,
         ...(durationMs === undefined ? {} : { durationMs }),
