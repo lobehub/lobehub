@@ -604,6 +604,31 @@ describe('FtsSearchRepo (pg_like)', () => {
       expect(ids(messagesByAgentFilter)).toEqual([messageB.id]);
     });
 
+    it('excludes ineligible messages before the candidate limit', async () => {
+      const [eligible] = await serverDB
+        .insert(messages)
+        .values([
+          { content: 'Kubernetes rollout notes', role: 'user', userId },
+          { content: 'Kubernetes tool output', role: 'tool', userId },
+          { content: '   ', role: 'assistant', summary: 'Kubernetes', userId },
+        ])
+        .returning({ id: messages.id });
+
+      const repo = createRepo(serverDB, userId);
+      const response = await repo.ftsSearchCandidates({
+        entity: 'messages',
+        filters: {},
+        pagination: { limit: 1 },
+        query: { text: 'kubernetes' },
+      });
+
+      // Only the tool row is ineligible: the blank-content row is still
+      // searchable through its summary, matching the Elasticsearch projection.
+      const candidateIds = response.candidates.map((candidate) => candidate.id);
+      expect(candidateIds).toContain(eligible.id);
+      expect(candidateIds).toHaveLength(2);
+    });
+
     it('matches memory layers through their parent memory text', async () => {
       const [parent] = await serverDB
         .insert(userMemories)

@@ -34,6 +34,7 @@ import {
   userMemoriesPreferences,
   userPersonaDocuments,
 } from '../../../schemas';
+import { searchableMessage } from '../../../utils/searchableMessage';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchBackendCandidate,
@@ -479,6 +480,10 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
     table: messages,
     where: (scope, filters) => [
       buildWorkspaceWhere(scope, messages),
+      // Elasticsearch never indexes tool or blank messages, so its candidates
+      // exclude them before the bounded pool is cut; mirror that here or such
+      // rows crowd out eligible hits that hydration would have kept.
+      searchableMessage(),
       ...topicScopeWhere(messages, filters, true),
     ],
   },
