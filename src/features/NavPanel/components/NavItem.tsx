@@ -33,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
 
       /* Fade the covered text itself instead of painting a row-colored plate over it,
          so the overlay matches any row background (hover / active / none). */
-      .${CONTENT_CLASS_NAME} {
+      &:has(> .${ACTION_CLASS_NAME}) .${CONTENT_CLASS_NAME} {
         mask-image: linear-gradient(
           to right,
           #000 calc(100% - 56px),
