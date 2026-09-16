@@ -15,11 +15,11 @@ bases, chat groups, and memories. This is separate from the web-search tools tha
 
 LobeHub supports three product-search backends:
 
-| Backend         | Best fit                                                                                                          | Additional operations                                                                                                                                                                                                    |
-| --------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pg_search`     | A deployment that already runs PostgreSQL with the ParadeDB `pg_search` extension and wants the simplest topology | PostgreSQL maintains the BM25 indexes; no separate search-sync worker is required                                                                                                                                        |
-| `elasticsearch` | A deployment that wants a dedicated, independently scalable search service or must leave `pg_search`              | Requires an Elasticsearch service (external, or the optional single-node service in the official Docker Compose file), an initial backfill, PostgreSQL change capture, and a continuously scheduled incremental consumer |
-| `pg_like`       | A small deployment on plain PostgreSQL that cannot install `pg_search` and does not want to run Elasticsearch     | None; substring matching runs directly against the existing tables without extensions, indexes, or sync workers                                                                                                          |
+| Backend         | Best fit                                                                                                              | Additional operations                                                                                                                                                                                                    |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pg_search`     | A deployment that already runs PostgreSQL with the ParadeDB `pg_search` extension and wants the simplest topology     | PostgreSQL maintains the BM25 indexes; no separate search-sync worker is required                                                                                                                                        |
+| `elasticsearch` | A larger deployment that needs BM25 search quality and can operate a dedicated search service and persistent sync job | Requires an Elasticsearch service (external, or the optional single-node service in the official Docker Compose file), an initial backfill, PostgreSQL change capture, and a continuously scheduled incremental consumer |
+| `pg_like`       | A personal or small deployment on plain PostgreSQL that does not want to run Elasticsearch                            | None; substring matching runs directly against the existing tables without extensions, indexes, or sync workers                                                                                                          |
 
 `FTS_SEARCH_PROVIDER` selects one backend for the whole deployment. The accepted values are
 `pg_search`, `elasticsearch`, and `pg_like`; the default is `pg_search`. LobeHub does not silently
@@ -80,17 +80,16 @@ extension until those migrations become optional.
 ### Use Elasticsearch
 
 Choose Elasticsearch when search needs independent capacity, when you want to separate search
-storage from transactional PostgreSQL, or when your PostgreSQL provider is ending `pg_search`
-support.
+storage from transactional PostgreSQL, and when you can keep a sync job running continuously.
+Personal and small deployments whose database provider is ending `pg_search` should consider the
+service-free `pg_like` backend first.
 
-Neon stopped offering `pg_search` to new projects on March 19, 2026. Neon has notified affected
-existing customers that the extension will be removed on September 21, 2026; queries, indexes, and
-applications that still depend on it will stop working after removal. Existing LobeHub deployments
-on Neon should complete the
-[pg\_search to Elasticsearch migration guide](/docs/self-hosting/advanced/elasticsearch-migration)
-before that deadline. Check Neon's
-[current pg\_search notice](https://neon.com/docs/extensions/pg_search) and
-[extension catalog](https://neon.com/docs/extensions/pg-extensions) before acting.
+Neon stopped offering `pg_search` to new projects on March 19, 2026. Retirement timelines for
+existing projects follow the notice Neon sends for that project. LobeHub users who receive such a
+notice should use
+[Migrate from pg\_search on Neon](/docs/self-hosting/advanced/neon-pg-search-migration) to choose
+`pg_like` or Elasticsearch. Check Neon's
+[current pg\_search notice](https://neon.com/docs/extensions/pg_search) before acting.
 
 There are two supported ways to run Elasticsearch. Both use the same backfill and incremental
 sync commands and the same `ES_INDEX_NAMESPACE`; they differ only in how LobeHub reaches the
@@ -125,8 +124,8 @@ a PostgreSQL image that can install `pg_search`, such as the bundled `paradedb/p
 Elasticsearch then takes over search traffic after the backfill; the `pg_search` objects can be
 removed later with the supported cleanup command.
 
-See [Migrate from pg\_search to Elasticsearch](/docs/self-hosting/advanced/elasticsearch-migration)
-for the complete rehearsal, backfill, cutover, and rollback procedure.
+See [Migrate from pg\_search on Neon](/docs/self-hosting/advanced/neon-pg-search-migration) for
+guidance on choosing a backend and starting the migration.
 
 ## How Elasticsearch synchronization works
 

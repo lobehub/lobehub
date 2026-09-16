@@ -14,11 +14,11 @@ LobeHub 使用全文搜索检索助手、话题、消息、文件、知识库、
 
 LobeHub 支持三种产品搜索后端：
 
-| 后端              | 适用场景                                                          | 额外运维工作                                                                                     |
-| --------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `pg_search`     | PostgreSQL 已支持 ParadeDB `pg_search` 扩展，希望部署结构尽量简单             | BM25 索引由 PostgreSQL 维护，不需要单独运行搜索同步任务                                                       |
-| `elasticsearch` | 希望搜索服务独立扩容，或者数据库服务即将停止支持 `pg_search`                          | 需要 Elasticsearch 服务（外部服务，或官方 Docker Compose 附带的可选单节点服务）、首次全量回填、PostgreSQL 变更采集和持续运行的增量消费任务 |
-| `pg_like`       | 数据库是无法安装 `pg_search` 的普通 PostgreSQL，且规模较小、不想再运维 Elasticsearch | 无；直接在现有数据表上做子串匹配，不需要扩展、索引或同步任务                                                             |
+| 后端              | 适用场景                                              | 额外运维工作                                                                                     |
+| --------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `pg_search`     | PostgreSQL 已支持 ParadeDB `pg_search` 扩展，希望部署结构尽量简单 | BM25 索引由 PostgreSQL 维护，不需要单独运行搜索同步任务                                                       |
+| `elasticsearch` | 数据量较大、需要 BM25 搜索质量，并且能维护独立搜索服务和常驻同步任务             | 需要 Elasticsearch 服务（外部服务，或官方 Docker Compose 附带的可选单节点服务）、首次全量回填、PostgreSQL 变更采集和持续运行的增量消费任务 |
+| `pg_like`       | 使用普通 PostgreSQL 的个人或小型自部署，不想再运维 Elasticsearch     | 无；直接在现有数据表上做子串匹配，不需要扩展、索引或同步任务                                                             |
 
 `FTS_SEARCH_PROVIDER` 为整个部署选择唯一的后端，可用值为 `pg_search`、`elasticsearch` 和
 `pg_like`，默认值是 `pg_search`。选中的后端不可用时，LobeHub 不会静默切换到另一个后端。
@@ -61,14 +61,9 @@ FTS_SEARCH_PROVIDER=pg_like
 
 ### 使用 Elasticsearch
 
-如果搜索需要独立容量、希望把搜索存储从事务 PostgreSQL 中拆开，或者数据库服务即将停止支持
-`pg_search`，可以选择 Elasticsearch。
+如果搜索需要独立容量、希望把搜索存储从事务 PostgreSQL 中拆开，并且能够持续运行同步任务，可以选择 Elasticsearch。个人或小型部署在数据库停止支持 `pg_search` 时，应优先考虑无需额外服务的 `pg_like`。
 
-Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`，并已通知受影响的现有客户：该扩展将在
-2026 年 9 月 21 日从 Neon 移除，此后依赖它的查询、索引和应用都会停止工作。已经在 Neon 上运行 LobeHub 的用户应在截止日期前完成
-[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。执行前请同时核对 Neon 的
-[最新 pg\_search 公告](https://neon.com/docs/extensions/pg_search)和
-[扩展列表](https://neon.com/docs/extensions/pg-extensions)。
+Neon 已于 2026 年 3 月 19 日停止为新项目提供 `pg_search`。现有项目的停用安排以 Neon 发给该项目的通知为准；收到停用通知的 LobeHub 用户应按 [Neon pg\_search 迁移指南](/zh/docs/self-hosting/advanced/neon-pg-search-migration)选择 `pg_like` 或 Elasticsearch。执行前请核对 Neon 的[最新 pg\_search 公告](https://neon.com/docs/extensions/pg_search)。
 
 Elasticsearch 有两种受支持的运行方式。两者使用同一套回填和增量同步命令、同一个
 `ES_INDEX_NAMESPACE`，区别只在于 LobeHub 如何连接集群。
@@ -98,8 +93,7 @@ Compose 安装）仍必须运行在能够安装 `pg_search` 的 PostgreSQL 镜�
 `paradedb/paradedb:latest-pg17`。回填完成后由 Elasticsearch 接管搜索流量；`pg_search`
 相关对象可以之后通过项目提供的清理命令移除。
 
-完整的演练、回填、切换和回滚流程，请参阅
-[从 pg\_search 迁移到 Elasticsearch](/zh/docs/self-hosting/advanced/elasticsearch-migration)。
+选择建议和迁移入口，请参阅 [Neon pg\_search 迁移指南](/zh/docs/self-hosting/advanced/neon-pg-search-migration)。
 
 ## Elasticsearch 如何同步数据
 

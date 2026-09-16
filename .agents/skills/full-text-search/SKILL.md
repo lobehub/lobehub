@@ -185,7 +185,7 @@ schema_fingerprint}`; the alias marks the live generation. Indexes created befor
   `unmanaged`, `in_sync`, `drift`, `upgrade_available`, `rollback_required`), promotion, and
   retirement; keep them free of Cloud-specific policy.
 
-Read `docs/self-hosting/advanced/elasticsearch-migration.mdx` or its Chinese counterpart before
+Read `docs/self-hosting/advanced/neon-pg-search-migration.mdx` or its Chinese counterpart before
 changing the operational sequence. When database rollout or index cost affects the design, also
 use the `db-migrations` skill and measure the relevant operation on the actual Dev database before
 adding manual or deferred release steps.
