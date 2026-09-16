@@ -39,6 +39,28 @@ interface Draft {
   selectionAnchor?: DocumentCommentSelectionAnchor;
 }
 
+const getDraftKey = (workspaceId: string | null | undefined, documentId: string, scope: string) =>
+  `document-comment-draft:${workspaceId ?? 'personal'}:${documentId}:${scope}`;
+
+/**
+ * The gutter composer only mounts once a pending anchor exists in the store,
+ * but the store doesn't survive a reload while the draft does — so nothing
+ * would ever re-publish it. Read the persisted anchor directly, outside the
+ * composer, to break that chicken-and-egg gate.
+ */
+export const readAnchoredDraftAnchor = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+): DocumentCommentSelectionAnchor | undefined => {
+  try {
+    const raw = window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'anchored'));
+    if (!raw) return undefined;
+    return (JSON.parse(raw) as Draft).selectionAnchor;
+  } catch {
+    return undefined;
+  }
+};
+
 /**
  * How a root composer relates to the selection being commented on.
  *
@@ -102,7 +124,7 @@ const Composer = memo<ComposerProps>(
     // The gutter composer and the document-level composer can be open at the
     // same time, so each keeps its own draft.
     const draftScope = parentCommentId ?? (isGutterComposer ? 'anchored' : 'root');
-    const draftKey = `document-comment-draft:${workspaceId ?? 'personal'}:${documentId}:${draftScope}`;
+    const draftKey = getDraftKey(workspaceId, documentId, draftScope);
     const [draft, setDraft] = useLocalStorageState<Draft>(draftKey, {
       clientId: nanoid(),
       content: '',

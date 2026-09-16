@@ -7,6 +7,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { usePageEditorStore } from '../store';
 import { DocumentCommentAnchorsProvider } from './anchor/context';
 import DocumentCommentHighlightStyle from './anchor/HighlightStyle';
+import { readAnchoredDraftAnchor } from './Composer';
 import type { DocumentCommentsState } from './useDocumentCommentsState';
 import { useDocumentCommentsState } from './useDocumentCommentsState';
 
@@ -30,10 +31,24 @@ const DocumentCommentsStateProvider = ({
   paneRef,
   panelAvailable,
 }: DocumentCommentsProviderProps) => {
+  const workspaceId = useActiveWorkspaceId();
   const commentsPanelOpen = usePageEditorStore((s) => s.commentsPanelOpen);
   const setCommentsPanelOpen = usePageEditorStore((s) => s.setCommentsPanelOpen);
   const gutterEnabled = panelAvailable && commentsPanelOpen;
   const state = useDocumentCommentsState({ documentId, gutterEnabled, paneRef, panelAvailable });
+
+  // The gutter composer only mounts once a pending anchor exists in the
+  // store, but the store doesn't survive a reload while the draft (in
+  // localStorage) does. Republish it here, in a provider that is always
+  // mounted for the document, so a reload mid-draft doesn't strand it.
+  const pendingCommentAnchor = usePageEditorStore((s) => s.pendingCommentAnchor);
+  const setPendingCommentAnchor = usePageEditorStore((s) => s.setPendingCommentAnchor);
+  useEffect(() => {
+    if (pendingCommentAnchor?.documentId === documentId) return;
+    const anchor = readAnchoredDraftAnchor(workspaceId, documentId);
+    if (anchor) setPendingCommentAnchor({ anchor, documentId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]);
 
   // A selection being commented on, or a run picked in the body, is answered
   // in the comments panel: open it on demand. Keyed on tick counters, not the
