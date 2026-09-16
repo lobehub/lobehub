@@ -20,6 +20,19 @@ import { AcceptanceDrawer } from '../AcceptanceDrawer';
  */
 export const markdownTextEvidenceTypes = new Set(['markdown', 'text']);
 
+/**
+ * Which of those two render as prose, and which stay verbatim.
+ *
+ * Only a document that says it is markdown gets markdown rendering. A `text`
+ * artifact is usually captured command output, where `###`, `-` and `*` are
+ * literal characters the reviewer is meant to read: rendering it as markdown
+ * turned transcript sections into headings, argument lists into bullets, and
+ * reflowed the lines so column alignment — often the point of the capture —
+ * was lost. Everything that is not explicitly markdown is shown verbatim.
+ */
+export const rendersAsMarkdown = (evidence: { fileName?: string | null; type: string }): boolean =>
+  evidence.type === 'markdown' || /\.(?:md|markdown)$/i.test(evidence.fileName ?? '');
+
 export const filenameFromUrl = (url: string): string => {
   try {
     return new URL(url).pathname.split('/').pop() || 'document';
@@ -239,55 +252,69 @@ export const resolveMarkdownEvidenceFold = (content: string, authoredTitle?: str
  * card of space showing the least informative part of the document — and read
  * as noise. Need it → expand; don't → one quiet line.
  */
-export const CollapsibleMarkdownEvidence = memo<{ children: string; title?: string }>(
-  ({ children, title }) => {
-    const { t } = useTranslation('verify');
-    const [expanded, setExpanded] = useState(false);
-    const { fold, foldTitle } = useMemo(
-      () => resolveMarkdownEvidenceFold(children, title),
-      [children, title],
-    );
+export const CollapsibleMarkdownEvidence = memo<{
+  children: string;
+  fileName?: string | null;
+  /** False renders the document verbatim — see `rendersAsMarkdown`. */
+  markdown?: boolean;
+  title?: string;
+}>(({ children, fileName, markdown = true, title }) => {
+  const { t } = useTranslation('verify');
+  const [expanded, setExpanded] = useState(false);
+  const { fold, foldTitle } = useMemo(
+    () => resolveMarkdownEvidenceFold(children, title),
+    [children, title],
+  );
+  const body = markdown ? (
+    <Markdown fontSize={13} headerMultiple={0.1} variant={'chat'}>
+      {children}
+    </Markdown>
+  ) : (
+    <Highlighter
+      wrap
+      language={getLanguageFromFilename(fileName)}
+      showLanguage={false}
+      variant={'borderless'}
+    >
+      {children}
+    </Highlighter>
+  );
 
-    if (!fold) {
-      return (
-        <Markdown fontSize={13} variant={'chat'}>
-          {children}
-        </Markdown>
-      );
-    }
-
-    return (
-      <Flexbox className={styles.foldCard}>
-        <button
-          aria-expanded={expanded}
-          className={styles.foldHeader}
-          title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
-          type={'button'}
-          onClick={() => setExpanded(!expanded)}
-        >
-          <Icon
-            className={cx(styles.foldChevron, expanded && styles.foldChevronOpen)}
-            icon={ChevronRight}
-            size={14}
-          />
-          <span className={styles.fileCardIcon}>
-            <Icon icon={FileText} size={13} />
-          </span>
-          <span data-fold-title className={styles.foldTitle}>
-            {foldTitle}
-          </span>
-        </button>
-        {expanded && (
-          <div className={styles.foldBody}>
-            <Markdown fontSize={13} headerMultiple={0.1} variant={'chat'}>
-              {children}
-            </Markdown>
-          </div>
-        )}
-      </Flexbox>
+  if (!fold) {
+    return markdown ? (
+      <Markdown fontSize={13} variant={'chat'}>
+        {children}
+      </Markdown>
+    ) : (
+      body
     );
-  },
-);
+  }
+
+  return (
+    <Flexbox className={styles.foldCard}>
+      <button
+        aria-expanded={expanded}
+        className={styles.foldHeader}
+        title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
+        type={'button'}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Icon
+          className={cx(styles.foldChevron, expanded && styles.foldChevronOpen)}
+          icon={ChevronRight}
+          size={14}
+        />
+        <span className={styles.fileCardIcon}>
+          <Icon icon={FileText} size={13} />
+        </span>
+        <span data-fold-title className={styles.foldTitle}>
+          {foldTitle}
+        </span>
+      </button>
+      {expanded && <div className={styles.foldBody}>{body}</div>}
+    </Flexbox>
+  );
+});
 
 CollapsibleMarkdownEvidence.displayName = 'CollapsibleMarkdownEvidence';
 

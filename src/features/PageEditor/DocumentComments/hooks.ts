@@ -1,7 +1,9 @@
 import type {
+  DocumentCommentAnchorList,
   DocumentCommentDetail,
   DocumentCommentItem,
   DocumentCommentReplyPage,
+  DocumentCommentSelectionAnchor,
   DocumentCommentSummary,
   DocumentCommentThreadPage,
 } from '@lobechat/types';
@@ -91,6 +93,7 @@ export const useOptimisticDocumentComment = () => {
       editorData,
       parentCommentId,
       replyTo,
+      selectionAnchor,
     }: {
       clientId: string;
       content: string;
@@ -98,6 +101,7 @@ export const useOptimisticDocumentComment = () => {
       editorData: DocumentCommentItem['editorData'];
       parentCommentId?: string;
       replyTo?: DocumentCommentItem['replyTo'];
+      selectionAnchor?: DocumentCommentSelectionAnchor;
     }) => {
       if (!workspaceId) throw new Error('Workspace is required for document comments');
 
@@ -115,11 +119,26 @@ export const useOptimisticDocumentComment = () => {
         editorData,
         parentCommentId,
         replyTo,
+        selectionAnchor,
         userId: user?.id ?? null,
         workspaceId,
       });
     },
     [user?.avatar, user?.fullName, user?.id, user?.username, workspaceId],
+  );
+};
+
+/**
+ * Every anchored root of the document, independent of how many thread pages
+ * the list has loaded. Body highlights are painted from this so a
+ * newer anchored comment is discoverable from the document right after a
+ * reload, not only once the reader has paged the list far enough to reach it.
+ */
+export const useDocumentCommentAnchorList = (documentId?: string | null) => {
+  const workspaceId = useActiveWorkspaceId();
+  return useClientDataSWR<DocumentCommentAnchorList>(
+    documentId && workspaceId ? documentCommentKeys.anchors(workspaceId, documentId) : null,
+    () => documentCommentService.listAnchors(documentId!),
   );
 };
 

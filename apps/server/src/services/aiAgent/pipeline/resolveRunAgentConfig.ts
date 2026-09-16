@@ -1,20 +1,8 @@
-import {
-  BUILTIN_AGENT_SLUGS,
-  getAgentRuntimeConfig,
-  isCollaborativeBuiltinAgentRow,
-} from '@lobechat/builtin-agents';
-import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
-import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { resolveSubAgentChatConfig } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { AgentModelOverride, LobeAgentAgencyConfig } from '@lobechat/types';
-import {
-  getActivePluginIds,
-  getDisabledPluginIds,
-  resolveAgentAgencyConfig,
-  resolveAgentModelConfig,
-} from '@lobechat/types';
+import { type AgentConfigSnapshot, resolveAgentConfig } from '@lobechat/mecha';
+import type { AgentModelOverride, LobeAgentAgencyConfig, MessageMapScope } from '@lobechat/types';
+import { getDisabledPluginIds, resolveAgentAgencyConfig } from '@lobechat/types';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
@@ -41,6 +29,12 @@ export interface ResolveRunAgentConfigInput {
   instructions?: string;
   modelOverride?: string;
   providerOverride?: string;
+  /**
+   * The share visitor actually driving a shared-agent run. The service is
+   * constructed as the share owner, so caller-scoped facts (the reply
+   * language appended to the system role) must be read for this user instead.
+   */
+  shareVisitorUserId?: string;
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   toolModeOverride?: InternalExecAgentParams['toolModeOverride'];
 }
@@ -68,16 +62,98 @@ export interface ResolvedRunAgentConfig {
   resolvedAgentId: string;
 }
 
+interface WorkspaceMemberOverrides {
+  device?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
+  mode?: boolean;
+  model?: AgentModelOverride;
+}
+
+/**
+ * This caller's workspace-scoped execution / model / mode preferences for the
+ * agent. They live in the dedicated per-(workspace, user) settings row and
+ * never mutate the shared Agent config. Losing them is non-fatal: execution
+ * falls back to the shared row.
+ */
+const loadWorkspaceMemberOverrides = async (
+  deps: ResolveRunAgentConfigDeps,
+  agentId: string,
+): Promise<WorkspaceMemberOverrides> => {
+  if (!deps.workspaceId) return {};
+  try {
+    const preference = await new WorkspaceUserSettingsModel(
+      deps.db,
+      deps.userId,
+      deps.workspaceId,
+    ).getPreference();
+    return {
+      device: preference.agentDeviceOverrides?.[agentId],
+      mode: preference.agentModeOverrides?.[agentId],
+      model: preference.agentModelOverrides?.[agentId],
+    };
+  } catch (error) {
+    log('execAgent: failed to load caller workspace_user_settings preferences: %O', error);
+    return {};
+  }
+};
+
+/**
+ * Author-or-admin, NOT the configuration flag: this value decides whether the
+ * run ignores the member's own model / device / mode overrides, and a
+ * collaborative builtin must keep honoring them — the client runtime resolves
+ * the same distinction from authorship. Permission lookup failure is
+ * fail-closed: applying member policy is safer than accidentally granting
+ * shared-config semantics.
+ */
+const resolveCanManage = async (
+  deps: ResolveRunAgentConfigDeps,
+  agentConfig: AgentConfigWithId,
+  agentWorkspaceId: string | undefined,
+  isPublicWorkspaceAgent: boolean,
+): Promise<boolean> => {
+  if (agentConfig.userId === deps.userId) return true;
+  if (!isPublicWorkspaceAgent || !agentWorkspaceId) return false;
+  try {
+    return await isResourceAuthorOrAdmin({
+      db: deps.db,
+      meta: {
+        userId: agentConfig.userId,
+        visibility: agentConfig.visibility ?? 'public',
+        workspaceId: agentWorkspaceId,
+      },
+      resourceType: 'agent',
+      userId: deps.userId,
+      workspaceId: agentWorkspaceId,
+    });
+  } catch (error) {
+    log('execAgent: failed to resolve Agent management access: %O', error);
+    return false;
+  }
+};
+
+const loadUserLocale = async (
+  deps: ResolveRunAgentConfigDeps,
+  userId: string,
+): Promise<string | undefined> => {
+  try {
+    const userInfo = await UserModel.getInfoForAIGeneration(deps.db, userId);
+    return userInfo.responseLanguage;
+  } catch (error) {
+    log('execAgent: failed to load user locale for agent config resolution: %O', error);
+    return undefined;
+  }
+};
+
 /**
  * Stages 1–2.5 of {@link AiAgentService.execAgent}: resolve the effective agent
  * configuration for this run.
  *
- * Covers: config fetch (id or slug), per-(workspace, user) member overrides
- * (device / model / mode), author-or-admin management access, agency-config
- * resolution, callSubAgent chatConfig patches, the IM `/mode` override, the
- * persistence-attribution agent ids, final model resolution, builtin-agent
- * runtime merge, page/task scope injection, sub-agent tool stripping, and the
- * per-call `instructions` systemRole append.
+ * Gathers what the shared rules need from the server's own sources (the agent
+ * row, the caller's workspace member overrides, author-or-admin access, the
+ * user's reply language), runs `resolveAgentConfig` from `@lobechat/mecha` —
+ * the same rules the client runtime applies — and then layers the per-call
+ * intents only a run knows about: the member device override, callSubAgent
+ * chatConfig patches, the IM `/mode` override, the persistence-attribution
+ * agent ids and the per-call `instructions` systemRole append.
  */
 export const resolveRunAgentConfig = async (
   deps: ResolveRunAgentConfigDeps,
@@ -90,86 +166,81 @@ export const resolveRunAgentConfig = async (
     instructions,
     modelOverride,
     providerOverride,
+    shareVisitorUserId,
     throwIfExecutionAborted,
     toolModeOverride,
   } = input;
 
-  // 1. Get agent configuration with default config merged (supports both id and slug)
-  const agentConfig = await deps.resolveAgentConfigOrThrow(identifier);
+  // --- gather the snapshot ---
+  const row = await deps.resolveAgentConfigOrThrow(identifier);
+  const resolvedAgentId = row.id;
+  const agentWorkspaceId = row.workspaceId ?? deps.workspaceId;
+  const isPublicWorkspaceAgent = !!agentWorkspaceId && row.visibility !== 'private';
 
-  // Use actual agent ID from config for subsequent operations
-  const resolvedAgentId = agentConfig.id;
-  let memberDeviceOverride:
-    Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | undefined;
-  let memberModelOverride: AgentModelOverride | undefined;
-  let memberModeOverride: boolean | undefined;
+  const [overrides, canManageAgent, userLocale] = await Promise.all([
+    loadWorkspaceMemberOverrides(deps, resolvedAgentId),
+    resolveCanManage(deps, row, agentWorkspaceId, isPublicWorkspaceAgent),
+    // A share visitor replies in their own language, not the owner's.
+    loadUserLocale(deps, shareVisitorUserId ?? deps.userId),
+  ]);
 
-  // Layer this caller's workspace-scoped execution and model preferences over
-  // the shared Agent row. Device selection keeps its existing fallback rules;
-  // public Workspace Agents allow member choice by default unless the author
-  // explicitly fixes the model. Both overrides live in the dedicated per-
-  // (workspace, user) settings row and never mutate shared Agent config.
-  if (deps.workspaceId) {
-    try {
-      const workspaceUserSettings = new WorkspaceUserSettingsModel(
-        deps.db,
-        deps.userId,
-        deps.workspaceId,
-      );
-      const preference = await workspaceUserSettings.getPreference();
-      memberDeviceOverride = preference.agentDeviceOverrides?.[resolvedAgentId];
-      memberModelOverride = preference.agentModelOverrides?.[resolvedAgentId];
-      memberModeOverride = preference.agentModeOverrides?.[resolvedAgentId];
-    } catch (error) {
-      // Losing preferences is non-fatal: execution falls back to the shared
-      // Agent row.
-      log('execAgent: failed to load caller workspace_user_settings preferences: %O', error);
-    }
-  }
+  // The caller's device preference layers onto the shared row BEFORE the
+  // shared rules run, so a builtin runtime that pins its own execution target
+  // (the onboarding agents set `executionTarget: 'none'`) still wins over a
+  // saved member override when its `agencyConfig` is merged on top.
+  row.agencyConfig = resolveAgentAgencyConfig(row.agencyConfig, overrides.device, {
+    canManage: canManageAgent,
+    visibility: row.visibility,
+    workspaceId: agentWorkspaceId,
+  });
 
-  let canManageAgent = agentConfig.userId === deps.userId;
-  const agentWorkspaceId = agentConfig.workspaceId ?? deps.workspaceId;
-  const isPublicWorkspaceAgent = !!agentWorkspaceId && agentConfig.visibility !== 'private';
-  if (isPublicWorkspaceAgent && !canManageAgent) {
-    try {
-      // Author-or-admin, NOT the configuration flag: this value decides whether
-      // the run ignores the member's own model / device / mode overrides, and a
-      // collaborative builtin must keep honoring them — the client runtime
-      // (`agentConfigResolver`) resolves the same distinction from authorship.
-      canManageAgent = await isResourceAuthorOrAdmin({
-        db: deps.db,
-        meta: {
-          userId: agentConfig.userId,
-          visibility: agentConfig.visibility ?? 'public',
-          workspaceId: agentWorkspaceId,
-        },
-        resourceType: 'agent',
-        userId: deps.userId,
-        workspaceId: agentWorkspaceId,
-      });
-    } catch (error) {
-      // Permission lookup failure is fail-closed: applying member policy is
-      // safer than accidentally granting shared-config semantics.
-      log('execAgent: failed to resolve Agent management access: %O', error);
-    }
-  }
-
-  agentConfig.agencyConfig = resolveAgentAgencyConfig(
-    agentConfig.agencyConfig,
-    memberDeviceOverride,
-    {
-      canManage: canManageAgent,
-      visibility: agentConfig.visibility,
-      workspaceId: agentWorkspaceId,
+  const snapshot: AgentConfigSnapshot = {
+    agent: {
+      name: row.name ?? null,
+      slug: row.slug,
+      title: row.title ?? null,
+      userId: row.userId,
+      virtual: (row as { virtual?: boolean | null }).virtual,
+      visibility: row.visibility,
+      workspaceId: agentWorkspaceId ?? null,
     },
-  );
-  if (!canManageAgent && memberModeOverride !== undefined) {
-    agentConfig.chatConfig = {
-      ...agentConfig.chatConfig,
-      enableAgentMode: memberModeOverride,
-    };
-  }
+    agentConfig: row,
+    canManage: canManageAgent,
+    chatConfig: row.chatConfig,
+    memberModeOverride: overrides.mode,
+    memberModelOverride: overrides.model,
+    slug: row.slug ?? undefined,
+    userLocale,
+  };
 
+  // --- shared rules ---
+  const resolved = resolveAgentConfig(
+    {
+      agentId: resolvedAgentId,
+      groupId: appContext?.groupId ?? undefined,
+      isSubAgent: appContext?.isSubAgent,
+      modelOverride: {
+        ...(modelOverride ? { model: modelOverride } : {}),
+        ...(providerOverride ? { provider: providerOverride } : {}),
+      },
+      scope: (appContext?.scope ?? undefined) as MessageMapScope | undefined,
+    },
+    snapshot,
+  );
+
+  // Capture disabled identifiers off the row before the resolved config
+  // collapses plugins to pinned ids: they later filter the auto-discovery
+  // candidate pool so a disabled plugin can't be rediscovered.
+  const disabledPluginIds = getDisabledPluginIds(row.plugins);
+
+  // One mutable object from here on — later stages append to `systemRole` and
+  // `createOperation` must see those writes.
+  const agentConfig: AgentConfigWithId = Object.assign(row, resolved.agentConfig, {
+    chatConfig: resolved.chatConfig,
+    plugins: resolved.plugins,
+  });
+
+  // --- per-call intents the shared rules do not know ---
   // callSubAgent thinking / reasoning-effort overrides. A virtual sub-agent
   // executes the same agent row, so `agentConfig.chatConfig` here IS the
   // parent's chatConfig — merging the `agencyConfig.subagent.chatConfig`
@@ -217,33 +288,6 @@ export const resolveRunAgentConfig = async (
   const conversationAgentId = appContext?.conversationAgentId ?? persistAgentId;
   const assistantAgentId = appContext?.conversationAgentId ? resolvedAgentId : persistAgentId;
 
-  // Resolve the final model once, keeping per-call task / sub-agent overrides
-  // above the caller's personal workspace choice and the shared Agent default.
-  // The callSubAgent spawn site resolves the sub-agent default and passes it
-  // explicitly, so this path never has to special-case sub-agents.
-  const effectiveModel = resolveAgentModelConfig(
-    {
-      ...agentConfig,
-      canManage: canManageAgent,
-      // A collaborative builtin is Workspace infrastructure with no author and
-      // no config page, so its model is personal for every caller — being its
-      // creator or an admin must not pin the whole Workspace to one model.
-      // Device / mode overrides keep the ordinary author rule above.
-      personalModelSelection: isCollaborativeBuiltinAgentRow({
-        ...agentConfig,
-        workspaceId: agentWorkspaceId,
-      }),
-      workspaceId: agentWorkspaceId,
-    },
-    memberModelOverride,
-    {
-      ...(modelOverride ? { model: modelOverride } : {}),
-      ...(providerOverride ? { provider: providerOverride } : {}),
-    },
-  );
-  agentConfig.model = effectiveModel.model;
-  agentConfig.provider = effectiveModel.provider;
-
   log(
     'execAgent: got agent config for %s (id: %s), model: %s, provider: %s',
     identifier,
@@ -251,115 +295,6 @@ export const resolveRunAgentConfig = async (
     agentConfig.model,
     agentConfig.provider,
   );
-
-  // Capture disabled identifiers before collapsing to pinned-only ids below
-  // — everything from here on (builtin runtime merge, page/task/sub-agent
-  // injection, the `agentPlugins` build further down) expects a plain
-  // pinned-id string[], matching pre-tri-state behavior. Operating on a
-  // local `string[]` (rather than repeatedly re-reading/writing
-  // `agentConfig.plugins`, whose declared type is the wider
-  // `AgentPluginEntry[]`) keeps this whole block free of per-line casts;
-  // `agentConfig.plugins` is written back once, at the end.
-  // `disabledPluginIds` is consumed later to filter the auto-discovery
-  // candidate pool (installedPlugins) so disabled plugins can't be
-  // rediscovered/activated by the auto activator.
-  const disabledPluginIds = getDisabledPluginIds(agentConfig.plugins);
-  let activePluginIds: string[] = getActivePluginIds(agentConfig.plugins);
-
-  // 2. Merge builtin agent runtime config (systemRole, plugins)
-  // The DB only stores persist config. Runtime config (e.g. inbox systemRole) is generated dynamically.
-  const agentSlug = agentConfig.slug;
-  const builtinSlugs = Object.values(BUILTIN_AGENT_SLUGS) as string[];
-  if (agentSlug && builtinSlugs.includes(agentSlug)) {
-    let userLocale: string | undefined;
-    try {
-      const userInfo = await UserModel.getInfoForAIGeneration(deps.db, deps.userId);
-      userLocale = userInfo.responseLanguage;
-    } catch (error) {
-      log('execAgent: failed to load user locale for builtin runtime config: %O', error);
-    }
-
-    const runtimeConfig = getAgentRuntimeConfig(agentSlug, {
-      // The renameable default assistant must introduce itself by the name the
-      // user gave it, not the hardcoded product default.
-      agentName: agentConfig.name ?? undefined,
-      agentTitle: agentConfig.title ?? undefined,
-      model: agentConfig.model,
-      plugins: activePluginIds,
-      userLocale,
-    });
-    if (runtimeConfig) {
-      // Runtime systemRole takes effect only if DB has no user-customized systemRole
-      if (!agentConfig.systemRole && runtimeConfig.systemRole) {
-        agentConfig.systemRole = runtimeConfig.systemRole;
-        log('execAgent: merged builtin agent runtime systemRole for slug=%s', agentSlug);
-      }
-      // Runtime plugins merged (runtime plugins take priority if provided)
-      if (runtimeConfig.plugins && runtimeConfig.plugins.length > 0) {
-        activePluginIds = runtimeConfig.plugins;
-        log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
-      }
-      if (runtimeConfig.agencyConfig) {
-        agentConfig.agencyConfig = {
-          ...agentConfig.agencyConfig,
-          ...runtimeConfig.agencyConfig,
-        };
-        log('execAgent: merged builtin agent runtime agencyConfig for slug=%s', agentSlug);
-      }
-    }
-  }
-
-  if (appContext?.scope !== 'page') {
-    activePluginIds = activePluginIds.filter((id) => id !== PageAgentIdentifier);
-  }
-
-  if (appContext?.scope === 'page' && agentSlug !== BUILTIN_AGENT_SLUGS.pageAgent) {
-    const pageAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.pageAgent, {
-      model: agentConfig.model,
-      plugins: activePluginIds,
-    });
-    const pageAgentSystemRole = pageAgentRuntime?.systemRole || '';
-
-    if (pageAgentSystemRole) {
-      agentConfig.systemRole = agentConfig.systemRole
-        ? `${agentConfig.systemRole}\n\n${pageAgentSystemRole}`
-        : pageAgentSystemRole;
-    }
-
-    activePluginIds = activePluginIds.includes(PageAgentIdentifier)
-      ? activePluginIds
-      : [PageAgentIdentifier, ...activePluginIds];
-    agentConfig.chatConfig = {
-      ...agentConfig.chatConfig,
-      enableHistoryCount: false,
-    };
-    log('execAgent: injected page-agent runtime for page scope');
-  }
-
-  if (appContext?.scope === 'task' && agentSlug !== BUILTIN_AGENT_SLUGS.taskAgent) {
-    const taskAgentRuntime = getAgentRuntimeConfig(BUILTIN_AGENT_SLUGS.taskAgent, {
-      model: agentConfig.model,
-      plugins: activePluginIds,
-    });
-    const taskAgentSystemRole = taskAgentRuntime?.systemRole || '';
-
-    if (taskAgentSystemRole) {
-      agentConfig.systemRole = agentConfig.systemRole
-        ? `${agentConfig.systemRole}\n\n${taskAgentSystemRole}`
-        : taskAgentSystemRole;
-    }
-
-    activePluginIds = activePluginIds.includes(TaskIdentifier)
-      ? activePluginIds
-      : [TaskIdentifier, ...activePluginIds];
-    log('execAgent: injected task-agent runtime for task scope');
-  }
-
-  if (appContext?.isSubAgent) {
-    activePluginIds = activePluginIds.filter((id) => id !== LobeAgentIdentifier);
-  }
-
-  agentConfig.plugins = activePluginIds;
 
   await throwIfExecutionAborted('agent configuration');
 
@@ -373,13 +308,13 @@ export const resolveRunAgentConfig = async (
 
   return {
     agentConfig,
-    agentSlug,
+    agentSlug: row.slug,
     assistantAgentId,
     canManageAgent,
     conversationAgentId,
     disabledPluginIds,
     isPublicWorkspaceAgent,
-    memberDeviceOverride,
+    memberDeviceOverride: overrides.device,
     persistAgentId,
     resolvedAgentId,
   };

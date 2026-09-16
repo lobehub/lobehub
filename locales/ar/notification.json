@@ -44,6 +44,8 @@
   "document_comment_mentioned_title": "تم الإشارة إليك في تعليق على مستند",
   "document_liked": "{{actorLabel}} أعجب بوثيقتك \"{{documentTitle}}\".",
   "document_liked_title": "أحدهم أعجب بوثيقتك",
+  "document_mentioned": "{{actorLabel}} ذكرَك في \"{{documentTitle}}\".",
+  "document_mentioned_title": "تم ذكرك في مستند",
   "email.footer.contactSupport": "اتصل بالدعم",
   "email.footer.joinDiscord": "انضم إلى Discord",
   "email.footer.manage": "إدارة الإشعارات",

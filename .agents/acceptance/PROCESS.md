@@ -93,7 +93,11 @@ requires abstracting the feedback first.
 ### Step 1 — Prepare the plan
 
 Skip to Step 2 if this is a re-run after a fix, the plan is already agreed, or
-the user gave exact commands.
+the user gave exact commands. Skip straight to Step 5 when the delivery was
+already verified on the real product earlier in this session: the run's own
+observations, logs, command output, and captures are the evidence, and the
+round is written from them and ingested without re-execution or a checker stage
+(SKILL.md → Decide whether to execute).
 
 Draft the surface, cases, expected evidence, assumptions, and deliverable — but
 do not send it for review yet: Step 2 must establish real environment state

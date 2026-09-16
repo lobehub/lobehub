@@ -1,6 +1,23 @@
 import { createStaticStyles, cssVar } from 'antd-style';
 
 export const styles = createStaticStyles(({ css }) => ({
+  /**
+   * Regions whose evidence a later round replaced. Kept quiet on purpose: it is
+   * a footnote to the check, not a second checklist — full-strength cards here
+   * competed with the evidence the reader actually came for.
+   */
+  staleRegions: css`
+    margin-block-start: 4px;
+    padding-block: 10px;
+    padding-inline-start: 12px;
+    border-inline-start: 2px solid ${cssVar.colorBorderSecondary};
+
+    opacity: 0.75;
+
+    &:hover {
+      opacity: 1;
+    }
+  `,
   chip: css`
     padding-inline: 6px;
     border-radius: 4px;

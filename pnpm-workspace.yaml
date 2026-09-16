@@ -1,4 +1,22 @@
 lockfile: false
+resolutionMode: highest
+dedupePeerDependents: true
+ignoreWorkspaceRootCheck: true
+enablePrePostScripts: true
+
+publicHoistPattern:
+  - '*@umijs/lint*'
+  - '*changelog*'
+  - '*commitlint*'
+  - '*eslint*'
+  - '*postcss*'
+  - '*prettier*'
+  - '*remark*'
+  - '*semantic-release*'
+  - '*stylelint*'
+  - '@auth/core'
+  - 'pdfjs-dist'
+
 packages:
   - packages/**
   - .
@@ -10,20 +28,48 @@ packages:
   - apps/workbench
 
 minimumReleaseAgeExclude:
-  - '@lobehub/ui@5.20.2'
+  - '@lobehub/*'
 
-onlyBuiltDependencies:
-  - '@google/genai'
-  - '@lobehub/editor'
-  - '@vercel/speed-insights'
+# Build scripts run one at a time. Several peer-variant copies of
+# @lobehub/editor resolve in this workspace and every copy's postinstall
+# patches the SAME hoisted `lexical` files; run in parallel they race on those
+# writes and CI fails with "Patch context mismatch" (LOBE-13963). Only the
+# handful of packages allowed below build, so serializing costs seconds.
+childConcurrency: 1
+
+allowBuilds:
+  '@google/genai': true
+  '@lobehub/editor': true
+  '@sentry/cli': true
+  '@vercel/speed-insights': true
+  core-js: false
+  es5-ext: false
+  esbuild: false
+  ffmpeg-static: true
+  protobufjs: false
+  sharp: false
+  unrs-resolver: false
+  workerd: true
 
 overrides:
-  jose: ^6.1.3
-  stylelint-config-clean-order: 7.0.0
-  pdfjs-dist: 5.4.530
-  react: 19.2.4
-  react-dom: 19.2.4
+  '@ant-design/icons': 6.3.2
   '@react-pdf/image': 3.0.4
+  '@types/react': 19.2.13
+  '@vitest/coverage-v8': 5.0.0
+  antd: 6.3.5
+  baseline-browser-mapping: 2.10.31
+  drizzle-orm: ^0.45.2
+  fast-xml-parser: 5.4.2
+  lexical: 0.42.0
+  node-gyp: ^12.4.0
+  pdfjs-dist: 5.4.530
+  react: 19.2.7
+  react-dom: 19.2.7
+  's3rver>fast-xml-parser': 3.21.1
+  stylelint-config-clean-order: 7.0.0
+  typescript: 6.0.3
+  vitest: 5.0.0
+  'zod@^4': 4.5.4
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch

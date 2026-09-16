@@ -22,6 +22,13 @@ describe('forward branch labels', () => {
     expect(label.x + label.maxWidth / 2).toBeLessThan(branch.targetX);
   });
 
+  it('spends the gutter on the caption but keeps it clear of the cards beside it', () => {
+    expect(getFlowEdgeLabelLayout({ ...branch, targetX: 508 }).maxWidth).toBe(200);
+    const tight = getFlowEdgeLabelLayout({ ...branch, targetX: 468 });
+    expect(tight.maxWidth).toBe(160);
+    expect(tight.x - tight.maxWidth / 2 - branch.sourceX).toBe(24);
+  });
+
   it('separates captions for branches with different destinations', () => {
     const first = getFlowEdgeLabelLayout(branch);
     const second = getFlowEdgeLabelLayout({ ...branch, targetY: 420 });
@@ -36,7 +43,7 @@ describe('forward branch labels', () => {
     expect(getFlowEdgeLabelLayout({ ...branch, ...overrides })).toEqual({
       x: branch.labelX,
       y: branch.labelY,
-      maxWidth: 180,
+      maxWidth: 200,
     });
   });
 });

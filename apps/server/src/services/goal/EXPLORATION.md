@@ -11,14 +11,46 @@ lh goal create 'Compare three candidate explanations' \
 ```
 
 The first Task produces a baseline. Its normal Task settlement creates a finding
-and schedules a Goal advance. The Goal model then chooses one of two actions:
+and schedules a Goal advance. The Goal model then chooses one of three actions:
 
 - `expand`: choose a resolved historical experiment container and create one experiment.
   `child --derived_from--> parent` records provenance; `depends_on` continues to
   mean execution dependency. The child receives the selected parent's findings
   and pins the parent's produced Work version references as inputs.
+- `revise`: rerun one experiment with a corrected protocol when it measured the
+  wrong thing — a wrong output shape, metric, threshold or evaluation procedure.
+  Without it the only move available is a sibling that inherits the same flawed
+  instrument, which reproduces the flaw rather than answering the question.
 - `verify`: request the existing independent terminal acceptance Task. The
   planner cannot declare the Goal achieved.
+
+These three are the whole vocabulary, and that bounds what exploration can say: it
+can move within the graph, but it cannot express "this goal is mis-framed", "the
+judge was wrong" or "stop and ask". Those belong to an optional main Agent, which
+`config.manager` adds as a second layer rather than a replacement — exploration
+keeps the ordinary path and the main Agent is handed the problem at the moment the
+coordinator would otherwise stop the Goal on a person. See `manager.README.md`;
+the handover point is `gateOrTakeOver`.
+
+A correction is a Task inside the experiment it corrects, not a new container, so
+it does not consume an experiment slot: fixing an instrument should not cost an
+exploration budget. `MAX_PROTOCOL_REVISIONS` bounds them per experiment, and
+`revisionsRemaining` reports the balance in the planner input so an exhausted
+allowance is visible before the choice is made rather than refused after it.
+Corrections carry a dedicated `revises` edge rather than `derived_from`: that kind
+is generic provenance, is writable through the public `addEdge` mutation, and
+already appears on hand-authored tasks, so reusing it would reinterpret unrelated
+provenance as a correction. `revises` is written only by the coordinator and is
+deliberately absent from the public vocabulary. Rolling this release back leaves
+any queued correction dispatchable but weaker: the previous coordinator resolves
+provenance through the containing experiment, so the rerun carries that
+experiment's branch parent instead of the experiment it corrects, or no history
+when the container is a root. The corrected protocol itself is in the Task
+description and survives, so the degradation is missing context rather than a
+wrong instruction; drain queued corrections before rolling back if that matters.
+An experiment reads as unresolved while a correction runs,
+so corrections are serial. A seed Task with no experiment container cannot hold
+one and reports no allowance; those goals expand first.
 
 Retries remain attempts of the same Task, with their existing TaskTopics. They
 do not create new experiment nodes. A bad experimental result may be useful

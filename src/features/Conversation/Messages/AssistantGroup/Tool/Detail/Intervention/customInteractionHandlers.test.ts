@@ -105,9 +105,12 @@ describe('customInteractionHandlers', () => {
     });
   });
 
-  it.each(['droid', 'qoder'])('routes %s tools through the heterogeneous custom flow', (type) => {
-    expect(isCustomInteractionIdentifier(type, 'askUserQuestion')).toBe(true);
-  });
+  it.each(['devin', 'droid', 'qoder'])(
+    'routes %s tools through the heterogeneous custom flow',
+    (type) => {
+      expect(isCustomInteractionIdentifier(type, 'askUserQuestion')).toBe(true);
+    },
+  );
 
   it('persists skipped marketplace picks from the original tool arguments', async () => {
     await recordCustomInteractionResolution(

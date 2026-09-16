@@ -1,22 +1,23 @@
 'use client';
 
-import { Empty, Flexbox, Icon, type IconProps, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Skeleton, toast } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, Skeleton, toast } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   BoxesIcon,
-  ChevronDownIcon,
   ClipboardListIcon,
+  FilesIcon,
   FileTextIcon,
   GitBranchIcon,
   GitForkIcon,
   LaptopIcon,
   RefreshCwIcon,
+  TriangleAlertIcon,
 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
@@ -26,7 +27,6 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
-import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
@@ -46,186 +46,68 @@ import {
 
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
+import OverviewHeader from './OverviewHeader';
+import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     overflow-y: auto;
-    padding-block: 4px 10px;
-    padding-inline: 8px;
   `,
-  changeAdditions: css`
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorSuccess};
+  emptyWorkspace: css`
+    padding-block: 28px 30px;
+    padding-inline: 20px;
   `,
-  changeDeletions: css`
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorError};
-  `,
-  divider: css`
-    flex-shrink: 0;
-
-    height: 1px;
-    margin-block: 6px;
-    margin-inline: 8px;
-
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  icon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  row: css`
-    cursor: pointer;
-
-    flex-shrink: 0;
-
-    min-height: 32px;
-    padding-block: 5px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    transition: background-color 0.12s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowStatic: css`
-    cursor: default;
-
-    &:hover {
-      background: transparent;
-    }
-  `,
-  rowTrailing: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 6px;
+  pill: css`
+    display: inline-flex;
+    gap: 4px;
     align-items: center;
 
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowValue: css`
-    overflow: hidden;
-    flex: 1;
+    height: 20px;
+    padding-inline: 7px;
+    border-radius: 6px;
 
-    min-width: 0;
-
-    font-size: 13px;
+    font-size: 11.5px;
+    font-weight: 500;
     line-height: 20px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
-  rowValueDanger: css`
-    color: ${cssVar.colorError};
+  section: css`
+    flex-shrink: 0;
+    padding-block: 8px;
+    padding-inline: 8px;
+
+    & + & {
+      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    }
   `,
   sectionHeader: css`
-    padding-block: 4px 6px;
-    padding-inline: 10px;
+    padding-block: 0 4px;
+    padding-inline: 8px;
   `,
   sectionTitle: css`
     font-size: 10.5px;
     font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
+    color: ${cssVar.colorTextTertiary};
     text-transform: uppercase;
     letter-spacing: 0.08em;
   `,
   skeleton: css`
     padding-block: 4px;
-    padding-inline: 10px;
-  `,
-  weakLabel: css`
-    font-size: 12px;
-    line-height: 18px;
-  `,
-  weakRow: css`
-    cursor: pointer;
-
-    flex-shrink: 0;
-
-    min-height: 28px;
-    padding-block: 3px;
     padding-inline: 8px;
-    border-radius: 6px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition: background-color 0.12s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
 }));
 
 interface OverviewProps {
   active: boolean;
-  /** Enables the branch / worktree switchers; without it those rows are read-only. */
   agentId?: string;
   deviceId?: string;
   environmentAvailable: boolean;
   onOpenTab: (tab: string) => void;
   repoType?: string;
-  /** The repo the conversation is anchored to (worktrees hang off it). */
   sourcePath?: string;
   workingDirectory?: string;
 }
 
 const pathBasename = (path: string) => path.replaceAll('\\', '/').split('/').findLast(Boolean);
-
-interface OverviewRowProps {
-  danger?: boolean;
-  icon?: IconProps['icon'];
-  iconColor?: string;
-  /** Pre-rendered leading node (e.g. DirIcon) used instead of a lucide `icon`. */
-  iconNode?: ReactNode;
-  /** Row LOOKS clickable but the click is handled by a wrapping dropdown trigger. */
-  interactive?: boolean;
-  onClick?: () => void;
-  title?: string;
-  trailing?: ReactNode;
-  value: ReactNode;
-}
-
-/**
- * The panel's single row grammar: `icon + value + trailing`. The value column is
- * the fact itself (branch name, PR title), never a noun label describing it; the
- * trailing column holds exactly one of a number, a status, or a chevron.
- */
-const OverviewRow = memo<OverviewRowProps>(
-  ({ danger, icon, iconColor, iconNode, interactive, onClick, title, trailing, value }) => (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={cx(styles.row, !onClick && !interactive && styles.rowStatic)}
-      gap={10}
-      role={onClick || interactive ? 'button' : undefined}
-      onClick={onClick}
-    >
-      {iconNode ?? (
-        <Icon
-          className={styles.icon}
-          icon={icon!}
-          size={16}
-          style={iconColor ? { color: iconColor } : undefined}
-        />
-      )}
-      <span className={cx(styles.rowValue, danger && styles.rowValueDanger)} title={title}>
-        {value}
-      </span>
-      {trailing ? <span className={styles.rowTrailing}>{trailing}</span> : null}
-    </Flexbox>
-  ),
-);
-
-OverviewRow.displayName = 'OverviewRow';
-
-const Chevron = () => <Icon icon={ChevronDownIcon} size={14} style={{ opacity: 0.6 }} />;
 
 const Overview = memo<OverviewProps>(
   ({
@@ -290,6 +172,7 @@ const Overview = memo<OverviewProps>(
     const isGitLoading = branchLoading || reviewLoading;
     const visibleWorks = works.slice(0, 3);
     const directoryName = workingDirectory ? pathBasename(workingDirectory) : undefined;
+    const hasWorkspace = environmentAvailable && !!workingDirectory;
 
     const isLinkedWorktree = isLinkedWorktreeCheckout(workingDirectory, worktrees);
 
@@ -367,14 +250,22 @@ const Overview = memo<OverviewProps>(
         icon={GitBranchIcon}
         interactive={!detached && !!agentId && !!workingDirectory}
         title={detached ? tDevice('workingDirectory.detachedHead', { sha: branch ?? '' }) : branch}
-        trailing={!detached && agentId ? <Chevron /> : undefined}
-        value={branch}
+        trailing={!detached && agentId ? <PickerGlyph /> : undefined}
+        value={
+          detached ? (
+            <>
+              <span className={rowStyles.num}>{branch}</span>
+              {t('workingPanel.overview.branch.detached')}
+            </>
+          ) : (
+            branch
+          )
+        }
       />
     );
 
     const gitRows = (
       <>
-        {/* Branch: the value owns the main column; switching happens in place. */}
         {branch &&
           (!detached && agentId && workingDirectory ? (
             <BranchSwitcher
@@ -398,7 +289,39 @@ const Overview = memo<OverviewProps>(
             branchRow
           ))}
 
-        {/* Worktree: only when the checkout actually is a linked worktree. */}
+        {showBehind && (
+          <OverviewRow
+            icon={ArrowDownIcon}
+            iconColor={cssVar.colorError}
+            iconSize={14}
+            value={t('workingPanel.overview.sync.behind', { count: aheadBehind!.behind })}
+            trailing={
+              pulling ? (
+                <RingLoadingIcon size={12} />
+              ) : (
+                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.pull')}</span>
+              )
+            }
+            onClick={syncBusy ? undefined : handlePull}
+          />
+        )}
+        {showAhead && (
+          <OverviewRow
+            icon={ArrowUpIcon}
+            iconColor={cssVar.colorInfo}
+            iconSize={14}
+            value={t('workingPanel.overview.sync.ahead', { count: aheadBehind!.ahead })}
+            trailing={
+              pushing ? (
+                <RingLoadingIcon size={12} />
+              ) : (
+                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.push')}</span>
+              )
+            }
+            onClick={syncBusy ? undefined : handlePush}
+          />
+        )}
+
         {isLinkedWorktree && branch && workingDirectory && agentId && (
           <WorktreeSwitcher
             agentId={agentId}
@@ -415,22 +338,23 @@ const Overview = memo<OverviewProps>(
             <OverviewRow
               interactive
               icon={GitForkIcon}
-              title={workingDirectory}
-              trailing={<Chevron />}
-              value={pathBasename(workingDirectory)}
+              title={sourcePath ?? workingDirectory}
+              trailing={<PickerGlyph />}
+              value={t('workingPanel.overview.worktree.of', {
+                name: pathBasename(sourcePath ?? workingDirectory),
+              })}
             />
           </WorktreeSwitcher>
         )}
 
-        {/* Changes: the ±N numbers are the value — no sentence about them. */}
         <OverviewRow
           icon={ClipboardListIcon}
           value={t('workingPanel.overview.changes')}
           trailing={
             changeStats.files > 0 ? (
               <>
-                <span className={styles.changeAdditions}>+{changeStats.additions}</span>
-                <span className={styles.changeDeletions}>−{changeStats.deletions}</span>
+                <span className={rowStyles.changeAdditions}>+{changeStats.additions}</span>
+                <span className={rowStyles.changeDeletions}>−{changeStats.deletions}</span>
               </>
             ) : (
               t('workingPanel.overview.changes.none')
@@ -439,43 +363,29 @@ const Overview = memo<OverviewProps>(
           onClick={() => onOpenTab('review')}
         />
 
-        {/* Sync: the row is the action, one action per row. */}
-        {showBehind && (
-          <OverviewRow
-            icon={ArrowDownIcon}
-            iconColor={cssVar.colorError}
-            trailing={pulling ? <RingLoadingIcon size={12} /> : aheadBehind!.behind}
-            value={t('workingPanel.overview.sync.pull')}
-            onClick={syncBusy ? undefined : handlePull}
-          />
-        )}
-        {showAhead && (
-          <OverviewRow
-            icon={ArrowUpIcon}
-            iconColor={cssVar.colorInfo}
-            trailing={pushing ? <RingLoadingIcon size={12} /> : aheadBehind!.ahead}
-            value={t('workingPanel.overview.sync.push')}
-            onClick={syncBusy ? undefined : handlePush}
-          />
-        )}
-
-        {/* Linked PR with its CI rollup as trailing status — passing is the
-            steady state, so only failure / pending earn a text label. */}
         {pullRequest && prVisual && ci && (
           <Tooltip title={`#${pullRequest.number} ${pullRequest.title}`}>
             <div>
               <OverviewRow
                 icon={prVisual.icon}
                 iconColor={prVisual.color}
-                value={`#${pullRequest.number} ${pullRequest.title}`}
                 trailing={
-                  <>
-                    <Icon icon={ci.icon} size={14} style={{ color: ci.color }} />
+                  <span
+                    className={styles.pill}
+                    style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
+                  >
+                    <Icon icon={ci.icon} size={12} />
                     {shouldShowCiLabel(ciStatus)
                       ? t(
                           `workingPanel.overview.ci.${ciStatus as 'failure' | 'pending'}` as 'workingPanel.overview.ci.failure',
                         )
                       : null}
+                  </span>
+                }
+                value={
+                  <>
+                    <span className={rowStyles.num}>#{pullRequest.number}</span>
+                    {pullRequest.title}
                   </>
                 }
                 onClick={
@@ -490,61 +400,68 @@ const Overview = memo<OverviewProps>(
       </>
     );
 
-    return (
-      <Flexbox className={styles.body} gap={10}>
-        {environmentAvailable && (
-          <Flexbox>
-            <OverviewRow
-              icon={workingDirectory ? undefined : LaptopIcon}
-              title={workingDirectory}
-              value={directoryName || t('workingPanel.overview.workspace.empty')}
-              iconNode={
-                workingDirectory ? (
-                  <DirIcon repoType={isGithub ? 'github' : repoType ? 'git' : undefined} />
-                ) : undefined
-              }
-              trailing={
-                workingDirectory
-                  ? t(
-                      deviceId
-                        ? 'workingPanel.overview.execution.device'
-                        : 'workingPanel.overview.execution.local',
-                    )
-                  : undefined
-              }
-              onClick={workingDirectory ? () => onOpenTab('files') : undefined}
-            />
+    const workspaceSection = repoType ? (
+      isGitLoading ? (
+        <div className={styles.skeleton}>
+          <Skeleton.Text rows={3} />
+        </div>
+      ) : gitError ? (
+        <OverviewRow
+          danger
+          icon={TriangleAlertIcon}
+          iconColor={cssVar.colorError}
+          value={t('workingPanel.overview.environmentError')}
+          trailing={
+            <Button
+              icon={<Icon icon={RefreshCwIcon} size={12} />}
+              size={'small'}
+              onClick={() => void refreshGit()}
+            >
+              {tCommon('retry')}
+            </Button>
+          }
+        />
+      ) : (
+        gitRows
+      )
+    ) : (
+      <OverviewRow
+        icon={FilesIcon}
+        trailing={<ChevronRight />}
+        value={t('workingPanel.overview.files')}
+        onClick={() => onOpenTab('files')}
+      />
+    );
 
-            {repoType && workingDirectory && isGitLoading ? (
-              <div className={styles.skeleton}>
-                <Skeleton.Text rows={2} />
-              </div>
-            ) : gitError ? (
-              // A failed probe is one row, not a panel-bending error block.
-              <OverviewRow
-                danger
-                icon={GitBranchIcon}
-                iconColor={cssVar.colorError}
-                value={t('workingPanel.overview.environmentError')}
-                trailing={
-                  <ActionIcon
-                    icon={RefreshCwIcon}
-                    size={'small'}
-                    title={tCommon('retry')}
-                    onClick={() => void refreshGit()}
-                  />
-                }
-              />
-            ) : repoType && workingDirectory ? (
-              gitRows
-            ) : null}
-          </Flexbox>
+    return (
+      <Flexbox className={styles.body}>
+        {hasWorkspace && (
+          <>
+            <OverviewHeader
+              deviceId={deviceId}
+              error={!!gitError}
+              name={directoryName!}
+              path={workingDirectory}
+              repoType={repoType}
+              onClick={() => onOpenTab('files')}
+            />
+            <Flexbox className={styles.section}>{workspaceSection}</Flexbox>
+          </>
         )}
 
-        <ProgressSection />
+        {environmentAvailable && !workingDirectory && (
+          <Empty
+            className={cx(styles.section, styles.emptyWorkspace)}
+            description={t('workingPanel.overview.workspace.emptyDesc')}
+            icon={LaptopIcon}
+            title={t('workingPanel.overview.workspace.empty')}
+          />
+        )}
+
+        <ProgressSection className={styles.section} />
 
         {visibleWorks.length > 0 && (
-          <Flexbox>
+          <Flexbox className={styles.section}>
             <Flexbox
               horizontal
               align={'center'}
@@ -552,7 +469,12 @@ const Overview = memo<OverviewProps>(
               justify={'space-between'}
             >
               <span className={styles.sectionTitle}>{t('workingPanel.overview.outputs')}</span>
-              <Button size={'small'} type={'text'} onClick={() => onOpenTab('works')}>
+              <Button
+                outdent={'end'}
+                size={'small'}
+                type={'text'}
+                onClick={() => onOpenTab('works')}
+              >
                 {t('workingPanel.overview.viewAll')}
               </Button>
             </Flexbox>
@@ -562,44 +484,35 @@ const Overview = memo<OverviewProps>(
           </Flexbox>
         )}
 
-        {/* Resource entries: kept, but demoted — same row grammar, lower weight. */}
-        <Flexbox>
-          {environmentAvailable && <div className={styles.divider} />}
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={styles.weakRow}
-            gap={10}
-            role={'button'}
-            onClick={() => onOpenTab('skills')}
-          >
-            <Icon className={styles.icon} icon={SkillsIcon} size={14} />
-            <span className={styles.weakLabel}>{t('workingPanel.resources.filter.skills')}</span>
-          </Flexbox>
-          {!isHetero && (
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={styles.weakRow}
-              gap={10}
-              role={'button'}
-              onClick={() => onOpenTab('documents')}
-            >
-              <Icon className={styles.icon} icon={FileTextIcon} size={14} />
-              <span className={styles.weakLabel}>
-                {t('workingPanel.resources.filter.documents')}
-              </span>
-            </Flexbox>
-          )}
-        </Flexbox>
-
-        {!topicId && visibleWorks.length === 0 && !workingDirectory && (
+        {!environmentAvailable && !topicId && visibleWorks.length === 0 && (
           <Empty
+            className={styles.section}
             description={t('workingPanel.overview.empty')}
             icon={BoxesIcon}
             title={t('workingPanel.overview.emptyTitle')}
           />
         )}
+
+        <Flexbox className={styles.section}>
+          <OverviewRow
+            weak
+            icon={SkillsIcon}
+            iconSize={15}
+            trailing={<ChevronRight />}
+            value={t('workingPanel.resources.filter.skills')}
+            onClick={() => onOpenTab('skills')}
+          />
+          {!isHetero && (
+            <OverviewRow
+              weak
+              icon={FileTextIcon}
+              iconSize={15}
+              trailing={<ChevronRight />}
+              value={t('workingPanel.resources.filter.documents')}
+              onClick={() => onOpenTab('documents')}
+            />
+          )}
+        </Flexbox>
       </Flexbox>
     );
   },

@@ -28,7 +28,7 @@ export class ServerSubAgentTransport implements SubAgentTransport {
 
   async execSubAgent(params: ExecSubAgentParams): Promise<ExecSubAgentResult> {
     // Agent share (defensive layer): a share-visitor run's `ctx.agentShareVisitor` is
-    // set from `state.metadata.agentShareVisitor` (see AgentRuntimeService).
+    // set from `state.principal.actor.shareVisitor` (see AgentRuntimeService).
     // `callSubAgent`/`callAgent` children built via `execAgentThreadRun` don't
     // thread the parent's `shareGate` through — they'd otherwise execute with
     // the CREATOR's full, unrestricted tool/file/memory surface. The

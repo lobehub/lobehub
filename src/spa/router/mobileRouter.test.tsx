@@ -8,18 +8,12 @@ import { mobileRoutes } from './mobileRouter.config';
 import { getRouteMetaFromHandle } from './routeMeta';
 
 describe('mobileRouter agent share route', () => {
-  it('serves the agent-share visitor page on /a/:slugOrId outside the main layout', () => {
-    const matches = matchRoutes(mobileRoutes, '/a/my-agent');
-
-    expect(matches).toHaveLength(1);
-    expect(matches?.[0]?.route.path).toBe('/a/:slugOrId/:topicId?');
-    expect(matches?.[0]?.params).toMatchObject({ slugOrId: 'my-agent' });
-  });
-
-  it('opens a visitor topic directly without the owner layout', () => {
-    const matches = matchRoutes(mobileRoutes, '/a/my-agent/tpc_saved');
-    expect(matches).toHaveLength(1);
-    expect(matches?.[0]?.params).toEqual({ slugOrId: 'my-agent', topicId: 'tpc_saved' });
+  it('leaves the agent-share visitor surface to the business routes', () => {
+    // Agent sharing runs a visitor's conversation on the creator's account, so
+    // the surface ships with the deployment that does that accounting and
+    // registers itself through `BusinessMobileRoutesWithoutMainLayout`.
+    // Nothing claims `/a/*` any more, so it falls through to not-found.
+    expect(matchRoutes(mobileRoutes, '/a/my-agent')?.at(-1)?.route.path).toBe('*');
   });
 
   it('keeps the creator agent surface on /agent/:aid', () => {
@@ -43,8 +37,10 @@ describe('mobileRouter task routes', () => {
     expect(source).toContain("import('@/routes/(main)/agent/task/[taskId]')");
     expect(source).toContain("path: 'tasks'");
     expect(source).toContain("path: 'task'");
-    expect(source).toContain("path: ':taskId'");
-    expect(source).toContain("path: ':aid/task/:taskId'");
+    // The `:slug?` tail is the readable title segment; it never resolves the
+    // task, so pre-slug links keep matching the same route.
+    expect(source).toContain("path: ':taskId/:slug?'");
+    expect(source).toContain("path: ':aid/task/:taskId/:slug?'");
     expect(source).not.toContain("import('@/routes/(main)/tasks/_layout')");
   });
 });

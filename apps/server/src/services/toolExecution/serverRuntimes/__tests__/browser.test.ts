@@ -3,17 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
 
-// Mock deviceGateway
 const mockExecuteToolCall = vi.fn();
-vi.mock('@/server/services/deviceGateway', () => ({
-  deviceGateway: {
-    executeToolCall: (...args: any[]) => mockExecuteToolCall(...args),
-  },
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    mockExecuteToolCall(...args),
 }));
 
 const mockUploadBase64 = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({ uploadBase64: mockUploadBase64 })),
+  FileService: vi.fn(function () {
+    return { uploadBase64: mockUploadBase64 };
+  }),
 }));
 
 // Import after mock setup

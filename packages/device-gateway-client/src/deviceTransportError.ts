@@ -1,3 +1,7 @@
+import type { DeviceUnavailableErrorData } from '@lobechat/types';
+
+export type { DeviceUnavailableErrorData } from '@lobechat/types';
+
 /**
  * Human- and model-readable descriptions for device-channel transport
  * failures.
@@ -42,16 +46,24 @@ export const DeviceTransportErrorCode = {
 export type DeviceTransportErrorCode =
   (typeof DeviceTransportErrorCode)[keyof typeof DeviceTransportErrorCode];
 
+/** A normalized failure from the server-to-device transport hop. */
 export interface DeviceTransportFailure {
   code: DeviceTransportErrorCode;
   /** LLM- and user-facing explanation. Goes in the result `content`. */
   content: string;
+  /** Structured retry context when the requested logical device is absent. */
+  data?: DeviceUnavailableErrorData;
   /** Machine-facing detail: the gateway's own body when it sent one. */
   error: string;
 }
 
 /** What the failed hop was carrying, used to open the sentence. */
 export type DeviceTransportOperation = 'tool call' | 'message API call' | 'RPC call' | 'agent run';
+
+interface DeviceTransportTarget {
+  deviceId?: string;
+  workspaceId?: string;
+}
 
 const RECONNECT_HINT = `Tell the user to check that the LobeHub desktop app (or the \`lh\` CLI) is running and shows as connected.`;
 
@@ -121,18 +133,40 @@ const describeStatus = (
  * `body` is the gateway's response text; it is kept verbatim as `error` so that
  * existing matches on gateway codes (e.g. `DEVICE_OFFLINE`) keep working, and
  * appended to the explanation when it carries anything beyond the status.
+ *
+ * Use when:
+ * - A Gateway HTTP request returned a non-success status
+ * - A caller needs structured retry context for a missing logical device
+ *
+ * Expects:
+ * - `target`, when provided, is the already-authorized dispatch target
+ *
+ * Returns:
+ * - Backward-compatible text plus optional structured unavailable-device data
  */
 export const describeGatewayResponseFailure = (
   status: number,
   body: string | undefined,
   operation: DeviceTransportOperation,
+  target?: DeviceTransportTarget,
 ): DeviceTransportFailure => {
   const { code, content } = describeStatus(status, operation);
   const detail = body?.trim();
+  const data =
+    code === DeviceTransportErrorCode.DeviceNotFound && target?.deviceId
+      ? {
+          code: DeviceTransportErrorCode.DeviceNotFound,
+          deviceId: target.deviceId,
+          retryable: true as const,
+          scope: target.workspaceId ? ('workspace' as const) : ('personal' as const),
+          ...(target.workspaceId ? { workspaceId: target.workspaceId } : {}),
+        }
+      : undefined;
 
   return {
     code,
     content: detail ? `${content}\n\nGateway detail: ${detail}` : content,
+    ...(data ? { data } : {}),
     error: detail || `${code} (HTTP ${status})`,
   };
 };

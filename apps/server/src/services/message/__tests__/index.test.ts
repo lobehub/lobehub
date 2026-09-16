@@ -32,12 +32,18 @@ describe('MessageService', () => {
     } as any;
 
     mockFileService = {
-      getFullFileUrl: vi.fn().mockImplementation((path) => Promise.resolve(`/files${path}`)),
+      getFullFileUrl: vi.fn().mockImplementation(function (path) {
+        return Promise.resolve(`/files${path}`);
+      }),
     } as any;
 
     // Mock constructors
-    vi.mocked(MessageModel).mockImplementation(() => mockMessageModel);
-    vi.mocked(FileService).mockImplementation(() => mockFileService);
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return mockMessageModel;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return mockFileService;
+    });
 
     messageService = new MessageService(mockDB, userId);
   });

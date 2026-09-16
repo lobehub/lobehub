@@ -13,24 +13,30 @@ const mockAssertActiveOrLegacy = vi.fn();
 const mockReleaseBestEffort = vi.fn();
 
 vi.mock('@/database/repositories/dataImporter', () => ({
-  DataImporterRepos: vi.fn().mockImplementation(() => ({
-    importData: mockImportData,
-    importPgData: mockImportPgData,
-  })),
+  DataImporterRepos: vi.fn().mockImplementation(function () {
+    return {
+      importData: mockImportData,
+      importPgData: mockImportPgData,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFileContent: mockGetFileContent,
-    deleteFile: mockDeleteFile,
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFileContent: mockGetFileContent,
+      deleteFile: mockDeleteFile,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/fileUpload', () => ({
-  FileUploadService: vi.fn().mockImplementation(() => ({
-    assertActiveOrLegacy: mockAssertActiveOrLegacy,
-    releaseBestEffort: mockReleaseBestEffort,
-  })),
+  FileUploadService: vi.fn().mockImplementation(function () {
+    return {
+      assertActiveOrLegacy: mockAssertActiveOrLegacy,
+      releaseBestEffort: mockReleaseBestEffort,
+    };
+  }),
 }));
 
 describe('importerRouter', () => {

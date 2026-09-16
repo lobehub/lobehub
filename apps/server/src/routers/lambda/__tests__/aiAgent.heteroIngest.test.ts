@@ -13,7 +13,9 @@ import { cleanupTestUser, createTestUser } from './integration/setup';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 const mockHeteroIngest = vi.fn();
@@ -22,19 +24,25 @@ const mockHeteroFinish = vi.fn();
 // Stub the service so we can assert on procedure → service wiring without
 // pulling in the real Redis-backed StreamEventManager.
 vi.mock('@/server/services/heterogeneousAgent', () => ({
-  HeterogeneousAgentService: vi.fn().mockImplementation(() => ({
-    heteroFinish: mockHeteroFinish,
-    heteroIngest: mockHeteroIngest,
-  })),
+  HeterogeneousAgentService: vi.fn().mockImplementation(function () {
+    return {
+      heteroFinish: mockHeteroFinish,
+      heteroIngest: mockHeteroIngest,
+    };
+  }),
 }));
 
 // AgentRuntimeService and AiChatService are constructed by the procedure
 // middleware too — stub to keep the test isolated.
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({})),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 const buildEvent = (type: AgentStreamEvent['type'], stepIndex: number): AgentStreamEvent => ({

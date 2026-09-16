@@ -12,11 +12,20 @@ const dockerPath = '/app/scripts/_shared/checkDeprecatedAuth.js';
 const sharedModulePath = existsSync(localPath) ? localPath : dockerPath;
 
 const { checkDeprecatedAuth } = require(sharedModulePath);
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+const gatewayCheckLocalPath = path.join(__dirname, '..', '_shared', 'checkGatewayConfig.js');
+const gatewayCheckDockerPath = '/app/scripts/_shared/checkGatewayConfig.js';
+const { checkGatewayConfig } = require(
+  existsSync(gatewayCheckLocalPath) ? gatewayCheckLocalPath : gatewayCheckDockerPath,
+);
+const normalizeHostnameLocalPath = path.join(
+  __dirname,
+  '..',
+  '_shared',
+  'normalizeServerHostname.js',
+);
+const normalizeHostnameDockerPath = '/app/scripts/_shared/normalizeServerHostname.js';
 const { normalizeServerHostname } = require(
-  existsSync(localPath)
-    ? path.join(__dirname, '..', '_shared', 'normalizeServerHostname.js')
-    : '/app/scripts/_shared/normalizeServerHostname.js',
+  existsSync(normalizeHostnameLocalPath) ? normalizeHostnameLocalPath : normalizeHostnameDockerPath,
 );
 
 // Set file paths
@@ -247,6 +256,8 @@ const runServer = async () => {
 (async () => {
   // Check for deprecated auth env vars first - fail fast if found
   checkDeprecatedAuth({ action: 'restart' });
+  // Warn loudly when an upgraded Compose stack enables Gateway Mode without its .env settings
+  checkGatewayConfig();
 
   console.log('🌐 DNS Server:', dns.getServers());
   console.log('-------------------------------------');
@@ -290,7 +301,9 @@ const runServer = async () => {
   // Create QStash schedule for workflow task dispatching
   createQstashSchedule();
 
-  // Run the server in either database or non-database mode
+  // Normalize container-injected hostnames immediately before starting the server.
   normalizeServerHostname();
+
+  // Run the server in either database or non-database mode
   await runServer();
 })();

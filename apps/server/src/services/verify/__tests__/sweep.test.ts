@@ -24,18 +24,26 @@ const {
 
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: Object.assign(
-    vi.fn(() => ({})),
+    vi.fn(function () {
+      return {};
+    }),
     { findStuckVerifying },
   ),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({ listByRun: resultListByRun, upsertByCheckItem })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return { listByRun: resultListByRun, upsertByCheckItem };
+  }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: operationFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: operationFindById };
+  }),
 }));
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn(() => ({ claimVerifying, recompute })),
+  VerifyStatusService: vi.fn(function () {
+    return { claimVerifying, recompute };
+  }),
 }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
 

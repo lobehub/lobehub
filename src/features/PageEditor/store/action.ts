@@ -10,7 +10,7 @@ import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
-import { type RightPanelMode, type State } from './initialState';
+import { type PendingCommentAnchor, type RightPanelMode, type State } from './initialState';
 import { initialState } from './initialState';
 
 const log = debug('page:editor');
@@ -41,6 +41,8 @@ export interface Action {
     expiresAt?: Date | string | null,
     holderOwnerId?: string | null,
   ) => void;
+  /** Hand a captured body selection to the comment composer, or clear it (`undefined`). */
+  setPendingCommentAnchor: (pending: PendingCommentAnchor | undefined) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
@@ -221,6 +223,10 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         )
           return;
         set({ lockExpiresAt: expiresAt, lockHolderId: holderId, lockHolderOwnerId: holderOwnerId });
+      },
+
+      setPendingCommentAnchor: (pendingCommentAnchor) => {
+        set({ pendingCommentAnchor });
       },
 
       setRightPanelMode: (rightPanelMode) => {

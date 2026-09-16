@@ -1,6 +1,7 @@
 import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 
 import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
@@ -44,7 +45,8 @@ export const auvRuntime: ServerRuntimeRegistration = {
             'The selected device does not support Computer Use. Update the desktop app and reconnect.',
           );
         }
-        return deviceGateway.executeToolCall(
+        return executeAuthorizedDeviceToolCall(
+          context.serverDB,
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,

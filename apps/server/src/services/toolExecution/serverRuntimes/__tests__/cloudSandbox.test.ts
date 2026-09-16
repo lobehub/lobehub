@@ -11,14 +11,18 @@ const mocks = vi.hoisted(() => {
   return {
     createSandboxService: vi.fn(),
     FakeSandboxService,
-    MarketService: vi.fn(() => ({})),
+    MarketService: vi.fn(function () {
+      return {};
+    }),
     preprocessLhCommand: vi.fn(),
     sandboxService: new FakeSandboxService(),
   };
 });
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({})),
+  FileService: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({

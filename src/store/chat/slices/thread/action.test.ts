@@ -23,7 +23,8 @@ vi.mock('@/libs/swr', async () => {
 });
 
 // Mock version constants
-vi.mock('@/const/version', () => ({
+vi.mock(import('@/const/version'), async (importOriginal) => ({
+  ...(await importOriginal()),
   isDeprecatedEdition: false,
   isDesktop: false,
 }));

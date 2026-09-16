@@ -160,6 +160,91 @@ describe('GatewayStreamNotifier', () => {
       expect(urls).toContain(`${gatewayUrl}/api/operations/push-event`);
     });
 
+    // Protocol v2 §3.2: the per-user hub describes an op in its lifecycle feed
+    // from the `meta` persisted at init, so the routing fields the caller
+    // already knows must ride along — and nothing else (no lookups, no
+    // agentConfig / modelRuntimeConfig leakage into the gateway).
+    it('sends only the known op-routing fields as `meta` in the init body', async () => {
+      await notifier.publishAgentRuntimeInit('op-1', {
+        agentConfig: { systemRole: 'secret' },
+        agentId: 'agt_1',
+        groupId: 'grp_1',
+        mirrorToOperationId: 'op-supervisor',
+        modelRuntimeConfig: { model: 'gpt' },
+        parentOperationId: 'op-parent',
+        rootOperationId: 'op-root',
+        scope: 'group',
+        taskId: 'task_1',
+        threadId: 'thr_1',
+        topicId: 'tpc_1',
+        userId: 'user-1',
+        workspaceId: 'ws_1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          mirrorToOperationId: 'op-supervisor',
+          parentOperationId: 'op-parent',
+          rootOperationId: 'op-root',
+          scope: 'group',
+          taskId: 'task_1',
+          threadId: 'thr_1',
+          topicId: 'tpc_1',
+        },
+        operationId: 'op-1',
+        userId: 'user-1',
+      });
+    });
+
+    it('omits absent meta keys, and the whole `meta` when nothing applies', async () => {
+      // Hetero dispatch shape: only agentId / topicId / (optional) mirror known.
+      await notifier.publishAgentRuntimeInit('op-hetero', {
+        agentId: 'agt_1',
+        mirrorToOperationId: undefined,
+        topicId: 'tpc_1',
+        userId: 'user-1',
+      });
+      // Legacy / minimal init (what the coordinator's Redis metadata yields
+      // for a plain single-agent run).
+      await notifier.publishAgentRuntimeInit('op-legacy', { userId: 'user-1' });
+
+      const bodies = mockFetch.mock.calls
+        .filter((call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`)
+        .map((call: any[]) => JSON.parse(call[1].body));
+
+      expect(bodies).toEqual([
+        {
+          meta: { agentId: 'agt_1', topicId: 'tpc_1' },
+          operationId: 'op-hetero',
+          userId: 'user-1',
+        },
+        { operationId: 'op-legacy', userId: 'user-1' },
+      ]);
+      expect(bodies[1]).not.toHaveProperty('meta');
+    });
+
+    it('registers the visitor as gateway owner while still sending meta', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        streamOwnerUserId: 'visitor-1',
+        topicId: 'tpc_1',
+        userId: 'creator-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: { topicId: 'tpc_1' },
+        operationId: 'op-share',
+        userId: 'visitor-1',
+      });
+    });
+
     it('waits for gateway init before exposing the operation to subscribers', async () => {
       let resolveInit!: () => void;
       mockFetch.mockImplementation((url: string) => {

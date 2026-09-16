@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const callTool = vi.hoisted(() => vi.fn());
 const getLocalFilePreview = vi.hoisted(() => vi.fn());
 const readProjectFileBytes = vi.hoisted(() => vi.fn());
+const readExternalAssetForPublishBytes = vi.hoisted(() => vi.fn());
 
 vi.mock('@/services/cloudSandbox', () => ({
   cloudSandboxService: {
@@ -13,12 +14,14 @@ vi.mock('@/services/cloudSandbox', () => ({
 vi.mock('@/services/projectFile', () => ({
   projectFileService: {
     getLocalFilePreview,
+    readExternalAssetForPublish: readExternalAssetForPublishBytes,
     readProjectFileBytes,
   },
 }));
 
 const { readWorkspaceAsset, resolveWorkspaceAssetContentType } =
   await import('./readWorkspaceAsset');
+const { readExternalAssetForPublish } = await import('./readExternalAssetForPublish');
 
 describe('resolveWorkspaceAssetContentType', () => {
   it('prefers the svg image type over a generic text/plain preview', () => {
@@ -37,6 +40,7 @@ describe('readWorkspaceAsset', () => {
     callTool.mockReset();
     getLocalFilePreview.mockReset();
     readProjectFileBytes.mockReset();
+    readExternalAssetForPublishBytes.mockReset();
   });
 
   it('reads sandbox text files through readLocalFile', async () => {
@@ -132,5 +136,33 @@ describe('readWorkspaceAsset', () => {
     await expect(
       readWorkspaceAsset({ path: '/tmp/runtime.js', workingDirectory: '/tmp' }),
     ).resolves.toEqual({ ok: false, reason: 'oversized', sizeBytes: bytes.byteLength });
+  });
+
+  it('refuses a path outside the workspace before touching any normal transport', async () => {
+    await expect(
+      readWorkspaceAsset({ path: '/private/secret.txt', workingDirectory: '/repo' }),
+    ).resolves.toEqual({ ok: false, reason: 'missing' });
+
+    expect(getLocalFilePreview).not.toHaveBeenCalled();
+    expect(readProjectFileBytes).not.toHaveBeenCalled();
+  });
+
+  it('reads an external path only through the publish-scoped transport', async () => {
+    readExternalAssetForPublishBytes.mockResolvedValue({
+      bytes: new TextEncoder().encode('body{}'),
+      contentType: 'text/css',
+    });
+
+    await expect(
+      readExternalAssetForPublish({ path: '/private/app.css', workingDirectory: '/repo' }),
+    ).resolves.toMatchObject({ contentType: 'text/css', ok: true, text: 'body{}' });
+
+    expect(readExternalAssetForPublishBytes).toHaveBeenCalledWith({
+      deviceId: undefined,
+      path: '/private/app.css',
+      workingDirectory: '/repo',
+    });
+    expect(getLocalFilePreview).not.toHaveBeenCalled();
+    expect(readProjectFileBytes).not.toHaveBeenCalled();
   });
 });

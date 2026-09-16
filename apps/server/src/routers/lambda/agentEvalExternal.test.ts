@@ -15,28 +15,40 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
 
 vi.mock('@/database/models/agentEval', () => ({
-  AgentEvalDatasetModel: vi.fn().mockImplementation(() => ({})),
-  AgentEvalRunModel: vi.fn().mockImplementation(() => ({
-    findById: mocks.findRunById,
-    update: mocks.updateRun,
-  })),
-  AgentEvalRunTopicModel: vi.fn().mockImplementation(() => ({
-    findByRunId: mocks.findRunTopics,
-    updateByRunAndTopic: mocks.updateRunTopic,
-  })),
-  AgentEvalTestCaseModel: vi.fn().mockImplementation(() => ({
-    countByDatasetId: mocks.countByDatasetId,
-  })),
+  AgentEvalDatasetModel: vi.fn().mockImplementation(function () {
+    return {};
+  }),
+  AgentEvalRunModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: mocks.findRunById,
+      update: mocks.updateRun,
+    };
+  }),
+  AgentEvalRunTopicModel: vi.fn().mockImplementation(function () {
+    return {
+      findByRunId: mocks.findRunTopics,
+      updateByRunAndTopic: mocks.updateRunTopic,
+    };
+  }),
+  AgentEvalTestCaseModel: vi.fn().mockImplementation(function () {
+    return {
+      countByDatasetId: mocks.countByDatasetId,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({})),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/agentEvalRun', () => ({
-  AgentEvalRunService: vi.fn().mockImplementation(() => ({
-    evaluateAndFinalizeRun: mocks.evaluateAndFinalizeRun,
-  })),
+  AgentEvalRunService: vi.fn().mockImplementation(function () {
+    return {
+      evaluateAndFinalizeRun: mocks.evaluateAndFinalizeRun,
+    };
+  }),
   RUN_CREATE_ID_CONFLICT: 'RUN_CREATE_ID_CONFLICT',
 }));
 

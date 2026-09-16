@@ -4,7 +4,7 @@ import type { AcceptanceAttachment } from '@lobechat/types';
 import { Flexbox, Icon, Image } from '@lobehub/ui';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { Upload } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, useResponsive } from 'antd-style';
 import { ImagePlus, Loader2, X } from 'lucide-react';
 import { type ClipboardEvent, memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -72,6 +72,28 @@ const styles = createStaticStyles(({ css }) => ({
       width: 100%;
       height: 100%;
       object-fit: cover;
+    }
+  `,
+  /**
+   * A screenshot posted INTO a remark is the remark's evidence, not a chip on a
+   * draft: at 56px "here is what I see instead" is unreadable, so in a comment
+   * the picture is shown at a size a reader can judge without opening it.
+   */
+  thumbLarge: css`
+    width: auto;
+    max-width: min(100%, 360px);
+    height: auto;
+    max-height: 220px;
+
+    img {
+      cursor: zoom-in;
+
+      width: auto;
+      max-width: min(100%, 360px);
+      height: auto;
+      max-height: 220px;
+
+      object-fit: contain;
     }
   `,
   thumbLoading: css`
@@ -224,6 +246,8 @@ interface AttachmentUploadButtonProps {
 /** The "attach screenshot" trigger — a picker button that hands files back for upload. */
 export const AttachmentUploadButton = memo<AttachmentUploadButtonProps>(({ disabled, onFiles }) => {
   const { t } = useTranslation('verify');
+  // A 44px target is for thumbs; on a pointer device it towers over the field above it.
+  const { md = true } = useResponsive();
   return (
     <Upload
       multiple
@@ -240,7 +264,7 @@ export const AttachmentUploadButton = memo<AttachmentUploadButtonProps>(({ disab
       <Button
         disabled={disabled}
         icon={<Icon icon={ImagePlus} />}
-        style={{ minHeight: 44, alignSelf: 'flex-start' }}
+        style={{ alignSelf: 'flex-start', minHeight: md ? undefined : 44 }}
         type={'text'}
       >
         {t('acceptance.review.attach')}
@@ -253,10 +277,12 @@ AttachmentUploadButton.displayName = 'AcceptanceAttachmentUploadButton';
 
 interface AttachmentThumbsProps {
   attachments?: AcceptanceAttachment[];
+  /** `comment` shows the picture at reading size; the default is the 56px chip. */
+  size?: 'chip' | 'comment';
 }
 
 /** Read-only screenshots on a settled feedback card — click any to zoom (native preview). */
-export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments }) => {
+export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments, size = 'chip' }) => {
   const usable = (attachments ?? []).filter((attachment) => attachment.url);
   if (usable.length === 0) return null;
   return (
@@ -272,7 +298,10 @@ export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments }) =>
       }}
     >
       {usable.map((attachment) => (
-        <div className={styles.thumb} key={attachment.id}>
+        <div
+          className={cx(styles.thumb, size === 'comment' && styles.thumbLarge)}
+          key={attachment.id}
+        >
           <Image alt={attachment.name ?? ''} src={attachment.url!} />
         </div>
       ))}

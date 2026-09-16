@@ -4,6 +4,7 @@ import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initi
 
 import {
   buildKanbanColumns,
+  buildKanbanGroupQuery,
   canDropTaskIntoKanbanColumn,
   getKanbanAssigneeUpdate,
   getKanbanColumnHeaderVariant,
@@ -192,5 +193,59 @@ describe('kanbanBoardModel', () => {
     });
 
     expect(next.map(({ total }) => total)).toEqual([74, 64]);
+  });
+  describe('buildKanbanGroupQuery', () => {
+    it('sends no automation filter on the "My tasks" board', () => {
+      // Regression: the board pinned `automated: false` while the My tasks list
+      // view sends none, so a scheduled or heartbeat task assigned to the
+      // caller vanished the moment they switched that collection to board.
+      const query = buildKanbanGroupQuery({ groupBy: 'status', myTaskScope: 'assigned' });
+
+      expect(query).not.toHaveProperty('automated');
+      expect(query).toEqual({ excludeStatuses: undefined, groupBy: 'status', scope: 'assigned' });
+    });
+
+    it('keeps excluding automation on the project, agent and all-agents boards', () => {
+      // Those three do belong to the scheduled roll-up, so their columns stay
+      // free of self-firing tasks.
+      expect(buildKanbanGroupQuery({ groupBy: 'status', projectId: 'proj_1' })).toMatchObject({
+        automated: false,
+        projectId: 'proj_1',
+      });
+      expect(buildKanbanGroupQuery({ agentId: 'agt_1', groupBy: 'status' })).toMatchObject({
+        agentId: 'agt_1',
+        automated: false,
+      });
+      expect(buildKanbanGroupQuery({ groupBy: 'status' })).toMatchObject({
+        allAgents: true,
+        automated: false,
+      });
+    });
+
+    it('prefers the My tasks scope over the other scopes', () => {
+      const query = buildKanbanGroupQuery({
+        agentId: 'agt_1',
+        groupBy: 'status',
+        myTaskScope: 'created',
+        projectId: 'proj_1',
+      });
+
+      expect(query).toEqual({
+        excludeStatuses: undefined,
+        groupBy: 'status',
+        scope: 'created',
+      });
+    });
+
+    it('carries the status exclusions through every scope', () => {
+      const excludeStatuses = ['completed'] as const;
+
+      expect(
+        buildKanbanGroupQuery({ excludeStatuses, groupBy: 'status', myTaskScope: 'assigned' }),
+      ).toMatchObject({ excludeStatuses });
+      expect(buildKanbanGroupQuery({ excludeStatuses, groupBy: 'status' })).toMatchObject({
+        excludeStatuses,
+      });
+    });
   });
 });

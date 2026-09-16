@@ -11,18 +11,22 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/acceptance', () => ({
-  AcceptanceModel: vi.fn(() => ({
-    ensureForSubject: mocks.acceptanceEnsure,
-    findPolicyBySubject: mocks.acceptanceFindPolicyBySubject,
-    updatePolicy: mocks.acceptanceUpdatePolicy,
-  })),
+  AcceptanceModel: vi.fn(function () {
+    return {
+      ensureForSubject: mocks.acceptanceEnsure,
+      findPolicyBySubject: mocks.acceptanceFindPolicyBySubject,
+      updatePolicy: mocks.acceptanceUpdatePolicy,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({
-    findById: mocks.taskFindById,
-    getVerifyConfig: (task: { verify?: unknown }) => task.verify,
-  })),
+  TaskModel: vi.fn(function () {
+    return {
+      findById: mocks.taskFindById,
+      getVerifyConfig: (task: { verify?: unknown }) => task.verify,
+    };
+  }),
 }));
 
 const db = {} as never;

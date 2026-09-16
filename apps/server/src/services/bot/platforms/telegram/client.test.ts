@@ -8,9 +8,14 @@ import { resolveTelegramSecretToken } from './helpers';
 
 const { createTelegramAdapterMock } = vi.hoisted(() => ({
   // Typed parameter so `mock.calls[n][0]` is a config object, not `never`.
-  createTelegramAdapterMock: vi.fn((_config: Record<string, unknown>, _sessionScope: string) => ({
-    name: 'telegram',
-  })),
+  createTelegramAdapterMock: vi.fn(function (
+    _config: Record<string, unknown>,
+    _sessionScope: string,
+  ) {
+    return {
+      name: 'telegram',
+    };
+  }),
 }));
 
 vi.mock('./guestAdapter', () => ({

@@ -77,6 +77,10 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: vi.fn().mockResolvedValue([]),
 }));
+// Mock getModelPricing to prevent async issues
+vi.mock('../../utils/model', () => ({
+  getModelPricing: vi.fn().mockResolvedValue({}),
+}));
 
 let instance: LobeOpenAICompatibleRuntime;
 
@@ -1373,6 +1377,29 @@ describe('LobeOpenAICompatibleFactory', () => {
         });
       });
 
+      it('should classify an HTML 413 response as RequestBodyTooLarge', async () => {
+        const apiError = new OpenAI.APIError(
+          413,
+          null as any,
+          'Failed to buffer request body',
+          new Headers({ 'content-type': 'text/html' }),
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'deepseek-chat',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          error: { status: 413 },
+          errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
+          provider,
+        });
+      });
+
       it('should throw AgentRuntimeError with invalidErrorType if no apiKey is provided', async () => {
         try {
           new LobeMockProvider({});
@@ -1825,6 +1852,7 @@ describe('LobeOpenAICompatibleFactory', () => {
     describe('responses routing', () => {
       it(
         'should route to Responses API when chatCompletion.useResponse is true',
+        { timeout: 10000 },
         async () => {
           const LobeMockProviderUseResponses = createOpenAICompatibleRuntime({
             baseURL: 'https://api.test.com/v1',
@@ -1849,10 +1877,6 @@ describe('LobeOpenAICompatibleFactory', () => {
             } as any);
 
           // Mock getModelPricing to prevent async issues
-          vi.mock('../../utils/model', () => ({
-            getModelPricing: vi.fn().mockResolvedValue({}),
-          }));
-
           try {
             await inst.chat({
               messages: [{ content: 'hi', role: 'user' }],
@@ -1865,7 +1889,6 @@ describe('LobeOpenAICompatibleFactory', () => {
 
           expect(mockResponsesCreate).toHaveBeenCalled();
         },
-        { timeout: 10000 },
       );
 
       it('should enable strictToolPairing when building Responses API input', async () => {
@@ -2029,6 +2052,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
       it(
         'should route to Responses API when model matches useResponseModels',
+        { timeout: 10000 },
         async () => {
           const LobeMockProviderUseResponseModels = createOpenAICompatibleRuntime({
             baseURL: 'https://api.test.com/v1',
@@ -2096,7 +2120,6 @@ describe('LobeOpenAICompatibleFactory', () => {
           }
           expect(spy).toHaveBeenCalledTimes(2); // Ensure no additional calls were made
         },
-        { timeout: 10000 },
       );
     });
 

@@ -1,3 +1,4 @@
+import { formatSandboxRecreation } from '@lobechat/prompts/fileSystem';
 import { ComputerRuntime } from '@lobechat/tool-runtime';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
@@ -46,6 +47,7 @@ export class CloudSandboxExecutionRuntime extends ComputerRuntime {
       });
 
       const state: ExecuteCodeState = {
+        ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
         error: result.result?.error,
         exitCode: result.result?.exitCode,
         language,
@@ -56,14 +58,27 @@ export class CloudSandboxExecutionRuntime extends ComputerRuntime {
 
       if (!result.success) {
         return {
-          content: result.error?.message || JSON.stringify(result.error),
+          content: formatSandboxRecreation(
+            result.error?.message || 'Failed to execute code in sandbox',
+            result.sessionExpiredAndRecreated,
+          ),
+          // Execution may have completed before its response failed. Preserve
+          // diagnostics without automatically replaying arbitrary code.
+          error: {
+            ...result.error,
+            kind: 'stop',
+            message: result.error?.message || 'Failed to execute code in sandbox',
+          },
           state,
-          success: true,
+          success: false,
         };
       }
 
       return {
-        content: JSON.stringify(result.result),
+        content: formatSandboxRecreation(
+          JSON.stringify(result.result),
+          result.sessionExpiredAndRecreated,
+        ),
         state,
         success: true,
       };
@@ -101,8 +116,14 @@ export class CloudSandboxExecutionRuntime extends ComputerRuntime {
             filename,
             success: false,
           }),
+          // Upload or registration may already have succeeded before the error.
+          error: {
+            ...result.error,
+            kind: 'stop',
+            message: result.error?.message || 'Failed to export file from sandbox',
+          },
           state,
-          success: true,
+          success: false,
         };
       }
 

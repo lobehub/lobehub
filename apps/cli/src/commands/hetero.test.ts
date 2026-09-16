@@ -5,16 +5,20 @@ import { PassThrough } from 'node:stream';
 
 import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
-const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
-  mockResolveHeteroSpawnCommand: vi.fn(),
-  mockSpawnAgent: vi.fn(),
-}));
+const { mockCreatePiRpcAgentHandle, mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(
+  () => ({
+    mockCreatePiRpcAgentHandle: vi.fn(),
+    mockResolveHeteroSpawnCommand: vi.fn(),
+    mockSpawnAgent: vi.fn(),
+  }),
+);
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
   mockGetTrpcClient: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),
@@ -32,8 +36,19 @@ vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
   resolveHeteroSpawnCommand: mockResolveHeteroSpawnCommand,
 }));
 
+vi.mock('@lobechat/heterogeneous-agents/rpc', () => ({
+  createPiRpcAgentHandle: mockCreatePiRpcAgentHandle,
+  toPiRpcPrompt: (input: unknown) =>
+    Promise.resolve({ text: typeof input === 'string' ? input : JSON.stringify(input) }),
+}));
+
 vi.mock('../api/client', () => ({
   getTrpcClient: mockGetTrpcClient,
+}));
+
+const { mockRenewalStop } = vi.hoisted(() => ({ mockRenewalStop: vi.fn() }));
+vi.mock('../utils/OperationTokenRenewal', () => ({
+  createOperationTokenRenewal: () => ({ active: true, stop: mockRenewalStop }),
 }));
 
 /**
@@ -107,6 +122,7 @@ describe('hetero exec command', () => {
         return { command: command ?? defaultCommand };
       },
     );
+    mockCreatePiRpcAgentHandle.mockReset();
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
     mockHeteroFinishMutate.mockReset();
@@ -125,6 +141,7 @@ describe('hetero exec command', () => {
     exitSpy.mockRestore();
     stdoutSpy.mockRestore();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   /** Build a fresh program with the hetero command registered. */
@@ -149,6 +166,26 @@ describe('hetero exec command', () => {
       throw err;
     }
   };
+
+  it('reports a failed CLI exit when terminal delivery is rejected', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle({ exitCode: 0 }));
+    mockHeteroFinishMutate.mockRejectedValue(
+      Object.assign(new Error('Denied'), { data: { code: 'UNAUTHORIZED' } }),
+    );
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'kimi-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-1',
+    ]);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
 
   it('supports exactly the local agent descriptor types', () => {
     expect([...SUPPORTED_AGENT_TYPES].toSorted()).toEqual(
@@ -197,6 +234,95 @@ describe('hetero exec command', () => {
     });
     // operationId auto-generated when omitted (uuid v4 shape)
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+  });
+
+  it.each(['codex', 'pi'])(
+    'keeps %s in the wrapper process group when requested by dispatch',
+    async (agentType) => {
+      vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
+      const spawn = agentType === 'pi' ? mockCreatePiRpcAgentHandle : mockSpawnAgent;
+      spawn.mockReturnValue(createFakeHandle());
+
+      await runCmd(['hetero', 'exec', '--type', agentType, '--prompt', 'do thing']);
+
+      expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ detached: false }));
+    },
+  );
+
+  it('does not duplicate Unix group signals inside an inherited wrapper group', async () => {
+    vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
+    let sigintHandler: (() => void) | undefined;
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT') sigintHandler = listener;
+      return process;
+    }) as typeof process.on);
+
+    let resolveExit:
+      ((result: { code: number | null; signal: NodeJS.Signals | null }) => void) | undefined;
+    const stderr = new PassThrough();
+    setImmediate(() => stderr.end());
+    const kill = vi.fn();
+    mockSpawnAgent.mockResolvedValue({
+      events: {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => ({ done: true, value: undefined }),
+        }),
+      },
+      exit: new Promise((resolve) => {
+        resolveExit = resolve;
+      }),
+      kill,
+      pid: 12_345,
+      stderr,
+    });
+
+    const command = runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'hi']);
+    for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
+
+    sigintHandler?.();
+    expect(kill).not.toHaveBeenCalled();
+
+    resolveExit?.({ code: null, signal: 'SIGINT' });
+    await command;
+  });
+
+  it('binds cancellation while the async Pi factory is still awaiting startup and escalates a second SIGINT', async () => {
+    const signalHandlers = new Map<string, () => void>();
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT' || event === 'SIGTERM') signalHandlers.set(event, listener);
+      return process;
+    }) as typeof process.on);
+    vi.spyOn(process, 'off').mockImplementation(((event: string) => {
+      signalHandlers.delete(event);
+      return process;
+    }) as typeof process.off);
+
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    let rejectFactory: ((error: Error) => void) | undefined;
+    mockCreatePiRpcAgentHandle.mockImplementation(
+      (options: { onStartupControl?: (control: { cancel: typeof cancel }) => void }) => {
+        options.onStartupControl?.({ cancel });
+        return new Promise((_resolve, reject) => {
+          rejectFactory = reject;
+        });
+      },
+    );
+
+    const command = runCmd(['hetero', 'exec', '--type', 'pi', '--prompt', 'hi']);
+    for (let index = 0; index < 20 && !signalHandlers.get('SIGINT'); index += 1) {
+      await Promise.resolve();
+    }
+    signalHandlers.get('SIGINT')?.();
+    signalHandlers.get('SIGINT')?.();
+    for (let index = 0; index < 20 && cancel.mock.calls.length === 0; index += 1) {
+      await Promise.resolve();
+    }
+
+    expect(cancel.mock.calls).toEqual([['SIGKILL']]);
+    rejectFactory!(new Error('Pi RPC session is closed'));
+    await command;
+    expect(exitSpy).toHaveBeenCalledWith(137);
+    expect(signalHandlers.size).toBe(0);
   });
 
   it('runs Qoder with its default command and forwards model and effort', async () => {
@@ -248,6 +374,35 @@ describe('hetero exec command', () => {
         agentType: 'kimi-code',
         command: 'kimi',
         extraArgs: ['--model', 'kimi-for-coding'],
+        prompt: 'do thing',
+      }),
+    );
+  });
+
+  it('runs Devin through ACP with its selected model and native arguments', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'devin',
+      '--prompt',
+      'do thing',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+      '--agent-arg=--agent-type',
+      '--agent-arg=coding',
+    ]);
+
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('devin', undefined);
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'devin',
+        command: 'devin',
+        extraArgs: ['--agent-type', 'coding', '--model', 'claude-sonnet-4-6-thinking'],
+        initialModel: 'claude-sonnet-4-6-thinking',
+        permissionMode: 'bypass',
         prompt: 'do thing',
       }),
     );
@@ -329,6 +484,39 @@ describe('hetero exec command', () => {
     const call = mockSpawnAgent.mock.calls[0][0];
     expect(call.operationId).toBe('op-server-allocated');
     expect(call.includePartialMessages).toBe(true);
+  });
+
+  it("echoes the run's operation and conversation into a server-ingest agent's env", async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      '/goal ship the report',
+      '--topic',
+      'tpc_conversation',
+      '--operation-id',
+      'op_conversation_run',
+    ]);
+
+    // `lh goal create --conversation` inside the agent's shell reads these.
+    expect(mockSpawnAgent.mock.calls[0][0].env).toMatchObject({
+      LOBEHUB_OPERATION_ID: 'op_conversation_run',
+      LOBEHUB_TOPIC_ID: 'tpc_conversation',
+    });
+  });
+
+  it('gives a standalone run no conversation identity', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'claude-code', '--prompt', 'hi']);
+
+    const env = mockSpawnAgent.mock.calls[0][0].env ?? {};
+    expect(env).not.toHaveProperty('LOBEHUB_OPERATION_ID');
+    expect(env).not.toHaveProperty('LOBEHUB_TOPIC_ID');
   });
 
   it('does not request Claude partial-message framing for other heterogeneous agents', async () => {
@@ -596,6 +784,33 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('passes an intervention bridge to server-ingest Devin runs', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'devin',
+      '--prompt',
+      'do thing',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-devin-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'devin',
+        askUserBridge: expect.objectContaining({ pending: expect.any(Function) }),
+        permissionMode: 'bypass',
+      }),
+    );
+  });
+
   it('runs OpenCode with model, resume, and native args while ignoring effort and speed', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -629,8 +844,12 @@ describe('hetero exec command', () => {
     );
   });
 
-  it('runs Pi with model, resume, and native args while ignoring effort and speed', async () => {
-    mockSpawnAgent.mockReturnValue(createFakeHandle());
+  it('runs Pi over the RPC transport with model, resume, and native args while ignoring effort and speed', async () => {
+    vi.stubEnv('HOME', '/pi-test-home');
+    vi.stubEnv('PI_CODING_AGENT_DIR', '/pi-test-config');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-only-key');
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'pi', pathEnv: '/pi-custom-bin' });
+    mockCreatePiRpcAgentHandle.mockResolvedValue(createFakeHandle());
 
     await runCmd([
       'hetero',
@@ -652,11 +871,20 @@ describe('hetero exec command', () => {
     ]);
 
     expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('pi', undefined);
-    expect(mockSpawnAgent).toHaveBeenCalledWith(
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(mockCreatePiRpcAgentHandle).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentType: 'pi',
-        command: 'pi',
-        extraArgs: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        args: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        commandPath: 'pi',
+        env: expect.objectContaining({
+          HOME: '/pi-test-home',
+          PI_CODING_AGENT_DIR: '/pi-test-config',
+          ANTHROPIC_API_KEY: 'test-only-key',
+          PATH: '/pi-custom-bin',
+        }),
+        operationId: expect.any(String),
+        onRawStdout: undefined,
+        onStartupControl: expect.any(Function),
         resumeSessionId: 'pi-session-1',
       }),
     );
@@ -811,6 +1039,7 @@ describe('hetero exec command', () => {
     for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
 
     sigintHandler?.();
+    await Promise.resolve();
     expect(kill).toHaveBeenCalledWith('SIGINT');
     expect(mockHeteroFinishMutate).not.toHaveBeenCalled();
 
@@ -1627,6 +1856,56 @@ describe('hetero exec command', () => {
       'ingest:agent_runtime_end:terminal',
       'finish',
     ]);
+  });
+
+  /**
+   * Regression: renewal was stopped before the final drain, so a token expiring
+   * while the drain or the finish receipt sat in retries rejected both — the
+   * very loss renewal exists to prevent.
+   */
+  it('keeps the operation token renewing until the finish receipt is sent', async () => {
+    const callOrder: string[] = [];
+    mockRenewalStop.mockReset();
+    mockRenewalStop.mockImplementation(() => callOrder.push('renewal:stop'));
+    mockHeteroIngestMutate.mockImplementation(async () => {
+      callOrder.push('ingest');
+      return { ack: true };
+    });
+    mockHeteroFinishMutate.mockImplementation(async () => {
+      callOrder.push('finish');
+      return { ack: true };
+    });
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { reason: 'success' },
+            operationId: 'op-renew',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'agent_runtime_end',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-renew',
+      '--render',
+      'none',
+    ]);
+
+    expect(callOrder).toEqual(['ingest', 'finish', 'renewal:stop']);
   });
 
   it('finishes with result "error" when a terminal error event is pushed despite a clean exit', async () => {

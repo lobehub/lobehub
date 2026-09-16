@@ -86,6 +86,8 @@ export default {
   'channel.messengerPromo.dismiss': 'Dismiss',
   'channel.messengerPromo.title': 'Skip the setup',
   'channel.exportConfig': 'Export Configuration',
+  'channel.exportContainsCredentials':
+    'This file contains bot credentials in plain text — store it somewhere safe.',
   'channel.importConfig': 'Import Configuration',
   'channel.importSuccess': 'Configuration imported successfully',
   'channel.importFailed': 'Failed to import configuration',
@@ -268,6 +270,9 @@ export default {
   'channel.charLimit': 'Character Limit',
   'channel.charLimitHint': 'Maximum number of characters per message',
   'channel.concurrency': 'Concurrency Mode',
+  'channel.concurrencyBurst': 'Burst',
+  'channel.concurrencyBurstHint':
+    'Wait briefly, then handle a run of messages as one turn (nothing is dropped)',
   'channel.concurrencyDebounce': 'Debounce',
   'channel.concurrencyDebounceHint':
     'Only process the last message in a burst (earlier ones are dropped)',
@@ -275,7 +280,7 @@ export default {
   'channel.concurrencyQueue': 'Queue',
   'channel.concurrencyQueueHint': 'Process messages one at a time',
   'channel.credentials': 'Credentials',
-  'channel.debounceMs': 'Debounce Window (ms)',
+  'channel.debounceMs': 'Wait Window (ms)',
   'channel.debounceMsHint':
     'How long to wait for additional messages before dispatching to the agent (ms)',
   'channel.dm': 'Direct Messages',
@@ -358,12 +363,19 @@ export default {
   'channel.userIdHint':
     'Lets AI tools reach you proactively (e.g. reminders); auto-trusted by the global allowlist',
   'channel.userIdMissingDesc':
-    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Fill it in under Advanced Settings.",
+    "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in under Advanced Settings.",
   'channel.userIdMissingTitle': 'Add your platform User ID',
   'channel.userIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':
-    'Open your app on the Feishu / Lark Open Platform → Permissions, then look up your Open ID.',
+    "Feishu Open IDs are per-app, so no console page shows you your own. Once the credentials are in, the app owner's is filled in for you; if nothing appears, use the button below or send /whoami to the bot in a direct message.",
+  'channel.feishu.fetchOwnerId': 'Fetch from app info',
+  'channel.feishu.fetchOwnerIdAutoSuccess':
+    'Filled in the app owner’s Open ID — check it is you, then save',
+  'channel.feishu.fetchOwnerIdSuccess': 'Open ID filled in — check it is you, then save',
+  'channel.feishu.fetchOwnerIdFailed': 'Failed to read the app owner',
+  'channel.feishu.fetchOwnerIdMissingCredentials':
+    'Enter the Application ID and App Secret first — the lookup runs as your app.',
   'channel.userIdHint.imessage':
     'Use your iMessage handle as seen in BlueBubbles, usually an email address or E.164 phone number.',
   'channel.userIdHint.line':
@@ -497,6 +509,35 @@ export default {
   'share.visitor.input.stop': 'Stop',
   'share.visitor.privacyNotice':
     'This conversation runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
+  'share.visitor.profile.about': 'About',
+  'share.visitor.profile.createdBy': 'Created by {{creator}}',
+  'share.visitor.profile.cta': 'Start a conversation',
+  'share.visitor.profile.ctaSignIn': 'Sign in to start',
+  'share.visitor.profile.freeNote': 'Free · paid for by the creator',
+  'share.visitor.profile.metrics.conversations': 'Conversations',
+  'share.visitor.profile.metrics.conversationsCaption': 'started so far',
+  'share.visitor.profile.metrics.tools': 'Open tools',
+  'share.visitor.profile.metrics.toolsCaption': 'available to you',
+  'share.visitor.profile.metrics.turns': 'Each conversation',
+  'share.visitor.profile.metrics.turnsCaption': 'turns at most',
+  'share.visitor.profile.metrics.views': 'Views',
+  'share.visitor.profile.metrics.viewsCaption': 'on this page',
+  'share.visitor.profile.metrics.visitors': 'People who used it',
+  'share.visitor.profile.metrics.visitorsCaption': 'visitors',
+  'share.visitor.profile.starters.desc': 'Pick one and it goes straight into the composer.',
+  'share.visitor.profile.starters.title': 'Not sure where to start?',
+  'share.visitor.profile.terms.account':
+    'It runs on the creator’s account, and every reply is paid for by them.',
+  'share.visitor.profile.terms.desc':
+    'Today these rules only show up as errors once you hit them. Here they are up front.',
+  'share.visitor.profile.terms.title': 'Before you start',
+  'share.visitor.profile.terms.tools_one': '{{count}} tool is open to visitors.',
+  'share.visitor.profile.terms.tools_other': '{{count}} tools are open to visitors.',
+  'share.visitor.profile.terms.topics': 'You can open up to {{count}} conversations.',
+  'share.visitor.profile.terms.turns': 'Each conversation allows up to {{count}} turns.',
+  'share.visitor.profile.terms.visibilityCreator':
+    'The creator has turned on session review, so they can read this conversation.',
+  'share.visitor.profile.terms.visibilityPrivate': 'Only you can see your conversations.',
   'share.visitor.topBar.home': 'Go to my LobeHub',
   'share.visitor.topics.empty': 'No conversations yet',
   'share.visitor.topics.new': 'New conversation',

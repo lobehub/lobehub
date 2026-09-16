@@ -40,6 +40,7 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
         logoUrl={clientMetadata.logo}
       />
       <AuthCard
+        centered
         subtitle={descriptionText}
         title={titleText}
         footer={

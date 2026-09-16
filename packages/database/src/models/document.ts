@@ -319,9 +319,42 @@ export class DocumentModel {
         .update(documents)
         .set({ updatedAt: new Date(), visibility })
         .where(and(eq(documents.id, rootId), this.ownership(), eq(documents.userId, this.userId)))
-        .returning({ id: documents.id });
+        .returning({ fileId: documents.fileId, id: documents.id });
 
       if (result.length === 0) throw new Error('Document not found');
+
+      // A page filed into a library owns a paired `files` row, stamped with the
+      // library's visibility when the page was created. The library lists rows
+      // through THAT column while the page opens through the document's, so
+      // leaving it behind splits the two: the row keeps announcing a private
+      // page's title to every member, and the page behind it refuses to open.
+      // Same transaction, and scoped without `files.visibility` for the same
+      // reason as `works` below — a promotion has to reach rows that are still
+      // private.
+      //
+      // `files.userId` is required on top of the workspace scope: `fileId` is a
+      // plain foreign key, and a document can point at a file somebody else
+      // uploaded (parsing another member's shared file yields a caller-owned
+      // document that keeps the original `fileId`). Without the owner check the
+      // workspace scope alone matches every member's file, so taking such a
+      // derived page private would hide the uploader's original from everyone.
+      // The paired row this mirrors is always the caller's own.
+      const fileId = result[0].fileId;
+      if (fileId) {
+        await (trx as LobeChatDatabase)
+          .update(files)
+          .set({ visibility })
+          .where(
+            and(
+              eq(files.id, fileId),
+              eq(files.userId, this.userId),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                { userId: files.userId, workspaceId: files.workspaceId },
+              ),
+            ),
+          );
+      }
 
       // Mirror visibility onto existing Work projections in the same
       // transaction. Scope without works.visibility so a promotion can

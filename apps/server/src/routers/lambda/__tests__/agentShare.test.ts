@@ -6,7 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 // `assertAgentShareCreationEnabled` (`_helpers/agentShareFeatureGate.ts`) runs
@@ -43,18 +45,22 @@ const mockUpdateSlug = vi.fn();
 const mockUpdateVisibility = vi.fn();
 
 vi.mock('@/database/models/agentShare', () => ({
-  AgentShareModel: vi.fn(() => ({
-    create: mockCreate,
-    getByAgentId: mockGetByAgentId,
-    updateConfig: mockUpdateConfig,
-    updateSlug: mockUpdateSlug,
-    updateVisibility: mockUpdateVisibility,
-  })),
+  AgentShareModel: vi.fn(function () {
+    return {
+      create: mockCreate,
+      getByAgentId: mockGetByAgentId,
+      updateConfig: mockUpdateConfig,
+      updateSlug: mockUpdateSlug,
+      updateVisibility: mockUpdateVisibility,
+    };
+  }),
 }));
 
 const mockCountShareVisitors = vi.fn();
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({ countShareVisitors: mockCountShareVisitors })),
+  TopicModel: vi.fn(function () {
+    return { countShareVisitors: mockCountShareVisitors };
+  }),
 }));
 
 const mockGetAgentShareMonthlySpend = vi.fn();

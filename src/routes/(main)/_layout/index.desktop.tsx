@@ -36,6 +36,7 @@ import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
+import GatewayMuxWarmup from './GatewayMuxWarmup';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -91,6 +92,7 @@ const Layout: FC = () => {
         </DndContextWrapper>
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
+          <GatewayMuxWarmup />
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />

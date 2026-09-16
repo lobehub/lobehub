@@ -15,7 +15,7 @@ import type {
   AgentShareItem,
   NormalizedAgentShareConfig,
 } from '../schemas';
-import { agents, agentShares } from '../schemas';
+import { agents, agentShares, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { isUuid } from '../utils/uuid';
@@ -484,9 +484,18 @@ export class AgentShareModel {
         agentDescription: agents.description,
         agentId: agentShares.agentId,
         agentName: agents.name,
+        agentOpeningQuestions: agents.openingQuestions,
         agentSlug: agents.slug,
+        agentTags: agents.tags,
         agentTitle: agents.title,
+        // Creator identity for the visitor-facing profile. Left-joined on the
+        // owner rather than read through a second query: the share page needs
+        // it on its only round trip, and the row is already joined for the
+        // personal-scope guard below.
+        ownerAvatar: users.avatar,
+        ownerFullName: users.fullName,
         ownerId: agents.userId,
+        ownerUsername: users.username,
         shareConfig: agentShares.shareConfig,
         shareId: agentShares.id,
         userViewCount: agentShares.userViewCount,
@@ -494,6 +503,7 @@ export class AgentShareModel {
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
+      .leftJoin(users, eq(agents.userId, users.id))
       .where(and(eq(agentShares.id, shareId), isNull(agents.workspaceId)))
       .limit(1);
 
@@ -502,6 +512,8 @@ export class AgentShareModel {
     return {
       ...share,
       agentAvatar: normalizeInboxAgentAvatar(share.agentAvatar, { slug: share.agentSlug }),
+      agentOpeningQuestions: share.agentOpeningQuestions ?? [],
+      agentTags: share.agentTags ?? [],
       agentTitle: normalizeInboxAgentTitle(share.agentTitle, { slug: share.agentSlug }),
       shareConfig: normalizeAgentShareConfig(share.shareConfig),
     };

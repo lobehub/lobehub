@@ -172,6 +172,16 @@ describe('refineErrorCode', () => {
   });
 
   describe('HTTP-status fallback (no message match)', () => {
+    it('classifies a structured 413 as RequestBodyTooLarge', () => {
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          httpStatus: 413,
+          message: 'opaque HTML response',
+        }),
+      ).toBe(AgentRuntimeErrorType.RequestBodyTooLarge);
+    });
+
     it('uses the structured status when the message carries no pattern', () => {
       expect(
         refineErrorCode({

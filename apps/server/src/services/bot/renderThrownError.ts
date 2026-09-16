@@ -1,4 +1,7 @@
-import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import {
+  formatErrorForState,
+  readErrorBudgetContext,
+} from '@/server/modules/AgentRuntime/formatErrorForState';
 
 import type { BotReplyLocale } from './platforms';
 import { renderAgentError } from './replyTemplate';
@@ -40,5 +43,6 @@ export const renderThrownAgentError = (
     operationId,
     replyLocale,
     formatted.attribution ?? 'harness',
+    readErrorBudgetContext(formatted),
   );
 };

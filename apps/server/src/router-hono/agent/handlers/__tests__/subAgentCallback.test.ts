@@ -8,16 +8,18 @@ const mockGetOperationMetadata = vi.fn();
 const mockAiAgentService = vi.fn();
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation((...args: any[]) => {
+  AiAgentService: vi.fn().mockImplementation(function (...args: any[]) {
     mockAiAgentService(...args);
     return { completeSubAgentBridge: mockCompleteSubAgentBridge };
   }),
 }));
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
-  AgentRuntimeCoordinator: vi.fn().mockImplementation(() => ({
-    getOperationMetadata: mockGetOperationMetadata,
-  })),
+  AgentRuntimeCoordinator: vi.fn().mockImplementation(function () {
+    return {
+      getOperationMetadata: mockGetOperationMetadata,
+    };
+  }),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({

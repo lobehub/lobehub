@@ -57,6 +57,15 @@ const StoreUpdater = memo<StoreUpdaterProps>(
       return Boolean(doc?.workspaceId) && doc?.visibility !== 'private';
     });
 
+    // Every page that lives in a workspace, private drafts included. Naming a
+    // member is about who exists in the workspace, not who can already open the
+    // page — and a page created from the sidebar starts as 私人, so gating on
+    // `isWorkspacePage` would hide `@` exactly where most pages begin. The
+    // server still drops the ping for anyone without view access.
+    const isWorkspaceScopedPage = usePageStore((s) =>
+      Boolean(pageSelectors.getDocumentById(pageId)(s)?.workspaceId),
+    );
+
     // Drive the collaborative edit lock for workspace pages
     useDocumentLock();
     // Subscribe to realtime doc/lock events so the page syncs without polling
@@ -68,6 +77,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // Update store with props
     useStoreUpdater('documentId', pageId);
     useStoreUpdater('isWorkspacePage', isWorkspacePage);
+    useStoreUpdater('isWorkspaceScopedPage', isWorkspaceScopedPage);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);
     useStoreUpdater('metaReadOnly', metaReadOnly);
     useStoreUpdater('onDocumentIdChange', onDocumentIdChange);

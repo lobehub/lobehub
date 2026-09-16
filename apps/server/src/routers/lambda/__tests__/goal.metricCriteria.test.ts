@@ -2,17 +2,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
-vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
   const { authedProcedure } = await import('@/libs/trpc/lambda');
-  return { wsCompatProcedure: authedProcedure };
+  return { ...(await importOriginal<object>()), wsCompatProcedure: authedProcedure };
 });
+
+// Router contract tests do not launch an Agent runtime.
+vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: vi.fn() }));
 
 const mockCreate = vi.fn();
 const mockSetMetricCriteria = vi.fn();
@@ -20,15 +27,19 @@ const mockRecordObservation = vi.fn();
 const mockFindById = vi.fn();
 
 vi.mock('@/server/services/goal', () => ({
-  GoalService: vi.fn(() => ({
-    create: mockCreate,
-    recordObservation: mockRecordObservation,
-    setMetricCriteria: mockSetMetricCriteria,
-  })),
+  GoalService: vi.fn(function () {
+    return {
+      create: mockCreate,
+      recordObservation: mockRecordObservation,
+      setMetricCriteria: mockSetMetricCriteria,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ findById: mockFindById })),
+  GoalModel: vi.fn(function () {
+    return { findById: mockFindById };
+  }),
 }));
 
 const mockScheduleGoalAdvance = vi.fn();
@@ -48,6 +59,21 @@ describe('goalRouter numeric acceptance', () => {
     mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'user-1' });
     mockSetMetricCriteria.mockResolvedValue({ goal: { id: 'goal_1' } });
     mockRecordObservation.mockResolvedValue({ point: {}, series: {}, shouldAdvance: true });
+  });
+
+  it('accepts planning limits without a separately configured manager identity', async () => {
+    await caller.create({
+      agentId: 'task-worker',
+      createdByAgentId: 'creating-agent',
+      config: { manager: { maxTurns: 5 } },
+      title: 'Creator-managed goal',
+    });
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdByAgentId: 'creating-agent',
+        config: { manager: { maxTurns: 5 } },
+      }),
+    );
   });
 
   it('carries measured clauses through the create contract', async () => {

@@ -1,7 +1,6 @@
 'use client';
 
-import { type DraggablePanelProps } from '@lobehub/ui';
-import { DraggablePanel } from '@lobehub/ui';
+import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui/base-ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import { type PropsWithChildren } from 'react';
 import { Activity, memo, useState } from 'react';

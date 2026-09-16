@@ -1,6 +1,6 @@
 ---
 name: acceptance
-version: 0.4.2
+version: 0.4.3
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
@@ -24,6 +24,36 @@ marks it `uncertain` and holds the delivery.
 ```
 author (or discover) the plan  →  pick the surface  →  capture evidence  →  publish the round  →  self-check coverage
 ```
+
+## Decide whether to execute before starting a round
+
+Creating or updating a PR, marking it ready, or being asked to upload a report
+must not by itself start another verification run. First inspect the requested
+scope and the task's existing reports, evidence, and published acceptance links
+(from the conversation, PR, or local `.acceptances/` directory).
+
+| Delivery state                                                                                                                       | Action                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Documentation/instruction-only change, or pure refactor/tooling change with no product behavior change                               | Skip product acceptance and briefly state why. Keep any applicable quality checks.                                                                                                                                                                                                                          |
+| Gitlink-only sync                                                                                                                    | Do not launch a fresh acceptance. Link the upstream change and its existing acceptance when available; disclose missing upstream evidence without claiming it passed. Cloud changes accompanying the sync are assessed separately.                                                                          |
+| Completed acceptance already published and still covers the delivery                                                                 | Reuse its URL and coverage. Do not create a round or rerun cases just for the PR.                                                                                                                                                                                                                           |
+| Completed acceptance report and evidence exist locally and still cover the delivery                                                  | Inspect coverage and artifacts, then upload that report using [report.md](references/report.md). Preserve the original execution provenance; no product rerun, new plan, or repeated completed checker review is needed merely for upload.                                                                  |
+| The delivery was already exercised on the real product earlier in this session (observations and raw artifacts exist, no report yet) | Do not rerun, re-plan, or open a checker stage. Write `plan[]` and `cases[]` from the observations already made, attach the original artifacts (logs, command output, captures) with their original provenance, disclose any required medium that was never captured instead of recapturing it, and ingest. |
+| Product behavior lacks valid evidence, or relevant behavior changed after verification                                               | Execute only the missing or affected outcomes, retain unaffected evidence with its original provenance, and publish according to the round rules below.                                                                                                                                                     |
+
+Evidence is reusable when its criteria cover the requested behavior, its artifacts
+are available and support the observations, and subsequent code, dependency,
+configuration, or environment changes do not invalidate those observations.
+Compare the relevant changes; a different commit SHA, rebase, PR event, or report
+publication status alone is not a reason to rerun. Failed/blocked checks and missing
+required evidence are not passes: repair or supplement those specific gaps.
+An explicit user request for fresh verification still takes precedence.
+
+The execution, environment setup, plan/checker, and capture sections below apply
+when executing acceptance. For reuse or upload only, inspect the existing report
+and evidence and complete the necessary publication/coverage steps; do not boot
+services or replay completed cases. Uploading does not change when or against
+which implementation the evidence was captured.
 
 ## Independent acceptance review (first round only)
 
@@ -164,9 +194,17 @@ execution semantics.
    definition and returns `flowId`. To edit it, include that `flowId` and the
    current `expectedHash` in the file. `lh acceptance flow view <acceptanceId>`
    reads definitions, snapshots and results. Publishing does not execute checks.
+   Revise a graph in place rather than publishing a second one; a superseded
+   graph left behind still renders as its own journey with its own unexecuted
+   checks. `lh acceptance flow delete <acceptanceId> --flow <flowId>` removes
+   one that never should have existed, and only while it has no verified
+   history: it is refused once a settled round has run it, or while another
+   flow invokes it as a subflow.
 3. `lh acceptance flow plan <acceptanceId> --flow <flowId>` creates a draft round
-   with a frozen graph and plan. Add `--run <verifyRunId>` to attach another flow
-   to the same open round. Read `lh acceptance run get <verifyRunId> --json` for
+   with the graph and its plan. While the round is only planned it follows the
+   live graph: publishing an edit refreshes its snapshot and plan in place, and
+   running `flow plan` again refreshes the same draft instead of opening another
+   round. Add `--run <verifyRunId>` to attach another flow to the same draft. Read `lh acceptance run get <verifyRunId> --json` for
    the actual plan IDs: each branch and subflow invocation has its own
    `checkItemId`; never substitute the reusable asset ID.
 4. Share the acceptance link so the user can inspect the proposed nodes, branches
@@ -174,8 +212,9 @@ execution semantics.
    feedback. Preparing a plan neither executes checks nor approves delivery;
    there is no separate flow-confirmation action. Continue within the user's
    authorized scope, or pause if the user explicitly asked to review before work.
-   For requested changes, publish the revised definition and prepare a new draft
-   round in the same acceptance.
+   For requested changes, publish the revised definition with its `flowId` and
+   `expectedHash`; the draft round follows automatically. Never open another
+   round or another flow just to revise a plan that has not executed.
 5. Implement the work and exercise the real product, then use
    `lh acceptance flow record <acceptanceId> --file result.json`, containing
    `verifyRunId`, `checkItemId`, `verdict` (`passed`, `failed`, `uncertain`, or
@@ -189,7 +228,10 @@ execution semantics.
 
 To rerun the exact old graph, prepare a plan with `--from-run <sourceVerifyRunId>` and
 omit `--run` for a fresh round. This preserves the old definition and starts
-without results. Each replay starts as an unexecuted draft. Accepted or closed
+without results. Each replay starts as an unexecuted draft. A round is frozen
+by its first recorded result; only then does it keep its number. An
+`lh acceptance run ingest` that reaches an acceptance whose latest round is
+still a draft folds into that draft rather than opening a new round. Accepted or closed
 acceptances must be explicitly reopened
 before starting. Edges describe business transitions; they do not automatically
 schedule execution. Continue to read `lh acceptance feedback <acceptanceId> --actionable` before repairs and publish new rounds into the same acceptance.
@@ -238,22 +280,26 @@ excuse below was made in a real round.
 | "One more config edit and the env will boot" / "I'll mock it" / "I'll drive the rest myself"           | Timebox. Inventory running instances, probe for the real capability before mocking (a mock that records nothing is not in the path), re-delegate a dead subagent's remaining steps, revert experiments and ask. (M17)           |
 | "The fix is in and tests pass — verified"                                                              | Reproduce the failure's precondition first, then verify with it held. A run that cannot fail proves nothing; "reproduces sometimes" means an unnamed precondition. When the mocked seam is the suspect, drop the mock. (M31)    |
 
-## Pick the surface by what you changed
+## Pick the surface by the user-visible outcome
 
-Match the change to the cheapest surface that can prove it; escalate only if
-needed.
+Match the requirement to the cheapest surface that can prove the complete outcome,
+not merely the layer containing the code change. A backend fix for missing cards,
+stale lists, navigation, or another visible behavior still requires the consuming
+UI, its actual data response, and inspected screenshots. Database assertions and
+passing tests support that evidence; they do not replace it.
 
 | What your task changed                                      | Surface                                               | Guide                                                  |
 | ----------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| Backend / CLI / library / data logic                        | **CLI** — stdout as `text`, zero UI flakiness         | [surfaces/cli.md](surfaces/cli.md)                     |
+| Backend / CLI / library / data logic with no UI outcome     | **CLI** — stdout as `text`, zero UI flakiness         | [surfaces/cli.md](surfaces/cli.md)                     |
 | Web app frontend / styles / interactions                    | **Web** (agent-browser → running web app)             | [surfaces/web.md](surfaces/web.md)                     |
 | New/changed API **plus** the UI consuming it                | **Web**, full-stack (agent-browser + network capture) | [surfaces/web.md](surfaces/web.md#web-full-stack)      |
 | Desktop-only behavior (native windows, IPC, packaged shell) | **Electron** (agent-browser `--cdp`)                  | [surfaces/electron.md](surfaces/electron.md)           |
 | Native macOS app / OS chrome agent-browser can't reach      | **Native** (osascript + screencapture, local macOS)   | [surfaces/native.md](surfaces/native.md)               |
 | Native iOS behavior, gestures, device-size layout           | **iOS Simulator** (AXe/native CLI + `simctl`)         | [surfaces/ios-simulator.md](surfaces/ios-simulator.md) |
 
-- **Don't open a browser for a backend change**; command output as `text` is the
-  strongest, cheapest proof. Use **Electron** only when the criterion depends on
+- **Use CLI alone only when the required outcome has no UI surface.** If a visible
+  outcome cannot be exercised, report that acceptance as incomplete instead of
+  narrowing it to data checks. Use **Electron** only when the criterion depends on
   desktop-only code; iOS is driven by a Simulator HID/AX CLI, never host mouse —
   mark the case `blocked` if the CLI cannot express the gesture.
 - **Structured data uses native visualizations** (`cases[].datasets` +
@@ -306,10 +352,11 @@ surface; append `?r=<roundIndex>` for this round's fixed snapshot.
 Put no images, local paths, local file links, or internal run-page paths in the
 chat reply.
 
-```text
-Acceptance:   https://app.lobehub.com/acceptance/<acceptanceId>
+Write the link as a plain-text line, never inside a fenced or inline code block — the
+chat client only linkifies plain text, and a code block makes it unclickable:
+
+Acceptance: <https://app.lobehub.com/acceptance/ACCEPTANCE_ID> (the placeholder is the id ingest printed; it stays inside the URL)
 Coverage: 2/2 criteria, all required evidence uploaded
-```
 
 ## Portability rules
 

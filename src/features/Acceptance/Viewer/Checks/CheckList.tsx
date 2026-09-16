@@ -51,6 +51,11 @@ interface CheckListProps {
   onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   /** Record group-scoped feedback; resolves true when the write landed. */
   onGroupFeedback: (category: string, comment: string, fileIds: string[]) => Promise<boolean>;
+  /**
+   * Open a check on its own page instead of unfolding it in the list. Set on a
+   * phone, where the inline disclosure buries its neighbours.
+   */
+  onOpenCheck?: (id: string) => void;
   /** Open an agent judge's verification run (its trace IS the argument). */
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
   /** Record the user's verdict; resolves true when the write landed. */
@@ -74,6 +79,7 @@ const CheckList = memo<CheckListProps>(
     groupFeedback,
     onDismissProposal,
     onGroupFeedback,
+    onOpenCheck,
     onReview,
     onOpenTrace,
     onRound,
@@ -161,6 +167,7 @@ const CheckList = memo<CheckListProps>(
               key={check.id}
               reviewPending={reviewPending}
               onDismissProposal={onDismissProposal}
+              onOpenDetail={onOpenCheck ? () => onOpenCheck(check.id) : undefined}
               onOpenTrace={onOpenTrace}
               onReview={onReview}
               onRound={onRound}
@@ -315,8 +322,10 @@ const CheckList = memo<CheckListProps>(
                     />
                   </span>
                 )}
-                {collapsed ? (
-                  // Fixed-size placeholder keeps the header height stable across toggles.
+                {collapsed || onOpenCheck ? (
+                  // Fixed-size placeholder keeps the header height stable across
+                  // toggles — and stands in for the bulk expander on rows that
+                  // navigate away instead of unfolding.
                   <div style={{ height: 24, width: 24 }} />
                 ) : (
                   <ActionIcon
@@ -400,6 +409,7 @@ const CheckList = memo<CheckListProps>(
                     key={check.id}
                     reviewPending={reviewPending}
                     onDismissProposal={onDismissProposal}
+                    onOpenDetail={onOpenCheck ? () => onOpenCheck(check.id) : undefined}
                     onOpenTrace={onOpenTrace}
                     onReview={onReview}
                     onRound={onRound}

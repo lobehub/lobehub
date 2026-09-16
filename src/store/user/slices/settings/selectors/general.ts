@@ -32,6 +32,11 @@ const currentResponseLanguage = (s: UserStore): Locales => {
   return normalizeLocale(getSystemLanguage());
 };
 const telemetry = (s: UserStore) => generalConfig(s).telemetry;
+const timezone = (s: UserStore) => generalConfig(s).timezone;
+/** The user's timezone setting, falling back to the browser's. */
+const currentTimezone = (s: UserStore): string | undefined =>
+  timezone(s) ||
+  (typeof Intl === 'undefined' ? undefined : Intl.DateTimeFormat().resolvedOptions().timeZone);
 const enableAutoScrollOnStreaming = (s: UserStore) =>
   generalConfig(s).enableAutoScrollOnStreaming ?? true;
 const enableMessageLinkIcon = (s: UserStore) => generalConfig(s).enableMessageLinkIcon ?? true;
@@ -50,8 +55,10 @@ export const userGeneralSettingsSelectors = {
   neutralColor,
   primaryColor,
   currentResponseLanguage,
+  currentTimezone,
   responseLanguage,
   telemetry,
+  timezone,
   transitionMode,
   workflowStreamingExpandLevel,
 };

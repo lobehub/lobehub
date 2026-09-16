@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   findPolicyById: vi.fn(),
   findReportByRun: vi.fn(),
   findRunById: vi.fn(),
+  foldIntoRound: vi.fn(),
   ensureForSubject: vi.fn(),
   listByAcceptance: vi.fn(),
   setDecision: vi.fn(),
@@ -19,32 +20,43 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/acceptance', () => ({
-  AcceptanceModel: vi.fn(() => ({
-    ensureForSubject: mocks.ensureForSubject,
-    findById: mocks.findById,
-    findPolicyById: mocks.findPolicyById,
-    updatePolicyStatus: mocks.updatePolicyStatus,
-    updateStatus: mocks.updateStatus,
-  })),
+  AcceptanceModel: vi.fn(function () {
+    return {
+      ensureForSubject: mocks.ensureForSubject,
+      findById: mocks.findById,
+      findPolicyById: mocks.findPolicyById,
+      updatePolicyStatus: mocks.updatePolicyStatus,
+      updateStatus: mocks.updateStatus,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    attachToAcceptance: mocks.attachToAcceptance,
-    findById: mocks.findRunById,
-    listByAcceptance: mocks.listByAcceptance,
-    setDecision: mocks.setDecision,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      attachToAcceptance: mocks.attachToAcceptance,
+      findById: mocks.findRunById,
+      foldIntoRound: mocks.foldIntoRound,
+      listByAcceptance: mocks.listByAcceptance,
+      setDecision: mocks.setDecision,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({ VerifyCheckResultModel: vi.fn() }));
 vi.mock('@/database/models/verifyEvidence', () => ({ VerifyEvidenceModel: vi.fn() }));
 vi.mock('@/database/models/verifyReport', () => ({
-  VerifyReportModel: vi.fn(() => ({ findByRun: mocks.findReportByRun })),
+  VerifyReportModel: vi.fn(function () {
+    return { findByRun: mocks.findReportByRun };
+  }),
 }));
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({ resolve: mocks.taskResolve })),
+  TaskModel: vi.fn(function () {
+    return { resolve: mocks.taskResolve };
+  }),
 }));
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn(() => ({ findOwnTopicById: mocks.findOwnTopicById })),
+  TopicModel: vi.fn(function () {
+    return { findOwnTopicById: mocks.findOwnTopicById };
+  }),
 }));
 vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn() }));
 vi.mock('@/server/services/task', () => ({ TaskService: vi.fn() }));
@@ -61,7 +73,9 @@ const acceptance = (status: string) => ({
 describe('AcceptanceService decision gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.findPolicyById.mockImplementation((...args) => mocks.findById(...args));
+    mocks.findPolicyById.mockImplementation(function (...args) {
+      return mocks.findById(...args);
+    });
     mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1 }]);
   });
 
@@ -154,6 +168,38 @@ describe('AcceptanceService decision gating', () => {
       acceptanceId: 'acc-1',
     });
     expect(mocks.attachToAcceptance).toHaveBeenCalledWith('run-2', 'acc-1', undefined);
+  });
+
+  it('folds a new run into the draft round instead of opening another', async () => {
+    mocks.findById.mockResolvedValue(acceptance('planned'));
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-2', plan: [] });
+    mocks.listByAcceptance.mockResolvedValue([
+      { id: 'run-1', planConfirmedAt: null, roundIndex: 1, status: 'planned', userDecision: null },
+    ]);
+    mocks.foldIntoRound.mockResolvedValue({ acceptanceId: 'acc-1', id: 'run-1', roundIndex: 1 });
+
+    await expect(service().attachRun('run-2', 'acc-1')).resolves.toMatchObject({ id: 'run-1' });
+    expect(mocks.foldIntoRound).toHaveBeenCalledWith('run-2', 'run-1');
+    expect(mocks.attachToAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('opens a new round when the newest one is no longer a draft', async () => {
+    mocks.findById.mockResolvedValue(acceptance('planned'));
+    mocks.findRunById.mockResolvedValue({ acceptanceId: null, id: 'run-3', plan: [] });
+    // Ascending chain: an abandoned draft sits behind an executed newer round.
+    mocks.listByAcceptance.mockResolvedValue([
+      { id: 'run-1', planConfirmedAt: null, roundIndex: 1, status: 'planned', userDecision: null },
+      { id: 'run-2', planConfirmedAt: new Date(), roundIndex: 2, status: null, userDecision: null },
+    ]);
+    mocks.attachToAcceptance.mockResolvedValue({
+      acceptanceId: 'acc-1',
+      id: 'run-3',
+      roundIndex: 3,
+    });
+
+    await expect(service().attachRun('run-3', 'acc-1')).resolves.toMatchObject({ id: 'run-3' });
+    expect(mocks.foldIntoRound).not.toHaveBeenCalled();
+    expect(mocks.attachToAcceptance).toHaveBeenCalledWith('run-3', 'acc-1', undefined);
   });
 
   it.each(['delivered', 'errored'])('accepts a settled (%s) delivery', async (status) => {

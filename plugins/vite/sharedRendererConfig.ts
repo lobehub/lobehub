@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import type { ModulePreloadOptions, Plugin } from 'vite';
 
+import { viteCompletionSounds } from './completionSounds';
 import { viteEmotionSpeedy } from './emotionSpeedy';
 import { lobeIconImports } from './lobeIconImports';
 import { lobeUiImports } from './lobeUiImports';
@@ -403,22 +404,22 @@ interface SharedRendererOptions {
 
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
+    viteCompletionSounds(),
     viteEmotionSpeedy(),
     viteMarkdownImport(),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
 
-    // GlobalProvider/Editor.tsx reaches @lobehub/editor's provider by file path
-    // (the export map has no provider-only entry) so the editor runtime stays
-    // off the first screen. In dev that path is served raw while the editors
-    // use the prebundled @lobehub/editor/react, which would create a second
-    // EditorContext; point the dev import back at the bundle.
+    // Editor.tsx takes the provider-only entry so the editor runtime stays off
+    // the first screen. In dev that entry is prebundled separately from
+    // @lobehub/editor/react, which the editors use, giving the app a second
+    // EditorContext; point the dev import back at the one bundle.
     isDev &&
       ({
         enforce: 'pre',
         name: 'lobe-dev-editor-provider',
         resolveId(source, importer) {
-          if (!source.includes('@lobehub/editor/es/react/EditorProvider')) return null;
+          if (source !== '@lobehub/editor/react/EditorProvider') return null;
           return this.resolve('@lobehub/editor/react', importer, { skipSelf: true });
         },
       } satisfies Plugin),

@@ -8,10 +8,17 @@ const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     goal: {
       create: { mutate: vi.fn() },
+      submitPlan: { mutate: vi.fn() },
+      submitOperationPlan: { mutate: vi.fn() },
       graph: { query: vi.fn() },
+      supervision: { query: vi.fn() },
       tick: { mutate: vi.fn() },
     },
   },
+}));
+
+vi.mock('node:fs/promises', () => ({
+  readFile: async () => JSON.stringify({ action: 'verify', reason: 'Ready' }),
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn().mockResolvedValue(mockClient) }));
@@ -36,6 +43,57 @@ const waitingResult = {
   outcome: 'waiting_external',
   taskId: 'task-1',
 };
+
+describe('goal plan authentication', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(console.log).mockRestore();
+  });
+
+  it.each(['hetero-operation', 'cli-sandbox', undefined])(
+    'routes %s credentials to the appropriate plan endpoint',
+    async (purpose) => {
+      vi.clearAllMocks();
+      vi.stubEnv(
+        'LOBEHUB_JWT',
+        purpose
+          ? `header.${Buffer.from(JSON.stringify({ purpose })).toString('base64url')}.signature`
+          : undefined,
+      );
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      mockClient.goal.submitPlan.mutate.mockResolvedValue({ data: {} });
+      mockClient.goal.submitOperationPlan.mutate.mockResolvedValue({ data: {} });
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'goal',
+        'plan',
+        'goal-1',
+        '--file',
+        'plan.json',
+        '--token',
+        'turn-1',
+        '--operation',
+        'op-1',
+      ]);
+      const selected =
+        purpose === 'hetero-operation'
+          ? mockClient.goal.submitOperationPlan
+          : mockClient.goal.submitPlan;
+      const other =
+        purpose === 'hetero-operation'
+          ? mockClient.goal.submitPlan
+          : mockClient.goal.submitOperationPlan;
+      expect(selected.mutate).toHaveBeenCalledWith({
+        id: 'goal-1',
+        operationId: 'op-1',
+        token: 'turn-1',
+        plan: { action: 'verify', reason: 'Ready' },
+      });
+      expect(other.mutate).not.toHaveBeenCalled();
+    },
+  );
+});
 
 describe('goal run command', () => {
   beforeEach(() => {
@@ -298,9 +356,55 @@ describe('goal show command', () => {
 });
 
 describe('goal create command', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  it.each([undefined, 'task-worker'])(
+    'inherits the calling Agent with Task assignee %s',
+    async (worker) => {
+      vi.stubEnv('LOBEHUB_AGENT_ID', 'creating-agent');
+      mockClient.goal.create.mutate.mockResolvedValue({ data: { goal: { id: 'goal-1' } } });
+      await createProgram().parseAsync([
+        'node',
+        'test',
+        'goal',
+        'create',
+        'Creator goal',
+        '--json',
+        ...(worker ? ['--agent', worker] : []),
+        '--max-manager-turns',
+        '5',
+      ]);
+      expect(mockClient.goal.create.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: worker ?? 'creating-agent',
+          createdByAgentId: 'creating-agent',
+          config: expect.objectContaining({ manager: { maxTurns: 5 } }),
+        }),
+      );
+    },
+  );
+
+  it('allows a person to select an Agent without inventing Agent authorship', async () => {
+    vi.stubEnv('LOBEHUB_AGENT_ID', undefined);
+    mockClient.goal.create.mutate.mockResolvedValue({ data: { goal: { id: 'goal-1' } } });
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'create',
+      'User goal',
+      '--agent',
+      'selected-agent',
+      '--json',
+    ]);
+    expect(mockClient.goal.create.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'selected-agent', createdByAgentId: undefined }),
+    );
   });
 
   it('links to the created goal rather than to /goal/undefined', async () => {
@@ -352,15 +456,36 @@ describe('goal create command', () => {
       'Repair',
       '--max-attempts-per-task',
       '4',
+      '--supervise',
+      '--max-supervision-incidents',
+      '6',
     ]);
 
     expect(mockClient.goal.create.mutate).toHaveBeenCalledWith(
       expect.objectContaining({
         config: expect.objectContaining({
           recovery: expect.objectContaining({ maxAttemptsPerTask: 4 }),
+          supervision: { enabled: true, maxIncidents: 6 },
         }),
         tasks: ['Inspect', 'Repair'],
       }),
     );
+  });
+});
+
+describe('goal supervision command', () => {
+  it('exposes diagnostic identity and recovery metrics without advancing the Goal', async () => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const data = {
+      enabled: true,
+      state: { topicId: 'supervisor-topic' },
+      summary: { effectiveRecoveries: 0 },
+    };
+    mockClient.goal.supervision.query.mockResolvedValue({ data });
+    await createProgram().parseAsync(['node', 'test', 'goal', 'supervision', 'goal-1']);
+    expect(mockClient.goal.supervision.query).toHaveBeenCalledWith({ id: 'goal-1' });
+    expect(JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))).toEqual(data);
+    expect(mockClient.goal.tick.mutate).not.toHaveBeenCalled();
   });
 });

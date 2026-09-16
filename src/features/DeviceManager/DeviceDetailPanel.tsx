@@ -234,7 +234,9 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
           </Text>
           <Flexbox horizontal align={'center'} gap={8}>
             <Tag color={online ? 'success' : 'default'} size={'small'}>
-              {online ? t('devices.status.online') : t('devices.status.offline')}
+              {online
+                ? t('devices.status.onlineConnections', { count: channels.length })
+                : t('devices.status.offline')}
             </Tag>
             {isCurrent && <Tag size={'small'}>{t('devices.currentBadge')}</Tag>}
           </Flexbox>

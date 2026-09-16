@@ -38,6 +38,7 @@
   "ProviderServiceUnavailable": "Der Anbieter ist vorübergehend überlastet oder nicht verfügbar. Bitte versuchen Sie es in Kürze erneut.",
   "QuotaLimitReached": "Entschuldigung, die Token-Nutzung oder die Anzahl der Anfragen hat das Kontingentlimit für diesen Schlüssel erreicht. Bitte erhöhen Sie das Kontingent des Schlüssels oder versuchen Sie es später erneut.",
   "RateLimitExceeded": "Entschuldigung, die Token-Nutzung oder die Anzahl der Anfragen hat das Ratenlimit für diesen Schlüssel erreicht. Bitte versuchen Sie es später erneut oder erhöhen Sie das Kontingent des Schlüssels.",
+  "RequestBodyTooLarge": "Diese Anfrage ist zu groß für den Modellanbieter. Komprimieren Sie die Unterhaltung oder reduzieren Sie angehängte Inhalte und versuchen Sie es erneut.",
   "StateStorePersistError": "Ein vorübergehendes Problem mit dem Konversationsstatusspeicher hat diesen Vorgang unterbrochen. Bitte versuchen Sie es erneut; falls das Problem weiterhin besteht, wenden Sie sich an den Support.",
   "StateStoreReadError": "Dieser Vorgang konnte nicht fortgesetzt werden, da der Sitzungsstatus nicht verfügbar war. Bitte öffnen Sie das Gespräch erneut, um fortzufahren; wenn das Problem weiterhin besteht, wenden Sie sich an den Support.",
   "StreamChunkError": "Fehler beim Parsen des Nachrichtenchunks der Streaming-Anfrage. Bitte überprüfen Sie, ob die aktuelle API-Schnittstelle den Standardspezifikationen entspricht, oder wenden Sie sich an Ihren API-Anbieter, um Unterstützung zu erhalten.",

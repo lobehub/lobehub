@@ -7,6 +7,8 @@ export interface ShareChatExecParams {
   clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
   prompt: string;
   shareId: string;
+  /** The prompt was queued behind a running turn and renders as its continuation. */
+  steer?: boolean;
   /** Absent → the server creates a new visitor topic (counted against the topic cap). */
   topicId?: string | null;
 }
@@ -45,8 +47,29 @@ class ShareChatService {
     return await lambdaClient.shareChat.interruptTask.mutate({ operationId, shareId, topicId });
   }
 
+  /**
+   * The visitor counterpart of `aiAgentService.setQueuedMessages`.
+   */
+  async setQueuedMessages(shareId: string, topicId: string, operationId: string, pending: boolean) {
+    return await lambdaClient.shareChat.setQueuedMessages.mutate({
+      operationId,
+      pending,
+      shareId,
+      topicId,
+    });
+  }
+
   async refreshGatewayToken(shareId: string, topicId: string): Promise<{ token: string }> {
     return await lambdaClient.shareChat.refreshGatewayToken.query({ shareId, topicId });
+  }
+
+  /**
+   * Mint the visitor's per-user JWT for the multiplexed Gateway WebSocket —
+   * the visitor counterpart of `aiAgentService.issueGatewayUserToken`. Keyed by
+   * shareId only (no topic / running operation required).
+   */
+  async issueGatewayUserToken(shareId: string): Promise<{ token: string }> {
+    return await lambdaClient.shareChat.issueGatewayUserToken.query({ shareId });
   }
 }
 

@@ -14,7 +14,7 @@ import { resolveGoalModelConfig } from './modelConfig';
 
 const planSchema = z
   .object({
-    action: z.enum(['expand', 'verify']),
+    action: z.enum(['expand', 'revise', 'verify']),
     parentNodeId: z.string(),
     title: z.string().max(80),
     instruction: z.string().max(12000),
@@ -28,6 +28,14 @@ const planSchema = z
       ctx.addIssue({
         code: 'custom',
         message: 'An expansion requires a parent, title and instruction',
+      });
+    }
+    // A revision reuses its parent's container and title, so only the corrected
+    // protocol and the experiment it corrects are mandatory.
+    if (plan.action === 'revise' && (!plan.parentNodeId || !plan.instruction.trim())) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'A revision requires the experiment it corrects and a corrected instruction',
       });
     }
   });

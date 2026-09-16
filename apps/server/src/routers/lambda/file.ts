@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   CUSTOM_FOLDER_FILE_TYPE,
   DERIVED_DOCUMENT_SOURCE_TYPE,
@@ -29,13 +31,14 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
 import { FileUploadService } from '@/server/services/fileUpload';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import { createResourceContentPreview } from '@/server/utils/resourceContentPreview';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
-import { QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
+import { FileSource, QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
@@ -856,6 +859,32 @@ export const fileRouter = router({
       // Pages only (folders and files are excluded in SQL, so `limit` can't be
       // eaten by rows that are then filtered out).
       return ctx.knowledgeRepo.queryRecent(limit, 'page', input?.visibility);
+    }),
+
+  rehostImage: fileProcedure
+    .use(withScopedPermission('file:upload'))
+    .use(checkFileStorageUsage)
+    .input(z.object({ url: z.url() }))
+    .mutation(async ({ ctx, input }) => {
+      const { buffer, extension, mimeType } = await downloadRemoteImage(input.url);
+      const pathname = `images/${ctx.userId}/${randomUUID()}.${extension}`;
+      const result = await ctx.fileService.uploadFromBuffer(
+        buffer,
+        mimeType,
+        pathname,
+        (transaction) =>
+          businessFileUploadCheck({
+            actualSize: buffer.length,
+            clientIp: ctx.clientIp ?? undefined,
+            inputSize: buffer.length,
+            transaction,
+            url: pathname,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+        { source: FileSource.PageEditor, visibility: 'private' },
+      );
+      return { fileId: result.fileId, url: result.url };
     }),
 
   removeFile: fileProcedure

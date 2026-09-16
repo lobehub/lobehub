@@ -32,19 +32,17 @@ describe('generationRouter', () => {
       const mockFindById = vi.fn().mockResolvedValue(mockAsyncTask);
       const mockFindByIdAndTransform = vi.fn().mockResolvedValue(mockGeneration);
 
-      vi.mocked(AsyncTaskModel).mockImplementation(
-        () =>
-          ({
-            checkTimeoutTasks: mockCheckTimeoutTasks,
-            findById: mockFindById,
-          }) as any,
-      );
-      vi.mocked(GenerationModel).mockImplementation(
-        () =>
-          ({
-            findByIdAndTransform: mockFindByIdAndTransform,
-          }) as any,
-      );
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return {
+          checkTimeoutTasks: mockCheckTimeoutTasks,
+          findById: mockFindById,
+        } as any;
+      });
+      vi.mocked(GenerationModel).mockImplementation(function () {
+        return {
+          findByIdAndTransform: mockFindByIdAndTransform,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 
@@ -71,13 +69,12 @@ describe('generationRouter', () => {
       const mockCheckTimeoutTasks = vi.fn().mockResolvedValue(undefined);
       const mockFindById = vi.fn().mockResolvedValue(mockAsyncTask);
 
-      vi.mocked(AsyncTaskModel).mockImplementation(
-        () =>
-          ({
-            checkTimeoutTasks: mockCheckTimeoutTasks,
-            findById: mockFindById,
-          }) as any,
-      );
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return {
+          checkTimeoutTasks: mockCheckTimeoutTasks,
+          findById: mockFindById,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 
@@ -100,13 +97,12 @@ describe('generationRouter', () => {
       const mockCheckTimeoutTasks = vi.fn().mockResolvedValue(undefined);
       const mockFindById = vi.fn().mockResolvedValue(mockAsyncTask);
 
-      vi.mocked(AsyncTaskModel).mockImplementation(
-        () =>
-          ({
-            checkTimeoutTasks: mockCheckTimeoutTasks,
-            findById: mockFindById,
-          }) as any,
-      );
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return {
+          checkTimeoutTasks: mockCheckTimeoutTasks,
+          findById: mockFindById,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 
@@ -124,13 +120,12 @@ describe('generationRouter', () => {
       const mockCheckTimeoutTasks = vi.fn().mockResolvedValue(undefined);
       const mockFindById = vi.fn().mockResolvedValue(null);
 
-      vi.mocked(AsyncTaskModel).mockImplementation(
-        () =>
-          ({
-            checkTimeoutTasks: mockCheckTimeoutTasks,
-            findById: mockFindById,
-          }) as any,
-      );
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return {
+          checkTimeoutTasks: mockCheckTimeoutTasks,
+          findById: mockFindById,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 
@@ -152,19 +147,17 @@ describe('generationRouter', () => {
       const mockFindById = vi.fn().mockResolvedValue(mockAsyncTask);
       const mockFindByIdAndTransform = vi.fn().mockResolvedValue(null);
 
-      vi.mocked(AsyncTaskModel).mockImplementation(
-        () =>
-          ({
-            checkTimeoutTasks: mockCheckTimeoutTasks,
-            findById: mockFindById,
-          }) as any,
-      );
-      vi.mocked(GenerationModel).mockImplementation(
-        () =>
-          ({
-            findByIdAndTransform: mockFindByIdAndTransform,
-          }) as any,
-      );
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return {
+          checkTimeoutTasks: mockCheckTimeoutTasks,
+          findById: mockFindById,
+        } as any;
+      });
+      vi.mocked(GenerationModel).mockImplementation(function () {
+        return {
+          findByIdAndTransform: mockFindByIdAndTransform,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 
@@ -189,19 +182,17 @@ describe('generationRouter', () => {
         .fn()
         .mockResolvedValue({ ...mockDeletedGeneration, userId: 'test-user' });
 
-      vi.mocked(GenerationModel).mockImplementation(
-        () =>
-          ({
-            delete: mockDelete,
-            findById: mockGenerationFindById,
-          }) as any,
-      );
-      vi.mocked(FileService).mockImplementation(
-        () =>
-          ({
-            deleteFile: mockDeleteFile,
-          }) as any,
-      );
+      vi.mocked(GenerationModel).mockImplementation(function () {
+        return {
+          delete: mockDelete,
+          findById: mockGenerationFindById,
+        } as any;
+      });
+      vi.mocked(FileService).mockImplementation(function () {
+        return {
+          deleteFile: mockDeleteFile,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 
@@ -223,19 +214,17 @@ describe('generationRouter', () => {
         .fn()
         .mockResolvedValue({ ...mockDeletedGeneration, userId: 'test-user' });
 
-      vi.mocked(GenerationModel).mockImplementation(
-        () =>
-          ({
-            delete: mockDelete,
-            findById: mockGenerationFindById,
-          }) as any,
-      );
-      vi.mocked(FileService).mockImplementation(
-        () =>
-          ({
-            deleteFile: mockDeleteFile,
-          }) as any,
-      );
+      vi.mocked(GenerationModel).mockImplementation(function () {
+        return {
+          delete: mockDelete,
+          findById: mockGenerationFindById,
+        } as any;
+      });
+      vi.mocked(FileService).mockImplementation(function () {
+        return {
+          deleteFile: mockDeleteFile,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 
@@ -251,19 +240,17 @@ describe('generationRouter', () => {
       const mockDeleteFile = vi.fn().mockResolvedValue(true);
       const mockGenerationFindById = vi.fn().mockResolvedValue(undefined);
 
-      vi.mocked(GenerationModel).mockImplementation(
-        () =>
-          ({
-            delete: mockDelete,
-            findById: mockGenerationFindById,
-          }) as any,
-      );
-      vi.mocked(FileService).mockImplementation(
-        () =>
-          ({
-            deleteFile: mockDeleteFile,
-          }) as any,
-      );
+      vi.mocked(GenerationModel).mockImplementation(function () {
+        return {
+          delete: mockDelete,
+          findById: mockGenerationFindById,
+        } as any;
+      });
+      vi.mocked(FileService).mockImplementation(function () {
+        return {
+          deleteFile: mockDeleteFile,
+        } as any;
+      });
 
       const caller = generationRouter.createCaller(mockCtx);
 

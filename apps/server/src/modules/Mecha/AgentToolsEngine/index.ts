@@ -9,44 +9,15 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { BrowserManifest } from '@lobechat/builtin-tool-browser';
-import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
-import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
-import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
-import { MemoryManifest } from '@lobechat/builtin-tool-memory';
-import { MessageManifest } from '@lobechat/builtin-tool-message';
-import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import {
-  alwaysOnToolIds,
-  builtinTools,
-  chatModeAllowedToolIds,
-  defaultToolIds,
-  groupSupervisorToolIds,
-} from '@lobechat/builtin-tools';
+import { builtinTools } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import {
-  type BuiltinToolManifest,
-  getActivePluginIds,
-  type RuntimeEnvMode,
-  type RuntimePlatform,
-} from '@lobechat/types';
+import { resolveToolRules } from '@lobechat/mecha';
+import { type BuiltinToolManifest, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
-import {
-  executionTargetToRuntimeMode,
-  isDeviceLockedPlan,
-  resolveExecutionTarget,
-  resolveToolMode,
-} from '@/helpers/executionTarget';
-import {
-  buildAllowedBuiltinTools,
-  DEVICE_TOOL_IDENTIFIERS,
-  REMOTE_DEVICE_TOOL_IDENTIFIERS,
-} from '@/server/services/aiAgent/deviceToolRegistry';
+import { isDeviceLockedPlan, resolveExecutionTarget } from '@/helpers/executionTarget';
+import { buildAllowedBuiltinTools } from '@/server/services/aiAgent/deviceToolRegistry';
 
 import {
   type ServerAgentToolsContext,
@@ -217,193 +188,89 @@ export const createServerAgentToolsEngine = (
   } = params;
 
   // Tools that need a user-side execution target (local-system, stdio MCP)
-  // run on a device registered with the device-gateway. Desktop, CLI, and
-  // bot/IM callers all converge on this single path; the previous Phase 6.4
-  // `clientRuntime === 'desktop'` short-circuit (Agent Gateway WS dispatch
-  // back to the caller) is removed.
+  // run on a device registered with the device-gateway. Desktop, CLI and
+  // bot/IM callers all converge on this single path.
   const hasDeviceProxy = !!deviceContext?.gatewayConfigured;
-
   // A server configured with a device-gateway is serving desktop-class users
-  // (the unset-target default resolves to `local`); otherwise the caller is
-  // treated as web.
+  // (the unset-target default resolves to `local`); otherwise web.
   const platform: RuntimePlatform = hasDeviceProxy ? 'desktop' : 'web';
-
-  // Tool gate derived from the run's resolved execution plan (sandbox → cloud
-  // tools, local → local-system tools, device → gateway). Callers that don't
-  // resolve a plan (focused sub-agent engines) fall back to deriving the
-  // effective target from agencyConfig.
+  // Prefer the run's resolved plan; callers without one (focused sub-agent
+  // engines) derive the effective target from agencyConfig.
   const executionTarget =
     executionPlan?.target ??
     resolveExecutionTarget(agentConfig.agencyConfig, {
       clientExecutionAvailable: platform === 'desktop',
     });
-  const runtimeMode: RuntimeEnvMode = executionTargetToRuntimeMode(executionTarget);
-  // Device tools (local-system, remote-device proxy) only exist for
-  // device-capable targets. `none` means NO device — the proxy that could
-  // activate one mid-run must not be offered either; `sandbox` and devices
-  // are mutually exclusive.
-  const deviceCapable = executionTarget === 'local' || executionTarget === 'device';
-  // The run is locked to ONE device (routed, or explicitly bound but
-  // offline): there is no device decision left, so the remote-device picker
-  // must not exist — physically, not just rule-disabled, because
-  // `allowExplicitActivation` lets activator-driven activation bypass the
-  // rule gates. Prefer the resolved plan; callers without one (focused
-  // sub-agent engines) fall back to the raw device context with the same
-  // semantics.
   const deviceLocked = executionPlan
     ? isDeviceLockedPlan(executionPlan)
     : !!deviceContext?.autoActivated || !!deviceContext?.boundDeviceId;
 
-  const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
-  const isSearchEnabled = useApplicationBuiltinSearchTool ?? searchMode !== 'off';
-  // Chat mode no longer auto-injects image generation. Opt in by pinning the
-  // tool; native imageOutput models never receive the fallback.
-  const pinnedPluginIds = getActivePluginIds(agentConfig.plugins);
-  const imageGenerationCapable =
-    context.isModelSupportToolUse(model, provider) && !modelAbilities?.imageOutput;
-  const imageGenerationEnabled =
-    imageGenerationCapable && pinnedPluginIds.includes(ImageGenerationManifest.identifier);
-  // Tool mode: explicit `toolMode` wins; otherwise derive from `enableAgentMode`
-  // (undefined = agent). `custom` = toolset is exactly the agent's plugins.
-  const toolMode = resolveToolMode(agentConfig.chatConfig ?? undefined);
-  const isChatMode = toolMode === 'chat';
-  const isCustomMode = toolMode === 'custom';
+  // The rules — mode, per-tool enablement, defaults and the device walls —
+  // are shared with the browser through `@lobechat/mecha`; this engine only
+  // assembles the server's facts.
+  const resolved = resolveToolRules({
+    agent: { chatConfig: agentConfig.chatConfig, plugins: agentConfig.plugins },
+    // Gateway facts exist only behind a gateway: without one nothing can
+    // dispatch to a device, so the picker never exists. The policy / plan
+    // walls apply either way.
+    device: hasDeviceProxy
+      ? {
+          autoActivated: deviceContext?.autoActivated,
+          deviceOnline: deviceContext?.deviceOnline,
+          supportedTools: deviceContext?.supportedTools ?? [],
+        }
+      : undefined,
+    deviceAccess: { canUseDevice, deviceLocked },
+    disableLocalSystem,
+    disabledPluginIds,
+    executionTarget,
+    hasEnabledKnowledgeBases,
+    isBotConversation,
+    isGroupSupervisor,
+    // Local tools reach a machine only through an online, auto-activated
+    // device on the gateway; access policy is enforced upstream by the plan.
+    localExecutionReady:
+      hasDeviceProxy && !!deviceContext?.deviceOnline && !!deviceContext?.autoActivated,
+    memoryEnabled: globalMemoryEnabled,
+    model: {
+      canUseFC: context.isModelSupportToolUse(model, provider),
+      hasImageOutput: !!modelAbilities?.imageOutput,
+    },
+    useApplicationBuiltinSearchTool,
+  });
 
   log(
-    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasDeviceProxy=%s canUseDevice=%s isChatMode=%s',
+    'Creating agent tools engine model=%s provider=%s platform=%s runtimeMode=%s toolMode=%s additionalManifests=%d hasDeviceProxy=%s canUseDevice=%s',
     model,
     provider,
-    searchMode,
     platform,
-    runtimeMode,
+    resolved.runtimeMode,
+    resolved.toolMode,
     additionalManifests?.length ?? 0,
     hasDeviceProxy,
     canUseDevice,
-    isChatMode,
   );
 
-  // Chat mode: strict outer whitelist. Drop alwaysOn tools and every other
-  // runtime-managed rule. Each entry still passes through its own gate (KB /
-  // memory / search). Image generation is opt-in via a pinned plugin — no
-  // automatic injection. `allowExplicitActivation` is off so the activator
-  // can't smuggle anything else in.
-  const chatModeRules = {
-    [ImageGenerationManifest.identifier]: imageGenerationEnabled,
-    [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
-    [MemoryManifest.identifier]: globalMemoryEnabled,
-    [WebBrowsingManifest.identifier]: isSearchEnabled,
-  };
-
-  // Custom mode: the tool set is EXACTLY the agent's declared plugins — no
-  // alwaysOn tools, no default/runtime-managed injection, no activator. Used by
-  // focused builtin sub-agents (e.g. the verify agent, which mounts only its
-  // writeback tool) that need a precise, self-configured toolset.
-  const customModeRules = Object.fromEntries((agentConfig.plugins ?? []).map((id) => [id, true]));
-
-  const agentModeRules = {
-    // User-selected plugins
-    ...Object.fromEntries((agentConfig.plugins ?? []).map((id) => [id, true])),
-    // Always-on builtin tools
-    ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
-    // System-level rules (may override user selection for specific tools)
-    // Auto mode lets the model choose per call whether to run in the cloud
-    // sandbox or on the auto-routed device — `injectCredsToSandbox` has no
-    // device branch and always targets the sandbox regardless of routing —
-    // so the dedicated Cloud Sandbox tool is offered here too, not only when
-    // the target is literally 'sandbox'.
-    [CloudSandboxManifest.identifier]: runtimeMode === 'cloud' || executionTarget === 'auto',
-    [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
-    // Local-system: the user must have opted into local runtime
-    // (`runtimeMode === 'local'`) AND have an online, auto-activated device
-    // registered with the device-gateway. Access policy (external bot
-    // senders) is enforced upstream: `resolveExecutionPlan` degrades denied
-    // targets to `none`, and `buildAllowedBuiltinTools` +
-    // `excludeIdentifiers` physically drop the manifest for
-    // `canUseDevice=false` turns.
-    [LocalSystemManifest.identifier]:
-      !disableLocalSystem &&
-      runtimeMode === 'local' &&
-      hasDeviceProxy &&
-      !!deviceContext?.deviceOnline &&
-      !!deviceContext?.autoActivated,
-    // Browser drives the device's in-app browser — same device gate as
-    // local-system: local runtime routed to an online, auto-activated device.
-    [BrowserManifest.identifier]:
-      runtimeMode === 'local' &&
-      hasDeviceProxy &&
-      !!deviceContext?.deviceOnline &&
-      !!deviceContext?.autoActivated,
-    [MemoryManifest.identifier]: globalMemoryEnabled,
-    // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
-    ...(isBotConversation && { [MessageManifest.identifier]: true }),
-    // Group supervisor: enable the orchestration toolset (see
-    // `groupSupervisorToolIds`). The same list also feeds the candidate set
-    // below, so the bundle has a single source of truth.
-    ...(isGroupSupervisor && Object.fromEntries(groupSupervisorToolIds.map((id) => [id, true]))),
-    // Remote-device proxy: shown only for device-capable targets when the
-    // server has a proxy AND the run is not already locked to a device
-    // (routed, or explicitly bound but offline — a bound-offline run stays
-    // unrouted until that device comes back, rather than silently hopping
-    // elsewhere). This rule is defense-in-depth: the authoritative wall is
-    // physical (`buildAllowedBuiltinTools` + `excludeIdentifiers` below drop
-    // the manifest for locked turns), since explicit activation bypasses
-    // rules. External bot senders never reach it either way: the plan
-    // degrades denied targets to `none` (→ not deviceCapable) and the
-    // physical walls drop it for `canUseDevice=false` turns.
-    [RemoteDeviceManifest.identifier]: deviceCapable && hasDeviceProxy && !deviceLocked,
-    [WebBrowsingManifest.identifier]: isSearchEnabled,
-  };
-
-  const excludedIdentifiers = new Set(disabledPluginIds);
-  if (hasDeviceProxy && !deviceContext?.supportedTools?.includes(AuvManifest.identifier))
-    excludedIdentifiers.add(AuvManifest.identifier);
-  if (!canUseDevice) {
-    for (const identifier of DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
-  } else if (deviceLocked) {
-    for (const identifier of REMOTE_DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);
-  }
-
   return createServerToolsEngine(context, {
-    // Pass additional manifests (e.g., LobeHub Skills)
     additionalManifests,
-    // Physically drop device-tool manifests for turns whose access policy
-    // denies them. Without this filter, `lobe-activator`'s explicit
-    // activation could resolve the manifest and bypass the rule-layer
-    // gates below ().
+    // Physically drop device-tool manifests the walls deny: explicit
+    // activation could otherwise resolve them past the rule gates.
     builtinTools: buildAllowedBuiltinTools({
       canUseDevice,
       deviceLocked,
       disableLocalSystem,
       supportedDeviceTools: hasDeviceProxy ? (deviceContext?.supportedTools ?? []) : undefined,
     }),
-    // Add default tools based on configuration. Custom mode = exactly the
-    // agent's plugins; chat mode = strict allow-list; agent mode = full defaults.
-    // Agent mode: the supervisor's orchestration tools are neither in the
-    // agent's plugins nor in `defaultToolIds`, so add them to the candidate set
-    // here (the `agentModeRules` above then enable them). Enabling a tool that
-    // isn't a candidate is a no-op — the checker only filters
-    // `union(toolIds, defaultToolIds)`.
-    defaultToolIds: isCustomMode
-      ? (agentConfig.plugins ?? [])
-      : isChatMode
-        ? chatModeAllowedToolIds
-        : [...defaultToolIds, ...(isGroupSupervisor ? groupSupervisorToolIds : [])],
-    // Post-merge wall: a plugin or Skill/Composio manifest claiming a
-    // device identifier survives `buildAllowedBuiltinTools` (which only
-    // filters the builtin source). Excluding the identifiers here drops
-    // them from the combined `manifestSchemas` so the activator cannot
-    // resolve them regardless of which manifest source declared them.
-    // Locked turns exclude the remote-device picker only (local-system
-    // stays for the routed device).
-    excludeIdentifiers: excludedIdentifiers.size > 0 ? excludedIdentifiers : undefined,
-    // Conversation context for context-aware builtin manifests (scope /
-    // isSubAgent), e.g. hiding lobe-agent's callSubAgent in sub-agent / group runs.
+    defaultToolIds: resolved.defaultToolIds,
+    // Post-merge wall: a plugin or Skill/Composio manifest claiming a device
+    // identifier survives the builtin filter; excluding it here drops it from
+    // every source.
+    excludeIdentifiers:
+      resolved.excludedIdentifiers.size > 0 ? resolved.excludedIdentifiers : undefined,
     manifestContext,
     enableChecker: createEnableChecker({
-      // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-task).
-      // Only in agent mode; chat/custom modes can't let the activator bypass their fixed set.
-      allowExplicitActivation: toolMode === 'agent',
-      rules: isCustomMode ? customModeRules : isChatMode ? chatModeRules : agentModeRules,
+      allowExplicitActivation: resolved.allowExplicitActivation,
+      rules: resolved.rules,
     }),
   });
 };

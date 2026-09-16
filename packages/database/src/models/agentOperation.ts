@@ -497,6 +497,22 @@ export class AgentOperationModel {
     return row ?? null;
   }
 
+  /** Match a server-minted turn identity when a diagnostic dispatch receipt was lost. */
+  async findByTopicSourceMessage(topicId: string, sourceMessageId: string) {
+    const [operation] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          eq(agentOperations.topicId, topicId),
+          sql`${agentOperations.appContext}->>'sourceMessageId' = ${sourceMessageId}`,
+        ),
+      )
+      .limit(1);
+    return operation;
+  }
+
   /**
    * Operations recorded for one topic, newest first — the lookup that turns a
    * topic id (what a user actually has on hand) into the operation ids their
@@ -512,6 +528,7 @@ export class AgentOperationModel {
     return this.db
       .select({
         agentId: agentOperations.agentId,
+        appContext: agentOperations.appContext,
         createdAt: agentOperations.createdAt,
         id: agentOperations.id,
         model: agentOperations.model,

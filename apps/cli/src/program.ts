@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { registerAgentCommand } from './commands/agent';
 import { registerAgentGroupCommand } from './commands/agent-group';
 import { registerAgentSignalCommand } from './commands/agent-signal';
+import { registerArtifactCommand } from './commands/artifact';
 import { registerBotCommand } from './commands/bot';
 import { registerCompletionCommand } from './commands/completion';
 import { registerConfigCommand } from './commands/config';
@@ -90,6 +91,7 @@ export function createProgram() {
   registerGenerateCommand(program);
   registerGoalCommand(program);
   registerFileCommand(program);
+  registerArtifactCommand(program);
   registerHeteroCommand(program);
   registerSkillCommand(program);
   registerSessionGroupCommand(program);

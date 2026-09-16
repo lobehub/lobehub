@@ -1,34 +1,28 @@
-import { copyToClipboard, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
 import { ActionIcon, confirmModal, toast } from '@lobehub/ui/base-ui';
 import { CopyIcon, EyeOffIcon, LinkIcon, MoreHorizontal, Trash, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskCopyActions } from './useTaskCopyActions';
 
 const TaskDetailHeaderActions = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
 
   const navigate = useWorkspaceAwareNavigate();
-  const appOrigin = useAppOrigin();
   const activeWorkspaceId = useActiveWorkspaceId();
-  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canEditTask } = usePermission('create_content');
-  const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
-  const taskAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const { copyId, copyLink, taskId } = useTaskCopyActions();
   const visibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
   const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
   const currentUserId = useUserStore(userProfileSelectors.userId);
@@ -101,29 +95,18 @@ const TaskDetailHeaderActions = memo(() => {
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!taskId) return [];
 
-    const taskUrl = `${appOrigin}${buildWorkspaceAwarePath(
-      taskDetailPath(taskId, taskAgentId ?? undefined),
-      activeWorkspaceSlug,
-    )}`;
-
     const baseItems: DropdownItem[] = [
       {
         icon: <Icon icon={CopyIcon} />,
         key: 'copyId',
         label: t('taskList.contextMenu.copyId'),
-        onClick: async () => {
-          await copyToClipboard(taskId);
-          toast.success(t('taskList.contextMenu.copyIdSuccess'));
-        },
+        onClick: copyId,
       },
       {
         icon: <Icon icon={LinkIcon} />,
         key: 'copyLink',
         label: t('taskList.contextMenu.copyLink'),
-        onClick: async () => {
-          await copyToClipboard(taskUrl);
-          toast.success(t('taskList.contextMenu.copyLinkSuccess'));
-        },
+        onClick: copyLink,
       },
       { type: 'divider' },
       {
@@ -180,9 +163,8 @@ const TaskDetailHeaderActions = memo(() => {
     return [...baseItems.slice(0, 3), ...transferGroup, { type: 'divider' }, ...baseItems.slice(3)];
   }, [
     taskId,
-    taskAgentId,
-    appOrigin,
-    activeWorkspaceSlug,
+    copyId,
+    copyLink,
     activeWorkspaceId,
     visibility,
     createdByUserId,

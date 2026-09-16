@@ -13,9 +13,14 @@ const item = (scope: string, queryKey: string, ref: RecentEntityRef) => (s: Home
   );
   const optimisticTitle = scopedState?.optimisticTitles[ref]?.title;
 
-  return recentItem && optimisticTitle !== undefined
-    ? { ...recentItem, title: optimisticTitle }
-    : recentItem;
+  if (!recentItem || optimisticTitle === undefined) return recentItem;
+
+  // A pending task rename has to carry the slug source with it, so the row's
+  // link is built from the name the user just typed rather than the one the
+  // server still has.
+  return recentItem.type === 'task'
+    ? { ...recentItem, slugTitle: optimisticTitle, title: optimisticTitle }
+    : { ...recentItem, title: optimisticTitle };
 };
 
 export const homeRecentSelectors = {

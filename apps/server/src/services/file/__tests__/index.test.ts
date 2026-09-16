@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FileModel } from '@/database/models/file';
 import { TempFileManager } from '@/server/utils/tempFileManager';
+import { FileSource } from '@/types/files';
 
 import { FileService } from '../index';
 
@@ -68,11 +69,15 @@ describe('FileService', () => {
       writeTempFile: vi.fn(),
       cleanup: vi.fn(),
     };
-    vi.mocked(FileModel).mockImplementation(() => mockFileModel);
-    vi.mocked(TempFileManager).mockImplementation(() => mockTempManager);
+    vi.mocked(FileModel).mockImplementation(function () {
+      return mockFileModel;
+    });
+    vi.mocked(TempFileManager).mockImplementation(function () {
+      return mockTempManager;
+    });
 
     // Mock console.error to test error logging
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
     service = new FileService(mockDb, mockUserId);
   });
@@ -412,6 +417,26 @@ describe('FileService', () => {
       );
     });
 
+    it('preserves private visibility and page-editor source for rehosted images', async () => {
+      const beforeRecord = vi.fn();
+      await service.uploadFromBuffer(
+        Buffer.from('image'),
+        'image/png',
+        'images/test.png',
+        beforeRecord,
+        {
+          source: FileSource.PageEditor,
+          visibility: 'private',
+        },
+      );
+      expect(beforeRecord).toHaveBeenCalled();
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'page-editor', visibility: 'private' }),
+        expect.any(Boolean),
+        expect.anything(),
+      );
+    });
+
     it('should compute hash for deduplication', async () => {
       const content = Buffer.from('test content');
 
@@ -513,7 +538,7 @@ describe('FileService', () => {
       mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'old/path.txt' });
       mockFileModel.create.mockResolvedValue({ id: 'file-id' });
       vi.mocked(service['impl'].getFileMetadata).mockRejectedValue(new Error('NoSuchKey'));
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       await service.createFileRecord({
         fileHash: 'existing-hash',

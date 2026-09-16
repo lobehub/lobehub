@@ -8,15 +8,19 @@ const mockTopicModelFindOwnTopicById = vi.fn();
 const mockMessageModelQuery = vi.fn();
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    findOwnTopicById: (...args: any[]) => mockTopicModelFindOwnTopicById(...args),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      findOwnTopicById: (...args: any[]) => mockTopicModelFindOwnTopicById(...args),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    query: (...args: any[]) => mockMessageModelQuery(...args),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      query: (...args: any[]) => mockMessageModelQuery(...args),
+    };
+  }),
 }));
 
 // Import after mock setup

@@ -60,105 +60,131 @@ vi.mock('@/libs/trusted-client', () => ({
 
 vi.mock('@/database/models/message', () => ({
   HumanApprovalAlreadyResolvedError: class HumanApprovalAlreadyResolvedError extends Error {},
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    findById: mockFindById,
-    findMessagePlugin: mockFindMessagePlugin,
-    listMessagePluginsByTopic: mockListMessagePluginsByTopic,
-    query: mockMessageQuery,
-    resolveHumanApproval: mockResolveHumanApproval,
-    restoreHumanApproval: mockRestoreHumanApproval,
-    update: vi.fn().mockResolvedValue({}),
-    updateMessagePlugin: mockUpdateMessagePlugin,
-    updateToolMessage: mockUpdateToolMessage,
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      findById: mockFindById,
+      findMessagePlugin: mockFindMessagePlugin,
+      listMessagePluginsByTopic: mockListMessagePluginsByTopic,
+      query: mockMessageQuery,
+      resolveHumanApproval: mockResolveHumanApproval,
+      restoreHumanApproval: mockRestoreHumanApproval,
+      update: vi.fn().mockResolvedValue({}),
+      updateMessagePlugin: mockUpdateMessagePlugin,
+      updateToolMessage: mockUpdateToolMessage,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({ queryAgents: vi.fn().mockResolvedValue([]) })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return { queryAgents: vi.fn().mockResolvedValue([]) };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({ query: vi.fn().mockResolvedValue([]) })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return { query: vi.fn().mockResolvedValue([]) };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    releaseTaskCallbackReservation: mockReleaseTaskCallbackReservation,
-    repairAgentInterventionContinuation: mockRepairAgentInterventionContinuation,
-    tryReserveTaskCallback: mockTryReserveTaskCallback,
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
-    updateMetadata: mockUpdateTopicMetadata,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: mockReleaseTaskCallbackReservation,
+      repairAgentInterventionContinuation: mockRepairAgentInterventionContinuation,
+      tryReserveTaskCallback: mockTryReserveTaskCallback,
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+      updateMetadata: mockUpdateTopicMetadata,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn().mockImplementation(() => ({
-    getUserSettings: vi.fn().mockResolvedValue(undefined),
-  })),
+  UserModel: vi.fn().mockImplementation(function () {
+    return {
+      getUserSettings: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/userMemory/persona', () => ({
-  UserPersonaModel: vi.fn().mockImplementation(() => ({
-    getLatestPersonaDocument: vi.fn().mockResolvedValue(undefined),
-  })),
+  UserPersonaModel: vi.fn().mockImplementation(function () {
+    return {
+      getLatestPersonaDocument: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-    ensureInterventionContinuationStarted: mockEnsureInterventionContinuationStarted,
-    interruptOperation: mockInterruptOperation,
-    loadInterventionContinuationState: mockLoadInterventionContinuationState,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+      ensureInterventionContinuationStarted: mockEnsureInterventionContinuationStarted,
+      interruptOperation: mockInterruptOperation,
+      loadInterventionContinuationState: mockLoadInterventionContinuationState,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn().mockImplementation(() => ({
-    findById: mockFindOperationById,
-    recordCompletion: mockRecordCompletion,
-  })),
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: mockFindOperationById,
+      recordCompletion: mockRecordCompletion,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({ uploadFromUrl: vi.fn() })),
+  FileService: vi.fn().mockImplementation(function () {
+    return { uploadFromUrl: vi.fn() };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -513,9 +539,9 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       intervention: { operationId: 'op-parked', status: 'pending' },
     });
     mockLoadInterventionContinuationState.mockImplementation(async (operationId: string) => ({
-      metadata: {
+      origin: {
         agentId: 'agent-1',
-        agentInterventionContinuation: {
+        continuation: {
           resolutionRequestId: approvalResolutionRequestId,
           sourceOperationId: 'op-parked',
           sourceToolMessageIds: ['tool-msg-1'],
@@ -566,12 +592,14 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     });
     mockLoadInterventionContinuationState.mockResolvedValue({
       metadata: {
-        agentId: 'agent-1',
-        agentInterventionContinuation: provenance,
         agentInterventionPreparation: {
           resolutionRequestId: approvalResolutionRequestId,
           state: 'ready',
         },
+      },
+      origin: {
+        agentId: 'agent-1',
+        continuation: provenance,
         sourceMessageId: 'tool-msg-1',
         topicId: 'topic-1',
         userId: 'user-1',
@@ -655,15 +683,15 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     mockFindOperationById.mockResolvedValue({
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: 'op-parked',
-          sourceToolMessageIds: ['tool-msg-1'],
-        },
         agentInterventionDispatch: {
           deduplicationId: deriveAgentInterventionQueueDeduplicationId(continuationOperationId, 0),
           resolutionRequestId,
           state: 'scheduled',
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: 'op-parked',
+          sourceToolMessageIds: ['tool-msg-1'],
         },
       },
       startedAt: new Date('2026-08-26T00:00:00.000Z'),
@@ -704,15 +732,15 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     mockFindOperationById.mockResolvedValue({
       id: continuationOperationId,
       metadata: {
-        agentInterventionContinuation: {
-          resolutionRequestId,
-          sourceOperationId: 'op-parked',
-          sourceToolMessageIds: ['tool-msg-1'],
-        },
         agentInterventionDispatch: {
           deduplicationId: deriveAgentInterventionQueueDeduplicationId(continuationOperationId, 0),
           resolutionRequestId,
           state: 'scheduled',
+        },
+        agentInterventionContinuation: {
+          resolutionRequestId,
+          sourceOperationId: 'op-parked',
+          sourceToolMessageIds: ['tool-msg-1'],
         },
       },
       status: 'running',
@@ -756,7 +784,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     const initializerStarted = new Promise<void>((resolve) => {
       markInitializerStarted = resolve;
     });
-    mockCreateOperation.mockImplementationOnce(() => {
+    mockCreateOperation.mockImplementationOnce(function () {
       markInitializerStarted();
       return new Promise((resolve) => {
         finishInitializer = resolve;
@@ -815,7 +843,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     const initializerStarted = new Promise<void>((resolve) => {
       markInitializerStarted = resolve;
     });
-    mockCreateOperation.mockImplementationOnce(() => {
+    mockCreateOperation.mockImplementationOnce(function () {
       markInitializerStarted();
       return new Promise((resolve) => {
         finishInitializer = resolve;
@@ -882,7 +910,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     mockResolveHumanApproval.mockResolvedValueOnce('applied').mockResolvedValueOnce('idempotent');
     mockTryReserveTaskCallback.mockResolvedValueOnce(true).mockResolvedValue(false);
     mockMessageQuery
-      .mockImplementationOnce(() => {
+      .mockImplementationOnce(function () {
         markFirstHistoryStarted();
         return firstHistory;
       })

@@ -26,6 +26,45 @@ afterEach(async () => {
 });
 
 describe('GoalModel', () => {
+  describe('supervisor state', () => {
+    it('claims an incident once and preserves other configuration under concurrent writes', async () => {
+      const goal = await goalModel.create({
+        config: { supervision: { enabled: true }, recovery: { maxAttemptsPerTask: 4 } },
+        title: 'Supervised',
+      });
+      const state = { agentId: 'agent', incidents: [], topicId: 'topic' };
+      const claims = await Promise.all([
+        goalModel.updateSupervisorState(goal.id, 0, state),
+        goalModel.updateSupervisorState(goal.id, 0, state),
+      ]);
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      await goalModel.updatePauseReason(goal.id, 'user');
+      await goalModel.updateSupervisorState(goal.id, 1, state);
+      expect((await goalModel.findById(goal.id))?.config).toMatchObject({
+        pausedBy: 'user',
+        recovery: { maxAttemptsPerTask: 4 },
+        supervisorState: { revision: 2 },
+      });
+      expect(await goalModel.updateSupervisorState(goal.id, 1, state)).toBeUndefined();
+      await goalModel.update(goal.id, { config: { supervision: { enabled: false } } });
+      expect((await goalModel.findById(goal.id))?.config?.supervisorState?.revision).toBe(2);
+    });
+
+    it('cannot read-lock or mutate another user supervisor state', async () => {
+      const goal = await goalModel.create({ title: 'Private supervision' });
+      const other = new GoalModel(serverDB, otherUserId);
+      expect(await other.lockById(goal.id)).toBeUndefined();
+      expect(
+        await other.updateSupervisorState(goal.id, 0, {
+          agentId: 'agent',
+          incidents: [],
+          topicId: 'topic',
+        }),
+      ).toBeUndefined();
+      expect((await goalModel.findById(goal.id))?.config?.supervisorState).toBeUndefined();
+    });
+  });
+
   describe('create', () => {
     it('creates a goal with defaults', async () => {
       const result = await goalModel.create({

@@ -404,6 +404,22 @@ export class TaskModel {
       .where(and(inArray(tasks.id, ids), this.ownership()));
   }
 
+  /**
+   * Only the assignee of each task. For callers on a polling path (the goal
+   * graph re-reads every few seconds while a goal advances) that would
+   * otherwise pull full rows — instruction, editor data, context, config — for
+   * up to hundreds of tasks just to read one column.
+   */
+  async findAssigneesByIds(
+    ids: string[],
+  ): Promise<{ assigneeAgentId: string | null; id: string }[]> {
+    if (ids.length === 0) return [];
+    return this.db
+      .select({ assigneeAgentId: tasks.assigneeAgentId, id: tasks.id })
+      .from(tasks)
+      .where(and(inArray(tasks.id, ids), this.ownership()));
+  }
+
   async resolveMany(idsOrIdentifiers: string[]): Promise<TaskItem[]> {
     if (idsOrIdentifiers.length === 0) return [];
     const identifiers = idsOrIdentifiers.map((value) => value.toUpperCase());

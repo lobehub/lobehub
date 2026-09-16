@@ -64,8 +64,10 @@ jobs:
       version: ${{ steps.result.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+        id: checkout
 
       - name: Resolve update server base URL
+        id: server
         env:
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
         run: |
@@ -82,14 +84,23 @@ jobs:
           CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
-          BASE=$(curl -sf "$UPDATE_SERVER_BASE_URL/$CHANNEL/base.json" || true)
-          if [ -z "$BASE" ]; then
+          HTTP_STATUS=$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o "$RUNNER_TEMP/renderer-base.json" -w '%{http_code}' \
+            "$UPDATE_SERVER_BASE_URL/$CHANNEL/base.json")
+          echo "Renderer base HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" = "404" ]; then
             echo "::warning::no renderer OTA base metadata found; run a full release first"
             echo "found=false" >> "$GITHUB_OUTPUT"
             echo "reason=base-missing" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Renderer base fetch failed: HTTP $HTTP_STATUS"
+            exit 1
+          fi
+          echo "reason=base-invalid" >> "$GITHUB_OUTPUT"
+          BASE=$(cat "$RUNNER_TEMP/renderer-base.json")
           if [ "$(jq -r '.rendererProtocol // 0' <<< "$BASE")" != "2" ]; then
             echo "::warning::renderer OTA base is not V2; run a full release first"
             echo "found=false" >> "$GITHUB_OUTPUT"
@@ -104,10 +115,12 @@ jobs:
             echo "app_version=$APP_VERSION"
             echo "cloud_ref=$CLOUD_REF"
             echo "found=true"
+            echo "reason=base-found"
             echo "main_hash=$MAIN_HASH"
           } >> "$GITHUB_OUTPUT"
 
       - name: Setup build environment
+        id: setup
         if: steps.base.outputs.found == 'true'
         uses: ./.github/actions/desktop-build-setup
         with:
@@ -117,6 +130,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Set package version
+        id: app_version
         if: steps.base.outputs.found == 'true'
         run: npm run workflow:set-desktop-version ${{ steps.base.outputs.app_version }} ${{ inputs.channel }}
 
@@ -124,11 +138,14 @@ jobs:
         id: gate
         if: steps.base.outputs.found == 'true'
         env:
+          APP_VERSION: ${{ steps.base.outputs.app_version }}
+          CHANNEL: ${{ inputs.channel }}
           BASE_MAIN_HASH: ${{ steps.base.outputs.main_hash }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
           UPDATE_CHANNEL: ${{ inputs.channel }}
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
         run: |
+          set -euo pipefail
           MAIN_HASH=$(node apps/desktop/scripts/mainHash.mjs)
           echo "main_hash=$MAIN_HASH" >> "$GITHUB_OUTPUT"
           echo "HEAD mainHash: $MAIN_HASH"
@@ -138,6 +155,18 @@ jobs:
             echo "::warning::main changed since last full release — renderer patch is not allowed, run a full release instead"
             echo "allowed=false" >> "$GITHUB_OUTPUT"
             echo "reason=main-changed" >> "$GITHUB_OUTPUT"
+            if curl -fsS --connect-timeout 10 --max-time 30 "$UPDATE_SERVER_BASE_URL/$CHANNEL/$APP_VERSION/renderer/v2/mainhash-inputs.json" -o "$RUNNER_TEMP/base-mainhash-inputs.json"; then
+              node --input-type=module > "$RUNNER_TEMP/renderer-mainhash-diff.txt" <<'NODE' || echo "::warning::Input manifest diff unavailable"
+          import { readFile } from 'node:fs/promises';
+          import { diffInputs } from './apps/desktop/scripts/validateMainHash.mjs';
+          const base = JSON.parse(await readFile(`${process.env.RUNNER_TEMP}/base-mainhash-inputs.json`, 'utf8'));
+          const head = JSON.parse(await readFile('apps/desktop/release/renderer-mainhash-inputs.json', 'utf8'));
+          console.log(diffInputs(base, head).join('\n'));
+          NODE
+              cat "$RUNNER_TEMP/renderer-mainhash-diff.txt"
+            else
+              echo "Baseline has no source input manifest; a full release will establish one"
+            fi
           else
             echo "allowed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -158,6 +187,7 @@ jobs:
           echo "version=$NEXT" >> "$GITHUB_OUTPUT"
 
       - name: Build renderer
+        id: renderer
         if: steps.gate.outputs.allowed == 'true'
         run: npm run build:renderer --prefix=./apps/desktop
         env:
@@ -170,6 +200,7 @@ jobs:
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'stable' && secrets.UMAMI_STABLE_DESKTOP_BASE_URL || secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
 
       - name: Build and sign manifest
+        id: sign
         if: steps.gate.outputs.allowed == 'true'
         env:
           RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
@@ -198,6 +229,7 @@ jobs:
           APP_VERSION: ${{ steps.base.outputs.app_version }}
           CHANNEL: ${{ inputs.channel }}
         run: |
+          set -euo pipefail
           ENDPOINT_ARGS=()
           if [ -n "$S3_ENDPOINT" ]; then
             ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
@@ -223,48 +255,8 @@ jobs:
       - name: Report renderer OTA result
         id: result
         if: always()
-        env:
-          APP_VERSION: ${{ steps.base.outputs.app_version }}
-          BASE_FOUND: ${{ steps.base.outputs.found }}
-          BASE_REASON: ${{ steps.base.outputs.reason }}
-          GATE_ALLOWED: ${{ steps.gate.outputs.allowed }}
-          GATE_REASON: ${{ steps.gate.outputs.reason }}
-          PATCH_VERSION: ${{ steps.version.outputs.version }}
-          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
-        run: |
-          published=false
-          requires_full_release=false
-          version=""
-
-          if [ "$BASE_FOUND" != "true" ]; then
-            reason="${BASE_REASON:-base-unavailable}"
-            requires_full_release=true
-          elif [ "$GATE_ALLOWED" != "true" ]; then
-            reason="${GATE_REASON:-gate-failed}"
-            requires_full_release=true
-          elif [ "$PUBLISH_OUTCOME" = "success" ]; then
-            published=true
-            reason=published
-            version="$PATCH_VERSION"
-          else
-            reason=publish-failed
-          fi
-
-          {
-            echo "published=$published"
-            echo "reason=$reason"
-            echo "requires_full_release=$requires_full_release"
-            echo "version=$version"
-          } >> "$GITHUB_OUTPUT"
-
-          {
-            echo "## Renderer OTA"
-            echo
-            echo "| Field | Value |"
-            echo "| --- | --- |"
-            echo "| Published | \`$published\` |"
-            echo "| Version | \`${version:-(none)}\` |"
-            echo "| Reason | \`$reason\` |"
-            echo "| Requires full release | \`$requires_full_release\` |"
-            echo "| App version | \`${APP_VERSION:-(none)}\` |"
-          } >> "$GITHUB_STEP_SUMMARY"
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          channel: ${{ inputs.channel }}
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}

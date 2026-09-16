@@ -1,4 +1,8 @@
 export default {
+  'builtins.lobe-goal-supervisor.apiName.inspectGoal': 'Inspect goal',
+  'builtins.lobe-goal-supervisor.apiName.inspectTask': 'Inspect interrupted task',
+  'builtins.lobe-goal-supervisor.apiName.readArtifact': 'Read goal artifact',
+  'builtins.lobe-goal-supervisor.apiName.resolveInterruption': 'Choose recovery action',
   'arguments.moreParams': '{{count}} params in total',
   'arguments.title': 'Arguments',
   'builtins.lobe-computer-use.apiName.runCommand': 'Use computer',

@@ -97,7 +97,9 @@ const indexIdentityResponseSchema = z.record(
       index: z
         .object({
           analysis: z.record(z.string(), z.unknown()),
-          uuid: z.string().trim().min(1),
+          // Serverless omits internal settings; sync still validates the stamped generation below.
+          // https://www.elastic.co/docs/reference/elasticsearch/index-settings/serverless
+          uuid: z.string().trim().min(1).optional(),
         })
         .passthrough(),
     }),
@@ -126,7 +128,8 @@ export interface ElasticsearchFtsSearchHttpClientOptions {
 }
 
 export interface ElasticsearchFtsSearchSyncIndexIdentity {
-  indexUuid: string;
+  /** Null when the deployment does not expose its internal index UUID. */
+  indexUuid: string | null;
   mappingSha256: string;
   physicalIndex: string;
   reindexRunId: string;
@@ -584,7 +587,7 @@ export class ElasticsearchFtsSearchHttpClient implements ElasticsearchFtsSearchC
       }
 
       identities.set(alias, {
-        indexUuid: index.settings.index.uuid,
+        indexUuid: index.settings.index.uuid ?? null,
         mappingSha256: sha256Json(index.mappings),
         physicalIndex,
         reindexRunId: index.mappings._meta.reindex_run_id,

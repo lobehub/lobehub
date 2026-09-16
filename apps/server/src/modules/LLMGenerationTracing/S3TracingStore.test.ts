@@ -12,7 +12,9 @@ const uploadBuffer = vi.fn();
 const getFileByteArray = vi.fn();
 
 vi.mock('@/server/modules/S3', () => ({
-  FileS3: vi.fn(() => ({ getFileByteArray, uploadBuffer })),
+  FileS3: vi.fn(function () {
+    return { getFileByteArray, uploadBuffer };
+  }),
 }));
 
 const { S3TracingStore, buildTracingKey } = await import('./S3TracingStore');

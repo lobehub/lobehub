@@ -1,3 +1,5 @@
+export type { PlatformSettingsFieldExtrasProps } from '@/features/AgentSetting/AgentChannel/types';
+
 export interface PlatformCredentialBodyProps {
   currentConfig?: {
     applicationId: string;

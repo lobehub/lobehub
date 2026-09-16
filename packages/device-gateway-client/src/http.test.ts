@@ -182,6 +182,32 @@ describe('GatewayHttpClient', () => {
       });
     });
 
+    /** @example The HTTP client preserves target context on a missing workspace device. */
+    it('returns structured retryable data for DEVICE_NOT_FOUND', async () => {
+      mockFetch({
+        ok: false,
+        status: 404,
+        text: vi.fn().mockResolvedValue('DEVICE_NOT_FOUND'),
+      });
+
+      const result = await client.executeToolCall(
+        {
+          deviceId: 'workspace-device-1',
+          userId: 'user-1',
+          workspaceId: 'workspace-1',
+        },
+        { apiName: 'readFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.errorData).toEqual({
+        code: 'DEVICE_NOT_FOUND',
+        deviceId: 'workspace-device-1',
+        retryable: true,
+        scope: 'workspace',
+        workspaceId: 'workspace-1',
+      });
+    });
+
     it('keeps a deliberate empty success result empty', async () => {
       mockFetch({
         json: vi.fn().mockResolvedValue({ content: '', success: true }),
@@ -537,6 +563,35 @@ describe('GatewayHttpClient', () => {
       });
 
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
+    });
+
+    /** @example A pre-acceptance 404 keeps enough context for an outer agent to retry. */
+    it('returns structured retry context for a missing agent-run target', async () => {
+      mockFetch({
+        ok: false,
+        status: 404,
+        text: vi.fn().mockResolvedValue('DEVICE_NOT_FOUND'),
+      });
+
+      const result = await client.dispatchAgentRun({
+        agentType: 'claude-code',
+        assistantMessageId: 'asst-1',
+        deviceId: 'device-1',
+        jwt: 'jwt',
+        operationId: 'op-1',
+        prompt: 'run',
+        topicId: 'tpc-1',
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+
+      expect(result.errorData).toEqual({
+        code: 'DEVICE_NOT_FOUND',
+        deviceId: 'device-1',
+        retryable: true,
+        scope: 'workspace',
+        workspaceId: 'workspace-1',
+      });
     });
   });
 

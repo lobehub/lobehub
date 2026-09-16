@@ -65,7 +65,14 @@ export const highlightTextStyles = createStaticStyles(({ css, cssVar }) => {
  */
 const shinyToneStyles = createStaticStyles(({ css, cssVar }) => ({
   secondary: css`
-    --shiny-color: ${cssVar.colorTextSecondary};
+    /* The upstream rest color is a 28% mix of --shiny-color, which reads far
+     * weaker than the static labels next to it. Pin the rest color to the
+     * neighbouring text color and let the sweep peak at full colorText. */
+    &&& {
+      --shiny-color: ${cssVar.colorText};
+
+      color: ${cssVar.colorTextSecondary};
+    }
   `,
 }));
 

@@ -244,7 +244,9 @@ const createHarness = (initialSession?: OnboardingUnderstandingSession) => {
       stored.set(`${value.providerId}:${value.revision}`, value);
     }),
   };
-  const sourceStoreFactory = vi.fn(() => sourceStore);
+  const sourceStoreFactory = vi.fn(function () {
+    return sourceStore;
+  });
   const writerAgent = vi.fn(async () => ({
     id: 'agent-1',
     model: 'gpt-5.4-mini',

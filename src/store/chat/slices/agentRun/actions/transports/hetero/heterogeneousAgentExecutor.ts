@@ -3,6 +3,7 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
@@ -1937,7 +1938,7 @@ export const executeHeterogeneousAgent = async (
       cwd: workingDirectory,
       env: sessionEnv,
       initialModel:
-        (adapterType === 'droid' || adapterType === 'trae') &&
+        (adapterType === 'devin' || adapterType === 'droid' || adapterType === 'trae') &&
         !providerBindingActive &&
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
@@ -2460,7 +2461,9 @@ export const executeHeterogeneousAgent = async (
     });
 
     const systemContext = buildLocalHeterogeneousSystemContext({
-      agentSystemContext: heterogeneousProvider.systemContext,
+      // `/goal` reaches a hetero agent as instructions, not a tool: it creates
+      // and plans the goal through `lh` in this same run.
+      agentSystemContext: withConversationGoalPrompt(heterogeneousProvider.systemContext, message),
       contextSelections,
       pageSelections,
     });
@@ -2483,7 +2486,9 @@ export const executeHeterogeneousAgent = async (
       agentId: context.agentId,
       imageList,
       operationId,
-      prompt: message,
+      // `/goal` travels as system-context instructions; the CLI gets only the
+      // request so its own `/goal` command does not take the message over.
+      prompt: stripGoalCommand(message),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
@@ -2569,7 +2574,7 @@ export const executeHeterogeneousAgent = async (
               files: mergedFiles,
               ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: merged.content,
-              metadata: merged.metadata,
+              metadata: { ...merged.metadata, steer: true },
             })
             .catch((e: unknown) => {
               console.error(

@@ -2,7 +2,7 @@ import type { AgentState } from '@lobechat/agent-runtime';
 
 import {
   type AgentSignalOperationMarker,
-  readAgentSignalMarker,
+  parseAgentSignalMarker,
 } from '@/server/services/agentSignal/operationMarker';
 import { resolveMemoryActionResultFromState } from '@/server/services/agentSignal/policies/analyzeIntent/actions/memoryActionResult';
 
@@ -72,13 +72,13 @@ export const extractSelfIterationCompletionPayload = (
   state: unknown,
 ): SelfIterationCompletionPayload | undefined => {
   if (!isRecord(state)) return undefined;
-  const metadata = isRecord(state.metadata) ? state.metadata : undefined;
-  if (!metadata) return undefined;
+  const origin = isRecord(state.origin) ? state.origin : undefined;
+  if (!origin) return undefined;
 
-  const marker = readAgentSignalMarker(metadata);
+  const marker = parseAgentSignalMarker(origin.signal);
   if (!marker) return undefined;
 
-  const userId = typeof metadata.userId === 'string' ? metadata.userId : undefined;
+  const userId = typeof origin.userId === 'string' ? origin.userId : undefined;
   if (!userId) return undefined;
 
   const finalState = state as unknown as AgentState;

@@ -401,6 +401,25 @@ describe('chatDockSlice', () => {
       expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('third');
     });
 
+    it('openGoal pushes a Goal view and a node drill-down returns to it on Back', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoal('goal_1');
+      });
+
+      expect(result.current.portalStack).toEqual([{ goalId: 'goal_1', type: PortalViewType.Goal }]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
+    });
+
     it('openGoalNode pushes a GoalNode view and exposes it via selector', () => {
       const { result } = renderHook(() => useChatStore());
 

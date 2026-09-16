@@ -65,7 +65,7 @@ export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
 };
 
 /** Bump when the goal decomposition planning prompt meaningfully changes. */
-export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v4';
+export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v5';
 
 export const GOAL_DECOMPOSE_JSON_SCHEMA = {
   name: 'goal_decomposition',
@@ -78,10 +78,11 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
           additionalProperties: false,
           properties: {
             dependsOn: { items: { minimum: 0, type: 'integer' }, type: 'array' },
+            hypothesis: { maxLength: 280, type: ['string', 'null'] },
             instruction: { minLength: 1, type: 'string' },
             title: { maxLength: 80, minLength: 1, type: 'string' },
           },
-          required: ['title', 'instruction', 'dependsOn'],
+          required: ['title', 'instruction', 'dependsOn', 'hypothesis'],
           type: 'object',
         },
         maxItems: 5,
@@ -127,6 +128,7 @@ export const chainGoalDecompose = ({
         '- Preserve every concrete URL, scope, constraint, and numeric threshold from the goal in whichever task it belongs to.',
         '- Order tasks so that earlier ones produce what later ones consume.',
         '- For each task, set dependsOn to the 0-based indices of the earlier tasks whose outputs it consumes; use [] for a task that can start immediately. A pipeline-shaped goal (gather → analyze → synthesize) must express those edges — do not mark every task independent — but never invent a dependency the task does not actually need.',
+        '- hypothesis marks a task as a candidate answer under test: one sentence stating what the direction bets on, which its result may confirm or refute, and from which later branches may be derived. Set it only for genuinely uncertain approaches that compete with or may replace an alternative. Certain delivery steps — gathering material, implementing a requested change, verifying a deliverable, writing a report — take null. Most goals have no hypothesis at all; never invent one to decorate an ordinary step.',
         '- Write all fields in the language used by the goal.',
       ].join('\n'),
       role: 'system',

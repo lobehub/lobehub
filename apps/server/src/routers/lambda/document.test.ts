@@ -16,10 +16,14 @@ vi.mock('@/database/models/document', () => ({
   DOCUMENT_TRANSFER_FOREIGN_ROWS: 'foreign',
 }));
 vi.mock('@/server/services/document', () => ({
-  DocumentService: vi.fn().mockImplementation(() => ({ getDocumentById: mocks.getDocumentById })),
+  DocumentService: vi.fn().mockImplementation(function () {
+    return { getDocumentById: mocks.getDocumentById };
+  }),
 }));
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({ getFileAccessUrl: mocks.getFileAccessUrl })),
+  FileService: vi.fn().mockImplementation(function () {
+    return { getFileAccessUrl: mocks.getFileAccessUrl };
+  }),
 }));
 vi.mock('./_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),

@@ -44,6 +44,8 @@
   "document_comment_mentioned_title": "Você foi mencionado em um comentário de documento",
   "document_liked": "{{actorLabel}} curtiu seu documento \"{{documentTitle}}\".",
   "document_liked_title": "Alguém curtiu seu documento",
+  "document_mentioned": "{{actorLabel}} mencionou você em \"{{documentTitle}}\".",
+  "document_mentioned_title": "Você foi mencionado em um documento",
   "email.footer.contactSupport": "Entrar em contato com o suporte",
   "email.footer.joinDiscord": "Participar do Discord",
   "email.footer.manage": "Gerenciar notificações",

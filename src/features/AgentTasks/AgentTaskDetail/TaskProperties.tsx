@@ -18,6 +18,7 @@ import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import TaskAcceptanceStateRow from './TaskAcceptanceStateRow';
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskScheduleConfig from './TaskScheduleConfig';
 
 interface StatusMeta {
@@ -68,15 +69,14 @@ const TaskProperties = memo(() => {
   const priorityMeta = PRIORITY_META[priority as TaskPriority] ?? PRIORITY_META[0];
 
   return (
-    <Block gap={4} padding={4} variant={'outlined'} width={200}>
+    <div className={styles.properties}>
       <TaskStatusTag status={status} taskIdentifier={taskId}>
         <Block
           clickable
           horizontal
           align="center"
-          gap={10}
-          paddingBlock={4}
-          paddingInline={8}
+          className={styles.propertyItem}
+          gap={8}
           variant={'borderless'}
         >
           <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
@@ -94,9 +94,8 @@ const TaskProperties = memo(() => {
           clickable
           horizontal
           align="center"
-          gap={10}
-          paddingBlock={4}
-          paddingInline={8}
+          className={styles.propertyItem}
+          gap={8}
           variant={'borderless'}
         >
           <TaskPriorityTag disableDropdown priority={priority} size={16} taskIdentifier={taskId} />
@@ -106,7 +105,6 @@ const TaskProperties = memo(() => {
 
       {shouldShowMemberAssignee(activeWorkspaceId, assigneeUserId) && (
         <AssigneeMemberSelector
-          fullWidth
           currentUserId={assigneeUserId}
           disabled={status === 'running'}
           taskCreatorId={createdByUserId}
@@ -117,11 +115,9 @@ const TaskProperties = memo(() => {
             clickable
             horizontal
             align="center"
-            gap={10}
-            paddingBlock={4}
-            paddingInline={8}
+            className={styles.propertyItem}
+            gap={8}
             variant={'borderless'}
-            width={'100%'}
           >
             {assigneeUserId ? (
               <>
@@ -147,9 +143,8 @@ const TaskProperties = memo(() => {
           clickable
           horizontal
           align="center"
-          gap={10}
-          paddingBlock={4}
-          paddingInline={8}
+          className={styles.propertyItem}
+          gap={8}
           variant={'borderless'}
         >
           <TaskTriggerTag
@@ -161,7 +156,7 @@ const TaskProperties = memo(() => {
           />
         </Block>
       </TaskScheduleConfig>
-    </Block>
+    </div>
   );
 });
 

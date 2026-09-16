@@ -9,7 +9,12 @@ import { ChatErrorType, type ErrorType } from '@lobechat/types';
  * caller keeps for non-web surfaces (IM bots) while retaining the raw code in
  * `detail` for diagnostics. Web clients localize via the mapped error type below.
  */
-const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
+/**
+ * Exported so a consumer that reads a persisted `task.error` can recognise the same
+ * failure it would have recognised from the raw code: dispatch failures reach storage
+ * as a code on one path and as this headline on another.
+ */
+export const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
   DEVICE_CHANNEL_UNAVAILABLE:
     "The device this agent runs on isn't reachable right now — it went offline, went to sleep, or is reconnecting. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again.",
   DEVICE_GATEWAY_ERROR:

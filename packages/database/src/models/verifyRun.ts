@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { VerifyVisibility } from '@lobechat/const/verify';
+import { isDraftVerifyRun, type VerifyVisibility } from '@lobechat/const/verify';
 import type {
   VerifyCheckItem,
   VerifyRunDecisionDetail,
@@ -326,6 +326,58 @@ export class VerifyRunModel {
 
     if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
     return run;
+  };
+
+  /**
+   * A harness run arriving while the acceptance still holds a draft round must
+   * not open another round: its plan folds into the draft, the draft becomes the
+   * ingest target (frozen now, since results are about to land) and the
+   * detached run row goes away. Returns the draft row the caller ingests into.
+   */
+  foldIntoRound = async (sourceRunId: string, targetRunId: string): Promise<VerifyRunItem> => {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(verifyRuns)
+        .where(and(inArray(verifyRuns.id, [sourceRunId, targetRunId]), this.ownership()))
+        .for('update');
+      const source = rows.find((row) => row.id === sourceRunId);
+      const target = rows.find((row) => row.id === targetRunId);
+      if (!source || !target) throw new Error('Verify run not found in the current workspace');
+      if (source.acceptanceId) throw new Error('Only a detached run can fold into a draft round');
+      if (!isDraftVerifyRun(target)) throw new Error('Only a draft round can absorb another run');
+      const executed = await tx
+        .select({ id: verifyCheckResults.id })
+        .from(verifyCheckResults)
+        .where(inArray(verifyCheckResults.verifyRunId, [sourceRunId, targetRunId]))
+        .limit(1);
+      if (executed.length) throw new Error('A run with results cannot fold into a draft round');
+
+      const known = new Set((target.plan ?? []).map((item) => item.id));
+      const plan = [
+        ...(target.plan ?? []),
+        ...(source.plan ?? []).filter((item) => !known.has(item.id)),
+      ].map((item, index) => ({ ...item, index }));
+      // The source row goes first so its unique operation_id can move over.
+      await tx.delete(verifyRuns).where(eq(verifyRuns.id, sourceRunId));
+      const [folded] = await tx
+        .update(verifyRuns)
+        .set({
+          context: target.context ?? source.context,
+          goal: target.goal ?? source.goal,
+          metadata: { ...target.metadata, ...source.metadata },
+          operationId: target.operationId ?? source.operationId,
+          plan,
+          planConfirmedAt: new Date(),
+          scenario: target.scenario ?? source.scenario,
+          source: source.source ?? target.source,
+          // Ingested rounds carry no rollup status: the report settles them.
+          status: null,
+        })
+        .where(eq(verifyRuns.id, targetRunId))
+        .returning();
+      return folded;
+    });
   };
 
   /** Flip who can read this round's report page beyond its creator. */

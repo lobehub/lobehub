@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Header from './index';
 
 const mocks = vi.hoisted(() => ({
+  marketSubmission: { isSubmitting: false, isUnderReview: false, open: vi.fn(), revision: 0 },
   agentState: {
     activeAgentId: 'agent-1',
     authorId: undefined as string | undefined,
@@ -36,8 +37,11 @@ const mocks = vi.hoisted(() => ({
     removeAgent: vi.fn(),
   },
   hasActiveWorkspace: true,
-  /** What the share-entry hook's live-share lookup resolves to. */
-  shareStatus: null as { visibility: 'link' | 'private' } | null,
+  /**
+   * What the Agent Share business slot reports. The rules behind it live with
+   * the deployment that offers sharing; this file only renders the outcome.
+   */
+  shareSupport: { publishable: false, supported: false, visible: false as boolean | undefined },
   serverConfigState: {
     featureFlags: { enableAgentShare: undefined as boolean | undefined },
     // Business features on by default in these tests — the Cloud-only
@@ -57,14 +61,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-// `useAgentShareSupported` looks the live share up (via SWR) only for an
-// account that may not publish; resolve it synchronously here.
-vi.mock('swr', () => ({
-  default: (key: unknown, fetcher: () => unknown) => ({ data: key ? fetcher() : undefined }),
-}));
-
-vi.mock('@/services/agentShare', () => ({
-  agentShareService: { getShareStatus: () => mocks.shareStatus },
+vi.mock('@/business/client/useAgentShareSupported', () => ({
+  useAgentShareSupported: () => mocks.shareSupport,
 }));
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -151,20 +149,16 @@ vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    error: vi.fn(),
-    success: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
-
 vi.mock('@/const/layoutTokens', () => ({
   DESKTOP_HEADER_ICON_SMALL_SIZE: 24,
 }));
 
 vi.mock('@/features/AgentBreadcrumb', () => ({
   default: () => null,
+}));
+
+vi.mock('@/features/AgentMarketSubmission/useAgentMarketSubmission', () => ({
+  useAgentMarketSubmission: () => mocks.marketSubmission,
 }));
 
 vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
@@ -275,100 +269,115 @@ vi.mock('./AgentForkTag', () => ({
 }));
 
 vi.mock('./AgentStatusTag', () => ({
-  default: () => null,
+  default: () => <span>Unpublished</span>,
 }));
 
-vi.mock('./AgentVersionReviewTag', () => ({
-  default: () => null,
+vi.mock('@/services/marketApi', () => ({
+  marketApiService: { getAgentDetail: vi.fn().mockResolvedValue({ status: 'unpublished' }) },
 }));
 
 describe('Agent profile Header', () => {
   beforeEach(() => {
+    mocks.marketSubmission.isUnderReview = false;
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     mocks.agentState.isCurrentAgentHeterogeneous = false;
+    mocks.agentState.isBuiltinAgent = false;
     mocks.agentState.isInbox = false;
     mocks.agentState.systemRole = 'You are helpful.';
     mocks.agentState.visibility = 'public';
     mocks.globalState.showAgentBuilderPanel = false;
     mocks.profileState.editor = undefined;
+    mocks.profileState.lockState.pending = false;
+    mocks.profileState.lockState.lockedByOther = false;
     mocks.permission.allowed = true;
     mocks.resourceAccess.canEditResource = true;
     mocks.resourceAccess.canManageResource = true;
     mocks.hasActiveWorkspace = true;
+    mocks.shareSupport = { publishable: false, supported: false, visible: false };
     mocks.serverConfigState.featureFlags.enableAgentShare = undefined;
     mocks.serverConfigState.serverConfig.enableBusinessFeatures = true;
   });
 
-  describe('share entry', () => {
-    // Agent sharing is personal-only, so the entry needs a personal agent;
-    // the rollout flag is on unless a case says otherwise.
-    beforeEach(() => {
-      mocks.hasActiveWorkspace = false;
-      mocks.serverConfigState.featureFlags.enableAgentShare = true;
-      mocks.shareStatus = null;
+  describe('Market review entry', () => {
+    it('replaces the unpublished status with under review after submission', () => {
+      const { rerender } = render(<Header />);
+      expect(screen.getByText('Unpublished')).toBeVisible();
+      expect(screen.queryByText('Under Review')).toBeNull();
+
+      mocks.marketSubmission.isUnderReview = true;
+      rerender(<Header key="submitted" />);
+
+      expect(screen.getByText('Under Review')).toBeVisible();
+      expect(screen.queryByText('Unpublished')).toBeNull();
     });
 
-    it('offers the share entry to a personal agent owner', () => {
+    it('keeps publishing inside the collapsed actions menu, not directly in the header', () => {
       render(<Header />);
 
-      expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
+      const entry = screen.getByRole('button', { name: 'marketSubmission.entry' });
+      expect(screen.getByTestId('agent-profile-menu')).toContainElement(entry);
+      expect(entry).toBeVisible();
     });
 
-    // Outside the rollout allowlist the entry is hidden entirely …
-    it('hides the share entry when the account may not publish and has no live share', () => {
+    it('offers submission independently of the share rollout flag', () => {
       mocks.serverConfigState.featureFlags.enableAgentShare = false;
-      mocks.shareStatus = null;
+      render(<Header />);
+      expect(screen.getByText('marketSubmission.entry')).toBeEnabled();
+    });
 
+    it.each(['builtin', 'heterogeneous'] as const)('hides submission for %s agents', (kind) => {
+      mocks.agentState.isBuiltinAgent = kind === 'builtin';
+      mocks.agentState.isCurrentAgentHeterogeneous = kind === 'heterogeneous';
+      render(<Header />);
+      expect(screen.queryByText('marketSubmission.entry')).toBeNull();
+    });
+
+    it.each(['role', 'resource', 'lock'] as const)(
+      'disables submission when blocked by %s',
+      (kind) => {
+        mocks.permission.allowed = kind !== 'role';
+        mocks.resourceAccess.canManageResource = kind !== 'resource';
+        mocks.profileState.lockState.lockedByOther = kind === 'lock';
+        render(<Header />);
+        expect(screen.getByText('marketSubmission.entry')).toBeDisabled();
+      },
+    );
+  });
+
+  describe('share entry', () => {
+    // Agent sharing runs a visitor's conversation on the creator's account, so
+    // the capability is contributed by the deployment that does that
+    // accounting. This file owns only what the header does with the answer;
+    // the rules themselves are tested with the slot's real implementation.
+    it('offers no share entry by default', () => {
       render(<Header />);
 
       expect(screen.queryByTestId('share-entry-icon')).toBeNull();
-    });
-
-    // … unless a share is already live: an owner rolled back out of the
-    // allowlist still needs the entry to reach (and revoke) it.
-    it('keeps the share entry for a live share when the account may not publish', () => {
-      mocks.serverConfigState.featureFlags.enableAgentShare = false;
-      mocks.shareStatus = { visibility: 'link' };
-
-      render(<Header />);
-
-      expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
     });
 
     it('hides the share entry while the capability is still unresolved', () => {
-      mocks.serverConfigState.featureFlags.enableAgentShare = undefined;
-      mocks.shareStatus = null;
+      mocks.shareSupport = { publishable: false, supported: true, visible: undefined };
 
       render(<Header />);
 
       expect(screen.queryByTestId('share-entry-icon')).toBeNull();
     });
 
-    // Unlike the rollout flag above, `enableBusinessFeatures` is structural:
-    // an OSS deployment has no Agent Share surface at all, server-enforced by
-    // `ENABLE_BUSINESS_FEATURES` — there is no live share to revoke there, so
-    // hiding the entry entirely (not just disabling publish) is correct.
-    it('hides the share entry on a deployment without business features', () => {
-      mocks.serverConfigState.serverConfig.enableBusinessFeatures = false;
+    it('offers the share entry when the deployment reports it visible', () => {
+      mocks.shareSupport = { publishable: true, supported: true, visible: true };
 
       render(<Header />);
 
-      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
+      expect(screen.getByTestId('share-entry-icon')).toBeInTheDocument();
     });
 
-    it('hides the share entry for a workspace agent', () => {
-      mocks.hasActiveWorkspace = true;
-
-      render(<Header />);
-
-      expect(screen.queryByTestId('share-entry-icon')).toBeNull();
-    });
-
-    // Share settings are a sibling tab of the profile group now, so the entry
+    // Share settings are a sibling tab of the profile group, so the entry
     // navigates instead of opening a modal.
     it('navigates to the share tab', () => {
+      mocks.shareSupport = { publishable: true, supported: true, visible: true };
+
       render(<Header />);
 
       fireEvent.click(screen.getByTestId('share-entry-icon'));

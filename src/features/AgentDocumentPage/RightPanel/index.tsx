@@ -49,8 +49,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   body: css`
     overflow-y: auto;
-    flex: 1;
-    min-height: 0;
+    height: 100%;
   `,
 }));
 

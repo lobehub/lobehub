@@ -132,8 +132,6 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
-  const { useState } = await import('react');
-
   return {
     ...(await importOriginal<object>()),
     ActionIcon: ({
@@ -153,36 +151,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         onClick={onClick}
       />
     ),
-    Collapse: ({
-      defaultActiveKey = [],
-      items,
-    }: {
-      defaultActiveKey?: string[];
-      items: { children?: ReactNode; key: string; label?: ReactNode }[];
-    }) => {
-      const [activeKeys, setActiveKeys] = useState(defaultActiveKey);
-
-      return (
-        <div>
-          {items.map((item) => {
-            const expanded = activeKeys.includes(item.key);
-
-            return (
-              <div key={item.key}>
-                <button
-                  aria-expanded={expanded}
-                  type="button"
-                  onClick={() => setActiveKeys(expanded ? [] : [item.key])}
-                >
-                  {item.label}
-                </button>
-                {expanded && item.children}
-              </div>
-            );
-          })}
-        </div>
-      );
-    },
     Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
       <div className={className}>{children}</div>
     ),
@@ -1015,7 +983,6 @@ describe('CodexQuotaMenu', () => {
       screen.getAllByText((content) => content.startsWith('heteroAgent.quota.duration.')),
     ).toHaveLength(2);
     const resetCreditsSummary = screen.getByText('heteroAgent.codexQuota.resetCredits:4');
-    expect(resetCreditsSummary.closest('button')?.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('#1')).toBeNull();
 
     fireEvent.click(resetCreditsSummary);

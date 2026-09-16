@@ -1,3 +1,4 @@
+import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client';
 import { describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
@@ -18,7 +19,11 @@ const mockClient = vi.hoisted(() => ({
   queryDeviceStatus: vi.fn(),
 }));
 
-const MockGatewayHttpClient = vi.hoisted(() => vi.fn(() => mockClient));
+const MockGatewayHttpClient = vi.hoisted(() =>
+  vi.fn(function () {
+    return mockClient;
+  }),
+);
 
 vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockEnv,
@@ -28,7 +33,7 @@ vi.mock('@/envs/gateway', () => ({
 // describers are pure functions the service calls to phrase its errors, and
 // stubbing them would test nothing.
 vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@lobechat/device-gateway-client')>()),
+  ...(await importOriginal<typeof DeviceGatewayClientModule>()),
   GatewayHttpClient: MockGatewayHttpClient,
 }));
 
@@ -230,7 +235,7 @@ describe('DeviceGateway', () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.queryDeviceList.mockRejectedValue(new Error('fetch failed'));
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(function () {});
 
       const result = await new DeviceGateway().queryDeviceList('user-1', 'ws-1');
 
@@ -866,6 +871,79 @@ describe('DeviceGateway', () => {
       });
 
       expect(result).toEqual({ error: 'offline', success: false });
+    });
+  });
+
+  describe('readExternalAssetForPublish', () => {
+    it('invokes only the dedicated publish RPC method', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const data = { base64: 'AQID', contentType: 'image/png', success: true };
+      mockClient.invokeRpc.mockResolvedValue({ data, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.readExternalAssetForPublish({
+        deviceId: 'dev-1',
+        path: '/outside/image.png',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual(data);
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        {
+          method: 'readExternalAssetForPublish',
+          params: { path: '/outside/image.png', workingDirectory: '/proj' },
+        },
+      );
+    });
+  });
+
+  describe('copyAssetForPublish', () => {
+    it('invokes the copy RPC when the destination is inside the workspace', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.invokeRpc.mockResolvedValue({ data: { success: true }, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.copyAssetForPublish({
+        deviceId: 'dev-1',
+        from: '/outside/image.png',
+        to: '/proj/.lobe-artifacts/site/image.png',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        {
+          method: 'copyAssetForPublish',
+          params: {
+            from: '/outside/image.png',
+            to: '/proj/.lobe-artifacts/site/image.png',
+            workingDirectory: '/proj',
+          },
+        },
+      );
+    });
+
+    it('throws without invoking the rpc when the destination escapes the workspace', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const proxy = new DeviceGateway();
+
+      await expect(
+        proxy.copyAssetForPublish({
+          deviceId: 'dev-1',
+          from: '/outside/image.png',
+          to: '/proj/../image.png',
+          userId: 'user-1',
+          workingDirectory: '/proj',
+        }),
+      ).rejects.toThrow(/outside the approved workspace/);
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
     });
   });
 

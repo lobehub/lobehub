@@ -58,10 +58,13 @@ vi.mock('@/server/services/verify/taskAcceptance', () => ({ resolveTaskAcceptanc
 
 // AiAgentService pulls in ~14 sub-dependencies in its constructor; mock it so
 // the running-status branch in updateStatus doesn't drag them in.
+const { interruptTaskMock } = vi.hoisted(() => ({ interruptTaskMock: vi.fn() }));
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    interruptTask: vi.fn(),
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      interruptTask: interruptTaskMock,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/taskScheduler', () => ({
@@ -141,17 +144,30 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    interruptTaskMock.mockReset().mockResolvedValue({ success: true });
     cancelScheduled.mockResolvedValue(undefined);
     scheduleNextTopic.mockResolvedValue('tick-new');
     resolveTaskAcceptance.mockResolvedValue(undefined);
     mockTaskTopicModel.findRunningByTaskIds.mockResolvedValue([]);
     mockTaskModel.getActivities.mockResolvedValue([]);
-    (AgentModel as any).mockImplementation(() => mockAgentModel);
-    (TaskModel as any).mockImplementation(() => mockTaskModel);
-    (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
-    (BriefModel as any).mockImplementation(() => mockBriefModel);
-    (RbacModel as any).mockImplementation(() => mockRbacModel);
-    (WorkspaceMemberModel as any).mockImplementation(() => mockWorkspaceMemberModel);
+    (AgentModel as any).mockImplementation(function () {
+      return mockAgentModel;
+    });
+    (TaskModel as any).mockImplementation(function () {
+      return mockTaskModel;
+    });
+    (TaskTopicModel as any).mockImplementation(function () {
+      return mockTaskTopicModel;
+    });
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (RbacModel as any).mockImplementation(function () {
+      return mockRbacModel;
+    });
+    (WorkspaceMemberModel as any).mockImplementation(function () {
+      return mockWorkspaceMemberModel;
+    });
   });
 
   describe('assertAssigneeUserAssignable', () => {
@@ -1448,6 +1464,24 @@ describe('TaskService', () => {
       expect(result?.activities?.[0].type).toBe('comment');
       expect(result?.activities?.[1].type).toBe('topic');
     });
+  });
+
+  describe('confirmed execution stop', () => {
+    it.each([{ success: true, deviceCancellationConfirmed: false }, { success: false }])(
+      'keeps a live Task and topic unchanged when cancellation is unconfirmed: %j',
+      async (result) => {
+        mockTaskModel.resolve.mockResolvedValue({ id: 'task-live', status: 'running' });
+        mockTaskTopicModel.findByTaskId.mockResolvedValue([
+          { topicId: 'topic-live', operationId: 'op-live', status: 'running' },
+        ]);
+        interruptTaskMock.mockResolvedValueOnce(result);
+        await expect(
+          new TaskService(db, userId).updateStatus({ id: 'task-live', status: 'paused' }),
+        ).rejects.toThrow('Task interruption was not confirmed');
+        expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+        expect(mockTaskTopicModel.cancelIfRunning).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('updateStatus / scheduleStartedAt', () => {

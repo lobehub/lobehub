@@ -290,6 +290,17 @@ export class TaskService {
     });
   }
 
+  private interruptTaskOperation = async (service: AiAgentService, operationId: string) => {
+    const result = await service.interruptTask({ operationId });
+    if (!result.success || result.deviceCancellationConfirmed === false) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'Task interruption was not confirmed. The execution remains active; retry stopping it before starting another attempt.',
+      });
+    }
+  };
+
   /**
    * Cancel a running topic: interrupt the remote operation (if any), then
    * mark the topic as `canceled` and pause its parent task.
@@ -309,7 +320,7 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      await this.interruptTaskOperation(aiAgentService, target.operationId);
     }
 
     await this.taskTopicModel.updateStatus(target.taskId, topicId, 'canceled');
@@ -328,7 +339,7 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      await this.interruptTaskOperation(aiAgentService, target.operationId);
     }
 
     await this.taskTopicModel.remove(target.taskId, topicId);
@@ -435,14 +446,14 @@ export class TaskService {
         // to avoid desynchronizing DB state from a still-running operation.
         if (t.operationId) {
           try {
-            await aiAgentService.interruptTask({ operationId: t.operationId });
+            await this.interruptTaskOperation(aiAgentService, t.operationId);
           } catch (err) {
             console.error(
               '[TaskService.updateStatus] failed to interrupt topic %s:',
               t.topicId,
               err,
             );
-            continue;
+            throw err;
           }
         }
 
@@ -599,7 +610,7 @@ export class TaskService {
       const settled = await Promise.allSettled(
         runningTopics.map(async (topic) => {
           if (topic.operationId) {
-            await aiAgentService.interruptTask({ operationId: topic.operationId });
+            await this.interruptTaskOperation(aiAgentService, topic.operationId);
           }
         }),
       );

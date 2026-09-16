@@ -19,14 +19,19 @@ const PERSONAL_KEY = '__personal__';
 const _clients = new Map<string, TrpcClient>();
 const _toolsClients = new Map<string, ToolsTrpcClient>();
 
-async function getAuthAndServer(): Promise<{ headers: Record<string, string>; serverUrl: string }> {
+async function getAuthAndServer(): Promise<{
+  headers: () => Record<string, string>;
+  serverUrl: string;
+}> {
   // LOBEHUB_JWT + LOBEHUB_SERVER env vars (used by server-side sandbox execution)
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
     const serverUrl = resolveServerUrl();
 
     return {
-      headers: { 'Oidc-Auth': envJwt },
+      // Read per request: `hetero exec` renews its operation token in place, and
+      // its clients live for the whole run.
+      headers: () => ({ 'Oidc-Auth': process.env.LOBEHUB_JWT || envJwt }),
       serverUrl,
     };
   }
@@ -36,7 +41,7 @@ async function getAuthAndServer(): Promise<{ headers: Record<string, string>; se
     const serverUrl = resolveServerUrl();
 
     return {
-      headers: { 'X-API-Key': envApiKey },
+      headers: () => ({ 'X-API-Key': envApiKey }),
       serverUrl,
     };
   }
@@ -50,9 +55,10 @@ async function getAuthAndServer(): Promise<{ headers: Record<string, string>; se
   }
 
   const serverUrl = resolveServerUrl();
+  const { accessToken } = result.credentials;
 
   return {
-    headers: { 'Oidc-Auth': result.credentials.accessToken },
+    headers: () => ({ 'Oidc-Auth': accessToken }),
     serverUrl,
   };
 }
@@ -67,7 +73,7 @@ export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
   const client = createTRPCClient<LambdaRouter>({
     links: [
       httpLink({
-        headers: withWorkspaceHeader(headers, wsId),
+        headers: () => withWorkspaceHeader(headers(), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/lambda`,
       }),
@@ -125,7 +131,7 @@ export async function getToolsTrpcClient(workspaceId?: string): Promise<ToolsTrp
   const client = createTRPCClient<ToolsRouter>({
     links: [
       httpLink({
-        headers: withWorkspaceHeader(headers, wsId),
+        headers: () => withWorkspaceHeader(headers(), wsId),
         transformer: superjson,
         url: `${serverUrl}/trpc/tools`,
       }),

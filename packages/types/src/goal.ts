@@ -104,10 +104,20 @@ export interface GoalAcceptancePolicy {
  * stored explicitly rather than as the absence of a marker, because pausing an
  * already-paused goal is a no-op that leaves no other trace of who asked.
  */
-export type GoalPauseReason = 'measured_acceptance' | 'exploration_limit' | 'user';
+export type GoalPauseReason =
+  | 'measured_acceptance'
+  | 'exploration_limit'
+  /** The planner asked for a correction after its allowance was already spent. */
+  | 'exploration_revision_limit'
+  | 'user';
 
 export interface GoalExplorationDecision {
-  action: 'expand' | 'verify';
+  /**
+   * `expand` opens a sibling experiment for a new question; `revise` corrects the
+   * protocol of an experiment that already ran, so a flawed instrument is fixed in
+   * place instead of being inherited by another sibling.
+   */
+  action: 'expand' | 'revise' | 'verify';
   instruction: string;
   parentNodeId: string;
   reason: string;
@@ -127,10 +137,137 @@ export interface GoalExplorationConfig {
   maxExperiments: number;
 }
 
+/** Opt-in recovery supervision. It cannot grant new permissions or expand budgets. */
+export interface GoalSupervisionPolicy {
+  enabled: boolean;
+  /** Bounded incident ledger and paid diagnostic runs per Goal (default 10, maximum 100). */
+  maxIncidents?: number;
+}
+
+export interface GoalSupervisionIncident {
+  createdAt: string;
+  eligible: boolean;
+  failedOperationId: string;
+  id: string;
+  /** Server-recorded tool inspections and recovery request for this incident. */
+  inspected?: { goal?: boolean; task?: boolean; artifactVersionIds?: string[] };
+  nodeId: string;
+  reason: string;
+  recoveryInstruction?: string;
+  recoveryOperationId?: string;
+  resolution?: {
+    action: 'retry' | 'escalate';
+    instruction: string;
+    reason: string;
+    toolCallId: string;
+  };
+  resolvedAt?: string;
+  status: 'diagnosing' | 'retrying' | 'recovered' | 'escalated' | 'unsuccessful' | 'human_resumed';
+  supervisorOperationId?: string;
+  taskId: string;
+  /**
+   * Status the Task held when this incident opened. A diagnosis runs for minutes, so
+   * the recovery claims against this rather than a later read: anything a person did
+   * in between must win, not be swapped back into work.
+   */
+  taskStatus?: string;
+}
+
+/** Server-owned state; never accepted as client configuration. */
+export interface GoalSupervisionState {
+  agentId: string;
+  incidents: GoalSupervisionIncident[];
+  revision: number;
+  topicId: string;
+}
+
+export interface GoalSupervisionSummary {
+  effectiveRecoveries: number;
+  /** Null when no eligible interruption has been observed. */
+  effectiveRecoveryRate: number | null;
+  eligibleInterruptions: number;
+  escalated: number;
+  interruptions: number;
+  pendingRecoveries: number;
+}
+
+export const summarizeGoalSupervision = (state?: GoalSupervisionState): GoalSupervisionSummary => {
+  const incidents = state?.incidents ?? [];
+  const eligibleInterruptions = incidents.filter((item) => item.eligible).length;
+  const effectiveRecoveries = incidents.filter(
+    (item) => item.eligible && item.status === 'recovered',
+  ).length;
+  return {
+    effectiveRecoveries,
+    effectiveRecoveryRate: eligibleInterruptions
+      ? effectiveRecoveries / eligibleInterruptions
+      : null,
+    eligibleInterruptions,
+    escalated: incidents.filter((item) => item.status === 'escalated').length,
+    interruptions: incidents.length,
+    pendingRecoveries: incidents.filter((item) => ['diagnosing', 'retrying'].includes(item.status))
+      .length,
+  };
+};
+
+/**
+ * A CLI-capable agent owns planning; the coordinator owns execution and acceptance.
+ * The planning agent is the goal's own `agentId` — the policy carries no identity.
+ */
+export interface GoalManagerPolicy {
+  instruction?: string;
+  maxTurns?: number;
+}
+
+/** Server-owned dispatch receipt, retained across backend restarts. */
+export interface GoalManagerState {
+  /**
+   * The turn was not dispatched by the manager: it is the conversation run that
+   * created the goal (`/goal` → `lh goal create --conversation`), adopted as the
+   * first planning turn. The turn is keyed by `operationId` instead of the
+   * server-minted `msg_goal_manager_<token>` source message.
+   */
+  adopted?: boolean;
+  /**
+   * The conversation run adopted as the first planning turn, kept on every later
+   * receipt. `adopted` / `operationId` describe the current turn and are replaced
+   * when the next one starts; without this the first run's spend would drop out
+   * of the goal's management usage and budget.
+   */
+  adoptedOperationId?: string;
+  consumed?: boolean;
+  operationId?: string;
+  /**
+   * The problem this turn was invited to take over, when the coordinator handed
+   * one over instead of opening a human gate. Its presence is what separates a
+   * takeover turn from ordinary planning: an `escalate` from a takeover turn puts
+   * the gate back rather than pausing the Goal, and the same problem is not handed
+   * over twice.
+   */
+  problem?: string;
+  /** The blocked task that problem belongs to, so accepting a plan that replaces
+   *  it can retire exactly that node without parsing the key. */
+  problemTaskId?: string;
+  readyForAcceptance?: boolean;
+  reviewSnapshot?: string;
+  snapshot: string;
+  startedAt: string;
+  submitted?: {
+    action: 'tasks' | 'verify' | 'retry' | 'escalate';
+    reason: string;
+    taskId?: string;
+  };
+  token: string;
+  topicId: string;
+  turns: number;
+}
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
 
   exploration?: GoalExplorationConfig;
+  manager?: GoalManagerPolicy;
+  managerState?: GoalManagerState;
   /**
    * How many of a goal's Tasks may be in flight at once. Independent Tasks are
    * the common case — four bug fixes that share no code have no reason to run
@@ -146,7 +283,19 @@ export interface GoalConfig {
   planningProtocol?: 'lease-v1';
   recovery?: GoalRecoveryPolicy;
   schedule?: GoalSchedulePolicy;
+  supervision?: GoalSupervisionPolicy;
+  /** Durable supervisor topic and bounded incident ledger. */
+  supervisorState?: GoalSupervisionState;
+  /**
+   * Who executes the Tasks the coordinator creates, when that is not the goal's
+   * own agent. The goal's `agentId` supervises and plans; this only routes work.
+   * Unset means the goal's agent does its own Tasks.
+   */
+  taskAgentId?: string;
 }
+
+/** Creation accepts planning options, never a runtime receipt. */
+export type GoalCreateConfig = Omit<GoalConfig, 'managerState' | 'supervisorState'>;
 
 /**
  * The goal entity as exposed to clients — a mirror of the `goals` table row.
@@ -194,6 +343,13 @@ export type GoalEdgeKind =
   | 'decomposes'
   | 'depends_on'
   | 'derived_from'
+  /**
+   * A corrected protocol replacing an earlier one inside the same experiment.
+   * Distinct from `derived_from`, which records generic provenance and is writable
+   * through the public graph mutation: reusing it would silently reinterpret any
+   * hand-authored task provenance as a correction.
+   */
+  | 'revises'
   | 'investigates'
   | 'produces'
   | 'supports'
@@ -343,6 +499,12 @@ export interface GoalGraphSnapshot {
    * finished without saying whether it held up.
    */
   acceptances?: Record<string, GoalNodeAcceptance>;
+  /**
+   * The agent each dispatched task node is assigned to, keyed by node id. A
+   * goal can route its tasks to an executor other than the supervising agent,
+   * and a task title alone never says who is doing the work.
+   */
+  assignees?: Record<string, string>;
   decisions: GoalGraphDecision[];
   /**
    * When an active task node's newest run delivered, present only while that

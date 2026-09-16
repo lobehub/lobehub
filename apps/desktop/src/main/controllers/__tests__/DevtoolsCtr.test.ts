@@ -14,6 +14,7 @@ const { getAppMetricsMock, getGPUFeatureStatusMock, getGPUInfoMock, ipcMainHandl
   }));
 
 vi.mock('electron', () => ({
+  BrowserWindow: {},
   app: {
     getAppMetrics: getAppMetricsMock,
     getGPUFeatureStatus: getGPUFeatureStatusMock,
@@ -151,6 +152,43 @@ describe('DevtoolsCtr', () => {
           devtoolsCtr.getAppProcessMetrics(),
         ),
       ).resolves.toMatchObject({ cpuPercent: 3, gpu: null, rendererResidentMB: 8 });
+    });
+  });
+
+  describe('collectRendererGarbage', () => {
+    it('should run HeapProfiler.collectGarbage over a debugger it attaches and detaches', async () => {
+      const dbg = {
+        attach: vi.fn(),
+        detach: vi.fn(),
+        isAttached: () => false,
+        sendCommand: vi.fn(async () => ({})),
+      };
+      const sender = { debugger: dbg } as any;
+
+      await runWithIpcContext({ event: { sender } as any, sender }, () =>
+        devtoolsCtr.collectRendererGarbage(),
+      );
+
+      expect(dbg.sendCommand).toHaveBeenCalledWith('HeapProfiler.collectGarbage');
+      expect(dbg.attach).toHaveBeenCalledWith('1.3');
+      expect(dbg.detach).toHaveBeenCalledOnce();
+    });
+
+    it('should leave an already attached debugger attached', async () => {
+      const dbg = {
+        attach: vi.fn(),
+        detach: vi.fn(),
+        isAttached: () => true,
+        sendCommand: vi.fn(async () => ({})),
+      };
+      const sender = { debugger: dbg } as any;
+
+      await runWithIpcContext({ event: { sender } as any, sender }, () =>
+        devtoolsCtr.collectRendererGarbage(),
+      );
+
+      expect(dbg.attach).not.toHaveBeenCalled();
+      expect(dbg.detach).not.toHaveBeenCalled();
     });
   });
 

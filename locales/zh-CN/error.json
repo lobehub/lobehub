@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "点击复制",
   "unknownError.desc": "遇到了意外错误，请重试或反馈至",
   "unknownError.retry": "重试",
+  "unknownError.sharedDesc": "请前往此处反馈问题：",
+  "unknownError.sharedTitle": "无法生成这条回答",
   "unknownError.title": "糟糕，请求打了个盹",
   "unknownError.traceIdLabel": "追踪 ID：",
   "unlock.addProxyUrl": "添加 OpenAI 代理地址（可选）",

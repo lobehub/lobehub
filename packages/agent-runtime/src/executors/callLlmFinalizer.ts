@@ -148,7 +148,7 @@ const buildWorkAnchor = ({
 }): MessageMetadata['work'] => {
   if (output.toolsCalling.length > 0 || output.toolCalls.length > 0) return undefined;
 
-  const sourceMessageId = state.metadata?.sourceMessageId;
+  const sourceMessageId = state.origin?.sourceMessageId;
   const sourceMessageIndex =
     typeof sourceMessageId === 'string'
       ? state.messages.findIndex((message) => message.id === sourceMessageId)
@@ -226,6 +226,9 @@ const buildFinalState = ({
   visibleOutputEndPublishedStepIndex?: number;
 }): AgentState => {
   const newState = structuredClone(state);
+  // Completion must retain the persisted assistant identity even when messages
+  // are rehydrated into display groups before the next runtime step.
+  newState.metadata = { ...newState.metadata, workAssistantMessageId: assistantMessageId };
   newState.toolCallRepeatGuard = toolCallRepeatGuard;
   newState.messages.push({
     content: output.content,

@@ -31,12 +31,11 @@ vi.mock('@/database/server', () => ({
 describe('messageRouter', () => {
   it('should handle batchCreateMessages', async () => {
     const mockBatchCreate = vi.fn().mockResolvedValue({ rowCount: 2 });
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          batchCreate: mockBatchCreate,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        batchCreate: mockBatchCreate,
+      } as any;
+    });
 
     const input = [
       {
@@ -80,12 +79,11 @@ describe('messageRouter', () => {
 
   it('should handle count', async () => {
     const mockCount = vi.fn().mockResolvedValue(5);
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          count: mockCount,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        count: mockCount,
+      } as any;
+    });
 
     const input = { startDate: '2024-01-01' };
     const ctx = {
@@ -100,12 +98,11 @@ describe('messageRouter', () => {
 
   it('should handle createMessage', async () => {
     const mockCreate = vi.fn().mockResolvedValue({ id: 'msg1' });
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreate,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+      } as any;
+    });
 
     const input: CreateMessageParams = {
       content: 'test',
@@ -125,25 +122,24 @@ describe('messageRouter', () => {
 
   it('should handle getMessages', async () => {
     const mockQuery = vi.fn().mockResolvedValue([{ id: 'msg1' }]);
-    const mockGetFullFileUrl = vi
-      .fn()
-      .mockImplementation((path: string | null, file: { fileType: string }) => {
-        return Promise.resolve('url');
-      });
+    const mockGetFullFileUrl = vi.fn().mockImplementation(function (
+      path: string | null,
+      file: { fileType: string },
+    ) {
+      return Promise.resolve('url');
+    });
 
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          query: mockQuery,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        query: mockQuery,
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          getFullFileUrl: mockGetFullFileUrl,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        getFullFileUrl: mockGetFullFileUrl,
+      } as any;
+    });
 
     const input = { sessionId: 'session1' };
     const ctx = {
@@ -166,12 +162,11 @@ describe('messageRouter', () => {
         id: 'msg1',
       } as UIChatMessage,
     ]);
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          queryAll: mockQueryAll,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        queryAll: mockQueryAll,
+      } as any;
+    });
 
     const ctx = {
       messageModel: new MessageModel({} as any, 'user1'),
@@ -185,12 +180,11 @@ describe('messageRouter', () => {
 
   it('should handle removeMessage', async () => {
     const mockDelete = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          deleteMessage: mockDelete,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        deleteMessage: mockDelete,
+      } as any;
+    });
 
     const input = { id: 'msg1' };
     const ctx = {
@@ -204,12 +198,11 @@ describe('messageRouter', () => {
 
   it('should handle updateMessage', async () => {
     const mockUpdate = vi.fn().mockResolvedValue({ success: true });
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        update: mockUpdate,
+      } as any;
+    });
 
     const input = { id: 'msg1', value: { content: 'updated' } };
     const ctx = {
@@ -224,12 +217,11 @@ describe('messageRouter', () => {
 
   it('should handle updateMessageRAG', async () => {
     const mockUpdateRAG = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(MessageModel).mockImplementation(
-      () =>
-        ({
-          updateMessageRAG: mockUpdateRAG,
-        }) as any,
-    );
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return {
+        updateMessageRAG: mockUpdateRAG,
+      } as any;
+    });
 
     const input = {
       id: 'msg1',
@@ -254,12 +246,11 @@ describe('messageRouter', () => {
   describe('agentId support', () => {
     it('should handle createMessage with agentId', async () => {
       const mockCreate = vi.fn().mockResolvedValue({ id: 'msg1' });
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            create: mockCreate,
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          create: mockCreate,
+        } as any;
+      });
 
       const input: CreateMessageParams = {
         agentId: 'agent1',
@@ -280,23 +271,21 @@ describe('messageRouter', () => {
 
     it('should handle getMessages with agentId', async () => {
       const mockQuery = vi.fn().mockResolvedValue([{ id: 'msg1' }]);
-      const mockGetFullFileUrl = vi
-        .fn()
-        .mockImplementation((path: string | null) => Promise.resolve('url'));
+      const mockGetFullFileUrl = vi.fn().mockImplementation(function (path: string | null) {
+        return Promise.resolve('url');
+      });
 
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            query: mockQuery,
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          query: mockQuery,
+        } as any;
+      });
 
-      vi.mocked(FileService).mockImplementation(
-        () =>
-          ({
-            getFullFileUrl: mockGetFullFileUrl,
-          }) as any,
-      );
+      vi.mocked(FileService).mockImplementation(function () {
+        return {
+          getFullFileUrl: mockGetFullFileUrl,
+        } as any;
+      });
 
       const input = { agentId: 'agent1', sessionId: 'session1' };
       const ctx = {
@@ -314,16 +303,15 @@ describe('messageRouter', () => {
 
     it('should handle getMessages with agentId only (no sessionId)', async () => {
       const mockQuery = vi.fn().mockResolvedValue([{ id: 'msg1' }]);
-      const mockGetFullFileUrl = vi
-        .fn()
-        .mockImplementation((path: string | null) => Promise.resolve('url'));
+      const mockGetFullFileUrl = vi.fn().mockImplementation(function (path: string | null) {
+        return Promise.resolve('url');
+      });
 
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            query: mockQuery,
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          query: mockQuery,
+        } as any;
+      });
 
       const input = { agentId: 'agent1' };
       const ctx = {
@@ -340,12 +328,11 @@ describe('messageRouter', () => {
 
     it('should handle batchDeleteByAgentId', async () => {
       const mockBatchDeleteByAgentId = vi.fn().mockResolvedValue({ rowCount: 5 });
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            batchDeleteByAgentId: mockBatchDeleteByAgentId,
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          batchDeleteByAgentId: mockBatchDeleteByAgentId,
+        } as any;
+      });
 
       const ctx = {
         messageModel: new MessageModel({} as any, 'user1'),
@@ -373,23 +360,21 @@ describe('messageRouter', () => {
       ];
 
       const mockQuery = vi.fn().mockResolvedValue(mockMessages);
-      const mockGetFullFileUrl = vi
-        .fn()
-        .mockImplementation((path: string) => `https://cdn/${path}`);
+      const mockGetFullFileUrl = vi.fn().mockImplementation(function (path: string) {
+        return `https://cdn/${path}`;
+      });
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare as any);
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            query: mockQuery,
-          }) as any,
-      );
-      vi.mocked(FileService).mockImplementation(
-        () =>
-          ({
-            getFullFileUrl: mockGetFullFileUrl,
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          query: mockQuery,
+        } as any;
+      });
+      vi.mocked(FileService).mockImplementation(function () {
+        return {
+          getFullFileUrl: mockGetFullFileUrl,
+        } as any;
+      });
 
       // Simulate the router logic
       const share = await TopicShareModel.findByShareIdWithAccessCheck(
@@ -479,12 +464,11 @@ describe('messageRouter', () => {
       const mockQuery = vi.fn().mockResolvedValue([{ id: 'msg1' }]);
 
       vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare as any);
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            query: mockQuery,
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          query: mockQuery,
+        } as any;
+      });
 
       const share = await TopicShareModel.findByShareIdWithAccessCheck(
         {} as any,

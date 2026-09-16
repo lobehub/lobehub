@@ -1,21 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import { hasAnnotatableEvidence, hasVisualEvidence } from '../Evidence/evidence';
+import { mergeRejectComments, serializeReviewAnnotations } from '../Review/rejectDraft';
 import {
   canDismissRejectModal,
   CHECK_REJECT_MODAL_SIZE,
   checkRejectModalShell,
   checkRejectModalSize,
-  mergeRejectComments,
   rejectModalTitle,
-  serializeReviewAnnotations,
   TEXT_REJECT_MODAL_WIDTH,
-} from '../Review/CheckRejectModal';
+} from '../Review/rejectModalShell';
 import {
   checkFilterState,
   focusedCheckStates,
   groupChecks,
-  isCheckWorkActionable,
   shouldCollapseAfterReview,
   shouldGroupChecks,
   userReviewState,
@@ -243,30 +241,6 @@ describe('userReviewState', () => {
     };
     expect(userReviewState(withReview({ ...reject, stale: false }))).toBe('rejected');
     expect(userReviewState(withReview({ ...reject, stale: true }))).toBe('pending');
-  });
-});
-
-describe('isCheckWorkActionable', () => {
-  const withReview = (action?: 'accept' | 'ignore' | 'reject') =>
-    ({
-      userReview: action
-        ? {
-            action,
-            createdAt: '2026-07-16T00:00:00.000Z',
-            roundIndex: 1,
-            stale: false,
-          }
-        : undefined,
-    }) as AcceptanceCheck;
-
-  it('keeps work available for pending and rejected checks', () => {
-    expect(isCheckWorkActionable(withReview())).toBe(true);
-    expect(isCheckWorkActionable(withReview('reject'))).toBe(true);
-  });
-
-  it('hides work for accepted and ignored checks', () => {
-    expect(isCheckWorkActionable(withReview('accept'))).toBe(false);
-    expect(isCheckWorkActionable(withReview('ignore'))).toBe(false);
   });
 });
 

@@ -24,6 +24,8 @@ import type {
   PinMessageState,
   ReactToMessageParams,
   ReactToMessageState,
+  ReadDocumentParams,
+  ReadDocumentState,
   ReadMessagesParams,
   ReadMessagesState,
   ReplyToThreadParams,
@@ -78,6 +80,16 @@ export class MessageDispatcherService implements MessageRuntimeService {
 
   readMessages = async (params: ReadMessagesParams): Promise<ReadMessagesState> => {
     return (await this.getService(params.platform)).readMessages(params);
+  };
+
+  // Optional on the service contract: forward only when the platform has it,
+  // so the runtime's "not supported on <platform>" branch stays reachable.
+  readDocument = async (params: ReadDocumentParams): Promise<ReadDocumentState> => {
+    const service = await this.getService(params.platform);
+    if (!service.readDocument) {
+      throw new Error(`readDocument is not supported on ${params.platform}`);
+    }
+    return service.readDocument(params);
   };
 
   editMessage = async (params: EditMessageParams): Promise<EditMessageState> => {

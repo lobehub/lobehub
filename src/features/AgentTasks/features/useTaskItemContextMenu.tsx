@@ -44,6 +44,8 @@ export interface TaskContextMenuTarget {
   assigneeAgentId?: string | null;
   assigneeUserId?: string | null;
   identifier: string;
+  /** Only feeds the copied link's readable slug tail. */
+  name?: string | null;
   priority?: number | null;
   status: string;
 }
@@ -139,6 +141,7 @@ export const useTaskContextMenuActions = (
         taskDetailPath(
           task.identifier,
           routeScope === 'agent' ? (task.assigneeAgentId ?? undefined) : undefined,
+          task.name,
         ),
         activeWorkspaceSlug,
       )}`;

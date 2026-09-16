@@ -1,6 +1,6 @@
 'use client';
 
-import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import type { AcceptanceCommentThread } from '@lobechat/types';
 import { copyToClipboard, Flexbox, Icon, TextArea, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx, useResponsive } from 'antd-style';
@@ -16,22 +16,36 @@ import {
   FileText,
   Film,
   Images,
+  MessageSquare,
   MessageSquareX,
   Repeat,
   Route,
 } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { hasRenderableEvidence, readVisualizationManifest } from '../../Report/visualization';
 import { VisualizationDeltaBadge, VisualizationRenderer } from '../../Report/VisualizationRenderer';
 import { checkDisplayTitle } from '../../utils';
+import { useOptionalAcceptanceScope } from '../AcceptanceScope';
+import { useAcceptanceAuthorColor } from '../Comments/authorColor';
+import { commentAuthorName } from '../Comments/CommentCard';
+import CommentThread from '../Comments/CommentThread';
+import { openEvidenceCommentModal } from '../Comments/EvidenceCommentModal';
+import { useAcceptanceComments } from '../Comments/hooks';
+import ThreadEvidence from '../Comments/ThreadEvidence';
+import { threadsForCheck } from '../Comments/threads';
 import { evidenceCounts, hasAnnotatableEvidence, isAnnotatable } from '../Evidence/evidence';
 import { EvidenceList } from '../Evidence/EvidenceList';
+import type { EvidenceOverlayMap } from '../Evidence/overlay';
 import { openCheckRejectModal } from '../Review/CheckRejectModal';
 import type { CheckProposal } from '../Review/proposal';
 import { classifyProposalEdit } from '../Review/proposal';
 import ProposalCard from '../Review/ProposalCard';
+import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import {
   AcceptedNote,
   collectEvidenceById,
@@ -41,6 +55,7 @@ import {
 } from './CheckHistory';
 import { shouldCollapseAfterReview, userReviewState } from './checkState';
 import { STATE_META } from './checkStatus';
+import { checkRowDisclosure } from './rowDisclosure';
 import { styles } from './styles';
 import type { AcceptanceCheck, CheckReviewInput, ProposalDismissInput } from './types';
 
@@ -60,6 +75,12 @@ export const AcceptanceCheckRow = memo<{
   onDismissProposal?: (input: ProposalDismissInput) => Promise<void>;
   onReview: (input: CheckReviewInput) => Promise<boolean>;
   onRound?: (round: number) => void;
+  /**
+   * Open this check on its own page instead of disclosing it in place. Set on
+   * a phone, where a row that unfolds a full evidence review inside a scrolling
+   * list buries both the check above it and the one below.
+   */
+  onOpenDetail?: () => void;
   /** Open an agent judge's verification run (its trace IS the argument). */
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
   onToggle: () => void;
@@ -71,6 +92,7 @@ export const AcceptanceCheckRow = memo<{
     detailMode,
     expanded,
     onDismissProposal,
+    onOpenDetail,
     onOpenTrace,
     onReview,
     onRound,
@@ -90,6 +112,11 @@ export const AcceptanceCheckRow = memo<{
     // unreviewed check would push the evidence the reviewer came for below the fold.
     const [proposalOpen, setProposalOpen] = useState(false);
     const meta = STATE_META[check.state];
+    const { activate, ariaExpanded, open } = checkRowDisclosure({
+      expanded,
+      onOpenDetail,
+      onToggle,
+    });
     const title = checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'));
     const counts = evidenceCounts(check.evidence);
     const visualization = readVisualizationManifest(check.result?.metadata);
@@ -111,10 +138,7 @@ export const AcceptanceCheckRow = memo<{
     // open — boxes with no visible explanation read as a defect of the evidence.
     const proposalOverlays = useMemo(() => {
       if (!proposalOpen || !check.prediction) return undefined;
-      const map = new Map<
-        string,
-        { comment?: string; label?: number; rect: AcceptanceReviewAnnotation['rect'] }[]
-      >();
+      const map: EvidenceOverlayMap = new Map();
       (check.prediction.annotations ?? []).forEach((annotation, index) => {
         const bucket = map.get(annotation.evidenceId) ?? [];
         bucket.push({ comment: annotation.comment, label: index + 1, rect: annotation.rect });
@@ -123,6 +147,99 @@ export const AcceptanceCheckRow = memo<{
       return map.size > 0 ? map : undefined;
     }, [proposalOpen, check.prediction]);
     const hasHistory = check.revisions > 1 || historyReviews.length > 0;
+
+    // Collaboration: threads circled on this check's evidence. Only inside the
+    // viewer — the row also renders in hosts with no acceptance scope.
+    const scope = useOptionalAcceptanceScope();
+    const { data: bundle } = useAcceptanceBundle(scope?.acceptanceId ?? '');
+    const comments = useAcceptanceComments(scope?.acceptanceId);
+    const authorColor = useAcceptanceAuthorColor();
+    const viewerId = useUserStore(userProfileSelectors.userId);
+    /**
+     * Closing a note is a verdict on it: whoever raised it may close their own,
+     * and the acceptance's reviewers may close anyone's. Ownership is read from
+     * the author, not from `canDelete` — that flag also turns on for a
+     * moderator, and borrowing it would silently hand the same power out.
+     *
+     * Memoized on the identity it reads: the profile arrives after the first
+     * paint, and the overlay memo below would otherwise keep handing its
+     * threads the answer computed while nobody was signed in.
+     */
+    const canResolveThread = useCallback(
+      (thread: AcceptanceCommentThread) =>
+        comments.canApprove ||
+        (Boolean(viewerId) && thread.root.authorUserId === viewerId && !thread.root.deletedAt),
+      [comments.canApprove, viewerId],
+    );
+    const checkThreads = useMemo(
+      () => threadsForCheck(comments.threads, check.id),
+      [comments.threads, check.id],
+    );
+    const commentActions = {
+      onDelete: comments.remove,
+      onReply: (rootId: string, content: string, attachments: { fileId: string }[]) =>
+        comments.create({
+          attachments,
+          clientId: `${rootId}:${Date.now()}`,
+          content,
+          contextRunId: bundle?.rounds.at(-1)?.run.id,
+          parentCommentId: rootId,
+        }),
+      onResolve: comments.setResolved,
+    };
+    // A region whose evidence a later round replaced: the box has nothing left
+    // to sit on, so the thread renders under the evidence with its own copy of
+    // the picture instead of disappearing.
+    const showsNow = new Set(check.evidence.map((item) => item.id));
+    const staleThreads = checkThreads.filter(
+      (thread) => thread.root.evidenceId && !showsNow.has(thread.root.evidenceId),
+    );
+    // Each reviewer's regions carry their own colour, so two people circling
+    // the same screenshot never read as one person's notes; the marker on the
+    // box opens that thread in full — replies and all.
+    const commentOverlays = useMemo(() => {
+      const map: EvidenceOverlayMap = new Map(proposalOverlays ?? []);
+      checkThreads.forEach((thread, index) => {
+        const { author, authorUserId, evidenceId, rect, content, deletedAt } = thread.root;
+        if (!evidenceId || !rect || deletedAt) return;
+        const bucket = map.get(evidenceId) ?? [];
+        bucket.push({
+          authorAvatar: author.avatar,
+          authorName: commentAuthorName(author),
+          color: authorColor(authorUserId),
+          comment: content,
+          label: index + 1,
+          panel: (
+            <CommentThread
+              canComment={comments.canComment}
+              canResolve={canResolveThread(thread)}
+              thread={thread}
+              {...commentActions}
+            />
+          ),
+          rect,
+          resolved: Boolean(thread.root.resolvedAt),
+        });
+        map.set(evidenceId, bucket);
+      });
+      return map.size > 0 ? map : undefined;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [proposalOverlays, checkThreads, comments.canComment, canResolveThread, authorColor]);
+    const canCommentEvidence =
+      comments.canComment && Boolean(check.result) && hasAnnotatableEvidence(check);
+    const openEvidenceComment = () =>
+      openEvidenceCommentModal({
+        evidence: check.evidence,
+        onConfirm: async ({ content, evidenceId, rect }) => {
+          await comments.create({
+            anchor: { checkItemId: check.id, evidenceId, rect },
+            clientId: `${check.id}:${Date.now()}`,
+            content,
+            contextRunId: bundle?.rounds.at(-1)?.run.id,
+          });
+          return true;
+        },
+      });
 
     /**
      * @param fromProposal - when set, the modal opens prefilled with the
@@ -261,20 +378,20 @@ export const AcceptanceCheckRow = memo<{
           <Flexbox
             horizontal
             align={'flex-start'}
-            aria-expanded={expanded}
+            aria-expanded={ariaExpanded}
             className={styles.rowHeader}
-            data-expanded={expanded ? '' : undefined}
+            data-expanded={open ? '' : undefined}
             gap={10}
             role={'button'}
             tabIndex={0}
-            onClick={onToggle}
+            onClick={activate}
             onKeyDown={(event) => {
               if (
                 event.target === event.currentTarget &&
                 (event.key === 'Enter' || event.key === ' ')
               ) {
                 event.preventDefault();
-                onToggle();
+                activate();
               }
             }}
           >
@@ -305,10 +422,10 @@ export const AcceptanceCheckRow = memo<{
               flex={1}
               gap={8}
               style={{ minWidth: 0 }}
-              wrap={expanded ? 'wrap' : 'nowrap'}
+              wrap={open ? 'wrap' : 'nowrap'}
             >
               <Text
-                className={expanded || !desktop ? undefined : styles.titleEllipsis}
+                className={open || !desktop ? undefined : styles.titleEllipsis}
                 style={{ fontSize: desktop ? 13 : 14, minWidth: 0 }}
               >
                 {title}
@@ -396,6 +513,21 @@ export const AcceptanceCheckRow = memo<{
                   </Tooltip>
                 ) : null,
               )}
+              {checkThreads.length > 0 && (
+                <Tooltip
+                  title={t('acceptance.comments.regionCount', { count: checkThreads.length })}
+                >
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    gap={3}
+                    style={{ color: cssVar.colorTextTertiary, fontSize: 11 }}
+                  >
+                    <Icon icon={MessageSquare} size={13} />
+                    {checkThreads.length}
+                  </Flexbox>
+                </Tooltip>
+              )}
               {/* The iteration mark stays compact — [↻ N]; the words (verified N
               rounds · introduced in round X) live in its tooltip. Clicking
               jumps to the round the concern first appeared in. */}
@@ -445,7 +577,7 @@ export const AcceptanceCheckRow = memo<{
                 icon={ChevronRight}
                 size={14}
                 style={{
-                  transform: expanded ? 'rotate(90deg)' : 'none',
+                  transform: open ? 'rotate(90deg)' : 'none',
                   transition: 'transform 0.2s',
                 }}
               />
@@ -453,7 +585,7 @@ export const AcceptanceCheckRow = memo<{
           </Flexbox>
         )}
 
-        {expanded && (
+        {open && (
           <Flexbox
             gap={10}
             paddingBlock={detailMode ? 0 : '0 14px'}
@@ -507,10 +639,51 @@ export const AcceptanceCheckRow = memo<{
             {visualization && <VisualizationRenderer manifest={visualization} />}
             <EvidenceList
               evidence={check.evidence}
-              overlays={proposalOverlays}
+              overlays={commentOverlays}
               onReviewEvidence={canReview ? (id) => openReject(undefined, id) : undefined}
             />
-
+            {staleThreads.length > 0 && (
+              <Flexbox className={styles.staleRegions} gap={10}>
+                <Text fontSize={12} type={'secondary'}>
+                  {t('acceptance.comments.historicalRegions', { count: staleThreads.length })}
+                </Text>
+                {staleThreads.map((thread) => {
+                  const evidence = thread.root.evidenceId
+                    ? evidenceById.get(thread.root.evidenceId)
+                    : undefined;
+                  return (
+                    <Flexbox
+                      horizontal
+                      align={'flex-start'}
+                      gap={12}
+                      key={thread.root.id}
+                      wrap={'wrap'}
+                    >
+                      {evidence && (
+                        <ThreadEvidence
+                          stale
+                          comment={thread.root}
+                          evidence={evidence}
+                          roundIndex={
+                            check.timeline.find((entry) =>
+                              entry.evidence.some((item) => item.id === thread.root.evidenceId),
+                            )?.roundIndex
+                          }
+                        />
+                      )}
+                      <Flexbox flex={1} style={{ minWidth: 200 }}>
+                        <CommentThread
+                          canComment={comments.canComment}
+                          canResolve={canResolveThread(thread)}
+                          thread={thread}
+                          {...commentActions}
+                        />
+                      </Flexbox>
+                    </Flexbox>
+                  );
+                })}
+              </Flexbox>
+            )}
             {check.state === 'not_executed' && (
               <Flexbox
                 horizontal
@@ -650,92 +823,25 @@ export const AcceptanceCheckRow = memo<{
                 </Flexbox>
               ))}
 
-            {/* Confirm (plain filled) anchors the right edge; reject is the
-              quiet text escape next to it. */}
-            {reviewable &&
-              !activeReview &&
-              (detailMode ? (
-                <Flexbox gap={10} style={{ marginBlockStart: 6 }}>
-                  {hasAnnotatableEvidence(check) && (
-                    <Button
-                      outdent
-                      icon={<Icon icon={Images} />}
-                      style={{ alignSelf: 'flex-start' }}
-                      type={'text'}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openReject();
-                      }}
-                    >
-                      {t('acceptance.review.annotate')}
-                    </Button>
-                  )}
-                  <TextArea
-                    autoSize={{ maxRows: 8, minRows: 3 }}
-                    placeholder={t('acceptance.review.detailPlaceholder')}
-                    value={reviewComment}
-                    onChange={(event) => setReviewComment(event.target.value)}
-                  />
-                  <Flexbox horizontal gap={8}>
-                    <Button
-                      block
-                      disabled={reviewPending || !reviewComment.trim()}
-                      loading={rejecting}
-                      size={'large'}
-                      style={{ flex: 1 }}
-                      onClick={handleReject}
-                    >
-                      {t('acceptance.review.reject')}
-                    </Button>
-                    <Button
-                      block
-                      disabled={reviewPending && !accepting}
-                      icon={<Icon icon={Check} />}
-                      loading={accepting}
-                      size={'large'}
-                      style={{ flex: 1 }}
-                      type={'fill'}
-                      onClick={handleAccept}
-                    >
-                      {t('acceptance.review.accept')}
-                    </Button>
-                  </Flexbox>
-                </Flexbox>
-              ) : (
-                <Flexbox horizontal gap={4} justify={'flex-end'}>
-                  <Button
-                    disabled={reviewPending && !ignoring}
-                    loading={ignoring}
-                    size={'small'}
-                    type={'text'}
-                    onClick={handleIgnore}
-                  >
-                    {t('acceptance.review.ignore')}
-                  </Button>
-                  <Button
-                    disabled={reviewPending}
-                    size={'small'}
-                    type={'text'}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openReject();
-                    }}
-                  >
-                    {t('acceptance.review.reject')}
-                  </Button>
-                  <Button
-                    disabled={reviewPending && !accepting}
-                    icon={<Icon icon={Check} />}
-                    loading={accepting}
-                    size={'small'}
-                    type={'fill'}
-                    onClick={handleAccept}
-                  >
-                    {t('acceptance.review.accept')}
-                  </Button>
-                </Flexbox>
-              ))}
-
+            {/* Circling the evidence belongs WITH the evidence, above the
+              history — it is another way of looking at what was delivered,
+              not a verdict. The rounds this check already went through then
+              sit between that and the verdict buttons: context for the
+              decision, never an appendix to one already made. */}
+            {detailMode && reviewable && !activeReview && hasAnnotatableEvidence(check) && (
+              <Button
+                outdent
+                icon={<Icon icon={Images} />}
+                style={{ alignSelf: 'flex-start' }}
+                type={'text'}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openReject();
+                }}
+              >
+                {t('acceptance.review.annotate')}
+              </Button>
+            )}
             {hasHistory && (
               <span
                 className={styles.historyToggle}
@@ -759,6 +865,100 @@ export const AcceptanceCheckRow = memo<{
                 historyReviews={historyReviews}
                 onRound={onRound}
               />
+            )}
+            {/* One row closes the check: looking harder on the left, deciding on
+              the right. Circling the evidence is another way of reading what
+              was delivered rather than a verdict, so it keeps its quiet text
+              styling and the left edge — but it sits ON the same line as the
+              buttons instead of stacking a half-empty row above them. */}
+            {(canCommentEvidence || (reviewable && !activeReview && !detailMode)) && (
+              <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+                {canCommentEvidence ? (
+                  <Button
+                    outdent
+                    icon={<Icon icon={MessageSquare} />}
+                    type={'text'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEvidenceComment();
+                    }}
+                  >
+                    {t('acceptance.comments.commentEvidence')}
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                {reviewable && !activeReview && !detailMode && (
+                  <Flexbox horizontal gap={4} justify={'flex-end'}>
+                    <Button
+                      disabled={reviewPending && !ignoring}
+                      loading={ignoring}
+                      size={'small'}
+                      type={'text'}
+                      onClick={handleIgnore}
+                    >
+                      {t('acceptance.review.ignore')}
+                    </Button>
+                    <Button
+                      disabled={reviewPending}
+                      size={'small'}
+                      type={'text'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openReject();
+                      }}
+                    >
+                      {t('acceptance.review.reject')}
+                    </Button>
+                    <Button
+                      disabled={reviewPending && !accepting}
+                      icon={<Icon icon={Check} />}
+                      loading={accepting}
+                      size={'small'}
+                      type={'fill'}
+                      onClick={handleAccept}
+                    >
+                      {t('acceptance.review.accept')}
+                    </Button>
+                  </Flexbox>
+                )}
+              </Flexbox>
+            )}
+            {/* The phone keeps its own stacked shape: a comment box over two
+              full-width buttons, which no single row can hold. */}
+            {reviewable && !activeReview && detailMode && (
+              <Flexbox gap={10} style={{ marginBlockStart: 6 }}>
+                <TextArea
+                  autoSize={{ maxRows: 8, minRows: 3 }}
+                  placeholder={t('acceptance.review.detailPlaceholder')}
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                />
+                <Flexbox horizontal gap={8}>
+                  <Button
+                    block
+                    disabled={reviewPending || !reviewComment.trim()}
+                    loading={rejecting}
+                    size={'large'}
+                    style={{ flex: 1 }}
+                    onClick={handleReject}
+                  >
+                    {t('acceptance.review.reject')}
+                  </Button>
+                  <Button
+                    block
+                    disabled={reviewPending && !accepting}
+                    icon={<Icon icon={Check} />}
+                    loading={accepting}
+                    size={'large'}
+                    style={{ flex: 1 }}
+                    type={'fill'}
+                    onClick={handleAccept}
+                  >
+                    {t('acceptance.review.accept')}
+                  </Button>
+                </Flexbox>
+              </Flexbox>
             )}
           </Flexbox>
         )}

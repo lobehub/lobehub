@@ -21,7 +21,7 @@ describe('tool display names', () => {
     expect(getToolDisplayName('web_search')).toBe('Searched the web');
   });
 
-  it('uses friendly Codex labels in workflow summaries', () => {
+  it('summarises a workflow as the total call count only', () => {
     const summary = getWorkflowSummaryText([
       blk({
         id: '0',
@@ -29,53 +29,33 @@ describe('tool display names', () => {
           { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
           { apiName: 'command_execution', id: 'tool-2', result: { content: 'ok' } } as any,
           { apiName: 'file_change', id: 'tool-3', result: { content: 'ok' } } as any,
-          { apiName: 'mcp_tool_call', id: 'tool-4', result: { content: 'ok' } } as any,
-          { apiName: 'web_search', id: 'tool-5', result: { content: 'ok' } } as any,
         ],
       }),
-    ]);
-
-    expect(summary).toContain('Ran a command (2)');
-    expect(summary).toContain('Edited a file');
-    expect(summary).toContain('Called MCP tool');
-    expect(summary).toContain('Searched the web');
-    expect(summary).not.toContain('Command_execution');
-    expect(summary).not.toContain('File_change');
-    expect(summary).not.toContain('Mcp_tool_call');
-    expect(summary).not.toContain('Web_search');
-  });
-
-  it('leads the summary with the total call count and appends the tool-kind count when truncated', () => {
-    const tools = [
-      ...Array.from({ length: 6 }, (_, i) => ({ apiName: 'a', id: `a-${i}` })),
-      ...Array.from({ length: 4 }, (_, i) => ({ apiName: 'b', id: `b-${i}` })),
-      ...Array.from({ length: 2 }, (_, i) => ({ apiName: 'c', id: `c-${i}` })),
-      { apiName: 'd', id: 'd-0' },
-      { apiName: 'e', id: 'e-0', result: { error: { message: 'boom' } } },
-      { apiName: 'f', id: 'f-0' },
-    ];
-    const summary = getWorkflowSummaryText([blk({ id: '0', tools: tools as any })]);
-
-    // total calls (15) leads, "calls total" / "共" wording is gone
-    expect(summary.startsWith('15 calls:')).toBe(true);
-    expect(summary).not.toContain('calls total');
-    // truncated tool list is followed by the kind count; failures stay in the details
-    expect(summary).toContain('across 6 tools');
-    expect(summary).not.toContain('failed');
-  });
-
-  it('omits the total call count when each tool is called once', () => {
-    const summary = getWorkflowSummaryText([
       blk({
-        id: '0',
-        tools: [
-          { apiName: 'a', id: 'a-0' },
-          { apiName: 'b', id: 'b-0' },
-        ] as any,
+        id: '1',
+        tools: [{ apiName: 'web_search', id: 'tool-4', result: { content: 'ok' } } as any],
       }),
     ]);
 
-    expect(summary).not.toContain('calls:');
+    // No per-tool breakdown in the fold — the expanded list already has it.
+    expect(summary).toBe('4 calls');
+  });
+
+  it('counts a single call too, instead of naming the tool', () => {
+    const summary = getWorkflowSummaryText([
+      blk({ id: '0', tools: [{ apiName: 'command_execution', id: 'tool-1' }] as any }),
+    ]);
+
+    // Plural form depends on the active language (the test i18n runs zh rules).
+    expect(summary).toMatch(/^1 calls?$/);
+  });
+
+  it('falls back to reasoning time when a workflow has no tool calls', () => {
+    const summary = getWorkflowSummaryText([
+      blk({ id: '0', reasoning: { content: '', duration: 21_000 } as any }),
+    ]);
+
+    expect(summary).toBe('Thought for 21s');
   });
 
   it('uses friendly labels for Linear MCP tool names', () => {

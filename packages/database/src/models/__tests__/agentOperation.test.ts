@@ -25,6 +25,33 @@ afterEach(async () => {
 });
 
 describe('AgentOperationModel', () => {
+  it('matches diagnostic source identity within both topic and owner', async () => {
+    await serverDB.insert(topics).values({ id: 'diagnostic-topic', userId });
+    const model = new AgentOperationModel(serverDB, userId);
+    await model.recordStart({
+      operationId: 'diagnostic-operation',
+      topicId: 'diagnostic-topic',
+      appContext: { sourceMessageId: 'server-incident-message' },
+    });
+    await model.recordStart({
+      operationId: 'unrelated-operation',
+      topicId: 'diagnostic-topic',
+      appContext: { sourceMessageId: 'another-message' },
+    });
+    expect(
+      (await model.findByTopicSourceMessage('diagnostic-topic', 'server-incident-message'))?.id,
+    ).toBe('diagnostic-operation');
+    expect(
+      await model.findByTopicSourceMessage('different-topic', 'server-incident-message'),
+    ).toBeUndefined();
+    expect(
+      await new AgentOperationModel(serverDB, otherUserId).findByTopicSourceMessage(
+        'diagnostic-topic',
+        'server-incident-message',
+      ),
+    ).toBeUndefined();
+  });
+
   describe('recordStart', () => {
     it('inserts a row with status=running and the provided ids', async () => {
       const model = new AgentOperationModel(serverDB, userId);

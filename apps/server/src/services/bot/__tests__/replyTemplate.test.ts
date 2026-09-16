@@ -21,6 +21,7 @@ import {
   renderStepProgress,
   renderStopped,
   renderToolExecuting,
+  renderWhoami,
   splitMessage,
   summarizeOutput,
 } from '../replyTemplate';
@@ -414,6 +415,154 @@ describe('replyTemplate', () => {
       expect(zh).not.toContain('请检查你的输入');
     });
 
+    // The admission gate emits one of three codes for the same "the allowance
+    // can't cover this" outcome; the plan-limit pair used to fall to the `user`
+    // tier and tell the user to check their input.
+    it('gives every budget-exhaustion code its own credits copy, not "check your input"', () => {
+      const expected: Record<string, string> = {
+        FreePlanLimit: 'Free plan limit reached',
+        InsufficientBudgetForModel: 'Not enough credits',
+        SubscriptionPlanLimit: 'Plan limit reached',
+      };
+
+      for (const [code, header] of Object.entries(expected)) {
+        const out = renderAgentError(code, 'Budget exceeded', 'op-1', 'en-US', 'user');
+
+        expect(out).toContain(header);
+        expect(out).not.toContain("couldn't be completed");
+      }
+    });
+
+    // Runs are billed to the bot owner, not to whoever mentioned the bot, so
+    // the copy must point at the owner / admin instead of calling the reader
+    // the payer.
+    it('addresses the bot owner rather than the reader on every budget tier', () => {
+      const scoped = ['workspace', 'workspace_member', undefined];
+      for (const code of ['FreePlanLimit', 'InsufficientBudgetForModel', 'SubscriptionPlanLimit']) {
+        for (const budgetTypeAtError of scoped) {
+          const out = renderAgentError(code, undefined, 'op-1', 'en-US', 'user', {
+            budgetTypeAtError,
+          });
+
+          expect(out).not.toMatch(/\byour\b/i);
+          expect(out).toMatch(/bot owner|workspace admin/);
+        }
+      }
+    });
+
+    // A workspace member's own allowance ran out and the reply told
+    // them to top up — which does nothing for that allowance — while the numbers
+    // that would have identified the real fault stayed in the trace.
+    describe('budget scope', () => {
+      const budget = {
+        availableCredits: 7_242_747,
+        budgetTypeAtError: 'workspace_member',
+        requiredCredits: 197_391,
+        shortfallCredits: 0,
+      };
+
+      it('names the member allowance instead of telling them to top up', () => {
+        const en = renderAgentError(
+          'InsufficientBudgetForModel',
+          'Workspace budget exceeded',
+          'op-1',
+          'en-US',
+          'user',
+          budget,
+        );
+
+        expect(en).toContain('Member budget in this workspace is used up');
+        expect(en).not.toContain('Not enough credits');
+        expect(en).toContain('Operation ID: `op-1`');
+
+        const zh = renderAgentError(
+          'InsufficientBudgetForModel',
+          'Workspace budget exceeded',
+          'op-1',
+          'zh-CN',
+          'user',
+          budget,
+        );
+
+        expect(zh).toContain('该工作区的成员预算已用尽');
+        expect(zh).not.toContain('积分余额不足');
+      });
+
+      // The workspace gate throws SubscriptionPlanLimit (not
+      // InsufficientBudgetForModel) when the run couldn't be priced upfront; the
+      // scope still wins over the per-code copy.
+      it('refines the plan-limit codes by scope too', () => {
+        const out = renderAgentError('SubscriptionPlanLimit', undefined, 'op-1', 'en-US', 'user', {
+          ...budget,
+          budgetTypeAtError: 'workspace_member',
+        });
+
+        expect(out).toContain('Member budget in this workspace is used up');
+        expect(out).not.toContain('Plan limit reached');
+      });
+
+      it('names the shared workspace pool for a workspace-scoped allowance', () => {
+        const en = renderAgentError(
+          'InsufficientBudgetForModel',
+          undefined,
+          'op-1',
+          'en-US',
+          'user',
+          { ...budget, budgetTypeAtError: 'workspace' },
+        );
+
+        expect(en).toContain('Workspace credits exhausted');
+
+        const zh = renderAgentError(
+          'InsufficientBudgetForModel',
+          undefined,
+          'op-1',
+          'zh-CN',
+          'user',
+          { ...budget, budgetTypeAtError: 'workspace' },
+        );
+
+        expect(zh).toContain('工作区额度已用尽');
+      });
+
+      it('keeps the personal credits copy for an unrecognized or absent scope', () => {
+        expect(
+          renderAgentError('InsufficientBudgetForModel', undefined, 'op-1', 'en-US', 'user', {
+            ...budget,
+            budgetTypeAtError: 'some_new_scope',
+          }),
+        ).toContain('Not enough credits');
+
+        expect(
+          renderAgentError('InsufficientBudgetForModel', undefined, 'op-1', 'en-US', 'user', {
+            availableCredits: 12,
+            requiredCredits: 34,
+          }),
+        ).toContain('Not enough credits');
+      });
+
+      // Runs mentioned from a shared channel are billed to the bot owner, so the
+      // reply must name the scope without publishing the owner's balance to
+      // everyone in the channel.
+      it('never quotes the allowance figures, only the scope', () => {
+        for (const lng of ['en-US', 'zh-CN'] as const) {
+          const out = renderAgentError(
+            'InsufficientBudgetForModel',
+            undefined,
+            'op-1',
+            lng,
+            'user',
+            budget,
+          );
+
+          expect(out).not.toContain('7.24M');
+          expect(out).not.toContain('7242747');
+          expect(out).not.toContain('197,391');
+          expect(out).not.toContain('197391');
+        }
+      });
+    });
+
     it('maps both QuotaLimitReached and InsufficientQuota to the same quota copy', () => {
       const a = renderAgentError('QuotaLimitReached', undefined, 'op-1');
       const b = renderAgentError('InsufficientQuota', undefined, 'op-1');
@@ -747,6 +896,35 @@ describe('replyTemplate', () => {
       expect(renderCommandReply('cmdStopNotActive', 'zh-CN')).toContain('没有正在执行');
       expect(renderCommandReply('cmdStopRequested', 'zh-CN')).toBe('已发出停止请求。');
       expect(renderCommandReply('cmdStopUnable', 'zh-CN')).toContain('无法停止');
+    });
+  });
+
+  // ==================== renderWhoami ====================
+
+  describe('renderWhoami', () => {
+    it('echoes the caller ID, display name and the settings pointer in English', () => {
+      const text = renderWhoami({ isOperator: false, userId: 'ou_abc123', userName: 'Lin' });
+      expect(text).toContain('`ou_abc123`');
+      expect(text).toContain('Lin');
+      expect(text).toContain('Your Platform User ID');
+    });
+
+    it('omits the display name line when unknown and flags an already-configured operator', () => {
+      const text = renderWhoami({ isOperator: true, userId: 'ou_abc123' });
+      expect(text).toContain('`ou_abc123`');
+      expect(text).not.toContain('Display name');
+      expect(text).toContain('already set as the bot operator');
+    });
+
+    it('renders Chinese copy for zh-CN', () => {
+      const text = renderWhoami(
+        { isOperator: false, userId: 'ou_abc123', userName: '林' },
+        'zh-CN',
+      );
+      expect(text).toContain('你的平台用户 ID：`ou_abc123`');
+      expect(text).toContain('显示名称：林');
+      expect(text).toContain('高级设置');
+      expect(renderCommandReply('cmdWhoamiUnavailable', 'zh-CN')).toContain('无法');
     });
   });
 

@@ -318,6 +318,7 @@ export interface TurnSetupInput {
   /** Spine anchor for a batch approval — overrides the assistant's parent. */
   batchApprovalAnchorId?: string;
   botContext?: InternalExecAgentParams['botContext'];
+  botSender?: InternalExecAgentParams['botSender'];
   clientIds?: InternalExecAgentParams['clientIds'];
   /** Stable assistant id for a generic intervention continuation. */
   continuationAssistantId?: string;
@@ -337,6 +338,8 @@ export interface TurnSetupInput {
   runFromHistory: boolean;
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
+  /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
+  steer?: boolean;
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   title?: string;
   trigger?: string;
@@ -358,6 +361,7 @@ export interface TurnSetupResult {
   provider: string;
   requestTriggerMetadata: {
     agentDispatch?: { kind: 'callAgent'; visibility: 'internal' };
+    steer?: true;
     trigger?: RequestTrigger;
   };
   runAttachments: RunAttachments;
@@ -391,6 +395,7 @@ export const setupTurn = async (
     attachedFileIds,
     batchApprovalAnchorId,
     botContext,
+    botSender,
     clientIds,
     continuationAssistantId,
     conversationAgentId,
@@ -407,6 +412,7 @@ export const setupTurn = async (
     resume,
     runFromHistory,
     shareGate,
+    steer,
     throwIfExecutionAborted,
     title,
     trigger,
@@ -644,6 +650,12 @@ export const setupTurn = async (
     ...(appContext?.conversationAgentId && appContext.scope === 'sub_agent'
       ? { agentDispatch: { kind: 'callAgent' as const, visibility: 'internal' as const } }
       : undefined),
+    // Bot-channel turns are inserted under the OWNER's userId; keep the real
+    // platform author alongside so the UI can attribute the bubble correctly.
+    ...(botSender ? { botSender } : undefined),
+    // A follow-up queued behind a running turn renders as that turn's
+    // continuation; the client's optimistic row is replaced by this one.
+    ...(steer ? { steer: true as const } : undefined),
   };
 
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded

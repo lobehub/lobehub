@@ -29,30 +29,52 @@ const {
 }));
 
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({
-    claimEvidenceCollection,
-    findByOperation,
-    updateStatus,
-  })),
+  VerifyRunModel: vi.fn(function () {
+    return {
+      claimEvidenceCollection,
+      findByOperation,
+      updateStatus,
+    };
+  }),
 }));
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({ findById: operationFindById })),
+  AgentOperationModel: vi.fn(function () {
+    return { findById: operationFindById };
+  }),
 }));
 vi.mock('@/database/models/verifyEvidence', () => ({
-  VerifyEvidenceModel: vi.fn(() => ({ listByRun: evidenceListByRun })),
+  VerifyEvidenceModel: vi.fn(function () {
+    return { listByRun: evidenceListByRun };
+  }),
 }));
-vi.mock('@/database/models/document', () => ({ DocumentModel: vi.fn(() => ({})) }));
+vi.mock('@/database/models/document', () => ({
+  DocumentModel: vi.fn(function () {
+    return {};
+  }),
+}));
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({
-    getPinnedDocuments: vi.fn().mockResolvedValue([]),
-    resolveVerifyConfig: vi.fn().mockResolvedValue(null),
-  })),
+  TaskModel: vi.fn(function () {
+    return {
+      getPinnedDocuments: vi.fn().mockResolvedValue([]),
+      resolveVerifyConfig: vi.fn().mockResolvedValue(null),
+    };
+  }),
 }));
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn(() => ({ claimVerifying })),
+  VerifyStatusService: vi.fn(function () {
+    return { claimVerifying };
+  }),
 }));
-vi.mock('../executor', () => ({ VerifyExecutorService: vi.fn(() => ({ execute })) }));
-vi.mock('../agentVerifier', () => ({ createVerifierAgentRunner: vi.fn(() => vi.fn()) }));
+vi.mock('../executor', () => ({
+  VerifyExecutorService: vi.fn(function () {
+    return { execute };
+  }),
+}));
+vi.mock('../agentVerifier', () => ({
+  createVerifierAgentRunner: vi.fn(function () {
+    return vi.fn();
+  }),
+}));
 vi.mock('../modelConfig', () => ({
   resolveVerifyModelConfig: vi.fn().mockResolvedValue({ model: 'm', provider: 'p' }),
 }));

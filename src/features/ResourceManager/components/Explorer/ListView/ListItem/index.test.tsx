@@ -45,6 +45,7 @@ vi.mock('@/store/file', () => ({
 
 vi.mock('../../hooks/useFileItemClick', () => ({
   useFileItemClick: () => vi.fn(),
+  useFileItemDoubleClick: () => vi.fn(),
 }));
 
 vi.mock('../../ItemDropdown/useFileItemDropdown', () => ({

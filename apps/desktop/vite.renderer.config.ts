@@ -7,6 +7,7 @@ import type { PluginOption, UserConfig, ViteDevServer } from 'vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
+import { devLoadingProgress } from '../../plugins/vite/devLoadingProgress';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
@@ -250,6 +251,7 @@ export default defineConfig(async (env) => {
       isCloudDesktop && cloudTsconfigPathsPlugin(),
       isCloudDesktop && cloudDesktopBusinessConstPlugin(),
       electronDesktopHtmlPlugin(),
+      devLoadingProgress(),
       reactDevtoolsPlugin(),
       excludeWebSpaBuildArtifactsPlugin(),
       vanillaExtractPlugin(),

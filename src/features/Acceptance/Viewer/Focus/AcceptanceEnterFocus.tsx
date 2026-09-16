@@ -33,9 +33,9 @@ const AcceptanceEnterFocus = () => {
   return (
     <Button
       className={styles.button}
-      icon={<Icon icon={ChevronRight} />}
+      icon={<Icon icon={ChevronRight} size={14} />}
       size={'small'}
-      style={{ alignSelf: 'flex-start', minHeight: 44 }}
+      style={{ alignSelf: 'center' }}
       type={'text'}
       onClick={() =>
         navigate(

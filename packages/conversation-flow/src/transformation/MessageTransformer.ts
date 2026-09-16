@@ -103,7 +103,7 @@ export class MessageTransformer {
    * Aggregate metadata from multiple children
    * - Sums token counts and costs
    * - Takes first ttft
-   * - Averages tps
+   * - Calculates tps from paired output tokens and generation durations
    * - Sums duration and latency
    */
   aggregateMetadata(children: AssistantContentBlock[]): {
@@ -114,8 +114,8 @@ export class MessageTransformer {
     const performance: ModelPerformance = {};
     let hasUsageData = false;
     let hasPerformanceData = false;
-    let tpsSum = 0;
-    let tpsCount = 0;
+    let measuredOutputTokens = 0;
+    let generationDuration = 0;
 
     children.forEach((child) => {
       if (child.usage) {
@@ -160,11 +160,20 @@ export class MessageTransformer {
           hasPerformanceData = true;
         }
 
-        // Average tps (tokens per second)
-        if (typeof child.performance.tps === 'number') {
-          tpsSum += child.performance.tps;
-          tpsCount += 1;
-          hasPerformanceData = true;
+        // Pair tokens with their measured duration so incomplete calls cannot skew either sum.
+        // Averaging per-call rates would give short bursts the same weight as long generations.
+        const outputTokens = child.usage?.totalOutputTokens;
+        const duration = child.performance.duration;
+        if (
+          typeof outputTokens === 'number' &&
+          Number.isFinite(outputTokens) &&
+          outputTokens >= 0 &&
+          typeof duration === 'number' &&
+          Number.isFinite(duration) &&
+          duration > 0
+        ) {
+          measuredOutputTokens += outputTokens;
+          generationDuration += duration;
         }
 
         // Sum duration
@@ -181,9 +190,8 @@ export class MessageTransformer {
       }
     });
 
-    // Calculate average tps
-    if (tpsCount > 0) {
-      performance.tps = tpsSum / tpsCount;
+    if (generationDuration > 0) {
+      performance.tps = (measuredOutputTokens / generationDuration) * 1000;
     }
 
     return {

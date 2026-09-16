@@ -38,6 +38,7 @@ the next free number of that prefix.
 - **L-E17** Direct-mention routing is verified with a real tool call and the full persisted tree; no owner assistant, `callAgent`, or synthetic target-user row.
 - **L-E19** Markdown evidence: one paragraph per physical line; newline only where it is content.
 - **L-E20** Build fixtures through the same composition the product uses; compare an entity page against a canary-created sibling before publishing it as evidence.
+- **L-E21** Evidence for "A is unaffected by B" must be able to tell A from B: distinct content and the target echoed in the request line.
 - **L-E21** Publish against production even when the subject exists only locally; a local ingest may supplement, never replace.
 
 **Product and interaction contracts**
@@ -62,6 +63,7 @@ the next free number of that prefix.
 - **L-S19** `plan[]` holds only what the user accepts or rejects, each id fulfilled by a case; a clean ingest prints `plan: N item(s)` with nothing after it.
 - **L-S20** Read the managed containers' host ports from `docker ps` and pass `DB_PORT`/`REDIS_PORT` to every `init-dev-env.sh` subcommand; `auth_failed` on migrate is a port mismatch.
 - **L-S21** In a worktree, invoke scripts by absolute path and prove the SPA's identity (Vite pid cwd, changed module from the Vite origin) before trusting any gate or evidence.
+- **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
 
 ## Entries
 
@@ -535,3 +537,35 @@ once and require its server call in the log. Before trusting any gate,
 `pwd`/`cd <worktree> &&` and confirm the NAME of the test you added appears in
 the runner output. Distinct from L-S7: that is a stale bundle from the right
 tree; this is a healthy bundle from the wrong tree.
+
+### L-E21 — Evidence that cannot distinguish the two things the case compares
+
+`since 2026-09-10` · `holds-while: a case asserts one artifact is unaffected by an operation on another`
+
+**Trap:** proving `--new` forks a separate site, the round published two sites
+whose pages were byte-identical (`contentHash` equal) and a request line that
+printed only the response, not the URL asked for. The artifact showed the
+expected string, so the case read as a pass — but curling the _new_ site would
+have printed exactly the same bytes. The claim rested on a hand-typed section
+header, not on anything in the output.
+
+**Rule:** when a case asserts "X still serves its own content" or any other
+independence between two objects, make the two distinguishable _before_
+capturing: different content per object, and each request echoing the URL or id
+it targeted. Ask of the artifact: if the wrong target had been requested, would
+this file look different? If not, the case proves nothing.
+
+### L-S22 — A per-account quota the round itself consumes, cleared for the wrong account
+
+`since 2026-09-10` · `holds-while: artifact deployments are capped per plan (Free = 3 active) and the CLI authenticates as a seeded runtime user`
+
+**Trap:** each publish leaves an active deployment, so the third run of a round
+fails with `ARTIFACT_DEPLOYMENT_CAPACITY_LIMIT_REACHED` — which reads as a
+regression in the code under test. The purge then ran against the smoke's
+default `user_artifact_e2e` and reported "active before: 0" while the CLI, which
+authenticates as the seeded runtime user, still held three.
+
+**Rule:** identify the account the surface actually authenticates as (for the CLI,
+the `user_id` on the seeded API key row) and clear the cap for _that_ id before
+and between rounds. A quota error mid-round is an environment fact until the
+account has been checked; do not debug it as product behaviour.

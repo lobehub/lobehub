@@ -604,6 +604,35 @@ describe('ElasticsearchFtsSearchHttpClient', () => {
     });
   });
 
+  it('allows sync when Serverless omits the internal index UUID', async () => {
+    const index = identityIndex('agents', 'unused', { schema_fingerprint: undefined });
+    const { uuid: _uuid, ...settings } = index.settings.index;
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockImplementation(async (url: URL) =>
+          Response.json(
+            url.pathname.startsWith('/_alias/')
+              ? { 'lobehub-agents-v1': { aliases: { 'lobehub-agents': {} } } }
+              : { 'lobehub-agents-v1': { ...index, settings: { index: settings } } },
+          ),
+        ),
+    );
+    const client = new ElasticsearchFtsSearchHttpClient({
+      apiKey: 'test-api-key',
+      indexNamespace: 'lobehub',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.assertFtsSearchSyncAliases(['lobehub-agents'])).resolves.toBeUndefined();
+    await expect(client.getFtsSearchSyncIndexIdentities(['lobehub-agents'])).resolves.toMatchObject(
+      {
+        'lobehub-agents': { indexUuid: null, schemaFingerprint: null, schemaVersion: 1 },
+      },
+    );
+  });
+
   it('rejects a runtime identity response with missing reindex metadata', async () => {
     vi.stubGlobal(
       'fetch',

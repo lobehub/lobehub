@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { fileRouter } from '@/server/routers/lambda/file';
+import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
@@ -20,18 +21,22 @@ const routerMocks = vi.hoisted(() => {
     serverDB: {
       // `where` doubles as an awaitable empty result (restricted-KB lookups)
       // and as a `.limit()` chain (workspace-role lookups).
-      select: vi.fn(() => ({
-        from: vi.fn(() => {
-          const whereResult = () =>
-            Object.assign(Promise.resolve([]), {
-              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-            });
-          return {
-            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
-            where: vi.fn(whereResult),
-          };
-        }),
-      })),
+      select: vi.fn(function () {
+        return {
+          from: vi.fn(function () {
+            const whereResult = () =>
+              Object.assign(Promise.resolve([]), {
+                limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+              });
+            return {
+              innerJoin: vi.fn(function () {
+                return { where: vi.fn(whereResult) };
+              }),
+              where: vi.fn(whereResult),
+            };
+          }),
+        };
+      }),
       transaction: vi.fn(async (callback: (trx: unknown) => unknown) =>
         callback(transactionClient),
       ),
@@ -93,18 +98,22 @@ function createCallerWithCtx(partialCtx: any = {}) {
   const ctx = {
     serverDB: {
       // Same dual-shape `where` as the module-level mock above.
-      select: vi.fn(() => ({
-        from: vi.fn(() => {
-          const whereResult = () =>
-            Object.assign(Promise.resolve([]), {
-              limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
-            });
-          return {
-            innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
-            where: vi.fn(whereResult),
-          };
-        }),
-      })),
+      select: vi.fn(function () {
+        return {
+          from: vi.fn(function () {
+            const whereResult = () =>
+              Object.assign(Promise.resolve([]), {
+                limit: vi.fn().mockResolvedValue([{ role: 'member' }]),
+              });
+            return {
+              innerJoin: vi.fn(function () {
+                return { where: vi.fn(whereResult) };
+              }),
+              where: vi.fn(whereResult),
+            };
+          }),
+        };
+      }),
     } as any,
     userId: 'test-user',
     asyncTaskModel,
@@ -133,7 +142,9 @@ vi.mock('@/envs/app', () => ({
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => routerMocks.serverDB),
+  getServerDB: vi.fn(function () {
+    return routerMocks.serverDB;
+  }),
 }));
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
@@ -152,18 +163,22 @@ const mockChunkCountByFileIds = vi.fn();
 const mockChunkCountByFileId = vi.fn();
 
 vi.mock('@/database/models/asyncTask', () => ({
-  AsyncTaskModel: vi.fn(() => ({
-    delete: mockAsyncTaskDelete,
-    findById: mockAsyncTaskFindById,
-    findByIds: mockAsyncTaskFindByIds,
-  })),
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      delete: mockAsyncTaskDelete,
+      findById: mockAsyncTaskFindById,
+      findByIds: mockAsyncTaskFindByIds,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/chunk', () => ({
-  ChunkModel: vi.fn(() => ({
-    countByFileId: mockChunkCountByFileId,
-    countByFileIds: mockChunkCountByFileIds,
-  })),
+  ChunkModel: vi.fn(function () {
+    return {
+      countByFileId: mockChunkCountByFileId,
+      countByFileIds: mockChunkCountByFileIds,
+    };
+  }),
 }));
 
 const mockFileModelCheckHash = vi.fn();
@@ -181,29 +196,33 @@ const mockFileModelTransferTo = vi.fn();
 const mockFileModelCopyToWorkspace = vi.fn();
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({
-    checkHash: mockFileModelCheckHash,
-    create: mockFileModelCreate,
-    delete: mockFileModelDelete,
-    deleteUnreferenced: mockFileModelDeleteUnreferenced,
-    deleteMany: mockFileModelDeleteMany,
-    findById: mockFileModelFindById,
-    findByIds: mockFileModelFindByIds,
-    query: mockFileModelQuery,
-    update: mockFileModelUpdate,
-    updateGlobalFile: mockFileModelUpdateGlobalFile,
-    clear: mockFileModelClear,
-    copyToWorkspace: mockFileModelCopyToWorkspace,
-    transferTo: mockFileModelTransferTo,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      checkHash: mockFileModelCheckHash,
+      create: mockFileModelCreate,
+      delete: mockFileModelDelete,
+      deleteUnreferenced: mockFileModelDeleteUnreferenced,
+      deleteMany: mockFileModelDeleteMany,
+      findById: mockFileModelFindById,
+      findByIds: mockFileModelFindByIds,
+      query: mockFileModelQuery,
+      update: mockFileModelUpdate,
+      updateGlobalFile: mockFileModelUpdateGlobalFile,
+      clear: mockFileModelClear,
+      copyToWorkspace: mockFileModelCopyToWorkspace,
+      transferTo: mockFileModelTransferTo,
+    };
+  }),
 }));
 
 const mockKnowledgeBaseFindById = vi.fn();
 
 vi.mock('@/database/models/knowledgeBase', () => ({
-  KnowledgeBaseModel: vi.fn(() => ({
-    findById: mockKnowledgeBaseFindById,
-  })),
+  KnowledgeBaseModel: vi.fn(function () {
+    return {
+      findById: mockKnowledgeBaseFindById,
+    };
+  }),
 }));
 
 const mockFileServiceGetFullFileUrl = vi.fn();
@@ -211,16 +230,22 @@ const mockFileServiceGetFileContent = vi.fn();
 const mockFileServiceGetFileAccessUrl = vi.fn();
 const mockFileServiceGetFileMetadata = vi.fn();
 const mockFileServiceDeleteFile = vi.fn();
+const mockUploadFromBuffer = vi.fn();
+
+vi.mock('@/server/services/file/downloadRemoteImage', () => ({ downloadRemoteImage: vi.fn() }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({
-    deleteFile: mockFileServiceDeleteFile,
-    deleteFiles: vi.fn(),
-    getFileAccessUrl: mockFileServiceGetFileAccessUrl,
-    getFileContent: mockFileServiceGetFileContent,
-    getFullFileUrl: mockFileServiceGetFullFileUrl,
-    getFileMetadata: mockFileServiceGetFileMetadata,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      deleteFile: mockFileServiceDeleteFile,
+      uploadFromBuffer: mockUploadFromBuffer,
+      deleteFiles: vi.fn(),
+      getFileAccessUrl: mockFileServiceGetFileAccessUrl,
+      getFileContent: mockFileServiceGetFileContent,
+      getFullFileUrl: mockFileServiceGetFullFileUrl,
+      getFileMetadata: mockFileServiceGetFileMetadata,
+    };
+  }),
 }));
 
 const mockFileUploadFindLatest = vi.fn();
@@ -231,16 +256,18 @@ const mockFileUploadFindLatestForUpdate = vi.fn();
 const mockFileUploadSettle = vi.fn();
 
 vi.mock('@/server/services/fileUpload', () => ({
-  FileUploadService: vi.fn(() => ({
-    findLatest: mockFileUploadFindLatest,
-    hasAnyLiveSession: mockFileUploadHasAnyLiveSession,
-    model: {
-      findLatestByPathnameForUpdate: mockFileUploadFindLatestForUpdate,
-      settle: mockFileUploadSettle,
-    },
-    releaseBestEffort: mockFileUploadReleaseBestEffort,
-    touchActive: mockFileUploadTouchActive,
-  })),
+  FileUploadService: vi.fn(function () {
+    return {
+      findLatest: mockFileUploadFindLatest,
+      hasAnyLiveSession: mockFileUploadHasAnyLiveSession,
+      model: {
+        findLatestByPathnameForUpdate: mockFileUploadFindLatestForUpdate,
+        settle: mockFileUploadSettle,
+      },
+      releaseBestEffort: mockFileUploadReleaseBestEffort,
+      touchActive: mockFileUploadTouchActive,
+    };
+  }),
 }));
 
 const mockKnowledgeRepoQuery = vi.fn().mockResolvedValue([]);
@@ -253,26 +280,32 @@ const mockDocumentModelTransferTo = vi.fn();
 const mockDocumentModelSubtreeHasForeignRows = vi.fn().mockResolvedValue(false);
 
 vi.mock('@/database/repositories/knowledge', () => ({
-  KnowledgeRepo: vi.fn(() => ({
-    query: mockKnowledgeRepoQuery,
-  })),
+  KnowledgeRepo: vi.fn(function () {
+    return {
+      query: mockKnowledgeRepoQuery,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn(() => ({
-    countFileUsageInSubtree: mockDocumentModelCountFileUsageInSubtree,
-    copyToWorkspace: mockDocumentModelCopyToWorkspace,
-    findById: mockDocumentModelFindById,
-    findBySlug: mockDocumentModelFindBySlug,
-    subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
-    transferTo: mockDocumentModelTransferTo,
-  })),
+  DocumentModel: vi.fn(function () {
+    return {
+      countFileUsageInSubtree: mockDocumentModelCountFileUsageInSubtree,
+      copyToWorkspace: mockDocumentModelCopyToWorkspace,
+      findById: mockDocumentModelFindById,
+      findBySlug: mockDocumentModelFindBySlug,
+      subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
+      transferTo: mockDocumentModelTransferTo,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/document', () => ({
-  DocumentService: vi.fn(() => ({
-    deleteDocuments: mockDocumentServiceDeleteDocuments,
-  })),
+  DocumentService: vi.fn(function () {
+    return {
+      deleteDocuments: mockDocumentServiceDeleteDocuments,
+    };
+  }),
 }));
 
 const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
@@ -280,6 +313,58 @@ const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
 }));
+
+describe('fileRouter rehostImage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    routerMocks.businessFileUploadCheck.mockResolvedValue(undefined);
+    vi.mocked(downloadRemoteImage).mockResolvedValue({
+      buffer: Buffer.from('image'),
+      extension: 'png',
+      mimeType: 'image/png',
+    });
+    mockUploadFromBuffer.mockImplementation(async (_buffer, _mime, _path, beforeRecord) => {
+      await beforeRecord(routerMocks.transactionClient);
+      return { fileId: 'image-id', key: 'stored-key', url: 'https://lobehub.com/f/image-id' };
+    });
+  });
+
+  it('returns an attachment after checking actual bytes within the upload transaction', async () => {
+    const { caller } = createCallerWithCtx();
+    await expect(
+      caller.rehostImage({ url: 'https://cdn.discordapp.com/image.png' }),
+    ).resolves.toEqual({ fileId: 'image-id', url: 'https://lobehub.com/f/image-id' });
+    expect(mockUploadFromBuffer.mock.calls[0][4]).toEqual({
+      source: FileSource.PageEditor,
+      visibility: 'private',
+    });
+    expect(routerMocks.businessFileUploadCheck).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actualSize: 5,
+        inputSize: 5,
+        userId: 'test-user',
+        transaction: routerMocks.transactionClient,
+      }),
+    );
+  });
+
+  it('propagates quota rejection instead of returning an attachment', async () => {
+    routerMocks.businessFileUploadCheck.mockRejectedValueOnce(new TRPCError({ code: 'FORBIDDEN' }));
+    const { caller } = createCallerWithCtx();
+    await expect(
+      caller.rehostImage({ url: 'https://cdn.discordapp.com/image.png' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('does not upload failed downloads', async () => {
+    vi.mocked(downloadRemoteImage).mockRejectedValueOnce(new Error('Download failed'));
+    const { caller } = createCallerWithCtx();
+    await expect(
+      caller.rehostImage({ url: 'https://cdn.discordapp.com/image.png' }),
+    ).rejects.toThrow('Download failed');
+    expect(mockUploadFromBuffer).not.toHaveBeenCalled();
+  });
+});
 
 describe('fileRouter', () => {
   let ctx: any;
@@ -354,7 +439,7 @@ describe('fileRouter', () => {
     });
 
     it('should treat stale hash records as missing when the stored object is unavailable', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
       mockFileModelCheckHash.mockResolvedValue({
         isExist: true,
         metadata: { path: 'generations/images/missing_raw.jpg' },
@@ -482,7 +567,7 @@ describe('fileRouter', () => {
       mockFileServiceGetFileMetadata
         .mockResolvedValueOnce({ contentLength: 100, contentType: 'text/plain' })
         .mockRejectedValueOnce(new Error('NoSuchKey'));
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       await caller.createFile({
         hash: 'test-hash',

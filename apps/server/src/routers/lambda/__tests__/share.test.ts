@@ -14,6 +14,18 @@ vi.mock('@/database/models/agentShare', () => ({
   },
 }));
 
+const countShareVisitors = vi.fn();
+const topicModelConstructor = vi.fn();
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    constructor(...args: unknown[]) {
+      topicModelConstructor(...args);
+    }
+    countShareVisitors = countShareVisitors;
+  },
+}));
+
 vi.mock('@/database/models/topicShare', () => ({
   TopicShareModel: {
     findByShareIdWithAccessCheck: vi.fn(),
@@ -72,9 +84,19 @@ describe('shareRouter', () => {
       agentDescription: 'A shared agent',
       agentId: 'agent-1',
       agentName: 'Alice',
+      agentOpeningQuestions: ['What can you do?'],
+      agentTags: ['research'],
       agentTitle: 'Research Assistant',
       ownerId: 'owner-user',
-      shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20, slug: 'shared-agent' },
+      ownerAvatar: 'owner.png',
+      ownerFullName: 'Owner Person',
+      ownerUsername: 'owner',
+      shareConfig: {
+        maxTopicsPerVisitor: 5,
+        maxTurnsPerTopic: 20,
+        slug: 'shared-agent',
+        toolGrants: [{ apis: ['search'], identifier: 'lobe-web-browsing' }],
+      },
       shareId: 'agent-share-1',
       userViewCount: 42,
       visibility: 'link',
@@ -87,6 +109,7 @@ describe('shareRouter', () => {
       vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue(agentShare as any);
       vi.mocked(AgentShareModel.assertShareAccess).mockReturnValue(undefined);
       vi.mocked(AgentShareModel.incrementUserViewCount).mockResolvedValue(undefined);
+      countShareVisitors.mockResolvedValue({ topicCount: 12, visitorCount: 7 });
     });
 
     it('requires authentication without resolving or counting the share', async () => {
@@ -111,16 +134,30 @@ describe('shareRouter', () => {
           backgroundColor: '#ffffff',
           description: 'A shared agent',
           name: 'Alice',
+          openingQuestions: ['What can you do?'],
+          tags: ['research'],
           title: 'Research Assistant',
         },
+        creator: { avatar: 'owner.png', name: 'Owner Person' },
         isOwner: false,
         shareId: 'agent-share-1',
         slug: 'shared-agent',
+        stats: { conversations: 12, views: 42, visitors: 7 },
+        terms: {
+          allowCreatorViewSessions: false,
+          maxTopicsPerVisitor: 5,
+          maxTurnsPerTopic: 20,
+        },
+        // Identifier only: the granted API list is owner-facing configuration.
+        toolGrants: ['lobe-web-browsing'],
         visibility: 'link',
       });
       expect(result).not.toHaveProperty('ownerId');
       expect(result).not.toHaveProperty('shareConfig');
       expect(result).not.toHaveProperty('userViewCount');
+      // Visitor topics live under the creator's account, so the counter has to
+      // run as the owner rather than the caller.
+      expect(topicModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
       expect(AgentShareModel.findBySlugOrId).toHaveBeenCalledWith(
         expect.anything(),
         'shared-agent',
@@ -209,18 +246,21 @@ describe('shareRouter', () => {
         expect(AgentShareModel.findBySlugOrId).not.toHaveBeenCalled();
       });
 
-      it('rejects a non-owner visitor when the agent share flag is off', async () => {
-        mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
-        const caller = shareRouter.createCaller(
-          await createContextInner({ userId: 'visitor-user' }),
-        );
+      it.each([false, undefined])(
+        'admits a non-owner visitor when the agent share flag is %s',
+        async (enableAgentShare) => {
+          mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare });
+          const caller = shareRouter.createCaller(
+            await createContextInner({ userId: 'visitor-user' }),
+          );
 
-        await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).rejects.toMatchObject({
-          code: 'FORBIDDEN',
-        });
-        expect(mockGetFeatureFlagsState).toHaveBeenCalledWith('visitor-user');
-        expect(AgentShareModel.incrementUserViewCount).not.toHaveBeenCalled();
-      });
+          await expect(caller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject({
+            isOwner: false,
+          });
+          expect(mockGetFeatureFlagsState).not.toHaveBeenCalled();
+          expect(AgentShareModel.incrementUserViewCount).toHaveBeenCalled();
+        },
+      );
 
       it('still lets the owner preview their own share when the agent share flag is off', async () => {
         mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: false });
