@@ -8,6 +8,7 @@ import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatIn
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
+import SandboxWorkspaceSection from './SandboxWorkspaceSection';
 import { useWorkspaceSurface } from './useWorkspaceSurface';
 import WorkingDirectorySection from './WorkingDirectorySection';
 
@@ -61,6 +62,9 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     return (
       <>
         <HeteroDeviceSwitcher agentId={agentId} />
+        {/* Cloud-sandbox runs have no device workspace, so this sits alongside
+            rather than inside `renderWorkspace` — each gates on its own target. */}
+        <SandboxWorkspaceSection agentId={agentId} />
         {workspace &&
           (canConfigureResource ? (
             workspace
