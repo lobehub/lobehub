@@ -18,6 +18,12 @@ export interface UpdateEngine {
   configure: (channel: UpdateChannel) => void;
   downloadUpdate: () => Promise<unknown>;
   installOnQuit: () => void;
+  /**
+   * Whether this installation can update itself. electron-updater has no
+   * updater for a snap, the plain `tar.gz` archive or an AppImage started
+   * without its runtime, and silently resolves `checkForUpdates()` to `null`.
+   */
+  isActive: () => boolean;
   kind: UpdateEngineKind;
   on: <K extends keyof UpdateEngineEvents>(
     event: K,

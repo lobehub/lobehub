@@ -280,6 +280,52 @@ describe('App', () => {
     });
   });
 
+  describe('handleWindowAllClosed', () => {
+    const originalPlatform = process.platform;
+
+    const setPlatform = (value: string) =>
+      Object.defineProperty(process, 'platform', { configurable: true, value });
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform,
+      });
+    });
+
+    it('quits on Linux once the last window is gone', () => {
+      setPlatform('linux');
+      appInstance = new App();
+
+      appInstance.handleWindowAllClosed();
+
+      expect(electronApp.quit).toHaveBeenCalled();
+    });
+
+    // Regression: installNow() closes every window on its way to
+    // autoUpdater.quitAndInstall(). Quitting here would end the process before
+    // electron-updater ever runs the installer, which is exactly why in-app
+    // update never applied on Linux while it worked on Windows. Issue #19564.
+    it('stays alive while an update install is in flight', () => {
+      setPlatform('linux');
+      appInstance = new App();
+      appInstance.isInstallingUpdate = true;
+
+      appInstance.handleWindowAllClosed();
+
+      expect(electronApp.quit).not.toHaveBeenCalled();
+    });
+
+    it('does not quit on macOS', () => {
+      setPlatform('darwin');
+      appInstance = new App();
+
+      appInstance.handleWindowAllClosed();
+
+      expect(electronApp.quit).not.toHaveBeenCalled();
+    });
+  });
+
   describe('desktop bootstrap identity', () => {
     it('responds through the registered controller without an elided runtime symbol', () => {
       appInstance = new App();

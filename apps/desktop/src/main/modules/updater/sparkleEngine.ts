@@ -115,6 +115,8 @@ export class SparkleEngine extends EventEmitter<UpdateEngineEvents> implements U
 
   installOnQuit = () => this.bridge.installUpdateOnQuit();
 
+  isActive = () => true;
+
   quitAndInstall = () => this.bridge.installUpdateNow();
 
   private handleEvent = (event: SparkleBridgeEvent) => {

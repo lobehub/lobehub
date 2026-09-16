@@ -58,6 +58,9 @@ export default {
   'checkForUpdates': 'Check for Updates',
   'downloadingUpdate': 'Downloading {{percent}}%',
   'restartToUpdate': 'Restart to Update',
+  'updateUnsupported.action': 'Download Latest Version',
+  'updateUnsupported.desc':
+    'This installation format cannot update itself. Download the latest build to upgrade.',
   'close': 'Close',
   'cmdk.about': 'About',
   'cmdk.aiModeEmptyState': 'Type your question above to start chatting with AI',

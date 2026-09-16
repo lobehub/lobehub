@@ -5,7 +5,7 @@ import type {
   UpdaterStage,
   UpdaterState,
 } from '@lobechat/electron-client-ipc';
-import { app as electronApp } from 'electron';
+import { app as electronApp, BrowserWindow } from 'electron';
 import semver from 'semver';
 
 import { isDev, isWindows } from '@/const/env';
@@ -17,6 +17,14 @@ import { createLogger } from '@/utils/logger';
 import type { App as AppCore } from '../App';
 
 const logger = createLogger('core:UpdaterManager');
+
+/**
+ * How long to wait for electron-updater to take the process down after
+ * `quitAndInstall()`. A Linux package install runs `pkexec`/`sudo` through
+ * `spawnSync`, so this timer cannot fire while the installer is still working —
+ * it only fires when the hand-off failed outright.
+ */
+const INSTALL_HANDOFF_TIMEOUT = 60 * 1000;
 
 export class UpdaterManager {
   private app: AppCore;
@@ -149,6 +157,20 @@ export class UpdaterManager {
     if (manual) void this.app.coreUpdateManager.checkForUpdates({ manual: true });
     if (!this.engine || this.checking || this.downloading) return;
 
+    // electron-updater has no updater implementation for every Linux
+    // distribution format we ship: snap refreshes through snapd, the `tar.gz`
+    // archive has no installer at all, and AppImageUpdater needs the APPIMAGE
+    // env only the AppImage runtime exports. For those, `checkForUpdates()`
+    // resolves `null` without emitting a single event, which would leave the
+    // UI spinning on "checking" forever. Say so instead.
+    if (!this.engine.isActive()) {
+      logger.warn(
+        'Updater is inactive for this installation (unsupported distribution format or unpacked build) — in-app update is unavailable',
+      );
+      this.setStage('unsupported');
+      return;
+    }
+
     this.checking = true;
     this.activeGeneration = this.checkGeneration;
 
@@ -253,9 +275,12 @@ export class UpdaterManager {
     this.captureRestoreRoute();
 
     this.app.isQuiting = true;
+    // Suppress the `window-all-closed` quit in App.ts: on Linux it fires as soon
+    // as the loop below closes the last window and would tear the process down
+    // before the deferred quitAndInstall() runs.
+    this.app.isInstallingUpdate = true;
 
     logger.info('Closing all windows before update installation...');
-    const { BrowserWindow, app } = require('electron');
     if (!isWindows) {
       const allWindows = BrowserWindow.getAllWindows();
       allWindows.forEach((window: any) => {
@@ -266,11 +291,25 @@ export class UpdaterManager {
     }
 
     logger.info('Releasing single instance lock...');
-    app.releaseSingleInstanceLock();
+    electronApp.releaseSingleInstanceLock();
 
     setTimeout(() => {
-      logger.info(`Calling ${this.engine?.kind} quitAndInstall...`);
-      this.engine?.quitAndInstall();
+      const engine = this.engine;
+      logger.info(`Calling ${engine?.kind} quitAndInstall...`);
+      engine?.quitAndInstall();
+
+      // electron-updater's quitAndInstall() only quits once the installer took
+      // over. If it bailed out (no installer path, package manager missing,
+      // sudo prompt refused) we would be left with a window-less process that
+      // never quits, because window-all-closed is suppressed above. Quit on our
+      // own in that case; after a successful hand-off the process is already
+      // gone. Sparkle owns its own termination and may still be prompting.
+      if (engine?.kind !== 'electron-updater') return;
+      setTimeout(() => {
+        logger.warn('quitAndInstall did not end the process, quitting explicitly');
+        this.app.isInstallingUpdate = false;
+        electronApp.quit();
+      }, INSTALL_HANDOFF_TIMEOUT);
     }, 100);
   };
 
