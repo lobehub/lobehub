@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test -f {{ device_ready }} || {
+  echo "lh local device is not ready" >&2
+  exit 1
+}
+
+agent_log=/logs/agent/agent-run.log
+rm -f "$agent_log"
+{{ cli_command }} agent run {{ selector_flag }} {{ selector_value }} \
+  --prompt {{ instruction }} \
+  --device local \
+  > >(tee -a "$agent_log") 2>&1 &
+agent_pid="$!"
+finished=0
+
+while kill -0 "$agent_pid" 2>/dev/null; do
+  if grep -q "Agent finished" "$agent_log" 2>/dev/null; then
+    finished=1
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$finished" -eq 1 ]]; then
+  for _ in 1 2 3; do
+    kill -0 "$agent_pid" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$agent_pid" 2>/dev/null; then
+    kill -TERM "$agent_pid" 2>/dev/null || true
+    wait "$agent_pid" 2>/dev/null || true
+    rc=0
+  elif wait "$agent_pid"; then
+    rc=0
+  else
+    rc="$?"
+  fi
+elif wait "$agent_pid"; then
+  rc=0
+else
+  rc="$?"
+fi
+
+supervisorctl -c {{ supervisor_config }} shutdown >/dev/null 2>&1 || true
+exit "$rc"

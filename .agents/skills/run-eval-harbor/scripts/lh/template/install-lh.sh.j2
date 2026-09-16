@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CLI_PACKAGE={{ cli_package }}
+NODE_VERSION={{ node_version }}
+REQUIRED_NODE_MAJOR="${NODE_VERSION%%.*}"
+REQUIRED_NODE_MAJOR="${REQUIRED_NODE_MAJOR#v}"
+NVM_DIR="${HOME}/.nvm"
+
+have_compatible_node() {
+  command -v node >/dev/null 2>&1 || return 1
+  current_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+  [[ -n "$current_major" && "$current_major" -ge "$REQUIRED_NODE_MAJOR" ]]
+}
+
+install_node() {
+  if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
+    command -v curl >/dev/null 2>&1 || {
+      apt-get update
+      DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates
+    }
+    curl -4 -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
+  fi
+  # shellcheck disable=SC1091
+  . "$NVM_DIR/nvm.sh"
+  nvm install "$NODE_VERSION"
+  nvm use "$NODE_VERSION" >/dev/null
+}
+
+if ! have_compatible_node; then
+  install_node
+fi
+
+if ! command -v supervisord >/dev/null 2>&1; then
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y supervisor
+fi
+
+for bin in node npm; do
+  bin_path="$(command -v "$bin")"
+  [[ "$bin_path" == "/usr/local/bin/$bin" ]] || ln -sf "$bin_path" "/usr/local/bin/$bin"
+done
+
+{% if use_system_cli %}
+npm install -g "$CLI_PACKAGE"
+command -v lh >/dev/null
+lh --help >/dev/null
+{% else %}
+test -f /opt/lh-dev/package.json
+test -f /opt/lh-dev/dist/index.js
+cat >/opt/lh-dev/run-lh.sh <<'LH_RUNNER'
+#!/usr/bin/env bash
+set -euo pipefail
+exec node /opt/lh-dev/dist/index.js "$@"
+LH_RUNNER
+chmod +x /opt/lh-dev/run-lh.sh
+/opt/lh-dev/run-lh.sh --help >/dev/null
+{% endif %}

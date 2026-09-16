@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Run Eval Harbor'
+  short_description: 'Run and diagnose local Harbor evaluations'
+  default_prompt: 'Use $run-eval-harbor to preflight the local LobeHub harness and run an existing Harbor evaluation.'
