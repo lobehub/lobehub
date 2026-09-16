@@ -49,6 +49,7 @@ export enum ModelProvider {
   Nvidia = 'nvidia',
   Ollama = 'ollama',
   OllamaCloud = 'ollamacloud',
+  OfoxAI = 'ofoxai',
   OpenAI = 'openai',
   OpenCodeCodingPlan = 'opencodecodingplan',
   OpenCodeZen = 'opencodezen',
