@@ -288,6 +288,34 @@ describe('cliAgentBinaries', () => {
       platformMock.mockReturnValue('darwin');
     });
 
+    it('detects Gemini CLI from a bare semantic version banner', async () => {
+      callExecFile('/Users/test/.local/bin/gemini\n');
+      callExecFile('0.55.1');
+
+      const { geminiCliBinary } = await import('../cliAgentBinaries');
+      const status = await geminiCliBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/gemini',
+        version: '0.55.1',
+      });
+    });
+
+    it('detects Qwen Code from a bare semantic version banner', async () => {
+      callExecFile('/Users/test/.local/bin/qwen\n');
+      callExecFile('0.21.12');
+
+      const { qwenCodeBinary } = await import('../cliAgentBinaries');
+      const status = await qwenCodeBinary.detect();
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/qwen',
+        version: '0.21.12',
+      });
+    });
+
     it('detects OpenCode through the shared command/version probe', async () => {
       callExecFile('/Users/test/.opencode/bin/opencode\n');
       callExecFile('1.18.3');
