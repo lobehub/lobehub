@@ -4,6 +4,7 @@ const menu = {
   'common.downloadingUpdate': 'Downloading update...',
   'common.isLatestVersion': 'Already up to date',
   'common.restartToUpdate': 'Restart to update',
+  'common.updateUnsupported': 'Download latest version...',
   'context.copyImage': 'Copy Image',
   'context.copyImageAddress': 'Copy Image Address',
   'context.copyLink': 'Copy Link',

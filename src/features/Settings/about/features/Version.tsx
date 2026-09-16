@@ -4,14 +4,14 @@ import {
   type UpdaterState,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox } from '@lobehub/ui';
+import { Block, Flexbox, Tooltip } from '@lobehub/ui';
 import { Button, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
-import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
+import { CHANGELOG_URL, DOWNLOAD_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { autoUpdateService } from '@/services/electron/autoUpdate';
@@ -138,6 +138,17 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Button disabled block={mobile}>
             {t('alreadyUpToDate')}
           </Button>
+        );
+      }
+      // snap / tar.gz / a runtime-less AppImage cannot replace themselves, so the
+      // only honest action is sending the user to a fresh build.
+      case 'unsupported': {
+        return (
+          <Tooltip title={t('updateUnsupported.desc')}>
+            <a href={DOWNLOAD_URL.default} rel="noreferrer" style={{ flex: 1 }} target="_blank">
+              <Button block={mobile}>{t('updateUnsupported.action')}</Button>
+            </a>
+          </Tooltip>
         );
       }
       default: {

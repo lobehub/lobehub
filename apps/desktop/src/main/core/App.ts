@@ -79,6 +79,14 @@ export class App {
    */
   isQuiting: boolean = false;
 
+  /**
+   * Set while UpdaterManager is handing an installed update over to
+   * electron-updater. It closes every window first, which on Linux would
+   * otherwise trip the `window-all-closed` quit below and kill the process
+   * before `quitAndInstall()` ever runs.
+   */
+  isInstallingUpdate: boolean = false;
+
   get appStoragePath() {
     const storagePath = this.storeManager.get('storagePath');
 
@@ -280,12 +288,7 @@ export class App {
     // Set global application exit state and lifecycle listeners immediately.
     this.isQuiting = false;
 
-    app.on('window-all-closed', () => {
-      if (electronIs.windows() || process.platform === 'linux') {
-        logger.info(`All windows closed, quitting application (${process.platform})`);
-        app.quit();
-      }
-    });
+    app.on('window-all-closed', this.handleWindowAllClosed);
 
     app.on('activate', this.onActivate);
 
@@ -594,6 +597,26 @@ export class App {
       );
     });
   }
+
+  /**
+   * Windows and Linux quit once the last window goes away — except while an
+   * update is being installed. `UpdaterManager.installNow()` closes every
+   * window before handing over to `autoUpdater.quitAndInstall()`, so quitting
+   * here would end the process first and the downloaded package would silently
+   * never be applied. That is a Linux-only failure today: macOS does not quit
+   * on `window-all-closed`, and installNow() skips the close loop on Windows.
+   */
+  handleWindowAllClosed = () => {
+    if (this.isInstallingUpdate) {
+      logger.info('All windows closed while installing an update, keeping the process alive');
+      return;
+    }
+
+    if (electronIs.windows() || process.platform === 'linux') {
+      logger.info(`All windows closed, quitting application (${process.platform})`);
+      app.quit();
+    }
+  };
 
   // Add before-quit handler function
   private handleBeforeQuit = () => {
