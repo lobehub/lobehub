@@ -17,6 +17,25 @@ import type { FileServiceImpl, PreSignedUpload } from './impls/type';
 
 export const getFileProxyUrl = (fileId: string): string => `${appEnv.APP_URL}/f/${fileId}`;
 
+const getFileIdFromProxyUrl = (url: string): string | undefined => {
+  try {
+    const appUrl = new URL(appEnv.APP_URL);
+    const candidate = new URL(url);
+    if (candidate.origin !== appUrl.origin) return;
+
+    const appPath = appUrl.pathname.replace(/\/$/, '');
+    const proxyPrefix = `${appPath}/f/`;
+    if (!candidate.pathname.startsWith(proxyPrefix)) return;
+
+    const encodedFileId = candidate.pathname.slice(proxyPrefix.length);
+    if (!encodedFileId || encodedFileId.includes('/')) return;
+
+    return decodeURIComponent(encodedFileId);
+  } catch {
+    return;
+  }
+};
+
 export interface FileAccessUrlItem {
   fileId?: string | null;
   id?: string | null;
@@ -149,6 +168,29 @@ export class FileService {
     if (!isDev && fileId) {
       return getFileProxyUrl(fileId);
     }
+
+    return this.getFullFileUrl(file.url);
+  }
+
+  /**
+   * Resolve an owned file reference to a direct storage URL for short-lived
+   * server-to-server consumers that may not follow the stable file proxy redirect.
+   */
+  public async getDirectFileUrl(file: FileAccessUrlItem): Promise<string> {
+    const fileId = file.fileId || file.id || (file.url && getFileIdFromProxyUrl(file.url));
+
+    if (fileId) {
+      const storedFile = await this.fileModel.findById(fileId);
+      if (storedFile?.url) return this.getFullFileUrl(storedFile.url);
+
+      return file.url || '';
+    }
+
+    if (!file.url) return '';
+
+    // External and already-signed URLs are already direct. Only raw storage
+    // keys owned by this service should be expanded through the S3 adapter.
+    if (/^(?:data:|https?:\/\/)/i.test(file.url)) return file.url;
 
     return this.getFullFileUrl(file.url);
   }

@@ -5,8 +5,8 @@ import { FileService } from '@/server/services/file';
 
 import { ServerBlobStore } from './ServerBlobStore';
 
-const { getFileAccessUrl, uploadBase64 } = vi.hoisted(() => ({
-  getFileAccessUrl: vi.fn().mockResolvedValue('https://files.example/access'),
+const { getDirectFileUrl, uploadBase64 } = vi.hoisted(() => ({
+  getDirectFileUrl: vi.fn().mockResolvedValue('https://storage.example/direct'),
   uploadBase64: vi.fn().mockResolvedValue({
     fileId: 'file-1',
     key: 'files/image.png',
@@ -16,7 +16,7 @@ const { getFileAccessUrl, uploadBase64 } = vi.hoisted(() => ({
 
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn().mockImplementation(function () {
-    return { getFileAccessUrl, uploadBase64 };
+    return { getDirectFileUrl, uploadBase64 };
   }),
 }));
 
@@ -35,7 +35,7 @@ describe('ServerBlobStore', () => {
 
     expect(FileService).toHaveBeenCalledTimes(1);
     expect(uploadBase64).toHaveBeenCalledWith('BASE64', 'files/image.png');
-    expect(getFileAccessUrl).toHaveBeenCalledWith({ id: 'file-1' });
+    expect(getDirectFileUrl).toHaveBeenCalledWith({ id: 'file-1' });
   });
 
   it('surfaces missing storage configuration only when blob IO is requested', async () => {

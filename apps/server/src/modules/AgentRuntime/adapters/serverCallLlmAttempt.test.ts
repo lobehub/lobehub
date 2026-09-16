@@ -1,6 +1,6 @@
 import type { AgentEvent, BlobStore } from '@lobechat/agent-runtime';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import type { ChatMethodOptions, ModelRuntime } from '@lobechat/model-runtime';
+import type { ChatMethodOptions, ChatStreamPayload, ModelRuntime } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RuntimeExecutorContext } from '../context';
@@ -56,11 +56,21 @@ const createAttempt = (
   runCallbacks: (options: ChatMethodOptions) => Promise<void>,
   blobStore?: BlobStore,
   attemptOverrides?: {
+    chatPayload?: ChatStreamPayload;
     clientIp?: string;
     agentShareVisitorIds?: { agentId: string; shareId: string; visitorUserId: string };
     userAgent?: string;
   },
 ) => {
+  const {
+    chatPayload = {
+      messages: [{ content: 'Question', role: 'user' }],
+      model: 'test-model',
+      stream: true,
+      tools: resolved.tools,
+    },
+    ...metadataOverrides
+  } = attemptOverrides ?? {};
   const publishStreamChunk = vi.fn().mockResolvedValue('event-1');
   const streamManager = {
     publishStreamChunk,
@@ -84,12 +94,7 @@ const createAttempt = (
   const attempt = createServerCallLlmAttempt({
     attempt: 1,
     blobStore,
-    chatPayload: {
-      messages: [{ content: 'Question', role: 'user' }],
-      model: 'test-model',
-      stream: true,
-      tools: resolved.tools,
-    },
+    chatPayload,
     ctx,
     events,
     maxAttempts: 3,
@@ -102,7 +107,7 @@ const createAttempt = (
     resolved,
     topicId: 'topic-1',
     trigger: 'user',
-    ...attemptOverrides,
+    ...metadataOverrides,
   });
 
   return { attempt, chat, events, onFirstChunk, publishStreamChunk };
@@ -174,6 +179,65 @@ describe('ServerCallLlmAttempt', () => {
       'operation-1',
       2,
       expect.objectContaining({ chunkType: 'tools_calling' }),
+    );
+  });
+
+  it('replaces platform image proxies with direct blob URLs before calling the provider', async () => {
+    const blobStore: BlobStore = {
+      persistBase64: vi.fn(),
+      resolveUrl: vi.fn().mockResolvedValue('https://storage.example.com/image.png?signature=1'),
+    };
+    const { attempt, chat } = createAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('done');
+        await callback?.onCompletion?.({
+          finishReason: 'stop',
+          text: 'done',
+          usage: { totalOutputTokens: 1 },
+        });
+      },
+      blobStore,
+      {
+        chatPayload: {
+          messages: [
+            {
+              content: [
+                { text: 'Inspect this image', type: 'text' },
+                {
+                  image_url: { url: 'https://app.example.com/f/file-1' },
+                  type: 'image_url',
+                },
+              ],
+              role: 'user',
+            },
+          ],
+          model: 'test-model',
+          stream: true,
+          tools: resolved.tools,
+        },
+      },
+    );
+
+    await attempt.execute();
+
+    expect(blobStore.resolveUrl).toHaveBeenCalledWith({
+      url: 'https://app.example.com/f/file-1',
+    });
+    expect(chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: [
+              { text: 'Inspect this image', type: 'text' },
+              {
+                image_url: { url: 'https://storage.example.com/image.png?signature=1' },
+                type: 'image_url',
+              },
+            ],
+          }),
+        ],
+      }),
+      expect.any(Object),
     );
   });
 

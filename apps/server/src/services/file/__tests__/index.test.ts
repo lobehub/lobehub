@@ -328,6 +328,46 @@ describe('FileService', () => {
     expect(result).toBe(expectedUrl);
   });
 
+  describe('getDirectFileUrl', () => {
+    it('resolves an owned file id to a direct storage URL', async () => {
+      mockFileModel.findById.mockResolvedValue({ url: 'files/image.png' });
+      vi.mocked(service['impl'].getFullFileUrl).mockResolvedValue(
+        'https://storage.example.com/image.png',
+      );
+
+      const result = await service.getDirectFileUrl({ id: 'file-1' });
+
+      expect(mockFileModel.findById).toHaveBeenCalledWith('file-1');
+      expect(service['impl'].getFullFileUrl).toHaveBeenCalledWith('files/image.png', undefined);
+      expect(result).toBe('https://storage.example.com/image.png');
+    });
+
+    it('resolves an owned platform proxy URL to a direct storage URL', async () => {
+      mockFileModel.findById.mockResolvedValue({ url: 'files/image.png' });
+      vi.mocked(service['impl'].getFullFileUrl).mockResolvedValue(
+        'https://storage.example.com/image.png',
+      );
+
+      const result = await service.getDirectFileUrl({
+        url: 'https://lobehub.com/f/file-1',
+      });
+
+      expect(mockFileModel.findById).toHaveBeenCalledWith('file-1');
+      expect(service['impl'].getFullFileUrl).toHaveBeenCalledWith('files/image.png', undefined);
+      expect(result).toBe('https://storage.example.com/image.png');
+    });
+
+    it('keeps external URLs unchanged', async () => {
+      const result = await service.getDirectFileUrl({
+        url: 'https://images.example.com/f/file-1',
+      });
+
+      expect(mockFileModel.findById).not.toHaveBeenCalled();
+      expect(service['impl'].getFullFileUrl).not.toHaveBeenCalled();
+      expect(result).toBe('https://images.example.com/f/file-1');
+    });
+  });
+
   it('should delegate getKeyFromFullUrl to implementation', async () => {
     const testUrl = 'https://example.com/path/to/file.jpg';
     const expectedKey = 'path/to/file.jpg';
