@@ -66,6 +66,9 @@ export default {
   'checkForUpdates': 'Check for Updates',
   'downloadingUpdate': 'Downloading {{percent}}%',
   'restartToUpdate': 'Restart to Update',
+  'updateUnsupported.action': 'Download Latest Version',
+  'updateUnsupported.desc':
+    'This installation format cannot update itself. Download the latest build to upgrade.',
   'clientDB.autoInit.title': 'Initializing PGlite Database',
   'clientDB.error.desc':
     'PGlite failed to initialize. Retry first. If it helps, open Self-serve fixes and follow the steps. Still stuck after a few tries? Use Report issue to send us the error details.',

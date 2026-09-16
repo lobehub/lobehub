@@ -549,6 +549,8 @@
   "unknownError": "未知错误",
   "update": "更新",
   "updateAgent": "更新助理信息",
+  "updateUnsupported.action": "下载最新版本",
+  "updateUnsupported.desc": "当前安装格式不支持应用内更新，请下载最新版本进行升级。",
   "upgradeVersion.action": "升级",
   "upgradeVersion.hasNew": "有可用更新",
   "upgradeVersion.newVersion": "可用更新版本：{{version}}",
