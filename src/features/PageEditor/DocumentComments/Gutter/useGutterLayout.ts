@@ -210,7 +210,26 @@ export const useGutterLayout = ({
       for (const id of idsRef.current) {
         push(id, getAnchorRange(id), getAnchorMatch(id)?.start ?? 0);
       }
-      if (hasPendingRef.current) push(PENDING_CARD_ID, getPendingAnchorRange(), 0);
+      if (hasPendingRef.current) {
+        const pendingRange = getPendingAnchorRange();
+        if (pendingRange) {
+          push(PENDING_CARD_ID, pendingRange, 0);
+        } else {
+          // An orphaned draft (its quote no longer resolves — edited or
+          // removed, e.g. by a collaborator) has no run to sit beside; dock it
+          // at the pane's current top instead of leaving it unmeasured and
+          // permanently `visibility: hidden`, with no way to read or act on it.
+          const element = elements.get(PENDING_CARD_ID);
+          if (element) {
+            entries.push({
+              anchorTop: pane.scrollTop,
+              height: element.offsetHeight,
+              id: PENDING_CARD_ID,
+              order: 0,
+            });
+          }
+        }
+      }
 
       const tops = layoutGutterCards(entries, {
         activeId: activeIdRef.current,

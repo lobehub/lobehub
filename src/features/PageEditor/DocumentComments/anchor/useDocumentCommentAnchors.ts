@@ -257,6 +257,10 @@ export const useDocumentCommentAnchors = (
     // until another thread is picked or the reader clicks elsewhere in the
     // body. A timed flash would drop it seconds after they arrive.
     setSelectedRootId(rootCommentId);
+    // Ticks even on a repeat of the same id, for the same reason as the body
+    // click below: a re-pick of an already-selected thread must still reopen
+    // a panel the reader closed in between.
+    setPickTick((tick) => tick + 1);
   }, []);
 
   // Clicking a run selects its thread. Its card sits beside the text, so the

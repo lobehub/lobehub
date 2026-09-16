@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentCommentAnchorsProvider } from '../anchor/context';
 import type { DocumentCommentAnchorsValue } from '../anchor/useDocumentCommentAnchors';
-import { useGutterLayout } from './useGutterLayout';
+import { PENDING_CARD_ID, useGutterLayout } from './useGutterLayout';
 
 /** Frames are held until `flush`, the way a background tab never gets one. */
 const fakeFrames = () => {
@@ -95,5 +95,39 @@ describe('useGutterLayout', () => {
     act(() => frames.flush());
 
     expect(result.current.tops.get('a')).toBe(120);
+  });
+
+  it('docks an orphaned pending draft at the pane top instead of leaving it unmeasured', () => {
+    const frames = fakeFrames();
+    const pane = document.createElement('div');
+    pane.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    Object.defineProperty(pane, 'scrollTop', { value: 40 });
+    const track = document.createElement('div');
+    const host = document.createElement('div');
+    host.append(track);
+    document.body.append(pane, host);
+    const card = document.createElement('div');
+    Object.defineProperty(card, 'offsetHeight', { value: 80 });
+
+    // The draft's quote no longer resolves — e.g. the text was edited away.
+    const value = anchors({ getPendingAnchorRange: () => null });
+    const { result } = renderHook(
+      () =>
+        useGutterLayout({
+          activeId: null,
+          hasPending: true,
+          ids: [],
+          paneRef: { current: pane },
+          trackRef: { current: track },
+        }),
+      {
+        wrapper: ({ children }: { children: ReactNode }) =>
+          createElement(DocumentCommentAnchorsProvider, { children, value }),
+      },
+    );
+    act(() => result.current.registerCard(PENDING_CARD_ID)(card));
+    act(() => frames.flush());
+
+    expect(result.current.tops.get(PENDING_CARD_ID)).toBe(40);
   });
 });
