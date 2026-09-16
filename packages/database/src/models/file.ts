@@ -1,5 +1,10 @@
-import type { AgentShareFileProvenance, QueryFileListParams } from '@lobechat/types';
-import { FilesTabs, getAgentShareFileProvenance, SortType } from '@lobechat/types';
+import type { FileAccessScope, QueryFileListParams } from '@lobechat/types';
+import {
+  FilesTabs,
+  getAgentShareFileProvenance,
+  ordinaryFileAccessScope,
+  SortType,
+} from '@lobechat/types';
 import {
   and,
   asc,
@@ -37,7 +42,11 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildFileCategoryFilter } from '../utils/fileTypeCategory';
-import { libraryVisibleFile, notAgentShareFile } from '../utils/fileVisibility';
+import {
+  fileMatchesAccessScope,
+  libraryVisibleFile,
+  notAgentShareFile,
+} from '../utils/fileVisibility';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -171,12 +180,10 @@ export class FileModel {
     id: string,
     removeGlobalFile: boolean,
     tx: Transaction,
-    includeAgentShare: boolean,
+    accessScope: FileAccessScope,
   ) => {
     // In pglite environment, non-transactional operations cannot be used within a transaction as it will block
-    const file = includeAgentShare
-      ? await this.findByIdIncludingAgentShare(id, tx)
-      : await this.findById(id, tx);
+    const file = await this.findById(id, { accessScope, transaction: tx });
     if (!file) return;
 
     const fileHash = file.fileHash;
@@ -232,12 +239,22 @@ export class FileModel {
     return undefined;
   };
 
-  /** Delete an ordinary file row and return it only when its stored object should be removed. */
-  delete = async (id: string, removeGlobalFile: boolean = true, trx?: Transaction) => {
+  /** Delete a file row within the caller's access scope. */
+  delete = async (
+    id: string,
+    options: {
+      accessScope?: FileAccessScope;
+      removeGlobalFile?: boolean;
+      transaction?: Transaction;
+    } = {},
+  ) => {
+    const { accessScope = ordinaryFileAccessScope, removeGlobalFile = true, transaction } = options;
     const executeInTransaction = (tx: Transaction) =>
-      this.deleteInTransaction(id, removeGlobalFile, tx, false);
+      this.deleteInTransaction(id, removeGlobalFile, tx, accessScope);
 
-    return trx ? executeInTransaction(trx) : this.db.transaction(executeInTransaction);
+    return transaction
+      ? executeInTransaction(transaction)
+      : this.db.transaction(executeInTransaction);
   };
 
   /**
@@ -248,11 +265,11 @@ export class FileModel {
    * Resolves to the row only when its stored object should be deleted too;
    * `undefined` covers both "still referenced, kept" and "deleted, object still shared".
    */
-  private deleteUnreferencedInternal = async (
+  deleteUnreferenced = async (
     id: string,
-    removeGlobalFile: boolean,
-    provenance?: AgentShareFileProvenance,
+    options: { accessScope?: FileAccessScope; removeGlobalFile?: boolean } = {},
   ) => {
+    const { accessScope = ordinaryFileAccessScope, removeGlobalFile = true } = options;
     return this.db.transaction(async (trx) => {
       const [file] = await trx
         .select({ id: files.id })
@@ -261,12 +278,7 @@ export class FileModel {
           and(
             eq(files.id, id),
             this.ownership(),
-            provenance
-              ? and(
-                  sql`${files.metadata} -> 'agentShare' ->> 'shareId' = ${provenance.shareId}`,
-                  sql`${files.metadata} -> 'agentShare' ->> 'visitorUserId' = ${provenance.visitorUserId}`,
-                )
-              : notAgentShareFile(files.metadata),
+            fileMatchesAccessScope(files.metadata, accessScope),
           ),
         )
         .limit(1)
@@ -287,19 +299,9 @@ export class FileModel {
         .limit(1);
       if (sessionReference) return;
 
-      return this.deleteInTransaction(id, removeGlobalFile, trx, Boolean(provenance));
+      return this.deleteInTransaction(id, removeGlobalFile, trx, accessScope);
     });
   };
-
-  deleteUnreferenced = async (id: string, removeGlobalFile: boolean = true) =>
-    this.deleteUnreferencedInternal(id, removeGlobalFile);
-
-  /** Delete an unreferenced upload only when its share and visitor provenance matches. */
-  deleteAgentShareUnreferenced = async (
-    id: string,
-    provenance: AgentShareFileProvenance,
-    removeGlobalFile: boolean = true,
-  ) => this.deleteUnreferencedInternal(id, removeGlobalFile, provenance);
 
   deleteGlobalFile = async (hashId: string) => {
     return this.db.delete(globalFiles).where(eq(globalFiles.hashId, hashId));
@@ -550,41 +552,28 @@ export class FileModel {
     }));
   };
 
-  findByIds = async (ids: string[]) => {
-    return this.db.query.files.findMany({
-      where: and(inArray(files.id, ids), this.ownership(), notAgentShareFile(files.metadata)),
-    });
-  };
-
-  findById = async (id: string, trx?: Transaction) => {
-    const database = trx || this.db;
-    return database.query.files.findFirst({
-      where: and(eq(files.id, id), this.ownership(), notAgentShareFile(files.metadata)),
-    });
-  };
-
-  /** Resolve only files uploaded by one visitor through one agent share. */
-  findAgentShareFilesByIds = async (ids: string[], provenance: AgentShareFileProvenance) => {
+  findByIds = async (ids: string[], accessScope: FileAccessScope = ordinaryFileAccessScope) => {
     return this.db.query.files.findMany({
       where: and(
         inArray(files.id, ids),
         this.ownership(),
-        sql`${files.metadata} -> 'agentShare' ->> 'shareId' = ${provenance.shareId}`,
-        sql`${files.metadata} -> 'agentShare' ->> 'visitorUserId' = ${provenance.visitorUserId}`,
+        fileMatchesAccessScope(files.metadata, accessScope),
       ),
     });
   };
 
-  /** Resolve one file uploaded by a visitor through one agent share. */
-  findAgentShareFileById = async (id: string, provenance: AgentShareFileProvenance) => {
-    const [file] = await this.findAgentShareFilesByIds([id], provenance);
-    return file;
-  };
-
-  private findByIdIncludingAgentShare = async (id: string, trx?: Transaction) => {
-    const database = trx || this.db;
+  findById = async (
+    id: string,
+    options: { accessScope?: FileAccessScope; transaction?: Transaction } = {},
+  ) => {
+    const { accessScope = ordinaryFileAccessScope, transaction } = options;
+    const database = transaction || this.db;
     return database.query.files.findFirst({
-      where: and(eq(files.id, id), this.ownership()),
+      where: and(
+        eq(files.id, id),
+        this.ownership(),
+        fileMatchesAccessScope(files.metadata, accessScope),
+      ),
     });
   };
 

@@ -1,5 +1,6 @@
 import { AGENT_ARTIFACT_SOURCE_TYPES } from '@lobechat/const';
-import type { AgentShareFileProvenance } from '@lobechat/types';
+import type { FileAccessScope } from '@lobechat/types';
+import { ordinaryFileAccessScope } from '@lobechat/types';
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
@@ -14,7 +15,10 @@ import {
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { agentShareFileReference, notAgentShareFileReference } from '../utils/fileVisibility';
+import {
+  fileReferenceMatchesAccessScope,
+  notAgentShareFileReference,
+} from '../utils/fileVisibility';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
@@ -254,7 +258,7 @@ export class DocumentModel {
       .where(and(this.ordinaryReadScope(), inArray(documents.id, ids)));
   };
 
-  findByFileId = async (fileId: string) => {
+  findByFileId = async (fileId: string, accessScope: FileAccessScope = ordinaryFileAccessScope) => {
     const [document] = await this.db
       .select()
       .from(documents)
@@ -263,21 +267,11 @@ export class DocumentModel {
       // Pick the oldest one explicitly instead of leaving the choice to the
       // query plan, so repeated lookups keep returning the same content.
       // `created_at` carries no uniqueness guarantee, so `id` breaks ties.
-      .where(and(this.ordinaryReadScope(), eq(documents.fileId, fileId)))
-      .orderBy(asc(documents.createdAt), asc(documents.id))
-      .limit(1);
-    return document;
-  };
-
-  findAgentShareDocumentByFileId = async (fileId: string, provenance: AgentShareFileProvenance) => {
-    const [document] = await this.db
-      .select()
-      .from(documents)
       .where(
         and(
           this.ownership(),
           eq(documents.fileId, fileId),
-          agentShareFileReference(this.db, documents.fileId, provenance),
+          fileReferenceMatchesAccessScope(this.db, documents.fileId, accessScope),
         ),
       )
       .orderBy(asc(documents.createdAt), asc(documents.id))

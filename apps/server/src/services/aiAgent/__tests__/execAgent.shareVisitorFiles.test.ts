@@ -20,11 +20,10 @@ const {
 }));
 
 // `discoverTools` peeks at the attached files' MIME types for media routing.
-// Stub both ordinary and share-scoped reads so the bare mock db is never queried.
+// Stub file reads so the bare mock db is never queried.
 vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn().mockImplementation(function () {
     return {
-      findAgentShareFilesByIds: vi.fn().mockResolvedValue([]),
       findByIds: vi.fn().mockResolvedValue([]),
     };
   }),
@@ -246,7 +245,11 @@ describe('AiAgentService.execAgent - share-visitor attachment scope', () => {
 
     expect(mockResolveAttachmentsByFileIds).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentShare: { shareId: 'share-1', visitorUserId: visitorId },
+        fileAccessScope: {
+          shareId: 'share-1',
+          type: 'agentShare',
+          visitorUserId: visitorId,
+        },
         fileIds: ['file-visitor'],
         userId: creatorId,
       }),

@@ -1269,7 +1269,9 @@ describe('fileRouter', () => {
 
       await caller.removeFile({ id: 'shared-file' });
 
-      expect(mockFileModelDelete).toHaveBeenCalledWith('shared-file', false);
+      expect(mockFileModelDelete).toHaveBeenCalledWith('shared-file', {
+        removeGlobalFile: false,
+      });
     });
   });
 
@@ -1280,7 +1282,9 @@ describe('fileRouter', () => {
 
       await caller.removeUnreferencedFile({ id: 'voice-file' });
 
-      expect(mockFileModelDeleteUnreferenced).toHaveBeenCalledWith('voice-file', false);
+      expect(mockFileModelDeleteUnreferenced).toHaveBeenCalledWith('voice-file', {
+        removeGlobalFile: false,
+      });
       expect(mockFileServiceDeleteFile).not.toHaveBeenCalled();
     });
 

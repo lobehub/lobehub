@@ -1,5 +1,5 @@
-import type { AgentShareFileProvenance } from '@lobechat/types';
-import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
+import type { FileAccessScope } from '@lobechat/types';
+import { LIBRARY_HIDDEN_FILE_SOURCES, ordinaryFileAccessScope } from '@lobechat/types';
 import { and, eq, exists, isNull, notExists, notInArray, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
@@ -18,33 +18,37 @@ export const libraryVisibleFileSource = (source: AnyPgColumn) =>
 export const libraryVisibleFile = (source: AnyPgColumn, metadata: AnyPgColumn) =>
   and(libraryVisibleFileSource(source), notAgentShareFile(metadata));
 
+/** Match a file row against the caller's explicit access scope. */
+export const fileMatchesAccessScope = (metadata: AnyPgColumn, accessScope: FileAccessScope) =>
+  accessScope.type === 'agentShare'
+    ? and(
+        sql`${metadata} -> 'agentShare' ->> 'shareId' = ${accessScope.shareId}`,
+        sql`${metadata} -> 'agentShare' ->> 'visitorUserId' = ${accessScope.visitorUserId}`,
+      )
+    : notAgentShareFile(metadata);
+
+/** Match a file-derived document against the caller's explicit access scope. */
+export const fileReferenceMatchesAccessScope = (
+  db: Pick<LobeChatDatabase, 'select'>,
+  fileId: AnyPgColumn,
+  accessScope: FileAccessScope,
+) =>
+  accessScope.type === 'agentShare'
+    ? exists(
+        db
+          .select({ id: files.id })
+          .from(files)
+          .where(and(eq(files.id, fileId), fileMatchesAccessScope(files.metadata, accessScope))),
+      )
+    : notExists(
+        db
+          .select({ id: files.id })
+          .from(files)
+          .where(and(eq(files.id, fileId), sql`COALESCE(${files.metadata} ? 'agentShare', false)`)),
+      );
+
 /** Exclude a document derived from an agent-share attachment. */
 export const notAgentShareFileReference = (
   db: Pick<LobeChatDatabase, 'select'>,
   fileId: AnyPgColumn,
-) =>
-  notExists(
-    db
-      .select({ id: files.id })
-      .from(files)
-      .where(and(eq(files.id, fileId), sql`COALESCE(${files.metadata} ? 'agentShare', false)`)),
-  );
-
-/** Resolve a file-derived document only inside its exact agent-share scope. */
-export const agentShareFileReference = (
-  db: Pick<LobeChatDatabase, 'select'>,
-  fileId: AnyPgColumn,
-  provenance: AgentShareFileProvenance,
-) =>
-  exists(
-    db
-      .select({ id: files.id })
-      .from(files)
-      .where(
-        and(
-          eq(files.id, fileId),
-          sql`${files.metadata} -> 'agentShare' ->> 'shareId' = ${provenance.shareId}`,
-          sql`${files.metadata} -> 'agentShare' ->> 'visitorUserId' = ${provenance.visitorUserId}`,
-        ),
-      ),
-  );
+) => fileReferenceMatchesAccessScope(db, fileId, ordinaryFileAccessScope);

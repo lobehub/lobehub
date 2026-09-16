@@ -1,4 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import { agentShareFileAccessScope } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -107,7 +108,6 @@ describe('DocumentService', () => {
     mockDocumentModel = {
       create: vi.fn(),
       delete: vi.fn(),
-      findAgentShareDocumentByFileId: vi.fn().mockResolvedValue(null),
       findByFileId: vi.fn().mockResolvedValue(null),
       findById: vi.fn(),
       query: vi.fn(),
@@ -1889,7 +1889,10 @@ describe('DocumentService', () => {
     });
 
     it('should preserve agent-share provenance when downloading a visitor file', async () => {
-      const agentShare = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+      const accessScope = agentShareFileAccessScope({
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      });
       vi.mocked(loadFile).mockResolvedValue({
         content: 'Visitor content',
         fileType: 'markdown',
@@ -1899,14 +1902,10 @@ describe('DocumentService', () => {
       } as any);
       mockDocumentModel.create.mockResolvedValue({ id: 'doc-visitor' });
 
-      await service.parseFile('file-visitor', agentShare);
+      await service.parseFile('file-visitor', accessScope);
 
-      expect(mockDocumentModel.findAgentShareDocumentByFileId).toHaveBeenCalledWith(
-        'file-visitor',
-        agentShare,
-      );
-      expect(mockDocumentModel.findByFileId).not.toHaveBeenCalled();
-      expect(mockFileService.downloadFileToLocal).toHaveBeenCalledWith('file-visitor', agentShare);
+      expect(mockDocumentModel.findByFileId).toHaveBeenCalledWith('file-visitor', accessScope);
+      expect(mockFileService.downloadFileToLocal).toHaveBeenCalledWith('file-visitor', accessScope);
     });
 
     it('should use file name as title (stripping extension) when metadata has no title', async () => {
@@ -2011,7 +2010,9 @@ describe('DocumentService', () => {
         'workspace-1',
         'public',
       );
-      expect(transactionModel.findByFileId).toHaveBeenCalledWith('file-1');
+      expect(transactionModel.findByFileId).toHaveBeenCalledWith('file-1', {
+        type: 'ordinary',
+      });
       expect(transactionModel.create).toHaveBeenCalledTimes(1);
       expect(mockDocumentModel.create).not.toHaveBeenCalled();
       // Both have to happen after the lock is held — re-checking before it would

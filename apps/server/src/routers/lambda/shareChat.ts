@@ -8,7 +8,12 @@ import {
   SHARE_VISITOR_PROMPT_MAX_LENGTH,
 } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
-import { ChatErrorType, entityIdPattern, RequestTrigger } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  ChatErrorType,
+  entityIdPattern,
+  RequestTrigger,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -269,10 +274,10 @@ const assertShareVisitorFiles = async (
   if (!fileIds?.length) return;
 
   const uniqueIds = Array.from(new Set(fileIds));
-  const rows = await new FileModel(db, share.ownerId).findAgentShareFilesByIds(uniqueIds, {
-    shareId: share.shareId,
-    visitorUserId,
-  });
+  const rows = await new FileModel(db, share.ownerId).findByIds(
+    uniqueIds,
+    agentShareFileAccessScope({ shareId: share.shareId, visitorUserId }),
+  );
   if (rows.length !== uniqueIds.length) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
   }
@@ -930,19 +935,19 @@ export const shareChatRouter = router({
       const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
       const fileModel = new FileModel(ctx.serverDB, share.ownerId);
-      const existing = await fileModel.findAgentShareFileById(input.fileId, {
+      const accessScope = agentShareFileAccessScope({
         shareId: share.shareId,
         visitorUserId: ctx.userId,
       });
+      const existing = await fileModel.findById(input.fileId, { accessScope });
       if (!existing) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       }
 
-      const file = await fileModel.deleteAgentShareUnreferenced(
-        input.fileId,
-        { shareId: share.shareId, visitorUserId: ctx.userId },
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
+      const file = await fileModel.deleteUnreferenced(input.fileId, {
+        accessScope,
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
       if (!file) return;
 
       await new FileService(ctx.serverDB, share.ownerId).deleteFile(file.url!);

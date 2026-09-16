@@ -10,7 +10,6 @@ import { AiAgentService } from '../../index';
 // below (which run before the test body) can wire them into stubbed models.
 const {
   mockCreateOperation,
-  mockFindAgentShareFilesByIds,
   mockFindByIds,
   mockGetAgentConfig,
   mockGetUserSettings,
@@ -19,7 +18,6 @@ const {
   mockScheduleStaleConnectorToolsRefresh,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
-  mockFindAgentShareFilesByIds: vi.fn(),
   mockFindByIds: vi.fn(),
   mockGetAgentConfig: vi.fn(),
   mockGetUserSettings: vi.fn(),
@@ -33,7 +31,6 @@ const {
 vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn().mockImplementation(function () {
     return {
-      findAgentShareFilesByIds: mockFindAgentShareFilesByIds,
       findByIds: mockFindByIds,
     };
   }),
@@ -222,7 +219,6 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
       success: true,
     });
     mockGetUserSettings.mockResolvedValue({ general: { timezone: 'UTC' } });
-    mockFindAgentShareFilesByIds.mockResolvedValue([]);
     mockFindByIds.mockResolvedValue([]);
     // Pinned plugins on the creator's agent — one granted by the share, the
     // other is a connector-backed identifier that must not be resolved for a
@@ -290,7 +286,7 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
   });
 
   it('reads attached file types through the exact share visitor scope', async () => {
-    mockFindAgentShareFilesByIds.mockResolvedValue([{ fileType: 'image/png', id: 'file-visitor' }]);
+    mockFindByIds.mockResolvedValue([{ fileType: 'image/png', id: 'file-visitor' }]);
 
     await service.execAgent({
       agentId: 'agent-1',
@@ -304,10 +300,10 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
       },
     });
 
-    expect(mockFindAgentShareFilesByIds).toHaveBeenCalledWith(['file-visitor'], {
+    expect(mockFindByIds).toHaveBeenCalledWith(['file-visitor'], {
       shareId: 'share-1',
+      type: 'agentShare',
       visitorUserId: 'visitor-1',
     });
-    expect(mockFindByIds).not.toHaveBeenCalled();
   });
 });

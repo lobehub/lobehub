@@ -1,3 +1,4 @@
+import { agentShareFileAccessScope } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,8 +63,6 @@ describe('FileService', () => {
   beforeEach(() => {
     mockFileModel = {
       delete: vi.fn(),
-      deleteAgentShareUnreferenced: vi.fn(),
-      findAgentShareFileById: vi.fn(),
       findById: vi.fn(),
       updateGlobalFile: vi.fn(),
     };
@@ -129,7 +128,10 @@ describe('FileService', () => {
         new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' }),
       );
 
-      expect(mockFileModel.delete).toHaveBeenCalledWith('test-file-id', false);
+      expect(mockFileModel.delete).toHaveBeenCalledWith('test-file-id', {
+        accessScope: { type: 'ordinary' },
+        removeGlobalFile: false,
+      });
     });
 
     it('should log error and rethrow for non-NoSuchKey errors', async () => {
@@ -176,33 +178,36 @@ describe('FileService', () => {
     });
 
     it('should resolve an agent-share file only through its provenance scope', async () => {
-      const agentShare = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+      const accessScope = agentShareFileAccessScope({
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      });
       const mockContent = new Uint8Array([1, 2, 3]);
-      mockFileModel.findAgentShareFileById.mockResolvedValue(mockFile);
+      mockFileModel.findById.mockResolvedValue(mockFile);
       vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(mockContent);
       mockTempManager.writeTempFile.mockResolvedValue('/tmp/test.txt');
 
-      await service.downloadFileToLocal('test-file-id', agentShare);
+      await service.downloadFileToLocal('test-file-id', accessScope);
 
-      expect(mockFileModel.findAgentShareFileById).toHaveBeenCalledWith('test-file-id', agentShare);
-      expect(mockFileModel.findById).not.toHaveBeenCalled();
+      expect(mockFileModel.findById).toHaveBeenCalledWith('test-file-id', { accessScope });
     });
 
     it('should use the scoped cleanup path when an agent-share object is missing', async () => {
-      const agentShare = { shareId: 'share-1', visitorUserId: 'visitor-1' };
-      mockFileModel.findAgentShareFileById.mockResolvedValue(mockFile);
+      const accessScope = agentShareFileAccessScope({
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      });
+      mockFileModel.findById.mockResolvedValue(mockFile);
       vi.mocked(service['impl'].getFileByteArray).mockRejectedValue({ Code: 'NoSuchKey' });
 
-      await expect(service.downloadFileToLocal('test-file-id', agentShare)).rejects.toThrow(
+      await expect(service.downloadFileToLocal('test-file-id', accessScope)).rejects.toThrow(
         new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' }),
       );
 
-      expect(mockFileModel.deleteAgentShareUnreferenced).toHaveBeenCalledWith(
-        'test-file-id',
-        agentShare,
-        false,
-      );
-      expect(mockFileModel.delete).not.toHaveBeenCalled();
+      expect(mockFileModel.delete).toHaveBeenCalledWith('test-file-id', {
+        accessScope,
+        removeGlobalFile: false,
+      });
     });
   });
 

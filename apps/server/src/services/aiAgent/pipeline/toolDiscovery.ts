@@ -21,7 +21,11 @@ import type {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { DeviceUnavailableErrorData } from '@lobechat/device-gateway-client';
 import type { ChatTopicBotContext, RequestTrigger } from '@lobechat/types';
-import { getActivePluginIds } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  getActivePluginIds,
+  ordinaryFileAccessScope,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
@@ -633,12 +637,10 @@ export const discoverTools = async (
     if (attachedFileIds && attachedFileIds.length > 0) {
       const fileModel = new FileModel(deps.db, deps.userId, deps.workspaceId);
       const uniqueFileIds = Array.from(new Set(attachedFileIds));
-      const fileRecords = shareGate
-        ? await fileModel.findAgentShareFilesByIds(uniqueFileIds, {
-            shareId: shareGate.shareId,
-            visitorUserId: shareGate.visitorUserId,
-          })
-        : await fileModel.findByIds(uniqueFileIds);
+      const fileRecords = await fileModel.findByIds(
+        uniqueFileIds,
+        shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+      );
       attachedFileTypes = fileRecords.map((file) => file.fileType || '');
     }
     const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];

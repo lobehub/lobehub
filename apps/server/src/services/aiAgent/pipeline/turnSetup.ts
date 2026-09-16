@@ -6,11 +6,14 @@ import type {
   ChatFileItem,
   ChatTopicMetadata,
   ChatVideoItem,
+  FileAccessScope,
   HeterogeneousProviderConfig,
   HeterogeneousTopicPin,
 } from '@lobechat/types';
 import {
+  agentShareFileAccessScope,
   ChatErrorType,
+  ordinaryFileAccessScope,
   RequestTrigger,
   resolveHeterogeneousProviderTopicModel,
 } from '@lobechat/types';
@@ -143,13 +146,13 @@ export const resolveNewTopicSnapshot = async (
 const resolveRunAttachments = async (
   deps: TurnSetupDeps,
   {
-    agentShare,
     attachedFileIds,
+    fileAccessScope,
     files,
     throwIfAborted,
   }: {
-    agentShare?: Pick<AgentShareGate, 'shareId' | 'visitorUserId'>;
     attachedFileIds?: string[];
+    fileAccessScope: FileAccessScope;
     files?: InternalExecAgentParams['files'];
     throwIfAborted: (stage: string) => Promise<void>;
   },
@@ -271,8 +274,8 @@ const resolveRunAttachments = async (
 
     try {
       const resolved = await resolveAttachmentsByFileIds({
-        agentShare,
         db: deps.db,
+        fileAccessScope,
         fileIds: attachedFileIds,
         userId: deps.userId,
         workspaceId: deps.workspaceId,
@@ -664,10 +667,8 @@ export const setupTurn = async (
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
   // `attachedFileIds` → signed URLs + classification.
   const runAttachments = await resolveRunAttachments(deps, {
-    agentShare: shareGate
-      ? { shareId: shareGate.shareId, visitorUserId: shareGate.visitorUserId }
-      : undefined,
     attachedFileIds,
+    fileAccessScope: shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
     files,
     throwIfAborted: throwIfExecutionAborted,
   });

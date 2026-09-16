@@ -103,6 +103,19 @@ export const AgentShareFileProvenanceSchema = z.object({
 
 export type AgentShareFileProvenance = z.infer<typeof AgentShareFileProvenanceSchema>;
 
+export type FileAccessScope =
+  ({ type: 'agentShare' } & AgentShareFileProvenance) | { type: 'ordinary' };
+
+export const ordinaryFileAccessScope = { type: 'ordinary' } as const satisfies FileAccessScope;
+
+export const agentShareFileAccessScope = (
+  provenance: AgentShareFileProvenance,
+): FileAccessScope => ({
+  shareId: provenance.shareId,
+  type: 'agentShare',
+  visitorUserId: provenance.visitorUserId,
+});
+
 /** Remove server-owned Agent Share provenance from caller-supplied metadata. */
 export const stripAgentShareFileProvenance = <T>(metadata: T): T => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;

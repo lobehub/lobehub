@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { agentShareFileAccessScope } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -405,16 +406,22 @@ describe('DocumentModel', () => {
       await expect(documentModel.findByFileId(fileId)).resolves.toBeUndefined();
       await expect(documentModel.findBySlug(slug!)).resolves.toBeUndefined();
       await expect(
-        documentModel.findAgentShareDocumentByFileId(fileId, {
-          shareId: 'share-a',
-          visitorUserId: 'visitor-a',
-        }),
+        documentModel.findByFileId(
+          fileId,
+          agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+        ),
       ).resolves.toMatchObject({ id: documentId });
       await expect(
-        documentModel.findAgentShareDocumentByFileId(fileId, {
-          shareId: 'share-a',
-          visitorUserId: 'visitor-b',
-        }),
+        documentModel.findByFileId(
+          fileId,
+          agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-b',
+          }),
+        ),
       ).resolves.toBeUndefined();
     });
 

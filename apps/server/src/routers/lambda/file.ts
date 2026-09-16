@@ -902,7 +902,9 @@ export const fileRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      const file = await ctx.fileModel.delete(input.id, {
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
 
       if (!file) return;
 
@@ -918,7 +920,9 @@ export const fileRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      const file = await ctx.fileModel.deleteUnreferenced(input.id, {
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
       if (!file) return;
 
       await ctx.fileService.deleteFile(file.url!);

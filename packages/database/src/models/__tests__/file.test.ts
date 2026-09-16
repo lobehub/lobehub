@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { FileSource, FilesTabs, SortType } from '@lobechat/types';
+import { agentShareFileAccessScope, FileSource, FilesTabs, SortType } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -194,7 +194,7 @@ describe('FileModel', () => {
         fileHash: '1',
       });
 
-      await fileModel.delete(id, false);
+      await fileModel.delete(id, { removeGlobalFile: false });
 
       const file = await serverDB.query.files.findFirst({ where: eq(files.id, id) });
       const globalFile = await serverDB.query.globalFiles.findFirst({
@@ -377,15 +377,19 @@ describe('FileModel', () => {
         serverDB.query.files.findFirst({ where: eq(files.id, id) }),
       ).resolves.toBeDefined();
       await expect(
-        fileModel.deleteAgentShareUnreferenced(id, {
-          shareId: 'share-a',
-          visitorUserId: 'visitor-b',
+        fileModel.deleteUnreferenced(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-b',
+          }),
         }),
       ).resolves.toBeUndefined();
       await expect(
-        fileModel.deleteAgentShareUnreferenced(id, {
-          shareId: 'share-a',
-          visitorUserId: 'visitor-a',
+        fileModel.deleteUnreferenced(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
         }),
       ).resolves.toMatchObject({
         id,
@@ -406,11 +410,13 @@ describe('FileModel', () => {
         false,
       );
       await expect(
-        fileModel.deleteAgentShareUnreferenced(
-          removalDisabled,
-          { shareId: 'share-a', visitorUserId: 'visitor-a' },
-          false,
-        ),
+        fileModel.deleteUnreferenced(removalDisabled, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+          removeGlobalFile: false,
+        }),
       ).resolves.toBeUndefined();
       await expect(
         serverDB.query.files.findFirst({ where: eq(files.id, removalDisabled) }),
@@ -442,11 +448,12 @@ describe('FileModel', () => {
       });
 
       await expect(
-        fileModel.deleteAgentShareUnreferenced(
-          id,
-          { shareId: 'share-a', visitorUserId: 'visitor-a' },
-          true,
-        ),
+        fileModel.deleteUnreferenced(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+        }),
       ).resolves.toBeUndefined();
       await expect(
         serverDB.query.files.findFirst({ where: eq(files.id, id) }),
@@ -1000,15 +1007,19 @@ describe('FileModel', () => {
       await expect(fileModel.findById(id)).resolves.toBeUndefined();
       await expect(fileModel.findByIds([id])).resolves.toEqual([]);
       await expect(
-        fileModel.findAgentShareFileById(id, {
-          shareId: 'share-a',
-          visitorUserId: 'visitor-a',
+        fileModel.findById(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
         }),
       ).resolves.toMatchObject({ id });
       await expect(
-        fileModel.findAgentShareFileById(id, {
-          shareId: 'share-a',
-          visitorUserId: 'visitor-b',
+        fileModel.findById(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-b',
+          }),
         }),
       ).resolves.toBeUndefined();
     });
@@ -1374,7 +1385,7 @@ describe('FileModel', () => {
 
         // Delete file in transaction
         await serverDB.transaction(async (trx) => {
-          await fileModel.delete(id, true, trx);
+          await fileModel.delete(id, { transaction: trx });
 
           // Verify file was deleted inside the transaction
           const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
@@ -1413,7 +1424,7 @@ describe('FileModel', () => {
         // Intentionally fail the transaction
         await expect(
           serverDB.transaction(async (trx) => {
-            await fileModel.delete(id, true, trx);
+            await fileModel.delete(id, { transaction: trx });
 
             // Verify file was deleted inside the transaction
             const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
@@ -1456,7 +1467,7 @@ describe('FileModel', () => {
 
         // Delete file in transaction, but keep global file
         await serverDB.transaction(async (trx) => {
-          await fileModel.delete(id, false, trx);
+          await fileModel.delete(id, { removeGlobalFile: false, transaction: trx });
         });
 
         // Verify file was deleted
@@ -1493,7 +1504,7 @@ describe('FileModel', () => {
         // Delete old file and create new file in the same transaction
         const result = await serverDB.transaction(async (trx) => {
           // Delete old file
-          await fileModel.delete(deleteFileId, true, trx);
+          await fileModel.delete(deleteFileId, { transaction: trx });
 
           // Create new file
           const { id: newFileId } = await fileModel.create(
@@ -1620,7 +1631,7 @@ describe('FileModel', () => {
 
       // Insert chunks (this might need to be done through proper API)
       // For testing purposes, we'll delete the file which should trigger the batch deletion
-      await fileModel.delete(fileId, true);
+      await fileModel.delete(fileId);
 
       // Verify the file is deleted
       const deletedFile = await serverDB.query.files.findFirst({
@@ -1678,7 +1689,7 @@ describe('FileModel', () => {
       // Skip documentChunks test, requires creating documents records first
 
       // Delete file, should clean up all related data
-      const result = await fileModel.delete(fileId, true);
+      const result = await fileModel.delete(fileId);
 
       // Verify file was deleted
       const deletedFile = await serverDB.query.files.findFirst({
@@ -1736,7 +1747,7 @@ describe('FileModel', () => {
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);
 
       // Delete file
-      await fileModel.delete(fileId, true);
+      await fileModel.delete(fileId);
 
       // Verify file was deleted
       const deletedFile = await serverDB.query.files.findFirst({
@@ -1798,7 +1809,7 @@ describe('FileModel', () => {
       expect(kbFile).toBeDefined();
 
       // Delete file
-      await fileModel.delete(fileId, true);
+      await fileModel.delete(fileId);
 
       // Verify files in knowledge base were also completely deleted
       const deletedFile = await serverDB.query.files.findFirst({
