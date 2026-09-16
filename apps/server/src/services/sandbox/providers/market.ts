@@ -52,22 +52,31 @@ export class MarketSandboxProvider implements SandboxProvider {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
-    const { marketService, topicId, userId } = this.options;
+    const { marketService, sandboxCwd, sandboxMode, topicId, userId } = this.options;
 
     log(
-      'Calling sandbox tool: %s with params: %O, topicId: %s',
+      'Calling sandbox tool: %s with params: %O, topicId: %s, mode: %s',
       toolName,
       redactSandboxParams(params),
       topicId,
+      sandboxMode ?? 'ephemeral',
     );
 
     try {
-      const response = await marketService
-        .getSDK()
-        .plugins.runBuildInTool(toolName as CodeInterpreterToolName, params as never, {
+      const response = await marketService.getSDK().plugins.runBuildInTool(
+        toolName as CodeInterpreterToolName,
+        params as never,
+        {
+          // Cast: the published SDK's context type predates both fields. Market
+          // validates the request body with a non-strict schema, so a field it
+          // does not know yet is dropped rather than rejected — which is what
+          // `sandboxCwd` relies on until the execution plane consumes it.
+          ...(sandboxMode && { sandboxMode }),
+          ...(sandboxCwd && { sandboxCwd }),
           topicId,
           userId,
-        });
+        } as never,
+      );
 
       log('Sandbox tool %s response: %O', toolName, response);
 

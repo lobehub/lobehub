@@ -1,6 +1,7 @@
 import type {
   ISandboxService,
   SandboxExportFileResult,
+  SandboxMode,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 
@@ -10,6 +11,20 @@ import type { MarketService } from '@/server/services/market';
 export type SandboxProviderKind = 'market' | 'onlyboxes';
 
 export interface SandboxSessionContext {
+  /**
+   * Working directory inside the persistent workspace, relative to its root.
+   * Forwarded with every call; the execution plane composes it onto the
+   * directory the entitlement names and fences the result. Only meaningful
+   * alongside `sandboxMode: 'persistent'`.
+   */
+  sandboxCwd?: string;
+  /**
+   * Whether this run wants its working directory to survive the session.
+   * Absent means ephemeral. Half the decision — the execution plane also
+   * requires an entitlement on the trust token, which is minted upstream of
+   * this service.
+   */
+  sandboxMode?: SandboxMode;
   topicId: string;
   userId: string;
 }

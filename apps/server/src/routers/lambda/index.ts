@@ -83,6 +83,7 @@ import { ragEvalRouter } from './ragEval';
 import { recentRouter } from './recent';
 import { resourcePermissionRouter } from './resourcePermission';
 import { resourceTransferRequestRouter } from './resourceTransferRequest';
+import { sandboxWorkspaceRouter } from './sandboxWorkspace';
 import { scmRouter } from './scm';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
@@ -116,6 +117,7 @@ export const lambdaRouter = router({
   agentEvalExternal: agentEvalExternalRouter,
   agentLabel: agentLabelRouter,
   agentSkills: agentSkillsRouter,
+  sandboxWorkspace: sandboxWorkspaceRouter,
   agentTrace: agentTraceRouter,
   expertise: expertiseRouter,
   agentSignal: agentSignalRouter,

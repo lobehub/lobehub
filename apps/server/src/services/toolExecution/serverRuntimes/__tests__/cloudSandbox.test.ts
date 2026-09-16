@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     createSandboxService: vi.fn(),
+    resolveSandboxSessionConfig: vi.fn(),
     FakeSandboxService,
     MarketService: vi.fn(function () {
       return {};
@@ -31,6 +32,7 @@ vi.mock('@/server/services/market', () => ({
 
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mocks.createSandboxService,
+  resolveSandboxSessionConfig: mocks.resolveSandboxSessionConfig,
 }));
 
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
@@ -52,6 +54,7 @@ describe('cloudSandboxRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createSandboxService.mockReturnValue(mocks.sandboxService);
+    mocks.resolveSandboxSessionConfig.mockResolvedValue({ claim: null, mode: 'ephemeral' });
     mocks.sandboxService.callTool.mockResolvedValue({
       result: { exitCode: 0, output: 'ok', stdout: 'ok', success: true },
       success: true,
@@ -106,7 +109,7 @@ describe('cloudSandboxRuntime', () => {
 
     expect(mocks.MarketService).toHaveBeenCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: 'ws-42' },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'ws-42' }),
       }),
     );
   });
@@ -195,6 +198,51 @@ describe('cloudSandboxRuntime', () => {
       './out/result.csv',
       'result.csv',
       undefined,
+    );
+  });
+
+  // ---- Persistence: entitlement on the token, preferences on the request ----
+
+  it('signs the entitlement onto the market token and passes the topic preferences down', async () => {
+    mocks.resolveSandboxSessionConfig.mockResolvedValue({
+      claim: { key: 'ws-user-1', quotaBytes: 2048 },
+      cwd: 'projects/atlas',
+      mode: 'persistent',
+    });
+
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+
+    expect(mocks.MarketService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({
+          sandboxWorkspace: { key: 'ws-user-1', quotaBytes: 2048 },
+        }),
+      }),
+    );
+    expect(mocks.createSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxCwd: 'projects/atlas', sandboxMode: 'persistent' }),
+    );
+  });
+
+  // The claim must be keyed on the SAME workspace the token carries; signing an
+  // organization key onto a token market reads as personal would mount that
+  // organization's directory inside a personal session.
+  it('keys the entitlement on the workspace the token carries', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+
+    expect(mocks.resolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', workspaceId: 'ws-42' }),
+    );
+  });
+
+  it('marks a share-visitor run so no entitlement is resolved for the creator', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext({ agentShareVisitor: { agentId: 'agent-1' } }));
+
+    expect(mocks.resolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ isShareVisitorRun: true }),
     );
   });
 });

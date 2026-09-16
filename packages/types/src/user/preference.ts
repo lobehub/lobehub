@@ -236,6 +236,12 @@ export const UserLabSchema = z.object({
    * running there can be opened from this UI
    */
   enableDeviceTunnel: z.boolean().optional(),
+  /**
+   * opt this user's cloud-sandbox runs into a persistent workspace: the working
+   * directory survives session recycling and is shared across their topics,
+   * instead of being thrown away with the sandbox
+   */
+  enablePersistentSandbox: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;

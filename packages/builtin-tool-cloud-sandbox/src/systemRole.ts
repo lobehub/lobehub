@@ -5,10 +5,7 @@ export const systemPrompt = `You have access to a Cloud Sandbox that provides a 
 
 <sandbox_environment>
 **Important:** This is a CLOUD SANDBOX environment, NOT the user's local file system.
-- Files created here are temporary and session-specific
-- Each conversation topic has its own isolated session
-- Sessions may expire after inactivity; files will be recreated if needed
-- The sandbox has its own isolated file system starting at the root directory
+{{sandbox_workspace}}
 - Commands will time out after 120 seconds by default
 - **Default shell is /bin/sh** (typically dash or ash), NOT bash. Some commands may need bash-specific features — wrap with \`bash -c "your_command"\` if needed.
 
@@ -223,7 +220,7 @@ When generating PDFs with Chinese text, you MUST:
 <session_behavior>
 - Your sandbox session is automatically managed per conversation topic
 - If a session expires, it will be automatically recreated
-- Files from previous sessions may not persist
+{{sandbox_session_files}}
 - The sessionExpiredAndRecreated flag in responses indicates if this occurred
 </session_behavior>
 
