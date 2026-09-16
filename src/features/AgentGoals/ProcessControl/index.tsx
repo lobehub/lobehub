@@ -2,7 +2,6 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Accordion, type AccordionItemType, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,12 +30,6 @@ import {
  * has been doing. Renders only for goals that actually carry a Goal Graph —
  * a plain task-carried goal has no nodes and keeps the page it always had.
  */
-
-const styles = createStaticStyles(({ css }) => ({
-  section: css`
-    padding-block: 8px;
-  `,
-}));
 
 interface ProcessControlProps {
   /** The `goals` row id — not the carrier task's identifier. */
@@ -130,11 +123,7 @@ const ProcessControl = memo<ProcessControlProps>(
               // gated on. Collapsed by default — reference material, like the task
               // detail's 交付验收 section. Prose-only legacy goals have none.
               !!acceptanceConfig && {
-                children: (
-                  <Flexbox className={styles.section}>
-                    <GoalAcceptanceCriteria criteriaIds={criteriaIds} goalId={goalId} />
-                  </Flexbox>
-                ),
+                children: <GoalAcceptanceCriteria criteriaIds={criteriaIds} goalId={goalId} />,
                 key: 'acceptance',
                 title: (
                   <Flexbox horizontal align={'center'} gap={8}>
@@ -152,11 +141,7 @@ const ProcessControl = memo<ProcessControlProps>(
               // what counts as done, 交付物 what was produced, 结论 what the goal now
               // believes about it. Findings routinely cite these artifacts.
               {
-                children: (
-                  <Flexbox className={styles.section}>
-                    <Deliverables graph={graph} />
-                  </Flexbox>
-                ),
+                children: <Deliverables graph={graph} />,
                 key: 'deliverables',
                 title: (
                   <Flexbox horizontal align={'center'} gap={8}>
@@ -170,11 +155,7 @@ const ProcessControl = memo<ProcessControlProps>(
                 ),
               },
               {
-                children: (
-                  <Flexbox className={styles.section}>
-                    <Findings graph={graph} onSelect={select} />
-                  </Flexbox>
-                ),
+                children: <Findings graph={graph} onSelect={select} />,
                 key: 'findings',
                 title: (
                   <Flexbox horizontal align={'center'} gap={8}>
@@ -186,11 +167,7 @@ const ProcessControl = memo<ProcessControlProps>(
                 ),
               },
               {
-                children: (
-                  <Flexbox className={styles.section}>
-                    <Activity graph={graph} onSelect={select} />
-                  </Flexbox>
-                ),
+                children: <Activity graph={graph} onSelect={select} />,
                 key: 'activity',
                 title: (
                   <Flexbox horizontal align={'center'} gap={8}>
