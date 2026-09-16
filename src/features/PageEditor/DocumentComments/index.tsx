@@ -128,13 +128,6 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               variant={'inline'}
               onRetry={() => void documentThreads.reload()}
             />
-          ) : anchoredError && !isAnchoredInitialError ? (
-            <AsyncError
-              error={anchoredError}
-              retrying={isAnchoredRetrying}
-              variant={'inline'}
-              onRetry={() => void reloadAnchored()}
-            />
           ) : (
             documentThreads.hasMore && (
               <Center paddingBlock={12}>
@@ -147,6 +140,16 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
                 </Button>
               </Center>
             )
+          )}
+          {/* Independent of the document query's own error/load-more slot above:
+              an anchored-only failure must not hide document pagination. */}
+          {anchoredError && !isAnchoredInitialError && (
+            <AsyncError
+              error={anchoredError}
+              retrying={isAnchoredRetrying}
+              variant={'inline'}
+              onRetry={() => void reloadAnchored()}
+            />
           )}
         </Flexbox>
       ) : null}

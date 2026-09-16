@@ -96,6 +96,7 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
   const [target, setTarget] = useState<MarkerTarget | null>(null);
   const targetRef = useRef(target);
   targetRef.current = target;
+  const markerRef = useRef<HTMLDivElement>(null);
   const documentId = state?.documentId;
   const enabled = Boolean(documentId) && canComment && Boolean(bodyElement);
 
@@ -119,11 +120,22 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
       setTarget({ range, top });
     };
     const handleLeave = () => setTarget(null);
+    // The body is only part of `host` (title, metadata, likes and the comment
+    // list share it), so leaving the body for any of those must clear the
+    // marker too — except onto the marker itself, which sits outside the
+    // body's DOM subtree; its own pointerleave (below) covers that exit.
+    const handleBodyLeave = (event: PointerEvent) => {
+      const related = event.relatedTarget;
+      if (related instanceof Node && markerRef.current?.contains(related)) return;
+      setTarget(null);
+    };
 
     bodyElement.addEventListener('pointermove', handleMove);
+    bodyElement.addEventListener('pointerleave', handleBodyLeave);
     host.addEventListener('pointerleave', handleLeave);
     return () => {
       bodyElement.removeEventListener('pointermove', handleMove);
+      bodyElement.removeEventListener('pointerleave', handleBodyLeave);
       host.removeEventListener('pointerleave', handleLeave);
       setTarget(null);
     };
@@ -145,7 +157,12 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
   if (!enabled || !target) return null;
 
   return (
-    <div className={styles.blockMarker} style={{ top: target.top }}>
+    <div
+      className={styles.blockMarker}
+      ref={markerRef}
+      style={{ top: target.top }}
+      onPointerLeave={() => setTarget(null)}
+    >
       <ActionIcon
         aria-label={t('pageEditor.comments.anchor.addToLine')}
         icon={MessageSquarePlus}
