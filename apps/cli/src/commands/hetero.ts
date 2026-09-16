@@ -15,7 +15,11 @@ import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
-import { createPiRpcAgentHandle, toPiRpcPrompt } from '@lobechat/heterogeneous-agents/rpc';
+import {
+  createPiRpcAgentHandle,
+  type PiRpcStartupControl,
+  toPiRpcPrompt,
+} from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentContentBlock,
   AgentImageSource,
@@ -59,10 +63,16 @@ const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 const spawnRuntimeRegistry: Partial<
   Record<
     LocalHeterogeneousAgentType,
-    (spawnOpts: Parameters<typeof spawnAgent>[0]) => Promise<Awaited<ReturnType<typeof spawnAgent>>>
+    (
+      spawnOpts: Parameters<typeof spawnAgent>[0],
+      lifecycle?: {
+        onRawStdout?: (chunk: Buffer) => void;
+        onStartupControl?: (control: PiRpcStartupControl) => void;
+      },
+    ) => Promise<Awaited<ReturnType<typeof spawnAgent>>>
   >
 > = {
-  pi: async (spawnOpts) =>
+  pi: async (spawnOpts, lifecycle) =>
     createPiRpcAgentHandle({
       args: spawnOpts.extraArgs ?? [],
       commandPath: spawnOpts.command!,
@@ -70,6 +80,8 @@ const spawnRuntimeRegistry: Partial<
       detached: spawnOpts.detached,
       env: { ...process.env, ...spawnOpts.env },
       operationId: spawnOpts.operationId,
+      onRawStdout: lifecycle?.onRawStdout,
+      onStartupControl: lifecycle?.onStartupControl,
       prompt: await toPiRpcPrompt(spawnOpts.prompt),
       resumeSessionId: spawnOpts.resumeSessionId,
       uploadImage: spawnOpts.uploadImage,
@@ -78,15 +90,16 @@ const spawnRuntimeRegistry: Partial<
 
 /**
  * Spawn via the registered runtime factory, or the generic one-shot spawn.
- * `onRawStdout` (raw-dump tee) only reaches the generic path — RPC runtimes
- * parse stdout internally.
+ * `onRawStdout` (raw-dump tee) reaches both generic and registered runtimes;
+ * RPC runtimes must install it before their eager handshake.
  */
 const spawnAgentOrRuntime = (
   spawnOpts: Parameters<typeof spawnAgent>[0],
   onRawStdout?: (chunk: Buffer) => void,
+  onStartupControl?: (control: PiRpcStartupControl) => void,
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
   const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
-  if (runtimeFactory) return runtimeFactory(spawnOpts);
+  if (runtimeFactory) return runtimeFactory(spawnOpts, { onRawStdout, onStartupControl });
   return spawnAgent({ ...spawnOpts, onRawStdout });
 };
 
@@ -731,6 +744,54 @@ const exec = async (options: ExecOptions): Promise<void> => {
     terminalErrorData: Record<string, unknown> | undefined;
     terminalErrorMessage: string | undefined;
   }> => {
+    // Own terminal signals before the async factory starts. Pi exposes its
+    // startup control synchronously once constructed; cancellation received
+    // during prompt normalization is remembered and applied at that point.
+    const inheritsWrapperProcessGroup =
+      process.platform !== 'win32' && process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] === '1';
+    let interrupted = false;
+    let cancellationSignal: NodeJS.Signals | undefined;
+    let handle: Awaited<ReturnType<typeof spawnAgent>> | undefined;
+    let startupControl: PiRpcStartupControl | undefined;
+    const cancellations: Promise<void>[] = [];
+    let cancellationError: unknown;
+    const cancelStartup = (control: PiRpcStartupControl, signal: NodeJS.Signals) => {
+      cancellations.push(
+        control.cancel(signal).catch((error) => {
+          cancellationError ??= error;
+          log.error(
+            'Failed to cancel agent:',
+            error instanceof Error ? error.message : String(error),
+          );
+        }),
+      );
+    };
+    const drainCancellation = async () => {
+      await Promise.all(cancellations);
+      if (cancellationError) throw cancellationError;
+    };
+    const applyCancellation = (signal: NodeJS.Signals) => {
+      cancellationSignal = signal;
+      if (inheritsWrapperProcessGroup) return;
+      if (startupControl) cancelStartup(startupControl, signal);
+      else handle?.kill(signal);
+    };
+    const onSigint = () => {
+      const signal = interrupted ? 'SIGKILL' : 'SIGINT';
+      interrupted = true;
+      applyCancellation(signal);
+    };
+    const onSigterm = () => {
+      interrupted = true;
+      applyCancellation('SIGTERM');
+    };
+    const removeSignalListeners = () => {
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
+    };
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+
     // One raw-dump file pair per spawn attempt (the resume retry is a second
     // attempt). The stdout tee runs inside `spawnAgent` before the adapter.
     const dumpAttempt = rawDump?.openAttempt(runLabel);
@@ -739,11 +800,37 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // failures, missing local --image paths, decode errors. The runtime
     // registry picks the transport: pi runs over RPC, everything else spawns
     // one-shot (same handle shape, so the event loop below is unchanged).
-    let handle: Awaited<ReturnType<typeof spawnAgent>>;
     try {
-      handle = await spawnAgentOrRuntime(spawnOpts, dumpAttempt?.writeStdout);
+      handle = await spawnAgentOrRuntime(spawnOpts, dumpAttempt?.writeStdout, (control) => {
+        startupControl = control;
+        if (cancellationSignal && !inheritsWrapperProcessGroup) {
+          cancelStartup(control, cancellationSignal);
+        }
+      });
+      if (cancellationSignal && !startupControl && !inheritsWrapperProcessGroup) {
+        handle.kill(cancellationSignal);
+      }
     } catch (err) {
-      await dumpAttempt?.close();
+      try {
+        await drainCancellation();
+        await dumpAttempt?.close();
+      } finally {
+        removeSignalListeners();
+      }
+      if (cancellationSignal) {
+        return {
+          cancelled: true,
+          code: null,
+          ingestError: false,
+          resumeNotFound: false,
+          sawTerminalError: false,
+          sessionId: undefined,
+          signal: cancellationSignal,
+          stderrContent: '',
+          terminalErrorData: undefined,
+          terminalErrorMessage: undefined,
+        };
+      }
       const message = err instanceof Error ? err.message : String(err);
       const errnoCode =
         typeof err === 'object' && err && 'code' in err && typeof err.code === 'string'
@@ -790,31 +877,6 @@ const exec = async (options: ExecOptions): Promise<void> => {
       }
       return { code: 1, signal: null as NodeJS.Signals | null };
     });
-
-    // Direct CLI runs own a detached child group and forward terminal signals.
-    // Device-dispatched wrappers share their outer detached group, so the
-    // gateway cancellation owner signals that group directly instead.
-    const inheritsWrapperProcessGroup =
-      process.platform !== 'win32' && process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] === '1';
-    let interrupted = false;
-    const onSigint = () => {
-      if (inheritsWrapperProcessGroup) {
-        interrupted = true;
-        return;
-      }
-      if (interrupted) {
-        handle.kill('SIGKILL');
-        return;
-      }
-      interrupted = true;
-      handle.kill('SIGINT');
-    };
-    const onSigterm = () => {
-      interrupted = true;
-      if (!inheritsWrapperProcessGroup) handle.kill('SIGTERM');
-    };
-    process.on('SIGINT', onSigint);
-    process.on('SIGTERM', onSigterm);
 
     // Stream events. Each event is optionally written as JSONL and pushed
     // into the ingester.  When intercepting resume errors, a matching
@@ -893,15 +955,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
         }
       }
       await dumpAttempt?.close();
+      try {
+        await drainCancellation();
+      } finally {
+        removeSignalListeners();
+      }
       process.exit(1);
-    } finally {
-      process.off('SIGINT', onSigint);
-      process.off('SIGTERM', onSigterm);
     }
 
     const { code, signal } = await exit;
     await stderrEnded;
     await dumpAttempt?.close();
+    try {
+      await drainCancellation();
+    } finally {
+      removeSignalListeners();
+    }
 
     // Fallback stderr detection: CC may exit non-zero without emitting a
     // result event (e.g. it writes to stderr and quits immediately).

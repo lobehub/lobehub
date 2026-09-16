@@ -1905,9 +1905,7 @@ export const executeHeterogeneousAgent = async (
       // wins — this is provenance, never an override the user can't escape.
       ...buildLobeHubSessionEnv({
         agentId: context.agentId,
-        // Pi RPC reuses a spawn-time environment across turns. Keep automatic
-        // provenance conversation-scoped; per-turn IDs still travel over IPC.
-        operationId: adapterType === 'pi' ? undefined : operationId,
+        operationId,
         topicId: context.topicId,
       }),
       ...quotaAccountPlan.env,

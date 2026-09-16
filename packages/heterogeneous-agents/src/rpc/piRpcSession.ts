@@ -3,6 +3,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from '../spawn/agentStreamPipeline';
 import type { HeterogeneousAgentRuntimeStatus } from '../spawn/claudeAgentSdkSession';
 import { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';
+import { PiOperationContextUnavailableError } from './piRpcOperationContext';
 import {
   PI_RPC_ABORT_TIMEOUT_MS,
   type PiExtensionUiRequest,
@@ -44,6 +45,7 @@ export interface PiRpcSessionOptions {
   onExtensionUiRequest?: (
     request: PiExtensionUiRequest,
   ) => Promise<PiExtensionUiResponse | undefined> | PiExtensionUiResponse | undefined;
+  onRawStdout?: (chunk: Buffer) => void;
   onRuntimeStatus: (status: HeterogeneousAgentRuntimeStatus) => void;
   /** Freshest native pi session id (RPC mode: from the get_state handshake). */
   onSessionId: (sessionId: string) => void;
@@ -54,6 +56,8 @@ export interface PiRpcSessionOptions {
   resumeSessionId?: string;
   /** LobeHub session id — used for runtime status and diagnostics only. */
   sessionId: string;
+  /** Effective child-visible identity, including user env overrides. null deletes it. */
+  shellOperationId?: string | null;
   /** Uploader for base64 tool_result images (see `AgentStreamPipelineOptions`). */
   uploadImage?: UploadHeterogeneousImage;
 }
@@ -66,6 +70,7 @@ export interface PiRpcSessionCallbacks {
   onStderr: (data: string) => void | Promise<void>;
   operationId: string;
   sessionId: string;
+  shellOperationId?: string | null;
 }
 
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -91,7 +96,7 @@ const isTerminalAbortedEvent = (event: PiRpcEvent): boolean => {
  */
 export class PiRpcSession {
   private callbacks: PiRpcSessionCallbacks;
-  private readonly client: PiRpcClient;
+  private client: PiRpcClient;
   private pipeline: AgentStreamPipeline;
   private readonly inactivityTimeoutMs: number;
   private aborted = false;
@@ -105,18 +110,24 @@ export class PiRpcSession {
   private startPromise?: Promise<void>;
   private closePromise?: Promise<void>;
   private closed = false;
+  private reuseDisabled = false;
 
   constructor(private readonly options: PiRpcSessionOptions) {
     this.callbacks = options;
     this.inactivityTimeoutMs = options.inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
     this.pipeline = this.createPipeline();
-    this.client = new PiRpcClient({
+    this.client = this.createClient(options.autoCloseOnSettle === false);
+  }
+
+  private createClient(
+    operationContext: boolean,
+    resumeSessionId = this.options.resumeSessionId,
+  ): PiRpcClient {
+    const options = this.options;
+    return new PiRpcClient({
       // Resume the native pi session when one is known — mirrors the legacy
       // `--session-id` resume of the json path.
-      args: [
-        ...(options.resumeSessionId ? ['--session-id', options.resumeSessionId] : []),
-        ...options.args,
-      ],
+      args: [...(resumeSessionId ? ['--session-id', resumeSessionId] : []), ...options.args],
       commandPath: options.commandPath,
       cwd: options.cwd,
       detached: options.detached,
@@ -124,7 +135,9 @@ export class PiRpcSession {
       onError: (error) => this.failRun(error),
       onEvent: (event) => this.handleEvent(event),
       onExtensionUiRequest: options.onExtensionUiRequest,
+      onRawStdout: options.onRawStdout,
       onStderr: (data) => this.callbacks.onStderr(data),
+      operationContext,
     });
   }
 
@@ -157,7 +170,7 @@ export class PiRpcSession {
   }
 
   get isReusable(): boolean {
-    return !this.closed && !this.runStarted && this.client.isReady;
+    return !this.closed && !this.reuseDisabled && !this.runStarted && this.client.isReady;
   }
 
   /**
@@ -166,13 +179,27 @@ export class PiRpcSession {
    */
   start(): Promise<void> {
     if (this.closed) return Promise.reject(new PiRpcConnectionError('Pi RPC session is closed'));
-    this.startPromise ??= this.client.start().then(() => {
+    this.startPromise ??= this.startClient().then(() => {
       if (this.closed) throw new PiRpcConnectionError('Pi RPC session is closed');
       const sessionId = this.client.sessionId;
       if (sessionId) this.callbacks.onSessionId(sessionId);
       this.emitStatus('idle');
     });
     return this.startPromise;
+  }
+
+  private async startClient(): Promise<void> {
+    try {
+      await this.client.start();
+    } catch (error) {
+      if (!(error instanceof PiOperationContextUnavailableError) || this.closed) throw error;
+      // start() has confirmed the old process is gone. No user prompt has
+      // been sent, so one non-pooled RPC attempt cannot duplicate model work.
+      this.reuseDisabled = true;
+      console.warn('[PiRpcSession] Operation extension unavailable; using single-turn RPC:', error);
+      this.client = this.createClient(false, this.client.sessionId);
+      await this.client.start();
+    }
   }
 
   /**
@@ -193,6 +220,7 @@ export class PiRpcSession {
     // Reserve before awaiting startup. Each turn needs a fresh PiAdapter.
     this.pipeline = this.createPipeline();
     this.aborted = false;
+    let contextInstalled = false;
     const completion = new Promise<{ aborted: boolean }>((resolve, reject) => {
       this.resolveRun = resolve;
       this.rejectRun = reject;
@@ -203,6 +231,13 @@ export class PiRpcSession {
       const sessionId = this.client.sessionId;
       if (sessionId) await this.pushEvent({ id: sessionId, type: 'session' }, this.pipeline);
       // Cancellation may arrive during startup or pipeline initialization.
+      if (this.aborted) {
+        this.settleRun({ aborted: true });
+        return;
+      }
+      await this.client.setOperationContext(this.callbacks.shellOperationId ?? null);
+      contextInstalled = true;
+      if (this.closed) throw new PiRpcConnectionError('Pi RPC session is closed');
       if (this.aborted) {
         this.settleRun({ aborted: true });
         return;
@@ -224,6 +259,15 @@ export class PiRpcSession {
       // Observe both promises immediately: process death may precede the ACK,
       // and agent_settled may arrive before command() resumes.
       const [result] = await Promise.all([completion, sendPrompt()]);
+      this.clearInactivityTimer();
+      if (contextInstalled && !this.closed) {
+        try {
+          await this.client.clearOperationContext();
+        } catch (error) {
+          console.error('[PiRpcSession] Operation cleanup failed; discarding process:', error);
+          await this.close();
+        }
+      }
       return result;
     } catch (error) {
       failed = true;
@@ -232,7 +276,7 @@ export class PiRpcSession {
       this.clearInactivityTimer();
       this.resolveRun = undefined;
       this.rejectRun = undefined;
-      if (failed || this.options.autoCloseOnSettle !== false) {
+      if (failed || this.reuseDisabled || this.options.autoCloseOnSettle !== false) {
         await this.close().catch(() => {
           /* best-effort cleanup */
         });
@@ -277,11 +321,17 @@ export class PiRpcSession {
   }
 
   /** Close the underlying process (graceful EOF → escalate). */
-  close(): Promise<void> {
-    if (this.closePromise) return this.closePromise;
+  close(options?: { force?: boolean }): Promise<void> {
+    if (this.closePromise) {
+      if (options?.force)
+        void this.client
+          .close(options)
+          .catch((error) => console.error('[PiRpcSession] Forced close failed:', error));
+      return this.closePromise;
+    }
     this.closed = true;
     this.clearInactivityTimer();
-    this.closePromise = this.client.close().finally(() => {
+    this.closePromise = this.client.close(options).finally(() => {
       this.settleRun({ aborted: true });
       this.emitStatus('closed');
     });

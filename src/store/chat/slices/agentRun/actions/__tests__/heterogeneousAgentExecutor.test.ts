@@ -677,7 +677,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   }
 
   it.each([
-    { provider: { command: 'pi', type: 'pi' }, expectedOperations: [undefined, undefined] },
+    { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
     { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
     {
       provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
@@ -687,7 +687,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     provider: HeterogeneousProviderConfig;
     expectedOperations: (string | undefined)[];
   }[])(
-    'keeps Pi provenance conversation-scoped without losing live run identity: $provider',
+    'preserves each turn identity and user env overrides: $provider',
     async ({ provider, expectedOperations }) => {
       for (const operationId of ['op-1', 'op-2']) {
         await runWithEvents(

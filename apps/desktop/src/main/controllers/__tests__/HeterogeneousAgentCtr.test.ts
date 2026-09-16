@@ -4296,7 +4296,11 @@ describe('HeterogeneousAgentCtr', () => {
 
       // Turn 1: no native id yet → spawn a fresh process.
       const env = { LOBEHUB_AGENT_ID: 'agent-pi', LOBEHUB_TOPIC_ID: 'topic-pi' };
-      const first = await ctr.startSession({ agentType: 'pi', command: 'pi', env });
+      const first = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        env: { ...env, LOBEHUB_OPERATION_ID: 'op-1' },
+      });
       await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
       await ctr.stopSession({ sessionId: first.sessionId });
 
@@ -4305,13 +4309,15 @@ describe('HeterogeneousAgentCtr', () => {
       const second = await ctr.startSession({
         agentType: 'pi',
         command: 'pi',
-        env,
+        env: { ...env, LOBEHUB_OPERATION_ID: 'op-2' },
         resumeSessionId: 'pi_sess_1',
       });
       await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId: second.sessionId });
       await ctr.stopSession({ sessionId: second.sessionId });
 
       expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(1);
+      expect(piRpcSessionConstructMock.mock.calls[0][0].shellOperationId).toBe('op-1');
+      expect(piRpcSessionRebindMock.mock.calls[0][0].shellOperationId).toBe('op-2');
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
         sessionId: first.sessionId,
       });
@@ -4330,8 +4336,8 @@ describe('HeterogeneousAgentCtr', () => {
         secondOptions: { env: { PI_ACCEPTANCE_CONFIG: 'second' } },
       },
       {
-        firstOptions: { env: { LOBEHUB_OPERATION_ID: 'explicit-1' } },
-        secondOptions: { env: { LOBEHUB_OPERATION_ID: 'explicit-2' } },
+        firstOptions: { env: { LOBEHUB_TOPIC_ID: 'topic-1' } },
+        secondOptions: { env: { LOBEHUB_TOPIC_ID: 'topic-2' } },
       },
     ])(
       'spawns fresh when runtime options change between turns: $secondOptions',

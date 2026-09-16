@@ -15,11 +15,19 @@ export interface PiRpcAgentHandleOptions {
   cwd: string;
   detached?: boolean;
   env: NodeJS.ProcessEnv;
+  /** Raw RPC stdout tee, installed before the process is spawned. */
+  onRawStdout?: (chunk: Buffer) => void;
+  /** Exposes cancellation synchronously, before the eager startup await. */
+  onStartupControl?: (control: PiRpcStartupControl) => void;
   operationId: string;
   /** Text + base64 images for the RPC `prompt` command. */
   prompt: { text: string; images?: PiRpcImage[] };
   resumeSessionId?: string;
   uploadImage?: UploadHeterogeneousImage;
+}
+
+export interface PiRpcStartupControl {
+  cancel: (signal: NodeJS.Signals) => Promise<void>;
 }
 
 /**
@@ -118,8 +126,10 @@ export const createPiRpcAgentHandle = async (
   const queue = createEventQueue();
   const stderr = new PassThrough();
   let nativeSessionId: string | undefined;
+  let runStarted = false;
+  let cancelledSignal: NodeJS.Signals | undefined;
 
-  const session = new PiRpcSession({
+  const sessionOptions = {
     args: options.args,
     commandPath: options.commandPath,
     cwd: options.cwd,
@@ -129,48 +139,61 @@ export const createPiRpcAgentHandle = async (
     resumeSessionId: options.resumeSessionId,
     sessionId: options.operationId,
     uploadImage: options.uploadImage,
-    onEvents: (events) => queue.push(events),
+    onEvents: (events: AgentStreamEvent[]) => queue.push(events),
+    onRawStdout: options.onRawStdout,
     onRuntimeStatus: () => {
       /* no-op — the CLI surfaces state via events */
     },
-    onSessionId: (id) => {
+    onSessionId: (id: string) => {
       nativeSessionId = id;
     },
-    onStderr: (data) => {
+    onStderr: (data: string) => {
       stderr.write(data);
     },
-  });
+  };
+  const session = new PiRpcSession(sessionOptions);
+
+  const cancel = async (signal: NodeJS.Signals) => {
+    cancelledSignal = signal;
+    if (signal === 'SIGKILL') {
+      await session.close({ force: true });
+    } else if (signal === 'SIGTERM' || !runStarted) {
+      await session.close();
+    } else {
+      await session.abort();
+    }
+  };
+  options.onStartupControl?.({ cancel });
 
   // Eager spawn + handshake: a missing/broken pi install rejects here so the
   // CLI's existing spawn-failure classification runs.
   await session.start();
 
+  runStarted = true;
   const exit = session
     .run(options.prompt)
     .then(() => {
       queue.close();
       stderr.end();
-      return { code: 0, signal: null as NodeJS.Signals | null };
+      return cancelledSignal
+        ? { code: null, signal: cancelledSignal }
+        : { code: 0, signal: null as NodeJS.Signals | null };
     })
     .catch((error) => {
       queue.close();
       stderr.end(`${error instanceof Error ? error.message : String(error)}\n`);
-      return { code: 1, signal: null as NodeJS.Signals | null };
+      return cancelledSignal
+        ? { code: null, signal: cancelledSignal }
+        : { code: 1, signal: null as NodeJS.Signals | null };
     });
 
   return {
     events: queue,
     exit,
     kill: (signal) => {
-      if (signal === 'SIGTERM' || signal === 'SIGKILL') {
-        void session.close().catch(() => {
-          /* best-effort */
-        });
-      } else {
-        void session.abort().catch(() => {
-          /* best-effort */
-        });
-      }
+      void cancel(signal ?? 'SIGINT').catch(() => {
+        /* legacy synchronous handle contract is best-effort */
+      });
     },
     pid: session.pid,
     get sessionId() {

@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
+import { PiOperationContextUnavailableError, PiRpcOperationContext } from './piRpcOperationContext';
 import {
   PI_RPC_ABORT_TIMEOUT_MS,
   PI_RPC_DEFAULT_REQUEST_TIMEOUT_MS,
@@ -65,7 +66,10 @@ export interface PiRpcClientOptions {
   onExtensionUiRequest?: (
     request: PiExtensionUiRequest,
   ) => Promise<PiExtensionUiResponse | undefined> | PiExtensionUiResponse | undefined;
+  onRawStdout?: (chunk: Buffer) => void;
   onStderr: (data: string) => void | Promise<void>;
+  /** Enable the private per-turn env bridge for a pooled process. */
+  operationContext?: boolean;
   /** Default response timeout per command. `false` disables the timeout. */
   requestTimeoutMs?: number | false;
 }
@@ -91,19 +95,32 @@ export class PiRpcClient {
   private handshakeSessionId?: string;
   private startPromise?: Promise<void>;
   private readonly probeAbort = new AbortController();
+  private probeExit?: Promise<void>;
+  private closePromise?: Promise<void>;
+  private readonly operationContext?: PiRpcOperationContext;
 
   constructor(options: PiRpcClientOptions) {
     this.options = options;
+    if (options.operationContext) this.operationContext = new PiRpcOperationContext();
     this.transport = new RpcStdioClient({
-      args: ['--mode', 'rpc', ...options.args],
+      args: [
+        '--mode',
+        'rpc',
+        ...options.args,
+        ...(this.operationContext ? ['-e', this.operationContext.path] : []),
+      ],
       closeGraceMs: options.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS,
       commandPath: options.commandPath,
       cwd: options.cwd,
       detached: options.detached,
       env: options.env,
       isResponse: (message) => message?.type === 'response',
-      onError: (error) => options.onError?.(this.toConnectionError(error)),
+      onError: (error) => {
+        this.operationContext?.cancel(error);
+        options.onError?.(this.toConnectionError(error));
+      },
       onMessage: (message) => this.handleNonResponse(message),
+      onRawStdout: options.onRawStdout,
       onStderr: options.onStderr,
       requestTimeoutMs: options.requestTimeoutMs,
     });
@@ -147,24 +164,58 @@ export class PiRpcClient {
 
   private async startProcess(): Promise<void> {
     try {
+      this.assertOpen();
       await this.checkVersion();
+      this.assertOpen();
+      await this.operationContext?.prepare();
+      this.assertOpen();
       await this.transport.start();
+      this.assertOpen();
       await this.performHandshake();
+      if (this.operationContext) {
+        try {
+          const response = await this.command<{ commands: { name: string; source: string }[] }>(
+            { type: 'get_commands' },
+            PI_RPC_HANDSHAKE_TIMEOUT_MS,
+          );
+          if (
+            !response.data?.commands.some(
+              (command) =>
+                command.name === this.operationContext!.commandName &&
+                command.source === 'extension',
+            )
+          ) {
+            throw new Error('Pi did not load the operation context extension');
+          }
+        } catch (error) {
+          this.assertOpen();
+          throw new PiOperationContextUnavailableError('Pi operation context unavailable', {
+            cause: error,
+          });
+        }
+      }
     } catch (error) {
       // The process never reached a usable state — do not leave it running.
-      await this.close().catch(() => {
-        /* best-effort */
-      });
-      throw error instanceof PiRpcConnectionError ? error : this.toConnectionError(error);
+      await this.close();
+      throw error instanceof PiRpcConnectionError ||
+        error instanceof PiOperationContextUnavailableError
+        ? error
+        : this.toConnectionError(error);
     }
+  }
+
+  private assertOpen(): void {
+    if (this.probeAbort.signal.aborted)
+      throw new PiRpcConnectionError('Pi RPC client closed by host');
   }
 
   private async checkVersion(): Promise<void> {
     const plan = await resolveCliSpawnPlan(this.options.commandPath, ['--version']);
+    this.assertOpen();
     let version: string;
     try {
       version = await new Promise<string>((resolve, reject) => {
-        execFile(
+        const probe = execFile(
           plan.command,
           plan.args,
           {
@@ -180,6 +231,12 @@ export class PiRpcClient {
             else resolve(stdout.trim());
           },
         );
+        this.probeExit = new Promise<void>((resolveExit) => {
+          probe.once('close', () => resolveExit());
+          probe.once('error', () => {
+            if (!probe.pid) resolveExit();
+          });
+        });
       });
     } catch {
       throw new PiRpcConnectionError(
@@ -241,9 +298,46 @@ export class PiRpcClient {
    * Graceful close: send EOF, wait for pi to exit, escalate only if needed.
    * Resolves when the child is gone (or was never spawned).
    */
-  close(): Promise<void> {
+  close(options?: { force?: boolean }): Promise<void> {
     this.probeAbort.abort();
-    return this.transport.close();
+    this.operationContext?.cancel(new PiRpcConnectionError('Pi RPC client closed by host'));
+    const transportClose = this.transport.close(options);
+    this.closePromise ??= (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.all([
+          transportClose,
+          Promise.race([
+            this.probeExit ?? Promise.resolve(),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () =>
+                  reject(
+                    new PiRpcConnectionError('Pi version probe did not exit after cancellation'),
+                  ),
+                PI_RPC_ABORT_TIMEOUT_MS,
+              );
+            }),
+          ]),
+        ]);
+        await this.operationContext?.dispose();
+      } finally {
+        clearTimeout(timer);
+      }
+    })();
+    return this.closePromise;
+  }
+
+  async setOperationContext(value: string | null): Promise<void> {
+    await this.operationContext?.update('set', value, (command, timeout) =>
+      this.command(command, timeout),
+    );
+  }
+
+  async clearOperationContext(): Promise<void> {
+    await this.operationContext?.update('clear', null, (command, timeout) =>
+      this.command(command, timeout),
+    );
   }
 
   private async performHandshake(): Promise<void> {
@@ -294,6 +388,7 @@ export class PiRpcClient {
   }
 
   private async handleExtensionUiRequest(request: PiExtensionUiRequest): Promise<void> {
+    if (this.operationContext?.consume(request)) return;
     const method = request.method;
     if (!DIALOG_METHODS.has(method)) {
       // Fire-and-forget — surface to the host, never answer.

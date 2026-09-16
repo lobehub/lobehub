@@ -1,6 +1,7 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PiOperationContextUnavailableError } from './piRpcOperationContext';
 import type { PiRpcEvent } from './piRpcProtocol';
 import { PiRpcSession } from './piRpcSession';
 
@@ -11,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   close: vi.fn(),
   abort: vi.fn(),
+  setOperationContext: vi.fn(),
+  clearOperationContext: vi.fn(),
 }));
 
 vi.mock('./piRpcClient', async (importOriginal) => {
@@ -40,6 +43,8 @@ vi.mock('./piRpcClient', async (importOriginal) => {
       command = mocks.command;
       close = mocks.close;
       abort = mocks.abort;
+      setOperationContext = mocks.setOperationContext;
+      clearOperationContext = mocks.clearOperationContext;
     },
   };
 });
@@ -72,6 +77,8 @@ const emit = (session: PiRpcSession, event: PiRpcEvent) => {
 beforeEach(() => {
   mocks.start.mockResolvedValue(undefined);
   mocks.close.mockResolvedValue(undefined);
+  mocks.setOperationContext.mockResolvedValue(undefined);
+  mocks.clearOperationContext.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -82,10 +89,75 @@ afterEach(() => {
   mocks.command.mockReset();
   mocks.close.mockReset();
   mocks.abort.mockReset();
+  mocks.setOperationContext.mockReset();
+  mocks.clearOperationContext.mockReset();
   vi.useRealTimers();
 });
 
 describe('PiRpcSession', () => {
+  it('waits for identity installation before prompting and cleanup before reuse', async () => {
+    let installed!: () => void;
+    let cleared!: () => void;
+    mocks.command.mockResolvedValue({ success: true });
+    mocks.setOperationContext.mockReturnValue(
+      new Promise<void>((resolve) => (installed = resolve)),
+    );
+    mocks.clearOperationContext.mockReturnValue(
+      new Promise<void>((resolve) => (cleared = resolve)),
+    );
+    const { session } = createSession({ autoCloseOnSettle: false, shellOperationId: 'shell-op-A' });
+    const run = session.run({ text: 'work' });
+    await vi.waitFor(() => expect(mocks.setOperationContext).toHaveBeenCalledWith('shell-op-A'));
+    expect(mocks.command).not.toHaveBeenCalled();
+    installed();
+    await vi.waitFor(() =>
+      expect(mocks.command).toHaveBeenCalledWith({ type: 'prompt', message: 'work' }),
+    );
+    await emit(session, { type: 'agent_settled' });
+    await vi.waitFor(() => expect(mocks.clearOperationContext).toHaveBeenCalled());
+    expect(session.isReusable).toBe(false);
+    await expect(session.run({ text: 'too early' })).rejects.toThrow('active run');
+    cleared();
+    await run;
+    expect(session.isReusable).toBe(true);
+    await session.close();
+  });
+
+  it('never prompts when identity installation fails and never reuses failed cleanup', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.setOperationContext.mockRejectedValue(new Error('missing context acknowledgment'));
+    await expect(session.run({ text: 'must not execute' })).rejects.toThrow('missing context');
+    expect(mocks.command).not.toHaveBeenCalled();
+    expect(session.isReusable).toBe(false);
+
+    mocks.setOperationContext.mockResolvedValue(undefined);
+    mocks.clearOperationContext.mockRejectedValue(new Error('clear failed'));
+    mocks.command.mockResolvedValue({ success: true });
+    const next = createSession({ autoCloseOnSettle: false }).session;
+    const run = next.run({ text: 'execute once' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await emit(next, { type: 'agent_settled' });
+    await expect(run).resolves.toEqual({ aborted: false });
+    expect(next.isReusable).toBe(false);
+    expect(mocks.command).toHaveBeenCalledOnce();
+  });
+
+  it('falls back once before the user prompt when the extension is unavailable', async () => {
+    mocks.start.mockRejectedValueOnce(new PiOperationContextUnavailableError('no extension'));
+    mocks.command.mockResolvedValue({ success: true });
+    const { session } = createSession({ autoCloseOnSettle: false });
+    const run = session.run({ text: 'once' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    expect(mocks.clientInstances.map((client) => client.options.operationContext)).toEqual([
+      true,
+      false,
+    ]);
+    await emit(session, { type: 'agent_settled' });
+    await run;
+    expect(mocks.command).toHaveBeenCalledOnce();
+    expect(session.isReusable).toBe(false);
+  });
+
   it('waits beyond the abort ACK until settlement before allowing reuse', async () => {
     const { session } = createSession({ autoCloseOnSettle: false });
     mocks.command.mockResolvedValue({ success: true });

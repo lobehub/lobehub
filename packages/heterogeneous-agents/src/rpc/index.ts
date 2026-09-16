@@ -9,6 +9,7 @@ export {
   createPiRpcAgentHandle,
   type PiRpcAgentHandle,
   type PiRpcAgentHandleOptions,
+  type PiRpcStartupControl,
   toPiRpcPrompt,
 } from './piRpcAgentHandle';
 export { PiRpcClient, PiRpcConnectionError, PiRpcResponseError } from './piRpcClient';

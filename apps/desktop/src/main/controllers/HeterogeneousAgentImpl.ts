@@ -2658,10 +2658,12 @@ export default class HeterogeneousAgentCtr {
     session: AgentSession,
     traceSession: CliTraceSession | undefined,
     operationId: string,
+    shellOperationId: string | null,
   ): PiRpcSessionCallbacks {
     return {
       operationId,
       sessionId: session.sessionId,
+      shellOperationId,
       onEvents: async (events) => {
         for (const event of events) {
           this.broadcast('heteroAgentEvent', {
@@ -2742,6 +2744,15 @@ export default class HeterogeneousAgentCtr {
     // `cwd::nativeSessionId`. The first turn spawns (no native id yet); later
     // turns resume with `--session-id` and hit the pool instead of respawning.
     const poolKey = session.agentSessionId ? `${cwd}::${session.agentSessionId}` : undefined;
+    // Extensions that cache env or launch unawaited work after settlement can
+    // opt out per agent without losing RPC or disabling their custom tools.
+    const reuse = spawnEnv.LOBE_PI_RPC_REUSE !== '0';
+    const callbacks = this.buildPiRpcCallbacks(
+      session,
+      traceSession,
+      params.operationId,
+      spawnEnv.LOBEHUB_OPERATION_ID ?? null,
+    );
     // Fingerprint the runtime options that shape the spawned process (command
     // path, args, env) so a pool hit under changed settings — model/provider,
     // proxy env, cwd env — spawns fresh instead of reusing stale config.
@@ -2749,7 +2760,11 @@ export default class HeterogeneousAgentCtr {
       commandPath,
       cwd,
       JSON.stringify(session.args ?? []),
-      JSON.stringify(Object.entries(spawnEnv).sort()),
+      JSON.stringify(
+        Object.entries(spawnEnv)
+          .filter(([key]) => key !== 'LOBEHUB_OPERATION_ID')
+          .sort(),
+      ),
     ].join('::');
     if (this.shuttingDown) throw new Error('Application is shutting down');
     const pooledSession = poolKey ? this.piRpcPool.acquire(poolKey, spawnFingerprint) : undefined;
@@ -2761,16 +2776,14 @@ export default class HeterogeneousAgentCtr {
         cwd,
         env: spawnEnv,
         resumeSessionId: session.agentSessionId,
-        // The pool owns the process lifecycle — never auto-close on settle.
-        autoCloseOnSettle: false,
+        autoCloseOnSettle: !reuse,
         uploadImage: this.uploadResultImage,
-        ...this.buildPiRpcCallbacks(session, traceSession, params.operationId),
+        ...callbacks,
       });
     // A pooled process carries the callbacks of the run that spawned it —
     // rebind to THIS run's IPC session / trace or events would broadcast to
     // a stale sessionId.
-    if (pooledSession)
-      pooledSession.rebind(this.buildPiRpcCallbacks(session, traceSession, params.operationId));
+    if (pooledSession) pooledSession.rebind(callbacks);
     session.piRpcSession = rpcSession;
 
     logger.info(pooledSession ? 'Reusing pooled Pi RPC process:' : 'Starting Pi RPC session:', {
@@ -2788,7 +2801,7 @@ export default class HeterogeneousAgentCtr {
       if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
       // Hand the process to the pool for the next turn (native id known now).
       // A fresh process without a native id cannot be keyed — recycle it.
-      if (session.agentSessionId) {
+      if (session.agentSessionId && reuse) {
         const key = `${cwd}::${session.agentSessionId}`;
         if (!pooledSession) this.piRpcPool.register(key, rpcSession, spawnFingerprint);
         this.piRpcPool.release(rpcSession);

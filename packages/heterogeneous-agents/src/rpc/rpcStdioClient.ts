@@ -63,6 +63,8 @@ export interface RpcStdioClientOptions {
    * request — i.e. notifications, events, and server-initiated requests.
    */
   onMessage: (message: Record<string, unknown>) => void | Promise<void>;
+  /** Receives each original stdout chunk before decoding or protocol handling. */
+  onRawStdout?: (chunk: Buffer) => void;
   onStderr: (data: string) => void | Promise<void>;
   /** Default per-request timeout. `false` disables it. */
   requestTimeoutMs?: number | false;
@@ -71,6 +73,8 @@ export interface RpcStdioClientOptions {
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_CLOSE_GRACE_MS = 3_000;
 const ESCALATE_KILL_MS = 2_000;
+/** Maximum retained stderr tail, measured in JavaScript UTF-16 code units. */
+const STDERR_TAIL_MAX_UTF16_CODE_UNITS = 8192;
 
 const defaultIsResponse = (message: Record<string, unknown>): boolean =>
   'id' in message && !('method' in message);
@@ -82,10 +86,11 @@ export class RpcStdioClient {
   private closed = false;
   private exited = false;
   private fatalError?: Error;
+  private forceShutdown?: () => void;
   private messageQueue: Promise<void> = Promise.resolve();
   private nextRequestId = 0;
-  private readonly stderrChunks: string[] = [];
   private readonly stderrDecoder = new StringDecoder('utf8');
+  private stderrTail = '';
   private readonly stdoutDecoder = new StringDecoder('utf8');
   private stdoutBuffer = '';
 
@@ -100,7 +105,7 @@ export class RpcStdioClient {
   }
 
   get stderrText(): string {
-    return this.stderrChunks.join('');
+    return this.stderrTail;
   }
 
   /**
@@ -204,16 +209,26 @@ export class RpcStdioClient {
    * Graceful close: send EOF, wait for the child to exit, escalate to SIGTERM
    * then SIGKILL only if it lingers. Pending requests reject with
    * 'closed by host'. Resolves once the child is gone (or was never spawned).
+   * `force` skips directly to SIGKILL and upgrades an in-progress graceful
+   * close while preserving its shared completion promise.
    */
-  close(): Promise<void> {
-    if (this.closePromise) return this.closePromise;
+  close(options?: { force?: boolean }): Promise<void> {
+    if (this.closePromise) {
+      if (options?.force) this.forceShutdown?.();
+      return this.closePromise;
+    }
     this.closed = true;
     this.rejectPendingRequests(new RpcStdioConnectionError('RPC client closed by host'));
-    this.closePromise ??= this.shutdown();
+    this.closePromise = this.shutdown(options?.force);
     return this.closePromise;
   }
 
   private consumeStdout(chunk: Buffer): void {
+    try {
+      this.options.onRawStdout?.(chunk);
+    } catch {
+      // Raw output is diagnostic-only and must never affect the agent.
+    }
     if (this.closed) return;
     this.stdoutBuffer += this.stdoutDecoder.write(chunk);
 
@@ -227,7 +242,13 @@ export class RpcStdioClient {
 
   private consumeStderr(text: string): void {
     if (!text) return;
-    this.stderrChunks.push(text);
+    this.stderrTail += text;
+    if (this.stderrTail.length > STDERR_TAIL_MAX_UTF16_CODE_UNITS) {
+      this.stderrTail = this.stderrTail.slice(-STDERR_TAIL_MAX_UTF16_CODE_UNITS);
+      const firstCodeUnit = this.stderrTail.charCodeAt(0);
+      if (firstCodeUnit >= 0xdc00 && firstCodeUnit <= 0xdfff)
+        this.stderrTail = this.stderrTail.slice(1);
+    }
     void Promise.resolve()
       .then(() => this.options.onStderr(text))
       .catch((error) => this.fail(this.toError(error)));
@@ -288,7 +309,7 @@ export class RpcStdioClient {
     this.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
-  private async shutdown(): Promise<void> {
+  private async shutdown(force = false): Promise<void> {
     const child = this.child;
     if (!child || this.exited) return;
 
@@ -296,25 +317,41 @@ export class RpcStdioClient {
       let timer: ReturnType<typeof setTimeout>;
       const onClose = () => {
         clearTimeout(timer);
+        this.forceShutdown = undefined;
         resolve();
       };
-      child.once('close', onClose);
-      timer = setTimeout(() => {
-        this.terminateChild(child, 'SIGTERM');
-        if (this.exited) return;
+      const rejectAfterKillDeadline = () => {
         timer = setTimeout(() => {
-          this.terminateChild(child, 'SIGKILL');
+          child.off('close', onClose);
+          this.forceShutdown = undefined;
+          reject(new RpcStdioConnectionError('RPC process did not exit after SIGKILL'));
+        }, ESCALATE_KILL_MS);
+      };
+      const forceNow = () => {
+        clearTimeout(timer);
+        this.terminateChild(child, 'SIGKILL');
+        if (this.exited) return;
+        rejectAfterKillDeadline();
+      };
+      child.once('close', onClose);
+      this.forceShutdown = forceNow;
+      if (force) {
+        forceNow();
+      } else {
+        timer = setTimeout(() => {
+          this.terminateChild(child, 'SIGTERM');
           if (this.exited) return;
           timer = setTimeout(() => {
-            child.off('close', onClose);
-            reject(new RpcStdioConnectionError('RPC process did not exit after SIGKILL'));
+            this.terminateChild(child, 'SIGKILL');
+            if (this.exited) return;
+            rejectAfterKillDeadline();
           }, ESCALATE_KILL_MS);
-        }, ESCALATE_KILL_MS);
-      }, this.options.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS);
-      try {
-        child.stdin?.end();
-      } catch {
-        // A broken stdin still needs the signal escalation above.
+        }, this.options.closeGraceMs ?? DEFAULT_CLOSE_GRACE_MS);
+        try {
+          child.stdin?.end();
+        } catch {
+          // A broken stdin still needs the signal escalation above.
+        }
       }
     });
   }

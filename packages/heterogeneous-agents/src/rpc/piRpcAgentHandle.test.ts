@@ -35,6 +35,8 @@ vi.mock('./piRpcClient', async (importOriginal) => {
       command = mocks.command;
       close = mocks.close;
       abort = mocks.abort;
+      setOperationContext = async () => {};
+      clearOperationContext = async () => {};
     },
   };
 });
@@ -149,6 +151,64 @@ describe('createPiRpcAgentHandle', () => {
         prompt: { text: 'x' },
       }),
     ).rejects.toThrow(/handshake/);
+  });
+
+  it('exposes startup cancellation before awaiting the handshake and closes instead of aborting', async () => {
+    let rejectStart: ((error: Error) => void) | undefined;
+    mocks.start.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        rejectStart = reject;
+      }),
+    );
+    mocks.close.mockResolvedValue(undefined);
+    let control: { cancel: (signal: NodeJS.Signals) => Promise<void> } | undefined;
+
+    const creating = createPiRpcAgentHandle({
+      args: [],
+      commandPath: 'pi',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onStartupControl: (value) => {
+        control = value;
+      },
+      operationId: 'op-startup-cancel',
+      prompt: { text: 'x' },
+    });
+
+    expect(control).toBeDefined();
+    await control!.cancel('SIGINT');
+    expect(mocks.close).toHaveBeenCalledOnce();
+    expect(mocks.abort).not.toHaveBeenCalled();
+    rejectStart!(new Error('Pi RPC session is closed'));
+    await expect(creating).rejects.toThrow('closed');
+  });
+
+  it('forces startup shutdown on SIGKILL and installs raw stdout before start', async () => {
+    mocks.start.mockResolvedValue(undefined);
+    mocks.close.mockResolvedValue(undefined);
+    mocks.command.mockResolvedValue({ success: true, type: 'response' });
+    const onRawStdout = vi.fn();
+    let control: { cancel: (signal: NodeJS.Signals) => Promise<void> } | undefined;
+
+    const creating = createPiRpcAgentHandle({
+      args: [],
+      commandPath: 'pi',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onRawStdout,
+      onStartupControl: (value) => {
+        control = value;
+      },
+      operationId: 'op-force',
+      prompt: { text: 'x' },
+    });
+    // Session construction (and therefore raw tee installation) happened
+    // before startup control became observable and before the eager await.
+    expect(mocks.clientInstances).toHaveLength(1);
+    await control!.cancel('SIGKILL');
+    // PiRpcSession owns propagation of `{ force: true }` to the transport.
+    expect(mocks.close).toHaveBeenCalledOnce();
+    await expect(creating).rejects.toThrow('closed');
   });
 
   it('maps kill(SIGINT) to a graceful abort', async () => {

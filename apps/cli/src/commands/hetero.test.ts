@@ -286,6 +286,45 @@ describe('hetero exec command', () => {
     await command;
   });
 
+  it('binds cancellation while the async Pi factory is still awaiting startup and escalates a second SIGINT', async () => {
+    const signalHandlers = new Map<string, () => void>();
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT' || event === 'SIGTERM') signalHandlers.set(event, listener);
+      return process;
+    }) as typeof process.on);
+    vi.spyOn(process, 'off').mockImplementation(((event: string) => {
+      signalHandlers.delete(event);
+      return process;
+    }) as typeof process.off);
+
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    let rejectFactory: ((error: Error) => void) | undefined;
+    mockCreatePiRpcAgentHandle.mockImplementation(
+      (options: { onStartupControl?: (control: { cancel: typeof cancel }) => void }) => {
+        options.onStartupControl?.({ cancel });
+        return new Promise((_resolve, reject) => {
+          rejectFactory = reject;
+        });
+      },
+    );
+
+    const command = runCmd(['hetero', 'exec', '--type', 'pi', '--prompt', 'hi']);
+    for (let index = 0; index < 20 && !signalHandlers.get('SIGINT'); index += 1) {
+      await Promise.resolve();
+    }
+    signalHandlers.get('SIGINT')?.();
+    signalHandlers.get('SIGINT')?.();
+    for (let index = 0; index < 20 && cancel.mock.calls.length === 0; index += 1) {
+      await Promise.resolve();
+    }
+
+    expect(cancel.mock.calls).toEqual([['SIGKILL']]);
+    rejectFactory!(new Error('Pi RPC session is closed'));
+    await command;
+    expect(exitSpy).toHaveBeenCalledWith(137);
+    expect(signalHandlers.size).toBe(0);
+  });
+
   it('runs Qoder with its default command and forwards model and effort', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
 
@@ -811,6 +850,8 @@ describe('hetero exec command', () => {
           PATH: '/pi-custom-bin',
         }),
         operationId: expect.any(String),
+        onRawStdout: undefined,
+        onStartupControl: expect.any(Function),
         resumeSessionId: 'pi-session-1',
       }),
     );
@@ -965,6 +1006,7 @@ describe('hetero exec command', () => {
     for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
 
     sigintHandler?.();
+    await Promise.resolve();
     expect(kill).toHaveBeenCalledWith('SIGINT');
     expect(mockHeteroFinishMutate).not.toHaveBeenCalled();
 

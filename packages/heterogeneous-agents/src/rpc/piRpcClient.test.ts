@@ -13,7 +13,17 @@ const { execFileMock, spawnMock } = vi.hoisted(() => ({
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, execFile: execFileMock, spawn: spawnMock };
+  return {
+    ...actual,
+    execFile: (...args: unknown[]) => {
+      const probe = execFileMock(...args);
+      if (probe) return probe;
+      const exited = new EventEmitter();
+      queueMicrotask(() => exited.emit('close', 0, null));
+      return exited;
+    },
+    spawn: spawnMock,
+  };
 });
 
 const originalPlatform = process.platform;
@@ -88,6 +98,54 @@ afterEach(() => {
 });
 
 describe('PiRpcClient', () => {
+  it('does not probe or spawn when cancelled before startup', async () => {
+    const client = new PiRpcClient({
+      args: [],
+      commandPath: 'pi',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onEvent: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.close();
+    await expect(client.start()).rejects.toThrow('closed by host');
+    expect(execFileMock).not.toHaveBeenCalled();
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('waits for a cancelled version probe to actually close and never starts RPC', async () => {
+    const probe = Object.assign(new EventEmitter(), { pid: 1234 });
+    execFileMock.mockImplementation((_command, _args, options, callback) => {
+      options.signal.addEventListener('abort', () => callback(new Error('aborted'), '', ''));
+      return probe;
+    });
+    const client = new PiRpcClient({
+      args: [],
+      commandPath: 'pi',
+      cwd: '/workspace',
+      env: { ...process.env },
+      onEvent: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    const start = client.start().catch((error) => error);
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalled());
+    const confirmed = vi.fn();
+    const close = client.close().then(confirmed);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(confirmed).not.toHaveBeenCalled();
+    probe.emit('close', null, 'SIGKILL');
+    await close;
+    expect(await start).toBeInstanceOf(PiRpcConnectionError);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('captures the raw handshake before the ready client is returned', async () => {
+    const raw: Buffer[] = [];
+    const { client } = await createReadyClient({ onRawStdout: (chunk) => raw.push(chunk) });
+    expect(JSON.parse(Buffer.concat(raw).toString()).command).toBe('get_state');
+    await client.close();
+  });
+
   it('bounds abort even when ordinary command timeouts are disabled', async () => {
     const { client } = await createReadyClient({ requestTimeoutMs: false });
     vi.useFakeTimers();
