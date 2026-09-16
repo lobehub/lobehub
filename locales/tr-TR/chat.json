@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} dosya",
   "agentProfile.knowledgeBases_one": "{{count}} bilgi tabanı",
   "agentProfile.knowledgeBases_other": "{{count}} bilgi tabanı",
+  "agentProfile.runtime": "{{name}} üzerinde çalışır",
   "agentProfile.skills_one": "{{count}} beceri",
   "agentProfile.skills_other": "{{count}} beceri",
   "agentSignal.receipts.agentSignalLabel": "Ajan Sinyali",

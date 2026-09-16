@@ -9,6 +9,9 @@ class DocumentCommentService {
 
   get = (id: string) => lambdaClient.documentComment.get.query({ id });
 
+  listAnchors = (documentId: string) =>
+    lambdaClient.documentComment.listAnchors.query({ documentId });
+
   listReplies = (params: { cursor?: string; limit?: number; rootCommentId: string }) =>
     lambdaClient.documentComment.listReplies.query(params);
 

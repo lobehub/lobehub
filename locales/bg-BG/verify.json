@@ -766,6 +766,7 @@
   "workspace.loadError": "Възникна проблем при зареждането на вашите доклади.",
   "workspace.loadErrorTitle": "Неуспешно зареждане на доклади",
   "workspace.loadMoreError": "Неуспешно зареждане на още доклади",
+  "workspace.pin": "Закачи списъка с доклади",
   "workspace.renameEmpty": "Заглавието на доклада не може да бъде празно",
   "workspace.renameError": "Неуспешно преименуване на доклада",
   "workspace.renameSuccess": "Докладът е преименуван",

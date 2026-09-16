@@ -19,6 +19,8 @@ import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { documentCommentService } from '@/services/documentComment';
 
+import AnchorQuote from './anchor/AnchorQuote';
+import { useCommentAnchors } from './anchor/context';
 import DocumentCommentEditor, {
   type DocumentCommentEditorRef,
   type DocumentCommentEditorValue,
@@ -29,7 +31,9 @@ import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
 
 interface CommentCardProps {
   comment: DocumentCommentItem;
-  /** Set when a deep link targets this comment; each new token scrolls + highlights again. */
+  /** Whether a focus also scrolls the card into view. Defaults to true; a pick in the body passes false. */
+  focusScroll?: boolean;
+  /** Set when a deep link targets this comment; each new token highlights (and by default scrolls) again. */
   focusToken?: number;
   onMutated: () => void | Promise<void>;
   onReply?: () => void;
@@ -63,7 +67,16 @@ const CommentContent = memo<Pick<DocumentCommentItem, 'content' | 'editorData'>>
 CommentContent.displayName = 'DocumentCommentContent';
 
 const CommentCard = memo<CommentCardProps>(
-  ({ comment, focusToken, onMutated, onReply, onUpdate, replying, variant = 'root' }) => {
+  ({
+    comment,
+    focusScroll = true,
+    focusToken,
+    onMutated,
+    onReply,
+    onUpdate,
+    replying,
+    variant = 'root',
+  }) => {
     const { t } = useTranslation('file');
     const cardRef = useRef<HTMLDivElement>(null);
     const { text: time, title: timeTitle } = useActivityTime(comment.createdAt);
@@ -79,6 +92,9 @@ const CommentCard = memo<CommentCardProps>(
       false,
     );
     const [mutating, setMutating] = useState(false);
+    const { locateInBody, orphanedRootIds, setHoveredRootId } = useCommentAnchors();
+    const anchor = comment.selectionAnchor;
+    const anchorOrphaned = Boolean(anchor) && orphanedRootIds.has(comment.id);
     const deleted = Boolean(comment.deletedAt);
     const optimistic = isOptimisticDocumentComment(comment);
     const authorName =
@@ -94,16 +110,18 @@ const CommentCard = memo<CommentCardProps>(
     useEffect(() => {
       const node = cardRef.current;
       if (focusToken === undefined || !node) return;
-      // Honor reduced motion: jump instead of gliding; the steady highlight itself stays.
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+      if (focusScroll) {
+        // Honor reduced motion: jump instead of gliding; the steady highlight itself stays.
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+      }
       node.classList.add(styles.highlighted);
       const timer = setTimeout(() => node.classList.remove(styles.highlighted), 2400);
       return () => {
         clearTimeout(timer);
         node.classList.remove(styles.highlighted);
       };
-    }, [focusToken]);
+    }, [focusScroll, focusToken]);
 
     const handleUpdate = useCallback(async () => {
       const editorValue: DocumentCommentEditorValue = editorRef.current?.getValue() ?? {
@@ -172,6 +190,12 @@ const CommentCard = memo<CommentCardProps>(
         className={`${styles.card} ${variant === 'reply' ? styles.replyCard : ''}`}
         data-document-comment-id={comment.id}
         ref={cardRef}
+        onMouseEnter={anchor && !anchorOrphaned ? () => setHoveredRootId(comment.id) : undefined}
+        onMouseLeave={
+          anchor && !anchorOrphaned
+            ? () => setHoveredRootId((current) => (current === comment.id ? null : current))
+            : undefined
+        }
       >
         <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
           <Avatar
@@ -205,6 +229,15 @@ const CommentCard = memo<CommentCardProps>(
             </Text>
           )}
         </Flexbox>
+
+        {anchor && (
+          <AnchorQuote
+            anchor={anchor}
+            className={styles.cardAnchor}
+            orphaned={anchorOrphaned}
+            onLocate={() => locateInBody(comment.id)}
+          />
+        )}
 
         <div className={`${styles.body} ${variant === 'reply' ? styles.replyBody : ''}`}>
           {deleted ? (

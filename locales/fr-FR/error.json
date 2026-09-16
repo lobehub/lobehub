@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Cliquez pour copier",
   "unknownError.desc": "Une erreur inattendue s'est produite. Vous pouvez réessayer ou signaler sur",
   "unknownError.retry": "Réessayer",
+  "unknownError.sharedDesc": "Veuillez signaler ce problème sur",
+  "unknownError.sharedTitle": "Impossible de générer cette réponse",
   "unknownError.title": "Oups, la requête s'est assoupie",
   "unknownError.traceIdLabel": "ID de trace :",
   "unlock.addProxyUrl": "Ajouter une URL proxy OpenAI (optionnel)",

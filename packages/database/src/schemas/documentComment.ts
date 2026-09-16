@@ -70,7 +70,7 @@ export const documentComments = pgTable(
     index('document_comments_author_user_id_idx').on(t.authorUserId),
     index('document_comments_workspace_id_idx').on(t.workspaceId),
     // A reply never carries its own anchor — the thread's anchor lives on the
-    // root row, so one anchored run maps to exactly one thread badge.
+    // root row, so one anchored run maps to exactly one thread highlight.
     check(
       'document_comments_reply_has_no_anchor',
       sql`${t.parentCommentId} IS NULL OR ${t.selectionAnchor} IS NULL`,

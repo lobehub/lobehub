@@ -144,6 +144,7 @@ export interface HeterogeneousAgentRuntimeStatus {
     | 'cursor-acp'
     | 'droid-acp'
     | 'devin-acp'
+    | 'pi-rpc'
     | 'trae-acp';
 }
 

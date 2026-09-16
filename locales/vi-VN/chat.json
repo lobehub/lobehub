@@ -38,6 +38,7 @@
   "agentProfile.files_other": "{{count}} tệp",
   "agentProfile.knowledgeBases_one": "{{count}} cơ sở tri thức",
   "agentProfile.knowledgeBases_other": "{{count}} cơ sở tri thức",
+  "agentProfile.runtime": "Chạy trên {{name}}",
   "agentProfile.skills_one": "{{count}} kỹ năng",
   "agentProfile.skills_other": "{{count}} kỹ năng",
   "agentSignal.receipts.agentSignalLabel": "Tín hiệu Đại lý",

@@ -186,6 +186,11 @@ export const acceptanceCommentKeys = {
 
 // ---- document comment ---------------------------------------------------
 export const documentCommentKeys = {
+  anchors: def('documentComment:anchors', (workspaceId: string | null, documentId: string) => [
+    'documentComment:anchors',
+    workspaceId ?? '',
+    documentId,
+  ]),
   detail: def('documentComment:detail', (workspaceId: string | null, commentId: string) => [
     'documentComment:detail',
     workspaceId ?? '',
@@ -236,6 +241,7 @@ export const isDocumentCommentKeyForEvent = (
   // carry the comment id, so revalidate them on any comment event in the workspace.
   if (key[0] === documentCommentKeys.detail.root) return true;
   if (key[0] === documentCommentKeys.threads.root) return key[2] === event.documentId;
+  if (key[0] === documentCommentKeys.anchors.root) return key[2] === event.documentId;
   if (key[0] === documentCommentKeys.replies.root) {
     return !event.rootCommentId || key[2] === event.rootCommentId;
   }

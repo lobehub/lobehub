@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Klik om te kopiëren",
   "unknownError.desc": "Er is een onverwachte fout opgetreden. U kunt het opnieuw proberen of rapporteren via",
   "unknownError.retry": "Opnieuw Proberen",
+  "unknownError.sharedDesc": "Meld dit probleem op",
+  "unknownError.sharedTitle": "Kan dit antwoord niet genereren",
   "unknownError.title": "Oeps, het verzoek heeft een dutje gedaan",
   "unknownError.traceIdLabel": "Traceer-ID:",
   "unlock.addProxyUrl": "Voeg OpenAI-proxy-URL toe (optioneel)",

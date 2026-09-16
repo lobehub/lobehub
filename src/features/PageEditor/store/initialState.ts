@@ -1,9 +1,16 @@
+import type { DocumentCommentSelectionAnchor } from '@lobechat/types';
 import { type IEditor } from '@lobehub/editor';
 
 import { type EditLockHealth } from '@/features/EditLock';
 
 export type MetaSaveStatus = 'idle' | 'saving' | 'saved';
 export type RightPanelMode = 'copilot' | 'history';
+
+/** A captured body selection, tagged with the document it was taken from. */
+export interface PendingCommentAnchor {
+  anchor: DocumentCommentSelectionAnchor;
+  documentId: string;
+}
 
 export interface PublicState {
   autoSave?: boolean;
@@ -61,6 +68,18 @@ export interface State extends PublicState {
   /** Edit-session id for this open page instance. */
   lockOwnerId?: string;
   metaSaveStatus?: MetaSaveStatus;
+  /**
+   * A body selection captured by the toolbar's comment action and waiting for
+   * the composer to publish it. This is the one piece of state the editor
+   * canvas and the comment list have to share — everything else about an
+   * anchor is derived from the body's DOM inside the comment list.
+   *
+   * It carries its own `documentId` because this store outlives a document
+   * switch (the resource manager swaps `pageId` on a mounted PageEditor): a
+   * quote captured in one document must never be adopted by the next one's
+   * composer, or published against it.
+   */
+  pendingCommentAnchor?: PendingCommentAnchor;
   rightPanelMode: RightPanelMode;
 }
 
@@ -80,6 +99,7 @@ export const initialState: State = {
   lockHolderOwnerId: null,
   lockOwnerId: undefined,
   metaSaveStatus: 'idle',
+  pendingCommentAnchor: undefined,
   rightPanelMode: 'copilot',
   title: undefined,
 };

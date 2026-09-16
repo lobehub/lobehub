@@ -766,6 +766,7 @@
   "workspace.loadError": "載入報告時發生錯誤。",
   "workspace.loadErrorTitle": "無法載入報告",
   "workspace.loadMoreError": "無法載入更多報告",
+  "workspace.pin": "釘選報告清單",
   "workspace.renameEmpty": "報告標題不能為空",
   "workspace.renameError": "重新命名報告失敗",
   "workspace.renameSuccess": "報告已重新命名",
