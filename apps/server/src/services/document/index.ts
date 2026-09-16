@@ -5,7 +5,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
-import type { AgentShareFileProvenance } from '@lobechat/types';
+import { type AgentShareFileProvenance, stripAgentShareFileProvenance } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
@@ -145,6 +145,7 @@ export class DocumentService {
       slug,
       visibility,
     } = params;
+    const sanitizedMetadata = stripAgentShareFileProvenance(metadata);
 
     // Calculate character and line counts
     const totalCharCount = content?.length || 0;
@@ -177,7 +178,7 @@ export class DocumentService {
         {
           fileType,
           knowledgeBaseId,
-          metadata,
+          metadata: sanitizedMetadata,
           name: title,
           parentId,
           size: totalCharCount,
@@ -192,8 +193,8 @@ export class DocumentService {
     // Store knowledgeBaseId in metadata for folders (which don't have fileId)
     const finalMetadata =
       knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
-        ? { ...metadata, knowledgeBaseId }
-        : metadata;
+        ? { ...sanitizedMetadata, knowledgeBaseId }
+        : sanitizedMetadata;
 
     const document = await this.documentModel.create({
       content,

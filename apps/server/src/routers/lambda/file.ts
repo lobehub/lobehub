@@ -38,7 +38,13 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { createResourceContentPreview } from '@/server/utils/resourceContentPreview';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
-import { FileSource, QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
+import {
+  FileSource,
+  QueryFileListSchema,
+  stripAgentShareFileProvenance,
+  toFileSource,
+  UploadFileSchema,
+} from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
@@ -71,15 +77,6 @@ const assertAllFilesAccessible = (requestedIds: string[], files: Array<{ id: str
       message: 'One or more files were not found or are not accessible',
     });
   }
-};
-
-/** Agent-share provenance is assigned only by the share upload endpoint. */
-const withoutAgentShareProvenance = (metadata: unknown): unknown => {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
-
-  return Object.fromEntries(
-    Object.entries(metadata as Record<string, unknown>).filter(([key]) => key !== 'agentShare'),
-  );
 };
 
 const resolveAccessibleParentDocument = async (
@@ -240,7 +237,7 @@ export const fileRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const metadata = withoutAgentShareProvenance(input.metadata);
+      const metadata = stripAgentShareFileProvenance(input.metadata);
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;
       const latestUpload = await ctx.fileUploadService.findLatest(input.url);
@@ -996,7 +993,7 @@ export const fileRouter = router({
       const updates: Parameters<typeof ctx.fileModel.update>[1] = {};
 
       if (metadata !== undefined) {
-        updates.metadata = withoutAgentShareProvenance(metadata);
+        updates.metadata = stripAgentShareFileProvenance(metadata);
       }
 
       if (name !== undefined) {

@@ -260,6 +260,29 @@ describe('DocumentService', () => {
       expect(result).toEqual(mockDoc);
     });
 
+    it('should strip caller-provided agent-share provenance from document metadata', async () => {
+      mockFileModel.create.mockResolvedValue({ id: 'file-1' });
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Test',
+        editorData: {},
+        knowledgeBaseId: 'kb-1',
+        metadata: {
+          agentShare: { shareId: 'forged-share', visitorUserId: 'forged-visitor' },
+          existingKey: 'value',
+        },
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { existingKey: 'value' } }),
+        false,
+      );
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { existingKey: 'value' } }),
+      );
+    });
+
     it('should NOT create a file record when fileType is custom/folder', async () => {
       const mockDoc = { id: 'doc-1', title: 'My Folder' };
       mockDocumentModel.create.mockResolvedValue(mockDoc);
