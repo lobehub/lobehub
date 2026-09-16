@@ -274,6 +274,40 @@ describe('chatDockSlice', () => {
   });
 
   describe('openArtifact', () => {
+    it('keeps a parent task portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskDetail('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskDetailId(result.current)).toBe('task-1');
+    });
+
+    it('keeps a parent task result portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskResult('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskResultId(result.current)).toBe('task-1');
+    });
+
     it('should push Artifact view and open portal', () => {
       const { result } = renderHook(() => useChatStore());
 

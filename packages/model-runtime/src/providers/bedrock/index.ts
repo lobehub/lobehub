@@ -19,6 +19,12 @@ import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../../core/parameterResolver';
 import {
+  finalizeProviderResponse,
+  initializeProviderDiagnostics,
+  observeProviderReadableStream,
+  recordProviderError,
+} from '../../core/providerDiagnostics';
+import {
   AWSBedrockClaudeStream,
   AWSBedrockLlamaStream,
   createBedrockStream,
@@ -34,6 +40,7 @@ import type {
   GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ProviderResponseDiagnostics } from '../../types/providerDiagnostics';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
@@ -41,6 +48,7 @@ import { StreamingResponse } from '../../utils/response';
 import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefill';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
 import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
+import { recordBedrockResponseEvent } from './providerDiagnostics';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -369,16 +377,33 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       contentType: 'application/json',
       modelId: this.resolveModelId(model),
     });
+    const providerResponseDiagnostics = initializeProviderDiagnostics({
+      apiMode: 'bedrock_claude_messages',
+      diagnostics: options?.diagnostics,
+      endpoint: `bedrock:${this.region}`,
+      payload: anthropicPayload,
+      sentAt: Date.now(),
+    });
 
     try {
       // Ask Claude for a streaming chat completion given the prompt
       const res = await this.client.send(command, { abortSignal: options?.signal });
 
-      const claudeStream = createBedrockStream(res);
-
-      const [prod, debug] = claudeStream.tee();
+      if (providerResponseDiagnostics) {
+        providerResponseDiagnostics.requestId = res.$metadata?.requestId;
+        providerResponseDiagnostics.status = res.$metadata?.httpStatusCode;
+      }
+      const claudeStream = observeProviderReadableStream(
+        createBedrockStream(res),
+        providerResponseDiagnostics,
+        recordBedrockResponseEvent,
+        options?.signal,
+      );
+      let prod = claudeStream;
 
       if (process.env.DEBUG_BEDROCK_CHAT_COMPLETION === '1') {
+        const [productionStream, debug] = claudeStream.tee();
+        prod = productionStream;
         debugStream(debug).catch(console.error);
       }
 
@@ -399,6 +424,8 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       );
     } catch (e) {
       const err = e as Error & { $metadata: any };
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
       const errorType = ErrorClassifier.isExceededContextWindow(err.message)
         ? AgentRuntimeErrorType.ExceededContextWindow
         : AgentRuntimeErrorType.ProviderBizError;
@@ -421,25 +448,44 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     options?: ChatMethodOptions,
   ): Promise<Response> => {
     const { max_tokens, messages, model } = payload;
+    const llamaPayload = {
+      max_gen_len: max_tokens || 400,
+      prompt: experimental_buildLlama2Prompt(messages as any),
+    };
     const command = new InvokeModelWithResponseStreamCommand({
       accept: 'application/json',
-      body: JSON.stringify({
-        max_gen_len: max_tokens || 400,
-        prompt: experimental_buildLlama2Prompt(messages as any),
-      }),
+      body: JSON.stringify(llamaPayload),
       contentType: 'application/json',
       modelId: model,
     });
+    const providerResponseDiagnostics: ProviderResponseDiagnostics | undefined =
+      initializeProviderDiagnostics({
+        apiMode: 'bedrock_llama',
+        diagnostics: options?.diagnostics,
+        endpoint: `bedrock:${this.region}`,
+        payload: llamaPayload,
+        sentAt: Date.now(),
+      });
 
     try {
       // Ask Claude for a streaming chat completion given the prompt
-      const res = await this.client.send(command);
+      const res = await this.client.send(command, { abortSignal: options?.signal });
 
-      const stream = createBedrockStream(res);
-
-      const [prod, debug] = stream.tee();
+      if (providerResponseDiagnostics) {
+        providerResponseDiagnostics.requestId = res.$metadata?.requestId;
+        providerResponseDiagnostics.status = res.$metadata?.httpStatusCode;
+      }
+      const stream = observeProviderReadableStream(
+        createBedrockStream(res),
+        providerResponseDiagnostics,
+        recordBedrockResponseEvent,
+        options?.signal,
+      );
+      let prod = stream;
 
       if (process.env.DEBUG_BEDROCK_CHAT_COMPLETION === '1') {
+        const [productionStream, debug] = stream.tee();
+        prod = productionStream;
         debugStream(debug).catch(console.error);
       }
       // Respond with the stream
@@ -448,6 +494,8 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       });
     } catch (e) {
       const err = e as Error & { $metadata: any };
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
 
       throw AgentRuntimeError.chat({
         error: {
