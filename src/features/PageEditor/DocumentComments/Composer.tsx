@@ -283,7 +283,12 @@ const Composer = memo<ComposerProps>(
       const handlePointerDown = () => {
         const current = draftRef.current;
         const attachments = getEditorAttachmentStateFromJson(current.editorData);
-        if (current.content.trim() || attachments.hasCompletedAttachments) return;
+        if (
+          current.content.trim() ||
+          attachments.hasCompletedAttachments ||
+          attachments.hasIncompleteAttachments
+        )
+          return;
         cancelRef.current();
       };
       bodyElement.addEventListener('mousedown', handlePointerDown);

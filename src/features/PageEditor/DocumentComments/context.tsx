@@ -3,6 +3,7 @@
 import { createContext, type ReactNode, type RefObject, use, useEffect } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { usePermission } from '@/hooks/usePermission';
 
 import { usePageEditorStore } from '../store';
 import { DocumentCommentAnchorsProvider } from './anchor/context';
@@ -32,6 +33,7 @@ const DocumentCommentsStateProvider = ({
   panelAvailable,
 }: DocumentCommentsProviderProps) => {
   const workspaceId = useActiveWorkspaceId();
+  const { allowed: canCreate } = usePermission('create_content');
   const commentsPanelOpen = usePageEditorStore((s) => s.commentsPanelOpen);
   const setCommentsPanelOpen = usePageEditorStore((s) => s.setCommentsPanelOpen);
   const gutterEnabled = panelAvailable && commentsPanelOpen;
@@ -41,14 +43,18 @@ const DocumentCommentsStateProvider = ({
   // store, but the store doesn't survive a reload while the draft (in
   // localStorage) does. Republish it here, in a provider that is always
   // mounted for the document, so a reload mid-draft doesn't strand it.
+  // Gated on the current permission: `Composer` renders nothing without it,
+  // so restoring the anchor for a since-revoked member would only leave a
+  // permanently empty, undismissable pending card — the draft stays in
+  // storage, recoverable once the permission comes back.
   const pendingCommentAnchor = usePageEditorStore((s) => s.pendingCommentAnchor);
   const setPendingCommentAnchor = usePageEditorStore((s) => s.setPendingCommentAnchor);
   useEffect(() => {
-    if (pendingCommentAnchor?.documentId === documentId) return;
+    if (!canCreate || pendingCommentAnchor?.documentId === documentId) return;
     const anchor = readAnchoredDraftAnchor(workspaceId, documentId);
     if (anchor) setPendingCommentAnchor({ anchor, documentId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId]);
+  }, [documentId, canCreate]);
 
   // A selection being commented on, or a run picked in the body, is answered
   // in the comments panel: open it on demand. Keyed on tick counters, not the
