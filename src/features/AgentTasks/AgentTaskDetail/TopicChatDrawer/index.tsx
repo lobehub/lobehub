@@ -22,6 +22,7 @@ import ChatList from '@/features/Conversation/ChatList';
 import { ConversationProvider } from '@/features/Conversation/ConversationProvider';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
 import MessageItem from '@/features/Conversation/Messages';
+import { PortalContent } from '@/features/Portal/router';
 import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -40,6 +41,7 @@ import { authSelectors } from '@/store/user/selectors';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
+import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
 import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
@@ -136,6 +138,7 @@ const TopicChatDrawer = memo(() => {
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
   const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
+  const showArtifactPortal = useTopicDrawerArtifactPortal();
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
   const { allowed: canEditTask } = usePermission('create_content');
@@ -351,7 +354,14 @@ const TopicChatDrawer = memo(() => {
           task: a run opened from the home inbox may have no parent task at all,
           and gating on one renders a titled but empty panel. */}
       <Freeze frozen={!open}>
-        {open && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
+        {open &&
+          (showArtifactPortal ? (
+            <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+              <PortalContent />
+            </Flexbox>
+          ) : (
+            <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />
+          ))}
       </Freeze>
     </FloatingPanel>
   );

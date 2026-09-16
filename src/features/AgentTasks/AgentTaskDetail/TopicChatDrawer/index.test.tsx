@@ -15,8 +15,14 @@ const mocks = vi.hoisted(() => ({
     useHydrateAgentConfig: vi.fn(),
   },
   chatState: {
-    dbMessagesMap: {} as Record<string, unknown[]>,
+    clearPortalStack: vi.fn(),
+    dbMessagesMap: {
+      'topic-chat-key': [{ id: 'message-1' }],
+    } as Record<string, { id: string }[]>,
+    messagesMap: {} as Record<string, { id: string }[]>,
+    portalStack: [] as { artifact?: { id: string }; type: string }[],
     replaceMessages: vi.fn(),
+    showPortal: false,
   },
   permission: {
     allowed: true,
@@ -180,6 +186,14 @@ vi.mock('@/features/Conversation/Markdown/plugins/Task', () => ({
   TaskCardScopeProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('@/features/Portal/router', () => ({
+  PortalContent: () => (
+    <button data-testid="artifact-portal" onClick={() => mocks.chatState.clearPortalStack()}>
+      artifact portal
+    </button>
+  ),
+}));
+
 vi.mock('@/features/ShareModal', () => ({
   useShareModal: () => ({
     openShareModal: vi.fn(),
@@ -254,6 +268,13 @@ describe('TopicChatDrawer', () => {
   beforeEach(() => {
     mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
+    mocks.chatState.portalStack = [];
+    mocks.chatState.showPortal = false;
+    mocks.chatState.clearPortalStack.mockClear();
+    mocks.chatState.clearPortalStack.mockImplementation(() => {
+      mocks.chatState.portalStack = [];
+      mocks.chatState.showPortal = false;
+    });
     mocks.navigate.mockClear();
     mocks.taskState.closeTopicDrawer.mockClear();
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
@@ -386,6 +407,39 @@ describe('TopicChatDrawer', () => {
 
     expect(mocks.taskState.closeTopicDrawer).toHaveBeenCalledOnce();
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_assignee/topic-1');
+  });
+
+  it('previews an artifact inside the run drawer and returns to its conversation', () => {
+    mocks.chatState.portalStack = [{ artifact: { id: 'message-1' }, type: 'artifact' }];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('topic-panel')).toBeInTheDocument();
+    expect(view.getByTestId('artifact-portal')).toBeInTheDocument();
+    expect(view.queryByTestId('chat-list')).not.toBeInTheDocument();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+
+    fireEvent.click(view.getByTestId('artifact-portal'));
+    expect(mocks.chatState.clearPortalStack).toHaveBeenCalledOnce();
+
+    view.unmount();
+    const conversationView = render(<TopicChatDrawer />);
+
+    expect(conversationView.getByTestId('chat-list')).toBeInTheDocument();
+    expect(conversationView.queryByTestId('artifact-portal')).not.toBeInTheDocument();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+  });
+
+  it('does not take over an artifact opened by another conversation', () => {
+    mocks.chatState.portalStack = [{ artifact: { id: 'another-message' }, type: 'artifact' }];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('chat-list')).toBeInTheDocument();
+    expect(view.queryByTestId('artifact-portal')).not.toBeInTheDocument();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
   });
 
   it('uses a resizable bottom-right floating panel', () => {
