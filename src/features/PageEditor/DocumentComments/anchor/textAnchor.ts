@@ -352,21 +352,18 @@ export const locateAnchor = (
 };
 
 /**
- * Read the reader's current selection as an anchor.
+ * Read a DOM range inside the body as an anchor.
  *
  * Whitespace at either edge is dropped before the quote is taken so a sloppy
  * double-click ("word ") doesn't bake a trailing space into the text every
- * future re-location has to reproduce. Returns `null` for a collapsed
- * selection, one outside the body, or one that is whitespace only.
+ * future re-location has to reproduce. Returns `null` for a range outside the
+ * body or one that is whitespace only.
  */
-export const captureSelectionAnchor = (
+export const captureRangeAnchor = (
   root: HTMLElement | null | undefined,
+  range: Range | null | undefined,
 ): DocumentCommentSelectionAnchor | null => {
-  if (!root) return null;
-  const selection = root.ownerDocument.defaultView?.getSelection();
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
-
-  const range = selection.getRangeAt(0);
+  if (!root || !range) return null;
   if (!root.contains(range.commonAncestorContainer)) return null;
 
   const flat = flattenEditorText(root);
@@ -405,6 +402,16 @@ export const captureSelectionAnchor = (
     start,
     suffix: flat.text.slice(end, suffixEnd),
   };
+};
+
+/** Read the reader's current selection as an anchor; `null` when it is collapsed. */
+export const captureSelectionAnchor = (
+  root: HTMLElement | null | undefined,
+): DocumentCommentSelectionAnchor | null => {
+  if (!root) return null;
+  const selection = root.ownerDocument.defaultView?.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+  return captureRangeAnchor(root, selection.getRangeAt(0));
 };
 
 /** Which flattened-text offset sits under a viewport point, or `null` when it is outside the body. */

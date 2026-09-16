@@ -1,385 +1,235 @@
 'use client';
 
-import type { DocumentCommentAnchorItem } from '@lobechat/types';
 import { Center, Flexbox } from '@lobehub/ui';
-import { Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { Button, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
-import { documentCommentService } from '@/services/documentComment';
 
-import { DocumentCommentAnchorsProvider } from './anchor/context';
-import DocumentCommentHighlightStyle from './anchor/HighlightStyle';
-import { useDocumentCommentAnchors } from './anchor/useDocumentCommentAnchors';
 import Composer from './Composer';
-import {
-  useDocumentCommentAnchorList,
-  useDocumentCommentDetail,
-  useDocumentCommentSummary,
-  useDocumentCommentThreads,
-  useOptimisticDocumentComment,
-} from './hooks';
-import type { DocumentCommentSubmitInput, DocumentCommentUpdateHandler } from './optimistic';
-import {
-  appendOptimisticThread,
-  removeOptimisticThread,
-  replaceOptimisticThread,
-  replaceThreadComment,
-  updateThreadReplyCount,
-} from './optimistic';
+import { useDocumentComments } from './context';
 import { styles } from './styles';
 import Thread from './Thread';
-import {
-  type DocumentCommentFocusMissReason,
-  useDocumentCommentDeepLink,
-} from './useDocumentCommentDeepLink';
+import type { DocumentCommentFocus } from './useDocumentCommentDeepLink';
+import type { DocumentCommentsState } from './useDocumentCommentsState';
 
-const DocumentComments = memo<{ documentId: string }>(({ documentId }) => {
+/**
+ * An anchored thread mounted in the gutter has two copies on screen at once;
+ * only the gutter one sits beside its run, so a deep link scrolls through it
+ * alone — the flat copy below the body just highlights, or its own scroll
+ * would race the gutter's and could win, throwing the reader past a target
+ * that was already in view beside the text.
+ */
+export const resolveListThreadFocus = (
+  focus: DocumentCommentFocus | undefined,
+  gutterShownIds: ReadonlySet<string>,
+  rootId: string,
+): DocumentCommentFocus | undefined => {
+  if (focus?.rootCommentId !== rootId) return undefined;
+  return gutterShownIds.has(rootId) ? { ...focus, scroll: false } : focus;
+};
+
+const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) => {
   const { t } = useTranslation('file');
-  const workspaceId = useActiveWorkspaceId();
-  const summary = useDocumentCommentSummary(workspaceId ? documentId : undefined);
-  const threads = useDocumentCommentThreads(workspaceId ? documentId : undefined);
-  const anchorList = useDocumentCommentAnchorList(workspaceId ? documentId : undefined);
-  const createOptimistic = useOptimisticDocumentComment();
-  const { clearFocus, focus, focusRoot, focusThread } = useDocumentCommentDeepLink(documentId);
-  const reloadSummary = summary.mutate;
-  const reloadThreads = threads.reload;
-  const mutateThreads = threads.mutate;
-  const mutateAnchors = anchorList.mutate;
-  const refresh = useCallback(async () => {
-    await Promise.all([reloadThreads(), reloadSummary(), mutateAnchors()]);
-  }, [mutateAnchors, reloadSummary, reloadThreads]);
-  const updateSummaryTotal = useCallback(
-    (delta: number) =>
-      reloadSummary(
-        (current) =>
-          current ? { ...current, total: Math.max(0, current.total + delta) } : current,
-        { revalidate: false },
-      ),
-    [reloadSummary],
-  );
-  const updateReplyCount = useCallback(
-    (rootCommentId: string, delta: number) =>
-      mutateThreads((pages) => updateThreadReplyCount(pages, rootCommentId, delta), {
-        revalidate: false,
-      }),
-    [mutateThreads],
-  );
-  const handleCreate = useCallback(
-    async ({ clientId, content, editorData, selectionAnchor }: DocumentCommentSubmitInput) => {
-      const optimisticComment = createOptimistic({
-        clientId,
-        content,
-        documentId,
-        editorData,
-        selectionAnchor,
-      });
-      await Promise.all([
-        mutateThreads((pages) => appendOptimisticThread(pages, optimisticComment), {
-          revalidate: false,
-        }),
-        updateSummaryTotal(1),
-      ]);
-
-      let created: Awaited<ReturnType<typeof documentCommentService.create>>;
-      try {
-        created = await documentCommentService.create({
-          clientId,
-          content,
-          documentId,
-          editorData,
-          selectionAnchor,
-        });
-        if (!created) throw new Error('Document comment creation returned no result');
-      } catch (error) {
-        await Promise.all([
-          mutateThreads((pages) => removeOptimisticThread(pages, clientId), {
-            revalidate: false,
-          }),
-          updateSummaryTotal(-1),
-        ]);
-        throw error;
-      }
-
-      try {
-        await mutateThreads((pages) => replaceOptimisticThread(pages, created.comment), {
-          revalidate: false,
-        });
-      } catch (error) {
-        console.error('Failed to reconcile the created document comment', error);
-        void reloadThreads();
-      }
-      if (created.isDuplicate) void reloadSummary();
-      // The body paints from the document-wide anchor list, so the new root
-      // joins it here rather than waiting for the next revalidation.
-      const createdAnchor = created.comment.selectionAnchor;
-      if (createdAnchor) {
-        void mutateAnchors(
-          (current) =>
-            current && !current.items.some(({ id }) => id === created.comment.id)
-              ? {
-                  items: [
-                    ...current.items,
-                    { id: created.comment.id, selectionAnchor: createdAnchor },
-                  ],
-                }
-              : current,
-          { revalidate: false },
-        );
-      }
-    },
-    [
-      createOptimistic,
-      documentId,
-      mutateAnchors,
-      mutateThreads,
-      reloadSummary,
-      reloadThreads,
-      updateSummaryTotal,
-    ],
-  );
-  const handleUpdate: DocumentCommentUpdateHandler = useCallback(
-    async (comment, value) => {
-      const optimisticComment = { ...comment, ...value, updatedAt: new Date() };
-      await mutateThreads((pages) => replaceThreadComment(pages, optimisticComment), {
-        revalidate: false,
-      });
-
-      let updated: Awaited<ReturnType<typeof documentCommentService.update>>;
-      try {
-        updated = await documentCommentService.update({ ...value, id: comment.id });
-        if (!updated) throw new Error('Document comment update returned no result');
-      } catch (error) {
-        await mutateThreads((pages) => replaceThreadComment(pages, comment), {
-          revalidate: false,
-        });
-        throw error;
-      }
-
-      try {
-        await mutateThreads((pages) => replaceThreadComment(pages, updated), {
-          revalidate: false,
-        });
-      } catch (error) {
-        console.error('Failed to reconcile the updated document comment', error);
-        void reloadThreads();
-      }
-    },
-    [mutateThreads, reloadThreads],
-  );
-  const isHeaderLoading = threads.isLoadingInitial || (summary.isLoading && !summary.data);
-
-  // Deep-link landing. Lists are oldest-first and a notification usually points at the
-  // newest comment, so the target root is fetched by id and pinned above the list until it
-  // shows up on a loaded page. NOT_FOUND, a non-root id, or a root from another document
-  // means the thread is gone; any other lookup failure is reported, never swallowed.
-  const focusRootCommentId = focus?.rootCommentId;
-  const hasFocusedThread =
-    Boolean(focusRootCommentId) && threads.items.some(({ root }) => root.id === focusRootCommentId);
-  const focusedRoot = useDocumentCommentDetail(hasFocusedThread ? undefined : focusRootCommentId);
-  const focusedRootData = focusedRoot.data;
-  const isFocusedRootUsable =
-    Boolean(focusedRootData) &&
-    !focusedRootData?.parentCommentId &&
-    focusedRootData?.documentId === documentId;
-  const pinnedThread = useMemo(
-    () =>
-      focus && !hasFocusedThread && focusedRootData && isFocusedRootUsable
-        ? { replyCount: focusedRootData.replyCount, root: focusedRootData }
-        : undefined,
-    [focus, focusedRootData, hasFocusedThread, isFocusedRootUsable],
-  );
-  // Highlights come from the document-wide anchor list so every anchored run
-  // is discoverable from the body, however far down the list its card sits.
-  // Loaded pages and the pinned thread are folded in on top: an optimistic
-  // root has no server row yet, and a pinned root may predate the last fetch.
-  const anchorItems = useMemo(() => {
-    const byId = new Map<string, DocumentCommentAnchorItem>();
-    for (const { id, selectionAnchor } of anchorList.data?.items ?? []) {
-      byId.set(id, { id, selectionAnchor });
-    }
-    const loaded = pinnedThread ? [pinnedThread, ...threads.items] : threads.items;
-    for (const { root } of loaded) {
-      if (root.selectionAnchor && !byId.has(root.id)) {
-        byId.set(root.id, { id: root.id, selectionAnchor: root.selectionAnchor });
-      }
-    }
-    return [...byId.values()];
-  }, [anchorList.data, pinnedThread, threads.items]);
-  const anchors = useDocumentCommentAnchors(anchorItems, { onPickUnloaded: focusThread });
-  const isFocusedRootMissing =
-    Boolean(focusRootCommentId) &&
-    (focusedRoot.isNotFound || (Boolean(focusedRootData) && !isFocusedRootUsable));
-  const isFocusedRootFailed =
-    Boolean(focusRootCommentId) && Boolean(focusedRoot.error) && !focusedRoot.isNotFound;
-  const handleFocusMissing = useCallback(() => {
-    toast.info(t('pageEditor.comments.deepLinkMissing'));
-    clearFocus();
-  }, [clearFocus, t]);
-  const handleFocusFailed = useCallback(() => {
-    toast.error(t('pageEditor.comments.deepLinkLoadFailed'));
-    clearFocus();
-  }, [clearFocus, t]);
-  // The linked reply is gone (or failed to load) but its thread is not: keep the thread and
-  // land on the root.
-  const handleReplyFocusMissing = useCallback(
-    (reason: DocumentCommentFocusMissReason) => {
-      if (reason === 'missing') toast.info(t('pageEditor.comments.deepLinkMissing'));
-      else toast.error(t('pageEditor.comments.deepLinkLoadFailed'));
-      focusRoot();
-    },
-    [focusRoot, t],
-  );
-  useEffect(() => {
-    if (isFocusedRootMissing) handleFocusMissing();
-    else if (isFocusedRootFailed) handleFocusFailed();
-  }, [handleFocusFailed, handleFocusMissing, isFocusedRootFailed, isFocusedRootMissing]);
-  // The pinned root lives in its own detail entry, so the list handlers (which only patch
-  // the paginated caches) are mirrored into it; a post-delete 404 flows through
-  // `isNotFound` and is not a refresh failure.
-  const mutateFocusedRoot = focusedRoot.mutate;
-  const refreshPinned = useCallback(async () => {
-    await Promise.all([mutateFocusedRoot().catch(() => undefined), refresh()]);
-  }, [mutateFocusedRoot, refresh]);
-  const updatePinnedReplyCount = useCallback(
-    async (rootCommentId: string, delta: number) => {
-      await Promise.all([
-        updateReplyCount(rootCommentId, delta),
-        mutateFocusedRoot(
-          (current) =>
-            current && current.id === rootCommentId
-              ? { ...current, replyCount: Math.max(0, current.replyCount + delta) }
-              : current,
-          { revalidate: false },
-        ),
-      ]);
-    },
-    [mutateFocusedRoot, updateReplyCount],
-  );
-  const handlePinnedRootUpdate: DocumentCommentUpdateHandler = useCallback(
-    async (comment, value) => {
-      await handleUpdate(comment, value);
-      await mutateFocusedRoot(
-        (current) =>
-          current && current.id === comment.id
-            ? { ...current, ...value, updatedAt: new Date() }
-            : current,
-        { revalidate: false },
-      );
-    },
-    [handleUpdate, mutateFocusedRoot],
-  );
-
-  if (!workspaceId) return null;
+  const {
+    anchoredError,
+    documentId,
+    documentThreads,
+    focus,
+    gutterThreads,
+    handleCreate,
+    handlePinnedRootUpdate,
+    handleReplyFocusMissing,
+    handleUpdate,
+    isAnchoredInitialError,
+    isAnchoredLoading,
+    isAnchoredRetrying,
+    listThreads,
+    panelAvailable,
+    pinnedThreadInGutter,
+    pinnedThreadInList,
+    refresh,
+    refreshPinned,
+    reloadAnchored,
+    summary,
+    updatePinnedReplyCount,
+    updateReplyCount,
+    updateSummaryTotal,
+  } = state;
+  const isLoadingInitial = documentThreads.isLoadingInitial || isAnchoredLoading;
+  const isHeaderLoading = isLoadingInitial || (summary.isLoading && !summary.data);
+  // The document and anchored queries are independent; one failing or still
+  // loading must not hide comments the other already fetched successfully.
+  const hasAnyItems = listThreads.length > 0 || Boolean(pinnedThreadInList);
+  // An anchored thread also mounted in the gutter has two copies on screen at
+  // once; only that copy sits beside its run, so a deep link scrolls through
+  // it alone — this one just highlights, or the flat copy's own scroll would
+  // race it down to the list below the body.
+  const gutterShownIds = useMemo(() => {
+    const ids = new Set(gutterThreads.map(({ root }) => root.id));
+    if (pinnedThreadInGutter) ids.add(pinnedThreadInGutter.root.id);
+    return ids;
+  }, [gutterThreads, pinnedThreadInGutter]);
 
   return (
-    <DocumentCommentAnchorsProvider value={anchors}>
-      <DocumentCommentHighlightStyle />
-      <Flexbox
-        data-document-comments
-        className={styles.section}
-        gap={24}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-          {isHeaderLoading ? (
-            <>
-              <Skeleton height={28} width={48} />
-              <Skeleton height={20} width={16} />
-            </>
-          ) : (
-            <>
-              <Text as={'h2'} fontSize={20} weight={600}>
-                {t('pageEditor.comments.title')}
+    <Flexbox
+      data-document-comments
+      className={styles.section}
+      gap={24}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+        {isHeaderLoading ? (
+          <>
+            <Skeleton height={28} width={48} />
+            <Skeleton height={20} width={16} />
+          </>
+        ) : (
+          <>
+            <Text as={'h2'} fontSize={20} weight={600}>
+              {t('pageEditor.comments.title')}
+            </Text>
+            {summary.data && (
+              <Text className={styles.meta} fontSize={14}>
+                {summary.data.total}
               </Text>
-              {summary.data && (
-                <Text className={styles.meta} fontSize={14}>
-                  {summary.data.total}
-                </Text>
-              )}
-            </>
-          )}
-        </Flexbox>
-
-        {/* The pinned deep-link thread renders on its own, so a pending or failed list
-          request never hides a target that was already fetched. */}
-        {threads.isInitialError ||
-        threads.isLoadingInitial ||
-        threads.items.length > 0 ||
-        pinnedThread ? (
-          <Flexbox className={styles.threadList}>
-            {pinnedThread && (
-              <Thread
-                documentId={documentId}
-                focus={focus}
-                key={pinnedThread.root.id}
-                replyCount={pinnedThread.replyCount}
-                root={pinnedThread.root}
-                onFocusMissing={handleReplyFocusMissing}
-                onMutated={refreshPinned}
-                onReplyCountChange={updatePinnedReplyCount}
-                onRootUpdate={handlePinnedRootUpdate}
-                onSummaryChange={updateSummaryTotal}
-              />
             )}
-            {threads.isInitialError ? (
-              <AsyncError
-                error={threads.error}
-                variant={'block'}
-                onRetry={() => void threads.reload()}
-              />
-            ) : threads.isLoadingInitial ? (
-              <SurfaceSkeleton header={false} variant={'list'} />
-            ) : (
-              threads.items.map(({ replyCount, root }) => (
-                <Thread
-                  documentId={documentId}
-                  focus={focus?.rootCommentId === root.id ? focus : undefined}
-                  key={root.id}
-                  replyCount={replyCount}
-                  root={root}
-                  onFocusMissing={handleReplyFocusMissing}
-                  onMutated={refresh}
-                  onReplyCountChange={updateReplyCount}
-                  onRootUpdate={handleUpdate}
-                  onSummaryChange={updateSummaryTotal}
-                />
-              ))
-            )}
-            {threads.error && !threads.isInitialError ? (
-              <AsyncError
-                error={threads.error}
-                retrying={threads.isRetrying}
-                variant={'inline'}
-                onRetry={() => void threads.reload()}
-              />
-            ) : (
-              threads.hasMore && (
-                <Center paddingBlock={12}>
-                  <Button
-                    loading={threads.isLoadingMore}
-                    type={'text'}
-                    onClick={() => void threads.loadMore()}
-                  >
-                    {t('pageEditor.comments.loadMore')}
-                  </Button>
-                </Center>
-              )
-            )}
-          </Flexbox>
-        ) : null}
-
-        {/* While the thread list is still skeleton-loading the composer would
-          float against placeholder content — reveal it with the real list. */}
-        {!threads.isLoadingInitial && (
-          <Composer documentId={documentId} key={`root:${documentId}`} onSubmit={handleCreate} />
+          </>
         )}
       </Flexbox>
-    </DocumentCommentAnchorsProvider>
+
+      {/* The pinned deep-link thread renders on its own, so a pending or failed list
+          request never hides a target that was already fetched. */}
+      {documentThreads.isInitialError ||
+      isAnchoredInitialError ||
+      isLoadingInitial ||
+      listThreads.length > 0 ||
+      pinnedThreadInList ? (
+        <Flexbox className={styles.threadList}>
+          {pinnedThreadInList && (
+            <Thread
+              documentId={documentId}
+              focus={resolveListThreadFocus(focus, gutterShownIds, pinnedThreadInList.root.id)}
+              key={pinnedThreadInList.root.id}
+              replyCount={pinnedThreadInList.replyCount}
+              root={pinnedThreadInList.root}
+              onFocusMissing={handleReplyFocusMissing}
+              onMutated={refreshPinned}
+              onReplyCountChange={updatePinnedReplyCount}
+              onRootUpdate={handlePinnedRootUpdate}
+              onSummaryChange={updateSummaryTotal}
+            />
+          )}
+          {hasAnyItems ? (
+            listThreads.map(({ replyCount, root }) => (
+              <Thread
+                documentId={documentId}
+                focus={resolveListThreadFocus(focus, gutterShownIds, root.id)}
+                key={root.id}
+                replyCount={replyCount}
+                root={root}
+                onFocusMissing={handleReplyFocusMissing}
+                onMutated={refresh}
+                onReplyCountChange={updateReplyCount}
+                onRootUpdate={handleUpdate}
+                onSummaryChange={updateSummaryTotal}
+              />
+            ))
+          ) : documentThreads.isInitialError ? (
+            <AsyncError
+              error={documentThreads.error}
+              variant={'block'}
+              onRetry={() => void documentThreads.reload()}
+            />
+          ) : isAnchoredInitialError ? (
+            <AsyncError
+              error={anchoredError}
+              variant={'block'}
+              onRetry={() => void reloadAnchored()}
+            />
+          ) : (
+            isLoadingInitial && <SurfaceSkeleton header={false} variant={'list'} />
+          )}
+          {/* Shown alongside whichever branch rendered above: a query that
+              failed its initial load must not hide comments the other query
+              already fetched successfully. */}
+          {hasAnyItems && documentThreads.isInitialError && (
+            <AsyncError
+              error={documentThreads.error}
+              variant={'inline'}
+              onRetry={() => void documentThreads.reload()}
+            />
+          )}
+          {hasAnyItems && isAnchoredInitialError && (
+            <AsyncError
+              error={anchoredError}
+              retrying={isAnchoredRetrying}
+              variant={'inline'}
+              onRetry={() => void reloadAnchored()}
+            />
+          )}
+          {documentThreads.error && !documentThreads.isInitialError ? (
+            <AsyncError
+              error={documentThreads.error}
+              retrying={documentThreads.isRetrying}
+              variant={'inline'}
+              onRetry={() => void documentThreads.reload()}
+            />
+          ) : (
+            documentThreads.hasMore && (
+              <Center paddingBlock={12}>
+                <Button
+                  loading={documentThreads.isLoadingMore}
+                  type={'text'}
+                  onClick={() => void documentThreads.loadMore()}
+                >
+                  {t('pageEditor.comments.loadMore')}
+                </Button>
+              </Center>
+            )
+          )}
+          {/* Independent of the document query's own error/load-more slot above:
+              an anchored-only failure must not hide document pagination. */}
+          {anchoredError && !isAnchoredInitialError && (
+            <AsyncError
+              error={anchoredError}
+              retrying={isAnchoredRetrying}
+              variant={'inline'}
+              onRetry={() => void reloadAnchored()}
+            />
+          )}
+        </Flexbox>
+      ) : null}
+
+      {/* While the thread list is still skeleton-loading the composer would
+          float against placeholder content — reveal it with the real list. */}
+      {!isLoadingInitial && (
+        <Composer
+          // With a comments panel around, a selection opens the panel and is
+          // written there; only an editor without one writes it down here.
+          anchorMode={panelAvailable ? 'none' : 'inline'}
+          documentId={documentId}
+          key={`root:${documentId}`}
+          onSubmit={handleCreate}
+        />
+      )}
+    </Flexbox>
   );
+});
+
+DocumentCommentList.displayName = 'DocumentCommentList';
+
+/**
+ * The comment list below the body: every thread of the document, anchored
+ * ones with their quote. Anchored threads with a live run additionally
+ * render beside the text in `DocumentCommentsPanel` while it is open.
+ */
+const DocumentComments = memo(() => {
+  const state = useDocumentComments();
+  if (!state) return null;
+  return <DocumentCommentList state={state} />;
 });
 
 DocumentComments.displayName = 'DocumentComments';

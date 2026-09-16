@@ -138,6 +138,17 @@ describe('DocumentCommentModel', () => {
     ]);
     expect(await authorModel.listAnchors(secondDocumentId)).toEqual([]);
     expect(await outsiderModel.listAnchors(documentId)).toEqual([]);
+
+    // Each surface pages its own subset: the gutter takes anchored roots, the
+    // list below the body takes document-level ones; no filter keeps them mixed.
+    const anchoredThreads = await authorModel.listThreads({ anchored: true, documentId });
+    expect(anchoredThreads.items.map(({ root: { clientId } }) => clientId)).toEqual([
+      'anchored-root',
+    ]);
+    const documentThreads = await authorModel.listThreads({ anchored: false, documentId });
+    expect(documentThreads.items.map(({ root: { clientId } }) => clientId)).toEqual(['plain-root']);
+    const allThreads = await authorModel.listThreads({ documentId });
+    expect(allThreads.items).toHaveLength(2);
   });
 
   it('leaves a comment made without a selection unanchored', async () => {

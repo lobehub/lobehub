@@ -47,6 +47,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     const editor = usePageEditorStore((s) => s.editor);
     const initMeta = usePageEditorStore((s) => s.initMeta);
+    const setDocumentId = usePageEditorStore((s) => s.setDocumentId);
     const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
     // Workspace pages are view-first; resolve once here so the lock + gating read
     // a single source of truth. Private-visibility pages are creator-only —
@@ -75,7 +76,12 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     usePageDraft();
 
     // Update store with props
-    useStoreUpdater('documentId', pageId);
+    // `useStoreUpdater` writes the raw field; `documentId` goes through its own
+    // action instead, so a panel left open on the previous document doesn't
+    // carry over to this one (see setDocumentId).
+    useEffect(() => {
+      if (typeof pageId !== 'undefined') setDocumentId(pageId);
+    }, [pageId, setDocumentId]);
     useStoreUpdater('isWorkspacePage', isWorkspacePage);
     useStoreUpdater('isWorkspaceScopedPage', isWorkspaceScopedPage);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);
