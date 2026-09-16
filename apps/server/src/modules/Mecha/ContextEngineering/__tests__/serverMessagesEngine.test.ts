@@ -188,6 +188,46 @@ describe('serverMessagesEngine', () => {
       expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
     });
 
+    it('renders the cloud-sandbox workspace placeholders to the ephemeral wording unless the builder supplies them', async () => {
+      const messages = createBasicMessages();
+      const systemRole =
+        '<env>{{sandbox_workspace}}</env><session>{{sandbox_session_files}}</session>';
+
+      // No additionalVariables — the run got no persistent workspace: the
+      // original ephemeral-session wording must render, never the literal tokens.
+      const fallback = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(fallback[0].content).not.toContain('{{sandbox_workspace}}');
+      expect(fallback[0].content).not.toContain('{{sandbox_session_files}}');
+      expect(fallback[0].content).toContain(
+        'Files created here are temporary and session-specific',
+      );
+      expect(fallback[0].content).toContain('Files from previous sessions may not persist');
+
+      // The builder's persistent-workspace guidance overrides both fallbacks.
+      const resolved = await serverMessagesEngine({
+        additionalVariables: {
+          sandbox_session_files: '- Files in your working directory persist',
+          sandbox_workspace: '- Your working directory is a persistent workspace',
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(resolved[0].content).toContain(
+        '<env>- Your working directory is a persistent workspace</env>',
+      );
+      expect(resolved[0].content).toContain(
+        '<session>- Files in your working directory persist</session>',
+      );
+      expect(resolved[0].content).not.toContain('temporary and session-specific');
+    });
+
     it('renders {{workingDirectory}} to a fallback instead of leaking the literal ', async () => {
       const messages = createBasicMessages();
       const systemRole = '<working-directory>{{workingDirectory}}</working-directory>';

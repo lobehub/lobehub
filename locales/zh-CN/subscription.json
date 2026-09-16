@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "升级后连接微信",
   "plansModal.modelAccess.desc": "该模型为付费方案专享，升级即可使用全部模型。",
   "plansModal.modelAccess.title": "解锁全部模型",
+  "plansModal.persistentSandbox.desc": "云端沙箱里写下的文件会在会话结束后丢弃。升级后可获得持久化工作目录，跨会话保留、并在各个话题间共享。",
+  "plansModal.persistentSandbox.title": "保留沙箱中的文件",
   "qa.desc": "如果您的问题未被解答，请查看 <1>产品文档</1> 获取更多常见问题，或联系我们。",
   "qa.detail": "查看详情",
   "qa.list.credit.a": "积分是 {{cloud}} 用于衡量 AI 模型调用用量的指标。不同模型消耗的积分不同。",

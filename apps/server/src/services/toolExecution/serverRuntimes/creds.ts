@@ -5,6 +5,7 @@ import debug from 'debug';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
+import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
 import { type ServerRuntimeRegistration } from './types';
 
@@ -230,9 +231,26 @@ export const credsRuntime: ServerRuntimeRegistration = {
       }
     }
 
+    // Credentials are injected INTO a sandbox, so this call has to agree with
+    // the cloud-sandbox and skills runtimes about which one. A token without the
+    // entitlement routes to the ephemeral runtime, and the injection lands in a
+    // different sandbox than the commands that need it — or tears down the live
+    // one on the way.
+    const sandbox = await resolveSandboxSessionConfig({
+      isShareVisitorRun: Boolean(context.agentShareVisitor),
+      serverDB: context.serverDB,
+      topicId: context.topicId,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    });
+
     const marketService = new MarketService({
       accessToken,
-      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+      userInfo: {
+        sandboxWorkspace: sandbox.claim,
+        userId: context.userId,
+        workspaceId: context.workspaceId,
+      },
     });
 
     const credsService = new ServerCredsService(

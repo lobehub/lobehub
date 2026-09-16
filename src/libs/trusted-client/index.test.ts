@@ -51,4 +51,42 @@ describe('generateTrustedClientToken', () => {
     );
     expect(createTrustedClientToken).toHaveBeenCalledWith(expect.anything(), 'client-secret');
   });
+
+  // The claim is what the execution plane routes a persistent sandbox on, so it
+  // has to be covered by the signature — a caller must not be able to supply it
+  // alongside the token.
+  it('signs the sandbox workspace claim into the payload', () => {
+    generateTrustedClientToken({
+      email: 'a@b.com',
+      sandboxWorkspace: { key: 'ws-user_real', quotaBytes: 2048 },
+      userId: 'user_real',
+    });
+
+    expect(createTrustedClientToken).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxWorkspace: { key: 'ws-user_real', quotaBytes: 2048 } }),
+      'client-secret',
+    );
+  });
+
+  // The published SDK builder has no parameter for it, so the field is attached
+  // afterwards; passing it in would be silently dropped.
+  it('does not route the claim through the SDK payload builder', () => {
+    generateTrustedClientToken({
+      sandboxWorkspace: { key: 'ws-user_real', quotaBytes: 2048 },
+      userId: 'user_real',
+    });
+
+    expect(buildTrustedClientPayload).toHaveBeenCalledWith(
+      expect.not.objectContaining({ sandboxWorkspace: expect.anything() }),
+    );
+  });
+
+  // Free tier is the overwhelming majority of tokens; leaving the key out keeps
+  // them exactly as they are today rather than carrying an explicit null.
+  it('omits the claim entirely when there is no entitlement', () => {
+    generateTrustedClientToken({ sandboxWorkspace: null, userId: 'user_real' });
+
+    const [payload] = vi.mocked(createTrustedClientToken).mock.calls[0];
+    expect(payload).not.toHaveProperty('sandboxWorkspace');
+  });
 });

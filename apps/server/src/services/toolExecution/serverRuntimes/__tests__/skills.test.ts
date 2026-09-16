@@ -1386,7 +1386,7 @@ describe('skillsRuntime', () => {
 
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
       }),
     );
 
@@ -1399,7 +1399,7 @@ describe('skillsRuntime', () => {
 
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: undefined },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: undefined }),
       }),
     );
   });
