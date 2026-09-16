@@ -1,7 +1,7 @@
 # Worked example — Agent Profile (助理档案) audit
 
 A real run of this skill against the **agent profile / character editor**
-(`/agent/:aid/profile` → `src/routes/(main)/agent/profile`), 2026-07 (LOBE-11215). Use it
+(`/agent/:aid/profile` → `src/routes/(main)/agent/profile`), 2026-07. Use it
 as a **template for the output shape**, not as current-state truth (the code moves;
 re-verify before citing). Surface = the nav header (breadcrumb + `AutoSaveHint` + status
 tags + More menu) → the profile editor (avatar / name / background, model + tool config, or

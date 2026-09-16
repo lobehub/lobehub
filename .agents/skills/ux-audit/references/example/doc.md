@@ -1,8 +1,8 @@
 # Worked example — Agent Document View (助理文档视图) audit
 
 A real run of this skill against the **standalone agent-document view**
-(`/agent/:aid/docs/:docId` → `src/routes/(main)/agent/docs`), 2026-07 (LOBE-11214, under the
-Chat UX Audit surface LOBE-11145). Use it as a **template for the output shape**, not as
+(`/agent/:aid/docs/:docId` → `src/routes/(main)/agent/docs`), 2026-07, under the
+Chat UX Audit surface. Use it as a **template for the output shape**, not as
 current-state truth (the code moves; re-verify before citing). Surface = the nav header
 (agent→doc breadcrumb + `AutoSaveHint` + Share + More menu) → the shared `PageEditor` canvas
 (title / meta bar / lock banners / rich-text editor) → the right-panel documents/skills

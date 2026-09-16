@@ -77,7 +77,7 @@ The whole scan returns `{attempted, failed}` and the completion backstop (`Compl
 
 ## Key decisions (from the Work PRs)
 
-- **Only successful create/edit results become Works** (LOBE-10967). Read-only queries, comments, merges/closes, and branch/repo operations are excluded — `gh pr view` printing an entity URL must NOT register.
+- **Only successful create/edit results become Works**. Read-only queries, comments, merges/closes, and branch/repo operations are excluded — `gh pr view` printing an entity URL must NOT register.
 - **`owner/repo#number` is the canonical github identity**, not node\_id: the gh CLI surface never returns node\_id, and the same entity touched via REST tools and CLI must land on one Work row.
 - **stdout is the source of truth for identity** on the CLI path (`gh … create/edit` prints the entity URL); the command's edit target is the fallback. The LAST gh create/edit segment of a chained command owns the trailing URL.
 - **Persisted URLs are http(s)-allowlisted** (`sanitizeExternalUrl`): gh stdout / tool results are member-controlled and the URL reaches `shell.openExternal` on desktop.

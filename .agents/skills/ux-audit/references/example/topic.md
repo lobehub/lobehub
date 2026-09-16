@@ -3,7 +3,7 @@
 A real run of this skill against the desktop **topic view** — the agent chat scoped to a
 selected topic: route `/agent/:aid/:topicId` → `src/routes/(main)/agent/index.tsx`
 (`Conversation` + `ChatHydration`) inside `(chat)/_layout` (ChatHeader + Portal +
-AgentWorkingSidebar). Linear: LOBE-11213 (under LOBE-11145). 2026-07. Use as a template for
+AgentWorkingSidebar). 2026-07. Use as a template for
 the **output shape**, not current-state truth (the code moves; re-verify before citing).
 
 **Layers run:** L1 (static / code) ✅ — everything below. L2 (visual) / L3 (dynamic + CLS)
@@ -87,7 +87,7 @@ which is a **success-only / data-presence-disguised init flag**:
 ⇒ When `messageService.getMessages()` errors (500 / network / auth) for a selected topic,
 `messagesInit` never flips → **`SkeletonList` renders forever**, no reason, no **Reload/Retry**
 — on the product's **highest-traffic surface**. Textbook §4.2 success-only-init-flag trap
-(same shape already cited for Task list / Eval / Memory / generation). → **LOBE-11222**.
+(same shape already cited for Task list / Eval / Memory / generation).
 
 **② Send-error Alert has no in-place retry — ux Act §3.1 / Feedback §4.2** 🟡 The failed-send
 `Alert` (§2) is closable but carries **no Retry / resend**; the editor was already cleared on

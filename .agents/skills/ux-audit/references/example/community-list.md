@@ -1,4 +1,4 @@
-# Worked example — Discover / Community **list surfaces** audit (Round 1 of LOBE-11148)
+# Worked example — Discover / Community **list surfaces** audit (Round 1)
 
 A real run of this skill against the Desktop **Discover / Community** area's **8 list
 surfaces**, 2026-07 — `home · agent · model · provider · skill · mcp · workspace ·
