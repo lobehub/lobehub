@@ -12,10 +12,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
-const { mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(() => ({
-  mockResolveHeteroSpawnCommand: vi.fn(),
-  mockSpawnAgent: vi.fn(),
-}));
+const { mockCreatePiRpcAgentHandle, mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(
+  () => ({
+    mockCreatePiRpcAgentHandle: vi.fn(),
+    mockResolveHeteroSpawnCommand: vi.fn(),
+    mockSpawnAgent: vi.fn(),
+  }),
+);
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
   mockGetTrpcClient: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),
@@ -31,6 +34,12 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
 
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
   resolveHeteroSpawnCommand: mockResolveHeteroSpawnCommand,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/rpc', () => ({
+  createPiRpcAgentHandle: mockCreatePiRpcAgentHandle,
+  toPiRpcPrompt: (input: unknown) =>
+    Promise.resolve({ text: typeof input === 'string' ? input : JSON.stringify(input) }),
 }));
 
 vi.mock('../api/client', () => ({
@@ -113,6 +122,7 @@ describe('hetero exec command', () => {
         return { command: command ?? defaultCommand };
       },
     );
+    mockCreatePiRpcAgentHandle.mockReset();
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
     mockHeteroFinishMutate.mockReset();
@@ -226,14 +236,18 @@ describe('hetero exec command', () => {
     expect(call.operationId).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it('keeps the agent in the detached wrapper process group when requested by dispatch', async () => {
-    vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
-    mockSpawnAgent.mockReturnValue(createFakeHandle());
+  it.each(['codex', 'pi'])(
+    'keeps %s in the wrapper process group when requested by dispatch',
+    async (agentType) => {
+      vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
+      const spawn = agentType === 'pi' ? mockCreatePiRpcAgentHandle : mockSpawnAgent;
+      spawn.mockReturnValue(createFakeHandle());
 
-    await runCmd(['hetero', 'exec', '--type', 'codex', '--prompt', 'do thing']);
+      await runCmd(['hetero', 'exec', '--type', agentType, '--prompt', 'do thing']);
 
-    expect(mockSpawnAgent).toHaveBeenCalledWith(expect.objectContaining({ detached: false }));
-  });
+      expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ detached: false }));
+    },
+  );
 
   it('does not duplicate Unix group signals inside an inherited wrapper group', async () => {
     vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
@@ -791,8 +805,12 @@ describe('hetero exec command', () => {
     );
   });
 
-  it('runs Pi with model, resume, and native args while ignoring effort and speed', async () => {
-    mockSpawnAgent.mockReturnValue(createFakeHandle());
+  it('runs Pi over the RPC transport with model, resume, and native args while ignoring effort and speed', async () => {
+    vi.stubEnv('HOME', '/pi-test-home');
+    vi.stubEnv('PI_CODING_AGENT_DIR', '/pi-test-config');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-only-key');
+    mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'pi', pathEnv: '/pi-custom-bin' });
+    mockCreatePiRpcAgentHandle.mockResolvedValue(createFakeHandle());
 
     await runCmd([
       'hetero',
@@ -814,11 +832,18 @@ describe('hetero exec command', () => {
     ]);
 
     expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('pi', undefined);
-    expect(mockSpawnAgent).toHaveBeenCalledWith(
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(mockCreatePiRpcAgentHandle).toHaveBeenCalledWith(
       expect.objectContaining({
-        agentType: 'pi',
-        command: 'pi',
-        extraArgs: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        args: ['--provider', 'anthropic', '--model', 'anthropic/claude-sonnet-4-5'],
+        commandPath: 'pi',
+        env: expect.objectContaining({
+          HOME: '/pi-test-home',
+          PI_CODING_AGENT_DIR: '/pi-test-config',
+          ANTHROPIC_API_KEY: 'test-only-key',
+          PATH: '/pi-custom-bin',
+        }),
+        operationId: expect.any(String),
         resumeSessionId: 'pi-session-1',
       }),
     );

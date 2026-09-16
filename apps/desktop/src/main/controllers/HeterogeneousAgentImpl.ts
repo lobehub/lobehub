@@ -52,6 +52,11 @@ import {
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
 import { isLoginShellTimeoutStatus } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+import {
+  type PiRpcImage,
+  PiRpcSession,
+  type PiRpcSessionCallbacks,
+} from '@lobechat/heterogeneous-agents/rpc';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
@@ -84,6 +89,7 @@ import {
   isCursorAcpSessionNotFoundError,
   isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
+  normalizeImage,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -119,6 +125,7 @@ import {
   createLambdaFileStorePort,
   type RemoteServerAuth,
 } from '@/modules/heterogeneousAgent/fileStorePort';
+import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
 import {
   gcHostedProviderBindingProfiles,
@@ -207,6 +214,16 @@ const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WA
 const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
 const HETERO_SESSION_COMPLETE_GRACE_MS = 1_000;
 const HETERO_RUNTIME_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+
+const readPositiveEnvMs = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+/** Default idle grace before a pooled pi RPC process is closed (5 min). */
+const PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
@@ -333,6 +350,18 @@ interface GetSessionInfoParams {
   sessionId: string;
 }
 
+/**
+ * A runtime dispatcher decides whether it handles a prompt for its agent
+ * type. Returns `true` when handled (the caller returns early); `false` when
+ * the caller should fall through to the generic CLI spawn. Entries live in
+ * the `runtimeDispatchers` registry so long-lived runtimes (pi RPC, codex
+ * app-server, ACP sessions, Claude SDK) select themselves by agent type.
+ */
+type HeterogeneousRuntimeDispatcher = (
+  params: SendPromptParams,
+  session: AgentSession,
+) => Promise<boolean>;
+
 interface GetCodexQuotaParams {
   command?: string;
   env?: Record<string, string>;
@@ -383,6 +412,8 @@ interface AgentSession {
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;
+  /** Active pi RPC run (per-run process; cleared when the run settles). */
+  piRpcSession?: PiRpcSession;
   process?: ChildProcess;
   /**
    * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
@@ -473,9 +504,98 @@ export default class HeterogeneousAgentCtr {
       getAccessToken: async () => (await this.remoteServerConfigCtr?.getAccessToken()) ?? null,
       getServerUrl: async () => (await this.remoteServerConfigCtr?.getRemoteServerUrl()) ?? null,
     };
+    this.piRpcPool = new PiRpcPool({
+      // Read per-construction so tests can inject a tiny idle window.
+      idleTimeoutMs: readPositiveEnvMs(
+        'LOBE_PI_RPC_IDLE_TIMEOUT_MS',
+        PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS,
+      ),
+      onReap: (key, reason) => logger.info('Reaped pooled Pi RPC process:', { key, reason }),
+    });
   }
 
   private sessions = new Map<string, AgentSession>();
+
+  /**
+   * Runtime selection registry — the heterogeneous-agent counterpart of the
+   * adapter registry. Each entry decides whether it handles a prompt for its
+   * agent type and returns `true` when it did (the caller then returns early
+   * instead of falling through to the generic CLI spawn). Long-lived runtimes
+   * (pi RPC, codex app-server, ACP sessions, Claude SDK) register here so a
+   * future agent adopting an RPC mode only adds one entry — no dispatch edit.
+   */
+  private readonly runtimeDispatchers: Partial<
+    Record<HeterogeneousCliAgentType, HeterogeneousRuntimeDispatcher>
+  > = {
+    'claude-code': async (params, session) => {
+      if (!(session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)) return false;
+      try {
+        await this.sendPromptWithClaudeSdk(params, session);
+        return true;
+      } finally {
+        // Also clean up failures before the SDK run starts.
+        await session.hostedProviderBinding?.cleanup();
+      }
+    },
+    'codex': async (params, session) => {
+      if (
+        session.hostedProviderBinding ||
+        session.codexAppServerFallback ||
+        !(session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+      ) {
+        return false;
+      }
+      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        resume: !!session.agentSessionId,
+      });
+      if (unsupportedArgs.length === 0) {
+        // `true` = app-server handled the prompt; `false` = fall through to
+        // the generic `codex exec` spawn.
+        return this.sendPromptWithCodexAppServer(params, session);
+      }
+      if (session.agentSessionId) {
+        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+        throw new Error(message);
+      }
+      session.codexAppServerFallback = true;
+      logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+        sessionId: session.sessionId,
+        unsupportedArgs,
+      });
+      return false;
+    },
+    'cursor': async (params, session) => {
+      await this.sendPromptWithCursorAcp(params, session);
+      return true;
+    },
+    'devin': async (params, session) => {
+      await this.sendPromptWithDevinAcp(params, session);
+      return true;
+    },
+    'droid': async (params, session) => {
+      await this.sendPromptWithDroidAcp(params, session);
+      return true;
+    },
+    'grok-build': async (params, session) => {
+      await this.sendPromptWithGrokAcp(params, session);
+      return true;
+    },
+    'trae': async (params, session) => {
+      await this.sendPromptWithTraeAcp(params, session);
+      return true;
+    },
+    // Pi runs exclusively over the RPC transport — there is no json fallback.
+    'pi': async (params, session) => {
+      try {
+        await this.sendPromptWithPiRpc(params, session);
+        return true;
+      } finally {
+        await session.hostedProviderBinding?.cleanup();
+      }
+    },
+  };
+
   /** Device-gateway CLI wrappers keyed by their server operation id. */
   private lhHeteroExecTasks = new Map<string, LhHeteroExecTask>();
   /**
@@ -496,6 +616,9 @@ export default class HeterogeneousAgentCtr {
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
   /** One lazy, long-lived native Codex app-server connection shared by thread sessions. */
   private codexAppServerClient?: CodexAppServerClient;
+  /** Cross-turn pi RPC process pool (reuse + idle reaping). */
+  private readonly piRpcPool: PiRpcPool;
+  private shuttingDown = false;
   // Fresh window sits under the renderer's 2-minute auto-refresh so each
   // scheduled poll reaches the usage API instead of a cache echo.
   private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>({
@@ -1549,62 +1672,13 @@ export default class HeterogeneousAgentCtr {
       }
     }
 
-    if (
-      session.agentType === 'claude-code' &&
-      (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
-    ) {
-      try {
-        return await this.sendPromptWithClaudeSdk(params, session);
-      } finally {
-        // The SDK helper owns cleanup once `run()` starts; this outer guard
-        // also covers input/trace/session construction failures before that try/finally.
-        await session.hostedProviderBinding?.cleanup();
-      }
-    }
-
-    if (
-      session.agentType === 'codex' &&
-      !session.hostedProviderBinding &&
-      !session.codexAppServerFallback &&
-      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
-    ) {
-      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
-        resume: !!session.agentSessionId,
-      });
-      if (unsupportedArgs.length === 0) {
-        if (await this.sendPromptWithCodexAppServer(params, session)) return;
-      } else if (session.agentSessionId) {
-        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
-        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
-        throw new Error(message);
-      } else {
-        session.codexAppServerFallback = true;
-        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
-          sessionId: session.sessionId,
-          unsupportedArgs,
-        });
-      }
-    }
-
-    if (session.agentType === 'grok-build') {
-      return this.sendPromptWithGrokAcp(params, session);
-    }
-
-    if (session.agentType === 'cursor') {
-      return this.sendPromptWithCursorAcp(params, session);
-    }
-
-    if (session.agentType === 'droid') {
-      return this.sendPromptWithDroidAcp(params, session);
-    }
-
-    if (session.agentType === 'devin') {
-      return this.sendPromptWithDevinAcp(params, session);
-    }
-
-    if (session.agentType === 'trae') {
-      return this.sendPromptWithTraeAcp(params, session);
-    }
+    // Long-lived runtimes (pi RPC, codex app-server, ACP sessions, Claude
+    // SDK) select themselves via the runtime registry. A dispatcher that
+    // returns `true` handled the prompt; `false` falls through to the generic
+    // CLI spawn below.
+    const runtimeDispatcher =
+      this.runtimeDispatchers[session.agentType as HeterogeneousCliAgentType];
+    if (runtimeDispatcher && (await runtimeDispatcher(params, session))) return;
 
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
@@ -2576,6 +2650,190 @@ export default class HeterogeneousAgentCtr {
     });
   }
 
+  /**
+   * Pi RPC host callbacks for one run. Built per run (not per process) so a
+   * pooled process can be rebound to the current IPC session and trace.
+   */
+  private buildPiRpcCallbacks(
+    session: AgentSession,
+    traceSession: CliTraceSession | undefined,
+    operationId: string,
+  ): PiRpcSessionCallbacks {
+    return {
+      operationId,
+      sessionId: session.sessionId,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+    };
+  }
+
+  /**
+   * Pi over the RPC transport — the only pi execution path (no json fallback).
+   *
+   * The first prompt spawns a process; settled runs hand it to the pool for
+   * follow-up turns. A pool miss resumes the native session via --session-id.
+   */
+  private async sendPromptWithPiRpc(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+
+    // Text + base64 images for the RPC `prompt` command (no `@path` temp files).
+    const promptBlocks = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const text: string[] = [];
+    const images: PiRpcImage[] = [];
+    for (const block of promptBlocks) {
+      if (block.type === 'text') {
+        if (block.text) text.push(block.text);
+        continue;
+      }
+      try {
+        const image = await normalizeImage(block.source, { cacheDir: this.fileCacheDir });
+        images.push({
+          data: image.buffer.toString('base64'),
+          mimeType: image.mediaType,
+          type: 'image',
+        });
+      } catch (error) {
+        // A broken attachment must not silently drop the image from the
+        // prompt — surface it like the Codex/Grok paths do.
+        throw new Error(
+          `Failed to attach image(s) to Pi RPC prompt: ${this.getErrorMessage(error) || 'Unknown error'}`,
+          { cause: error },
+        );
+      }
+    }
+
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: ['--mode', 'rpc', ...session.args],
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: '',
+    });
+    void this.writeCliTraceFile(traceSession, 'prompt.txt', params.prompt);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    // Cross-turn reuse: the pool keeps one `pi --mode rpc` process alive per
+    // `cwd::nativeSessionId`. The first turn spawns (no native id yet); later
+    // turns resume with `--session-id` and hit the pool instead of respawning.
+    const poolKey = session.agentSessionId ? `${cwd}::${session.agentSessionId}` : undefined;
+    // Fingerprint the runtime options that shape the spawned process (command
+    // path, args, env) so a pool hit under changed settings — model/provider,
+    // proxy env, cwd env — spawns fresh instead of reusing stale config.
+    const spawnFingerprint = [
+      commandPath,
+      cwd,
+      JSON.stringify(session.args ?? []),
+      JSON.stringify(Object.entries(spawnEnv).sort()),
+    ].join('::');
+    if (this.shuttingDown) throw new Error('Application is shutting down');
+    const pooledSession = poolKey ? this.piRpcPool.acquire(poolKey, spawnFingerprint) : undefined;
+    const rpcSession =
+      pooledSession ??
+      new PiRpcSession({
+        args: session.args,
+        commandPath,
+        cwd,
+        env: spawnEnv,
+        resumeSessionId: session.agentSessionId,
+        // The pool owns the process lifecycle — never auto-close on settle.
+        autoCloseOnSettle: false,
+        uploadImage: this.uploadResultImage,
+        ...this.buildPiRpcCallbacks(session, traceSession, params.operationId),
+      });
+    // A pooled process carries the callbacks of the run that spawned it —
+    // rebind to THIS run's IPC session / trace or events would broadcast to
+    // a stale sessionId.
+    if (pooledSession)
+      pooledSession.rebind(this.buildPiRpcCallbacks(session, traceSession, params.operationId));
+    session.piRpcSession = rpcSession;
+
+    logger.info(pooledSession ? 'Reusing pooled Pi RPC process:' : 'Starting Pi RPC session:', {
+      commandPath,
+      cwd,
+      pooled: !!pooledSession,
+      sessionId: session.sessionId,
+    });
+
+    try {
+      const { aborted } = await rpcSession.run({
+        text: text.join('\n\n'),
+        ...(images.length > 0 ? { images } : {}),
+      });
+      if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      // Hand the process to the pool for the next turn (native id known now).
+      // A fresh process without a native id cannot be keyed — recycle it.
+      if (session.agentSessionId) {
+        const key = `${cwd}::${session.agentSessionId}`;
+        if (!pooledSession) this.piRpcPool.register(key, rpcSession, spawnFingerprint);
+        this.piRpcPool.release(rpcSession);
+      } else if (!pooledSession) {
+        await rpcSession.close().catch(() => {
+          /* best-effort */
+        });
+      }
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        aborted,
+        finishedAt: new Date().toISOString(),
+        pooled: !!pooledSession,
+        transport: 'pi-rpc',
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      // The run failed — the process is not reusable; close and drop it.
+      this.piRpcPool.remove(rpcSession);
+      logger.error('Pi RPC session error:', error);
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'pi-rpc',
+      });
+      await this.flushCliTrace(traceSession);
+
+      // A user-initiated cancel resolves the run as `aborted`, so reaching the
+      // catch means a genuine failure — unless we tore the process down.
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const sessionError = this.getSessionErrorPayload(error, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    }
+  }
+
   private async verifyCodexSessionModel({
     env,
     pipeline,
@@ -3124,6 +3382,12 @@ export default class HeterogeneousAgentCtr {
       await session.traeAcpSession.interrupt();
       return;
     }
+    if (session.piRpcSession) {
+      // Resolves only after settlement or confirmed shutdown. Propagate a
+      // failed shutdown so "Send now" cannot start another native writer.
+      await session.piRpcSession.abort();
+      return;
+    }
     if (session.sdkSession) {
       session.sdkSession.close();
       return;
@@ -3188,6 +3452,12 @@ export default class HeterogeneousAgentCtr {
     if (session.traeAcpSession) {
       session.cancelledByUs = true;
       session.traeAcpSession.close();
+    }
+
+    if (session.piRpcSession) {
+      session.cancelledByUs = true;
+      // Healthy settled processes remain pooled; failed cancellation closes them.
+      await session.piRpcSession.abort();
     }
 
     if (session.sdkSession) {
@@ -3261,10 +3531,21 @@ export default class HeterogeneousAgentCtr {
    * harnesses, OS shutdown) where Electron's lifecycle events never fire.
    */
   afterAppReady() {
-    electronApp.on('before-quit', () => {
+    let quitReady = false;
+    electronApp.on('before-quit', (event) => {
+      if (quitReady) return;
+      event.preventDefault();
+      if (this.shuttingDown) return;
+      this.shuttingDown = true;
+      const piClosing: Promise<void>[] = [];
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
         session.hostedProviderBinding?.cleanupSync();
+        // First-turn processes have not reached the pool yet.
+        if (session.piRpcSession) {
+          session.cancelledByUs = true;
+          piClosing.push(session.piRpcSession.close());
+        }
         if (session.devinAcpSession) {
           session.cancelledByUs = true;
           session.devinAcpSession.close();
@@ -3300,6 +3581,8 @@ export default class HeterogeneousAgentCtr {
       }
       this.codexAppServerClient?.close();
       this.codexAppServerClient = undefined;
+      // Pooled pi processes outlive their IPC sessions — reap them on quit.
+      piClosing.push(this.piRpcPool.closeAll());
       this.sessions.clear();
       // The exit handlers will tear each per-op intervention down, but if
       // CC's stdio close races shutdown we'd leave the MCP server bound to
@@ -3307,6 +3590,13 @@ export default class HeterogeneousAgentCtr {
       // `session_ended` and closes the listener.
       void this.builtinMcpServer?.stop().catch((err) => {
         logger.warn('AskUserQuestion MCP server stop error:', err);
+      });
+      void Promise.allSettled(piClosing).then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') logger.warn('Pi RPC shutdown failed:', result.reason);
+        }
+        quitReady = true;
+        electronApp.quit();
       });
     });
 
@@ -3320,10 +3610,11 @@ export default class HeterogeneousAgentCtr {
         /* during late shutdown app.quit may throw — fine */
       }
       // Last-resort exit if Electron is wedged and won't quit on its own.
-      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 1000).unref();
+      // Allow EOF → TERM → KILL (up to seven seconds) to complete first.
+      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 10_000).unref();
     };
-    process.on('SIGTERM', onSignal);
-    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', () => onSignal('SIGTERM'));
+    process.on('SIGINT', () => onSignal('SIGINT'));
   }
 
   /**
