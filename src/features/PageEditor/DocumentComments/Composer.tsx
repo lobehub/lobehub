@@ -19,7 +19,7 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { usePermission } from '@/hooks/usePermission';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 
-import { usePageEditorStore } from '../store';
+import { usePageEditorStore, useStoreApi } from '../store';
 import AnchorQuote from './anchor/AnchorQuote';
 import { prefersReducedMotion } from './anchor/commentLocator';
 import { useCommentAnchors } from './anchor/context';
@@ -193,6 +193,11 @@ const Composer = memo<ComposerProps>(
       s.pendingCommentAnchor?.documentId === documentId ? s.pendingCommentAnchor.anchor : undefined,
     );
     const setPendingCommentAnchor = usePageEditorStore((s) => s.setPendingCommentAnchor);
+    // Read fresh in the submit failure handler below, never through the
+    // reactive selector: that closure is a snapshot from before the await,
+    // so it can't see a newer pick that happened while the request was
+    // in flight.
+    const storeApi = useStoreApi();
     const anchor = adoptsAnchor ? draft.selectionAnchor : undefined;
     const [showTypoBar, setShowTypoBar] = useLocalStorageState(
       'document-comment:show-formatting-toolbar',
@@ -385,12 +390,19 @@ const Composer = memo<ComposerProps>(
         });
         onSuccess?.();
       } catch {
-        if (isGutterComposer && anchor) {
+        // Releasing the anchor unmounted this box, so the reader could have
+        // already picked a new selection and started a different draft in
+        // the same shared 'anchored' slot while this request was in flight.
+        // Restoring into that slot now would overwrite their text or
+        // re-point their draft at this failed submission's anchor instead of
+        // theirs — only restore when nothing has claimed it since.
+        const slotStillEmpty = storeApi.getState().pendingCommentAnchor === undefined;
+        if (isGutterComposer && anchor && slotStillEmpty) {
           // The box is gone by now: the draft goes back to storage, where
           // the box reads it when the republished selection mounts it again.
           persistDraft(submittedDraft);
           setPendingCommentAnchor({ anchor, documentId });
-        } else {
+        } else if (!(isGutterComposer && anchor)) {
           setDraft((current) => (current.content ? current : submittedDraft));
           editorRef.current?.setValue(editorValue);
           editorRef.current?.focus();
@@ -412,6 +424,7 @@ const Composer = memo<ComposerProps>(
       persistDraft,
       setDraft,
       setPendingCommentAnchor,
+      storeApi,
       t,
       workspaceId,
     ]);

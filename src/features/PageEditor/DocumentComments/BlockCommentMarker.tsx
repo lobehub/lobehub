@@ -134,22 +134,30 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
       setTarget({ range, top });
     };
     const handleLeave = () => setTarget(null);
-    // The body is only part of `host` (title, metadata, likes and the comment
-    // list share it), so leaving the body for any of those must clear the
-    // marker too — except onto the marker itself, which sits outside the
-    // body's DOM subtree; its own pointerleave (below) covers that exit.
-    const handleBodyLeave = (event: PointerEvent) => {
-      const related = event.relatedTarget;
-      if (related instanceof Node && markerRef.current?.contains(related)) return;
+    // The marker sits outside the body's DOM subtree, past the column's own
+    // padding — a `pointerleave` on the body alone fires the instant the
+    // pointer crosses into that gap, `relatedTarget` still the gap itself,
+    // and clears the marker before the pointer ever reaches it. Recompute
+    // from where the pointer actually is instead: moving anywhere in the
+    // host that is neither the body nor the marker clears it; the gap is
+    // exactly such a place, and simply crossing it no longer counts as a
+    // leave.
+    const handleHostMove = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        (bodyElement.contains(target) || markerRef.current?.contains(target))
+      )
+        return;
       setTarget(null);
     };
 
     bodyElement.addEventListener('pointermove', handleMove);
-    bodyElement.addEventListener('pointerleave', handleBodyLeave);
+    host.addEventListener('pointermove', handleHostMove);
     host.addEventListener('pointerleave', handleLeave);
     return () => {
       bodyElement.removeEventListener('pointermove', handleMove);
-      bodyElement.removeEventListener('pointerleave', handleBodyLeave);
+      host.removeEventListener('pointermove', handleHostMove);
       host.removeEventListener('pointerleave', handleLeave);
       setTarget(null);
     };
@@ -171,12 +179,10 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
   if (!enabled || !target) return null;
 
   return (
-    <div
-      className={styles.blockMarker}
-      ref={markerRef}
-      style={{ top: target.top }}
-      onPointerLeave={() => setTarget(null)}
-    >
+    // Leaving the marker for anywhere else in the host, including the gap
+    // back to the body, is covered by the host-level pointermove above; no
+    // listener of its own needed here.
+    <div className={styles.blockMarker} ref={markerRef} style={{ top: target.top }}>
       <ActionIcon
         aria-label={t('pageEditor.comments.anchor.addToLine')}
         icon={MessageSquarePlus}
