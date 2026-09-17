@@ -135,6 +135,46 @@ const INSTANCE_DIRECTORY_CONSTRAINT = 'environment_instances_provider_path_uniqu
  */
 const DEFAULT_ENVIRONMENT_NAME = 'Default';
 
+/**
+ * Where source material comes from. Only `git` for now, and only over HTTPS:
+ * the other transports authenticate with a key, and a specification that
+ * carries no credentials cannot present one. Private repositories are a
+ * separate problem, not a URL scheme.
+ */
+const environmentSourceSchema = z.object({
+  kind: z.literal('git'),
+  /** Where the checkout lands, relative to the working copy's own directory. */
+  path: relativePathSchema.optional(),
+  ref: z.string().trim().min(1).max(255).optional(),
+  url: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith('https://'), {
+      message: 'Only https:// git URLs are supported',
+    }),
+});
+
+/**
+ * Non-secret values only. Enforced by shape as far as a shape can: the name has
+ * to look like an environment variable, and the rest is said plainly in the UI
+ * and in the type. A field that stores what the user types cannot tell a region
+ * from a token, which is why secrets are resolved at use time instead.
+ */
+const environmentEnvSchema = z.record(
+  z
+    .string()
+    .max(128)
+    .regex(/^[A-Z_]\w*$/i, 'Must be a valid environment variable name'),
+  z.string().max(4096),
+);
+
+const configurationSchema = z.object({
+  bootstrapCommand: z.string().max(8000).optional(),
+  env: environmentEnvSchema.optional(),
+  internetAccess: z.boolean().optional(),
+  sources: z.array(environmentSourceSchema).max(8).optional(),
+});
+
 /** Postgres surfaces the driver error somewhere down the `cause` chain. */
 const getPostgresErrorField = (error: unknown, field: string): string | undefined => {
   let current: unknown = error;
@@ -374,7 +414,13 @@ export const sandboxWorkspaceRouter = router({
     }),
 
   createEnvironment: environmentProcedure
-    .input(z.object({ description: z.string().max(2000).optional(), name: nameSchema }))
+    .input(
+      z.object({
+        configuration: configurationSchema.optional(),
+        description: z.string().max(2000).optional(),
+        name: nameSchema,
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       ctx.environmentModel.create(input).catch(rethrowDuplicateEnvironmentName),
     ),
@@ -489,9 +535,16 @@ export const sandboxWorkspaceRouter = router({
     )
     .mutation(async ({ ctx, input }) => ctx.client.deleteFile(input).catch(mapWorkspaceError)),
 
-  renameEnvironment: environmentProcedure
+  /**
+   * Edits the specification, which is what makes every working copy of it out
+   * of date. Nothing is rebuilt here: a rebuild discards whatever a
+   * conversation installed by hand, so it stays the person's call, made per
+   * copy from the list that now shows them as stale.
+   */
+  updateEnvironment: environmentProcedure
     .input(
       z.object({
+        configuration: configurationSchema.optional(),
         description: z.string().max(2000).optional(),
         id: idSchema,
         name: nameSchema.optional(),

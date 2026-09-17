@@ -157,7 +157,7 @@ describe('sandboxWorkspaceRouter', () => {
       const caller = sandboxWorkspaceRouter.createCaller(ctx);
 
       await expect(
-        caller.renameEnvironment({ id: environmentId, name: 'Data analysis' }),
+        caller.updateEnvironment({ id: environmentId, name: 'Data analysis' }),
       ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_ENVIRONMENT_NAME' });
     });
 
