@@ -90,6 +90,7 @@ export enum SettingsTabs {
   Provider = 'provider',
   Proxy = 'proxy',
   Referral = 'referral',
+  SandboxEnvironments = 'sandbox-environments',
   Security = 'security',
   ServiceModel = 'service-model',
   Skill = 'skill',

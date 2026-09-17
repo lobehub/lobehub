@@ -27,7 +27,9 @@ import { lambdaClient } from '@/libs/trpc/client';
 export interface SandboxEnvironmentSpecification {
   bootstrapCommand?: string;
   env?: Record<string, string>;
+  excludePaths?: string[];
   internetAccess?: boolean;
+  maintenanceCommand?: string;
   sources?: Extract<EnvironmentSource, { kind: 'git' }>[];
 }
 

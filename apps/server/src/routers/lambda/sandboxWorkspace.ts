@@ -171,7 +171,9 @@ const environmentEnvSchema = z.record(
 const configurationSchema = z.object({
   bootstrapCommand: z.string().max(8000).optional(),
   env: environmentEnvSchema.optional(),
+  excludePaths: z.array(relativePathSchema).max(64).optional(),
   internetAccess: z.boolean().optional(),
+  maintenanceCommand: z.string().max(8000).optional(),
   sources: z.array(environmentSourceSchema).max(8).optional(),
 });
 
