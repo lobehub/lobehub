@@ -1,11 +1,17 @@
 import type { DocumentCommentSelectionAnchor } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { migrateDraftToAnchoredScope, readAnchoredDraftAnchor } from './Composer';
+import {
+  clearLegacyRootDraft,
+  migrateDraftToAnchoredScope,
+  readAnchoredDraftAnchor,
+  readLegacyRootDraft,
+} from './Composer';
 
 const DOCUMENT_ID = 'doc-1';
 const WORKSPACE_ID = 'ws-1';
 const KEY = `document-comment-draft:${WORKSPACE_ID}:${DOCUMENT_ID}:anchored`;
+const LEGACY_KEY = `document-comment-draft:${WORKSPACE_ID}:${DOCUMENT_ID}:root`;
 
 const anchor: DocumentCommentSelectionAnchor = { end: 12, quote: 'hello world', start: 0 };
 
@@ -71,5 +77,52 @@ describe('migrateDraftToAnchoredScope', () => {
     const raw = window.localStorage.getItem(KEY);
     expect(raw && JSON.parse(raw)).toEqual(draft);
     expect(readAnchoredDraftAnchor(WORKSPACE_ID, DOCUMENT_ID)).toEqual(anchor);
+  });
+});
+
+describe('readLegacyRootDraft', () => {
+  const legacyDraft = {
+    clientId: 'c1',
+    content: 'an unanchored draft from before',
+    editorData: null,
+  };
+
+  it('returns null when there is no legacy draft', () => {
+    expect(readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('returns a legacy plain-comment draft with no anchor', () => {
+    window.localStorage.setItem(LEGACY_KEY, JSON.stringify(legacyDraft));
+
+    expect(readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID)).toEqual(legacyDraft);
+  });
+
+  it('returns null once the new (anchored) scope already has its own draft', () => {
+    window.localStorage.setItem(LEGACY_KEY, JSON.stringify(legacyDraft));
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ clientId: 'c2', content: 'a fresh draft', editorData: null }),
+    );
+
+    expect(readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('returns null for an empty legacy draft (nothing worth migrating)', () => {
+    window.localStorage.setItem(
+      LEGACY_KEY,
+      JSON.stringify({ clientId: 'c1', content: '', editorData: null }),
+    );
+
+    expect(readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+});
+
+describe('clearLegacyRootDraft', () => {
+  it('removes the legacy root-scope draft', () => {
+    window.localStorage.setItem(LEGACY_KEY, JSON.stringify({ clientId: 'c1' }));
+
+    clearLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID);
+
+    expect(window.localStorage.getItem(LEGACY_KEY)).toBeNull();
   });
 });

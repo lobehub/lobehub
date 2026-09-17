@@ -83,6 +83,39 @@ export const migrateDraftToAnchoredScope = (
 };
 
 /**
+ * Before gutter and inline shared a scope, inline mode stored every root
+ * draft — anchored or not — under 'root'. Returns a legacy draft still
+ * sitting there, or `null` when there is nothing to migrate or the new
+ * ('anchored') scope already has content of its own to protect.
+ */
+export const readLegacyRootDraft = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+): Draft | null => {
+  try {
+    if (window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'anchored'))) return null;
+    const raw = window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'root'));
+    if (!raw) return null;
+    const legacy = JSON.parse(raw) as Draft;
+    if (!legacy.content && !legacy.editorData && !legacy.selectionAnchor) return null;
+    return legacy;
+  } catch {
+    return null;
+  }
+};
+
+export const clearLegacyRootDraft = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+): void => {
+  try {
+    window.localStorage.removeItem(getDraftKey(workspaceId, documentId, 'root'));
+  } catch {
+    // ignore
+  }
+};
+
+/**
  * How a root composer relates to the selection being commented on.
  *
  * - `gutter`: the composer beside the text. Exists only while a selection is
@@ -223,6 +256,23 @@ const Composer = memo<ComposerProps>(
       setPendingCommentAnchor,
       workspaceId,
     ]);
+
+    // One-time upgrade: before gutter and inline shared a scope, inline mode
+    // stored every root draft — anchored or not — under 'root'. Adopt a
+    // legacy draft still sitting there once, on mount, before this
+    // composer's own 'anchored'-scope draft has ever been written, so an
+    // unfinished plain comment from before the upgrade doesn't just vanish.
+    useEffect(() => {
+      if (anchorMode !== 'inline' || !isRootComposer) return;
+      const legacy = readLegacyRootDraft(workspaceId, documentId);
+      if (!legacy) return;
+      setDraft(legacy);
+      clearLegacyRootDraft(workspaceId, documentId);
+      // Deliberately excludes `draft` and `setDraft`: this effect is what
+      // writes the draft, and depending on it would re-check on every
+      // keystroke instead of once per document.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [anchorMode, isRootComposer, documentId, workspaceId]);
 
     // The inline composer sits below the body, so a selection made further up
     // has to bring it into view before it can be typed into. The gutter
