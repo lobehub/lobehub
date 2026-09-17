@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm -w run build:vercel",
+  "buildCommand": "NODE_OPTIONS=--max-old-space-size=8192 pnpm -w run build:spa:raw && pnpm -w run build:spa:auth && pnpm -w run build:spa:workbench && pnpm -w run build:spa:share && pnpm -w run build:spa:copy && pnpm -w exec next build --webpack && pnpm -w run db:migrate",
   "headers": [
     {
       "source": "/_spa/(.*)",
