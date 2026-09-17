@@ -71,6 +71,7 @@ export enum SettingsTabs {
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',
+  Environments = 'environments',
   Hotkey = 'hotkey',
   /** @deprecated Use ServiceModel instead */
   Image = 'image',
@@ -88,7 +89,6 @@ export enum SettingsTabs {
   Provider = 'provider',
   Proxy = 'proxy',
   Referral = 'referral',
-  SandboxEnvironments = 'sandbox-environments',
   Security = 'security',
   ServiceModel = 'service-model',
   Skill = 'skill',

@@ -44,13 +44,13 @@ const EnvironmentRow = memo<EnvironmentRowProps>(({ environment }) => {
           </Text>
           <Text fontSize={12} type={'secondary'}>
             {environment.description ||
-              t('sandboxEnvironments.instances.empty', { count: instances.length })}
+              t('environments.instances.empty', { count: instances.length })}
           </Text>
         </Flexbox>
         <ActionIcon
           icon={Trash2Icon}
           size={'small'}
-          title={t('sandboxEnvironments.remove')}
+          title={t('environments.remove')}
           onClick={() => actions.removeEnvironment(environment.id)}
         />
       </Flexbox>
@@ -86,7 +86,7 @@ EnvironmentRow.displayName = 'SandboxEnvironmentRow';
  * usable, what they run with. What a sandbox builds from it is a cache, which is
  * why a copy can be thrown away and made again rather than repaired by hand.
  */
-const SandboxEnvironmentManager = memo(() => {
+const EnvironmentManager = memo(() => {
   const { t } = useTranslation('setting');
   const { data } = useEnvironments();
   const actions = useEnvironmentActions();
@@ -113,14 +113,14 @@ const SandboxEnvironmentManager = memo(() => {
       <Alert
         showIcon
         icon={InfoIcon}
-        title={t('sandboxEnvironments.pending')}
+        title={t('environments.pending')}
         type={'info'}
         variant={'soft'}
       />
 
       <Flexbox horizontal align={'center'} gap={8}>
         <Input
-          placeholder={t('sandboxEnvironments.namePlaceholder')}
+          placeholder={t('environments.namePlaceholder')}
           style={{ flex: 1 }}
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -135,13 +135,13 @@ const SandboxEnvironmentManager = memo(() => {
           size={'small'}
           onClick={create}
         >
-          {t('sandboxEnvironments.create')}
+          {t('environments.create')}
         </Button>
       </Flexbox>
 
       {environments.length === 0 ? (
         <Text fontSize={12} type={'secondary'}>
-          {t('sandboxEnvironments.empty')}
+          {t('environments.empty')}
         </Text>
       ) : (
         environments.map((environment) => (
@@ -152,6 +152,6 @@ const SandboxEnvironmentManager = memo(() => {
   );
 });
 
-SandboxEnvironmentManager.displayName = 'SandboxEnvironmentManager';
+EnvironmentManager.displayName = 'EnvironmentManager';
 
-export default SandboxEnvironmentManager;
+export default EnvironmentManager;
