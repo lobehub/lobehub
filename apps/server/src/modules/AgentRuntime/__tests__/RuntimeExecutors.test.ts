@@ -5568,9 +5568,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       ).toBe(false);
     });
 
-    it('should retry a structured branding-provider remote media download timeout once', async () => {
-      vi.useFakeTimers();
-
+    it('should not retry a branding-provider remote media download timeout after routing ends', async () => {
       const mediaDownloadTimeout = {
         error: {
           code: 'invalid_value',
@@ -5587,70 +5585,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
         errorType: 'RemoteMediaDownloadTimeout',
         provider: 'azure',
-      };
-      const mockChat = vi
-        .fn()
-        .mockRejectedValueOnce(mediaDownloadTimeout)
-        .mockImplementationOnce(async (_payload: any, options: any) => {
-          await options.callback.onText?.('recovered');
-          await options.callback.onCompletion?.({
-            finishReason: 'stop',
-            usage: { totalInputTokens: 10, totalOutputTokens: 2, totalTokens: 12 },
-          });
-          return new Response('done');
-        });
-
-      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
-
-      const executors = createRuntimeExecutors(ctx);
-      const state = createMockState();
-      const instruction = {
-        payload: {
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'gpt-6-astra',
-          parentMessageId: 'parent-msg-123',
-          provider: 'lobehub',
-          tools: [],
-        },
-        type: 'call_llm' as const,
-      };
-
-      try {
-        const resultPromise = executors.call_llm!(instruction, state);
-
-        await vi.runOnlyPendingTimersAsync();
-
-        const result = await resultPromise;
-
-        expect(mockChat).toHaveBeenCalledTimes(2);
-        expect(result.nextContext?.phase).toBe('llm_result');
-        expect(mockMessageModel.update).toHaveBeenCalledWith(
-          'msg-123',
-          expect.objectContaining({ content: 'recovered' }),
-        );
-        expect(mockStreamManager.publishStreamEvent).toHaveBeenCalledWith(
-          'op-123',
-          expect.objectContaining({
-            data: expect.objectContaining({ attempt: 2, delayMs: 1000, maxAttempts: 4 }),
-            type: 'stream_retry',
-          }),
-        );
-        expect(
-          mockStreamManager.publishStreamEvent.mock.calls.filter(
-            ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
-          ),
-        ).toHaveLength(1);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it('should stop after one retry when remote media download timeouts continue', async () => {
-      vi.useFakeTimers();
-
-      const mediaDownloadTimeout = {
-        errorType: 'RemoteMediaDownloadTimeout',
-        message: 'Provider timed out downloading remote media.',
       };
       const mockChat = vi.fn().mockRejectedValue(mediaDownloadTimeout);
 
@@ -5669,22 +5603,14 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         type: 'call_llm' as const,
       };
 
-      try {
-        const resultPromise = executors.call_llm!(instruction, state);
-        const rejection = expect(resultPromise).rejects.toEqual(mediaDownloadTimeout);
+      await expect(executors.call_llm!(instruction, state)).rejects.toEqual(mediaDownloadTimeout);
 
-        await vi.runOnlyPendingTimersAsync();
-        await rejection;
-
-        expect(mockChat).toHaveBeenCalledTimes(2);
-        expect(
-          mockStreamManager.publishStreamEvent.mock.calls.filter(
-            ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
-          ),
-        ).toHaveLength(1);
-      } finally {
-        vi.useRealTimers();
-      }
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      expect(
+        mockStreamManager.publishStreamEvent.mock.calls.some(
+          ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
+        ),
+      ).toBe(false);
     });
 
     it('should retry a no-usage empty completion caused by a network error once', async () => {
