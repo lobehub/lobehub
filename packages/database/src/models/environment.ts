@@ -7,6 +7,21 @@ import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload } from '../utils/workspace';
 
 /**
+ * Rows this member owns. Always both the member AND the workspace the
+ * environment was made in: `buildWorkspaceWhere` is wrong here — without a
+ * `visibility` column it resolves a workspace to "every row in it", which is
+ * exactly the sharing this resource must not have (see {@link EnvironmentModel}).
+ *
+ * Exported because instances inherit their scope from the environment and have
+ * no owner column of their own, so they have to reach ownership through here.
+ */
+export const environmentOwnership = (userId: string, workspaceId?: string) =>
+  and(
+    eq(environments.userId, userId),
+    workspaceId ? eq(environments.workspaceId, workspaceId) : isNull(environments.workspaceId),
+  );
+
+/**
  * The declarative half of an environment: what it should contain, not what it
  * currently does. `configuration` is the specification — the sources to check
  * out, what to run to make them usable, what the work needs to run on — and
@@ -15,16 +30,18 @@ import { buildWorkspacePayload } from '../utils/workspace';
  *
  * Reads and writes are scoped to the MEMBER, including inside a workspace where
  * `user_id` merely records the creator. That is narrower than most workspace
- * resources and deliberately so, because the specification is not the only
- * thing the id addresses: an execution plane keeps the materialized state under
- * it, and that state carries whatever a session left in a home directory —
- * including the token a CLI logged in with. An environment a colleague can
+ * resources and deliberately so, by one step of reasoning worth spelling out:
+ * an instance has no owner column and inherits its scope from here, and an
+ * instance's captured state carries whatever a session left in a home directory
+ * — including the token a CLI logged in with. So an environment a colleague can
  * select is an identity a colleague can borrow, and the borrower would see
  * nothing unusual, only a CLI that happens to be signed in.
  *
- * Sharing an environment is therefore not a matter of widening this filter. It
- * belongs to `project_environments`, which references a specification without
- * handing over anything built from it.
+ * Sharing an environment is therefore not a matter of widening this filter.
+ * `project_environments` exists to reference a specification without handing
+ * over anything built from it — but taking that path needs `environments`'
+ * instances to carry an owner of their own first, or a shared specification
+ * quietly becomes a shared snapshot again.
  */
 export class EnvironmentModel {
   private db: LobeChatDatabase;
@@ -37,19 +54,7 @@ export class EnvironmentModel {
     this.workspaceId = workspaceId;
   }
 
-  /**
-   * Always both: the member who owns the environment AND the workspace it was
-   * made in. `buildWorkspaceWhere` is wrong here — without a `visibility`
-   * column it resolves a workspace to "every row in it", which is exactly the
-   * sharing this resource must not have.
-   */
-  private ownership = () =>
-    and(
-      eq(environments.userId, this.userId),
-      this.workspaceId
-        ? eq(environments.workspaceId, this.workspaceId)
-        : isNull(environments.workspaceId),
-    );
+  private ownership = () => environmentOwnership(this.userId, this.workspaceId);
 
   query = async (): Promise<EnvironmentItem[]> =>
     this.db
@@ -91,6 +96,34 @@ export class EnvironmentModel {
         ),
       )
       .returning();
+
+    return row;
+  };
+
+  /**
+   * The environment with this name, created if it is not there yet.
+   *
+   * `onConflictDoNothing` and then a read rather than "look, then insert":
+   * two conversations opting into persistence at the same moment would both
+   * see nothing and both insert, and the second would fail a unique index on a
+   * name the user never typed.
+   */
+  ensureNamed = async (name: string): Promise<EnvironmentItem> => {
+    await this.db
+      .insert(environments)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { configuration: {}, name },
+        ),
+      )
+      .onConflictDoNothing();
+
+    const [row] = await this.db
+      .select()
+      .from(environments)
+      .where(and(eq(environments.name, name), this.ownership()))
+      .limit(1);
 
     return row;
   };

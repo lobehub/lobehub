@@ -14,29 +14,61 @@ import { lambdaClient } from '@/libs/trpc/client';
  */
 class SandboxWorkspaceService {
   /**
-   * Environments the caller has, each joined with the snapshot the execution
-   * plane holds. A brand-new environment has no snapshot yet — that is normal,
-   * not an error, and the UI shows it as unused rather than missing.
-   *
-   * Reaching the snapshot store needs a live sandbox session, so this can take
-   * seconds on a cold start and callers should render a loading state.
+   * Environment specifications: what an environment should contain. Answered
+   * from the database alone, so this returns immediately.
    */
-  listEnvironments = async (params: { topicId?: string } = {}) =>
-    lambdaClient.sandboxWorkspace.listEnvironments.query(params);
+  listEnvironments = async () => lambdaClient.sandboxWorkspace.listEnvironments.query();
 
   createEnvironment = async (params: { description?: string; name: string }) =>
     lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
 
-  /** Rename or re-describe. The identifier the snapshot lives under never moves. */
   renameEnvironment = async (params: { description?: string; id: string; name?: string }) =>
     lambdaClient.sandboxWorkspace.renameEnvironment.mutate(params);
 
-  copyEnvironment = async (params: { description?: string; id: string; name: string }) =>
-    lambdaClient.sandboxWorkspace.copyEnvironment.mutate(params);
+  /** Refused while working copies still reference it — those go first. */
+  removeEnvironment = async (params: { id: string }) =>
+    lambdaClient.sandboxWorkspace.removeEnvironment.mutate(params);
+
+  /**
+   * Working copies, each joined with the state the execution plane holds. A
+   * brand-new instance has no snapshot yet — that is normal, not an error, and
+   * the UI shows it as unused rather than missing.
+   *
+   * Reaching the snapshot store needs a live sandbox session, so this can take
+   * seconds on a cold start and callers should render a loading state.
+   */
+  listInstances = async (params: { environmentId?: string; topicId?: string } = {}) =>
+    lambdaClient.sandboxWorkspace.listInstances.query(params);
+
+  /** One working copy, from the database alone — no sandbox session, no wait. */
+  getInstance = async (params: { id: string }) =>
+    lambdaClient.sandboxWorkspace.getInstance.query(params);
+
+  createInstance = async (params: {
+    environmentId: string;
+    name: string;
+    workingDirectory: string;
+  }) => lambdaClient.sandboxWorkspace.createInstance.mutate(params);
+
+  /**
+   * The working copy at this directory, created if there is not one yet. What
+   * the composer calls when someone picks a directory — idempotent, so clicking
+   * the same folder twice is not an error.
+   */
+  useInstanceAtDirectory = async (params: { workingDirectory: string }) =>
+    lambdaClient.sandboxWorkspace.useInstanceAtDirectory.mutate(params);
+
+  /** Only the label. The directory does not move — the built state sits in it. */
+  renameInstance = async (params: { id: string; name: string }) =>
+    lambdaClient.sandboxWorkspace.renameInstance.mutate(params);
+
+  /** A second directory that starts with everything the first one had installed. */
+  copyInstance = async (params: { id: string; name: string; workingDirectory: string }) =>
+    lambdaClient.sandboxWorkspace.copyInstance.mutate(params);
 
   /** Refused while a conversation is still using it — the caller surfaces that. */
-  removeEnvironment = async (params: { id: string; topicId?: string }) =>
-    lambdaClient.sandboxWorkspace.removeEnvironment.mutate(params);
+  removeInstance = async (params: { id: string; topicId?: string }) =>
+    lambdaClient.sandboxWorkspace.removeInstance.mutate(params);
 
   /** Create a directory (parents included, idempotent). */
   createDirectory = async (params: { path: string; topicId?: string }) =>
