@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "06f65016-9559-42a5-a19f-b6a4cd694da9",
+  "id": "70294fb3-c3c5-4369-8845-32770912b82f",
   "policies": {},
   "prevId": "d1344d93-74f1-4021-9a6e-6cb1b318ded6",
   "roles": {},
@@ -13104,6 +13104,12 @@
         "prev_title": {
           "name": "prev_title",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },

@@ -180,3 +180,27 @@ export interface ExpertiseBacktestResult {
   sampled: number;
   verdict: ExpertiseBacktestVerdict;
 }
+
+/**
+ * What one consolidation pass read, and what each boundary it wrote rests on.
+ *
+ * A rewritten standard is only as trustworthy as the deliveries behind it, and the rewrite text
+ * cannot carry that: the model cites deliveries by per-request labels ("S2") that mean nothing once
+ * the request is gone. Ids are resolved before they are stored, so an exemption can always be
+ * walked back to the delivery the reviewer let through.
+ */
+export interface ExpertiseRevisionEvidence {
+  /**
+   * Each exemption written into `limits`, with the accepted deliveries it was read from. Never
+   * empty per entry: a boundary that cannot name a delivery the reviewer shipped is invented, and
+   * is dropped before it gets here.
+   */
+  boundaries: { checkResultIds: string[]; limit: string }[];
+  /** Rejected deliveries (`verify_check_results` ids) the pass restated the standard from. */
+  instances: string[];
+  /**
+   * Accepted deliveries offered as the contrast set. Kept even when no boundary was found, so
+   * "no boundary" can be read as "none among these" rather than "never looked".
+   */
+  shipped: string[];
+}

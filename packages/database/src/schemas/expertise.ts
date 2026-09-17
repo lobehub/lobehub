@@ -8,6 +8,7 @@ import type {
   ExpertiseLessonSection,
   ExpertiseReasonKind,
   ExpertiseReasonSource,
+  ExpertiseRevisionEvidence,
 } from '@lobechat/types';
 import { isNotNull, isNull, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -448,6 +449,13 @@ export const expertiseLessonRevisions = pgTable(
     kind: text('kind', { enum: EXPERTISE_REVISION_KINDS }).notNull().default('user-feedback'),
     /** Title before the rewrite, so what was generalized is visible at a glance. */
     prevTitle: text('prev_title'),
+    /**
+     * The deliveries a generalize pass read, and which accepted delivery each exemption was read
+     * from. null on a person's rewrite, whose authority is `feedback` itself. jsonb rather than a
+     * link table: a pass reads a handful of deliveries and is only ever audited one revision at a
+     * time; the ids are provenance, so a deleted check simply stops resolving.
+     */
+    evidence: jsonb('evidence').$type<ExpertiseRevisionEvidence>(),
     changedByUserId: text('changed_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),

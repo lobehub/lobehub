@@ -1552,6 +1552,7 @@ table expertise_lesson_revisions {
   changed_by text [not null]
   kind text [not null, default: 'user-feedback']
   prev_title text
+  evidence jsonb
   changed_by_user_id text
   source_run_id uuid
   operation_id text

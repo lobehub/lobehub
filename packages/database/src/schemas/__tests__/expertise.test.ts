@@ -7,6 +7,7 @@ import {
   expertiseDomains,
   expertiseDomainSnapshots,
   expertiseHits,
+  expertiseLessonRevisions,
   expertiseLessons,
   expertiseRuns,
   users,
@@ -151,6 +152,53 @@ describe('expertise domain constraints', () => {
 
     expect(survivor).toBeDefined();
     expect(survivor.sourceCheckResultId).toBeNull();
+  });
+
+  it('keeps which accepted delivery a generalized boundary was read from', async () => {
+    const { lessonB } = await createFixture();
+    const evidence = {
+      boundaries: [
+        {
+          checkResultIds: ['ok-menu'],
+          limit: 'Separators that isolate a destructive menu action are allowed',
+        },
+      ],
+      instances: ['rejected-1', 'rejected-2', 'rejected-3'],
+      shipped: ['ok-menu', 'ok-table'],
+    };
+
+    await serverDB.insert(expertiseLessonRevisions).values([
+      {
+        changedBy: 'system',
+        evidence,
+        kind: 'generalize',
+        lessonId: lessonB.id,
+        revision: 1,
+        sections: [],
+      },
+      // A person's rewrite carries its authority in `feedback`, so it has no evidence.
+      {
+        changedBy: 'user',
+        feedback: 'tables are fine',
+        lessonId: lessonB.id,
+        revision: 2,
+        sections: [],
+      },
+    ]);
+
+    const rows = await serverDB
+      .select({
+        evidence: expertiseLessonRevisions.evidence,
+        revision: expertiseLessonRevisions.revision,
+      })
+      .from(expertiseLessonRevisions)
+      .where(eq(expertiseLessonRevisions.lessonId, lessonB.id))
+      .orderBy(expertiseLessonRevisions.revision);
+
+    expect(rows).toEqual([
+      { evidence, revision: 1 },
+      { evidence: null, revision: 2 },
+    ]);
   });
 
   it('rejects snapshots whose run belongs to another domain', async () => {
