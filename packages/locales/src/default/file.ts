@@ -143,6 +143,7 @@ export default {
   'pageEditor.comments.title': 'Comments',
   'pageEditor.comments.toggle': 'Comments',
   'pageEditor.comments.updateFailed': 'Failed to update comment. Try again.',
+  'pageEditor.copilot.toggle': 'Ask Lobe AI',
   'pageEditor.likes.failed': 'Failed to update your like. Try again.',
   'pageEditor.likes.like': 'Find this page helpful? Give it a like',
   'pageEditor.likes.liked': 'Liked',

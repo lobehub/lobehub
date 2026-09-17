@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Commentaires",
   "pageEditor.comments.toggle": "Commentaires",
   "pageEditor.comments.updateFailed": "Échec de la mise à jour du commentaire. Réessayez.",
+  "pageEditor.copilot.toggle": "Demander à Lobe AI",
   "pageEditor.deleteConfirm.content": "Cette page sera supprimée de façon définitive. Veuillez confirmer.",
   "pageEditor.deleteConfirm.title": "Supprimer la page",
   "pageEditor.deleteError": "Échec de la suppression de la page",

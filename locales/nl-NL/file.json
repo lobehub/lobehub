@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Reacties",
   "pageEditor.comments.toggle": "Opmerkingen",
   "pageEditor.comments.updateFailed": "Reactie bijwerken mislukt. Probeer opnieuw.",
+  "pageEditor.copilot.toggle": "Vraag Lobe AI",
   "pageEditor.deleteConfirm.content": "Deze pagina wordt verwijderd en kan niet worden hersteld. Wees voorzichtig.",
   "pageEditor.deleteConfirm.title": "Pagina verwijderen",
   "pageEditor.deleteError": "Verwijderen van pagina mislukt",

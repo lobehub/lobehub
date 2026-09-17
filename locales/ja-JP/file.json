@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "コメント",
   "pageEditor.comments.toggle": "コメント",
   "pageEditor.comments.updateFailed": "コメントの更新に失敗しました。再試行してください。",
+  "pageEditor.copilot.toggle": "Lobe AIに尋ねる",
   "pageEditor.deleteConfirm.content": "このドキュメントを削除しようとしています。削除後は元に戻せませんので、慎重に操作してください。",
   "pageEditor.deleteConfirm.title": "ドキュメントの削除",
   "pageEditor.deleteError": "ドキュメントの削除に失敗しました",

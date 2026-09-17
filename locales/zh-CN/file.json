@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "评论",
   "pageEditor.comments.toggle": "评论",
   "pageEditor.comments.updateFailed": "评论更新失败，请重试",
+  "pageEditor.copilot.toggle": "问 Lobe AI",
   "pageEditor.deleteConfirm.content": "确认删除该文稿吗？删除后不可恢复。建议先导出或复制重要内容",
   "pageEditor.deleteConfirm.title": "删除文稿",
   "pageEditor.deleteError": "删除遇到了问题。你可以重试",

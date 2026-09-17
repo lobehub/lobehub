@@ -119,6 +119,7 @@ const Header = memo(() => {
                   showActive
                   expand={showPageAgentPanel}
                   icon={SparklesIcon}
+                  title={t('pageEditor.copilot.toggle')}
                   onToggle={() => togglePageAgentPanel()}
                 />
               )}

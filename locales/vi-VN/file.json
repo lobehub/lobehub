@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Bình luận",
   "pageEditor.comments.toggle": "Bình luận",
   "pageEditor.comments.updateFailed": "Không thể cập nhật bình luận. Vui lòng thử lại.",
+  "pageEditor.copilot.toggle": "Hỏi Lobe AI",
   "pageEditor.deleteConfirm.content": "Trang này sẽ bị xóa và không thể khôi phục. Vui lòng cẩn thận.",
   "pageEditor.deleteConfirm.title": "Xóa Trang",
   "pageEditor.deleteError": "Không thể xóa trang",

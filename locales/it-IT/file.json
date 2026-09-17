@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Commenti",
   "pageEditor.comments.toggle": "Commenti",
   "pageEditor.comments.updateFailed": "Impossibile aggiornare il commento. Riprova.",
+  "pageEditor.copilot.toggle": "Chiedi a Lobe AI",
   "pageEditor.deleteConfirm.content": "Questa pagina verrà eliminata e non potrà essere recuperata. Procedi con cautela.",
   "pageEditor.deleteConfirm.title": "Elimina pagina",
   "pageEditor.deleteError": "Eliminazione della pagina non riuscita",

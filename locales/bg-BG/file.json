@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Коментари",
   "pageEditor.comments.toggle": "Коментари",
   "pageEditor.comments.updateFailed": "Неуспешно обновяване на коментар. Опитайте отново.",
+  "pageEditor.copilot.toggle": "Попитай Lobe AI",
   "pageEditor.deleteConfirm.content": "Тази страница ще бъде изтрита и не може да бъде възстановена. Моля, бъдете внимателни.",
   "pageEditor.deleteConfirm.title": "Изтриване на страница",
   "pageEditor.deleteError": "Неуспешно изтриване на страницата",

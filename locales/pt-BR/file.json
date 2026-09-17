@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Comentários",
   "pageEditor.comments.toggle": "Comentários",
   "pageEditor.comments.updateFailed": "Falha ao atualizar o comentário. Tente novamente.",
+  "pageEditor.copilot.toggle": "Perguntar ao Lobe AI",
   "pageEditor.deleteConfirm.content": "Esta página será excluída e não poderá ser recuperada. Prossiga com cautela.",
   "pageEditor.deleteConfirm.title": "Excluir Página",
   "pageEditor.deleteError": "Falha ao excluir a página",

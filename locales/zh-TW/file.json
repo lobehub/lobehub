@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "評論",
   "pageEditor.comments.toggle": "評論",
   "pageEditor.comments.updateFailed": "更新評論失敗。請再試一次。",
+  "pageEditor.copilot.toggle": "詢問 Lobe AI",
   "pageEditor.deleteConfirm.content": "即將刪除此文稿，刪除後將無法恢復，請謹慎操作。",
   "pageEditor.deleteConfirm.title": "刪除文稿",
   "pageEditor.deleteError": "刪除文稿失敗",

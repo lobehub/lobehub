@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "نظرات",
   "pageEditor.comments.toggle": "نظرات",
   "pageEditor.comments.updateFailed": "به‌روزرسانی نظر ناموفق بود. دوباره تلاش کنید.",
+  "pageEditor.copilot.toggle": "از Lobe AI بپرسید",
   "pageEditor.deleteConfirm.content": "این صفحه حذف خواهد شد و قابل بازیابی نیست. لطفاً با احتیاط ادامه دهید.",
   "pageEditor.deleteConfirm.title": "حذف صفحه",
   "pageEditor.deleteError": "حذف صفحه ناموفق بود",

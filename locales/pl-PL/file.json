@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Komentarze",
   "pageEditor.comments.toggle": "Komentarze",
   "pageEditor.comments.updateFailed": "Nie udało się zaktualizować komentarza. Spróbuj ponownie.",
+  "pageEditor.copilot.toggle": "Zapytaj Lobe AI",
   "pageEditor.deleteConfirm.content": "Ta strona zostanie usunięta i nie będzie można jej odzyskać. Proszę zachować ostrożność.",
   "pageEditor.deleteConfirm.title": "Usuń stronę",
   "pageEditor.deleteError": "Nie udało się usunąć strony",

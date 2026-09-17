@@ -100,6 +100,17 @@ const useEditorBody = (editor?: IEditor) => {
 const sameRootIds = (left: ReadonlySet<string>, right: ReadonlySet<string>) =>
   left.size === right.size && [...left].every((id) => right.has(id));
 
+/**
+ * A stable string for "did the anchor set actually change" `useMemo`/effect
+ * deps. A hand-joined string (even with a delimiter) risks two different
+ * anchor sets colliding into the same string, since a quote is arbitrary
+ * user content; JSON.stringify's array structure and escaping rule that out.
+ */
+export const buildAnchorSignature = (anchors: readonly DocumentCommentAnchorItem[]): string =>
+  JSON.stringify(
+    anchors.map(({ id, selectionAnchor }) => [id, selectionAnchor.start, selectionAnchor.quote]),
+  );
+
 export interface DocumentCommentAnchorsValue {
   /**
    * The thread whose run is emphasised in the body right now. A hover wins
@@ -203,13 +214,7 @@ export const useDocumentCommentAnchors = (
   const hasGutterRef = useRef(hasGutter);
   hasGutterRef.current = hasGutter;
 
-  const anchorSignature = useMemo(
-    () =>
-      anchors
-        .map(({ id, selectionAnchor }) => `${id}${selectionAnchor.start}${selectionAnchor.quote}`)
-        .join(' '),
-    [anchors],
-  );
+  const anchorSignature = useMemo(() => buildAnchorSignature(anchors), [anchors]);
   const hasPendingAnchor = Boolean(pendingAnchor);
 
   useEffect(() => {

@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Kommentare",
   "pageEditor.comments.toggle": "Kommentare",
   "pageEditor.comments.updateFailed": "Kommentar konnte nicht aktualisiert werden. Versuchen Sie es erneut.",
+  "pageEditor.copilot.toggle": "Lobe AI fragen",
   "pageEditor.deleteConfirm.content": "Diese Seite wird gelöscht und kann nicht wiederhergestellt werden. Bitte seien Sie vorsichtig.",
   "pageEditor.deleteConfirm.title": "Seite löschen",
   "pageEditor.deleteError": "Fehler beim Löschen der Seite",

@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "التعليقات",
   "pageEditor.comments.toggle": "التعليقات",
   "pageEditor.comments.updateFailed": "فشل تحديث التعليق. حاول مرة أخرى.",
+  "pageEditor.copilot.toggle": "اسأل Lobe AI",
   "pageEditor.deleteConfirm.content": "سيتم حذف هذه الصفحة ولا يمكن استعادتها. يرجى المتابعة بحذر.",
   "pageEditor.deleteConfirm.title": "حذف الصفحة",
   "pageEditor.deleteError": "فشل في حذف الصفحة",

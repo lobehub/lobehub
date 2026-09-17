@@ -130,6 +130,7 @@
   "pageEditor.comments.title": "Yorumlar",
   "pageEditor.comments.toggle": "Yorumlar",
   "pageEditor.comments.updateFailed": "Yorum güncellenemedi. Tekrar deneyin.",
+  "pageEditor.copilot.toggle": "Lobe AI'ye Sor",
   "pageEditor.deleteConfirm.content": "Bu sayfa silinecek ve geri alınamayacak. Lütfen dikkatli olun.",
   "pageEditor.deleteConfirm.title": "Sayfayı Sil",
   "pageEditor.deleteError": "Sayfa silinemedi",
