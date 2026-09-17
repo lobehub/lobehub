@@ -1,3 +1,5 @@
+import type { EnvironmentSource } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 /**
@@ -12,6 +14,23 @@ import { lambdaClient } from '@/libs/trpc/client';
  * session, so naming the topic the user is already talking to reuses that warm
  * session instead of cold-starting a second sandbox to list a directory.
  */
+/**
+ * The part of a specification this API accepts today, and deliberately narrower
+ * than `EnvironmentConfiguration`.
+ *
+ * `sources` is git-only because every other transport authenticates with a key,
+ * and a specification documented as carrying no credentials cannot present one.
+ * `requirements` is absent because nothing schedules on it yet — the server
+ * would drop it without a word, and a field the types refuse is better than one
+ * that quietly evaporates.
+ */
+export interface SandboxEnvironmentSpecification {
+  bootstrapCommand?: string;
+  env?: Record<string, string>;
+  internetAccess?: boolean;
+  sources?: Extract<EnvironmentSource, { kind: 'git' }>[];
+}
+
 class SandboxWorkspaceService {
   /**
    * Environment specifications: what an environment should contain. Answered
@@ -22,8 +41,17 @@ class SandboxWorkspaceService {
   createEnvironment = async (params: { description?: string; name: string }) =>
     lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
 
-  renameEnvironment = async (params: { description?: string; id: string; name?: string }) =>
-    lambdaClient.sandboxWorkspace.renameEnvironment.mutate(params);
+  /**
+   * Edits the specification. Nothing is rebuilt — every working copy of it just
+   * becomes stale, and rebuilding one discards what that conversation installed
+   * by hand, so it stays the person's call.
+   */
+  updateEnvironment = async (params: {
+    configuration?: SandboxEnvironmentSpecification;
+    description?: string;
+    id: string;
+    name?: string;
+  }) => lambdaClient.sandboxWorkspace.updateEnvironment.mutate(params);
 
   /** Refused while working copies still reference it — those go first. */
   removeEnvironment = async (params: { id: string }) =>
