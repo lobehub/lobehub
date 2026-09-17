@@ -337,7 +337,7 @@ export const chainExpertiseRejectionIngestion = (input: {
   };
 };
 
-export const EXPERTISE_CONSOLIDATION_PROMPT_VERSION = 'v1';
+export const EXPERTISE_CONSOLIDATION_PROMPT_VERSION = 'v2';
 
 export const EXPERTISE_CONSOLIDATION_JSON_SCHEMA = {
   name: 'expertise_consolidation',
@@ -347,9 +347,27 @@ export const EXPERTISE_CONSOLIDATION_JSON_SCHEMA = {
       // `false` is a real answer, not a failure: instances that only share a category do not
       // share a standard, and rewriting them into one invents a rule nobody stated.
       generalized: { type: 'boolean' },
+      // Structured rather than one `limits` sentence, because a boundary is only legitimate if it
+      // can name what it rests on. The service resolves every ref to a check result id and drops
+      // any entry that resolves to nothing — which turns "never invent an exemption" from a request
+      // into something enforced.
+      limits: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            // A limit the reviewer already stated on the current standard, carried over. Checked
+            // against the current text, so it cannot smuggle in a new exemption.
+            keptFromCurrent: { type: 'boolean' },
+            shippedRefs: { items: { type: 'string' }, type: 'array' },
+            text: { type: 'string' },
+          },
+          required: ['keptFromCurrent', 'shippedRefs', 'text'],
+          type: 'object',
+        },
+        type: 'array',
+      },
       // Plain strings rather than nullable unions — the pinned model answers a nullable under a
       // strict schema with `{}`, which fails the parse and loses the pass.
-      limits: { type: 'string' },
       note: { type: 'string' },
       reasonKind: { enum: ['mechanism', 'taste'], type: 'string' },
       reasoning: { type: 'string' },
@@ -380,12 +398,18 @@ If the instances do not share a standard, answer \`generalized\`: false and retu
 
 \`limits\` is the one thing you could not write from a single rejection, and SHIPPED is what makes it writable now.
 
-Look for a shipped delivery whose frame plainly shows this standard's subject, in the state the standard objects to — and which the reviewer accepted anyway. That is a boundary the reviewer drew with their own hands: the standard stops somewhere before that delivery. Write \`limits\` as where it stops, pointing at what is different about the case they let through.
+Look for a shipped delivery whose frame plainly shows this standard's subject, in the state the standard objects to — and which the reviewer accepted anyway. That is a boundary the reviewer drew with their own hands: the standard stops somewhere before that delivery. Write it as where the standard stops, pointing at what is different about the case they let through.
+
+Return \`limits\` as a list. Each entry is one exemption:
+- \`text\` — where the standard stops, in the reviewer's language.
+- \`shippedRefs\` — the labels of the SHIPPED deliveries it was read from (for example ["S2"]). Every new exemption must name at least one. An entry that names none, or names an instance, is discarded — and so is any label that is not listed.
+- \`keptFromCurrent\` — true only for a limit the reviewer already stated in the standard as it stands, which you are carrying over unchanged. Copy its wording; do not widen it. Never mark the placeholder "边界未由评审者说明" (in any language) as a limit.
 
 Rules on this, in order:
-- Only a shipped delivery whose frame you have actually read can justify a limit. Never infer one from the instances, from the standard's own wording, or from what a reasonable person "would obviously" exempt — an invented exemption silently narrows a standard the reviewer stated without limit.
-- If the shipped frames do not show the subject at all, you have learned nothing about the boundary. Answer exactly "边界未由评审者说明" (or that same sentence in the reviewer's language), and do not apologise for it in \`note\`.
-- If a shipped delivery shows the subject in the objectionable state and you cannot tell what makes it different, say that in \`note\` and keep the empty boundary. "I cannot see the distinction" is information; a guessed distinction is not.
+- Only a shipped delivery whose frame you have actually read can justify a new exemption. Never infer one from the instances, from the standard's own wording, or from what a reasonable person "would obviously" exempt — an invented exemption silently narrows a standard the reviewer stated without limit.
+- A limit the reviewer already stated stays. Dropping it widens the standard past what they said, which is the same failure in the other direction.
+- If the shipped frames do not show the subject at all, you have learned nothing about the boundary: return only the limits you are carrying over (often none), and do not apologise for it in \`note\`.
+- If a shipped delivery shows the subject in the objectionable state and you cannot tell what makes it different, say that in \`note\` and add no entry for it. "I cannot see the distinction" is information; a guessed distinction is not.
 
 ## The rest
 

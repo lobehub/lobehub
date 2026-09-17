@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ExpertiseConsolidationService } from './consolidation';
+import { ExpertiseConsolidationService, resolveLimits } from './consolidation';
 
 const { resolveExpertiseModelConfig } = vi.hoisted(() => ({
   resolveExpertiseModelConfig: vi.fn().mockResolvedValue({ model: 'm', provider: 'p' }),
@@ -56,11 +56,16 @@ const instance = (id: string, comment: string) => ({
  * accepted deliveries, then — inside the transaction — the latest revision number. `inserts` and
  * `updates` capture what would be written.
  */
-const createDb = (instances: unknown[], shipped: unknown[] = [], priorRevision = 0) => {
+const createDb = (
+  instances: unknown[],
+  shipped: unknown[] = [],
+  priorRevision = 0,
+  lesson: typeof LESSON = LESSON,
+) => {
   const inserts: Record<string, unknown>[] = [];
   const updates: Record<string, unknown>[] = [];
   const results: unknown[][] = [
-    [LESSON],
+    [lesson],
     instances,
     shipped,
     priorRevision > 0 ? [{ revision: priorRevision }] : [],
@@ -118,7 +123,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     ]);
     generateObject.mockResolvedValue({
       generalized: true,
-      limits: '边界未由评审者说明',
+      limits: [],
       note: 'I1–I3 都是未被要求的分隔线',
       reasonKind: 'taste',
       reasoning: '分隔线与留白表达同一件事，重复的边界让人多读一层结构',
@@ -140,6 +145,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     );
     expect(inserts[0]).toMatchObject({
       changedBy: 'system',
+      evidence: { boundaries: [], instances: ['c1', 'c2', 'c3'], shipped: [] },
       kind: 'generalize',
       prevTitle: '输入框内部工具栏不应添加多余的分隔线',
       revision: 1,
@@ -154,7 +160,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     ]);
     generateObject.mockResolvedValue({
       generalized: false,
-      limits: '',
+      limits: [],
       note: '三条都是位置问题，但不是同一条标准',
       reasonKind: 'taste',
       reasoning: '',
@@ -167,17 +173,35 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     expect(result).toMatchObject({ generalized: false, reason: 'nothing-new' });
     // Nothing is rewritten — but the pass is logged, or the same instances get re-read every round.
     expect(updates).toHaveLength(0);
-    expect(inserts[0]).toMatchObject({ kind: 'generalize', prevTitle: LESSON.title });
+    // …and records what it looked at, so "not one standard" can be checked against the same rows.
+    expect(inserts[0]).toMatchObject({
+      evidence: { instances: ['c1', 'c2', 'c3'] },
+      kind: 'generalize',
+      prevTitle: LESSON.title,
+    });
   });
 
-  it('writes the boundary the model read off an accepted delivery', async () => {
-    const { db, updates } = createDb(
+  it('stores which accepted delivery each boundary was read from, and drops the ones that name none', async () => {
+    const { db, inserts, updates } = createDb(
       [instance('c1', 'a'), instance('c2', 'b'), instance('c3', 'c')],
-      [{ detail: null, example: null, id: 'ok_1', title: 'accepted check' }],
+      [
+        { detail: null, example: null, id: 'ok_menu', title: 'menu' },
+        { detail: null, example: null, id: 'ok_table', title: 'table' },
+      ],
     );
     generateObject.mockResolvedValue({
       generalized: true,
-      limits: '表格的表头与内容之间保留分隔线 —— 属主在 S1 里放行了这种用法',
+      limits: [
+        {
+          keptFromCurrent: false,
+          shippedRefs: ['S1'],
+          text: '下拉菜单里隔离危险操作的分隔线不受此限',
+        },
+        // Cites nothing the reviewer shipped — an invented exemption.
+        { keptFromCurrent: false, shippedRefs: [], text: '卡片内部的分隔线不受此限' },
+        // Cites a rejected instance, which can never justify an exemption.
+        { keptFromCurrent: false, shippedRefs: ['I2'], text: '表单里的分隔线不受此限' },
+      ],
       note: '',
       reasonKind: 'mechanism',
       reasoning: 'r',
@@ -188,7 +212,41 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     await new ExpertiseConsolidationService(db, 'user_1').consolidate('lesson_1');
 
     const sections = updates[0].sections as { body: string; key: string }[];
-    expect(sections.find((section) => section.key === 'limits')?.body).toContain('S1');
+    expect(sections.find((section) => section.key === 'limits')?.body).toBe(
+      '下拉菜单里隔离危险操作的分隔线不受此限',
+    );
+    expect(inserts[0].evidence).toEqual({
+      boundaries: [
+        { checkResultIds: ['ok_menu'], limit: '下拉菜单里隔离危险操作的分隔线不受此限' },
+      ],
+      instances: ['c1', 'c2', 'c3'],
+      shipped: ['ok_menu', 'ok_table'],
+    });
+  });
+
+  it('keeps the limits the standard already had when the pass adds none', async () => {
+    const stated = '表格表头下方的线不受此限';
+    const { db, updates } = createDb(
+      [instance('c1', 'a'), instance('c2', 'b'), instance('c3', 'c')],
+      [],
+      0,
+      { ...LESSON, sections: [...LESSON.sections, { body: stated, key: 'limits' }] },
+    );
+    generateObject.mockResolvedValue({
+      generalized: true,
+      limits: [],
+      note: '',
+      reasonKind: 'taste',
+      reasoning: 'r',
+      subject: 's',
+      title: 't',
+    });
+
+    await new ExpertiseConsolidationService(db, 'user_1').consolidate('lesson_1');
+
+    // Dropping a boundary the reviewer stated widens the standard past what they said.
+    const sections = updates[0].sections as { body: string; key: string }[];
+    expect(sections.find((section) => section.key === 'limits')?.body).toBe(stated);
   });
 
   it('counts a delivery once even when it backs the standard through several hits', async () => {
@@ -243,5 +301,39 @@ describe('ExpertiseConsolidationService.dueForConsolidation', () => {
     );
 
     await expect(service.dueForConsolidation('domain_1')).resolves.toEqual(['grown']);
+  });
+});
+
+describe('resolveLimits', () => {
+  it('carries over a limit the reviewer already stated, even re-wrapped', () => {
+    const { boundaries, texts } = resolveLimits(
+      [{ keptFromCurrent: true, shippedRefs: [], text: '表格表头  下方的线\n不受此限' }],
+      [],
+      '表格表头下方的线不受此限',
+    );
+
+    expect(texts).toEqual(['表格表头  下方的线\n不受此限']);
+    // It rests on the reviewer's words, not on a delivery, so it is not a boundary with ids.
+    expect(boundaries).toEqual([]);
+  });
+
+  it('refuses a "kept" limit the current standard never had', () => {
+    const { texts } = resolveLimits(
+      [{ keptFromCurrent: true, shippedRefs: [], text: '图表里的线不受此限' }],
+      [],
+      '表格表头下方的线不受此限',
+    );
+
+    expect(texts).toEqual([]);
+  });
+
+  it('ignores labels that were never listed and does not repeat an id', () => {
+    const { boundaries } = resolveLimits(
+      [{ keptFromCurrent: false, shippedRefs: ['S1', 'S1', 'S9'], text: 'x' }],
+      ['ok_1'],
+      '',
+    );
+
+    expect(boundaries).toEqual([{ checkResultIds: ['ok_1'], limit: 'x' }]);
   });
 });

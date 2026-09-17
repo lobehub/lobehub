@@ -10,7 +10,11 @@ import {
   EXPERTISE_CONSOLIDATION_JSON_SCHEMA,
   EXPERTISE_CONSOLIDATION_PROMPT_VERSION,
 } from '@lobechat/prompts';
-import type { ExpertiseLessonSection, VerifyCheckDecisionDetail } from '@lobechat/types';
+import type {
+  ExpertiseLessonSection,
+  ExpertiseRevisionEvidence,
+  VerifyCheckDecisionDetail,
+} from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq, gt, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -58,13 +62,63 @@ const pct = (value: number) => `${Math.round(value * 100)}%`;
 
 const ConsolidationSchema = z.object({
   generalized: z.boolean(),
-  limits: z.string(),
+  limits: z.array(
+    z.object({
+      keptFromCurrent: z.boolean(),
+      shippedRefs: z.array(z.string()),
+      text: z.string(),
+    }),
+  ),
   note: z.string(),
   reasonKind: z.enum(['mechanism', 'taste']),
   reasoning: z.string(),
   subject: z.string(),
   title: z.string(),
 });
+
+/** Whitespace-insensitive, so a carried-over limit survives the model re-wrapping it. */
+const squash = (text: string) => text.replaceAll(/\s+/g, '');
+
+/**
+ * The limits a pass may write, each tied to what it rests on.
+ *
+ * A new exemption survives only if it names a shipped delivery that was actually offered; a
+ * carried-over one only if its wording is already in the standard. Everything else — no refs, an
+ * instance ref, a label that was never listed, a "kept" limit the standard never had — is dropped.
+ * This is where "never invent a boundary" stops being a request to the model.
+ */
+export const resolveLimits = (
+  limits: z.infer<typeof ConsolidationSchema>['limits'],
+  shippedIds: string[],
+  currentLimits: string,
+) => {
+  const byRef = new Map(shippedIds.map((id, index) => [`S${index + 1}`, id]));
+  const current = squash(currentLimits);
+  const kept: string[] = [];
+  const boundaries: ExpertiseRevisionEvidence['boundaries'] = [];
+
+  for (const limit of limits) {
+    const text = limit.text.trim();
+    if (!text) continue;
+
+    if (limit.keptFromCurrent) {
+      if (current && current.includes(squash(text))) kept.push(text);
+      continue;
+    }
+
+    const checkResultIds = [
+      ...new Set(
+        limit.shippedRefs
+          .map((ref) => byRef.get(ref.trim()))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (checkResultIds.length === 0) continue;
+    boundaries.push({ checkResultIds, limit: text });
+  }
+
+  return { boundaries, texts: [...kept, ...boundaries.map((boundary) => boundary.limit)] };
+};
 
 export interface ConsolidationResult {
   generalized: boolean;
@@ -200,12 +254,22 @@ export class ExpertiseConsolidationService {
       },
     );
     const result = ConsolidationSchema.parse(raw);
+    const shippedIds = shipped.map((delivery) => delivery.id);
+    const { boundaries, texts } = resolveLimits(result.limits, shippedIds, section('limits'));
+    const evidence: ExpertiseRevisionEvidence = {
+      boundaries,
+      instances: instances.map((instance) => instance.id),
+      shipped: shippedIds,
+    };
 
     // A refusal is still a pass: recording it is what stops the same instances being re-read on
     // every subsequent rejection, and "these do not share a standard" is the honest answer for a
     // category like placement, where only 11% of complaints repeat.
     if (!result.generalized || !result.title.trim()) {
-      await this.recordRevision(lesson, lesson.sections, result.note, { generalized: false });
+      await this.recordRevision(lesson, lesson.sections, result.note, {
+        evidence,
+        generalized: false,
+      });
       return { generalized: false, lessonId, note: result.note, reason: 'nothing-new' };
     }
 
@@ -220,7 +284,11 @@ export class ExpertiseConsolidationService {
       // The worked example is the one section this pass has no better source for than the lesson
       // already has, so it is carried over rather than regenerated.
       ...lesson.sections.filter((entry) => entry.key === 'how'),
-      ...(result.limits.trim() ? [{ body: result.limits.trim(), key: 'limits' as const }] : []),
+      // Nothing survived resolution → the standard keeps the limits section it already had (the
+      // reviewer's own boundary, or ingestion's "not stated" placeholder), rather than losing it.
+      ...(texts.length > 0
+        ? [{ body: texts.join('\n'), key: 'limits' as const }]
+        : lesson.sections.filter((entry) => entry.key === 'limits')),
     ];
 
     await this.db.transaction(async (tx) => {
@@ -228,7 +296,7 @@ export class ExpertiseConsolidationService {
         .update(expertiseLessons)
         .set({ reasonKind: result.reasonKind, sections, title: result.title.trim() })
         .where(eq(expertiseLessons.id, lessonId));
-      await this.recordRevision(lesson, sections, result.note, { generalized: true, tx });
+      await this.recordRevision(lesson, sections, result.note, { evidence, generalized: true, tx });
     });
 
     log('consolidated %s: %s -> %s', lesson.code, lesson.title, result.title);
@@ -392,7 +460,7 @@ export class ExpertiseConsolidationService {
     lesson: { id: string; title: string },
     sections: ExpertiseLessonSection[],
     note: string,
-    options: { generalized: boolean; tx?: LobeChatDatabase },
+    options: { evidence: ExpertiseRevisionEvidence; generalized: boolean; tx?: LobeChatDatabase },
   ) => {
     const db = options.tx ?? this.db;
     const [prior] = await db
@@ -404,6 +472,7 @@ export class ExpertiseConsolidationService {
 
     await db.insert(expertiseLessonRevisions).values({
       changedBy: 'system',
+      evidence: options.evidence,
       feedback: note,
       kind: 'generalize',
       lessonId: lesson.id,
