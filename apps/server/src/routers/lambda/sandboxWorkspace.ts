@@ -452,18 +452,31 @@ export const sandboxWorkspaceRouter = router({
    * yet, which is a normal state and not an error.
    */
   listInstances: instanceProcedure
-    .input(z.object({ environmentId: idSchema.optional(), topicId: topicIdSchema }))
+    .input(
+      z.object({
+        environmentId: idSchema.optional(),
+        topicId: topicIdSchema,
+        /**
+         * Sizes come from the snapshot store, which is reachable only through a
+         * sandbox session and pays a cold start to answer. A settings page is
+         * worth that wait; a picker in the composer is not, and asks for names
+         * alone.
+         */
+        withSizes: z.boolean().default(true),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const [instances, snapshots] = await Promise.all([
         ctx.instanceModel.query({ environmentId: input.environmentId }),
-        ctx.client
-          .listEnvironments({ topicId: input.topicId })
-          .then((result) => result.environments)
-          // The snapshot store is reachable only through a sandbox session. If
-          // that fails, the instances still exist and can still be renamed or
-          // selected — only their sizes are unknown, so say so rather than
-          // failing a settings page.
-          .catch(() => null),
+        input.withSizes
+          ? ctx.client
+              .listEnvironments({ topicId: input.topicId })
+              .then((result) => result.environments)
+              // If the store fails, the instances still exist and can still be
+              // renamed or selected — only their sizes are unknown, so say so
+              // rather than failing a settings page.
+              .catch(() => null)
+          : [],
       ]);
 
       const byId = new Map((snapshots ?? []).map((snapshot) => [snapshot.name, snapshot]));

@@ -67,8 +67,9 @@ class SandboxWorkspaceService {
    * Reaching the snapshot store needs a live sandbox session, so this can take
    * seconds on a cold start and callers should render a loading state.
    */
-  listInstances = async (params: { environmentId?: string; topicId?: string } = {}) =>
-    lambdaClient.sandboxWorkspace.listInstances.query(params);
+  listInstances = async (
+    params: { environmentId?: string; topicId?: string; withSizes?: boolean } = {},
+  ) => lambdaClient.sandboxWorkspace.listInstances.query(params);
 
   /** One working copy, from the database alone — no sandbox session, no wait. */
   getInstance = async (params: { id: string }) =>
