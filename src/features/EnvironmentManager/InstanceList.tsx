@@ -56,16 +56,16 @@ const InstanceList = memo<InstanceListProps>(
       <Flexbox gap={8}>
         <Flexbox gap={2}>
           <Text fontSize={12} type={'secondary'} weight={500}>
-            {t('sandboxEnvironments.instances.title')}
+            {t('environments.instances.title')}
           </Text>
           <Text fontSize={12} type={'secondary'}>
-            {t('sandboxEnvironments.instances.desc')}
+            {t('environments.instances.desc')}
           </Text>
         </Flexbox>
 
         {instances.length === 0 && !adding && (
           <Text fontSize={12} type={'secondary'}>
-            {t('sandboxEnvironments.instances.empty')}
+            {t('environments.instances.empty')}
           </Text>
         )}
 
@@ -77,9 +77,9 @@ const InstanceList = memo<InstanceListProps>(
                   {instance.name}
                 </Text>
                 {instance.stale && (
-                  <Tooltip title={t('sandboxEnvironments.instances.staleHint')}>
+                  <Tooltip title={t('environments.instances.staleHint')}>
                     <Tag color={'warning'} size={'small'}>
-                      {t('sandboxEnvironments.instances.stale')}
+                      {t('environments.instances.stale')}
                     </Tag>
                   </Tooltip>
                 )}
@@ -95,12 +95,12 @@ const InstanceList = memo<InstanceListProps>(
                 ? '—'
                 : instance.snapshot
                   ? formatSize(instance.snapshot.bytes)
-                  : t('sandboxEnvironments.instances.unused')}
+                  : t('environments.instances.unused')}
             </Text>
             <ActionIcon
               icon={Trash2Icon}
               size={'small'}
-              title={t('sandboxEnvironments.instances.remove')}
+              title={t('environments.instances.remove')}
               onClick={() => onRemove(instance.id)}
             />
           </Flexbox>
@@ -108,7 +108,7 @@ const InstanceList = memo<InstanceListProps>(
 
         {snapshotsUnavailable && instances.length > 0 && (
           <Text fontSize={12} type={'secondary'}>
-            {t('sandboxEnvironments.instances.snapshotsUnavailable')}
+            {t('environments.instances.snapshotsUnavailable')}
           </Text>
         )}
 
@@ -116,29 +116,29 @@ const InstanceList = memo<InstanceListProps>(
           <Flexbox gap={6}>
             <Flexbox horizontal align={'center'} gap={8}>
               <Input
-                placeholder={t('sandboxEnvironments.instances.namePlaceholder')}
+                placeholder={t('environments.instances.namePlaceholder')}
                 style={{ flex: 1 }}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
               <Input
-                placeholder={t('sandboxEnvironments.instances.directoryPlaceholder')}
+                placeholder={t('environments.instances.directoryPlaceholder')}
                 style={{ flex: 1 }}
                 value={workingDirectory}
                 onChange={(event) => setWorkingDirectory(event.target.value)}
               />
               <Button disabled={!canCreate} loading={busy} size={'small'} onClick={create}>
-                {t('sandboxEnvironments.instances.add')}
+                {t('environments.instances.add')}
               </Button>
             </Flexbox>
             <Text fontSize={12} type={'secondary'}>
-              {t('sandboxEnvironments.instances.directoryHint')}
+              {t('environments.instances.directoryHint')}
             </Text>
           </Flexbox>
         ) : (
           <Flexbox horizontal>
             <Button icon={<Icon icon={PlusIcon} />} size={'small'} onClick={() => setAdding(true)}>
-              {t('sandboxEnvironments.instances.add')}
+              {t('environments.instances.add')}
             </Button>
           </Flexbox>
         )}
