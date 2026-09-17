@@ -34,10 +34,32 @@ export interface SandboxWorkspaceInfo {
   dir: string;
   key: string;
   lastActiveAt: string | null;
+  /**
+   * Outcome of the most recent environment snapshot. Snapshots happen when a
+   * session is torn down, with no request left to fail, so this is the only
+   * place a user can learn their environments stopped being saved.
+   */
+  lastSnapshotAt: string | null;
+  lastSnapshotError: string | null;
   quotaBytes: number;
   status: 'active' | 'archived';
   usageBytes: number | null;
   usageCheckedAt: string | null;
+}
+
+/**
+ * A snapshot the execution plane holds. Only environments that have actually
+ * been captured appear — one created but never used has metadata here and no
+ * snapshot there, which is why the two are joined rather than assumed to match.
+ */
+export interface SandboxEnvironmentSnapshot {
+  /** Size of the snapshot archive itself; exact, not a directory walk. */
+  bytes: number;
+  /** Files in the archive, or `null` when the sidecar metadata disagrees with it. */
+  files: number | null;
+  /** The identifier, which is this platform's environment id. */
+  name: string;
+  updatedAt: string;
 }
 
 export interface SandboxWorkspaceClientOptions {
@@ -113,6 +135,27 @@ export const createSandboxWorkspaceClient = ({
         method: 'POST',
       }),
 
+    copyEnvironment: async (
+      params: RequestContext & { from: string; to: string },
+    ): Promise<{ name: string }> =>
+      request(`${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.from)}/copy`, {
+        body: JSON.stringify({ to: params.to, topicId: params.topicId }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    deleteEnvironment: async (
+      params: RequestContext & { name: string },
+    ): Promise<{ name: string }> => {
+      const query = withTopic(new URLSearchParams(), params);
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request(
+        `${CURRENT_WORKSPACE}/environments/${encodeURIComponent(params.name)}${suffix}`,
+        { method: 'DELETE' },
+      );
+    },
+
     deleteFile: async (
       params: RequestContext & { path: string; recursive?: boolean },
     ): Promise<{ path: string }> => {
@@ -127,6 +170,20 @@ export const createSandboxWorkspaceClient = ({
       const suffix = query.size > 0 ? `?${query.toString()}` : '';
 
       return request(`${CURRENT_WORKSPACE}${suffix}`);
+    },
+
+    /**
+     * Needs a live sandbox session, so it can take seconds on a cold start —
+     * a caller rendering this must show it is loading rather than treat it as
+     * data it already has.
+     */
+    listEnvironments: async (
+      params: RequestContext = {},
+    ): Promise<{ environments: SandboxEnvironmentSnapshot[] }> => {
+      const query = withTopic(new URLSearchParams(), params);
+      const suffix = query.size > 0 ? `?${query.toString()}` : '';
+
+      return request(`${CURRENT_WORKSPACE}/environments${suffix}`);
     },
 
     listFiles: async (

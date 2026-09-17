@@ -132,6 +132,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private userId: string;
   private workspaceId?: string;
   private sandboxCwd?: string;
+  private sandboxEnvironment?: string;
   private sandboxMode?: SandboxMode;
   private device?: SkillDeviceExecution;
   private disabledSkillIds: Set<string>;
@@ -166,6 +167,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      * CLIs, injected credentials and anything outside the workspace with it.
      */
     sandboxCwd?: string;
+    sandboxEnvironment?: string;
     sandboxMode?: SandboxMode;
     serverDB: LobeChatDatabase;
     /** Agent Share only: `lh` must not mint a creator-scoped token for a visitor. */
@@ -186,6 +188,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
     this.sandboxCwd = options.sandboxCwd;
+    this.sandboxEnvironment = options.sandboxEnvironment;
     this.sandboxMode = options.sandboxMode;
     this.device = options.device;
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
@@ -321,6 +324,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
         serverDB: this.serverDB,
         topicId: this.topicId,
@@ -666,6 +670,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
         serverDB: this.serverDB,
         topicId: this.topicId,
@@ -726,6 +731,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxEnvironment: this.sandboxEnvironment,
         sandboxMode: this.sandboxMode,
         topicId: this.topicId,
         userId: this.userId,
@@ -890,6 +896,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       marketService,
       resourceService,
       sandboxCwd: sandbox.cwd,
+      sandboxEnvironment: sandbox.environment,
       sandboxMode: sandbox.mode,
       serverDB: context.serverDB,
       shareVisitorBlocked: !!shareVisitor,

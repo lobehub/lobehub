@@ -52,7 +52,8 @@ export class MarketSandboxProvider implements SandboxProvider {
     toolName: string,
     params: Record<string, unknown>,
   ): Promise<SandboxCallToolResult> {
-    const { marketService, sandboxCwd, sandboxMode, topicId, userId } = this.options;
+    const { marketService, sandboxCwd, sandboxEnvironment, sandboxMode, topicId, userId } =
+      this.options;
 
     log(
       'Calling sandbox tool: %s with params: %O, topicId: %s, mode: %s',
@@ -73,6 +74,7 @@ export class MarketSandboxProvider implements SandboxProvider {
           // `sandboxCwd` relies on until the execution plane consumes it.
           ...(sandboxMode && { sandboxMode }),
           ...(sandboxCwd && { sandboxCwd }),
+          ...(sandboxEnvironment && { sandboxEnvironment }),
           topicId,
           userId,
         } as never,

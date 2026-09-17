@@ -333,6 +333,20 @@ export interface ChatTopicMetadata {
    */
   sandboxCwd?: string;
   /**
+   * Which named cloud-sandbox environment this topic runs in — the packages and
+   * toolchain restored at the start of a session and captured again at the end.
+   * Absent means the caller's `default` environment.
+   *
+   * Orthogonal to {@link ChatTopicMetadata.sandboxCwd}: the environment holds
+   * what was installed, the working directory holds what was produced. A topic
+   * picks one of each.
+   *
+   * Fixed for the life of a session — the execution plane binds the session on
+   * its first call and refuses a snapshot under a different name — so a change
+   * takes effect the next time the sandbox starts.
+   */
+  sandboxEnvironmentId?: string;
+  /**
    * Whether this topic's cloud sandbox should persist its working directory.
    * Absent means ephemeral — persistence is an explicit choice, since not every
    * task wants to leave files behind. Mirrors `SandboxMode` in

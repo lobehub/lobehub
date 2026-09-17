@@ -38,7 +38,11 @@ describe('resolveSandboxSessionConfig', () => {
     findById.mockReset();
     resolveSandboxWorkspaceClaim.mockResolvedValue(CLAIM);
     findById.mockResolvedValue({
-      metadata: { sandboxCwd: 'projects/atlas', sandboxMode: 'persistent' },
+      metadata: {
+        sandboxCwd: 'projects/atlas',
+        sandboxEnvironmentId: 'env_9aB3xQ',
+        sandboxMode: 'persistent',
+      },
     });
   });
 
@@ -46,6 +50,7 @@ describe('resolveSandboxSessionConfig', () => {
     await expect(resolve()).resolves.toEqual({
       claim: CLAIM,
       cwd: 'projects/atlas',
+      environment: 'env_9aB3xQ',
       mode: 'persistent',
     });
   });
@@ -69,6 +74,17 @@ describe('resolveSandboxSessionConfig', () => {
       findById.mockResolvedValue({ metadata });
       await expect(resolve()).resolves.toEqual({ claim: CLAIM, mode: 'ephemeral' });
     }
+  });
+
+  // The default environment is a working session, just not the one that was
+  // asked for. Failing the call instead would leave the topic unable to run at
+  // all until someone edited a database row.
+  it('falls back to the default environment when the stored id is unusable', async () => {
+    findById.mockResolvedValue({
+      metadata: { sandboxEnvironmentId: 'has space', sandboxMode: 'persistent' },
+    });
+
+    await expect(resolve()).resolves.toEqual({ claim: CLAIM, mode: 'persistent' });
   });
 
   it('drops a directory that would not survive the fence', async () => {
