@@ -269,4 +269,31 @@ describe('AcceptanceService decision gating', () => {
     );
     expect(mocks.updateStatus).toHaveBeenCalledWith('acc-1', 'rejected');
   });
+
+  it.each([
+    ['accept', (svc: ReturnType<typeof service>) => svc.accept('acc-1', 'looks good')],
+    ['reject', (svc: ReturnType<typeof service>) => svc.reject('acc-1', 'not yet')],
+  ])('distils the final round when the reviewer settles by %s', async (_verb, decide) => {
+    mocks.findById.mockResolvedValue(acceptance('delivered'));
+
+    await decide(service());
+
+    // No later round will ever follow this one, so a terminal decision is the only thing that can
+    // settle it. Without this the last round of every acceptance is silently never learned from.
+    expect(mocks.distilRejections).toHaveBeenCalledWith({
+      acceptanceId: 'acc-1',
+      userId: 'user-1',
+      verifyRunId: 'run-1',
+      workspaceId: undefined,
+    });
+  });
+
+  it('refuses a terminal decision with no round, and distils nothing', async () => {
+    mocks.findById.mockResolvedValue(acceptance('delivered'));
+    mocks.listByAcceptance.mockResolvedValue([]);
+
+    await expect(service().accept('acc-1')).rejects.toThrow('no verification round');
+    expect(mocks.distilRejections).not.toHaveBeenCalled();
+    expect(mocks.updateStatus).not.toHaveBeenCalled();
+  });
 });

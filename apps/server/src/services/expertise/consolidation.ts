@@ -254,6 +254,16 @@ export class ExpertiseConsolidationService {
       },
     );
     const result = ConsolidationSchema.parse(raw);
+    // Only ever downgrade. Replaying one group twice with an unchanged prompt returned `taste`
+    // once and `mechanism` once, and the two are not symmetric: `mechanism` is the permissive
+    // value — it is what lets a standard compile into a criterion that blocks a delivery on its
+    // own. Ingestion decided this at the lesson's birth from the reviewer's own words, so letting
+    // a later pass promote it means a mechanism nobody stated can arm the gate through model
+    // noise. Admitting taste needs no such proof.
+    const reasonKind =
+      lesson.reasonKind === 'taste' && result.reasonKind === 'mechanism'
+        ? 'taste'
+        : result.reasonKind;
     const shippedIds = shipped.map((delivery) => delivery.id);
     const { boundaries, texts } = resolveLimits(result.limits, shippedIds, section('limits'));
     const evidence: ExpertiseRevisionEvidence = {
@@ -294,7 +304,7 @@ export class ExpertiseConsolidationService {
     await this.db.transaction(async (tx) => {
       await tx
         .update(expertiseLessons)
-        .set({ reasonKind: result.reasonKind, sections, title: result.title.trim() })
+        .set({ reasonKind, sections, title: result.title.trim() })
         .where(eq(expertiseLessons.id, lessonId));
       await this.recordRevision(lesson, sections, result.note, { evidence, generalized: true, tx });
     });

@@ -249,6 +249,51 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     expect(sections.find((section) => section.key === 'limits')?.body).toBe(stated);
   });
 
+  it('will not promote a taste standard to a mechanism', async () => {
+    // LESSON is taste. Replaying the same group twice returned both answers, so an upgrade here is
+    // model noise arming the compile gate with a mechanism the reviewer never gave.
+    const { db, updates } = createDb([
+      instance('c1', 'a'),
+      instance('c2', 'b'),
+      instance('c3', 'c'),
+    ]);
+    generateObject.mockResolvedValue({
+      generalized: true,
+      limits: [],
+      note: '',
+      reasonKind: 'mechanism',
+      reasoning: 'r',
+      subject: 's',
+      title: 't',
+    });
+
+    await new ExpertiseConsolidationService(db, 'user_1').consolidate('lesson_1');
+
+    expect(updates[0].reasonKind).toBe('taste');
+  });
+
+  it('lets a mechanism standard admit it was taste all along', async () => {
+    const { db, updates } = createDb(
+      [instance('c1', 'a'), instance('c2', 'b'), instance('c3', 'c')],
+      [],
+      0,
+      { ...LESSON, reasonKind: 'mechanism' },
+    );
+    generateObject.mockResolvedValue({
+      generalized: true,
+      limits: [],
+      note: '',
+      reasonKind: 'taste',
+      reasoning: 'r',
+      subject: 's',
+      title: 't',
+    });
+
+    await new ExpertiseConsolidationService(db, 'user_1').consolidate('lesson_1');
+
+    expect(updates[0].reasonKind).toBe('taste');
+  });
+
   it('counts a delivery once even when it backs the standard through several hits', async () => {
     const { db } = createDb([instance('c1', 'a'), instance('c1', 'a again'), instance('c2', 'b')]);
 
