@@ -21,12 +21,34 @@ export interface EnvironmentConfiguration {
    */
   env?: Record<string, string>;
   /**
+   * Paths the author declares REGENERABLE, relative to an instance's own root.
+   *
+   * Not merely "skip these". What is named here is kept apart from the work
+   * that cannot be remade, and what is kept apart may be discarded to reclaim
+   * space — so a path listed here that cannot in fact be rebuilt is work its
+   * owner can lose. Read it as a promise about the path, not an optimization.
+   *
+   * Declarative rather than a cleanup command run just before capture, which
+   * deletes unattended and then immediately makes the result permanent.
+   */
+  excludePaths?: string[];
+  /**
    * Whether work in this environment may reach the network. Omitted means the
    * adapter decides, which is not uniform: a sandbox runs connected so that a
    * bootstrap can install anything, while a device simply has whatever network
    * the machine has and cannot enforce a restriction at all.
    */
   internetAccess?: boolean;
+  /**
+   * Run every time work resumes in an instance, after whatever was built is
+   * restored — refreshing a checkout, reapplying a migration.
+   *
+   * Emphatically not {@link EnvironmentConfiguration.bootstrapCommand} run
+   * again: bootstrap is what makes an empty instance usable and is expensive by
+   * nature, so running it per task would discard the whole point of building
+   * once. This is the short reconciliation that follows.
+   */
+  maintenanceCommand?: string;
   /** Requirements, not a selection of a particular machine or provider. */
   requirements?: EnvironmentResourceRequirements;
   sources?: EnvironmentSource[];
