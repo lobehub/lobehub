@@ -171,6 +171,7 @@ export interface SortRouterOptionsParams {
 
 export interface RouteSuccessParams {
   channelId?: string;
+  channelWeight?: number;
   firstChannelId?: string;
   method: RouterRuntimeMethod;
   model: string;
@@ -752,6 +753,7 @@ export const createRouterRuntime = ({
             try {
               await params.onRouteSuccess({
                 channelId,
+                channelWeight: optionItem.weight,
                 firstChannelId,
                 method: routeContext.method,
                 model,

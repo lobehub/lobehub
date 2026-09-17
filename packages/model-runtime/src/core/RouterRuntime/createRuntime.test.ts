@@ -2070,6 +2070,7 @@ describe('createRouterRuntime', () => {
       expect(onRouteSuccess).toHaveBeenCalledWith(
         expect.objectContaining({
           channelId: 'channel-b',
+          channelWeight: 30,
           firstChannelId: 'channel-a',
           method: 'chat',
           model: 'gpt-4',
