@@ -53,6 +53,9 @@ export const componentMap = {
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
   }),
+  [SettingsTabs.SandboxEnvironments]: dynamic(() => import('../sandboxEnvironments'), {
+    loading: loading('Settings > SandboxEnvironments'),
+  }),
   [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
     loading: loading('Settings > Labels'),
   }),
