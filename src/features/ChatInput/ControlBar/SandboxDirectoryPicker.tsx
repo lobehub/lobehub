@@ -56,7 +56,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface SandboxDirectoryPickerProps {
-  onChange: (path: string | undefined) => void;
+  /**
+   * May be async: the caller has to record the choice before it can be used,
+   * and that is a round trip. Errors are left to propagate, as they are for
+   * folder creation below.
+   */
+  onChange: (path: string | undefined) => Promise<void> | void;
   /** Topic whose warm sandbox session should serve the listing. */
   topicId?: string;
   /** Currently selected directory, relative to the workspace root. */

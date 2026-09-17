@@ -25,6 +25,22 @@ vi.mock('@/database/models/environment', () => ({
   }),
 }));
 
+const mockInstanceCreate = vi.fn();
+const mockInstanceDelete = vi.fn();
+const mockInstanceFindById = vi.fn();
+
+vi.mock('@/database/models/environmentInstance', () => ({
+  EnvironmentInstanceModel: vi.fn(function () {
+    return {
+      create: mockInstanceCreate,
+      delete: mockInstanceDelete,
+      findById: mockInstanceFindById,
+      query: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
+}));
+
 const mockCopyEnvironment = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
@@ -58,6 +74,53 @@ describe('sandboxWorkspaceRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolveClaim.mockResolvedValue({ key: 'ws-org-1', quotaBytes: 1024 });
+  });
+
+  describe('createInstance', () => {
+    it("binds the working copy to the caller's own workspace", async () => {
+      // The binding is what `environment_instances_provider_path_unique` keys
+      // on, so it has to name the caller's storage rather than be accepted from
+      // the request — otherwise two members could be told they share a folder.
+      mockInstanceCreate.mockResolvedValue({ id: 'instance-1' });
+
+      await sandboxWorkspaceRouter.createCaller(ctx).createInstance({
+        environmentId,
+        name: 'Atlas',
+        workingDirectory: 'projects/atlas',
+      });
+
+      expect(mockInstanceCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'sandbox', providerScope: 'ws-org-1' }),
+      );
+    });
+
+    it('reports an environment it may not use as missing', async () => {
+      // The model answers `undefined` for "not yours" and "not there" alike.
+      // Telling them apart here would confirm that an id exists.
+      mockInstanceCreate.mockResolvedValue(undefined);
+
+      await expect(
+        sandboxWorkspaceRouter.createCaller(ctx).createInstance({
+          environmentId,
+          name: 'Atlas',
+          workingDirectory: 'projects/atlas',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('maps a directory already taken by another copy to CONFLICT', async () => {
+      mockInstanceCreate.mockRejectedValue(
+        uniqueViolation('environment_instances_provider_path_unique'),
+      );
+
+      await expect(
+        sandboxWorkspaceRouter.createCaller(ctx).createInstance({
+          environmentId,
+          name: 'Atlas',
+          workingDirectory: 'projects/atlas',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_INSTANCE_DIRECTORY' });
+    });
   });
 
   describe('entitlement', () => {
@@ -108,31 +171,50 @@ describe('sandboxWorkspaceRouter', () => {
     });
   });
 
-  describe('copyEnvironment', () => {
-    it('carries the specification onto the copy, not just the snapshot', async () => {
-      // The snapshot is a cache of the specification. A copy that took the
-      // cache without the recipe would rebuild into something else entirely
-      // the first time that cache was dropped.
-      const configuration = { sources: [{ kind: 'git', url: 'https://example.com/repo.git' }] };
-      mockFindById.mockResolvedValue({
-        configuration,
-        description: 'Original',
-        id: environmentId,
-        name: 'Data analysis',
-      });
-      mockCreate.mockResolvedValue({ id: 'copy-id' });
+  describe('copyInstance', () => {
+    const source = {
+      environmentId: '9f8b1c2d-0000-4000-8000-000000000001',
+      id: environmentId,
+      name: 'Atlas',
+      workingDirectory: 'projects/atlas',
+    };
+
+    it('forks the copy off the same environment and copies the built state', async () => {
+      mockInstanceFindById.mockResolvedValue(source);
+      mockInstanceCreate.mockResolvedValue({ id: 'copy-id' });
       mockCopyEnvironment.mockResolvedValue(undefined);
 
-      await sandboxWorkspaceRouter
-        .createCaller(ctx)
-        .copyEnvironment({ id: environmentId, name: 'Data analysis (copy)' });
-
-      expect(mockCreate).toHaveBeenCalledWith({
-        configuration,
-        description: 'Original',
-        name: 'Data analysis (copy)',
+      await sandboxWorkspaceRouter.createCaller(ctx).copyInstance({
+        id: environmentId,
+        name: 'Atlas (copy)',
+        workingDirectory: 'projects/atlas-copy',
       });
+
+      expect(mockInstanceCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          environmentId: source.environmentId,
+          name: 'Atlas (copy)',
+          workingDirectory: 'projects/atlas-copy',
+        }),
+      );
       expect(mockCopyEnvironment).toHaveBeenCalledWith({ from: environmentId, to: 'copy-id' });
+    });
+
+    it('removes the row again when the built state fails to copy', async () => {
+      // Otherwise the copy is an instance the UI shows as ready while its
+      // directory holds nothing — the person would find out by running in it.
+      mockInstanceFindById.mockResolvedValue(source);
+      mockInstanceCreate.mockResolvedValue({ id: 'copy-id' });
+      mockCopyEnvironment.mockRejectedValue(new Error('upstream down'));
+
+      await expect(
+        sandboxWorkspaceRouter.createCaller(ctx).copyInstance({
+          id: environmentId,
+          name: 'Atlas (copy)',
+          workingDirectory: 'projects/atlas-copy',
+        }),
+      ).rejects.toThrow();
+      expect(mockInstanceDelete).toHaveBeenCalledWith('copy-id');
     });
   });
 });
