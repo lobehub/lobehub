@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
-import SandboxEnvironmentManager from '@/features/SandboxEnvironmentManager';
+import EnvironmentManager from '@/features/EnvironmentManager';
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
@@ -17,9 +17,9 @@ const Page = memo(() => {
       variant={'filled'}
       items={[
         {
-          children: <SandboxEnvironmentManager />,
+          children: <EnvironmentManager />,
           extra: null,
-          title: t('sandboxEnvironments.title'),
+          title: t('environments.title'),
         },
       ]}
       {...FORM_STYLE}
@@ -27,6 +27,6 @@ const Page = memo(() => {
   );
 });
 
-Page.displayName = 'SandboxEnvironmentsSetting';
+Page.displayName = 'EnvironmentsSetting';
 
 export default Page;

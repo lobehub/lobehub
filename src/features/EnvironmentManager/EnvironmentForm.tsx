@@ -137,10 +137,10 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
     <Flexbox gap={20} paddingBlock={8}>
       <Flexbox gap={6}>
         <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('sandboxEnvironments.form.description')}
+          {t('environments.form.description')}
         </Text>
         <Input
-          placeholder={t('sandboxEnvironments.form.descriptionPlaceholder')}
+          placeholder={t('environments.form.descriptionPlaceholder')}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
         />
@@ -148,10 +148,10 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
 
       <Flexbox gap={6}>
         <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('sandboxEnvironments.form.sources')}
+          {t('environments.form.sources')}
         </Text>
         <Text fontSize={12} type={'secondary'}>
-          {t('sandboxEnvironments.form.sourcesHint')}
+          {t('environments.form.sourcesHint')}
         </Text>
         {state.sources.map((source, index) => (
           <Flexbox horizontal align={'center'} gap={8} key={index}>
@@ -162,13 +162,13 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
               onChange={(event) => updateSource(index, { url: event.target.value })}
             />
             <Input
-              placeholder={t('sandboxEnvironments.form.ref')}
+              placeholder={t('environments.form.ref')}
               style={{ flex: 1 }}
               value={source.ref ?? ''}
               onChange={(event) => updateSource(index, { ref: event.target.value })}
             />
             <Input
-              placeholder={t('sandboxEnvironments.form.path')}
+              placeholder={t('environments.form.path')}
               style={{ flex: 1 }}
               value={source.path ?? ''}
               onChange={(event) => updateSource(index, { path: event.target.value })}
@@ -176,7 +176,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
             <ActionIcon
               icon={Trash2Icon}
               size={'small'}
-              title={t('sandboxEnvironments.form.removeSource')}
+              title={t('environments.form.removeSource')}
               onClick={() => patch({ sources: state.sources.filter((_, at) => at !== index) })}
             />
           </Flexbox>
@@ -187,17 +187,17 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
             size={'small'}
             onClick={() => patch({ sources: [...state.sources, { url: '' }] })}
           >
-            {t('sandboxEnvironments.form.addSource')}
+            {t('environments.form.addSource')}
           </Button>
         </Flexbox>
       </Flexbox>
 
       <Flexbox gap={6}>
         <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('sandboxEnvironments.form.bootstrap')}
+          {t('environments.form.bootstrap')}
         </Text>
         <Text fontSize={12} type={'secondary'}>
-          {t('sandboxEnvironments.form.bootstrapHint')}
+          {t('environments.form.bootstrapHint')}
         </Text>
         <TextArea
           autoSize={{ maxRows: 10, minRows: 3 }}
@@ -209,10 +209,10 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
 
       <Flexbox gap={6}>
         <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('sandboxEnvironments.form.maintenance')}
+          {t('environments.form.maintenance')}
         </Text>
         <Text fontSize={12} type={'secondary'}>
-          {t('sandboxEnvironments.form.maintenanceHint')}
+          {t('environments.form.maintenanceHint')}
         </Text>
         <TextArea
           autoSize={{ maxRows: 6, minRows: 2 }}
@@ -224,10 +224,10 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
 
       <Flexbox gap={6}>
         <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('sandboxEnvironments.form.exclude')}
+          {t('environments.form.exclude')}
         </Text>
         <Text fontSize={12} type={'secondary'}>
-          {t('sandboxEnvironments.form.excludeHint')}
+          {t('environments.form.excludeHint')}
         </Text>
         <TextArea
           autoSize={{ maxRows: 8, minRows: 2 }}
@@ -239,12 +239,12 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
 
       <Flexbox gap={6}>
         <Text fontSize={12} type={'secondary'} weight={500}>
-          {t('sandboxEnvironments.form.env')}
+          {t('environments.form.env')}
         </Text>
         {/* Said plainly because the shape cannot enforce it: a text field cannot
             tell a region from a token. */}
         <Text fontSize={12} type={'secondary'}>
-          {t('sandboxEnvironments.form.envHint')}
+          {t('environments.form.envHint')}
         </Text>
         {state.env.map(([key, value], index) => (
           <Flexbox horizontal align={'center'} gap={8} key={index}>
@@ -275,7 +275,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
             <ActionIcon
               icon={Trash2Icon}
               size={'small'}
-              title={t('sandboxEnvironments.form.removeEnv')}
+              title={t('environments.form.removeEnv')}
               onClick={() => patch({ env: state.env.filter((_, at) => at !== index) })}
             />
           </Flexbox>
@@ -286,7 +286,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
             size={'small'}
             onClick={() => patch({ env: [...state.env, ['', '']] })}
           >
-            {t('sandboxEnvironments.form.addEnv')}
+            {t('environments.form.addEnv')}
           </Button>
         </Flexbox>
       </Flexbox>
@@ -294,10 +294,10 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
         <Flexbox gap={2}>
           <Text fontSize={12} weight={500}>
-            {t('sandboxEnvironments.form.internetAccess')}
+            {t('environments.form.internetAccess')}
           </Text>
           <Text fontSize={12} type={'secondary'}>
-            {t('sandboxEnvironments.form.internetAccessHint')}
+            {t('environments.form.internetAccessHint')}
           </Text>
         </Flexbox>
         <Switch
@@ -309,10 +309,10 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
       {dirty && (
         <Flexbox horizontal align={'center'} gap={12} justify={'flex-end'}>
           <Text fontSize={12} type={'secondary'}>
-            {t('sandboxEnvironments.form.staleWarning')}
+            {t('environments.form.staleWarning')}
           </Text>
           <Button loading={saving} size={'small'} type={'primary'} onClick={save}>
-            {t('sandboxEnvironments.form.save')}
+            {t('environments.form.save')}
           </Button>
         </Flexbox>
       )}

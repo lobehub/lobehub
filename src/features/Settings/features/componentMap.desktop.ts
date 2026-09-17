@@ -12,6 +12,7 @@ import Appearance from '../appearance';
 import Connector from '../connector';
 import Creds from '../creds';
 import Devices from '../devices';
+import Environments from '../environments';
 import Hotkey from '../hotkey';
 import Labels from '../labels';
 import Labs from '../labs';
@@ -22,7 +23,6 @@ import OAuthApps from '../oauth-apps';
 import Profile from '../profile';
 import Provider from '../provider';
 import Proxy from '../proxy';
-import SandboxEnvironments from '../sandboxEnvironments';
 import Security from '../security';
 import ServiceModel from '../service-model';
 import Skill from '../skill';
@@ -45,7 +45,7 @@ export const componentMap = {
   [SettingsTabs.SystemTools]: SystemTools,
   [SettingsTabs.Storage]: Storage,
   [SettingsTabs.Devices]: Devices,
-  [SettingsTabs.SandboxEnvironments]: SandboxEnvironments,
+  [SettingsTabs.Environments]: Environments,
   [SettingsTabs.Labels]: Labels,
   // Profile related tabs
   [SettingsTabs.Profile]: Profile,

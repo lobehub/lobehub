@@ -3773,60 +3773,60 @@ When I am ___, I need ___
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
-  'tab.sandboxEnvironments': 'Sandbox environments',
-  'sandboxEnvironments.title': 'Sandbox environments',
-  'sandboxEnvironments.desc':
-    'What a cloud sandbox should contain, and the working copies built from it.',
-  'sandboxEnvironments.create': 'New environment',
-  'sandboxEnvironments.namePlaceholder': 'Environment name',
-  'sandboxEnvironments.empty': 'No environments yet',
-  'sandboxEnvironments.remove': 'Delete environment',
-  'sandboxEnvironments.duplicateName': 'You already have an environment with this name',
-  'sandboxEnvironments.hasInstances': 'Remove its working copies first',
-  'sandboxEnvironments.pending':
-    'Stored, but not yet acted on: the sandbox cannot build from a specification until the execution plane supports it.',
-  'sandboxEnvironments.form.description': 'Description',
-  'sandboxEnvironments.form.descriptionPlaceholder': 'What this environment is for',
-  'sandboxEnvironments.form.sources': 'Source code',
-  'sandboxEnvironments.form.sourcesHint':
+  'tab.environments': 'Environments',
+  'environments.title': 'Environments',
+  'environments.desc':
+    'What a run should have around it, and the working copies built from each one.',
+  'environments.create': 'New environment',
+  'environments.namePlaceholder': 'Environment name',
+  'environments.empty': 'No environments yet',
+  'environments.remove': 'Delete environment',
+  'environments.duplicateName': 'You already have an environment with this name',
+  'environments.hasInstances': 'Remove its working copies first',
+  'environments.pending':
+    'Stored, but not yet acted on: nothing can build from a specification until the execution plane supports it.',
+  'environments.form.description': 'Description',
+  'environments.form.descriptionPlaceholder': 'What this environment is for',
+  'environments.form.sources': 'Source code',
+  'environments.form.sourcesHint':
     'Cloned over HTTPS before anything else runs. Private repositories are not supported yet — a specification holds no credentials.',
-  'sandboxEnvironments.form.ref': 'Branch or tag',
-  'sandboxEnvironments.form.path': 'Folder',
-  'sandboxEnvironments.form.addSource': 'Add repository',
-  'sandboxEnvironments.form.removeSource': 'Remove repository',
-  'sandboxEnvironments.form.bootstrap': 'Setup command',
-  'sandboxEnvironments.form.bootstrapHint':
+  'environments.form.ref': 'Branch or tag',
+  'environments.form.path': 'Folder',
+  'environments.form.addSource': 'Add repository',
+  'environments.form.removeSource': 'Remove repository',
+  'environments.form.bootstrap': 'Setup command',
+  'environments.form.bootstrapHint':
     'Runs once in the checkout, with network access, before the conversation starts.',
-  'sandboxEnvironments.form.env': 'Environment variables',
-  'sandboxEnvironments.form.envHint':
+  'environments.form.env': 'Environment variables',
+  'environments.form.envHint':
     'Non-secret values only — these are stored as plain text and copied into every working copy.',
-  'sandboxEnvironments.form.addEnv': 'Add variable',
-  'sandboxEnvironments.form.removeEnv': 'Remove variable',
-  'sandboxEnvironments.form.internetAccess': 'Agent internet access',
-  'sandboxEnvironments.form.internetAccessHint':
+  'environments.form.addEnv': 'Add variable',
+  'environments.form.removeEnv': 'Remove variable',
+  'environments.form.internetAccess': 'Agent internet access',
+  'environments.form.internetAccessHint':
     'Setup always has network access. This controls the conversation itself.',
-  'sandboxEnvironments.form.save': 'Save',
-  'sandboxEnvironments.form.staleWarning': 'Saving marks every working copy as needing a rebuild',
-  'sandboxEnvironments.instances.title': 'Working copies',
-  'sandboxEnvironments.instances.desc':
+  'environments.form.save': 'Save',
+  'environments.form.staleWarning': 'Saving marks every working copy as needing a rebuild',
+  'environments.instances.title': 'Working copies',
+  'environments.instances.desc':
     'Each copy has its own folder and its own installed state, so two conversations can run side by side without overwriting each other.',
-  'sandboxEnvironments.instances.empty': 'No working copies yet',
-  'sandboxEnvironments.instances.add': 'New working copy',
-  'sandboxEnvironments.instances.namePlaceholder': 'Copy name',
-  'sandboxEnvironments.instances.directoryPlaceholder': 'reports/q3',
-  'sandboxEnvironments.instances.directoryHint':
+  'environments.instances.empty': 'No working copies yet',
+  'environments.instances.add': 'New working copy',
+  'environments.instances.namePlaceholder': 'Copy name',
+  'environments.instances.directoryPlaceholder': 'reports/q3',
+  'environments.instances.directoryHint':
     'Where this copy keeps what you want to keep — reports, data, exports. Source code lives with the environment, not here.',
-  'sandboxEnvironments.instances.unused': 'Never used',
-  'sandboxEnvironments.instances.stale': 'Needs rebuild',
-  'sandboxEnvironments.instances.staleHint': 'The specification changed after this copy was built.',
-  'sandboxEnvironments.instances.remove': 'Delete copy',
-  'sandboxEnvironments.instances.duplicateDirectory': 'Another copy already uses this folder',
-  'sandboxEnvironments.instances.snapshotsUnavailable':
-    'Sizes unavailable — the sandbox could not be reached',
-  'sandboxEnvironments.form.maintenance': 'Maintenance command',
-  'sandboxEnvironments.form.maintenanceHint':
+  'environments.instances.unused': 'Never used',
+  'environments.instances.stale': 'Needs rebuild',
+  'environments.instances.staleHint': 'The specification changed after this copy was built.',
+  'environments.instances.remove': 'Delete copy',
+  'environments.instances.duplicateDirectory': 'Another copy already uses this folder',
+  'environments.instances.snapshotsUnavailable':
+    "Sizes unavailable — this copy's storage could not be reached",
+  'environments.form.maintenance': 'Maintenance command',
+  'environments.form.maintenanceHint':
     'Runs each time work resumes in a copy — refreshing a checkout, reapplying a migration. Not the setup command again: that one is expensive and is meant to run once.',
-  'sandboxEnvironments.form.exclude': 'Regenerable paths',
-  'sandboxEnvironments.form.excludeHint':
+  'environments.form.exclude': 'Regenerable paths',
+  'environments.form.excludeHint':
     'One per line, relative to the copy. Listing a path says it can be rebuilt, so it is kept apart from your work and may be discarded to reclaim space. Anything named here that cannot be rebuilt is work you can lose.',
 };

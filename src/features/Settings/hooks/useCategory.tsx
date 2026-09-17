@@ -144,8 +144,8 @@ export const useCategory = () => {
       },
       enablePersistentSandbox && {
         icon: ContainerIcon,
-        key: SettingsTabs.SandboxEnvironments,
-        label: t('tab.sandboxEnvironments'),
+        key: SettingsTabs.Environments,
+        label: t('tab.environments'),
       },
       (enableBusinessFeatures || isDesktop) && {
         icon: BellIcon,
