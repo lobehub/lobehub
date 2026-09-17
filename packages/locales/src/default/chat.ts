@@ -2413,8 +2413,6 @@ export default {
   'topicComment.updateFailed': 'Failed to update comment',
   'translate.action': 'Translate',
   'translate.clear': 'Clear Translation',
-  'tts.action': 'Text-to-Speech',
-  'tts.clear': 'Clear Speech',
   'turnProcess.done_one': 'Ran {{count}} step',
   'turnProcess.done_other': 'Ran {{count}} steps',
   'turnProcess.ranFor_one': 'Ran {{count}} step ({{duration}})',

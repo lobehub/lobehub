@@ -2,7 +2,6 @@ import {
   type ChatMessageError,
   type ChatMessagePluginError,
   type ChatTranslate,
-  type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
   type HeterogeneousToolStateSnapshot,
@@ -260,10 +259,6 @@ export class MessageService {
 
   updateMessageTranslate = async (id: string, translate: Partial<ChatTranslate> | false) => {
     return lambdaClient.message.updateTranslate.mutate({ id, value: translate as ChatTranslate });
-  };
-
-  updateMessageTTS = async (id: string, tts: Partial<ChatTTS> | false) => {
-    return lambdaClient.message.updateTTS.mutate({ id, value: tts });
   };
 
   updateMessageMetadata = async (

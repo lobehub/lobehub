@@ -138,7 +138,6 @@
   "transfer.transferRequestExpired": "This transfer request has expired. Ask for a new one to be sent.",
   "transfer.transferRequestPending": "This agent already has a pending transfer request. Withdraw it or wait for the recipient to respond.",
   "transfer.transferRequestStale": "The agent changed since this request was created, so it can no longer complete.",
-  "tts.responseError": "Service request failed, please check the configuration or try again",
   "unknownError.copyTraceId": "Trace ID Copied",
   "unknownError.copyTraceIdTooltip": "Click to copy",
   "unknownError.desc": "An unexpected error occurred. You can retry or report on",

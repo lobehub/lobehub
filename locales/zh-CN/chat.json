@@ -2118,8 +2118,6 @@
   "transferMigration.topicPendingCopy.title": "该会话正在复制",
   "translate.action": "翻译",
   "translate.clear": "删除翻译",
-  "tts.action": "语音朗读",
-  "tts.clear": "删除语音",
   "turnProcess.done_one": "共运行 {{count}} 步",
   "turnProcess.done_other": "共运行 {{count}} 步",
   "turnProcess.ranFor_one": "共运行 {{count}} 步 ({{duration}})",
