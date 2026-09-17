@@ -811,6 +811,7 @@ export const connectorRouter = router({
   syncToolsFromClient: connectorProcedure
     .input(
       z.object({
+        id: z.string().uuid().optional(),
         identifier: z.string().min(1),
         name: z.string().min(1),
         sourceType: z.enum([
@@ -828,21 +829,33 @@ export const connectorRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { connectorId, writable } = await upsertConnectorEntry(ctx, {
+      const { connectorId, sourceType, writable } = await upsertConnectorEntry(ctx, {
+        id: input.id,
         identifier: input.identifier,
         name: input.name,
         sourceType: input.sourceType,
       });
       if (!writable) return { connectorId, toolCount: 0 };
 
-      const syncInputs = input.tools.map((t) => ({
-        crudType: inferCrudType(t.toolName),
-        description: t.description,
-        inputSchema: t.inputSchema,
-        toolName: t.toolName,
-      }));
+      // Linear replaced these operations with save_document. Retire only these
+      // known names: cached/static/partial lists must not prune other tools.
+      const retiredToolNames =
+        input.identifier === 'linear' && sourceType === ConnectorSourceType.marketplace
+          ? ['create_document', 'update_document']
+          : [];
+      const syncInputs = input.tools
+        .filter((t) => !retiredToolNames.includes(t.toolName))
+        .map((t) => ({
+          crudType: inferCrudType(t.toolName),
+          description: t.description,
+          inputSchema: t.inputSchema,
+          toolName: t.toolName,
+        }));
 
       await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
+      if (retiredToolNames.length > 0) {
+        await ctx.connectorToolModel.deleteToolsByNames(connectorId, retiredToolNames);
+      }
       return { connectorId, toolCount: syncInputs.length };
     }),
 
@@ -1025,11 +1038,12 @@ async function upsertConnectorEntry(
     avatar?: string;
     composio?: ConnectorMetadata['composio'];
     description?: string;
+    id?: string;
     identifier: string;
     name: string;
     sourceType: string;
   },
-): Promise<{ connectorId: string; writable: boolean }> {
+): Promise<{ connectorId: string; sourceType: string; writable: boolean }> {
   const metadata: ConnectorMetadata = {};
   if (params.description) metadata.description = params.description;
   if (params.avatar) metadata.avatar = params.avatar;
@@ -1051,6 +1065,21 @@ async function upsertConnectorEntry(
           workspaceId: ctx.workspaceId,
         });
 
+  // Explicit refresh targets an existing row, including agent-owned rows.
+  // Never fall back to a same-named base row or rewrite connection metadata.
+  if (params.id) {
+    const row = await ctx.connectorModel.findPublicById(params.id);
+    if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+    if (row.identifier !== params.identifier || row.sourceType !== params.sourceType) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector identity does not match' });
+    }
+    return {
+      connectorId: row.id,
+      sourceType: row.sourceType,
+      writable: canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId),
+    };
+  }
+
   const existing = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (existing.length > 0) {
     const row = existing[0];
@@ -1060,7 +1089,7 @@ async function upsertConnectorEntry(
       // while refreshing display fields from the latest plugin manifest.
       await ctx.connectorModel.update(row.id, { metadata: { ...row.metadata, ...metadata } });
     }
-    return { connectorId: row.id, writable };
+    return { connectorId: row.id, sourceType: row.sourceType, writable };
   }
 
   if (!canWrite) {
@@ -1075,7 +1104,7 @@ async function upsertConnectorEntry(
     sourceType: params.sourceType as any,
     status: ConnectorStatus.connected,
   });
-  return { connectorId: created.id, writable: true };
+  return { connectorId: created.id, sourceType: created.sourceType, writable: true };
 }
 
 /** Map builtin manifest humanIntervention → default ConnectorToolPermission */
