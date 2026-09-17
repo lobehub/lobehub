@@ -6,7 +6,6 @@ export interface SettingsSearchContext {
   enableBusinessFeatures: boolean;
   enableComposio: boolean;
   enableGatewayMode: boolean;
-  enableSTT: boolean;
   /** Whether the signed-in user has an email on their profile */
   hasEmail: boolean;
   hideDocs: boolean;
@@ -123,10 +122,6 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<SettingsTabs, string[]>> = {
     'model assignment',
     'topic naming',
     'translation',
-    'tts',
-    'tts settings',
-    'voice',
-    'speech',
     'image',
     'image generation',
     'embedding',
@@ -445,13 +440,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['follow up', 'input completion', 'prompt rewrite', 'suggestion'],
     labelKey: 'serviceModel.optionalFeatures.title',
     tab: SettingsTabs.ServiceModel,
-  },
-  {
-    anchor: 'service-model-tts',
-    keywords: ['tts', 'tts settings', 'voice', 'speech', 'text to speech'],
-    labelKey: 'settingTTS.openai.ttsModel',
-    tab: SettingsTabs.ServiceModel,
-    visible: (ctx) => ctx.enableSTT,
   },
   {
     anchor: 'service-model-image',

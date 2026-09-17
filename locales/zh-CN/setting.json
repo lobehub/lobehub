@@ -1248,7 +1248,7 @@
   "settingsSearch.tabKeywords.provider": "服务商,模型,大模型,语言模型,模型服务商,自定义服务商,密钥,接入点,apikey,byok,model provider",
   "settingsSearch.tabKeywords.proxy": "代理,网络,连接,代理设置",
   "settingsSearch.tabKeywords.referral": "推荐,邀请,奖励,返利",
-  "settingsSearch.tabKeywords.serviceModel": "服务模型,模型分配,话题命名,翻译,语音,语音合成,语音设置,图片,图片生成,向量化,提示词改写,输入建议,跟进建议,搜索,搜索模型",
+  "settingsSearch.tabKeywords.serviceModel": "服务模型,模型分配,话题命名,翻译,图片,图片生成,向量化,提示词改写,输入建议,跟进建议,搜索,搜索模型",
   "settingsSearch.tabKeywords.skill": "技能,插件,工具",
   "settingsSearch.tabKeywords.stats": "数据统计,统计,分析",
   "settingsSearch.tabKeywords.storage": "存储,文件,导入,导出,备份,重置,清除数据,清理存储,知识库,资源,注销,删除账号",
