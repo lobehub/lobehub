@@ -1,6 +1,7 @@
 import {
   DEFAULT_SANDBOX_MODE,
   isSafeSandboxCwd,
+  isSafeSandboxEnvironmentId,
   type SandboxMode,
   type SandboxWorkspaceClaim,
 } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -26,6 +27,13 @@ export interface SandboxSessionConfig {
    * on a run that is actually persistent.
    */
   cwd?: string;
+  /**
+   * Named environment to restore, or `undefined` for the caller's default.
+   * Carries the same invariant as {@link SandboxSessionConfig.mode}: a session
+   * is bound to one environment on its first call, so every call for a topic
+   * has to agree or the snapshot at the end is refused.
+   */
+  environment?: string;
   mode: SandboxMode;
 }
 
@@ -88,7 +96,20 @@ export const resolveSandboxSessionConfig = async ({
       log('Ignoring unusable sandboxCwd on topic %s: %o', topicId, storedCwd);
     }
 
-    return { claim, cwd, mode: 'persistent' };
+    // An identifier the execution plane would reject becomes "no environment"
+    // rather than a failed call: the default environment is a working session,
+    // just not the one that was asked for, and the alternative is a topic that
+    // cannot run at all until someone edits a database row.
+    const storedEnvironment = topic.metadata.sandboxEnvironmentId;
+    const environment =
+      typeof storedEnvironment === 'string' && isSafeSandboxEnvironmentId(storedEnvironment)
+        ? storedEnvironment
+        : undefined;
+    if (storedEnvironment && !environment) {
+      log('Ignoring unusable sandboxEnvironmentId on topic %s: %o', topicId, storedEnvironment);
+    }
+
+    return { claim, cwd, environment, mode: 'persistent' };
   } catch (error) {
     log('Failed to read sandbox preferences for topic %s: %O', topicId, error);
     return { claim, mode: DEFAULT_SANDBOX_MODE };

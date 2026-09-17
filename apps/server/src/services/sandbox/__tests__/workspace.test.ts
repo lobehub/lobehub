@@ -4,6 +4,7 @@ import {
   formatSandboxWorkspacePrompt,
   formatSandboxWorkspacePromptVariables,
   isSafeSandboxCwd,
+  isSafeSandboxEnvironmentId,
   type SandboxWorkspacePromptVariables,
   systemPrompt,
 } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -181,6 +182,35 @@ describe('isSafeSandboxCwd', () => {
       'x'.repeat(1025),
     ]) {
       expect(isSafeSandboxCwd(value)).toBe(false);
+    }
+  });
+});
+
+describe('isSafeSandboxEnvironmentId', () => {
+  it('accepts the identifiers this platform issues', () => {
+    expect(isSafeSandboxEnvironmentId('env_9aB3xQ')).toBe(true);
+    expect(isSafeSandboxEnvironmentId('default')).toBe(true);
+    // A uuid, in case environments are ever keyed by one.
+    expect(isSafeSandboxEnvironmentId('0f8c1e2a-4b6d-4c9e-8a1f-2d3e4f5a6b7c')).toBe(true);
+  });
+
+  // Checked on this side as well as the far one because of WHERE the far one
+  // fails: the session runs to completion and the snapshot is refused at the
+  // end, so the work is done and there is nowhere to put it.
+  it('refuses what the execution plane would reject at snapshot time', () => {
+    for (const value of [
+      '',
+      // A leading underscore is fine in a workspace key and not here — the two
+      // rules are deliberately different.
+      '_leading',
+      '.hidden',
+      '-dash',
+      'has/slash',
+      'has space',
+      'évil',
+      'x'.repeat(65),
+    ]) {
+      expect(isSafeSandboxEnvironmentId(value)).toBe(false);
     }
   });
 });
