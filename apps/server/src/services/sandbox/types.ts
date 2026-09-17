@@ -19,6 +19,12 @@ export interface SandboxSessionContext {
    */
   sandboxCwd?: string;
   /**
+   * Named environment to restore for this run; absent means the caller's
+   * default. Like `sandboxMode`, every call for a topic must carry the same
+   * value — the session binds to one environment on its first call.
+   */
+  sandboxEnvironment?: string;
+  /**
    * Whether this run wants its working directory to survive the session.
    * Absent means ephemeral. Half the decision — the execution plane also
    * requires an entitlement on the trust token, which is minted upstream of

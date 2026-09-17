@@ -13,6 +13,31 @@ import { lambdaClient } from '@/libs/trpc/client';
  * session instead of cold-starting a second sandbox to list a directory.
  */
 class SandboxWorkspaceService {
+  /**
+   * Environments the caller has, each joined with the snapshot the execution
+   * plane holds. A brand-new environment has no snapshot yet — that is normal,
+   * not an error, and the UI shows it as unused rather than missing.
+   *
+   * Reaching the snapshot store needs a live sandbox session, so this can take
+   * seconds on a cold start and callers should render a loading state.
+   */
+  listEnvironments = async (params: { topicId?: string } = {}) =>
+    lambdaClient.sandboxWorkspace.listEnvironments.query(params);
+
+  createEnvironment = async (params: { description?: string; name: string }) =>
+    lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
+
+  /** Rename or re-describe. The identifier the snapshot lives under never moves. */
+  renameEnvironment = async (params: { description?: string; id: string; name?: string }) =>
+    lambdaClient.sandboxWorkspace.renameEnvironment.mutate(params);
+
+  copyEnvironment = async (params: { description?: string; id: string; name: string }) =>
+    lambdaClient.sandboxWorkspace.copyEnvironment.mutate(params);
+
+  /** Refused while a conversation is still using it — the caller surfaces that. */
+  removeEnvironment = async (params: { id: string; topicId?: string }) =>
+    lambdaClient.sandboxWorkspace.removeEnvironment.mutate(params);
+
   /** Create a directory (parents included, idempotent). */
   createDirectory = async (params: { path: string; topicId?: string }) =>
     lambdaClient.sandboxWorkspace.createDirectory.mutate(params);

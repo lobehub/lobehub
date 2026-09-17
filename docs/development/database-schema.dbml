@@ -1357,6 +1357,8 @@ table environments {
   indexes {
     user_id [name: 'environments_user_id_idx']
     workspace_id [name: 'environments_workspace_id_idx']
+    (user_id, name) [name: 'environments_user_name_unique', unique]
+    (workspace_id, user_id, name) [name: 'environments_workspace_user_name_unique', unique]
     
     
   }
