@@ -99,13 +99,20 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
   const { t } = useTranslation('setting');
   const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
 
-  const [baseline] = useState(() => toSpecification(toFormState(configuration)));
+  // What was last written, so the save affordance can go away once it has been.
+  // Re-deriving this from props would not do: the row does not remount after a
+  // save, so an initializer would keep comparing against the specification as it
+  // stood when the page opened and the form would claim unsaved changes forever.
+  const [saved, setSaved] = useState(() => ({
+    configuration: toSpecification(toFormState(configuration)),
+    description: environment.description ?? '',
+  }));
   const [state, setState] = useState<FormState>(() => toFormState(configuration));
   const [description, setDescription] = useState(environment.description ?? '');
   const [saving, setSaving] = useState(false);
 
   const next = toSpecification(state);
-  const dirty = !isEqual(next, baseline) || description !== (environment.description ?? '');
+  const dirty = !isEqual(next, saved.configuration) || description !== saved.description;
 
   const patch = (changes: Partial<FormState>) =>
     setState((current) => ({ ...current, ...changes }));
@@ -120,6 +127,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
     setSaving(true);
     try {
       await onSave({ configuration: next, description });
+      setSaved({ configuration: next, description });
     } finally {
       setSaving(false);
     }
