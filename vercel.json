@@ -1,5 +1,6 @@
 {
-  "buildCommand": "NODE_OPTIONS=--max-old-space-size=8192 pnpm -w run build:spa:raw && pnpm -w run build:spa:auth && pnpm -w run build:spa:workbench && pnpm -w run build:spa:share && pnpm -w run build:spa:copy && pnpm -w exec next build --webpack && pnpm -w run db:migrate",
+  "buildCommand": "NODE_OPTIONS=--max-old-space-size=8192 bun scripts/prepareVercel.mts && bun run build:raw && bun run db:migrate",
+  "ignoreCommand": "if [ \"$VERCEL_GIT_COMMIT_REF\" = \"vinatex-production\" ]; then exit 0; else exit 1; fi",
   "headers": [
     {
       "source": "/_spa/(.*)",
