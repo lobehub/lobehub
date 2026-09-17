@@ -145,6 +145,16 @@ const cliHome: DoctorCheck = {
 
     if (repairable === 'settings') {
       const settingsFile = path.join(configDir(), 'settings.json');
+      // Re-confirm at repair time: only a file that reads and fails to parse
+      // is moved aside.
+      let stillCorrupt = false;
+      try {
+        JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      } catch (error) {
+        stillCorrupt = error instanceof SyntaxError;
+      }
+      if (!stillCorrupt) throw new Error('settings.json is no longer unparseable; left in place');
+
       // Never clobber an earlier backup: the second corruption would destroy
       // the copy the first repair preserved, which nothing has diagnosed.
       let backup = `${settingsFile}.bak`;
@@ -200,8 +210,22 @@ const cliHome: DoctorCheck = {
     evidence.loosePermissions = loose;
 
     if (fs.existsSync(settingsFile)) {
+      let raw: string;
       try {
-        JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+        raw = fs.readFileSync(settingsFile, 'utf8');
+      } catch (error) {
+        // Unreadable is not corrupt: the file may be perfectly valid, so it is
+        // not offered to --fix, which would move it aside unparsed.
+        return {
+          detail: `${settingsFile} cannot be read: ${error instanceof Error ? error.message : String(error)}.`,
+          evidence,
+          fix: `chmod u+r ${settingsFile}`,
+          status: 'fail',
+        };
+      }
+
+      try {
+        JSON.parse(raw);
       } catch {
         return {
           detail: `${settingsFile} is not valid JSON, so every custom URL in it is being ignored.`,
@@ -298,6 +322,10 @@ const diskSpace: DoctorCheck = {
 
 /** A newer published CLI is a warning, never a failure. */
 const cliUpToDate: DoctorCheck = {
+  // The runner's budget must outlast the internal deadline for every
+  // `--timeout`, or a stalled registry surfaces as a runner failure instead
+  // of the warning this check reports.
+  budgetMs: (options) => options.timeoutMs + 1000,
   group: 'runtime',
   id: 'runtime.latest',
   network: true,
@@ -308,18 +336,23 @@ const cliUpToDate: DoctorCheck = {
       // Bound the request here rather than letting the runner's timeout fire:
       // that would surface as `fail` (and a non-zero exit) for what this check
       // has decided is only ever a warning.
-      latest = await Promise.race([
-        fetchLatestVersion(cliPackageName, 'latest'),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(`the npm registry did not answer within ${ctx.options.timeoutMs}ms`),
-              ),
-            Math.max(1000, ctx.options.timeoutMs - 500),
-          ),
-        ),
-      ]);
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        latest = await Promise.race([
+          fetchLatestVersion(cliPackageName, 'latest'),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () =>
+                reject(
+                  new Error(`the npm registry did not answer within ${ctx.options.timeoutMs}ms`),
+                ),
+              ctx.options.timeoutMs,
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
     } catch (error) {
       return {
         detail: `Could not reach the npm registry: ${error instanceof Error ? error.message : String(error)}.`,

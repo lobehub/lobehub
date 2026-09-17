@@ -198,6 +198,24 @@ describe('runDoctor', () => {
   });
 });
 
+describe('runDoctor report boundary', () => {
+  it('scrubs whatever a check forgot to redact', async () => {
+    const report = await runDoctor(
+      [
+        check('leaky', {
+          detail: 'GET https://alice:hunter2@lobe.internal failed',
+          evidence: { agentGatewayUrl: 'wss://bob:pw@gw.internal/ws?userId=u1' },
+          fix: 'mail admin@example.com',
+          status: 'fail',
+        }),
+      ],
+      baseOptions,
+    );
+
+    expect(JSON.stringify(report)).not.toMatch(/hunter2|bob:pw|userId=u1|admin@example\.com/);
+  });
+});
+
 describe('exitCodeFor', () => {
   const report = (status: DoctorReport['status']): DoctorReport => ({
     checks: [],

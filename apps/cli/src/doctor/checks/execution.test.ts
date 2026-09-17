@@ -241,13 +241,15 @@ describe('execution.round-trip', () => {
     expect(outcome.detail).toContain('waiting for human input');
   });
 
-  it('treats an untracked operation as finished only after seeing it run', async () => {
+  it('does not call a run that disappears mid-flight a success', async () => {
+    // Null also means lost state (an expired key, a lost Redis entry), so only
+    // `isCompleted` proves the round trip.
     state.statuses = [{ currentState: { status: 'idle' }, isCompleted: false }];
 
     const outcome = await runCheck(executionChecks, 'execution.round-trip', deepContext());
 
-    expect(outcome.status).toBe('ok');
-    expect(outcome.detail).toContain('no longer tracked');
+    expect(outcome.status).toBe('warn');
+    expect(outcome.detail).toContain('without reporting completion');
   });
 
   it('does not call a run that was never observed a success', async () => {

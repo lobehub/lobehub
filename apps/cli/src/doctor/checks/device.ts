@@ -60,7 +60,16 @@ const daemon: DoctorCheck = {
       };
     }
 
-    if (status?.connectionStatus && status.connectionStatus !== 'connected')
+    // A live process is not a connection: success needs the daemon's own report.
+    if (!status?.connectionStatus)
+      return {
+        detail: `Daemon ${pid} is running but has not reported a connection state.`,
+        evidence,
+        fix: `Check the daemon log: ${CLI_PRIMARY_BIN} connect logs`,
+        status: 'warn',
+      };
+
+    if (status.connectionStatus !== 'connected')
       return {
         detail: `Daemon ${pid} is running but its last known state is "${status.connectionStatus}".`,
         evidence,
@@ -69,7 +78,7 @@ const daemon: DoctorCheck = {
       };
 
     return {
-      detail: `Daemon ${pid} connected as device ${status?.deviceId ?? 'unknown'}.`,
+      detail: `Daemon ${pid} connected as device ${status.deviceId ?? 'unknown'}.`,
       evidence,
       status: 'ok',
     };

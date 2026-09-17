@@ -361,20 +361,14 @@ const roundTrip: DoctorCheck = {
       };
 
       if (!state) {
-        // A run the server no longer tracks has finished (or expired) — the
-        // same reading `lh agent run` takes when its event stream drops. But
-        // only if we saw it running first: the server also answers null when
-        // there is no state at all, and passing on that would make this check
-        // incapable of failing.
-        if (observedRunning)
-          return {
-            detail: `Run ${operationId} finished (no longer tracked) after ${elapsedSeconds}s.`,
-            evidence,
-            status: 'ok',
-          };
-
+        // Null is not a completion signal: the server also answers null when
+        // the run's state or metadata is gone (an expired key, a lost Redis
+        // entry). Only `isCompleted` proves the round trip; a disappearance is
+        // reported as inconclusive either way.
         return {
-          detail: `The server returned no state for run ${operationId}, so nothing was observed to run.`,
+          detail: observedRunning
+            ? `Run ${operationId} stopped being tracked after ${elapsedSeconds}s without reporting completion.`
+            : `The server returned no state for run ${operationId}, so nothing was observed to run.`,
           evidence,
           fix: `Check it directly with '${CLI_PRIMARY_BIN} agent status ${operationId}'.`,
           status: 'warn',

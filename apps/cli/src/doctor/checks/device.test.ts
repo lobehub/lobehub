@@ -66,6 +66,16 @@ describe('device.daemon', () => {
     expect(outcome.detail).toContain('left over');
   });
 
+  it('does not call a live daemon connected without its own report', async () => {
+    state.daemonPid = 42;
+    state.daemonStatus = null;
+
+    const outcome = await runCheck(deviceChecks, 'device.daemon');
+
+    expect(outcome.status).toBe('warn');
+    expect(outcome.detail).toContain('has not reported a connection state');
+  });
+
   it('reports a healthy daemon', async () => {
     state.daemonPid = 42;
     state.daemonStatus = {

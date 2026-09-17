@@ -1,4 +1,5 @@
 import { cliVersion } from '../pkg';
+import { scrubDeep } from './redact';
 import type {
   CheckResult,
   CheckStatus,
@@ -164,19 +165,23 @@ export async function runDoctor(
     if (repairable) {
       try {
         const action = await check.repair(ctx, result);
-        repairs.push({ action, id: check.id, ok: true });
+        repairs.push({ action: scrubDeep(action), id: check.id, ok: true });
         // Re-run so the report describes the world after the repair, not before.
         result = { ...(await execute(check)), repaired: action };
       } catch (error) {
         repairs.push({
-          action: error instanceof Error ? error.message : String(error),
+          action: scrubDeep(error instanceof Error ? error.message : String(error)),
           id: check.id,
           ok: false,
         });
       }
     }
 
-    results.set(check.id, result);
+    // The report exists to be pasted into an issue. Scrub centrally rather than
+    // trusting every check to redact everything it touches: error messages from
+    // fetch and the gateway client quote URLs, and evidence copies config
+    // verbatim, in more places than per-check redaction ever caught.
+    results.set(check.id, scrubDeep(result));
   }
 
   const checkResults = [...results.values()];

@@ -61,3 +61,54 @@ export function redactUrlsInMessage(message: string): string {
     /^wss?:\/\//i.test(token) ? token.split('?')[0]! : token,
   );
 }
+
+const EMAIL_TOKEN = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+
+/**
+ * Scrub one whitespace/quote-delimited token. Index arithmetic rather than a
+ * regex so the cost stays linear in the token length whatever it contains.
+ */
+function scrubToken(token: string): string {
+  const schemeEnd = token.indexOf('://');
+
+  if (schemeEnd === -1) return EMAIL_TOKEN.test(token) ? maskEmail(token)! : token;
+
+  const authorityStart = schemeEnd + 3;
+  let authorityEnd = token.length;
+  for (const delimiter of ['/', '?', '#']) {
+    const index = token.indexOf(delimiter, authorityStart);
+    if (index !== -1 && index < authorityEnd) authorityEnd = index;
+  }
+
+  let scrubbed = token;
+  const at = token.lastIndexOf('@', authorityEnd - 1);
+  if (at >= authorityStart)
+    scrubbed = `${token.slice(0, authorityStart)}***@${token.slice(at + 1)}`;
+
+  // WebSocket URLs from the gateway client carry device id, hostname and user
+  // id in their query string.
+  if (/^wss?:\/\//i.test(scrubbed)) scrubbed = scrubbed.split('?')[0]!;
+
+  return scrubbed;
+}
+
+/** Credentials in URLs, WebSocket query strings and email addresses, anywhere in a string. */
+export function scrubText(text: string): string {
+  return text.replaceAll(/[^\s'"`()<>]+/g, scrubToken);
+}
+
+/**
+ * Scrub every string reachable from a value. The runner applies this to each
+ * result before it enters the report, so a check that forgets to redact
+ * something — the failure mode three review rounds kept finding one instance of
+ * at a time — cannot leak it.
+ */
+export function scrubDeep<T>(value: T): T {
+  if (typeof value === 'string') return scrubText(value) as T;
+  if (Array.isArray(value)) return value.map((item) => scrubDeep(item)) as T;
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, scrubDeep(item)]),
+    ) as T;
+  return value;
+}

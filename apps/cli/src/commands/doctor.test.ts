@@ -26,11 +26,21 @@ vi.mock('../doctor', () => ({
 describe('doctor command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
+  let writeSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     runDoctor.mockResolvedValue(report.value);
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // The command exits from a stdout write callback; drain synchronously so
+    // that callback runs while process.exit is still mocked.
+    writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((
+      _chunk: unknown,
+      callback?: () => void,
+    ) => {
+      callback?.();
+      return true;
+    }) as any);
   });
 
   afterEach(() => {
@@ -38,6 +48,7 @@ describe('doctor command', () => {
     report.value.status = 'ok';
     exitSpy.mockRestore();
     logSpy.mockRestore();
+    writeSpy.mockRestore();
     vi.clearAllMocks();
   });
 
@@ -107,15 +118,23 @@ describe('doctor command', () => {
     expect(logSpy.mock.calls.at(-1)?.[0]).toContain('"profile": "core"');
   });
 
-  it('sets a non-zero exit code only when something failed', async () => {
-    // Never `process.exit()`: a piped JSON report would be truncated mid-object.
-    await run();
-    expect(process.exitCode).toBe(0);
-    expect(exitSpy).not.toHaveBeenCalled();
+  it('exits with the contract code only after stdout has drained', async () => {
+    // Exiting before the drain truncates a piped report; waiting for the event
+    // loop instead lets an abandoned request hold the process open.
+    const order: string[] = [];
+    writeSpy.mockImplementation(((_chunk: unknown, callback?: () => void) => {
+      order.push('drained');
+      callback?.();
+      return true;
+    }) as any);
+    exitSpy.mockImplementation(((code: number) => {
+      order.push(`exit ${code}`);
+    }) as any);
 
+    await run();
     report.value.status = 'fail';
     await run();
-    expect(process.exitCode).toBe(1);
-    expect(exitSpy).not.toHaveBeenCalled();
+
+    expect(order).toEqual(['drained', 'exit 0', 'drained', 'exit 1']);
   });
 });

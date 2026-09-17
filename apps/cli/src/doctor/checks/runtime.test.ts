@@ -117,6 +117,23 @@ describe('runtime.home', () => {
     expect(fs.existsSync(path.join(dir, 'settings.json.bak'))).toBe(true);
   });
 
+  it('does not offer to move aside a settings file it merely cannot read', async () => {
+    // Unreadable is not corrupt — the content may be perfectly valid.
+    if (process.getuid?.() === 0) return; // root reads mode-000 files
+    const dir = path.join(home.dir, '.lobehub');
+    fs.mkdirSync(dir, { mode: 0o700 });
+    fs.writeFileSync(path.join(dir, 'settings.json'), '{"serverUrl":"https://lobe.internal"}', {
+      mode: 0o000,
+    });
+
+    const outcome = await runCheck(runtimeChecks, 'runtime.home');
+
+    expect(outcome.status).toBe('fail');
+    expect(outcome.detail).toContain('cannot be read');
+    expect(outcome.evidence?.repairable).toBeUndefined();
+    fs.chmodSync(path.join(dir, 'settings.json'), 0o600);
+  });
+
   it('warns about a world-readable config directory', async () => {
     fs.mkdirSync(path.join(home.dir, '.lobehub'), { mode: 0o755 });
 
@@ -124,6 +141,15 @@ describe('runtime.home', () => {
 
     expect(outcome.status).toBe('warn');
     expect(outcome.fix).toContain('chmod go-rwx');
+  });
+});
+
+describe('runtime.latest budget', () => {
+  it('always gives the runner more time than its own registry deadline', () => {
+    // Otherwise a stalled registry becomes a runner failure instead of a warning.
+    const check = findCheck(runtimeChecks, 'runtime.latest');
+    for (const timeoutMs of [50, 1000, 300_000])
+      expect(check.budgetMs!(makeContext({ timeoutMs }).options)).toBeGreaterThan(timeoutMs);
   });
 });
 

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { maskEmail, redactUrlCredentials, redactUrlsInMessage } from './redact';
+import {
+  maskEmail,
+  redactUrlCredentials,
+  redactUrlsInMessage,
+  scrubDeep,
+  scrubText,
+} from './redact';
 
 describe('redactUrlCredentials', () => {
   it('keeps the host and drops the credential', () => {
@@ -49,5 +55,46 @@ describe('redactUrlsInMessage', () => {
     redactUrlsInMessage(hostile);
 
     expect(Date.now() - startedAt).toBeLessThan(1000);
+  });
+});
+
+describe('scrubText', () => {
+  it('scrubs a credential-bearing URL quoted inside an error message', () => {
+    // Node's fetch error names the full request URL.
+    expect(
+      scrubText('fetch failed for https://alice:hunter2@lobe.internal/api/version (ECONNREFUSED)'),
+    ).toBe('fetch failed for https://***@lobe.internal/api/version (ECONNREFUSED)');
+  });
+
+  it('masks a bare email and strips a WebSocket query', () => {
+    expect(scrubText("user arvin@example.com via 'wss://gw.example.com/ws?userId=u1'")).toBe(
+      "user a***@e***.com via 'wss://gw.example.com/ws'",
+    );
+  });
+
+  it('leaves ordinary text alone', () => {
+    const text = 'node v24.3.0 on darwin/arm64, 2 installs at /opt/homebrew/bin/lh';
+    expect(scrubText(text)).toBe(text);
+  });
+
+  it('stays linear on hostile input', () => {
+    const startedAt = Date.now();
+    scrubText(`${'https://a@'.repeat(20_000)}x ${'@'.repeat(50_000)}`);
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+  });
+});
+
+describe('scrubDeep', () => {
+  it('reaches strings nested anywhere in evidence', () => {
+    const scrubbed = scrubDeep({
+      evidence: {
+        gateways: ['wss://bob:pw@gw.internal/ws'],
+        nested: { server: 'https://a:b@s.internal' },
+      },
+      status: 'ok',
+    });
+
+    expect(JSON.stringify(scrubbed)).not.toMatch(/pw@|a:b@/);
+    expect(scrubbed.status).toBe('ok');
   });
 });

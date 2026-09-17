@@ -71,9 +71,13 @@ export function registerDoctorCommand(program: Command) {
         console.log(renderReport(report, { verbose: options.verbose }));
       }
 
-      // `process.exit()` does not wait for stdout to drain, and a piped report
-      // is well past the pipe buffer — the JSON would be cut mid-object. Set
-      // the code and let the process end when its output has actually left.
-      process.exitCode = exitCodeFor(report, doctorOptions.strict);
+      // Exit once stdout has drained, not before and not whenever the event loop
+      // happens to empty. `process.exit()` right after a large write truncates a
+      // piped JSON report; waiting for the loop instead lets a request abandoned
+      // by a check timeout (a stalled token refresh, a trickling response) keep
+      // the process alive long after the report is done. A write callback fires
+      // only after everything queued before it has been flushed.
+      const code = exitCodeFor(report, doctorOptions.strict);
+      process.stdout.write('', () => process.exit(code));
     });
 }
