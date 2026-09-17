@@ -8,6 +8,7 @@ import {
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
+import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
 
 import { resolveSandboxWorkspaceClaim } from './entitlement';
@@ -28,10 +29,14 @@ export interface SandboxSessionConfig {
    */
   cwd?: string;
   /**
-   * Named environment to restore, or `undefined` for the caller's default.
+   * Snapshot to restore, or `undefined` for the caller's default. This is the
+   * INSTANCE's id, not the environment's: what was installed belongs to one
+   * working copy, so two copies of one environment restore separately and
+   * capture separately.
+   *
    * Carries the same invariant as {@link SandboxSessionConfig.mode}: a session
-   * is bound to one environment on its first call, so every call for a topic
-   * has to agree or the snapshot at the end is refused.
+   * is bound to one of these on its first call, so every call for a topic has
+   * to agree or the snapshot at the end is refused.
    */
   environment?: string;
   mode: SandboxMode;
@@ -59,7 +64,7 @@ interface SandboxSessionConfigInput {
  * The topic is only consulted when an entitlement exists. Without one the
  * execution plane routes to the ephemeral sandbox whatever the request says, so
  * reading the preferences would buy nothing but a query — and deliberately
- * leaving `sandboxCwd` untouched on the topic is what lets a lapsed
+ * leaving the chosen instance untouched on the topic is what lets a lapsed
  * subscription pick up exactly where it left off.
  *
  * Never throws; a failed lookup degrades to the ephemeral sandbox every session
@@ -89,27 +94,34 @@ export const resolveSandboxSessionConfig = async ({
       return { claim, mode: DEFAULT_SANDBOX_MODE };
     }
 
-    const storedCwd = topic.metadata.sandboxCwd;
-    const cwd =
-      typeof storedCwd === 'string' && isSafeSandboxCwd(storedCwd) ? storedCwd : undefined;
-    if (storedCwd && !cwd) {
-      log('Ignoring unusable sandboxCwd on topic %s: %o', topicId, storedCwd);
+    const instanceId = topic.metadata.sandboxInstanceId;
+    if (!instanceId) return { claim, mode: 'persistent' };
+
+    // Deleted, or never this member's. Either way the conversation still runs,
+    // at the workspace root under the default environment — the alternative is
+    // a topic that cannot run at all until someone edits a database row.
+    const instance = await new EnvironmentInstanceModel(
+      serverDB,
+      userId,
+      workspaceId ?? undefined,
+    ).findById(instanceId);
+    if (!instance) {
+      log('Ignoring unresolvable sandboxInstanceId on topic %s: %o', topicId, instanceId);
+      return { claim, mode: 'persistent' };
     }
 
-    // An identifier the execution plane would reject becomes "no environment"
-    // rather than a failed call: the default environment is a working session,
-    // just not the one that was asked for, and the alternative is a topic that
-    // cannot run at all until someone edits a database row.
-    const storedEnvironment = topic.metadata.sandboxEnvironmentId;
-    const environment =
-      typeof storedEnvironment === 'string' && isSafeSandboxEnvironmentId(storedEnvironment)
-        ? storedEnvironment
-        : undefined;
-    if (storedEnvironment && !environment) {
-      log('Ignoring unusable sandboxEnvironmentId on topic %s: %o', topicId, storedEnvironment);
+    // The directory and the snapshot are one choice, so a bad half discards the
+    // whole instance rather than half of it. Running the instance's packages at
+    // the workspace root would put one working copy's files under another's
+    // captured state, which is the exact mixing separate instances exist to
+    // prevent — and it would do it silently.
+    const { id, workingDirectory } = instance;
+    if (!isSafeSandboxCwd(workingDirectory) || !isSafeSandboxEnvironmentId(id)) {
+      log('Ignoring unusable instance %s on topic %s: %o', id, topicId, workingDirectory);
+      return { claim, mode: 'persistent' };
     }
 
-    return { claim, cwd, environment, mode: 'persistent' };
+    return { claim, cwd: workingDirectory, environment: id, mode: 'persistent' };
   } catch (error) {
     log('Failed to read sandbox preferences for topic %s: %O', topicId, error);
     return { claim, mode: DEFAULT_SANDBOX_MODE };
