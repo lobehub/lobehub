@@ -1,4 +1,6 @@
 import { type LobeChatDatabase, type Transaction } from '@lobechat/database';
+import type { FileAccessScope } from '@lobechat/types';
+import { ordinaryFileAccessScope } from '@lobechat/types';
 import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { sha256 } from 'js-sha256';
@@ -257,7 +259,7 @@ export class FileService {
    * @param fileId - File ID to delete from user's files table
    */
   public async deleteUserFileRecord(fileId: string): Promise<void> {
-    await this.fileModel.delete(fileId, false); // false = don't remove globalFiles
+    await this.fileModel.delete(fileId, { removeGlobalFile: false });
   }
 
   /**
@@ -512,8 +514,9 @@ export class FileService {
 
   async downloadFileToLocal(
     fileId: string,
+    accessScope: FileAccessScope = ordinaryFileAccessScope,
   ): Promise<{ cleanup: () => void; file: FileItem; filePath: string }> {
-    const file = await this.fileModel.findById(fileId);
+    const file = await this.fileModel.findById(fileId, { accessScope });
     if (!file) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
     }
@@ -525,7 +528,10 @@ export class FileService {
       console.error(e);
       // if file not found, delete it from db
       if ((e as any).Code === 'NoSuchKey') {
-        await this.fileModel.delete(fileId, serverDBEnv.REMOVE_GLOBAL_FILE);
+        await this.fileModel.delete(fileId, {
+          accessScope,
+          removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+        });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
       }
     }

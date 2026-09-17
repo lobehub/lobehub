@@ -10,6 +10,7 @@ import { registerConfigCommand } from './commands/config';
 import { registerConnectCommand } from './commands/connect';
 import { registerDeviceCommand } from './commands/device';
 import { registerDocCommand } from './commands/doc';
+import { registerDoctorCommand } from './commands/doctor';
 import { registerEvalCommand } from './commands/eval';
 import { registerFileCommand } from './commands/file';
 import { registerGenerateCommand } from './commands/generate';
@@ -80,6 +81,7 @@ export function createProgram() {
   registerConnectCommand(program);
   registerDeviceCommand(program);
   registerStatusCommand(program);
+  registerDoctorCommand(program);
   registerDocCommand(program);
   registerSearchCommand(program);
   registerKbCommand(program);

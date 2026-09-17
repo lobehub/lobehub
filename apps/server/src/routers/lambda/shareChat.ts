@@ -8,7 +8,12 @@ import {
   SHARE_VISITOR_PROMPT_MAX_LENGTH,
 } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
-import { ChatErrorType, entityIdPattern, FileSource, RequestTrigger } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  ChatErrorType,
+  entityIdPattern,
+  RequestTrigger,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -250,19 +255,6 @@ const sanitizeUploadName = (name: string) =>
     .replaceAll(/\p{Cc}/gu, '')
     .trim() || 'file';
 
-const shareFileProvenance = (
-  file: { metadata?: unknown; source?: string | null } | undefined,
-): { shareId: string; visitorUserId: string } | undefined => {
-  if (!file || file.source !== FileSource.AgentShare) return undefined;
-  const metadata = file.metadata as { agentShare?: unknown } | null | undefined;
-  const provenance = metadata?.agentShare as
-    { shareId?: unknown; visitorUserId?: unknown } | undefined;
-  if (typeof provenance?.shareId !== 'string' || typeof provenance.visitorUserId !== 'string') {
-    return undefined;
-  }
-  return { shareId: provenance.shareId, visitorUserId: provenance.visitorUserId };
-};
-
 /**
  * Every attachment id a visitor pins to a turn must be a file THIS visitor
  * uploaded through THIS share (`shareChat.createFile`). Visitor uploads live
@@ -282,12 +274,11 @@ const assertShareVisitorFiles = async (
   if (!fileIds?.length) return;
 
   const uniqueIds = Array.from(new Set(fileIds));
-  const rows = await new FileModel(db, share.ownerId).findByIds(uniqueIds);
-  const owned = rows.filter((file) => {
-    const provenance = shareFileProvenance(file);
-    return provenance?.shareId === share.shareId && provenance.visitorUserId === visitorUserId;
-  });
-  if (owned.length !== uniqueIds.length) {
+  const rows = await new FileModel(db, share.ownerId).findByIds(
+    uniqueIds,
+    agentShareFileAccessScope({ shareId: share.shareId, visitorUserId }),
+  );
+  if (rows.length !== uniqueIds.length) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
   }
 };
@@ -337,8 +328,7 @@ export const shareChatRouter = router({
    * The row is written under the CREATOR: share conversations are creator-owned
    * data (topics/messages already are), and the creator's storage quota is what
    * paid for the reservation in `createUploadUrl`. What makes it the visitor's
-   * attachment rather than a creator resource is `source: agent_share` (hidden
-   * from the creator's library and knowledge listings) plus the
+   * attachment rather than a creator resource is the server-written
    * `metadata.agentShare` provenance every share read/write path checks.
    *
    * Deliberately simpler than the owner path: no knowledge base / parent
@@ -417,7 +407,6 @@ export const shareChatRouter = router({
             },
             name: sanitizeUploadName(input.name),
             size: actualSize,
-            source: FileSource.AgentShare,
             url: input.pathname,
           },
           false,
@@ -937,9 +926,8 @@ export const shareChatRouter = router({
    * and only while no message references the row — once sent, the attachment
    * is part of a creator-owned conversation and stays put.
    *
-   * `exclusiveStorage`: share rows are created outside `global_files` (see
-   * `createFile`), so the row's `url` is the only reference to its object and
-   * the object goes whenever the row does.
+   * Share rows are created outside `global_files` (see `createFile`), so their
+   * persisted provenance tells `FileModel` that the row owns its object.
    */
   removeFile: shareChatProcedure
     .input(z.object({ fileId: z.string().min(1).max(64), shareId: z.string() }))
@@ -947,19 +935,19 @@ export const shareChatRouter = router({
       const share = await resolveLinkShareOrThrow(ctx.serverDB, input.shareId, ctx.userId);
 
       const fileModel = new FileModel(ctx.serverDB, share.ownerId);
-      const existing = await fileModel.findById(input.fileId);
-      const provenance = shareFileProvenance(existing);
-      if (provenance?.shareId !== share.shareId || provenance.visitorUserId !== ctx.userId) {
+      const accessScope = agentShareFileAccessScope({
+        shareId: share.shareId,
+        visitorUserId: ctx.userId,
+      });
+      const existing = await fileModel.findById(input.fileId, { accessScope });
+      if (!existing) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       }
 
-      const file = await fileModel.deleteUnreferenced(
-        input.fileId,
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-        {
-          exclusiveStorage: true,
-        },
-      );
+      const file = await fileModel.deleteUnreferenced(input.fileId, {
+        accessScope,
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
       if (!file) return;
 
       await new FileService(ctx.serverDB, share.ownerId).deleteFile(file.url!);

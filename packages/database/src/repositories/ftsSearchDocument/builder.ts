@@ -18,6 +18,7 @@ import {
   userPersonaDocuments,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notAgentShareFile, notAgentShareFileReference } from '../../utils/fileVisibility';
 import { searchableMessage } from '../../utils/searchableMessage';
 import type {
   FtsSearchBuiltDocument,
@@ -97,8 +98,8 @@ const dedupeKeys = (keys: FtsSearchDocumentKey[]) =>
  * Canonical PostgreSQL → search projection builder.
  *
  * This repository is intentionally actor-agnostic: backfill, incremental sync, and reconciliation
- * need the complete source-of-truth projection. Product reads must continue to use FtsSearchRepo,
- * whose provider hydration reapplies authorization.
+ * need the complete searchable projection. Files that are never library-searchable are omitted at
+ * the projection boundary; product reads still use FtsSearchRepo, whose hydration reapplies access.
  */
 export class FtsSearchDocumentBuilder {
   constructor(private db: LobeChatDatabase) {}
@@ -371,11 +372,14 @@ export class FtsSearchDocumentBuilder {
       })
       .from(files)
       .where(
-        selection.ids
-          ? inArray(files.id, selection.ids)
-          : selection.afterId
-            ? gt(files.id, selection.afterId)
-            : undefined,
+        and(
+          notAgentShareFile(files.metadata),
+          selection.ids
+            ? inArray(files.id, selection.ids)
+            : selection.afterId
+              ? gt(files.id, selection.afterId)
+              : undefined,
+        ),
       )
       .orderBy(asc(files.id))
       .limit(selection.limit);
@@ -929,16 +933,19 @@ export class FtsSearchDocumentBuilder {
       })
       .from(documents)
       .where(
-        selection.ids
-          ? inArray(documents.id, selection.ids)
-          : and(
-              selection.afterId
-                ? gt(documents.id, selection.afterId)
-                : selection.fromId
-                  ? gte(documents.id, selection.fromId)
-                  : undefined,
-              selection.beforeId ? lt(documents.id, selection.beforeId) : undefined,
-            ),
+        and(
+          notAgentShareFileReference(this.db, documents.fileId),
+          selection.ids
+            ? inArray(documents.id, selection.ids)
+            : and(
+                selection.afterId
+                  ? gt(documents.id, selection.afterId)
+                  : selection.fromId
+                    ? gte(documents.id, selection.fromId)
+                    : undefined,
+                selection.beforeId ? lt(documents.id, selection.beforeId) : undefined,
+              ),
+        ),
       )
       .orderBy(asc(documents.id))
       .limit(selection.limit);

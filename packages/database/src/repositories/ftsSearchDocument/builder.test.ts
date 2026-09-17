@@ -338,6 +338,34 @@ describe('FtsSearchDocumentBuilder', () => {
     expect(result.map(({ id }) => id)).toEqual(['agent-1']);
   });
 
+  it('omits files carrying agent-share provenance from the search projection', async () => {
+    await db.insert(files).values({
+      fileType: 'text/plain',
+      id: 'file-agent-share',
+      metadata: { agentShare: { shareId: 'share-1', visitorUserId: 'visitor-1' } },
+      name: 'private visitor attachment.txt',
+      size: 10,
+      url: 'files/user/agent-share/share-1/private.txt',
+      userId,
+    });
+
+    await expect(builder.buildByIds('files', ['file-agent-share'])).resolves.toEqual([]);
+
+    await db.insert(documents).values({
+      content: 'Private visitor attachment content',
+      fileId: 'file-agent-share',
+      fileType: 'text/plain',
+      id: 'document-agent-share',
+      source: 'files/user/agent-share/share-1/private.txt',
+      sourceType: 'file',
+      title: 'Private visitor attachment',
+      totalCharCount: 34,
+      totalLineCount: 1,
+      userId,
+    });
+    await expect(builder.buildByIds('documents', ['document-agent-share'])).resolves.toEqual([]);
+  });
+
   it('rejects invalid batch limits before querying PostgreSQL', async () => {
     await expect(builder.buildBatch('agents', { limit: 0 })).rejects.toThrow(
       'FTS search document batch limit must be a positive integer',

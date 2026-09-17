@@ -19,11 +19,13 @@ const {
   mockResolveAttachmentsByFileIds: vi.fn(),
 }));
 
-// `discoverTools` peeks at the attached files' MIME types (creator-scoped
-// today; media routing only) — stub it so the bare mock db is never queried.
+// `discoverTools` peeks at the attached files' MIME types for media routing.
+// Stub file reads so the bare mock db is never queried.
 vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn().mockImplementation(function () {
-    return { findByIds: vi.fn().mockResolvedValue([]) };
+    return {
+      findByIds: vi.fn().mockResolvedValue([]),
+    };
   }),
 }));
 
@@ -242,7 +244,15 @@ describe('AiAgentService.execAgent - share-visitor attachment scope', () => {
     });
 
     expect(mockResolveAttachmentsByFileIds).toHaveBeenCalledWith(
-      expect.objectContaining({ fileIds: ['file-visitor'], userId: creatorId }),
+      expect.objectContaining({
+        fileAccessScope: {
+          shareId: 'share-1',
+          type: 'agentShare',
+          visitorUserId: visitorId,
+        },
+        fileIds: ['file-visitor'],
+        userId: creatorId,
+      }),
     );
     expect(mockResolveAttachmentsByFileIds).not.toHaveBeenCalledWith(
       expect.objectContaining({ userId: visitorId }),

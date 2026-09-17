@@ -121,3 +121,86 @@ export interface ExpertiseInsightEvidenceRef {
   ids: string[];
   type: ExpertiseInsightEvidenceType;
 }
+
+/**
+ * Whether a standard rests on something observable or on the owner's preference.
+ *
+ * Both are legitimate — a reviewer is allowed to just want things a certain way — but only one of
+ * them can be enforced automatically. A taste standard has no test a delivery could be measured
+ * against, so compiling it into a criterion that blocks work on its own would be enforcing a
+ * preference as if it were a fact.
+ */
+export type ExpertiseReasonKind = 'mechanism' | 'taste';
+
+/**
+ * Whether the reviewer gave the reason or the distillation supplied it.
+ *
+ * An inferred reason is worth keeping — the mechanism is what lets a standard reach a screen
+ * nobody has built yet — but it must never read as something the reviewer said, because a reason
+ * carries weight downstream that an invented one has not earned.
+ */
+export type ExpertiseReasonSource = 'inferred' | 'reviewer';
+
+/**
+ * What a backtest concluded about one lesson.
+ *
+ * `ready` does not mean the standard is correct — it means firing it would not have contradicted
+ * the reviewer on the history we can see.
+ */
+export type ExpertiseBacktestVerdict = 'ready' | 'too-broad' | 'insufficient-evidence';
+
+/**
+ * How a distilled standard scored against the reviewer's own past decisions, before anything
+ * compiles it into a criterion that can block a delivery.
+ *
+ * The metric is precision on the units it fired on, deliberately not recall. Every standard covers
+ * a narrow slice, so recall over the whole corpus is near zero for all of them and answers
+ * nothing. What decides whether compiling is safe is the opposite question: when it fires, was the
+ * reviewer actually going to reject? A standard that fires on deliveries they approved blocks work
+ * they would have shipped — the failure that makes someone switch the feature off.
+ *
+ * Read `precision` against the corpus base rate, not against 1.0: roughly 45% of this owner's
+ * judged units are rejections, so a standard firing at random already scores ~0.45.
+ */
+export interface ExpertiseBacktestResult {
+  /** ISO 8601. */
+  computedAt: string;
+  /** Units it flagged that the reviewer had in fact accepted — the cost of compiling it. */
+  falseAlarms: number;
+  /** Units the standard flagged, out of `sampled`. */
+  fired: number;
+  /**
+   * `fired` is low-information on its own: a standard nobody could violate scores a perfect
+   * precision on two units. The verdict requires a floor.
+   */
+  precision: number;
+  /** Prompt version behind the judgements, so scores from different wordings never get pooled. */
+  promptVersion: string;
+  /** Historical judged units put in front of the model, excluding the ones that taught it. */
+  sampled: number;
+  verdict: ExpertiseBacktestVerdict;
+}
+
+/**
+ * What one consolidation pass read, and what each boundary it wrote rests on.
+ *
+ * A rewritten standard is only as trustworthy as the deliveries behind it, and the rewrite text
+ * cannot carry that: the model cites deliveries by per-request labels ("S2") that mean nothing once
+ * the request is gone. Ids are resolved before they are stored, so an exemption can always be
+ * walked back to the delivery the reviewer let through.
+ */
+export interface ExpertiseRevisionEvidence {
+  /**
+   * Each exemption written into `limits`, with the accepted deliveries it was read from. Never
+   * empty per entry: a boundary that cannot name a delivery the reviewer shipped is invented, and
+   * is dropped before it gets here.
+   */
+  boundaries: { checkResultIds: string[]; limit: string }[];
+  /** Rejected deliveries (`verify_check_results` ids) the pass restated the standard from. */
+  instances: string[];
+  /**
+   * Accepted deliveries offered as the contrast set. Kept even when no boundary was found, so
+   * "no boundary" can be read as "none among these" rather than "never looked".
+   */
+  shipped: string[];
+}

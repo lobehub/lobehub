@@ -1,10 +1,14 @@
 import type {
   ExpertiseAnchorCandidate,
+  ExpertiseBacktestResult,
   ExpertiseCanonEntry,
   ExpertiseEvidenceSpecItem,
   ExpertiseInsightEvidenceRef,
   ExpertiseLayerDefinition,
   ExpertiseLessonSection,
+  ExpertiseReasonKind,
+  ExpertiseReasonSource,
+  ExpertiseRevisionEvidence,
 } from '@lobechat/types';
 import { isNotNull, isNull, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -32,26 +36,27 @@ import { agentOperations } from './agentOperations';
 import { documents } from './file';
 import { projects } from './project';
 import { users } from './user';
-import { verifyCriteria, verifyEvidence } from './verify';
+import { verifyCheckResults, verifyCriteria, verifyEvidence } from './verify';
 import { workspaces } from './workspace';
 
 /**
- * Expertise —— SCLPT 自进化体系的数据层。
+ * Expertise — the data layer of the SCLPT self-improvement system.
  *
- * 与 verify 的关系是**编译**，不是同一层：
- *   经验（人读的心得，注入上下文）──成熟到可程序化──▶ verify criterion（机器能跑）
- * 所以心得表独立存在，成熟后单向编译出 criterion 并回填 compiledCriterionId。
- * 心智模型层的心得永远编译不出来，那正是人类专家不可替代的部分。
+ * Its relationship to verify is **compilation**, not the same layer:
+ *   lesson (human-readable know-how, injected as context) ──matures into something programmable──▶ verify criterion (machine-runnable)
+ * So lessons live in their own table and, once mature, compile one-way into a criterion and backfill
+ * compiledCriterionId. Lessons at the mental-model layer never compile — that is exactly the part a
+ * human expert cannot be replaced on.
  *
- * 表的分工：
- *   domains    专长本体 + SCLPT 的非 P 部分（过滤器 / 分层 / Canon / 流程 / 证据规格）
- *   bindings   挂载到 agent / project / workspace / user
- *   lessons    P —— 心得，四段结构化正文
- *   revisions  对话改写的版本链
- *   runs       一次实践，边界复用 reflection 的时间窗口
- *   hits       命中 —— 「这次用上了哪几条」，整个 L2 界面的地基
- *   snapshots  每次实践后的时间序列快照，喂全部曲线与成熟度
- *   insights   跨多次实践才看得出的元模式，由定时分析作业产出
+ * Table responsibilities:
+ *   domains    the expertise itself + the non-P parts of SCLPT (filter / layers / canon / flow / evidence spec)
+ *   bindings   mounts onto an agent / project / workspace / user
+ *   lessons    P — lessons, with a four-part structured body
+ *   revisions  version chain of conversational rewrites
+ *   runs       one practice; its boundary reuses the reflection time window
+ *   hits       "which lessons were applied this time" — the foundation of the whole L2 view
+ *   snapshots  time-series snapshot after each practice; feeds every curve and the maturity score
+ *   insights   meta-patterns only visible across many practices, produced by a scheduled analysis job
  */
 
 export const EXPERTISE_DOMAIN_SOURCES = ['market', 'user'] as const;
@@ -62,13 +67,19 @@ export const EXPERTISE_LESSON_POLARITIES = ['bad', 'good', 'rule'] as const;
 export const EXPERTISE_LESSON_STATUSES = ['active', 'rejected', 'retired'] as const;
 export const EXPERTISE_COMPILABILITIES = ['compiled', 'compilable', 'not-compilable'] as const;
 export const EXPERTISE_ACTOR_TYPES = ['agent', 'user', 'system'] as const;
-export const EXPERTISE_SUBJECT_TYPES = ['topic', 'task', 'document'] as const;
 /**
- * 只有两值。早期有第三值 false_positive，实测被系统性误用：模型把「这条规则在
- * 这个 topic 不适用」记成了 fp（消息回复 fp 29 > pass 19）。但 fp 的本意是
- * 「被用上了但用错了」，是喂给用进废退的降级信号 —— 照那样记，每条规则只要在
- * 不相关的 topic 出现一次就被扣分。**不适用根本不该产生 hit**；真正的误报由
- * userDecision = 'reject' 承担。
+ * Mirrors `acceptanceSubjectTypes`: a practice run records the object it judged, and an
+ * acceptance-driven run inherits that acceptance's own subject rather than inventing one.
+ * `standalone` exists because 36 of this owner's 193 acceptances carry no in-product subject.
+ */
+export const EXPERTISE_SUBJECT_TYPES = ['topic', 'task', 'document', 'standalone'] as const;
+/**
+ * Two values only. There used to be a third, false_positive, and in practice it was systematically
+ * misused: the model recorded "this rule does not apply to this topic" as fp (fp 29 > pass 19 on
+ * message replies). But fp was meant as "applied, but applied wrongly" — a demotion signal for
+ * use-it-or-lose-it. Recorded that way, every rule is penalised merely for showing up in an
+ * unrelated topic. **Not applicable should produce no hit at all**; genuine false alarms are carried
+ * by userDecision = 'reject'.
  */
 export const EXPERTISE_HIT_OUTCOMES = ['pass', 'violation'] as const;
 export const EXPERTISE_HIT_SEVERITIES = ['high', 'mid', 'low'] as const;
@@ -76,20 +87,21 @@ export const EXPERTISE_HIT_USER_DECISIONS = ['agree', 'reject'] as const;
 export const EXPERTISE_FIT_CONFIDENCES = ['insufficient', 'low', 'ok'] as const;
 export const EXPERTISE_INSIGHT_STATUSES = ['active', 'dismissed', 'acted'] as const;
 export const EXPERTISE_REVISION_ACTORS = ['user', 'agent', 'system'] as const;
-/** 改写的两种来源：人把边界说清楚了 vs 合并时被泛化以覆盖新实例。 */
+/** The two sources of a rewrite: a person made the boundary explicit vs. a merge generalized it to cover new instances. */
 export const EXPERTISE_REVISION_KINDS = ['user-feedback', 'generalize'] as const;
 /**
- * 零命中有两种病，处置不同：
- *   over-specific  触发条件写死成某个角色/平台 → 该并回母规则
- *   one-off        真的罕见 → 保留或退休
- * 实测：找人专家的零命中 90% 带「当…时」条件从句，设计工程师的 0% 带 —— 同一档两种病。
+ * Zero hits come from two different conditions, handled differently:
+ *   over-specific  the trigger is hard-coded to one role/platform → merge back into the parent rule
+ *   one-off        genuinely rare → keep or retire
+ * Measured: 90% of the zero-hit lessons in the recruiting expert carry a "when…" clause, 0% in the
+ * design engineer — the same bucket, two different conditions.
  */
 export const EXPERTISE_SPECIFICITIES = ['general', 'over-specific', 'one-off'] as const;
-/** 曲线形态。区分「真饱和」与「从没起来过」是旧版最大的漏洞。 */
+/** Curve shape. Telling "truly saturated" apart from "never took off" was the old version's biggest hole. */
 export const EXPERTISE_PLATEAU_KINDS = ['saturated', 'growing', 'stalled', 'noisy'] as const;
 
 // ============================================
-// 1. expertise_domains — 专长本体 + SCLPT 的非 P 部分
+// 1. expertise_domains — the expertise itself + the non-P parts of SCLPT
 // ============================================
 
 export const expertiseDomains = pgTable(
@@ -103,7 +115,7 @@ export const expertiseDomains = pgTable(
     title: text('title').notNull(),
     description: text('description'),
 
-    // ---- 所有权（不是使用权）。对齐 projects / documents 的写法 ----
+    // ---- Ownership (not usage rights). Same shape as projects / documents ----
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -114,27 +126,30 @@ export const expertiseDomains = pgTable(
     source: text('source', { enum: EXPERTISE_DOMAIN_SOURCES }).notNull().default('user'),
 
     /**
-     * 派生。挂载了别人的领域但要本地积累时 fork 一份：继承 canon + layers +
-     * domainFilter，心得叠加。刻意限制一层 —— 多层继承的合并语义会失控。
+     * Derivation. When someone else's domain is mounted but lessons should accumulate locally, fork
+     * it: canon + layers + domainFilter are inherited and lessons stack on top. Deliberately capped at
+     * one level — merge semantics across multiple inheritance levels get out of hand.
      */
     parentDomainId: varchar255('parent_domain_id').references(
       (): AnyPgColumn => expertiseDomains.id,
       { onDelete: 'set null' },
     ),
 
-    // ---- SCLPT 的非 P 部分：这些是产品可见内容，不是文档 ----
+    // ---- The non-P parts of SCLPT: these are product-visible content, not documentation ----
     /**
-     * P 的守门判据，建域必填。例：「把所有框架名、表名、组件名去掉，还剩下产品洞察吗？」
-     * notNull 是刻意的：没有它，Pattern Base 会在几个月内变成什么都装的桶。
+     * The gatekeeping criterion for P, required when creating a domain. E.g. "Strip out every
+     * framework, table and component name — is there still a product insight left?"
+     * notNull is deliberate: without it the Pattern Base becomes a bucket for everything within months.
      */
     domainFilter: text('domain_filter').notNull(),
-    /** 明确写出什么不属于这个领域。 */
+    /** States explicitly what does not belong to this domain. */
     outOfScope: text('out_of_scope'),
 
     /**
-     * L —— 分层模型，归属于专长而不是全局枚举：
-     * Cooper 三模型 / 正确性-可维护性-安全性 / L1-L2-L3 各不相同。
-     * canonRef 记这一层抄的哪本经典；自己发明的分层会让你看不见经典能看见的东西。
+     * L — the layered model, owned by the expertise rather than a global enum:
+     * Cooper's three models / correctness-maintainability-security / L1-L2-L3 all differ.
+     * canonRef records which classic a layer was taken from; a self-invented layering hides what the
+     * classic would have let you see.
      */
     layers: jsonb('layers').$type<ExpertiseLayerDefinition[]>().notNull().default([]),
     layerSource: text('layer_source', { enum: EXPERTISE_LAYER_SOURCES })
@@ -142,54 +157,57 @@ export const expertiseDomains = pgTable(
       .default('invented'),
 
     /**
-     * Canon —— 外部基准，**条目化**。
+     * Canon — the external benchmark, **as entries**.
      *
-     * 早期这里是一句话文本，结果 lesson 的 canonAnchor 100% 是 null ——
-     * 锚点不可引用就锚不上；改成条目后锚定率跳到 100%。
+     * This used to be a single sentence of text, and lesson.canonAnchor ended up null 100% of the
+     * time — an anchor that cannot be referenced cannot be anchored to. After switching to entries
+     * the anchoring rate jumped to 100%.
      *
-     * 与 layers 同样用 jsonb 而不抽表：每个领域 7-8 条且固定，读取永远是全量
-     * （喂 prompt、算覆盖率），9 个真实领域之间零复用。lesson.canonAnchor 用
-     * key 引用它，与 lesson.layer 引用 layers[].key 是同一个取舍。
+     * jsonb rather than its own table, same as layers: each domain has a fixed 7–8 entries, reads are
+     * always the full set (fed to prompts, used for coverage), and there is zero reuse across the 9
+     * real domains. lesson.canonAnchor references it by key — the same trade-off as lesson.layer
+     * referencing layers[].key.
      */
     canonEntries: jsonb('canon_entries').$type<ExpertiseCanonEntry[]>().notNull().default([]),
-    /** 整本经典的全文或引用材料 —— 条目是索引，文档是原文。 */
+    /** Full text of or reference material for the classic — entries are the index, the document is the source. */
     canonDocumentId: varchar255('canon_document_id').references(() => documents.id, {
       onDelete: 'set null',
     }),
 
-    /** 一次实践怎么走。 */
+    /** How one practice proceeds. */
     flow: jsonb('flow').$type<string[]>().notNull().default([]),
 
     /**
-     * T —— 一次实践必须留下哪些证据。run 收尾时按它校验，缺的要标出来。
-     * 挂了 layer 的条目只在跑那一层时要求：例如 UX 审计把 screenshot 挂在 L2 且
-     * required，没截图就不允许下 L2 的结论。
+     * T — which evidence one practice must leave behind. Checked when a run finishes; anything
+     * missing is flagged. Items tied to a layer are only required when that layer runs: e.g. a UX
+     * audit ties screenshot to L2 as required, so no L2 conclusion is allowed without a screenshot.
      */
     evidenceSpec: jsonb('evidence_spec').$type<ExpertiseEvidenceSpecItem[]>().notNull().default([]),
 
-    /** 心得库的 markdown 投影，挂 agent_documents 做确定性注入。 */
+    /** Markdown projection of the lesson base, attached via agent_documents for deterministic injection. */
     lessonBaseDocumentId: varchar255('lesson_base_document_id').references(() => documents.id, {
       onDelete: 'set null',
     }),
 
     /**
-     * 锚定阶段给出的候选全集。领域是**选择**不是发现 —— 同一个 agent 锚两次
-     * 可能得到两个都成立的身份（技术情报分析 / 论文解读），各带不同的 canon
-     * 与分层。没选的那条路也留着，后面才能回答「当时选另一个会怎样」。
+     * The full candidate set produced at anchoring. A domain is a **choice**, not a discovery —
+     * anchoring the same agent twice can yield two valid identities (tech-intelligence analysis /
+     * paper reading), each with its own canon and layers. The road not taken is kept too, so we can
+     * later answer "what if we had picked the other one".
      */
     anchorCandidates: jsonb('anchor_candidates').$type<ExpertiseAnchorCandidate[]>(),
     /**
-     * 人在什么时候定下了锚点。null = 还没定 —— 此时**禁止开始长规则**，
-     * 因为下游的分层、canon、过滤器全部依赖这个选择。
+     * When a person settled the anchor. null = not yet — and while it is null, **growing rules is
+     * forbidden**, because the downstream layers, canon and filter all depend on that choice.
      */
     anchorChosenAt: timestamptz('anchor_chosen_at'),
     anchorChosenByUserId: text('anchor_chosen_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
 
-    /** 种子那次实践必然饱和，不计入成熟度判断。 */
+    /** The seed practice is saturated by definition and does not count toward maturity. */
     seedState: text('seed_state', { enum: EXPERTISE_SEED_STATES }).notNull().default('seeding'),
-    /** 不加 FK，避免与 runs 循环引用；由 service 保证一致。 */
+    /** No FK, to avoid a circular reference with runs; consistency is guaranteed by the service. */
     seedRunId: uuid('seed_run_id'),
 
     ...timestamps,
@@ -211,15 +229,16 @@ export type ExpertiseDomainItem = typeof expertiseDomains.$inferSelect;
 export type NewExpertiseDomain = typeof expertiseDomains.$inferInsert;
 
 // ============================================
-// 2. expertise_bindings — 挂载（exclusive arc）
+// 2. expertise_bindings — mounts (exclusive arc)
 // ============================================
 
 /**
- * 专长挂在载体上，载体不拥有它 —— 与 project_knowledge_bases 同样的语义。
+ * An expertise is mounted on a carrier; the carrier does not own it — the same semantics as
+ * project_knowledge_bases.
  *
- * 用 exclusive arc（四个 nullable FK + 恰好一个非空）而不是 carrier 侧多态：
- * 载体是封闭且已知的集合，多态的正当理由不成立；FK 完整性换来删载体自动级联，
- * 不需要额外的 GC。
+ * Exclusive arc (four nullable FKs + exactly one non-null) rather than carrier-side polymorphism:
+ * carriers are a closed, known set, so the usual justification for polymorphism does not hold, and
+ * FK integrity buys automatic cascades when a carrier is deleted, with no extra GC.
  */
 export const expertiseBindings = pgTable(
   'expertise_bindings',
@@ -237,9 +256,10 @@ export const expertiseBindings = pgTable(
     boundUserId: text('bound_user_id').references(() => users.id, { onDelete: 'cascade' }),
 
     /**
-     * 挂载是消费还是共建 —— 决定新心得写到哪里。
-     * derive 是默认：挂载公共领域时，本地踩的坑不该污染公共库，也不该泄漏出去，
-     * 首次产出新心得时自动 fork 一个私有域。
+     * Whether a mount consumes or co-builds — decides where new lessons are written.
+     * derive is the default: when a public domain is mounted, pitfalls hit locally should neither
+     * pollute the public base nor leak out of it, so a private domain is forked automatically the
+     * first time a new lesson is produced.
      */
     contributionMode: text('contribution_mode', { enum: EXPERTISE_CONTRIBUTION_MODES })
       .notNull()
@@ -278,7 +298,7 @@ export type ExpertiseBindingItem = typeof expertiseBindings.$inferSelect;
 export type NewExpertiseBinding = typeof expertiseBindings.$inferInsert;
 
 // ============================================
-// 3. expertise_lessons — P，心得
+// 3. expertise_lessons — P, lessons
 // ============================================
 
 export const expertiseLessons = pgTable(
@@ -292,12 +312,12 @@ export const expertiseLessons = pgTable(
       onDelete: 'set null',
     }),
 
-    /** 人读的稳定编号 P-01 / C-02。洞察引用它，retired 的号不复用。 */
+    /** Stable human-readable code, P-01 / C-02. Insights reference it; retired codes are never reused. */
     code: varchar('code', { length: 20 }).notNull(),
 
     /**
-     * rule 是中性判据 —— 既不是反模式也不是正例，而是一条启发式。
-     * 它决定 sections 用哪套 key：
+     * rule is a neutral criterion — neither an anti-pattern nor a positive example, but a heuristic.
+     * It decides which set of keys sections uses:
      *   bad  → wrong / why / breaks / correct
      *   good → good / works / dont
      *   rule → rule / why / how / limits
@@ -305,42 +325,69 @@ export const expertiseLessons = pgTable(
     polarity: text('polarity', { enum: EXPERTISE_LESSON_POLARITIES }).notNull(),
     title: text('title').notNull(),
     /**
-     * 四段结构化正文，有序。用 jsonb 而不是具名列：三种极性的字段名不同，
-     * 具名列会有一多半永远是 null；对话改写按 key 定位只改其中一段。
+     * Four-part structured body, ordered. jsonb rather than named columns: the three polarities use
+     * different field names, so named columns would be mostly null forever; conversational rewrites
+     * locate a part by key and change only that part.
      */
     sections: jsonb('sections').$type<ExpertiseLessonSection[]>().notNull(),
 
     layer: varchar255('layer'),
     tags: text('tags').array(),
-    /** 锚不上经典（null）是弱信号 —— 按 BM-58 多半意味着还没想透，不是错误。 */
+
+    /**
+     * Whether the standard rests on a mechanism or on taste, and whether its reason came from the
+     * owner or was filled in during distillation.
+     *
+     * Must be a column rather than a sentence in the body: the compile step relies on reasonKind to
+     * stop "compiling taste into a criterion that can block a delivery on its own", and the sentence
+     * in the body is **written in the reviewer's language**, so string matching is bound to miss it.
+     *
+     * Fixed at the moment the lesson is born. If a later rejection supplies a mechanism, taste should
+     * in principle be upgraded to mechanism, but the upgrade rule is not worked out yet, so it is not
+     * done for now.
+     */
+    reasonKind: text('reason_kind').$type<ExpertiseReasonKind>(),
+    reasonSource: text('reason_source').$type<ExpertiseReasonSource>(),
+    /** Failing to anchor to a classic (null) is a weak signal — per BM-58 it usually means not yet thought through, not an error. */
     canonAnchor: text('canon_anchor'),
 
-    /** 教会我们这条的那次实践与那条命中。 */
+    /** The practice and the hit that taught us this lesson. */
     originRunId: uuid('origin_run_id'),
     originHitId: uuid('origin_hit_id'),
 
-    /** 新学的默认进库，所以没有 candidate；守门靠事后淘汰而不是事前审批。 */
+    /** Newly learned lessons go in by default, so there is no candidate state; gatekeeping is by later retirement, not up-front approval. */
     status: text('status', { enum: EXPERTISE_LESSON_STATUSES }).notNull().default('active'),
-    /** rejected 是回收站不是删除 —— 被过滤掉的条目里常有内核裹在实现外壳里。 */
+    /** rejected is a recycle bin, not deletion — filtered-out entries often hide a kernel inside an implementation shell. */
     rejectedReason: text('rejected_reason'),
     salvagedFromId: uuid('salvaged_from_id').references((): AnyPgColumn => expertiseLessons.id, {
       onDelete: 'set null',
     }),
     retiredAt: timestamptz('retired_at'),
 
-    /** 经验的终点：被编译成一条机器能跑的判据。心智模型层的永远是 not-compilable。 */
+    /** Where a lesson ends up: compiled into a machine-runnable criterion. Mental-model-layer lessons are always not-compilable. */
     compilability: text('compilability', { enum: EXPERTISE_COMPILABILITIES })
       .notNull()
       .default('compilable'),
+    /**
+     * Pre-compile check-up: run the lesson against deliveries the owner judged **in the past** and
+     * see whether the owner actually rejected when it fired.
+     *
+     * Only this can answer "would compiling it block things they would have passed", and that is the
+     * one failure mode that makes someone turn the whole feature off. jsonb rather than a few named
+     * columns: the metrics will still change (precision/fired first, possibly per-layer breakdowns
+     * later), and a migration per new metric is not worth it. null = not measured yet.
+     */
+    backtest: jsonb('backtest').$type<ExpertiseBacktestResult>(),
     compiledCriterionId: uuid('compiled_criterion_id').references(() => verifyCriteria.id, {
       onDelete: 'set null',
     }),
 
     /**
-     * hits 的冗余计数 —— 不是优化而是必需：hits 是唯一有规模风险的表，
-     * 列表每次 count 会拖垮 L2。
-     * hitCount 是「用上过多少次」（一次实践里同一条可用在多处），
-     * hitRunCount 是「在多少个不同场景验证过」。梯队排序用前者，饱和判定用后者。
+     * Denormalized counts of hits — not an optimization but a necessity: hits is the only table
+     * with scale risk, and counting it on every list render would bring L2 down.
+     * hitCount is "how many times it was applied" (one practice can apply the same lesson in several
+     * places); hitRunCount is "in how many distinct situations it was validated". Tier ranking uses
+     * the former, saturation detection the latter.
      */
     hitCount: integer('hit_count').notNull().default(0),
     hitRunCount: integer('hit_run_count').notNull().default(0),
@@ -349,13 +396,13 @@ export const expertiseLessons = pgTable(
     lastHitRunId: uuid('last_hit_run_id'),
 
     /**
-     * 合并时指向被泛化掉的母规则，用于追溯「这条是从哪几条并出来的」。
-     * 写入路径的三分支（instance / refine / new）里，refine 会填它。
+     * On a merge, points to the parent rules that were generalized away, to trace "which lessons was
+     * this merged from". Of the three write-path branches (instance / refine / new), refine fills it.
      */
     generalizedFromIds: jsonb('generalized_from_ids').$type<string[]>(),
-    /** 零命中的病因分类，决定该并回母规则还是保留（见 EXPERTISE_SPECIFICITIES）。 */
+    /** Diagnosis of zero hits — decides whether to merge back into the parent rule or keep it (see EXPERTISE_SPECIFICITIES). */
     specificity: text('specificity', { enum: EXPERTISE_SPECIFICITIES }),
-    /** instance 判定挂上来的具体情形数 —— 就是 ✅❌ 例子的来源。 */
+    /** Number of concrete cases attached through instance matches — the source of the ✅❌ examples. */
     exampleCount: integer('example_count').notNull().default(0),
 
     currentRevision: integer('current_revision').notNull().default(1),
@@ -375,12 +422,13 @@ export type ExpertiseLessonItem = typeof expertiseLessons.$inferSelect;
 export type NewExpertiseLesson = typeof expertiseLessons.$inferInsert;
 
 // ============================================
-// 4. expertise_lesson_revisions — 对话改写的版本链
+// 4. expertise_lesson_revisions — version chain of conversational rewrites
 // ============================================
 
 /**
- * 「你说的条件成为它的例外」这件事的产物必须留痕，否则下次问「这条为什么加了
- * 这个限制」没人答得上来。feedback 存的是人当时说的原话 —— 它比改写结果更有价值。
+ * When "the condition you stated becomes its exception", the result must leave a trail; otherwise
+ * nobody can answer "why does this lesson have this restriction" next time. feedback stores what the
+ * person actually said at the time — it is worth more than the rewritten result.
  */
 export const expertiseLessonRevisions = pgTable(
   'expertise_lesson_revisions',
@@ -391,16 +439,23 @@ export const expertiseLessonRevisions = pgTable(
       .references(() => expertiseLessons.id, { onDelete: 'cascade' }),
     revision: integer('revision').notNull(),
 
-    /** 该版本的完整正文快照。 */
+    /** Full snapshot of the body at this revision. */
     sections: jsonb('sections').$type<ExpertiseLessonSection[]>().notNull(),
-    /** 触发这次改写的原话。 */
+    /** The words that triggered this rewrite. */
     feedback: text('feedback'),
 
     changedBy: text('changed_by', { enum: EXPERTISE_REVISION_ACTORS }).notNull(),
-    /** 人说清楚了，还是合并时被泛化 —— 两者的价值和可信度不同。 */
+    /** A person made it explicit, or a merge generalized it — the two differ in value and trustworthiness. */
     kind: text('kind', { enum: EXPERTISE_REVISION_KINDS }).notNull().default('user-feedback'),
-    /** 改写前的标题，方便直接看出泛化了什么。 */
+    /** Title before the rewrite, so what was generalized is visible at a glance. */
     prevTitle: text('prev_title'),
+    /**
+     * The deliveries a generalize pass read, and which accepted delivery each exemption was read
+     * from. null on a person's rewrite, whose authority is `feedback` itself. jsonb rather than a
+     * link table: a pass reads a handful of deliveries and is only ever audited one revision at a
+     * time; the ids are provenance, so a deleted check simply stops resolving.
+     */
+    evidence: jsonb('evidence').$type<ExpertiseRevisionEvidence>(),
     changedByUserId: text('changed_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
@@ -421,17 +476,18 @@ export type ExpertiseLessonRevisionItem = typeof expertiseLessonRevisions.$infer
 export type NewExpertiseLessonRevision = typeof expertiseLessonRevisions.$inferInsert;
 
 // ============================================
-// 5. expertise_runs — 一次实践
+// 5. expertise_runs — one practice
 // ============================================
 
 /**
- * 一次实践 = 一次针对某个对象的完整判断过程。
+ * One practice = one complete judgement pass over some object.
  *
- * 边界不自己发明：直接复用 reflection 的时间窗口幂等键。reflection 本身就是
- * 「一个 agent 在一个 topic/scope 的时间窗口上的复盘」，正是这个定义。
+ * The boundary is not invented here: it reuses the reflection time-window idempotency key directly.
+ * A reflection is itself "an agent reviewing a topic/scope over a time window", which is exactly this
+ * definition.
  *
- * 刻意没有 operationId —— 一个 topic 上的反思天然跨多个 operation；
- * operation 归因下沉到 expertise_hits（每条证据来自哪次执行）。
+ * Deliberately no operationId — a reflection on a topic naturally spans several operations;
+ * operation attribution is pushed down to expertise_hits (which execution each piece of evidence came from).
  */
 export const expertiseRuns = pgTable(
   'expertise_runs',
@@ -441,33 +497,34 @@ export const expertiseRuns = pgTable(
       .notNull()
       .references(() => expertiseDomains.id, { onDelete: 'cascade' }),
 
-    /** 曲线的 X 轴。写入时取该领域的 max+1。 */
+    /** X axis of the curve. Set to the domain's max+1 on write. */
     runIndex: integer('run_index').notNull(),
-    /** 种子那次必然饱和 —— 一等公民字段，不能靠约定。 */
+    /** The seed practice is saturated by definition — a first-class field, not a convention. */
     isSeedRun: boolean('is_seed_run').notNull().default(false),
 
-    // 归因（不是所有权）：这条曲线里有谁的贡献
+    // Attribution (not ownership): who contributed to this curve
     actorType: text('actor_type', { enum: EXPERTISE_ACTOR_TYPES }).notNull(),
     actorId: text('actor_id').notNull(),
 
-    /** 沿用 acceptance 的 subject 约定，不自己发明一套。 */
+    /** Follows the acceptance subject convention instead of inventing another one. */
     subjectType: text('subject_type', { enum: EXPERTISE_SUBJECT_TYPES }).notNull(),
     subjectId: text('subject_id').notNull(),
 
     windowStart: timestamptz('window_start'),
     windowEnd: timestamptz('window_end'),
-    /** reflection 的窗口幂等键，保证同一个反思窗口不会重复建 run。 */
+    /** Reflection window idempotency key; guarantees the same reflection window never creates a second run. */
     reflectionKey: varchar255('reflection_key'),
 
-    /** 「它学得最快的那几次你都在对话里」这条洞察靠它。 */
+    /** The insight "the times it learned fastest were all with you in the conversation" depends on this. */
     hadHumanInLoop: boolean('had_human_in_loop').notNull().default(false),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
-     * 写入路径三分支的计数。三者的比例是**枚举健康度的直接读数**：
-     * instance 占绝大多数才是健康的规则库；new 居高不下说明在把案例当规则记。
+     * Counts for the three write-path branches. Their ratio is **a direct reading of enumeration
+     * health**: a healthy rule base is dominated by instance; a persistently high new count means
+     * cases are being recorded as rules.
      */
     instanceCount: integer('instance_count').notNull().default(0),
     refineCount: integer('refine_count').notNull().default(0),
@@ -494,18 +551,20 @@ export type ExpertiseRunItem = typeof expertiseRuns.$inferSelect;
 export type NewExpertiseRun = typeof expertiseRuns.$inferInsert;
 
 // ============================================
-// 6. expertise_hits — 命中
+// 6. expertise_hits — hits
 // ============================================
 
 /**
- * 「这次用上了哪几条」。整个 L2 界面（梯队排序、死条目、✅❌ 例子、用进废退）
- * 都建立在这张表上。
+ * "Which lessons were applied this time." The entire L2 view (tier ranking, dead entries, ✅❌
+ * examples, use-it-or-lose-it) is built on this table.
  *
- * 注意「学到一条新的」**不是** hit —— 那是 lesson 的诞生，记在 lesson.originRunId。
- * 早期设计用 verdict + compliance 两个轴，是因为把这两件事混在了一张表里。
+ * Note that "learned a new one" is **not** a hit — that is a lesson being born, recorded on
+ * lesson.originRunId. The early design had two axes, verdict + compliance, precisely because it mixed
+ * those two things into one table.
  *
- * 这是唯一有规模风险的表：一个专长 47 次 × 每次命中 30 条 = 1400 行，
- * 乘专长数乘租户数。所以 lesson 上的冗余计数是必需的；明细可归档，计数保留。
+ * This is the only table with scale risk: one expertise × 47 practices × 30 hits each = 1,400 rows,
+ * multiplied by expertises and by tenants. That is why the denormalized counts on lesson are
+ * required; details can be archived while the counts are kept.
  */
 export const expertiseHits = pgTable(
   'expertise_hits',
@@ -517,23 +576,34 @@ export const expertiseHits = pgTable(
       .notNull()
       .references(() => expertiseDomains.id, { onDelete: 'cascade' }),
 
-    /** pass = 对象符合这条；violation = 违反（一条 finding）；false_positive = 这条用错了地方。 */
+    /** pass = the object follows this lesson; violation = it breaks it (one finding). See EXPERTISE_HIT_OUTCOMES. */
     outcome: text('outcome', { enum: EXPERTISE_HIT_OUTCOMES }).notNull(),
 
-    /** 违反时的定位与说明。 */
+    /** Location and explanation when violated. */
     where: text('where'),
     note: text('note'),
-    /** instance 判定挂的具体情形 —— 这条规则这次长什么样，就是 ✅❌ 例子。 */
+    /** The concrete case attached by an instance match — what this rule looked like this time; the ✅❌ example. */
     example: text('example'),
     severity: text('severity', { enum: EXPERTISE_HIT_SEVERITIES }),
 
-    /** 证据接 verify_evidence，不退化成一句话。 */
+    /** Evidence links to verify_evidence instead of degrading into a sentence. */
     evidenceId: uuid('evidence_id').references(() => verifyEvidence.id, { onDelete: 'set null' }),
     operationId: text('operation_id').references(() => agentOperations.id, {
       onDelete: 'set null',
     }),
+    /**
+     * For a hit distilled from a rejection, points back at the rejection that taught us this lesson.
+     *
+     * Without it, "which acceptances did this standard come from" could only be inferred via
+     * evidenceId, and a rejection does not always circle evidence (260 of 876 rejections have no
+     * circled region). set null because this is provenance, not ownership: deleting an acceptance
+     * should not also delete the rules learned from it.
+     */
+    sourceCheckResultId: uuid('source_check_result_id').references(() => verifyCheckResults.id, {
+      onDelete: 'set null',
+    }),
 
-    /** 人否掉它 → 喂用进废退，让这条心得下次更保守。 */
+    /** A person overruling it → feeds use-it-or-lose-it, so this lesson is more conservative next time. */
     userDecision: text('user_decision', { enum: EXPERTISE_HIT_USER_DECISIONS }),
     userDecisionAt: timestamptz('user_decision_at'),
 
@@ -561,19 +631,19 @@ export type ExpertiseHitItem = typeof expertiseHits.$inferSelect;
 export type NewExpertiseHit = typeof expertiseHits.$inferInsert;
 
 // ============================================
-// 7. expertise_domain_snapshots — 曲线的真相源
+// 7. expertise_domain_snapshots — source of truth for the curves
 // ============================================
 
 /**
- * 每次实践收尾写一行。一张表同时喂：L0 成熟度曲线、L1 柱线图、成熟度球、
- * 本月 delta、闲置判断、固化度、分层空洞。
+ * One row written when each practice finishes. A single table feeds: the L0 maturity curve, the L1
+ * bar/line chart, the maturity orb, this month's delta, idle detection, solidification, and layer gaps.
  *
- * 计数与拟合刻意分离：
- *   - 计数部分由 run 收尾事件驱动写入，纯聚合、确定性、便宜
- *   - 拟合部分由 6 小时定时作业回填，是数值优化，失败模式完全不同
- * 于是有两种不同的「没有成熟度」，界面文案也不同：
- *   fitComputedAt IS NULL          → 还在算
- *   fitConfidence = 'insufficient' → 样本太少，还算不出来（不给假数字）
+ * Counts and fitting are deliberately separated:
+ *   - the count part is written on the run-finished event: pure aggregation, deterministic, cheap
+ *   - the fit part is backfilled by a 6-hour scheduled job: numerical optimization, with entirely different failure modes
+ * So there are two different kinds of "no maturity yet", with different UI copy:
+ *   fitComputedAt IS NULL          → still computing
+ *   fitConfidence = 'insufficient' → too few samples to compute (no fake numbers)
  */
 export const expertiseDomainSnapshots = pgTable(
   'expertise_domain_snapshots',
@@ -585,55 +655,58 @@ export const expertiseDomainSnapshots = pgTable(
     runId: uuid('run_id').references(() => expertiseRuns.id, { onDelete: 'set null' }),
     runIndex: integer('run_index').notNull(),
 
-    // ---- 事件驱动写入 ----
+    // ---- Written on events ----
     learnedTotal: integer('learned_total').notNull(),
     retiredTotal: integer('retired_total').notNull().default(0),
-    /** = learnedTotal − retiredTotal。退休会让曲线掉头，那正是「能力在退」的可视化。 */
+    /** = learnedTotal − retiredTotal. Retirement makes the curve dip, which is exactly the visualization of "capability declining". */
     activeCount: integer('active_count').notNull(),
-    /** 固化度的分子：已编译成 verify criterion 的条数。 */
+    /** Numerator of solidification: how many lessons have been compiled into a verify criterion. */
     compiledCount: integer('compiled_count').notNull().default(0),
     layerCounts: jsonb('layer_counts').$type<Record<string, number>>().notNull().default({}),
 
-    // ---- 6 小时定时作业回填：P(n) = P∞·(1−e^(−n/τ)) ----
-    /** 估计这个领域一共能学到多少条（渐近线）。 */
+    // ---- Backfilled by the 6-hour scheduled job: P(n) = P∞·(1−e^(−n/τ)) ----
+    /** Estimate of how many lessons this domain can learn in total (the asymptote). */
     pInf: numeric('p_inf', { mode: 'number' }),
-    /** 学习时间常数，倒数即学习率。 */
+    /** Learning time constant; its reciprocal is the learning rate. */
     tau: numeric('tau', { mode: 'number' }),
-    /** = activeCount / pInf，0..1。归一化后跨领域可比，不受练习次数绝对值影响。 */
+    /** = activeCount / pInf, 0..1. Normalized, so comparable across domains regardless of absolute practice counts. */
     maturity: numeric('maturity', { mode: 'number' }),
     fitSampleSize: integer('fit_sample_size'),
     /**
-     * 拟合优度。和 fitConfidence 不是一回事，两个都要留：r² 高只说明这条曲线贴合
-     * 观测点，撞了 τ 上界的那 6 组回测 r² 同样漂亮 —— 贴合的是直线段。
-     * 界面把它和 observedSpan 并排放，就是为了让「拟合得好」和「外推可信」分开被读。
+     * Goodness of fit. Not the same thing as fitConfidence, and both must be kept: a high r² only says
+     * the curve hugs the observed points — the 6 backtest groups whose τ hit the upper bound had
+     * equally pretty r², because they were hugging the linear segment. The UI shows it next to
+     * observedSpan precisely so "fits well" and "extrapolation is trustworthy" are read separately.
      */
     fitR2: numeric('fit_r2', { mode: 'number' }),
     fitConfidence: text('fit_confidence', { enum: EXPERTISE_FIT_CONFIDENCES }),
     fitComputedAt: timestamptz('fit_computed_at'),
     /**
-     * τ 撞上了搜索上界 = 拟合失败，此时 pInf / maturity 全是边界伪影。
-     * 9 组回测里 6 组撞界，而旧版把它们全报成了 ok（有个「成熟度 93.6%」
-     * 就是这么来的）。撞界必须一律降级。
+     * τ hitting the search upper bound = the fit failed, and pInf / maturity are then pure boundary
+     * artifacts. 6 of 9 backtest groups hit the bound, and the old version reported all of them as ok
+     * (that is where a "maturity 93.6%" came from). Hitting the bound must always downgrade.
      */
     tauPinned: boolean('tau_pinned').notNull().default(false),
     /**
-     * = runIndex / τ。τ 是曲线弯折的尺度：没跨过一个时间常数，曲线还在直线段上，
-     * 渐近线根本没被数据约束住，pInf 是**猜出来的而不是测出来的**。
-     * < 1 时界面必须显式警告，不能拿它做外推。
+     * = runIndex / τ. τ is the scale at which the curve bends: until a full time constant has passed,
+     * the curve is still on its linear segment, the asymptote is not constrained by the data at all,
+     * and pInf is **guessed rather than measured**.
+     * Below 1 the UI must warn explicitly and must not extrapolate from it.
      */
     observedSpan: numeric('observed_span', { mode: 'number' }),
     plateauKind: text('plateau_kind', { enum: EXPERTISE_PLATEAU_KINDS }),
 
     /**
-     * 有界指标：分母固定，不依赖外推，拟合失败时它们仍然可信。
+     * Bounded metrics: fixed denominators, no extrapolation, so they stay trustworthy when the fit fails.
      *
-     * 分层覆盖与 canon 覆盖是**两个独立的比率**，不能乘成笛卡尔积 —— 并非每个
-     * (层, canon) 组合都有意义（entity_disambiguation 只在 entity_resolution
-     * 层成立，配到 corroboration 层是个永远填不满的空格子）。
+     * Layer coverage and canon coverage are **two independent ratios** and must not be multiplied into
+     * a Cartesian product — not every (layer, canon) pair is meaningful (entity_disambiguation only
+     * holds at the entity_resolution layer; pairing it with the corroboration layer is an empty cell
+     * that can never be filled).
      */
     layerCoverage: numeric('layer_coverage', { mode: 'number' }),
     canonCoverage: numeric('canon_coverage', { mode: 'number' }),
-    /** 有命中的规则 / 总规则。**枚举越多它越低 —— 天然的反枚举指标。** */
+    /** Lessons with hits / all lessons. **The more you enumerate, the lower it goes — a built-in anti-enumeration metric.** */
     activeRate: numeric('active_rate', { mode: 'number' }),
 
     capturedAt: timestamptz('captured_at').notNull().defaultNow(),
@@ -656,21 +729,22 @@ export type ExpertiseDomainSnapshotItem = typeof expertiseDomainSnapshots.$infer
 export type NewExpertiseDomainSnapshot = typeof expertiseDomainSnapshots.$inferInsert;
 
 // ============================================
-// 8. expertise_insights — 跨多次实践才看得出的元模式
+// 8. expertise_insights — meta-patterns only visible across many practices
 // ============================================
 
 /**
- * 由定时分析作业产出，不是聚合查询能得到的：纠正记录的语义聚类、心得共现矩阵、
- * run 元数据关联、发现重叠度。
+ * Produced by a scheduled analysis job, not obtainable from an aggregate query: semantic clustering
+ * of correction records, a lesson co-occurrence matrix, run-metadata correlation, discovery overlap.
  *
- * 因为它是分析产物，一定会出错，所以 dismissed 是硬要求 —— 洞察必须能被否掉。
- * staleAfterRunIndex 让它随数据变化自动过期，避免陈旧结论一直挂在首屏。
+ * Because it is an analysis artifact it will be wrong sometimes, so dismissed is a hard requirement —
+ * an insight must be possible to overrule. staleAfterRunIndex makes it expire as the data changes, so
+ * stale conclusions do not stay pinned on the first screen.
  */
 export const expertiseInsights = pgTable(
   'expertise_insights',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    /** 可为空：有些洞察是跨领域的。 */
+    /** Nullable: some insights span domains. */
     domainId: varchar255('domain_id').references(() => expertiseDomains.id, {
       onDelete: 'cascade',
     }),
@@ -684,13 +758,13 @@ export const expertiseInsights = pgTable(
     actionLabel: text('action_label'),
     actionTarget: jsonb('action_target').$type<Record<string, unknown>>(),
 
-    /** 支撑它的具体对象，点开要能走到。 */
+    /** The concrete objects backing it; opening it must lead to them. */
     evidence: jsonb('evidence').$type<ExpertiseInsightEvidenceRef[]>().notNull().default([]),
     confidence: real('confidence'),
 
     status: text('status', { enum: EXPERTISE_INSIGHT_STATUSES }).notNull().default('active'),
     dismissReason: text('dismiss_reason'),
-    /** 超过这个实践序号后视为过期。 */
+    /** Considered stale once the practice index passes this value. */
     staleAfterRunIndex: integer('stale_after_run_index'),
 
     generatedByOperationId: text('generated_by_operation_id').references(() => agentOperations.id, {

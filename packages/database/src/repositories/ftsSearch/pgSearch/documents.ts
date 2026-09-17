@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle
 
 import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
 import { sanitizeBm25Query } from '../../../utils/bm25';
+import { notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
   FtsSearchBackendResponse,
@@ -134,6 +135,7 @@ export async function searchPages(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        notAgentShareFileReference(db, hits.fileId),
         excludeKbIds && excludeKbIds.length > 0
           ? or(isNull(hits.knowledgeBaseId), notInArray(hits.knowledgeBaseId, excludeKbIds))
           : undefined,
@@ -210,6 +212,7 @@ export async function searchKnowledgeBaseDocuments(
         userClause,
         folderClause,
         inArray(documents.knowledgeBaseId, knowledgeBaseIds),
+        notAgentShareFileReference(db, documents.fileId),
         matchClause,
       ),
     )
@@ -236,7 +239,9 @@ export async function searchKnowledgeBaseDocuments(
         inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
       ),
     )
-    .where(and(userClause, folderClause, matchClause))
+    .where(
+      and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), matchClause),
+    )
     .orderBy(sql`paradedb.score(${documents.id}) DESC`)
     .limit(limit);
 

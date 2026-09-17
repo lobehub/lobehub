@@ -21,13 +21,6 @@ export enum FileSource {
    * the user's library.
    */
   Acceptance = 'acceptance',
-  /**
-   * Attachment a share VISITOR uploaded to a shared agent's conversation.
-   * Stored under the CREATOR (their storage quota, like every other share
-   * artifact) but authored by the visitor — `metadata.agentShare` records
-   * which share and visitor. Never a library resource of the creator.
-   */
-  AgentShare = 'agent_share',
   ImageGeneration = 'image_generation',
   PageEditor = 'page-editor',
   VideoGeneration = 'video_generation',
@@ -42,17 +35,8 @@ export enum FileSource {
  *
  * The one way back in is an explicit `ResourceSourceFilter.Acceptance` request:
  * the user asked for evidence, so burying it no longer applies.
- *
- * `AgentShare` files are hidden for a different reason: they sit under the
- * creator's account only so the creator's storage quota pays for them, but
- * they are a VISITOR's conversation attachments — surfacing them in the
- * creator's library would expose visitor content the creator otherwise never
- * sees (share conversations are hidden from the creator by default).
  */
-export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
-  FileSource.Acceptance,
-  FileSource.AgentShare,
-];
+export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [FileSource.Acceptance];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */
 export const AI_GENERATED_FILE_SOURCES: FileSource[] = [

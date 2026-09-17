@@ -38,7 +38,13 @@ import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermiss
 import { createResourceContentPreview } from '@/server/utils/resourceContentPreview';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
-import { FileSource, QueryFileListSchema, toFileSource, UploadFileSchema } from '@/types/files';
+import {
+  FileSource,
+  QueryFileListSchema,
+  stripAgentShareFileProvenance,
+  toFileSource,
+  UploadFileSchema,
+} from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
 import {
@@ -231,6 +237,7 @@ export const fileRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const metadata = stripAgentShareFileProvenance(input.metadata);
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;
       const latestUpload = await ctx.fileUploadService.findLatest(input.url);
@@ -285,7 +292,7 @@ export const fileRouter = router({
           (settledFile.source ?? undefined) === toFileSource(input.source) &&
           settledFile.url === input.url &&
           (!ctx.workspaceId || settledFile.visibility === resolvedVisibility) &&
-          isEqual(settledFile.metadata, input.metadata ?? null);
+          isEqual(settledFile.metadata, metadata ?? null);
 
         if (isRetry) {
           return {
@@ -367,7 +374,7 @@ export const fileRouter = router({
           await ctx.fileModel.updateGlobalFile(
             input.hash!,
             {
-              metadata: input.metadata,
+              metadata,
               url: input.url,
             },
             trx,
@@ -380,7 +387,7 @@ export const fileRouter = router({
               fileHash: input.hash,
               fileType: input.fileType,
               knowledgeBaseId: input.knowledgeBaseId,
-              metadata: input.metadata,
+              metadata,
               name: input.name,
               parentId: resolvedParentId,
               size: actualSize,
@@ -895,7 +902,9 @@ export const fileRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      const file = await ctx.fileModel.delete(input.id, {
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
 
       if (!file) return;
 
@@ -911,7 +920,9 @@ export const fileRouter = router({
       if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
       await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
 
-      const file = await ctx.fileModel.deleteUnreferenced(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+      const file = await ctx.fileModel.deleteUnreferenced(input.id, {
+        removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      });
       if (!file) return;
 
       await ctx.fileService.deleteFile(file.url!);
@@ -986,7 +997,7 @@ export const fileRouter = router({
       const updates: Parameters<typeof ctx.fileModel.update>[1] = {};
 
       if (metadata !== undefined) {
-        updates.metadata = metadata;
+        updates.metadata = stripAgentShareFileProvenance(metadata);
       }
 
       if (name !== undefined) {

@@ -1354,7 +1354,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
     );
   });
 
-  it('searches files by name and rechecks hidden sources and restricted KB memberships in PG', async () => {
+  it('searches files by name and rechecks non-library files and restricted KB memberships in PG', async () => {
     const longFileDescription = `Hydrated file description ${'x'.repeat(220)}`;
     await db.insert(knowledgeBases).values([
       {
@@ -1398,6 +1398,16 @@ describe('ElasticsearchFtsSearchBackend', () => {
         size: 30,
         source: FileSource.Acceptance,
         url: 'file://file-hidden-source',
+        userId,
+        workspaceId,
+      },
+      {
+        fileType: 'text/plain',
+        id: 'file-agent-share',
+        metadata: { agentShare: { shareId: 'share-1', visitorUserId: 'visitor-1' } },
+        name: 'Search phrase visitor attachment',
+        size: 30,
+        url: 'file://file-agent-share',
         userId,
         workspaceId,
       },
@@ -1446,6 +1456,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
     const client = createClient([
       { _id: 'file-restricted', _score: 12 },
       { _id: 'file-hidden-source', _score: 11 },
+      { _id: 'file-agent-share', _score: 10.5 },
       { _id: 'file-page-shell', _score: 10 },
       { _id: 'file-private-other', _score: 9 },
       { _id: 'file-deleted', _score: 8 },
@@ -1714,6 +1725,41 @@ describe('ElasticsearchFtsSearchBackend', () => {
     );
   });
 
+  it('does not hydrate a page derived from an agent-share file', async () => {
+    await db.insert(files).values({
+      fileType: 'application/pdf',
+      id: 'page-agent-share-file',
+      metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+      name: 'visitor.pdf',
+      size: 100,
+      url: 'file://page-agent-share-file',
+      userId,
+      workspaceId,
+    });
+    await db.insert(documents).values({
+      content: 'Search phrase private visitor page',
+      fileId: 'page-agent-share-file',
+      fileType: 'custom/document',
+      filename: 'visitor',
+      id: 'page-agent-share-document',
+      source: 'file://page-agent-share-file',
+      sourceType: 'file',
+      title: 'Visitor document',
+      totalCharCount: 34,
+      totalLineCount: 1,
+      userId,
+      workspaceId,
+    });
+    const client = createClient([{ _id: 'page-agent-share-document', _score: 10 }]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(
+      request('documents', { filters: { documentKind: 'page' } }),
+    );
+
+    expect(response.items).toEqual([]);
+  });
+
   it('hydrates inline and file-backed KB documents without truncating candidates by document size', async () => {
     const largeContent = `search phrase ${'x'.repeat(1_000_000)}`;
     await db.insert(knowledgeBases).values([
@@ -1865,6 +1911,59 @@ describe('ElasticsearchFtsSearchBackend', () => {
         }),
       }),
     );
+  });
+
+  it('does not hydrate a knowledge-base document derived from an agent-share file', async () => {
+    await db.insert(knowledgeBases).values({
+      id: 'agent-share-document-kb',
+      name: 'Agent share document KB',
+      userId,
+      visibility: 'public',
+      workspaceId,
+    });
+    await db.insert(files).values({
+      fileType: 'application/pdf',
+      id: 'agent-share-document-file',
+      metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+      name: 'visitor.pdf',
+      size: 100,
+      url: 'file://agent-share-document-file',
+      userId,
+      workspaceId,
+    });
+    await db.insert(knowledgeBaseFiles).values({
+      fileId: 'agent-share-document-file',
+      knowledgeBaseId: 'agent-share-document-kb',
+      userId,
+      workspaceId,
+    });
+    await db.insert(documents).values({
+      content: 'Search phrase private visitor document',
+      fileId: 'agent-share-document-file',
+      fileType: 'application/pdf',
+      filename: 'visitor.pdf',
+      id: 'agent-share-document-row',
+      source: 'file://agent-share-document-file',
+      sourceType: 'file',
+      title: 'Visitor document',
+      totalCharCount: 38,
+      totalLineCount: 1,
+      userId,
+      workspaceId,
+    });
+    const client = createClient([{ _id: 'agent-share-document-row', _score: 10 }]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(
+      request('documents', {
+        filters: {
+          documentKind: 'knowledgeBaseDocument',
+          knowledgeBaseIds: ['agent-share-document-kb'],
+        },
+      }),
+    );
+
+    expect(response.items).toEqual([]);
   });
 
   it('searches knowledge bases and rechecks visibility and restricted IDs in PG', async () => {

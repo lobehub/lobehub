@@ -96,14 +96,54 @@ export interface UploadFileItem {
   visibility?: 'private' | 'public';
 }
 
+export const AgentShareFileProvenanceSchema = z.object({
+  shareId: z.string(),
+  visitorUserId: z.string(),
+});
+
+export type AgentShareFileProvenance = z.infer<typeof AgentShareFileProvenanceSchema>;
+
+export type FileAccessScope =
+  ({ type: 'agentShare' } & AgentShareFileProvenance) | { type: 'ordinary' };
+
+export const ordinaryFileAccessScope = { type: 'ordinary' } as const satisfies FileAccessScope;
+
+export const agentShareFileAccessScope = (
+  provenance: AgentShareFileProvenance,
+): FileAccessScope => ({
+  shareId: provenance.shareId,
+  type: 'agentShare',
+  visitorUserId: provenance.visitorUserId,
+});
+
+/** Remove server-owned Agent Share provenance from caller-supplied metadata. */
+export const stripAgentShareFileProvenance = <T>(metadata: T): T => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+
+  return Object.fromEntries(
+    Object.entries(metadata as Record<string, unknown>).filter(([key]) => key !== 'agentShare'),
+  ) as T;
+};
+
+/** Read server-written agent-share provenance without trusting the rest of the JSON metadata. */
+export const getAgentShareFileProvenance = (
+  metadata: unknown,
+): AgentShareFileProvenance | undefined => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+
+  const result = AgentShareFileProvenanceSchema.safeParse(
+    (metadata as { agentShare?: unknown }).agentShare,
+  );
+  return result.success ? result.data : undefined;
+};
+
 export const FileMetadataSchema = z.object({
   /**
-   * Provenance of a `FileSource.AgentShare` upload: the file row sits under
-   * the CREATOR (storage quota), this records which share and which visitor
-   * actually uploaded it. Server-written only; the share endpoints check it
-   * before letting a visitor attach or remove the file.
+   * Provenance of an agent-share visitor upload. The file row sits under the
+   * creator for storage accounting, while this records the share and visitor
+   * that may access it. Server-written only.
    */
-  agentShare: z.object({ shareId: z.string(), visitorUserId: z.string() }).optional(),
+  agentShare: AgentShareFileProvenanceSchema.optional(),
   date: z.string(),
   dirname: z.string(),
   filename: z.string(),
