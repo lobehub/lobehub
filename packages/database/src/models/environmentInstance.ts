@@ -1,10 +1,18 @@
 import type { EnvironmentInstanceConfiguration } from '@lobechat/types';
 import { and, asc, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import type { EnvironmentInstanceItem, NewEnvironmentInstance } from '../schemas';
 import { environmentInstances, environments } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { environmentOwnership } from './environment';
+
+/**
+ * The part of a specification a build actually depends on, projected so two
+ * configurations that differ only in how a session runs compare equal.
+ */
+const buildInputs = (column: AnyPgColumn) =>
+  sql`jsonb_build_object('bootstrapCommand', ${column} -> 'bootstrapCommand', 'env', ${column} -> 'env', 'sources', ${column} -> 'sources')`;
 
 /** The binding that says which machine, account or volume an instance lives in. */
 export type EnvironmentInstanceBinding = Pick<
@@ -58,8 +66,15 @@ export class EnvironmentInstanceModel {
   private ownership = () => inArray(environmentInstances.environmentId, this.ownedEnvironments());
 
   /**
-   * Instances with the one thing that cannot be read off the row: whether the
-   * specification has moved since this copy was built.
+   * Instances with the one thing that cannot be read off the row: whether this
+   * copy needs rebuilding.
+   *
+   * Only the fields that change what gets BUILT count — the sources to check
+   * out, the command that makes them usable, and the variables that command
+   * runs under. `internetAccess` and `requirements` are deliberately excluded:
+   * they change how a session runs, not what a build produces, and folding them
+   * in would throw away a multi-gigabyte dependency cache because somebody
+   * moved a memory slider.
    *
    * Compared in SQL rather than in JS because `jsonb` equality ignores key
    * order and duplicate keys, while two objects that serialize differently in
@@ -72,7 +87,7 @@ export class EnvironmentInstanceModel {
     this.db
       .select({
         ...getTableColumns(environmentInstances),
-        stale: sql<boolean>`${environments.configuration} IS DISTINCT FROM ${environmentInstances.configurationSnapshot}`,
+        stale: sql<boolean>`${buildInputs(environments.configuration)} IS DISTINCT FROM ${buildInputs(environmentInstances.configurationSnapshot)}`,
       })
       .from(environmentInstances)
       .innerJoin(environments, eq(environments.id, environmentInstances.environmentId))
@@ -162,36 +177,6 @@ export class EnvironmentInstanceModel {
     const [row] = await this.db
       .update(environmentInstances)
       .set({ ...params, updatedAt: new Date() })
-      .where(and(eq(environmentInstances.id, id), this.ownership()))
-      .returning();
-
-    return row;
-  };
-
-  /**
-   * Marks this instance as rebuilt from the environment's current
-   * specification. Separate from {@link update} because it is not an edit of
-   * the instance — it records that the execution plane caught up.
-   */
-  markRebuilt = async (id: string): Promise<EnvironmentInstanceItem | undefined> => {
-    const [environment] = await this.db
-      .select({ configuration: environments.configuration })
-      .from(environments)
-      .innerJoin(environmentInstances, eq(environmentInstances.environmentId, environments.id))
-      .where(
-        and(eq(environmentInstances.id, id), environmentOwnership(this.userId, this.workspaceId)),
-      )
-      .limit(1);
-
-    if (!environment) return undefined;
-
-    const [row] = await this.db
-      .update(environmentInstances)
-      .set({
-        configurationSnapshot: environment.configuration,
-        status: 'ready',
-        updatedAt: new Date(),
-      })
       .where(and(eq(environmentInstances.id, id), this.ownership()))
       .returning();
 
