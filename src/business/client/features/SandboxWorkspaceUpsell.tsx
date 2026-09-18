@@ -1,12 +1,10 @@
 /**
- * Rendered in the composer control bar where the sandbox working-directory
- * picker would be, for a user who opted into the persistent-sandbox experiment
- * but whose plan does not include one.
+ * Opens whatever explains, to a user whose plan has no persistent sandbox, how
+ * to get one. Called from the "keep files" row of the execution-device menu,
+ * which renders inert with a tag for such a plan; the tag calls this.
  *
- * Empty in the open-source build: persistence there is a deployment decision,
- * not a purchase, so there is nothing to upsell. Downstream builds override this
+ * A no-op in the open-source build: persistence there is a deployment decision,
+ * not a purchase, so there is nothing to sell. Downstream builds override this
  * module through their own `@/business/...` mapping.
  */
-const SandboxWorkspaceUpsell = () => null;
-
-export default SandboxWorkspaceUpsell;
+export const openSandboxWorkspaceUpsell = (): void => {};
