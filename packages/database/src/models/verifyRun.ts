@@ -650,13 +650,46 @@ export class VerifyRunModel {
     olderThan: Date,
     options?: { after?: { id: string; updatedAt: Date }; limit?: number },
   ): Promise<VerifyRunItem[]> => {
+    return VerifyRunModel.findStuckInStatuses(db, ['verifying'], olderThan, options);
+  };
+
+  /**
+   * One page of runs stranded in `collecting_evidence` since before `olderThan`,
+   * across all owners — the evidence-turn half of the sweep's input.
+   *
+   * A task-bound run enters `collecting_evidence` through a durable write, but
+   * the evidence-only continuation that is supposed to end it is just another
+   * agent run: if that run is aborted, stalls, or its terminal hook is lost, no
+   * retry re-enters and no watchdog looks — the acceptance above the run stays
+   * blocked on a verdict that nothing will ever produce. The sweep re-enters
+   * judging directly (the `claimVerifying` gate accepts `collecting_evidence`),
+   * so a stranded run is recoverable without re-running evidence collection.
+   *
+   * Shares {@link findStuckVerifying}'s no-per-user scope, keyset paging, and
+   * millisecond-precision `updatedAt` handling — see that method's doc for why.
+   */
+  static findStuckCollectingEvidence = async (
+    db: LobeChatDatabase,
+    olderThan: Date,
+    options?: { after?: { id: string; updatedAt: Date }; limit?: number },
+  ): Promise<VerifyRunItem[]> => {
+    return VerifyRunModel.findStuckInStatuses(db, ['collecting_evidence'], olderThan, options);
+  };
+
+  /** Keyset-paged scan of runs stuck in any of `statuses` past `olderThan`. */
+  private static findStuckInStatuses = async (
+    db: LobeChatDatabase,
+    statuses: VerifyRunStatus[],
+    olderThan: Date,
+    options?: { after?: { id: string; updatedAt: Date }; limit?: number },
+  ): Promise<VerifyRunItem[]> => {
     const { after, limit = 200 } = options ?? {};
 
     // Millisecond-truncated updatedAt — the precision the cursor round-trips at.
     const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
 
     const conditions = [
-      eq(verifyRuns.status, 'verifying'),
+      inArray(verifyRuns.status, statuses),
       lt(verifyRuns.updatedAt, olderThan),
       isNotNull(verifyRuns.operationId),
     ];
