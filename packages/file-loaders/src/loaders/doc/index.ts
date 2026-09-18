@@ -17,10 +17,24 @@ export class DocLoader implements FileLoaderInterface {
       const extracted: any = await extractor.extract(filePath);
 
       // Prefer getBody() if available; fallback to common fields
-      const pageContent: string =
-        extracted && typeof extracted.getBody === 'function'
-          ? extracted.getBody()
-          : ((extracted?.text as string) ?? '');
+      const hasGetBody = extracted && typeof extracted.getBody === 'function';
+      const read = (name: string): string =>
+        typeof extracted?.[name] === 'function' ? ((extracted[name]() as string) ?? '') : '';
+
+      // getBody() is only the main story. A .doc keeps text boxes, footnotes and
+      // endnotes in streams of their own, and Word puts all of them on the page,
+      // so reading the body alone drops every callout, pull quote and footnote.
+      // Comments stay out: they are remarks about the document, not part of it.
+      const asides = [read('getTextboxes'), read('getFootnotes'), read('getEndnotes')]
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      const body = hasGetBody ? read('getBody') : ((extracted?.text as string) ?? '');
+      // A document whose text lives only in a text box has an empty body, and
+      // keeping it would open the content with two blank lines.
+      const pageContent: string = asides.length
+        ? [body.trimEnd(), ...asides].filter(Boolean).join('\n\n')
+        : body;
 
       const lines = pageContent.split('\n');
       const lineCount = lines.length;
