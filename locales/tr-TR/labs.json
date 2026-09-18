@@ -16,7 +16,7 @@
   "features.desktopSplitView.title": "Sekme Bölme Görünümü",
   "features.evalCapture.desc": "Bir konuşma turunu — önceki bağlamı, girdi ve ürettiği cevabı — bir değerlendirme test vakası olarak yakalayan bir mesaj eylemi ekler.",
   "features.evalCapture.title": "Bir turu değerlendirme vakası olarak kaydet",
-  "features.gatewayMux.desc": "Bu sekmede her ajan çalışmasını, her çalıştırma için ayrı bir soket açmak yerine, paylaşılan bir ağ geçidi WebSocket üzerinden yönlendirin. Yeniden bağlantılar ve olay tekrarları, paylaşılan bağlantı üzerinde çalıştırma başına işlenir.",
+  "features.gatewayMux.desc": "Bu sekmedeki her ajan çalışmasını, her çalışma için ayrı bir soket açmak yerine tek bir paylaşılan ağ geçidi WebSocket'i üzerinden yönlendirin. Yeniden bağlanmalar ve olay yeniden oynatma, paylaşılan bağlantı üzerinde her çalışma için ayrı ayrı yönetilir.",
   "features.gatewayMux.title": "Tek Bağlantılı Ağ Geçidi (deneysel)",
   "features.groupChat.desc": "Çoklu ajan grup sohbeti koordinasyonunu etkinleştirin.",
   "features.groupChat.title": "Grup Sohbeti (Çoklu Ajan)",
