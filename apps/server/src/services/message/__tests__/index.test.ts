@@ -1,4 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import type * as ToolViewModelModule from '@lobechat/tool-view-model';
+import { projectToolViewModels } from '@lobechat/tool-view-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
@@ -8,6 +10,14 @@ import { MessageService } from '../index';
 
 vi.mock('@/database/models/message');
 vi.mock('@/server/services/file');
+
+// Spy on the real projector pipeline rather than stubbing it: the assertion
+// that matters is that the UI read path runs it at all, and that with an empty
+// registry it is still a pass-through.
+vi.mock('@lobechat/tool-view-model', async (importOriginal) => {
+  const actual = await importOriginal<typeof ToolViewModelModule>();
+  return { ...actual, projectToolViewModels: vi.fn(actual.projectToolViewModels) };
+});
 
 describe('MessageService', () => {
   let messageService: MessageService;
@@ -46,6 +56,27 @@ describe('MessageService', () => {
     });
 
     messageService = new MessageService(mockDB, userId);
+  });
+
+  describe('queryMessages', () => {
+    const toolRow = {
+      content: 'RAW BODY',
+      id: 'tool-1',
+      plugin: { apiName: 'crawlSinglePage', arguments: '{}', identifier: 'lobe-web-browsing' },
+      pluginState: { results: [] },
+      role: 'tool',
+    } as any;
+
+    it('runs the UI read path through the tool view-model projector', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+
+      expect(projectToolViewModels).toHaveBeenCalledWith([toolRow]);
+      // Inert until a projector is registered: today the stored payload still
+      // reaches the client untouched.
+      expect(result).toEqual([toolRow]);
+    });
   });
 
   describe('removeMessage', () => {

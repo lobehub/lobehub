@@ -218,6 +218,13 @@ export interface UIChatMessage {
    */
   compressedMessages?: UIChatMessage[];
   content: string;
+  /**
+   * Character length of the STORED tool result body, kept when the read path
+   * replaced `content` with a render-facing view model. Presence checks (the
+   * tool status icon, "is this tool settled") must read this instead of
+   * `content.length`, which would otherwise report a trimmed body as empty.
+   */
+  contentLength?: number;
   createdAt: number;
   /** Lexical editor JSON state for rich text rendering */
   editorData?: Record<string, any> | null;
@@ -246,6 +253,12 @@ export interface UIChatMessage {
    * parent message id
    */
   parentId?: string;
+  /**
+   * The UI read path reduced this tool message's `content` / `pluginState` to
+   * a view model; the stored payload is larger and must be fetched on demand
+   * (raw viewer / detail portal) rather than read from the store.
+   */
+  payloadOmitted?: boolean;
   /**
    * Performance metrics (tps, ttft, duration, latency)
    * Aggregated from all children in group messages

@@ -1,5 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
+import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   type CreateMessageParams,
   type HeterogeneousToolStateSnapshot,
@@ -175,10 +176,15 @@ export class MessageService {
       allowShareVisitor?: boolean;
     },
   ): Promise<UIChatMessage[]> {
-    return this.messageModel.query(params, {
+    const messages = await this.messageModel.query(params, {
       ...this.getQueryOptions(),
       ...(options?.allowShareVisitor && { allowShareVisitor: true }),
     });
+
+    // The UI read path hands back render-facing view models; the model-facing
+    // read goes straight through `MessageModel.query` and never reaches here,
+    // so the LLM context keeps the full stored payload by construction.
+    return projectToolViewModels(messages);
   }
 
   /**
