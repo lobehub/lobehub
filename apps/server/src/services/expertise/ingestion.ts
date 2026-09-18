@@ -844,10 +844,13 @@ export class ExpertiseIngestionService {
 
       // One observation yields one hit per rejection it cites, so hitCount stays a count of real
       // violations; an observation with no cited source (the topic path) still yields one.
+      //
+      // Deduplicated here rather than at the caller: `hitCount` is what ranks the standards list
+      // and decides core-versus-niche, so one rejection counted twice because the model repeated
+      // its label ("R1", "R1") is a durable distortion, and this is the only place hits are made.
       const writeHits = async (lessonId: string, observation: PersistableObservation) => {
-        const sources = observation.sourceCheckResultIds?.length
-          ? observation.sourceCheckResultIds
-          : [undefined];
+        const cited = [...new Set(observation.sourceCheckResultIds ?? [])];
+        const sources = cited.length > 0 ? cited : [undefined];
         await tx.insert(expertiseHits).values(
           sources.map((sourceCheckResultId) => ({
             domainId: input.domain.id,
@@ -876,7 +879,7 @@ export class ExpertiseIngestionService {
             domainId: input.domain.id,
             id: lessonId,
             exampleCount: 1,
-            hitCount: observation.sourceCheckResultIds?.length || 1,
+            hitCount: new Set(observation.sourceCheckResultIds ?? []).size || 1,
             hitRunCount: 1,
             layer: observation.layer,
             lastHitAt: new Date(),

@@ -352,6 +352,22 @@ describe('ExpertiseIngestionService.persistDomainRun', () => {
     expect(fake.inserted.get(expertiseLessons)?.[0].exampleCount).toBe(1);
   });
 
+  it('counts a rejection once when the model cites its label twice', async () => {
+    const fake = createTx([]);
+    await persistRun(fake, [
+      observation({
+        outcome: 'violation',
+        sourceCheckResultIds: ['check_a', 'check_a', 'check_b'],
+      }),
+    ]);
+
+    // hitCount ranks the standards list and decides core-versus-niche, so a label the model
+    // repeated must not make one rejection look like two.
+    const hits = fake.inserted.get(expertiseHits) ?? [];
+    expect(hits.map((hit) => hit.sourceCheckResultId)).toEqual(['check_a', 'check_b']);
+    expect(fake.inserted.get(expertiseLessons)?.[0].hitCount).toBe(2);
+  });
+
   it('stores what a standard rests on as columns, not as prose in its body', async () => {
     const fake = createTx([]);
     await persistRun(fake, [

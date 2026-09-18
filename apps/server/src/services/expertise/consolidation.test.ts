@@ -64,6 +64,7 @@ const createDb = (
 ) => {
   const inserts: Record<string, unknown>[] = [];
   const updates: Record<string, unknown>[] = [];
+  const wheres: unknown[] = [];
   const results: unknown[][] = [
     [lesson],
     instances,
@@ -84,7 +85,10 @@ const createDb = (
       orderBy: () => self,
       // eslint-disable-next-line unicorn/no-thenable
       then: (resolve: (v: unknown) => void) => resolve(value),
-      where: () => self,
+      where: (condition: unknown) => {
+        wheres.push(condition);
+        return self;
+      },
     };
     return self;
   };
@@ -106,7 +110,7 @@ const createDb = (
     }),
   };
 
-  return { db: db as never, inserts, updates };
+  return { db: db as never, inserts, updates, wheres };
 };
 
 afterEach(() => {
@@ -251,6 +255,42 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     // Dropping a boundary the reviewer stated widens the standard past what they said.
     const sections = updates[0].sections as { body: string; key: string }[];
     expect(sections.find((section) => section.key === 'limits')?.body).toBe(stated);
+  });
+
+  it('samples only the accepted deliveries the caller may read', async () => {
+    const { db, wheres } = createDb([
+      instance('c1', 'a'),
+      instance('c2', 'b'),
+      instance('c3', 'c'),
+    ]);
+    generateObject.mockResolvedValue({
+      currentLimitsArePlaceholder: true,
+      generalized: false,
+      limits: [],
+      note: '',
+      reasonKind: 'taste',
+      reasoning: '',
+      subject: '',
+      title: '',
+    });
+
+    await new ExpertiseConsolidationService(db, 'user_1', 'ws_1').consolidate('lesson_1');
+
+    // A workspace shares its lesson catalog but not every round in it. This pass reads a
+    // delivery's title and the reviewer's notes into a prompt, then persists the result where the
+    // whole workspace sees it — so a teammate's creator-only round must not be sampled.
+    const columns = new Set<string>();
+    const seen = new Set<unknown>();
+    const walk = (node: unknown) => {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+      const record = node as Record<string, unknown>;
+      if (typeof record.name === 'string' && record.table) columns.add(record.name);
+      for (const value of Object.values(record)) walk(value);
+    };
+    walk(wheres);
+
+    expect([...columns]).toEqual(expect.arrayContaining(['visibility', 'user_id']));
   });
 
   it('will not promote a taste standard to a mechanism', async () => {

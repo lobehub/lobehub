@@ -4,6 +4,7 @@ import {
   expertiseLessonRevisions,
   expertiseLessons,
   verifyCheckResults,
+  verifyRuns,
 } from '@lobechat/database/schemas';
 import {
   chainExpertiseConsolidation,
@@ -16,7 +17,7 @@ import type {
   VerifyCheckDecisionDetail,
 } from '@lobechat/types';
 import debug from 'debug';
-import { and, desc, eq, gt, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -346,7 +347,14 @@ export class ExpertiseConsolidationService {
   };
 
   /**
-   * Deliveries the same reviewer accepted, excluding the instances themselves.
+   * Deliveries accepted in the same scope, excluding the instances themselves.
+   *
+   * Readable rounds only. A workspace shares its lesson catalog but not every round in it: a round
+   * is creator-only unless it is public, and this pass puts a delivery's title, the reviewer's
+   * comments and their circled notes into a prompt — then persists the result as a limit the whole
+   * workspace reads. So the sample is restricted the way a reader would be: the caller's own
+   * checks, plus other members' only where the round they belong to is public. A check with no
+   * round is the caller's own by the scope predicate.
    *
    * Deterministic per owner rather than newest-first: a boundary that appears only because the
    * sample moved is not a boundary, and a re-run has to be comparable with the last one.
@@ -364,9 +372,11 @@ export class ExpertiseConsolidationService {
         title: verifyCheckResults.checkItemTitle,
       })
       .from(verifyCheckResults)
+      .leftJoin(verifyRuns, eq(verifyRuns.id, verifyCheckResults.verifyRunId))
       .where(
         and(
           scope,
+          or(eq(verifyCheckResults.userId, this.userId), eq(verifyRuns.visibility, 'public')),
           eq(verifyCheckResults.userDecision, 'accepted'),
           excludeIds.length > 0 ? notInArray(verifyCheckResults.id, excludeIds) : undefined,
           gt(sql`length(coalesce(${verifyCheckResults.checkItemTitle}, ''))`, 0),
