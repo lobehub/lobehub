@@ -34,13 +34,34 @@ const ANCHORED_PAGE_SIZE = 50;
 
 export type DocumentCommentThreadScope = 'all' | 'anchored' | 'document';
 
-const fetchThreads = ([, , documentId, cursor, scope]: readonly string[]) =>
-  documentCommentService.listThreads({
+/**
+ * Keeps a page to its scope's own subset even when the backend ignored the
+ * `anchored` parameter — a production server predating it strips the unknown
+ * key and answers both scopes with the same mixed pages (the documented debug
+ * proxy runs the latest SPA against exactly that). Without this, the two
+ * caches overlap and the list below the body renders every such thread
+ * twice. The cursor still walks the server's own order, so paging stays
+ * consistent; a page may just carry fewer items than asked for.
+ */
+export const partitionThreadPage = (
+  page: DocumentCommentThreadPage,
+  scope: DocumentCommentThreadScope,
+): DocumentCommentThreadPage => {
+  if (scope === 'all') return page;
+  const wantsAnchored = scope === 'anchored';
+  const items = page.items.filter(({ root }) => Boolean(root.selectionAnchor) === wantsAnchored);
+  return items.length === page.items.length ? page : { ...page, items };
+};
+
+const fetchThreads = async ([, , documentId, cursor, scope]: readonly string[]) => {
+  const page = await documentCommentService.listThreads({
     anchored: scope === 'all' ? undefined : scope === 'anchored',
     cursor: cursor || undefined,
     documentId,
     limit: scope === 'anchored' ? ANCHORED_PAGE_SIZE : PAGE_SIZE,
   });
+  return partitionThreadPage(page, scope as DocumentCommentThreadScope);
+};
 
 const fetchReplies = ([, , rootCommentId, cursor]: readonly string[]) =>
   documentCommentService.listReplies({
