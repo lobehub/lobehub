@@ -3777,6 +3777,8 @@ When I am ___, I need ___
   'environments.title': 'Environments',
   'environments.desc': 'What a run should have around it, and the instances built from each one.',
   'environments.create': 'New environment',
+  'environments.cancel': 'Cancel',
+  'environments.createFailed': 'Could not create the environment',
   'environments.namePlaceholder': 'Environment name',
   'environments.empty': 'No environments yet',
   'environments.remove': 'Delete environment',

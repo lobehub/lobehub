@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Alert, Button, Input, Text } from '@lobehub/ui/base-ui';
-import { ChevronRightIcon, InfoIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { Center, Empty, Flexbox, FormGroup, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { ChevronRightIcon, ContainerIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import EnvironmentForm from './EnvironmentForm';
 import InstanceList from './InstanceList';
 import {
@@ -30,7 +31,11 @@ const EnvironmentRow = memo<EnvironmentRowProps>(({ environment }) => {
   );
 
   return (
-    <Flexbox gap={8} paddingBlock={8}>
+    <Flexbox
+      gap={8}
+      paddingBlock={8}
+      style={{ borderBlockEnd: '1px solid var(--color-border-secondary)' }}
+    >
       <Flexbox horizontal align={'center'} gap={8}>
         <ActionIcon
           icon={ChevronRightIcon}
@@ -84,6 +89,41 @@ const EnvironmentRow = memo<EnvironmentRowProps>(({ environment }) => {
 
 EnvironmentRow.displayName = 'SandboxEnvironmentRow';
 
+/** Three skeleton rows' worth — what the list occupies before it knows its length. */
+const LIST_MIN_HEIGHT = 3 * 56;
+
+/**
+ * The list's own shape while it loads: three rows, each a name over its
+ * description, separated the way the real rows are. A placeholder that matches
+ * what replaces it means nothing jumps when the data lands — and a slab of the
+ * wrong height was more visible than the wait it covered.
+ */
+const EnvironmentListSkeleton = memo(() => (
+  <Flexbox gap={4}>
+    {[0, 1, 2].map((row) => (
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={8}
+        key={row}
+        paddingBlock={8}
+        paddingInline={28}
+        style={{ borderBlockEnd: '1px solid var(--color-border-secondary)' }}
+      >
+        <Flexbox flex={1} gap={6}>
+          <Skeleton.Text rows={1} style={{ width: 140 }} />
+          <Skeleton.Text rows={1} style={{ width: 240 }} />
+        </Flexbox>
+        {/* Where the row's action sits, so the column of icons on the right
+            is already there when the real rows land. */}
+        <Skeleton.Avatar shape={'square'} size={24} />
+      </Flexbox>
+    ))}
+  </Flexbox>
+));
+
+EnvironmentListSkeleton.displayName = 'EnvironmentListSkeleton';
+
 /**
  * Environments and the instances built from them.
  *
@@ -93,67 +133,70 @@ EnvironmentRow.displayName = 'SandboxEnvironmentRow';
  */
 const EnvironmentManager = memo(() => {
   const { t } = useTranslation('setting');
-  const { data } = useEnvironments();
-  const actions = useEnvironmentActions();
-  const [name, setName] = useState('');
-  const [creating, setCreating] = useState(false);
+  const { data, isLoading } = useEnvironments();
 
   const environments = data?.environments ?? [];
 
-  const create = async () => {
-    if (!name.trim()) return;
-    setCreating(true);
-    try {
-      await actions.createEnvironment({ name: name.trim() });
-      setName('');
-    } finally {
-      setCreating(false);
-    }
-  };
+  // A `FormGroup` with free content, not a `Form` fed a bare node: the form
+  // shell lays out FORM ITEMS, each carrying its own row padding, and gives an
+  // unstructured child none — which rendered this list as a sliver. The group
+  // is the shape the workspace budget page uses for the same job.
+  const title = (
+    <Flexbox horizontal align={'baseline'} gap={8}>
+      <span>{t('environments.title')}</span>
+      {/* The one thing a reader has to know before filling anything in: what
+          they write is stored faithfully and not yet acted on. It sits with the
+          title rather than as a banner competing with it. */}
+      <Text fontSize={12} type={'secondary'}>
+        {t('environments.pending')}
+      </Text>
+    </Flexbox>
+  );
 
   return (
-    <Flexbox gap={16}>
-      {/* Said out loud rather than left for someone to discover: the fields
-          below are stored faithfully, but nothing builds from them yet. */}
-      <Alert
-        showIcon
-        icon={InfoIcon}
-        title={t('environments.pending')}
-        type={'info'}
-        variant={'soft'}
-      />
-
-      <Flexbox horizontal align={'center'} gap={8}>
-        <Input
-          placeholder={t('environments.namePlaceholder')}
-          style={{ flex: 1 }}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') void create();
-          }}
-        />
+    <FormGroup
+      collapsible={false}
+      gap={16}
+      title={title}
+      variant={'filled'}
+      extra={
         <Button
-          disabled={!name.trim()}
           icon={<Icon icon={PlusIcon} />}
-          loading={creating}
-          size={'small'}
-          onClick={create}
+          type={'primary'}
+          onClick={openCreateEnvironmentModal}
         >
           {t('environments.create')}
         </Button>
-      </Flexbox>
-
-      {environments.length === 0 ? (
-        <Text fontSize={12} type={'secondary'}>
-          {t('environments.empty')}
-        </Text>
+      }
+    >
+      {isLoading ? (
+        <EnvironmentListSkeleton />
+      ) : environments.length === 0 ? (
+        // Sized to the three rows the skeleton drew, so an empty list holds the
+        // same ground a loading one did, and the card does not collapse to a
+        // strip the moment the answer is "none".
+        <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
+          <Empty
+            description={t('environments.desc')}
+            descriptionProps={{ fontSize: 13 }}
+            icon={ContainerIcon}
+            style={{ maxWidth: 360 }}
+            title={t('environments.empty')}
+            action={
+              <Button icon={<Icon icon={PlusIcon} />} onClick={openCreateEnvironmentModal}>
+                {t('environments.create')}
+              </Button>
+            }
+          />
+        </Center>
       ) : (
-        environments.map((environment) => (
-          <EnvironmentRow environment={environment} key={environment.id} />
-        ))
+        <Flexbox gap={4}>
+          {environments.map((environment) => (
+            <EnvironmentRow environment={environment} key={environment.id} />
+          ))}
+        </Flexbox>
       )}
-    </Flexbox>
+    </FormGroup>
   );
 });
 

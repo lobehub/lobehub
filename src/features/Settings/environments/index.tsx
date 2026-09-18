@@ -1,31 +1,21 @@
 'use client';
 
-import { Form } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import { FORM_STYLE } from '@/const/layoutTokens';
+import { MAX_WIDTH } from '@/const/layoutTokens';
 import EnvironmentManager from '@/features/EnvironmentManager';
 
-const Page = memo(() => {
-  const { t } = useTranslation('setting');
-
-  return (
-    <Form
-      collapsible={false}
-      itemsType={'group'}
-      variant={'filled'}
-      items={[
-        {
-          children: <EnvironmentManager />,
-          extra: null,
-          title: t('environments.title'),
-        },
-      ]}
-      {...FORM_STYLE}
-    />
-  );
-});
+/**
+ * Thin: the group, its title and its create action all live in the manager,
+ * the way the workspace budget page composes its groups. Wrapping it in a
+ * `Form` would lay it out as a form ITEM and give it none of an item's padding.
+ */
+const Page = memo(() => (
+  <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>
+    <EnvironmentManager />
+  </Flexbox>
+));
 
 Page.displayName = 'EnvironmentsSetting';
 
