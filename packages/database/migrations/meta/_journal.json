@@ -1162,6 +1162,13 @@
       "when": 1789610500888,
       "tag": "0165_expertise_rejection_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1789696331064,
+      "tag": "0166_user_deletion_fk_indexes",
+      "breakpoints": true
     }
   ],
   "version": "6"
