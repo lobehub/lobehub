@@ -13,12 +13,26 @@ let loader: FileLoaderInterface;
 
 const testFile = fixturePath('test.xlsx');
 const nonExistentFile = fixturePath('nonexistent.xlsx');
+// One cell holds two lines, as Alt+Enter produces, and one holds a pipe.
+const multilineCellFile = fixturePath('multiline-cell.xlsx');
 
 beforeEach(() => {
   loader = new ExcelLoader();
 });
 
 describe('ExcelLoader', () => {
+  it('should keep a multi-line cell inside its row', async () => {
+    const pages = await loader.loadPages(multilineCellFile);
+    const lines = pages[0].pageContent.split('\n');
+
+    // Header, separator, and one line per data row: a raw newline in a cell
+    // would end the row early and leave the rest outside the table.
+    expect(lines).toHaveLength(4);
+    expect(lines[2]).toBe('| Ada | 12 Main Street<br>Springfield | ok |');
+    // The pipe escaping that is already there must not change.
+    expect(lines[3]).toBe('| Bob | 9 Oak Road | pipe \\| inside |');
+  });
+
   it('should load pages correctly from an Excel file (one page per sheet)', async () => {
     const pages = await loader.loadPages(testFile);
     // There should be one page per sheet in the Excel file
