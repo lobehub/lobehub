@@ -84,6 +84,7 @@ describe('persisted topic list across a reload', () => {
 
   afterEach(async () => {
     await localDataCache.clearScope(SCOPE);
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -91,8 +92,9 @@ describe('persisted topic list across a reload', () => {
     // --- session 1: the list is fetched while the run is still going ---------
     vi.mocked(topicService.getTopics).mockResolvedValue({ items: [runningTopic], total: 1 } as any);
 
+    const provider1 = makeProvider();
     const session1 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
-      wrapper: wrapper(makeProvider()),
+      wrapper: wrapper(provider1),
     });
 
     await waitFor(() => expect(session1.result.current.data?.items).toHaveLength(1));
@@ -111,6 +113,78 @@ describe('persisted topic list across a reload', () => {
     session1.unmount();
 
     // --- session 2 ("reload"): a slow network, so the cached page paints -----
+    act(() => {
+      useChatStore.setState({ topicDataMap: {} });
+    });
+    vi.mocked(topicService.getTopics).mockReturnValue(new Promise<never>(() => {}) as any);
+
+    const provider2 = makeProvider();
+    await provider2.hydrateScope?.();
+
+    const session2 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
+      wrapper: wrapper(provider2),
+    });
+
+    await waitFor(() =>
+      expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]?.items).toHaveLength(1),
+    );
+    expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]?.items[0].status).toBe('active');
+
+    session2.unmount();
+  });
+
+  it('keeps a terminal status after an older list request lands and the pending pin expires', async () => {
+    const now = Date.now();
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    vi.mocked(topicService.getTopics).mockResolvedValue({ items: [runningTopic], total: 1 } as any);
+
+    const provider1 = makeProvider();
+    const session1 = renderHook(() => useChatStore().useFetchTopics(true, { agentId: AGENT_ID }), {
+      wrapper: wrapper(provider1),
+    });
+
+    await waitFor(() => expect(session1.result.current.data?.items).toHaveLength(1));
+    await waitFor(async () => expect(await cachedTopicStatus()).toBe('running'));
+
+    // The terminal write wins in Zustand and the persisted cache first.
+    act(() => {
+      useChatStore.getState().internal_pinTopicStatus({
+        agentId: AGENT_ID,
+        status: 'active',
+        topicId: runningTopic.id,
+      });
+    });
+    await waitFor(async () => expect(await cachedTopicStatus()).toBe('active'));
+    const cacheSetSpy = vi.spyOn(localDataCache, 'set');
+
+    // A list request that started before the terminal write returns afterwards.
+    // The pending-status pin keeps the mounted sidebar correct, but the raw SWR
+    // response must not put `running` back into IndexedDB behind it.
+    await act(async () => {
+      await session1.result.current.mutate();
+    });
+    expect(useChatStore.getState().topicDataMap[CONTAINER_KEY]?.items[0].status).toBe('active');
+    await waitFor(() => expect(cacheSetSpy).toHaveBeenCalled());
+    await Promise.all(cacheSetSpy.mock.results.map(({ value }) => value));
+    expect(await cachedTopicStatus()).toBe('active');
+
+    // The normalized first response must not be mistaken for server
+    // confirmation. A second older response can still be in flight and must be
+    // pinned too.
+    cacheSetSpy.mockClear();
+    await act(async () => {
+      await session1.result.current.mutate();
+    });
+    await waitFor(() => expect(cacheSetSpy).toHaveBeenCalled());
+    await Promise.all(cacheSetSpy.mock.results.map(({ value }) => value));
+    expect(await cachedTopicStatus()).toBe('active');
+    session1.unmount();
+
+    // Regression: after the 15-second pending pin elapsed, navigating away and
+    // back remounted the sidebar from that stale IndexedDB snapshot and restored
+    // the yellow running spinner until the network response arrived.
+    nowSpy.mockReturnValue(now + 16_000);
     act(() => {
       useChatStore.setState({ topicDataMap: {} });
     });
