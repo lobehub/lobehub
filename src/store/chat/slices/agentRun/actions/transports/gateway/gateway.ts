@@ -38,6 +38,10 @@ import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import {
+  consumePendingSandboxSelection,
+  getPendingSandboxSelection,
+} from '@/store/chat/pendingSandboxSelection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -761,7 +765,20 @@ export class GatewayActionImpl {
     // it — the server can't read client-local state, and without this a
     // workspace hetero run's first send would fall back to the device default
     // cwd instead of the member's pick.
-    const initialTopicMetadata =
+    // The instance the composer bound before any topic existed. Merged rather
+    // than folded into the branches below: it is orthogonal to the cwd, and a
+    // conversation can start with one, the other, or both.
+    const pendingSandboxSelection =
+      isCreateNewTopic && executionContext.agentId
+        ? getPendingSandboxSelection(executionContext.agentId)
+        : undefined;
+    const sandboxTopicMetadata = pendingSandboxSelection
+      ? {
+          sandboxInstanceId: pendingSandboxSelection.instanceId,
+          sandboxMode: pendingSandboxSelection.mode,
+        }
+      : undefined;
+    const cwdTopicMetadata =
       pendingRepos.length > 0
         ? {
             repos: pendingRepos,
@@ -775,6 +792,10 @@ export class GatewayActionImpl {
               workingDirectoryConfig: optimisticTopic.metadata.workingDirectoryConfig,
             }
           : undefined;
+    const initialTopicMetadata =
+      cwdTopicMetadata || sandboxTopicMetadata
+        ? { ...cwdTopicMetadata, ...sandboxTopicMetadata }
+        : undefined;
 
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
@@ -971,8 +992,11 @@ export class GatewayActionImpl {
     }
 
     if (isCreateNewTopic && result.topicId) {
-      // Topic created successfully — now safe to clear the pending repo selection.
-      if (messageContext.agentId) consumePendingTopicRepos(messageContext.agentId);
+      // Topic created successfully — now safe to clear the pending selections.
+      if (messageContext.agentId) {
+        consumePendingTopicRepos(messageContext.agentId);
+        consumePendingSandboxSelection(messageContext.agentId);
+      }
       if (optimisticTopic) {
         const topicMetadata = optimisticTopic.metadata ?? initialTopicMetadata;
         this.#get().internal_replaceTopicId({

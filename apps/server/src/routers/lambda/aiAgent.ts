@@ -9,13 +9,13 @@ import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lo
 import {
   CreateThreadWithMessageSchema,
   entityIdPattern,
+  initialTopicMetadataSchema,
   isServerDefaultHeterogeneousRelayInvocation,
   LocalHeterogeneousAgentTypeSchema,
   RequestTrigger,
   ThreadStatus,
   ThreadType,
   UserInterventionConfigSchema,
-  workingDirConfigSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -949,13 +949,10 @@ const ExecAgentSchema = z
         /** The group being edited when scope is 'group_agent_builder' (not a group chat turn). */
         editingGroupId: z.string().optional(),
         groupId: z.string().nullish(),
-        initialTopicMetadata: z
-          .object({
-            repos: z.array(z.string()).optional(),
-            workingDirectory: z.string().optional(),
-            workingDirectoryConfig: workingDirConfigSchema.optional(),
-          })
-          .optional(),
+        // The shared declaration, not a copy of it: a local `z.object()` here
+        // silently strips whatever the type gained and the call still answers
+        // 200, so the two must be one thing.
+        initialTopicMetadata: initialTopicMetadataSchema.optional(),
         /**
          * Branch this run into a new thread (subtopic) under the resolved topic.
          * The gateway path never calls `aiChat.sendMessageInServer`, so this is

@@ -488,6 +488,10 @@ export const setupTurn = async (
             ...(editingGroupId && { editingGroupId }),
             taskId: operationTaskId,
             ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
+            ...(initialTopicMeta?.sandboxInstanceId && {
+              sandboxInstanceId: initialTopicMeta.sandboxInstanceId,
+            }),
+            ...(initialTopicMeta?.sandboxMode && { sandboxMode: initialTopicMeta.sandboxMode }),
             ...(initialTopicMeta?.workingDirectory && {
               workingDirectory: initialTopicMeta.workingDirectory,
             }),

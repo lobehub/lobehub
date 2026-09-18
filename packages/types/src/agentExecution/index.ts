@@ -1,8 +1,38 @@
+import { z } from 'zod';
+
 import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { CreateThreadWithMessageParams } from '../aiChat';
-import type { DeviceUnavailableErrorData, WorkingDirConfig } from '../device';
+import type { DeviceUnavailableErrorData } from '../device';
+import { workingDirConfigSchema } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
+
+/**
+ * Metadata a client resolved before the topic existed, carried by the first
+ * send so the SERVER topic is born with it.
+ *
+ * The schema is the declaration and the type is derived from it, deliberately.
+ * Written as two independent declarations — an interface here and a
+ * `z.object()` at the router — they drift silently: `z.object()` strips keys it
+ * does not know, so a field added to the interface alone is dropped mid-flight
+ * and the call still answers 200.
+ */
+export const initialTopicMetadataSchema = z.object({
+  repos: z.array(z.string()).optional(),
+  /**
+   * Cloud-sandbox instance the composer chose before any topic existed. The
+   * choice is made on a conversation that has nothing to write to yet, so it
+   * travels with the first send instead — the server cannot read the client's
+   * pending selection, and without this the new topic would be born unbound and
+   * silently run at the workspace root.
+   */
+  sandboxInstanceId: z.string().optional(),
+  sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
+  workingDirectory: z.string().optional(),
+  workingDirectoryConfig: workingDirConfigSchema.optional(),
+});
+
+export type InitialTopicMetadata = z.infer<typeof initialTopicMetadataSchema>;
 
 export type AgentSignalOperationKind =
   'memory' | 'nightly-review' | 'self-feedback-intent' | 'self-reflection' | 'skill';
@@ -104,11 +134,7 @@ export interface ExecAgentAppContext {
    * Initial metadata to merge into the topic when a new topic is created for
    * this execution. Ignored when a topicId is already provided (existing topic).
    */
-  initialTopicMetadata?: {
-    repos?: string[];
-    workingDirectory?: string;
-    workingDirectoryConfig?: WorkingDirConfig;
-  };
+  initialTopicMetadata?: InitialTopicMetadata;
   /**
    * Whether this operation runs inside an isolation thread spawned by another
    * operation on the same topic (callAgent / callSubAgent / group member).

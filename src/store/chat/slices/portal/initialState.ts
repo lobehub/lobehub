@@ -81,7 +81,7 @@ export type PortalViewData =
   | { type: PortalViewType.Notebook }
   | { file: PortalFile; type: PortalViewType.FilePreview }
   | { type: PortalViewType.LocalFile }
-  | { type: PortalViewType.SandboxWorkspace }
+  | { path?: string; type: PortalViewType.SandboxWorkspace }
   | { messageId: string; type: PortalViewType.MessageDetail }
   | {
       identifier: string;
