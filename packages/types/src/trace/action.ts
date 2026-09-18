@@ -4,7 +4,9 @@ export interface TraceEventBasePayload {
   content: string;
   eventType: TraceEventType;
   observationId?: string;
+  sessionId?: string;
   traceId: string;
+  userId?: string;
 }
 
 export interface TraceEventModifyMessage {

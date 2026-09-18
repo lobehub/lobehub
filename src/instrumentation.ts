@@ -48,11 +48,12 @@ export async function register() {
   // to receive forwarded events at `/api/agent/messenger/webhooks/<platform>`,
   // which doesn't require any startup work.
 
-  if (process.env.NODE_ENV !== 'production' && !process.env.ENABLE_TELEMETRY_IN_DEV) {
-    return;
-  }
-
-  const shouldEnable = process.env.ENABLE_TELEMETRY && process.env.NEXT_RUNTIME === 'nodejs';
+  const telemetryEnabled =
+    process.env.ENABLE_TELEMETRY &&
+    (process.env.NODE_ENV === 'production' || process.env.ENABLE_TELEMETRY_IN_DEV);
+  const shouldEnable =
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    (telemetryEnabled || process.env.ENABLE_LANGFUSE === '1');
   if (!shouldEnable) {
     return;
   }

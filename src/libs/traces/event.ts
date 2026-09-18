@@ -1,6 +1,7 @@
-import { TraceEventType } from '@lobechat/types';
+import { type LangfuseClient } from '@langfuse/client';
+import { propagateAttributes, startObservation } from '@langfuse/tracing';
+import { context, isValidTraceId, ROOT_CONTEXT } from '@opentelemetry/api';
 import { diffChars } from 'diff';
-import { type LangfuseTraceClient } from 'langfuse-core';
 
 import {
   type TraceEventBasePayload,
@@ -10,9 +11,9 @@ import {
   type TraceEventRegenerateMessage,
 } from '@/types/trace';
 
-/**
- * Trace event scores
- */
+import { getTraceContext } from './index';
+
+/** Trace event scores. */
 export enum EventScore {
   DeleteAndRegenerate = -1,
   Regenerate = -0.6,
@@ -23,111 +24,58 @@ export enum EventScore {
 type EventParams<T> = T & TraceEventBasePayload;
 
 export class TraceEventClient {
-  private _trace: LangfuseTraceClient;
-  constructor(client: LangfuseTraceClient) {
-    this._trace = client;
-  }
+  constructor(private client: LangfuseClient) {}
 
-  private scoreObservation(params: {
-    name: string;
-    observationId?: string;
-    traceId: string;
-    value: number;
-  }) {
-    const { observationId, traceId, value, name } = params;
+  private async recordEvent(
+    params: TraceEventBasePayload,
+    scoreName: string,
+    value: number,
+    output?: string,
+  ) {
+    const { content, eventType, observationId, traceId, sessionId, userId } = params;
+    const parentSpanContext = await getTraceContext(traceId, observationId);
+    context.with(ROOT_CONTEXT, () =>
+      propagateAttributes({ sessionId, userId }, () => {
+        startObservation(
+          eventType,
+          {
+            input: content,
+            metadata: {
+              ...(output !== undefined && { diffs: diffChars(content, output) }),
+              // Historical v3 traces cannot be mutated or used as OTel trace IDs.
+              ...(!isValidTraceId(traceId) && { legacyTraceId: traceId }),
+              score: value,
+            },
+            output,
+          },
+          { asType: 'event', parentSpanContext },
+        );
+      }),
+    );
 
-    // score the observation if there is an id
     if (observationId) {
-      this._trace.client.score({ name, observationId, traceId, value });
+      // Keep the original IDs so feedback on pre-migration messages still scores the original call.
+      this.client.score.create({ name: scoreName, observationId, traceId, value });
     }
   }
 
-  copyMessage({ traceId, observationId, content }: EventParams<TraceEventCopyMessage>) {
-    const score = EventScore.Copy;
-    // create update event
-    this._trace?.event({
-      input: content,
-      metadata: { score },
-      name: TraceEventType.CopyMessage,
-    });
-
-    // score the observation if there is an id
-    this.scoreObservation({
-      name: 'copy message',
-      observationId,
-      traceId,
-      value: score,
-    });
+  copyMessage(params: EventParams<TraceEventCopyMessage>) {
+    return this.recordEvent(params, 'copy message', EventScore.Copy);
   }
 
-  async deleteAndRegenerateMessage({
-    traceId,
-    observationId,
-    content,
-  }: EventParams<TraceEventDeleteAndRegenerateMessage>) {
-    const score = EventScore.DeleteAndRegenerate;
-    // create update event
-    this._trace?.event({
-      input: content,
-      metadata: { score },
-      name: TraceEventType.DeleteAndRegenerateMessage,
-    });
-
-    // score the observation if there is an id
-    this.scoreObservation({
-      name: 'delete and regenerate message',
-      observationId,
-      traceId,
-      value: score,
-    });
+  deleteAndRegenerateMessage(params: EventParams<TraceEventDeleteAndRegenerateMessage>) {
+    return this.recordEvent(
+      params,
+      'delete and regenerate message',
+      EventScore.DeleteAndRegenerate,
+    );
   }
 
-  async regenerateMessage({
-    traceId,
-    observationId,
-    content,
-  }: EventParams<TraceEventRegenerateMessage>) {
-    const score = EventScore.Regenerate;
-    // create update event
-    this._trace?.event({
-      input: content,
-      metadata: { score },
-      name: TraceEventType.RegenerateMessage,
-    });
-
-    // score the observation if there is an id
-    this.scoreObservation({ name: 'regenerate message', observationId, traceId, value: score });
+  regenerateMessage(params: EventParams<TraceEventRegenerateMessage>) {
+    return this.recordEvent(params, 'regenerate message', EventScore.Regenerate);
   }
 
-  async modifyMessage({
-    content: prev,
-    nextContent: next,
-    observationId,
-    traceId,
-  }: EventParams<TraceEventModifyMessage>) {
-    const score = EventScore.Modify;
-
-    // create update event
-    const diffs = diffChars(prev, next);
-    this._trace?.event({
-      input: prev,
-      metadata: { diffs, score },
-      name: TraceEventType.ModifyMessage,
-      output: next,
-    });
-
-    this._trace.update({
-      output: next,
-      // TODO: add tag when supported
-      // tags: [TraceNameMap.UserEvents]
-    });
-
-    // score the observation if there is an id
-    this.scoreObservation({
-      name: 'modify message',
-      observationId,
-      traceId,
-      value: score,
-    });
+  modifyMessage(params: EventParams<TraceEventModifyMessage>) {
+    return this.recordEvent(params, 'modify message', EventScore.Modify, params.nextContent);
   }
 }

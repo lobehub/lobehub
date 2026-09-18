@@ -84,6 +84,8 @@ We have integrated several free/open-source data analytics services in LobeHub f
 
 [Langfuse](https://langfuse.com/) is an [open-source](https://github.com/langfuse/langfuse) LLM Observability platform. By enabling the Langfuse integration, you can trace your chat data with Langfuse to develop, monitor, and evaluate the use of your LobeHub.
 
+The integration uses the Langfuse JavaScript SDK v5 and supports Langfuse v4. `ENABLE_LANGFUSE` works independently of `ENABLE_TELEMETRY`; users must still opt in to chat telemetry. Chat completions are recorded as a root observation with a nested generation. Message edits create new events with before/after content instead of overwriting completed observations.
+
 ### `ENABLE_LANGFUSE`
 
 - Type: Required

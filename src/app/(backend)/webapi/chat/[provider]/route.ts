@@ -18,6 +18,8 @@ export const maxDuration = 300;
 export const POST = checkAuth(async (req: Request, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 
+  let traceOptions: Awaited<ReturnType<typeof createTraceOptions>>;
+
   try {
     const workspaceId = await resolveValidWorkspaceIdFromRequest({ req, serverDB, userId });
 
@@ -30,10 +32,13 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
 
     const tracePayload = getTracePayload(req);
 
-    let traceOptions = {};
     // If user enable trace
     if (tracePayload?.enabled) {
-      traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
+      traceOptions = await createTraceOptions(data, {
+        provider,
+        signal: req.signal,
+        trace: tracePayload,
+      });
     }
 
     return await modelRuntime.chat(data, {
@@ -43,6 +48,7 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
       signal: req.signal,
     });
   } catch (e) {
+    traceOptions?.finish(e);
     const {
       errorType = ChatErrorType.InternalServerError,
       error: errorContent,

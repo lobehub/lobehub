@@ -42,8 +42,6 @@
     "dayjs": "^1.11.21",
     "debug": "^4.4.3",
     "immer": "^10.2.0",
-    "langfuse": "^3.38.20",
-    "langfuse-core": "^3.38.20",
     "model-bank": "workspace:*",
     "nanoid": "^5.1.16",
     "ollama": "^0.6.3",
