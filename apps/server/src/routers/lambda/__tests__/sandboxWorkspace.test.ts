@@ -77,7 +77,7 @@ describe('sandboxWorkspaceRouter', () => {
   });
 
   describe('createInstance', () => {
-    it("binds the working copy to the caller's own workspace", async () => {
+    it("binds the instance to the caller's own workspace", async () => {
       // The binding is what `environment_instances_provider_path_unique` keys
       // on, so it has to name the caller's storage rather than be accepted from
       // the request — otherwise two members could be told they share a folder.

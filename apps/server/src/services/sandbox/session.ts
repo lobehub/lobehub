@@ -31,7 +31,7 @@ export interface SandboxSessionConfig {
   /**
    * Snapshot to restore, or `undefined` for the caller's default. This is the
    * INSTANCE's id, not the environment's: what was installed belongs to one
-   * working copy, so two copies of one environment restore separately and
+   * instance, so two instances of one environment restore separately and
    * capture separately.
    *
    * Carries the same invariant as {@link SandboxSessionConfig.mode}: a session
@@ -112,7 +112,7 @@ export const resolveSandboxSessionConfig = async ({
 
     // The directory and the snapshot are one choice, so a bad half discards the
     // whole instance rather than half of it. Running the instance's packages at
-    // the workspace root would put one working copy's files under another's
+    // the workspace root would put one instance's files under another's
     // captured state, which is the exact mixing separate instances exist to
     // prevent — and it would do it silently.
     const { id, workingDirectory } = instance;
