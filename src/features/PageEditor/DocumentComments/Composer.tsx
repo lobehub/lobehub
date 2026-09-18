@@ -83,6 +83,29 @@ export const migrateDraftToAnchoredScope = (
 };
 
 /**
+ * A failed anchored submission whose shared slot was reclaimed by a newer
+ * pick before the request settled: restoring it there would overwrite the
+ * newer draft, but discarding it outright loses the reader's typed text and
+ * attachments for a network blip that was never their fault. Stash it under
+ * its own key, scoped by clientId, instead — no browsing UI reads it back
+ * yet, but it survives rather than vanishing silently.
+ */
+export const preserveFailedAnchoredDraft = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+  draft: Draft,
+): void => {
+  try {
+    window.localStorage.setItem(
+      getDraftKey(workspaceId, documentId, `anchored-failed:${draft.clientId}`),
+      JSON.stringify(draft),
+    );
+  } catch {
+    // ignore write failures (private mode, quota)
+  }
+};
+
+/**
  * Before gutter and inline shared a scope, inline mode stored every root
  * draft — anchored or not — under 'root'. Returns a legacy draft still
  * sitting there, or `null` when there is nothing to migrate or the new
@@ -285,7 +308,12 @@ const Composer = memo<ComposerProps>(
       const legacy = readLegacyRootDraft(workspaceId, documentId);
       if (!legacy) return;
       setDraft(legacy);
-      clearLegacyRootDraft(workspaceId, documentId);
+      // An anchored legacy draft belongs exclusively in the new scope now.
+      // An unanchored one never adopted an anchor to begin with, so it still
+      // belongs to 'none' mode's own composer too — leave that copy in
+      // place; clearing it here would orphan it again the next time this
+      // document opens without a gutter, showing neither copy.
+      if (legacy.selectionAnchor) clearLegacyRootDraft(workspaceId, documentId);
       // Deliberately excludes `draft` and `setDraft`: this effect is what
       // writes the draft, and depending on it would re-check on every
       // keystroke instead of once per document.
@@ -415,7 +443,9 @@ const Composer = memo<ComposerProps>(
           // the box reads it when the republished selection mounts it again.
           persistDraft(submittedDraft);
           setPendingCommentAnchor({ anchor, documentId });
-        } else if (!(isGutterComposer && anchor)) {
+        } else if (isGutterComposer && anchor) {
+          preserveFailedAnchoredDraft(workspaceId, documentId, submittedDraft);
+        } else {
           setDraft((current) => (current.content ? current : submittedDraft));
           editorRef.current?.setValue(editorValue);
           editorRef.current?.focus();

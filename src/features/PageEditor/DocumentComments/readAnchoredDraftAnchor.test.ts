@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearLegacyRootDraft,
   migrateDraftToAnchoredScope,
+  preserveFailedAnchoredDraft,
   readAnchoredDraftAnchor,
   readLegacyRootDraft,
 } from './Composer';
@@ -124,5 +125,36 @@ describe('clearLegacyRootDraft', () => {
     clearLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID);
 
     expect(window.localStorage.getItem(LEGACY_KEY)).toBeNull();
+  });
+});
+
+describe('preserveFailedAnchoredDraft', () => {
+  it('writes the failed draft under its own key, scoped by clientId', () => {
+    const failed = {
+      clientId: 'failed-1',
+      content: 'a comment the reader typed while offline',
+      editorData: null,
+      selectionAnchor: anchor,
+    };
+
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, failed);
+
+    const raw = window.localStorage.getItem(
+      `document-comment-draft:${WORKSPACE_ID}:${DOCUMENT_ID}:anchored-failed:failed-1`,
+    );
+    expect(raw && JSON.parse(raw)).toEqual(failed);
+  });
+
+  it('does not touch the shared anchored slot a newer draft may already own', () => {
+    const newerDraft = { clientId: 'newer', content: 'the new draft', editorData: null };
+    window.localStorage.setItem(KEY, JSON.stringify(newerDraft));
+
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, {
+      clientId: 'failed-2',
+      content: 'the failed draft',
+      editorData: null,
+    });
+
+    expect(JSON.parse(window.localStorage.getItem(KEY)!)).toEqual(newerDraft);
   });
 });
