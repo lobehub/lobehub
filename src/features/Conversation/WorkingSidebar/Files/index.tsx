@@ -45,6 +45,11 @@ interface FilesProps {
    * hidden for remote — there's no local filesystem to act on.
    */
   deviceId?: string;
+  /**
+   * Serves the tree from the cloud sandbox's workspace instead of a machine.
+   * The topic names the warm session the read goes through; it is not a scope.
+   */
+  sandboxTopicId?: string;
   workingDirectory: string;
 }
 
@@ -190,9 +195,13 @@ const FilesSearchBar = memo<FilesSearchBarProps>(({ onClose, onDebouncedChange }
 
 FilesSearchBar.displayName = 'FilesSearchBar';
 
-const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
+const Files = memo<FilesProps>(({ deviceId, sandboxTopicId, workingDirectory }) => {
   const { t } = useTranslation('chat');
-  const { data, isLoading } = useProjectFiles(deviceId, workingDirectory);
+  // Nothing here runs on this machine's filesystem: a remote device and the
+  // sandbox both answer over the network, and neither can be handed to Electron
+  // to reveal in a file manager.
+  const isRemote = !!deviceId || !!sandboxTopicId;
+  const { data, isLoading } = useProjectFiles(deviceId, workingDirectory, sandboxTopicId);
   const { data: gitFiles } = useGitWorkingTreeFiles(
     deviceId,
     workingDirectory,
@@ -299,6 +308,22 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
       return;
     }
 
+    // The sandbox index arrives whole, so matching it here costs one pass and
+    // needs no third search transport. Matching on the path, not the name,
+    // keeps `reports/q3` finding the file inside `reports`.
+    if (sandboxTopicId) {
+      const needle = normalizedDebouncedQuery.toLowerCase();
+      setSearchEntries(
+        entries
+          .filter(
+            (entry) => !entry.isDirectory && entry.relativePath.toLowerCase().includes(needle),
+          )
+          .slice(0, PROJECT_FILE_TREE_SEARCH_LIMIT),
+      );
+      setIsSearching(false);
+      return;
+    }
+
     let cancelled = false;
     setIsSearching(true);
     setSearchEntries(undefined);
@@ -329,7 +354,15 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     return () => {
       cancelled = true;
     };
-  }, [changedOnly, deviceId, hideIgnored, normalizedDebouncedQuery, workingDirectory]);
+  }, [
+    changedOnly,
+    deviceId,
+    entries,
+    hideIgnored,
+    normalizedDebouncedQuery,
+    sandboxTopicId,
+    workingDirectory,
+  ]);
 
   // Skip resyncs when defaultExpandedIds is structurally unchanged so the user's expansions survive re-renders.
   const prevDefaultRef = useRef<string[]>([]);
@@ -414,6 +447,7 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     onClearDisplayFilter: clearDisplayFilter,
     onCollapseAll: handleCollapseAll,
     projectRoot,
+    sandboxTopicId,
     treeRef,
     workingDirectory,
   });

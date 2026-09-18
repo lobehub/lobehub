@@ -19,6 +19,7 @@ import { mutate } from '@/libs/swr';
 import { localFileKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type LocalFilePreview, localFileService } from '@/services/electron/localFileService';
+import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 
 export type { LocalFilePreview } from '@/services/electron/localFileService';
 
@@ -101,17 +102,70 @@ export const refreshProjectFiles = async (
  * electron-vs-lambda decision never leaks up. (Parallels `gitService`.)
  */
 class ProjectFileService {
-  /** Project file index (tree) for a working directory. */
+  /**
+   * Project file index (tree) for a working directory.
+   *
+   * A third host, alongside the device RPC and Electron: the cloud sandbox's
+   * persistent workspace, which is reached over the workspace API and named by
+   * the topic whose warm session should serve it.
+   */
   async getProjectFileIndex({
     deviceId,
+    sandboxTopicId,
     scope,
   }: {
     deviceId?: string;
+    sandboxTopicId?: string;
     scope: string;
   }): Promise<ProjectFileIndexResult | undefined> {
+    if (sandboxTopicId) return this.getSandboxFileIndex({ scope, topicId: sandboxTopicId });
+
     return deviceId
       ? ((await lambdaClient.device.getProjectFileIndex.query({ deviceId, scope })) ?? undefined)
       : localFileService.getProjectFileIndex({ scope });
+  }
+
+  /**
+   * The sandbox workspace as a file index.
+   *
+   * Assembled here rather than server-side because the workspace API answers in
+   * its own vocabulary — one flat recursive listing of paths relative to the
+   * workspace root — and the tree wants a project root with paths relative to
+   * it. Nothing on that side knows about git, so there are no ignore rules to
+   * report and no collapsed directories to expand: the index is a plain walk,
+   * and says so.
+   */
+  private async getSandboxFileIndex({
+    scope,
+    topicId,
+  }: {
+    scope: string;
+    topicId: string;
+  }): Promise<ProjectFileIndexResult | undefined> {
+    const [workspace, listing] = await Promise.all([
+      sandboxWorkspaceService.getWorkspace(),
+      sandboxWorkspaceService.listFiles({ path: scope || undefined, recursive: true, topicId }),
+    ]);
+
+    if (!workspace?.dir) return undefined;
+
+    const prefix = scope ? `${scope}/` : '';
+    const root = scope ? `${workspace.dir}/${scope}` : workspace.dir;
+
+    return {
+      entries: listing.entries.map((entry) => ({
+        isDirectory: entry.isDirectory,
+        name: entry.name,
+        // The workspace speaks in paths relative to ITS root; the tree resolves
+        // everything against the project root it was given.
+        path: `${workspace.dir}/${entry.path}`,
+        relativePath: entry.path.startsWith(prefix) ? entry.path.slice(prefix.length) : entry.path,
+      })),
+      indexedAt: new Date().toISOString(),
+      root,
+      source: 'sandbox',
+      truncated: listing.truncated,
+    };
   }
 
   /** Search files within a project working directory. Matching runs on the file host. */
