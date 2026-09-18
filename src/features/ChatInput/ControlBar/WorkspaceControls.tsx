@@ -48,6 +48,9 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
         case 'cloudRepo': {
           return <CloudRepoSwitcher agentId={agentId} />;
         }
+        case 'sandbox': {
+          return <SandboxWorkspaceSection agentId={agentId} />;
+        }
         default: {
           return null;
         }
@@ -57,16 +60,18 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     // The directory picker and git controls write shared agent config / run
     // device git mutations, so members without edit access see the whole
     // cluster disabled. The device switcher handles its own use-level gate.
+    //
+    // The sandbox is exempt: its choice lands in the topic's own metadata, not
+    // in the shared agent row, so a member who may use the agent may choose
+    // where their own run keeps its files.
     const workspace = renderWorkspace();
+    const needsConfigureAccess = surface !== 'sandbox';
 
     return (
       <>
         <HeteroDeviceSwitcher agentId={agentId} />
-        {/* Cloud-sandbox runs have no device workspace, so this sits alongside
-            rather than inside `renderWorkspace` — each gates on its own target. */}
-        <SandboxWorkspaceSection agentId={agentId} />
         {workspace &&
-          (canConfigureResource ? (
+          (canConfigureResource || !needsConfigureAccess ? (
             workspace
           ) : (
             <Tooltip
