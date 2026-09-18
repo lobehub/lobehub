@@ -6,6 +6,8 @@ user-invocable: false
 
 # Agent Tracing CLI Guide
 
+When using traces to investigate failed or unexpected agent behavior, use the host repository's investigation entrypoint if one is provided (for example, `debug-backend-issue` under the host's `.agents/skills/`). Read it once and follow its investigation workflow; do not assume it lives beside this shared skill. Standalone trace retrieval or inspection stays within this skill.
+
 `@lobechat/agent-tracing` is a zero-config local dev tool that records agent execution snapshots to disk and provides a CLI to inspect them.
 
 ## How It Works
