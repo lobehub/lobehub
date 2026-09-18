@@ -110,6 +110,7 @@ export function spawnHeteroAgentRun(
   // coerceJsonPrompt.
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList,
+    isNewSession: !resumeSessionId,
     prompt,
     resumeFallbackSystemContext,
     systemContext,

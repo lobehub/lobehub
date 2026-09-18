@@ -7,7 +7,10 @@ import { PassThrough } from 'node:stream';
 
 import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
-import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
+import {
+  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
+  lobeHubCliGuide,
+} from '@lobechat/heterogeneous-agents/protocol';
 import { AcpRpcResponseError } from '@lobechat/heterogeneous-agents/spawn';
 // `electron` is mocked below; this binding is the mock object so tests can
 // flip `isPackaged` to exercise the packaged-build tracing gate.
@@ -15,6 +18,12 @@ import { app as electronAppMock } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import HeterogeneousAgentCtr, { redactPromptArgs } from '../HeterogeneousAgentImpl';
+
+/**
+ * Every prompt that opens a fresh CLI session leads with the `lh` introduction;
+ * a resumed one (`startSession({ resumeSessionId })`) does not.
+ */
+const cliGuideBlock = { text: lobeHubCliGuide, type: 'text' };
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
@@ -1252,7 +1261,7 @@ describe('HeterogeneousAgentCtr', () => {
       const msg = JSON.parse(line);
       expect(msg).toMatchObject({
         message: {
-          content: [{ text: prompt, type: 'text' }],
+          content: [cliGuideBlock, { text: prompt, type: 'text' }],
           role: 'user',
         },
         type: 'user',
@@ -1268,6 +1277,7 @@ describe('HeterogeneousAgentCtr', () => {
       const msg = JSON.parse(writes[0].trimEnd());
       expect(msg.message.content).toEqual([
         { text: 'selected code context', type: 'text' },
+        cliGuideBlock,
         { text: 'user task', type: 'text' },
       ]);
     });
@@ -1420,7 +1430,7 @@ describe('HeterogeneousAgentCtr', () => {
       expect(cliArgs).not.toContain(prompt);
       expect(writes).toHaveLength(1);
       const msg = JSON.parse(writes[0].trimEnd());
-      expect(msg.message.content[0].text).toBe(prompt);
+      expect(msg.message.content.at(-1).text).toBe(prompt);
     });
 
     it('falls back to the user Desktop when no cwd is supplied', async () => {
@@ -1449,6 +1459,7 @@ describe('HeterogeneousAgentCtr', () => {
       // Anthropic rejects `{ text: '', type: 'text' }` with
       // "messages: text content blocks must be non-empty".
       expect(msg.message.content).toEqual([
+        cliGuideBlock,
         {
           source: { data: 'UE5HX1RFU1Q=', media_type: 'image/png', type: 'base64' },
           type: 'image',
@@ -1957,6 +1968,7 @@ describe('HeterogeneousAgentCtr', () => {
           operationId: 'op-grok',
           prompt: [
             { text: 'selected context', type: 'text' },
+            cliGuideBlock,
             { text: 'implement this', type: 'text' },
           ],
           sessionId,
@@ -2317,7 +2329,7 @@ describe('HeterogeneousAgentCtr', () => {
         'stream-json',
         '--verbose',
         '--prompt',
-        'fresh private prompt',
+        `${lobeHubCliGuide}\n\nfresh private prompt`,
       ]);
       expect(spawnCalls[0].options.env).toEqual(
         expect.objectContaining({
@@ -3099,7 +3111,7 @@ describe('HeterogeneousAgentCtr', () => {
       );
       expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
-      expect(writes).toEqual([prompt]);
+      expect(writes).toEqual([`${lobeHubCliGuide}\n\n${prompt}`]);
     });
 
     it('uses Codex app-server lab instead of spawning codex exec', async () => {
@@ -3143,7 +3155,7 @@ describe('HeterogeneousAgentCtr', () => {
       );
       expect(codexAppServerRunMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: [{ text: 'stream this', text_elements: [], type: 'text' }],
+          input: [{ text: `${lobeHubCliGuide}\n\nstream this`, text_elements: [], type: 'text' }],
           operationId: 'op-test',
         }),
       );
@@ -3441,7 +3453,7 @@ describe('HeterogeneousAgentCtr', () => {
         systemContext: 'selected code context',
       });
 
-      expect(writes).toEqual(['selected code context\n\nuser task']);
+      expect(writes).toEqual([`selected code context\n\n${lobeHubCliGuide}\n\nuser task`]);
     });
 
     it('materializes image attachments into local files and forwards them via --image', async () => {
@@ -3471,7 +3483,7 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(
         Promise.all(imagePaths.map((filePath) => readFile(filePath, 'utf8'))),
       ).resolves.toEqual(['PNG_TEST', 'JPEG_TEST']);
-      expect(writes).toEqual(['describe these screenshots']);
+      expect(writes).toEqual([`${lobeHubCliGuide}\n\ndescribe these screenshots`]);
     });
 
     it('normalizes parameterized image MIME types before choosing the CLI file extension', async () => {
@@ -3599,7 +3611,9 @@ describe('HeterogeneousAgentCtr', () => {
         await expect(readFile(path.join(traceRoot, '.last-live-trace'), 'utf8')).resolves.toBe(
           `${traceDir}\n`,
         );
-        await expect(readFile(path.join(traceDir, 'stdin.txt'), 'utf8')).resolves.toBe(prompt);
+        await expect(readFile(path.join(traceDir, 'stdin.txt'), 'utf8')).resolves.toBe(
+          `${lobeHubCliGuide}\n\n${prompt}`,
+        );
         await expect(readFile(path.join(traceDir, 'stdout.jsonl'), 'utf8')).resolves.toBe(rawLine);
         await expect(readFile(path.join(traceDir, 'stderr.log'), 'utf8')).resolves.toBe('');
         await expect(readFile(path.join(traceDir, 'exit.json'), 'utf8')).resolves.toContain(
@@ -3613,7 +3627,7 @@ describe('HeterogeneousAgentCtr', () => {
           command: 'codex',
           cwd: appStoragePath,
           sessionId,
-          stdinBytes: Buffer.byteLength(prompt),
+          stdinBytes: Buffer.byteLength(`${lobeHubCliGuide}\n\n${prompt}`),
           stdoutFile: 'stdout.jsonl',
         });
         expect(meta.args).not.toContain('-');
@@ -4648,6 +4662,9 @@ describe('HeterogeneousAgentCtr', () => {
           ],
           resumeFallback: [
             { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+            // Native resume failed, so the retry opens a session that has never
+            // seen the introduction the first turn delivered.
+            cliGuideBlock,
             { text: 'inspect the repository', type: 'text' },
           ],
         }),

@@ -1458,6 +1458,19 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
+   * Whether this prompt opens a fresh CLI session, which is what decides if the
+   * prompt carries session-scoped context (the `lh` guide).
+   *
+   * A client-mode session is created per turn with the previous turn's id in
+   * `resumeSessionId`, so its absence is exactly "nothing to continue": the
+   * first turn of a topic, or the resume-recovery retry the renderer
+   * re-dispatches with `resumeSessionId` cleared after a stale session id.
+   */
+  private isNewAgentSession(session: AgentSession): boolean {
+    return !session.resumeSessionId;
+  }
+
+  /**
    * Build a Claude Code stream-json user message with text + base64 images.
    * Semantic context is assembled by the shared prompt engine before the
    * provider-specific serializer runs.
@@ -1466,8 +1479,14 @@ export default class HeterogeneousAgentCtr {
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
     systemContext?: string,
+    isNewSession?: boolean,
   ): Promise<string> {
-    const promptInput = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+    const promptInput = buildHeterogeneousPrompt({
+      imageList,
+      isNewSession,
+      prompt,
+      systemContext,
+    });
     const plan = await buildAgentInput('claude-code', promptInput, {
       cacheDir: this.fileCacheDir,
     });
@@ -1704,6 +1723,7 @@ export default class HeterogeneousAgentCtr {
       const driver = getHeterogeneousAgentDriver(session.agentType);
       const promptInput = buildHeterogeneousPrompt({
         imageList: params.imageList,
+        isNewSession: this.isNewAgentSession(session),
         prompt: params.prompt,
         systemContext: params.systemContext,
       });
@@ -1860,6 +1880,7 @@ export default class HeterogeneousAgentCtr {
       params.prompt,
       params.imageList ?? [],
       params.systemContext,
+      this.isNewAgentSession(session),
     );
     const traceSession = await this.createCliTraceSession({
       cliArgs: ['sdk-stream', ...session.args],
@@ -1958,6 +1979,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.isNewAgentSession(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2150,6 +2172,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.isNewAgentSession(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2259,6 +2282,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.isNewAgentSession(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2333,6 +2357,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.isNewAgentSession(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2440,6 +2465,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.isNewAgentSession(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2584,6 +2610,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.isNewAgentSession(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2699,6 +2726,7 @@ export default class HeterogeneousAgentCtr {
     // Text + base64 images for the RPC `prompt` command (no `@path` temp files).
     const promptBlocks = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.isNewAgentSession(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -3722,6 +3750,7 @@ export default class HeterogeneousAgentCtr {
 
     const stdinPayload = buildHeteroExecStdinPayload({
       imageList,
+      isNewSession: !resumeSessionId,
       prompt,
       resumeFallbackSystemContext,
       systemContext,
