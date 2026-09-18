@@ -11,6 +11,7 @@ import {
 import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 
 import { MessageModel } from '@/database/models/message';
+import { UserModel } from '@/database/models/user';
 
 import { FileService } from '../file';
 
@@ -95,11 +96,43 @@ export class MessageService {
   private messageModel: MessageModel;
   private fileService: FileService;
   private compressionRepository: CompressionRepository;
+  private userModel: UserModel;
+  private toolProjectionEnabled?: Promise<boolean>;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
+    this.userModel = new UserModel(db, userId);
+  }
+
+  /**
+   * Whether this user's reads hand back projected tool payloads.
+   *
+   * Gated on the `gatewayMux` lab opt-in, because that is exactly the cohort for
+   * which the browser never assembles an LLM context itself. Off the mux, a run
+   * can execute client-side against `dbMessagesMap`, so the read path IS the
+   * model path there and a projected tool result would silently disappear from
+   * the model's context.
+   *
+   * Memoized per service instance: a gateway run calls `queryMessages` once per
+   * step, and a lab preference cannot change mid-run. Fails to `false`, which
+   * keeps today's whole payload — never the direction that loses data.
+   *
+   * Turning the lab OFF does not invalidate message lists the client already
+   * cached in their projected form. Deliberately not handled: the mux is on its
+   * way to being the only runtime, at which point the gate goes away entirely.
+   */
+  private isToolProjectionEnabled(): Promise<boolean> {
+    this.toolProjectionEnabled ??= this.userModel
+      .getUserPreference()
+      .then((preference) => preference?.lab?.enableGatewayMux === true)
+      .catch((error) => {
+        console.error('[MessageService] failed to read lab preference: %O', error);
+        return false;
+      });
+
+    return this.toolProjectionEnabled;
   }
 
   /**
@@ -181,10 +214,10 @@ export class MessageService {
       ...(options?.allowShareVisitor && { allowShareVisitor: true }),
     });
 
-    // The UI read path hands back render-facing view models; the model-facing
-    // read goes straight through `MessageModel.query` and never reaches here,
-    // so the LLM context keeps the full stored payload by construction.
-    return projectToolViewModels(messages);
+    // The UI read path hands back render-facing view models — but only for the
+    // mux cohort, whose runs always execute server-side. See
+    // `isToolProjectionEnabled`.
+    return (await this.isToolProjectionEnabled()) ? projectToolViewModels(messages) : messages;
   }
 
   /**

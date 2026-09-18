@@ -3688,8 +3688,8 @@ export class AgentRuntimeService {
     }
 
     // MODEL, not `messageService.queryMessages`: this read feeds the LLM
-    // context and must keep every tool result whole. The service read path
-    // reduces tool payloads to render-facing view models (see
+    // context and must keep every tool result whole. The service read path may
+    // reduce tool payloads to render-facing view models (see
     // `@lobechat/tool-view-model`), which would silently strip the results the
     // model is supposed to remember.
     return this.messageModel.query(
