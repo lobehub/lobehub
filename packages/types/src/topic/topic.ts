@@ -618,6 +618,13 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .nullable()
     .optional(),
+  // A key absent here is not rejected, it is silently dropped: this is a plain
+  // `z.object()`, and stripping unknown keys is its default. So a field that
+  // lives only on `ChatTopicMetadata` writes nothing and still answers 200 —
+  // the interface and this schema are two declarations the type checker never
+  // compares.
+  sandboxInstanceId: z.string().optional(),
+  sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
   scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
