@@ -136,6 +136,27 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
     expect(result).toContain('offset 900 is past the end of this 800-line file');
   });
 
+  it('should explain a line that was cut to fit the per-call cap', () => {
+    const result = promptFileContents([
+      {
+        content: 'x'.repeat(10),
+        fileId: 'file-cut',
+        filename: 'minified.json',
+        range: {
+          cutLine: { keptChars: 10, line: 1, totalChars: 30_000 },
+          endLine: 1,
+          startLine: 1,
+          totalCharCount: 30_002,
+          totalLineCount: 2,
+          truncated: true,
+        },
+      },
+    ]);
+
+    expect(result).toContain('Line 1 is 30000 characters long and was cut at 10');
+    expect(result).toContain('offset=2 to continue with the next line');
+  });
+
   it('should render a paged window with range attributes and a continue notice', () => {
     const fileContents: FileContent[] = [
       {

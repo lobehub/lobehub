@@ -32,6 +32,13 @@ export interface ReadWindowOptions {
 
 export interface ReadWindow {
   content: string;
+  /**
+   * Set when the first line of the window alone exceeded `maxChars` and was cut
+   * to fit. The window then holds only that partial line; the tail is not
+   * reachable through `offset` (which is line-based), so callers should tell
+   * the model the line was cut.
+   */
+  cutLine?: { line: number; keptChars: number; totalChars: number };
   /** 1-based, inclusive. `0` when the window is empty. */
   endLine: number;
   /** 1-based, inclusive. */
@@ -87,11 +94,20 @@ export const sliceReadWindow = (content: string, options: ReadWindowOptions = {}
 
   const selected: string[] = [];
   let charCount = 0;
+  let cutLine: ReadWindow['cutLine'];
 
   for (let index = startLine - 1; index < totalLineCount && selected.length < limit; index++) {
     const line = lines[index];
-    // Always include at least one line so a single oversized line cannot stall
-    // paging forever; otherwise stop before the char cap is exceeded.
+
+    // A single line longer than the cap (minified JSON, generated text) would
+    // otherwise defeat the bound entirely. Cut it and still advance one line so
+    // paging cannot stall; the caller surfaces the cut to the model.
+    if (selected.length === 0 && line.length > maxChars) {
+      selected.push(line.slice(0, maxChars));
+      cutLine = { keptChars: maxChars, line: index + 1, totalChars: line.length };
+      break;
+    }
+
     const nextCount = charCount + line.length + (selected.length > 0 ? 1 : 0);
     if (selected.length > 0 && nextCount > maxChars) break;
 
@@ -103,10 +119,11 @@ export const sliceReadWindow = (content: string, options: ReadWindowOptions = {}
 
   return {
     content: selected.join('\n'),
+    cutLine,
     endLine,
     startLine,
     totalCharCount,
     totalLineCount,
-    truncated: endLine < totalLineCount,
+    truncated: endLine < totalLineCount || cutLine !== undefined,
   };
 };

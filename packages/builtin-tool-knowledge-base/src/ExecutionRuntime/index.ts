@@ -345,6 +345,7 @@ export class KnowledgeBaseExecutionRuntime {
                 fileId: file.fileId,
                 filename: file.filename,
                 range: {
+                  cutLine: window.cutLine,
                   endLine: window.endLine,
                   startLine: window.startLine,
                   totalCharCount: window.totalCharCount,

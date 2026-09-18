@@ -4,6 +4,8 @@
  * files render exactly as before.
  */
 export interface FileContentRange {
+  /** Present when the window's only line was cut to fit the per-call cap. */
+  cutLine?: { keptChars: number; line: number; totalChars: number };
   /** 1-based, inclusive. `0` when the window is empty. */
   endLine: number;
   /** 1-based, inclusive. */
@@ -28,6 +30,16 @@ const formatRangeAttributes = (range: FileContentRange): string =>
 const formatRangeNotice = (range: FileContentRange): string => {
   if (range.endLine === 0) {
     return `\n[offset ${range.startLine} is past the end of this ${range.totalLineCount}-line file; nothing returned. The file is not empty.]`;
+  }
+
+  if (range.cutLine) {
+    const { keptChars, line, totalChars } = range.cutLine;
+    const rest =
+      line < range.totalLineCount
+        ? ` Call readKnowledge again with offset=${line + 1} to continue with the next line.`
+        : '';
+
+    return `\n[Line ${line} is ${totalChars} characters long and was cut at ${keptChars}; the rest of that line cannot be paged.${rest}]`;
   }
 
   if (!range.truncated) return '';

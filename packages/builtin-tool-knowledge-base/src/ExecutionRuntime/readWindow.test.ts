@@ -74,13 +74,32 @@ describe('sliceReadWindow', () => {
     expect(rest.truncated).toBe(false);
   });
 
-  it('always returns at least one line even when it alone exceeds the char cap', () => {
+  it('cuts a single line that alone exceeds the char cap and still advances', () => {
     const content = ['a'.repeat(30_000), 'b'].join('\n');
     const window = sliceReadWindow(content);
 
-    expect(window.content).toBe('a'.repeat(30_000));
+    expect(window.content).toBe('a'.repeat(MAX_READ_KNOWLEDGE_CHARS_PER_FILE));
+    expect(window.content.length).toBe(MAX_READ_KNOWLEDGE_CHARS_PER_FILE);
     expect(window.endLine).toBe(1);
     expect(window.truncated).toBe(true);
+    expect(window.cutLine).toEqual({
+      keptChars: MAX_READ_KNOWLEDGE_CHARS_PER_FILE,
+      line: 1,
+      totalChars: 30_000,
+    });
+
+    const rest = sliceReadWindow(content, { offset: window.endLine + 1 });
+    expect(rest.content).toBe('b');
+    expect(rest.cutLine).toBeUndefined();
+    expect(rest.truncated).toBe(false);
+  });
+
+  it('flags a cut even when the oversized line is the last line', () => {
+    const window = sliceReadWindow('x'.repeat(20_000));
+
+    expect(window.content.length).toBe(MAX_READ_KNOWLEDGE_CHARS_PER_FILE);
+    expect(window.truncated).toBe(true);
+    expect(window.cutLine?.totalChars).toBe(20_000);
   });
 
   it('coerces numeric strings so a string offset does not restart from line 1', () => {
