@@ -23,5 +23,10 @@
   "update.later": "Sonra hatırlat",
   "update.newVersion": "Yeni sürüm bulundu",
   "update.newVersionAvailable": "Yeni sürüm bulundu: {{version}}",
-  "update.skipThisVersion": "Bu sürümü atla"
+  "update.skipThisVersion": "Bu sürümü atla",
+  "screenCaptureAccess.cancel": "Daha sonra",
+  "screenCaptureAccess.detail": "Sistem Ayarları'nı açın, LobeHub için Ekran Kaydı'nı etkinleştirin, ardından Hızlı Oluşturucu'yu yeniden deneyin.",
+  "screenCaptureAccess.message": "Hızlı Oluşturucu'nun ekran görüntüsü alabilmesi için Ekran Kaydı izni gerekiyor.",
+  "screenCaptureAccess.openSettings": "Ayarları Aç",
+  "screenCaptureAccess.title": "Ekran Kaydı İzni Gerekli"
 }
