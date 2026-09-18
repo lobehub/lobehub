@@ -220,34 +220,6 @@ export class EnvironmentModel {
     return row;
   };
 
-  /**
-   * The environment with this name, created if it is not there yet.
-   *
-   * `onConflictDoNothing` and then a read rather than "look, then insert":
-   * two conversations opting into persistence at the same moment would both
-   * see nothing and both insert, and the second would fail a unique index on a
-   * name the user never typed.
-   */
-  ensureNamed = async (name: string): Promise<EnvironmentItem> => {
-    await this.db
-      .insert(environments)
-      .values(
-        buildWorkspacePayload(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          { configuration: {}, name },
-        ),
-      )
-      .onConflictDoNothing();
-
-    const [row] = await this.db
-      .select()
-      .from(environments)
-      .where(and(eq(environments.name, name), this.ownership()))
-      .limit(1);
-
-    return row;
-  };
-
   update = async (
     id: string,
     params: Partial<Pick<NewEnvironment, 'configuration' | 'description' | 'enabled' | 'name'>>,

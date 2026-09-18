@@ -126,14 +126,8 @@ const ENVIRONMENT_NAME_CONSTRAINTS = new Set([
   'environments_workspace_user_name_unique',
 ]);
 
-/** The index that keeps two working copies out of the same directory. */
+/** The index that keeps two instances out of the same directory. */
 const INSTANCE_DIRECTORY_CONSTRAINT = 'environment_instances_provider_path_unique';
-
-/**
- * The environment a working copy belongs to when nobody has written a
- * specification yet. Renameable — it is an ordinary row, not a sentinel.
- */
-const DEFAULT_ENVIRONMENT_NAME = 'Default';
 
 /**
  * Where source material comes from. Only `git` for now, and only over HTTPS:
@@ -143,7 +137,7 @@ const DEFAULT_ENVIRONMENT_NAME = 'Default';
  */
 const environmentSourceSchema = z.object({
   kind: z.literal('git'),
-  /** Where the checkout lands, relative to the working copy's own directory. */
+  /** Where the checkout lands, relative to the instance's own directory. */
   path: relativePathSchema.optional(),
   ref: z.string().trim().min(1).max(255).optional(),
   url: z
@@ -207,15 +201,16 @@ const rethrowDuplicateEnvironmentName = (error: unknown): never => {
 };
 
 /**
- * Two working copies in one directory would restore two package sets over each
+ * Two instances in one directory would restore two package sets over each
  * other's files, so the database refuses it and the person picks another
  * directory. Same reasoning as a duplicate name, different fix.
  */
+const isDuplicateInstanceDirectory = (error: unknown): boolean =>
+  getPostgresErrorField(error, 'code') === '23505' &&
+  getPostgresErrorField(error, 'constraint') === INSTANCE_DIRECTORY_CONSTRAINT;
+
 const rethrowDuplicateInstanceDirectory = (error: unknown): never => {
-  if (
-    getPostgresErrorField(error, 'code') === '23505' &&
-    getPostgresErrorField(error, 'constraint') === INSTANCE_DIRECTORY_CONSTRAINT
-  ) {
+  if (isDuplicateInstanceDirectory(error)) {
     throw new TRPCError({
       cause: error,
       code: 'CONFLICT',
@@ -227,7 +222,41 @@ const rethrowDuplicateInstanceDirectory = (error: unknown): never => {
 };
 
 /**
- * An environment with working copies still on it. The reference is `restrict`
+ * How many derived directories to try before giving up.
+ *
+ * A bound rather than a loop until success: the only way to exhaust it is a
+ * member who already holds fifty directories under one name, and at that point
+ * the honest answer is to say so rather than keep probing the index.
+ */
+const MAX_DERIVED_DIRECTORY_ATTEMPTS = 50;
+
+/**
+ * A directory name derived from an environment's name.
+ *
+ * Letters and digits of any script survive — a Chinese environment name should
+ * not become a row of dashes — while everything else collapses to `-`, because
+ * this name is handed to a shell as a path. Interior spaces are legal in a
+ * workspace path and still not worth minting: every command the agent writes
+ * would need to quote them.
+ *
+ * Leading dots are stripped rather than escaped, which also puts `.sandbox`
+ * (the reserved platform directory) out of reach without naming it here.
+ */
+export const environmentDirectorySlug = (name: string): string => {
+  const slug = name
+    .normalize('NFKC')
+    .toLowerCase()
+    .replaceAll(/[^\p{L}\p{N}._-]+/gu, '-')
+    .slice(0, 48)
+    .replaceAll(/^[.-]+|[.-]+$/g, '');
+
+  // Every character was punctuation, or the name was dots. Nothing is derivable
+  // from it, so fall back to a word rather than to an empty path.
+  return slug || 'environment';
+};
+
+/**
+ * An environment with instances still on it. The reference is `restrict`
  * on purpose — deleting the specification out from under them would leave
  * directories and captured state nothing describes.
  */
@@ -263,7 +292,7 @@ const environmentProcedure = entitledProcedure.use(async (opts) => {
 });
 
 /**
- * Where a working copy lives, in the vocabulary `environment_instances` uses
+ * Where an instance lives, in the vocabulary `environment_instances` uses
  * for every execution target it supports.
  *
  * The scope is the caller's workspace key and the resource is the one
@@ -311,7 +340,7 @@ export const sandboxWorkspaceRouter = router({
   })),
 
   /**
-   * Fork a working copy: a second directory that starts with everything the
+   * Fork an instance: a second directory that starts with everything the
    * first one had installed. The point of copying rather than creating is to
    * skip the rebuild — the specification alone would give an empty directory
    * and a fresh bootstrap.
@@ -352,44 +381,63 @@ export const sandboxWorkspaceRouter = router({
     }),
 
   /**
-   * The working copy at this directory, created if there is not one yet.
+   * A new instance of an environment, with its directory derived rather than
+   * asked for.
    *
-   * What the composer calls when someone picks a directory: a person choosing
-   * where their files should live is not choosing a specification, so one is
-   * supplied rather than demanded. Until the settings page exists that means a
-   * single environment per member, which is also the truthful state of things —
-   * nothing can be built from a specification until the execution plane can run
-   * one, so every copy today is simply a directory plus whatever the
-   * conversation installed into it.
+   * The person picked an environment, not a folder. Under the agreed split the
+   * checkout and its installed packages live on local disk and travel in the
+   * snapshot, so this directory holds the outputs worth keeping — which is
+   * rarely something anyone has an opinion about before the work exists. Asking
+   * would make them invent an answer to start a conversation.
    *
-   * Idempotent on the directory, because the composer writes the choice on
-   * every click and the second click must not fail on the unique index.
+   * The directory is searched rather than computed in one shot: the unique
+   * index spans the whole workspace, not one environment, so a name that is
+   * free inside this environment can still be taken outside it. The index stays
+   * the authority — the pre-check only keeps the common case out of the error
+   * path, and a lost race falls through to the next suffix.
    */
-  useInstanceAtDirectory: instanceProcedure
-    .input(z.object({ workingDirectory: relativePathSchema }))
+  createInstanceForEnvironment: instanceProcedure
+    .input(z.object({ environmentId: idSchema }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await ctx.instanceModel.findByWorkingDirectory(input.workingDirectory);
-      if (existing) return existing;
+      const environment = await ctx.environmentModel.findById(input.environmentId);
+      if (!environment)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      const environment = await ctx.environmentModel.ensureNamed(DEFAULT_ENVIRONMENT_NAME);
-      const created = await ctx.instanceModel
-        .create({
-          ...sandboxBinding(ctx.claim.key),
-          environmentId: environment.id,
-          // The directory is the only thing the person chose, so it is also the
-          // only honest label until they rename it.
-          name: input.workingDirectory,
-          workingDirectory: input.workingDirectory,
-        })
-        .catch(rethrowDuplicateInstanceDirectory);
+      const base = environmentDirectorySlug(environment.name);
 
-      if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      for (let attempt = 1; attempt <= MAX_DERIVED_DIRECTORY_ATTEMPTS; attempt += 1) {
+        const workingDirectory = attempt === 1 ? base : `${base}-${attempt}`;
 
-      return created;
+        if (await ctx.instanceModel.findByWorkingDirectory(workingDirectory)) continue;
+
+        const created = await ctx.instanceModel
+          .create({
+            ...sandboxBinding(ctx.claim.key),
+            environmentId: environment.id,
+            // The directory is the only thing that distinguishes this instance
+            // from its siblings right now, so it is also the only honest label
+            // until the person renames it.
+            name: workingDirectory,
+            workingDirectory,
+          })
+          .catch((error: unknown) => {
+            // Someone else took this directory between the check and the
+            // insert. Not a conflict the caller can act on — try the next one.
+            if (isDuplicateInstanceDirectory(error)) return undefined;
+            throw error;
+          });
+
+        if (created) return created;
+      }
+
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'DUPLICATE_INSTANCE_DIRECTORY',
+      });
     }),
 
   /**
-   * A working copy of an environment: its own directory, its own captured
+   * An instance of an environment: its own directory, its own captured
    * state. Created empty — nothing is built until a conversation runs in it.
    */
   createInstance: instanceProcedure
@@ -428,7 +476,7 @@ export const sandboxWorkspaceRouter = router({
     ),
 
   /**
-   * One working copy, from the database alone. Separate from `listInstances`
+   * One instance, from the database alone. Separate from `listInstances`
    * because the composer only needs to know where the conversation is pointed,
    * and `listInstances` pays a sandbox cold start to answer how big everything
    * is — seconds, for a label.
@@ -447,7 +495,7 @@ export const sandboxWorkspaceRouter = router({
   })),
 
   /**
-   * Working copies, each joined with the state the execution plane actually
+   * Instances, each joined with the state the execution plane actually
    * holds for it. An instance that was created but never used has no snapshot
    * yet, which is a normal state and not an error.
    */
@@ -513,7 +561,7 @@ export const sandboxWorkspaceRouter = router({
     .input(z.object({ path: relativePathSchema, topicId: topicIdSchema }))
     .query(async ({ ctx, input }) => ctx.client.readFile(input).catch(mapWorkspaceError)),
 
-  /** Refused while working copies still reference it — those go first. */
+  /** Refused while instances still reference it — those go first. */
   removeEnvironment: environmentProcedure
     .input(z.object({ id: idSchema }))
     .mutation(async ({ ctx, input }) => {
@@ -551,7 +599,7 @@ export const sandboxWorkspaceRouter = router({
     .mutation(async ({ ctx, input }) => ctx.client.deleteFile(input).catch(mapWorkspaceError)),
 
   /**
-   * Edits the specification, which is what makes every working copy of it out
+   * Edits the specification, which is what makes every instance of it out
    * of date. Nothing is rebuilt here: a rebuild discards whatever a
    * conversation installed by hand, so it stays the person's call, made per
    * copy from the list that now shows them as stale.

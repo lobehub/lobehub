@@ -58,7 +58,7 @@ describe('resolveSandboxSessionConfig', () => {
   // The instance is one choice with two halves: the directory it works in and
   // the state restored into it. The snapshot is addressed by the instance's own
   // id, which is why two copies of one environment never read each other's.
-  it('carries the claim, the mode and the chosen working copy', async () => {
+  it('carries the claim, the mode and the chosen instance', async () => {
     await expect(resolve()).resolves.toEqual({
       claim: CLAIM,
       cwd: 'projects/atlas',
@@ -81,7 +81,7 @@ describe('resolveSandboxSessionConfig', () => {
   // The claim is independent of the mode: the workspace exists whether or not
   // THIS topic writes to it, and the file browser reads it from an ephemeral
   // topic just as well.
-  it('keeps the claim on an ephemeral topic but drops the working copy', async () => {
+  it('keeps the claim on an ephemeral topic but drops the instance', async () => {
     for (const metadata of [{}, { sandboxInstanceId: INSTANCE_ID, sandboxMode: 'ephemeral' }]) {
       findById.mockResolvedValue({ metadata });
       await expect(resolve()).resolves.toEqual({ claim: CLAIM, mode: 'ephemeral' });
@@ -90,7 +90,7 @@ describe('resolveSandboxSessionConfig', () => {
 
   // A persistent topic that never chose one runs at the workspace root under
   // the default environment, which is a working session — just not a named one.
-  it('runs at the workspace root when no working copy is chosen', async () => {
+  it('runs at the workspace root when no instance is chosen', async () => {
     findById.mockResolvedValue({ metadata: { sandboxMode: 'persistent' } });
 
     await expect(resolve()).resolves.toEqual({ claim: CLAIM, mode: 'persistent' });
@@ -107,9 +107,9 @@ describe('resolveSandboxSessionConfig', () => {
   });
 
   // The whole instance goes, not just the directory. Running its packages at
-  // the workspace root would put one working copy's files under another's
+  // the workspace root would put one instance's files under another's
   // captured state — silently, which is the failure worth preventing.
-  it('drops the whole working copy when its directory would not survive the fence', async () => {
+  it('drops the whole instance when its directory would not survive the fence', async () => {
     findInstanceById.mockResolvedValue({ id: INSTANCE_ID, workingDirectory: '../other-user' });
 
     await expect(resolve()).resolves.toEqual({ claim: CLAIM, mode: 'persistent' });

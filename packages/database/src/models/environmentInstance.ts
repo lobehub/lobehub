@@ -28,7 +28,7 @@ export interface CreateEnvironmentInstanceParams extends EnvironmentInstanceBind
 }
 
 /**
- * A materialization of an environment: one working copy, in one place, with one
+ * A materialization of an environment: one instance, in one place, with one
  * directory. Two of them off the same specification is the supported way to run
  * two conversations side by side — each keeps its own files and its own
  * captured state, where a shared directory would have them overwrite each
@@ -112,7 +112,7 @@ export class EnvironmentInstanceModel {
   };
 
   /**
-   * The working copy that already occupies this directory, if any. One instance
+   * The instance that already occupies this directory, if any. One instance
    * per directory is a database constraint, so this is how a caller that only
    * knows where it wants to work finds out whether that is a new copy or an
    * existing one.

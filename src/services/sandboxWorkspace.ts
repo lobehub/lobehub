@@ -44,7 +44,7 @@ class SandboxWorkspaceService {
     lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
 
   /**
-   * Edits the specification. Nothing is rebuilt — every working copy of it just
+   * Edits the specification. Nothing is rebuilt — every instance of it just
    * becomes stale, and rebuilding one discards what that conversation installed
    * by hand, so it stays the person's call.
    */
@@ -55,12 +55,12 @@ class SandboxWorkspaceService {
     name?: string;
   }) => lambdaClient.sandboxWorkspace.updateEnvironment.mutate(params);
 
-  /** Refused while working copies still reference it — those go first. */
+  /** Refused while instances still reference it — those go first. */
   removeEnvironment = async (params: { id: string }) =>
     lambdaClient.sandboxWorkspace.removeEnvironment.mutate(params);
 
   /**
-   * Working copies, each joined with the state the execution plane holds. A
+   * Instances, each joined with the state the execution plane holds. A
    * brand-new instance has no snapshot yet — that is normal, not an error, and
    * the UI shows it as unused rather than missing.
    *
@@ -71,7 +71,7 @@ class SandboxWorkspaceService {
     params: { environmentId?: string; topicId?: string; withSizes?: boolean } = {},
   ) => lambdaClient.sandboxWorkspace.listInstances.query(params);
 
-  /** One working copy, from the database alone — no sandbox session, no wait. */
+  /** One instance, from the database alone — no sandbox session, no wait. */
   getInstance = async (params: { id: string }) =>
     lambdaClient.sandboxWorkspace.getInstance.query(params);
 
@@ -82,12 +82,14 @@ class SandboxWorkspaceService {
   }) => lambdaClient.sandboxWorkspace.createInstance.mutate(params);
 
   /**
-   * The working copy at this directory, created if there is not one yet. What
-   * the composer calls when someone picks a directory — idempotent, so clicking
-   * the same folder twice is not an error.
+   * A new instance of an environment, with its directory derived server-side.
+   *
+   * What the composer calls: someone picking an environment has not chosen a
+   * folder, and the folder holds outputs that do not exist yet, so asking would
+   * make them invent an answer before the work.
    */
-  useInstanceAtDirectory = async (params: { workingDirectory: string }) =>
-    lambdaClient.sandboxWorkspace.useInstanceAtDirectory.mutate(params);
+  createInstanceForEnvironment = async (params: { environmentId: string }) =>
+    lambdaClient.sandboxWorkspace.createInstanceForEnvironment.mutate(params);
 
   /** Only the label. The directory does not move — the built state sits in it. */
   renameInstance = async (params: { id: string; name: string }) =>
