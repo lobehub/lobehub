@@ -63,8 +63,12 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
 
+  // Also fetched while CLOSED whenever a copy is bound, because the chip names
+  // the copy by looking it up in this list: gating the list on `open` alone
+  // leaves the closed chip with nothing to look up, so a topic that has chosen
+  // a copy still reads "pick one" until the menu happens to be open.
   const { data, mutate } = useSWR(
-    open ? ['sandbox-instances', topicId] : null,
+    open || value ? ['sandbox-instances', topicId] : null,
     () => sandboxWorkspaceService.listInstances({ topicId, withSizes: false }),
     { revalidateOnFocus: false },
   );

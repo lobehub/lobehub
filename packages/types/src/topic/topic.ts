@@ -601,11 +601,18 @@ export const chatTopicMetadataUpdateSchema = z.object({
     })
     .nullable()
     .optional(),
-  // The user's own choice of where this topic's sandbox works and whether it
-  // keeps anything. Client-writable on purpose: the execution plane fences the
-  // directory against the entitlement it was issued, so this is a preference,
-  // not a boundary (see `TopicMetadata.sandboxCwd`).
+  // The topic's own sandbox choices: where it works, which instance it works in,
+  // and whether anything survives. Client-writable on purpose — the execution
+  // plane fences all three against the entitlement it was issued, so they are
+  // preferences rather than boundaries (see `TopicMetadata.sandboxCwd`).
+  //
+  // A key absent here is not rejected, it is silently dropped: this is a plain
+  // `z.object()`, and stripping unknown keys is its default. So a field that
+  // lives only on `ChatTopicMetadata` writes nothing and still answers 200 —
+  // the interface and this schema are two declarations the type checker never
+  // compares.
   sandboxCwd: z.string().optional(),
+  sandboxInstanceId: z.string().optional(),
   sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
   scheduledRun: topicScheduledRunSchema.nullish(),
   workingDirectory: z.string().optional(),
