@@ -193,7 +193,6 @@ const PanelContent = memo(() => {
             type={'secondary'}
           >
             {t('pageEditor.comments.title')}
-            {state?.summary.data ? ` · ${state.summary.data.total}` : ''}
           </Text>
         }
         right={

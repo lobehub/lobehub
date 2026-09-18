@@ -1,3 +1,4 @@
+import { DEFAULT_BLOCK_ANCHOR_PADDING } from '@lobehub/editor/react';
 import { createStaticStyles, cssVar } from 'antd-style';
 
 import { GUTTER_INSET_END, GUTTER_INSET_START } from './Gutter/constants';
@@ -85,20 +86,21 @@ export const styles = createStaticStyles(({ css }) => ({
    * The margin marker: sits in the body's right margin at the height of the
    * block under the pointer. Hidden until hover, so a reading column stays
    * clean; the gutter beside it is where the marker's comment will land.
+   *
+   * The editor column reserves `DEFAULT_BLOCK_ANCHOR_PADDING` on both sides;
+   * the block drag handle lives in the start side, the marker takes the end
+   * side. Staying inside that padding keeps the marker within the column's
+   * own box: placed past the column's edge it would spill out of the scroll
+   * pane whenever the column is flush with it (comments panel open), where
+   * the panel covers it and the pane grows a horizontal scrollbar.
    */
   blockMarker: css`
     position: absolute;
     z-index: 1;
+    inset-inline-end: 0;
 
-    /*
-     * A physical transform (translateX) can't flip with direction, so
-     * "just past the inline-end edge" is expressed purely with insets
-     * instead of inset-inline-end + translateX(100%): pinning the
-     * inline-start edge at 100% of the container's width places the box
-     * flush against, and extending from, the inline-end edge either way.
-     */
-    inset-inline-start: 100%;
-
+    box-sizing: border-box;
+    width: ${DEFAULT_BLOCK_ANCHOR_PADDING}px;
     padding-inline-start: 4px;
 
     color: ${cssVar.colorTextTertiary};
