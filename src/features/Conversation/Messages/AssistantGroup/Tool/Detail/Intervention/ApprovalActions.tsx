@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
 import { type ApprovalMode } from './index';
+import { isSubmitShortcutBlockedByTarget } from './submitShortcutGuard';
 
 interface ApprovalActionsProps {
   apiName: string;
@@ -225,7 +226,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     }, [choice]);
 
     // Page-level keyboard: 1/2/↑/↓ to switch, Enter to submit. Skip while
-    // typing anywhere on the page so we never hijack the main chat composer.
+    // typing anywhere on the page so we never hijack the main chat composer,
+    // and skip when another interactive control has focus — Enter must
+    // activate that control, never silently submit an approval.
     // The reject input has its own onKeyDown for Enter / ↑.
     //
     // Kept fresh in a ref so the shared-arbiter registration below stays
@@ -235,11 +238,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     useEffect(() => {
       onKeyDownRef.current = (e: KeyboardEvent) => {
         if (e.defaultPrevented) return;
-        const target = e.target as HTMLElement | null;
-        if (target) {
-          const tag = target.tagName;
-          if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
-        }
+        if (isSubmitShortcutBlockedByTarget(e.target as HTMLElement | null)) return;
         if (e.metaKey || e.ctrlKey || e.altKey) return;
         // Digit keys select the matching numbered row directly.
         if (/^[1-9]$/.test(e.key)) {
