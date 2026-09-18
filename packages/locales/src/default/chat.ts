@@ -656,7 +656,7 @@ export default {
     'Could not reconnect this device. Make sure the desktop app is running, then try again.',
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
-  'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
+  'heteroAgent.executionTarget.sandboxDesc': 'Run in the cloud, on no machine of yours',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
