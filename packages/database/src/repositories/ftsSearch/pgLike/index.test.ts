@@ -694,6 +694,33 @@ describe('FtsSearchRepo (pg_like)', () => {
       expect(response.candidates.map((candidate) => candidate.id)).toEqual([context.id]);
     });
 
+    it('matches parent_text terms distributed across several parents', async () => {
+      const parents = await serverDB
+        .insert(userMemories)
+        .values([
+          { lastAccessedAt: now, title: 'Project planning', userId },
+          { details: 'Apollo launch notes', lastAccessedAt: now, userId },
+        ])
+        .returning({ id: userMemories.id });
+      const [context] = await serverDB
+        .insert(userMemoriesContexts)
+        .values({
+          title: 'Space program',
+          userId,
+          userMemoryIds: parents.map((parent) => parent.id),
+        })
+        .returning({ id: userMemoriesContexts.id });
+
+      const response = await createRepo(serverDB, userId).ftsSearchCandidates({
+        entity: 'memoryContexts',
+        filters: {},
+        pagination: {},
+        query: { fields: ['parent_text'], text: 'project apollo' },
+      });
+
+      expect(response.candidates.map((candidate) => candidate.id)).toEqual([context.id]);
+    });
+
     it('deduplicates memory contexts joined to several parent memories', async () => {
       const parents = await serverDB
         .insert(userMemories)

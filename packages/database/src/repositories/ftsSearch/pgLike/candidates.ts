@@ -81,6 +81,17 @@ const parentMemoryFields = {
   parent_title: [{ column: userMemories.title, weight: 4 }],
 } satisfies Record<string, PostgresFtsSearchField[]>;
 
+/** Memory-context documents flatten every linked parent's text into one logical search field. */
+const contextParentText = sql`COALESCE((
+  SELECT string_agg(
+    concat_ws(' ', ${userMemories.title}, ${userMemories.summary}, ${userMemories.details}),
+    ' '
+  )
+  FROM ${userMemories}
+  WHERE ${userMemories.userId} = ${userMemoriesContexts.userId}
+    AND COALESCE(${userMemoriesContexts.userMemoryIds}, '[]'::jsonb) ? (${userMemories.id})::text
+), '')`;
+
 const parentMemoryJoin = (layer: { userId: AnyPgColumn; userMemoryId: AnyPgColumn }): SQL =>
   and(eq(userMemories.id, layer.userMemoryId), eq(userMemories.userId, layer.userId)) as SQL;
 
@@ -382,9 +393,9 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
       description: [{ column: userMemoriesContexts.description }],
       parent_text: [
         {
-          // The search projection combines these columns into one logical field,
-          // so query terms may span a parent's title, summary, and details.
-          column: sql`concat_ws(' ', ${userMemories.title}, ${userMemories.summary}, ${userMemories.details})`,
+          // Elasticsearch flattens every linked parent's text into one field,
+          // so terms may span columns and different parents.
+          column: contextParentText,
         },
       ],
       title: [{ column: userMemoriesContexts.title, weight: 2 }],
