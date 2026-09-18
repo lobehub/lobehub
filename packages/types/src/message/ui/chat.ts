@@ -255,10 +255,12 @@ export interface UIChatMessage {
   parentId?: string;
   /**
    * The UI read path reduced this tool message's `content` / `pluginState` to
-   * a view model; the stored payload is larger and must be fetched on demand
-   * (raw viewer / detail portal) rather than read from the store.
+   * a view model, and which surface has to fetch the stored payload back:
+   * `'detail'` when the inline card is complete on its own (a detail portal or
+   * the raw viewer fetches), `'render'` when the card itself renders the body
+   * and must be hydrated as the row expands.
    */
-  payloadOmitted?: boolean;
+  payloadOmitted?: 'detail' | 'render';
   /**
    * Performance metrics (tps, ttft, duration, latency)
    * Aggregated from all children in group messages

@@ -49,9 +49,9 @@ const projectToolMessage = (message: UIChatMessage, resolve: ProjectorResolver):
     // nothing".
     contentLength: message.content?.length ?? 0,
     ...(replacedContent && { content: projection.content ?? '' }),
-    // Tells the client the stored payload is larger than what it holds, so the
-    // raw viewer / detail portal fetches instead of rendering the store value.
-    payloadOmitted: true,
+    // Tells the client the stored payload is larger than what it holds, and
+    // which surface has to fetch it back.
+    payloadOmitted: projection.storedPayloadNeededBy ?? 'detail',
     ...(replacedState && { pluginState: projection.pluginState }),
   };
 };

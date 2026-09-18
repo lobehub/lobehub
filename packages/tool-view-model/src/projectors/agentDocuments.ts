@@ -15,9 +15,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * surface fetches the raw payload when it needs the document.
  */
 export const readDocumentProjector: ToolProjector = ({ pluginState }) => {
-  if (!isRecord(pluginState)) return { content: null };
+  if (!isRecord(pluginState)) return { content: null, storedPayloadNeededBy: 'render' };
 
   const { content: _content, xml: _xml, ...rest } = pluginState;
 
-  return { content: null, pluginState: rest };
+  return { content: null, pluginState: rest, storedPayloadNeededBy: 'render' };
 };

@@ -35,7 +35,7 @@ describe('projectToolViewModels', () => {
 
     expect(projected.content).toBe('');
     expect(projected.contentLength).toBe('RAW BODY'.length);
-    expect(projected.payloadOmitted).toBe(true);
+    expect(projected.payloadOmitted).toBe('detail');
   });
 
   it('replaces pluginState while leaving content alone', () => {
@@ -46,7 +46,16 @@ describe('projectToolViewModels', () => {
 
     expect(projected.content).toBe('RAW BODY');
     expect(projected.pluginState).toEqual({ results: [{ title: 'T' }] });
-    expect(projected.payloadOmitted).toBe(true);
+    expect(projected.payloadOmitted).toBe('detail');
+  });
+
+  it('records which surface has to fetch the stored payload back', () => {
+    const [projected] = projectToolViewModels(
+      [toolMessage()],
+      resolveWith(() => ({ content: null, storedPayloadNeededBy: 'render' })),
+    );
+
+    expect(projected.payloadOmitted).toBe('render');
   });
 
   it('does not mark a message as omitted when the projector declines', () => {
@@ -96,9 +105,9 @@ describe('projectToolViewModels', () => {
       resolveWith(() => ({ content: null })),
     );
 
-    expect(compressedParent.compressedMessages![0].payloadOmitted).toBe(true);
-    expect(columnParent.columns![0][0].payloadOmitted).toBe(true);
-    expect(memberParent.members![0].payloadOmitted).toBe(true);
+    expect(compressedParent.compressedMessages![0].payloadOmitted).toBe('detail');
+    expect(columnParent.columns![0][0].payloadOmitted).toBe('detail');
+    expect(memberParent.members![0].payloadOmitted).toBe('detail');
   });
 });
 

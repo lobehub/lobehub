@@ -86,7 +86,7 @@ describe('MessageService', () => {
       expect(projectToolViewModels).toHaveBeenCalledWith([toolRow]);
       expect(projected.content).toBe('');
       expect(projected.contentLength).toBe('RAW BODY'.length);
-      expect(projected.payloadOmitted).toBe(true);
+      expect(projected.payloadOmitted).toBe('detail');
     });
 
     it('keeps the whole payload for a user who is not on the mux', async () => {

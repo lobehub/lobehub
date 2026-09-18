@@ -83,33 +83,54 @@ describe('crawlProjector', () => {
 });
 
 describe('runCommandProjector', () => {
-  it('drops the legacy `output` twin and the duplicated message body', () => {
+  it('drops all three copies of the output and keeps the settled metadata', () => {
     const result = runCommandProjector(
-      input({ pluginState: { exitCode: 0, output: 'OUT', stdout: 'OUT', success: true } }),
+      input({
+        pluginState: {
+          exitCode: 0,
+          outputFiles: ['/tmp/a.log'],
+          output: 'OUT',
+          stderr: 'warn',
+          stdout: 'OUT',
+          success: true,
+        },
+      }),
     );
 
     expect(result?.content).toBeNull();
-    expect(result?.pluginState).toEqual({ exitCode: 0, stdout: 'OUT', success: true });
+    expect(result?.pluginState).toEqual({
+      exitCode: 0,
+      outputFiles: ['/tmp/a.log'],
+      stderr: 'warn',
+      success: true,
+    });
   });
 
-  it('does not truncate the surviving output, which renders inline', () => {
-    const stdout = 'x'.repeat(50_000);
+  it('asks the card itself to fetch, since the card is what renders the output', () => {
+    const result = runCommandProjector(input({ pluginState: { stdout: 'OUT' } }));
 
-    const result = runCommandProjector(input({ pluginState: { stdout } }));
-
-    expect((result?.pluginState as any).stdout).toBe(stdout);
+    expect(result?.storedPayloadNeededBy).toBe('render');
   });
 
-  it('keeps a legacy row that only has `output`', () => {
+  it('drops a legacy row that only has `output`', () => {
     const result = runCommandProjector(input({ pluginState: { output: 'OUT' } }));
 
-    expect(result?.pluginState).toEqual({ output: 'OUT' });
+    expect(result?.pluginState).toEqual({});
     expect(result?.content).toBeNull();
   });
 
-  it('declines when the body is the only copy of the output', () => {
-    expect(runCommandProjector(input({ pluginState: { exitCode: 0 } }))).toBeUndefined();
-    expect(runCommandProjector(input({ pluginState: undefined }))).toBeUndefined();
+  it('still drops the body when state carries no output at all', () => {
+    const result = runCommandProjector(input({ pluginState: { exitCode: 0 } }));
+
+    expect(result?.content).toBeNull();
+    expect(result?.pluginState).toEqual({ exitCode: 0 });
+  });
+
+  it('declines a call that produced nothing to drop', () => {
+    expect(
+      runCommandProjector(input({ content: '', pluginState: { exitCode: 0 } })),
+    ).toBeUndefined();
+    expect(runCommandProjector(input({ content: '', pluginState: undefined }))).toBeUndefined();
   });
 });
 
@@ -126,10 +147,17 @@ describe('readDocumentProjector', () => {
       }),
     );
 
-    expect(result).toEqual({ content: null, pluginState: { id: 'doc_1', title: 'Spec' } });
+    expect(result).toEqual({
+      content: null,
+      pluginState: { id: 'doc_1', title: 'Spec' },
+      storedPayloadNeededBy: 'render',
+    });
   });
 
   it('drops the duplicated body even without a usable state', () => {
-    expect(readDocumentProjector(input({ pluginState: undefined }))).toEqual({ content: null });
+    expect(readDocumentProjector(input({ pluginState: undefined }))).toEqual({
+      content: null,
+      storedPayloadNeededBy: 'render',
+    });
   });
 });

@@ -27,6 +27,18 @@ export interface ToolProjectorInput {
 export interface ToolProjection {
   content?: string | null;
   pluginState?: unknown;
+  /**
+   * Who still needs the stored payload once this projection applies.
+   *
+   * `'detail'` (the default) means the inline card is complete on its own and
+   * only a detail surface — the crawl portal, the raw viewer — has to fetch.
+   * `'render'` means the card itself renders the body, so it must be hydrated
+   * when the row is expanded.
+   *
+   * Declared here, next to the projection that created the gap, so the two
+   * cannot drift the way a separate registry would.
+   */
+  storedPayloadNeededBy?: 'detail' | 'render';
 }
 
 /**
