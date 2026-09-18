@@ -304,7 +304,7 @@ export interface ChatTopicMetadata {
     threadId?: string | null;
   } | null;
   /**
-   * Which CLOUD-SANDBOX INSTANCE this topic runs in: one working copy of an
+   * Which CLOUD-SANDBOX INSTANCE this topic runs in: one instance of an
    * environment, meaning a directory inside the persistent workspace together
    * with the packages restored into it. Absent means the workspace root under
    * the caller's default environment, which is what a topic that never chose

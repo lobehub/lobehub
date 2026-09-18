@@ -80,7 +80,7 @@ const EnvironmentRow = memo<EnvironmentRowProps>(({ environment }) => {
 EnvironmentRow.displayName = 'SandboxEnvironmentRow';
 
 /**
- * Environments and the working copies built from them.
+ * Environments and the instances built from them.
  *
  * An environment is a SPECIFICATION — the sources to check out, what makes them
  * usable, what they run with. What a sandbox builds from it is a cache, which is

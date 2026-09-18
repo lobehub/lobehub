@@ -37,7 +37,7 @@ const SandboxWorkspaceSectionInner = memo<SandboxWorkspaceSectionProps>(({ agent
     async (selected: string | undefined) => {
       if (!topicId) return;
 
-      // Choosing a working copy is also how a topic opts into persistence: a
+      // Choosing an instance is also how a topic opts into persistence: a
       // user who picks where their files should live has said the files should
       // outlive the session.
       await updateTopicMetadata(topicId, {

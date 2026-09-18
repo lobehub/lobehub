@@ -20,7 +20,7 @@ interface InstanceListProps {
 }
 
 /**
- * The working copies of one environment.
+ * The instances of one environment.
  *
  * Two of them is the supported way to run two conversations side by side: each
  * keeps its own folder and its own installed state, where a shared folder would
