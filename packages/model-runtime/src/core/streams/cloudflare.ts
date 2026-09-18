@@ -15,7 +15,7 @@ class CloudflareStreamTransformer {
   }
 
   public async transform(chunk: Uint8Array, controller: TransformStreamDefaultController) {
-    let textChunk = this.textDecoder.decode(chunk);
+    let textChunk = this.textDecoder.decode(chunk, { stream: true });
     if (this.buffer.trim() !== '') {
       textChunk = this.buffer + textChunk;
       this.buffer = '';
