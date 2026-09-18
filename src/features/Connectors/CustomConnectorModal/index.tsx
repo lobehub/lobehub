@@ -7,6 +7,7 @@ import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
+import { buildCustomConnectorMetadata, cleanRecord } from './connectorMetadata';
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
 
 interface CustomConnectorModalProps {
@@ -69,15 +70,6 @@ const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPop
       }
     }, 800);
   });
-
-/** Drop empty key/value pairs a user may have left behind in an editor. */
-const cleanRecord = (record?: Record<string, string>): Record<string, string> | undefined => {
-  if (!record) return undefined;
-  const cleaned = Object.fromEntries(
-    Object.entries(record).filter(([k, v]) => k.trim() && (v ?? '').trim()),
-  );
-  return Object.keys(cleaned).length > 0 ? cleaned : undefined;
-};
 
 /**
  * "Add / Edit custom connector" entry. Reuses the rich PluginDevModal MCP form,
@@ -181,6 +173,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
       return {
         customParams: {
+          avatar: connector.metadata?.avatar as string | undefined,
           description: connector.metadata?.description as string | undefined,
           mcp: {
             args: mcpStdioConfig?.args,
@@ -268,22 +261,26 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
 
-        // Custom headers live in metadata (independent of the auth credential and
-        // of the server URL), so always re-sync them from the form. Merge into the
-        // existing metadata — a jsonb update replaces the whole column, so other
-        // keys (e.g. description) must be carried over. Also migrates legacy rows
-        // that stored headers as a 'header' credential (cleared below).
+        // Description, avatar and custom headers live in metadata (independent of
+        // the auth credential and of the server URL), so always re-sync them from
+        // the form. Merge into the existing metadata — a jsonb update replaces the
+        // whole column, so keys the form doesn't own (e.g. composio identity) must
+        // be carried over. Also migrates legacy rows that stored headers as a
+        // 'header' credential (cleared below).
         //
         // Guard on `connector`: only rewrite metadata once the connector record is
-        // loaded, so we never overwrite a populated column with `{}` (which would
-        // drop sibling keys like description). In practice the form can't be
-        // submitted before `connector` resolves, but this keeps it safe.
-        const headers = cleanRecord(mcp.headers);
+        // loaded, so we never overwrite a populated column with form-only values
+        // (which would drop sibling keys). In practice the form can't be submitted
+        // before `connector` resolves, but this keeps it safe.
         if (connector) {
-          const nextMetadata: Record<string, unknown> = { ...connector.metadata };
-          if (headers) nextMetadata.customHeaders = headers;
-          else delete nextMetadata.customHeaders;
-          patch.metadata = nextMetadata;
+          patch.metadata = buildCustomConnectorMetadata(
+            {
+              avatar: value.customParams?.avatar,
+              description: value.customParams?.description,
+              headers: mcp.headers,
+            },
+            connector.metadata,
+          );
         }
 
         if (urlChanged) {
@@ -330,8 +327,18 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       }
 
       // ── Create mode ───────────────────────────────────────────────────────
+      // Description, avatar and custom headers all persist in `metadata` (the
+      // credentials column only holds the single auth credential, see below).
+      // Built into `base` so the OAuth create path keeps them too.
+      const formMetadata = buildCustomConnectorMetadata({
+        avatar: value.customParams?.avatar,
+        description: value.customParams?.description,
+        headers: mcp.headers,
+      });
+
       const base = {
         identifier,
+        metadata: Object.keys(formMetadata).length > 0 ? formMetadata : undefined,
         mcpConnectionType: (mcp.type ?? 'http') as 'http' | 'stdio',
         mcpServerUrl: isHttp ? mcp.url?.trim() : undefined,
         mcpStdioConfig: isHttp
@@ -379,16 +386,14 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         return;
       }
 
-      // The auth credential (bearer token) and custom headers are stored
-      // separately: the credential goes in the encrypted single-kind
-      // `credentials` column, while custom headers live in
-      // `metadata.customHeaders` so they can coexist with no-auth OR bearer
+      // The auth credential (bearer token) goes in the encrypted single-kind
+      // `credentials` column — custom headers live in `metadata.customHeaders`
+      // (already inside `base`) so they can coexist with no-auth OR bearer
       // (the credentials column can only hold one credential kind at a time).
       const credentials =
         authType === 'bearer' && mcp.auth?.token?.trim()
           ? ({ token: mcp.auth.token.trim(), type: 'bearer' } as const)
           : undefined;
-      const headers = cleanRecord(mcp.headers);
 
       // `connector.create` is an idempotent upsert on (user, identifier);
       // `isNew` is the server's verdict on whether this row was freshly
@@ -399,7 +404,6 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       const { id: newConnectorId, isNew } = await createConnector({
         ...base,
         credentials,
-        metadata: headers ? { customHeaders: headers } : undefined,
       });
       try {
         await syncConnectorTools(newConnectorId);
