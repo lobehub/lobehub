@@ -1,3 +1,4 @@
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import { parse } from '@lobechat/conversation-flow';
 import { type ConversationContext, type TraceEventPayloads } from '@lobechat/types';
 import debug from 'debug';
@@ -88,7 +89,13 @@ export class MessageInternalsActionImpl {
 
     if (traceId && message?.role === 'assistant') {
       traceService
-        .traceEvent({ content: message.content, observationId, traceId, ...payload })
+        .traceEvent({
+          content: message.content,
+          observationId,
+          sessionId: message.topicId || `${message.agentId || INBOX_SESSION_ID}@default`,
+          traceId,
+          ...payload,
+        })
         .catch();
     }
   };

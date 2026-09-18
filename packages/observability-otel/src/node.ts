@@ -115,6 +115,8 @@ export interface RegisterOptions {
     meterName?: string;
   }[];
   name?: string;
+  /** Disable the default OTLP exporters when only custom span processors are needed. */
+  otlp?: boolean;
   sampler?: Sampler;
   spanProcessors?: SpanProcessor[];
   textMapPropagator?: TextMapPropagator;
@@ -157,17 +159,21 @@ export function register(options?: RegisterOptions) {
       options?.autoInstrumentations === false
         ? []
         : [new PgInstrumentation(), new HttpInstrumentation(), getNodeAutoInstrumentations()],
-    metricReaders: [
-      new PeriodicExportingMetricReader({
-        exportIntervalMillis: metricsExporterInterval,
-        exporter: new OTLPMetricExporter(),
-      }),
-    ],
+    logRecordProcessors: options?.otlp === false ? [] : undefined,
+    metricReaders:
+      options?.otlp === false
+        ? []
+        : [
+            new PeriodicExportingMetricReader({
+              exportIntervalMillis: metricsExporterInterval,
+              exporter: new OTLPMetricExporter(),
+            }),
+          ],
     resource: resourceFromAttributes(attributes),
     sampler: options?.sampler,
     spanProcessors: [
       ...(options?.spanProcessors ?? []),
-      new BatchSpanProcessor(new OTLPTraceExporter()),
+      ...(options?.otlp === false ? [] : [new BatchSpanProcessor(new OTLPTraceExporter())]),
     ],
     textMapPropagator: options?.textMapPropagator,
     views: options?.histogramViews?.map(({ boundaries, instrumentName, meterName }) => ({
