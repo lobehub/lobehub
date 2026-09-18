@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Button, Switch, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronDownIcon,
@@ -18,6 +18,7 @@ import {
 import { memo, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openSandboxWorkspaceUpsell } from '@/business/client/features/SandboxWorkspaceUpsell';
 import InstantSwitch from '@/components/InstantSwitch';
 import { DOWNLOAD_URL } from '@/const/url';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
@@ -45,6 +46,8 @@ import { useElectronStore } from '@/store/electron';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
 import OptionRow from './OptionRow';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
+import { useSandboxMode } from './useSandboxMode';
+import { useSandboxWorkspaceAccess } from './useSandboxWorkspaceAccess';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -338,6 +341,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // raw shared fallback stays workspace-scoped so a legacy `local` value keeps
   // routing to its bound workspace device rather than this member's desktop.
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  // Whether this conversation keeps its sandbox files, and whether this plan
+  // may. Read here as well as by the directory chip so the two never disagree.
+  const { status: sandboxWorkspaceStatus } = useSandboxWorkspaceAccess(agentId);
+  const { selection: sandboxSelection, setMode: setSandboxMode } = useSandboxMode(agentId);
+  const keepSandboxFiles = sandboxSelection.mode === 'persistent';
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
@@ -422,6 +430,19 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       await selectExecutionTarget(target, deviceId, { localSandbox });
     },
     [ensureSandboxWorkingDirectory, selectExecutionTarget],
+  );
+
+  const toggleKeepSandboxFiles = useCallback(
+    async (enabled: boolean) => {
+      // Not entitled: the switch is the way to a plan, not to the feature.
+      if (sandboxWorkspaceStatus !== 'ready') {
+        openSandboxWorkspaceUpsell();
+        return;
+      }
+      if (enabled && executionTarget !== 'sandbox') await handleSelect('sandbox');
+      await setSandboxMode(enabled ? 'persistent' : 'ephemeral');
+    },
+    [executionTarget, handleSelect, sandboxWorkspaceStatus, setSandboxMode],
   );
 
   // Setting up the backend raises an elevation prompt and creates a dedicated
@@ -753,6 +774,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             : 'heteroAgent.executionTarget.sandboxUnsupported',
           { name: heteroType ? HETEROGENEOUS_TYPE_LABELS[heteroType] : undefined },
         )}
+        // Keeping files is a modifier on this target, not a target of its own,
+        // so it rides in this row's trailing slot the way the local sandbox
+        // row carries its network switch. On: a persistent cloud sandbox. Off:
+        // the throwaway one. On a plan without persistence the switch is still
+        // there to reach for — flipping it opens the way to a plan and it
+        // settles back, since the value is the topic's, not the switch's.
+        extra={
+          supportsSandbox && sandboxWorkspaceStatus !== 'hidden' ? (
+            <>
+              <Switch
+                size={'small'}
+                value={sandboxWorkspaceStatus === 'ready' && keepSandboxFiles}
+                onChange={(enabled) => void toggleKeepSandboxFiles(enabled)}
+              />
+              <Tooltip title={t('heteroAgent.executionTarget.keepFilesTip')}>
+                <span className={styles.extraInfo}>
+                  <Icon icon={InfoIcon} size={12} />
+                </span>
+              </Tooltip>
+            </>
+          ) : undefined
+        }
         onClick={() => void handleSelect('sandbox')}
       />
       {deviceRows.length > 0 ? (
