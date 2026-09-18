@@ -171,6 +171,78 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
   const callBuild = (state: unknown, reason = 'completed') =>
     (buildLifecycle() as any).buildLifecycleEvent('op-1', state, reason);
 
+  it('attaches Markdown images explicitly included in the final reply without changing its text', () => {
+    const url = 'https://cdn.example.com/f/file_image';
+    const content = `Here is the result: ![Result](${url})`;
+    const { event } = callBuild({ messages: [{ role: 'assistant', content }] });
+    expect(event.attachments).toEqual([{ fetchUrl: url, type: 'image' }]);
+    expect(event.lastAssistantContent).toBe(content);
+  });
+
+  it('preserves the order of distinct final-reply images', () => {
+    const { event } = callBuild({
+      messages: [
+        {
+          role: 'assistant',
+          content:
+            '![Before](https://cdn.example.com/before.png) ![After](https://cdn.example.com/after.png)',
+        },
+      ],
+    });
+    expect(event.attachments?.map((attachment: any) => attachment.fetchUrl)).toEqual([
+      'https://cdn.example.com/before.png',
+      'https://cdn.example.com/after.png',
+    ]);
+  });
+
+  it('parses reference images in final text parts and deduplicates structured images', () => {
+    const url = 'https://cdn.example.com/result.png';
+    const { event } = callBuild({
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: `![one][result] ![two](${url})\n\n[result]: ${url}` },
+            { type: 'image_url', image_url: { url } },
+          ],
+        },
+      ],
+    });
+    expect(event.attachments).toEqual([{ fetchUrl: url, type: 'image' }]);
+  });
+
+  it('does not promote tool state, tool Markdown, or an earlier reply to final attachments', () => {
+    const url = 'https://cdn.example.com/intermediate.png';
+    const { event } = callBuild({
+      messages: [
+        { role: 'assistant', content: `![earlier](${url})` },
+        { role: 'user', content: 'Analyze the result without sending an image.' },
+        { role: 'assistant', content: '', tools: [{ id: 'call-image' }] },
+        {
+          role: 'tool',
+          content: `![tool result](${url})`,
+          state: { generations: [{ asset: { url, type: 'image' } }] },
+        },
+        { role: 'assistant', content: 'The composition is balanced.' },
+      ],
+    });
+    expect(event.attachments).toBeUndefined();
+  });
+
+  it('does not treat ordinary links, code, escaped syntax or unsafe schemes as images', () => {
+    const content = [
+      'https://cdn.example.com/plain.png',
+      '[download](https://cdn.example.com/download.png)',
+      '`![inline](https://cdn.example.com/inline.png)`',
+      '```md\n![fenced](https://cdn.example.com/fenced.png)\n```',
+      '\\![escaped](https://cdn.example.com/escaped.png)',
+      '![unsafe](file:///tmp/image.png)',
+      '![unsafe](javascript:alert)',
+    ].join('\n\n');
+    const { event } = callBuild({ messages: [{ role: 'assistant', content }] });
+    expect(event.attachments).toBeUndefined();
+  });
+
   it('extracts text content from a plain-string final assistant turn', () => {
     const state = {
       messages: [
@@ -1209,6 +1281,27 @@ describe('CompletionLifecycle.dispatchHooks — lastAssistantContent DB recovery
       'op-1',
       'onComplete',
       expect.objectContaining({ lastAssistantContent: 'the real reply' }),
+      [],
+    );
+  });
+
+  it('extracts final Markdown images when the reply is recovered from the database', async () => {
+    const lifecycle = buildLifecycle();
+    const dispatchSpy = setupSpies(lifecycle);
+    const content = '![Result](https://cdn.example.com/recovered.png)';
+    (lifecycle as any).messageModel = {
+      findById: vi.fn().mockResolvedValue({ content, id: 'msg-assistant' }),
+    };
+
+    await lifecycle.dispatchHooks('op-1', buildDoneState(''), 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      'op-1',
+      'onComplete',
+      expect.objectContaining({
+        attachments: [{ fetchUrl: 'https://cdn.example.com/recovered.png', type: 'image' }],
+        lastAssistantContent: content,
+      }),
       [],
     );
   });
