@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveListThreadFocus } from './index';
+import { listThreadOwnsFocusMiss, resolveListThreadFocus } from './index';
 import type { DocumentCommentFocus } from './useDocumentCommentDeepLink';
 
 const focus: DocumentCommentFocus = {
@@ -34,5 +34,15 @@ describe('resolveListThreadFocus', () => {
     const pick = { ...focus, scroll: false };
 
     expect(resolveListThreadFocus(pick, new Set(['root-1']), 'root-1')).toEqual(pick);
+  });
+});
+
+describe('listThreadOwnsFocusMiss', () => {
+  it('lets the flat copy answer for a missing reply when there is no gutter copy', () => {
+    expect(listThreadOwnsFocusMiss(new Set(), 'root-1')).toBe(true);
+  });
+
+  it('hands that to the gutter copy when it shows the same thread, so it is reported once', () => {
+    expect(listThreadOwnsFocusMiss(new Set(['root-1']), 'root-1')).toBe(false);
   });
 });

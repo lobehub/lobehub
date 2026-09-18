@@ -31,6 +31,15 @@ export const resolveListThreadFocus = (
   return gutterShownIds.has(rootId) ? { ...focus, scroll: false } : focus;
 };
 
+/**
+ * Same split for a deep link whose reply turns out missing or failed: both
+ * copies see the focus (the flat one still highlights), but exactly one of
+ * them may answer for it — the gutter copy when there is one — or the reader
+ * gets the toast twice and the focus token advances twice.
+ */
+export const listThreadOwnsFocusMiss = (gutterShownIds: ReadonlySet<string>, rootId: string) =>
+  !gutterShownIds.has(rootId);
+
 const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) => {
   const { t } = useTranslation('file');
   const {
@@ -118,11 +127,15 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               key={pinnedThreadInList.root.id}
               replyCount={pinnedThreadInList.replyCount}
               root={pinnedThreadInList.root}
-              onFocusMissing={handleReplyFocusMissing}
               onMutated={refreshPinned}
               onReplyCountChange={updatePinnedReplyCount}
               onRootUpdate={handlePinnedRootUpdate}
               onSummaryChange={updateSummaryTotal}
+              onFocusMissing={
+                listThreadOwnsFocusMiss(gutterShownIds, pinnedThreadInList.root.id)
+                  ? handleReplyFocusMissing
+                  : undefined
+              }
             />
           )}
           {hasAnyItems ? (
@@ -133,11 +146,15 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
                 key={root.id}
                 replyCount={replyCount}
                 root={root}
-                onFocusMissing={handleReplyFocusMissing}
                 onMutated={refresh}
                 onReplyCountChange={updateReplyCount}
                 onRootUpdate={handleUpdate}
                 onSummaryChange={updateSummaryTotal}
+                onFocusMissing={
+                  listThreadOwnsFocusMiss(gutterShownIds, root.id)
+                    ? handleReplyFocusMissing
+                    : undefined
+                }
               />
             ))
           ) : documentThreads.isInitialError ? (
