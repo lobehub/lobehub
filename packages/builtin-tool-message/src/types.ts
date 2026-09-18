@@ -213,8 +213,40 @@ export interface SendMessageParams {
 
 export interface SendMessageState {
   channelId?: string;
+  delivery?: SendMessageDelivery;
   messageId?: string;
   platform?: string;
+}
+
+export type MessageDeliveryStatus = 'accepted' | 'degraded' | 'partial' | 'failed' | 'unknown';
+
+export type SendMessageTextOutcome =
+  | { status: 'not_requested' }
+  | { status: 'accepted' }
+  | { reason: 'text_send_unconfirmed'; status: 'unknown' };
+
+export type SendMessageAttachmentOutcome = {
+  index: number;
+  type: SendMessageAttachment['type'];
+} & (
+  | { status: 'accepted' }
+  | { reason: 'over_budget'; status: 'link_fallback' }
+  | {
+      reason: 'source_unavailable' | 'over_budget_no_link' | 'prepare_failed' | 'upload_failed';
+      status: 'failed';
+    }
+  | {
+      reason: 'send_unconfirmed' | 'link_send_unconfirmed' | 'execution_unconfirmed';
+      status: 'unknown';
+    }
+  | { reason: 'text_not_accepted' | 'prior_failure'; status: 'not_attempted' }
+);
+
+export interface SendMessageDelivery {
+  attachments: SendMessageAttachmentOutcome[];
+  receipt: 'unconfirmed';
+  status: MessageDeliveryStatus;
+  text: SendMessageTextOutcome;
 }
 
 export interface ReadMessagesParams {

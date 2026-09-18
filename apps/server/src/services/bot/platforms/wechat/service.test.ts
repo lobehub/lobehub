@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { MessageExecutionRuntime } from '@lobechat/builtin-tool-message/executionRuntime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as PublicUrlFetchModule from '../publicUrlFetch';
@@ -67,6 +68,31 @@ describe('WechatMessageService.sendMessage', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
     mockRedisGet.mockResolvedValue(null);
+  });
+
+  it('does not report success when an attachment upload fails', async () => {
+    const api = makeApi();
+    api.uploadCdnMedia.mockRejectedValueOnce(new Error('synthetic upload failure'));
+    const runtime = new MessageExecutionRuntime({
+      service: new WechatMessageService(api as any, 'app-1'),
+    });
+
+    const result = await runtime.sendMessage({
+      attachments: [{ data: Buffer.from('image').toString('base64'), type: 'image' }],
+      channelId: 'user-1@im.wechat',
+      content: 'hello',
+      platform: 'wechat',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.state).toMatchObject({
+      delivery: {
+        attachments: [{ reason: 'upload_failed', status: 'failed', type: 'image' }],
+        status: 'partial',
+        text: { status: 'accepted' },
+      },
+    });
+    expect(result.content).not.toContain('Message sent');
   });
 
   it('forwards text via api.sendMessage', async () => {
