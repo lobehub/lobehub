@@ -14,6 +14,7 @@ import { documentCommentService } from '@/services/documentComment';
 
 import { useDocumentCommentAnchors } from './anchor/useDocumentCommentAnchors';
 import {
+  ANCHORED_EAGER_PAGE_LIMIT,
   useDocumentCommentAnchorList,
   useDocumentCommentDetail,
   useDocumentCommentSummary,
@@ -69,7 +70,12 @@ export const useDocumentCommentsState = ({
   const workspaceId = useActiveWorkspaceId();
   const enabledDocumentId = workspaceId ? documentId : undefined;
   const summary = useDocumentCommentSummary(enabledDocumentId);
-  const anchoredThreads = useDocumentCommentThreads(enabledDocumentId, 'anchored');
+  // Anchored threads are fetched ahead of demand only while the gutter shows
+  // them, and only up to a budget; a closed panel paints its highlights from
+  // the anchor list alone and fetches a picked thread on demand.
+  const anchoredThreads = useDocumentCommentThreads(enabledDocumentId, 'anchored', {
+    eagerPageLimit: gutterEnabled ? ANCHORED_EAGER_PAGE_LIMIT : 0,
+  });
   const documentThreads = useDocumentCommentThreads(enabledDocumentId, 'document');
   const anchorList = useDocumentCommentAnchorList(enabledDocumentId);
   const createOptimistic = useOptimisticDocumentComment();
@@ -340,6 +346,21 @@ export const useDocumentCommentsState = ({
     );
   }, [anchoredThreads.items, documentThreads.items]);
   const pinnedInGutter = Boolean(pinnedThread) && isGutterThread(pinnedThread!);
+  // The list below the body pages both caches together: anchored roots past
+  // the gutter's eager budget (or all of them while the panel is closed)
+  // are only reachable through it.
+  const hasMoreListThreads = documentThreads.hasMore || anchoredThreads.hasMore;
+  const isLoadingMoreListThreads = documentThreads.isLoadingMore || anchoredThreads.isLoadingMore;
+  const loadMoreAnchored = anchoredThreads.loadMore;
+  const loadMoreDocument = documentThreads.loadMore;
+  const loadMoreListThreads = useCallback(
+    () =>
+      Promise.all([
+        documentThreads.hasMore ? loadMoreDocument() : undefined,
+        anchoredThreads.hasMore ? loadMoreAnchored() : undefined,
+      ]),
+    [anchoredThreads.hasMore, documentThreads.hasMore, loadMoreAnchored, loadMoreDocument],
+  );
 
   return {
     anchoredError: anchoredThreads.error,
@@ -353,10 +374,13 @@ export const useDocumentCommentsState = ({
     handlePinnedRootUpdate,
     handleReplyFocusMissing,
     handleUpdate,
+    hasMoreListThreads,
     isAnchoredInitialError: anchoredThreads.isInitialError,
     isAnchoredLoading: anchoredThreads.isLoadingInitial,
     isAnchoredRetrying: anchoredThreads.isRetrying,
+    isLoadingMoreListThreads,
     listThreads,
+    loadMoreListThreads,
     paneRef,
     panelAvailable,
     pinnedThread,

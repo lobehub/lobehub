@@ -8,7 +8,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { usePageEditorStore } from '../store';
 import { DocumentCommentAnchorsProvider } from './anchor/context';
 import DocumentCommentHighlightStyle from './anchor/HighlightStyle';
-import { readAnchoredDraftAnchor } from './Composer';
+import { readAnchoredDraftAnchor, restoreFailedAnchoredDraft } from './Composer';
 import type { DocumentCommentsState } from './useDocumentCommentsState';
 import { useDocumentCommentsState } from './useDocumentCommentsState';
 
@@ -47,14 +47,28 @@ const DocumentCommentsStateProvider = ({
   // so restoring the anchor for a since-revoked member would only leave a
   // permanently empty, undismissable pending card — the draft stays in
   // storage, recoverable once the permission comes back.
-  const pendingCommentAnchor = usePageEditorStore((s) => s.pendingCommentAnchor);
+  //
+  // The same moment — the shared slot being free — is when a failed gutter
+  // submission stashed while a newer draft owned that slot gets handed back
+  // (see `Composer`'s `preserveFailedAnchoredDraft`): re-checked whenever
+  // the slot frees, i.e. after the newer draft is sent or cancelled, not
+  // only on mount. Only in a panel-capable layout, where no composer is
+  // mounted while the slot is free; the inline box below the body adopts
+  // the stash itself, since it already holds the slot's state.
+  const hasPendingForDocument = usePageEditorStore(
+    (s) => s.pendingCommentAnchor?.documentId === documentId,
+  );
   const setPendingCommentAnchor = usePageEditorStore((s) => s.setPendingCommentAnchor);
   useEffect(() => {
-    if (!canCreate || pendingCommentAnchor?.documentId === documentId) return;
-    const anchor = readAnchoredDraftAnchor(workspaceId, documentId);
+    if (!canCreate || hasPendingForDocument) return;
+    const anchor =
+      readAnchoredDraftAnchor(workspaceId, documentId) ??
+      (panelAvailable
+        ? restoreFailedAnchoredDraft(workspaceId, documentId)?.selectionAnchor
+        : undefined);
     if (anchor) setPendingCommentAnchor({ anchor, documentId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId, canCreate]);
+  }, [documentId, canCreate, hasPendingForDocument, panelAvailable]);
 
   // A selection being commented on, or a run picked in the body, is answered
   // in the comments panel: open it on demand. Keyed on tick counters, not the

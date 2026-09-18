@@ -151,9 +151,31 @@ export const useDocumentCommentAnchorList = (documentId?: string | null) => {
   );
 };
 
+/**
+ * How many pages of anchored threads the gutter fetches ahead of demand while
+ * it is open, so the cards beside the text are there for the runs a reader
+ * is most likely looking at. Anything past it stays paginated: a highlight
+ * whose thread is not loaded is still painted (from the anchor list) and
+ * fetches its own thread on pick, and the list below the body pages the rest.
+ */
+export const ANCHORED_EAGER_PAGE_LIMIT = 4;
+
+/** The page count to request next while draining ahead of demand, capped at `limit`. */
+export const nextEagerPageCount = (current: number, limit: number) =>
+  current < limit ? current + 1 : current;
+
 export const useDocumentCommentThreads = (
   documentId?: string | null,
   scope: DocumentCommentThreadScope = 'all',
+  {
+    eagerPageLimit = 0,
+  }: {
+    /**
+     * Pages to fetch ahead of demand, one after another, without the reader
+     * asking; `0` (the default) leaves paging entirely to `loadMore`.
+     */
+    eagerPageLimit?: number;
+  } = {},
 ) => {
   const workspaceId = useActiveWorkspaceId();
   const getKey = useCallback(
@@ -178,15 +200,17 @@ export const useDocumentCommentThreads = (
     response.isValidating,
     response.size,
   );
-  const { setSize } = response;
+  const { setSize, size } = response;
   const { hasMore, isLoadingMore } = pagination;
 
-  // Anchored threads are drained eagerly: a card the gutter has not loaded is
-  // a highlight with nothing beside it.
+  // Fetch ahead of demand up to the caller's budget: for the gutter, a card
+  // it has not loaded is a highlight with nothing beside it. The budget keeps
+  // a document with hundreds of anchored roots from mounting every one of
+  // them (twice — gutter and list) before the reader has looked at any.
   useEffect(() => {
-    if (scope !== 'anchored' || !hasMore || isLoadingMore) return;
-    void setSize((current) => current + 1);
-  }, [hasMore, isLoadingMore, scope, setSize]);
+    if (!hasMore || isLoadingMore || size >= eagerPageLimit) return;
+    void setSize((current) => nextEagerPageCount(current, eagerPageLimit));
+  }, [eagerPageLimit, hasMore, isLoadingMore, setSize, size]);
 
   return {
     ...response,

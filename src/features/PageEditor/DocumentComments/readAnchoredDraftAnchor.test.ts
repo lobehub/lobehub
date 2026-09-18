@@ -9,6 +9,8 @@ import {
   readAnchoredDraftAnchor,
   readLegacyRootDraft,
   readUnanchoredDraftFromAnchoredScope,
+  restoreFailedAnchoredDraft,
+  takeFailedAnchoredDraft,
 } from './Composer';
 
 const DOCUMENT_ID = 'doc-1';
@@ -250,5 +252,127 @@ describe('preserveFailedAnchoredDraft', () => {
     });
 
     expect(JSON.parse(window.localStorage.getItem(KEY)!)).toEqual(newerDraft);
+  });
+});
+
+describe('takeFailedAnchoredDraft', () => {
+  const FAILED_PREFIX = `document-comment-draft:${WORKSPACE_ID}:${DOCUMENT_ID}:anchored-failed:`;
+
+  it('returns null when nothing was stashed', () => {
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('removes and returns a stashed draft', () => {
+    const failed = {
+      clientId: 'f1',
+      content: 'typed offline',
+      editorData: null,
+      selectionAnchor: anchor,
+    };
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, failed);
+
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toEqual(failed);
+    expect(window.localStorage.getItem(`${FAILED_PREFIX}f1`)).toBeNull();
+  });
+
+  it('returns stashes one at a time, in key order', () => {
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, {
+      clientId: 'b',
+      content: 'second',
+      editorData: null,
+      selectionAnchor: anchor,
+    });
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, {
+      clientId: 'a',
+      content: 'first',
+      editorData: null,
+      selectionAnchor: anchor,
+    });
+
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)?.content).toBe('first');
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)?.content).toBe('second');
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('drops a stash the gutter could not show (no anchor, no content, malformed) and keeps looking', () => {
+    window.localStorage.setItem(`${FAILED_PREFIX}a`, '{not json');
+    window.localStorage.setItem(
+      `${FAILED_PREFIX}b`,
+      JSON.stringify({ clientId: 'b', content: 'no anchor', editorData: null }),
+    );
+    window.localStorage.setItem(
+      `${FAILED_PREFIX}c`,
+      JSON.stringify({ clientId: 'c', content: '', editorData: null, selectionAnchor: anchor }),
+    );
+    const usable = { clientId: 'd', content: 'usable', editorData: null, selectionAnchor: anchor };
+    window.localStorage.setItem(`${FAILED_PREFIX}d`, JSON.stringify(usable));
+
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toEqual(usable);
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it("leaves other documents' stashes alone", () => {
+    preserveFailedAnchoredDraft(WORKSPACE_ID, 'doc-2', {
+      clientId: 'x',
+      content: 'elsewhere',
+      editorData: null,
+      selectionAnchor: anchor,
+    });
+
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+    expect(window.localStorage.length).toBe(1);
+  });
+});
+
+describe('restoreFailedAnchoredDraft', () => {
+  const failed = {
+    clientId: 'f1',
+    content: 'typed offline',
+    editorData: null,
+    selectionAnchor: anchor,
+  };
+
+  it('returns null and keeps the stash while the shared slot has content of its own', () => {
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, failed);
+    const newer = { clientId: 'n1', content: 'the newer draft', editorData: null };
+    window.localStorage.setItem(KEY, JSON.stringify(newer));
+
+    expect(restoreFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(KEY)!)).toEqual(newer);
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toEqual(failed);
+  });
+
+  it('keeps the stash while the slot holds an anchor-only draft (a fresh pick not yet typed into)', () => {
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, failed);
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ clientId: 'n1', content: '', editorData: null, selectionAnchor: anchor }),
+    );
+
+    expect(restoreFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('moves the stash into the slot once it is free and returns it', () => {
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, failed);
+
+    expect(restoreFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toEqual(failed);
+    expect(JSON.parse(window.localStorage.getItem(KEY)!)).toEqual(failed);
+    expect(readAnchoredDraftAnchor(WORKSPACE_ID, DOCUMENT_ID)).toEqual(anchor);
+    expect(takeFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('treats the empty-but-present record submit and cancel leave behind as a free slot', () => {
+    preserveFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID, failed);
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ clientId: 'sent', content: '', editorData: null }),
+    );
+
+    expect(restoreFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toEqual(failed);
+  });
+
+  it('returns null when nothing is stashed, leaving a free slot untouched', () => {
+    expect(restoreFailedAnchoredDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+    expect(window.localStorage.getItem(KEY)).toBeNull();
   });
 });

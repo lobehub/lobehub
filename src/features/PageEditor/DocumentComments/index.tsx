@@ -43,10 +43,13 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
     handlePinnedRootUpdate,
     handleReplyFocusMissing,
     handleUpdate,
+    hasMoreListThreads,
     isAnchoredInitialError,
     isAnchoredLoading,
     isAnchoredRetrying,
+    isLoadingMoreListThreads,
     listThreads,
+    loadMoreListThreads,
     panelAvailable,
     pinnedThreadInGutter,
     pinnedThreadInList,
@@ -178,12 +181,12 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
               onRetry={() => void documentThreads.reload()}
             />
           ) : (
-            documentThreads.hasMore && (
+            hasMoreListThreads && (
               <Center paddingBlock={12}>
                 <Button
-                  loading={documentThreads.isLoadingMore}
+                  loading={isLoadingMoreListThreads}
                   type={'text'}
-                  onClick={() => void documentThreads.loadMore()}
+                  onClick={() => void loadMoreListThreads()}
                 >
                   {t('pageEditor.comments.loadMore')}
                 </Button>

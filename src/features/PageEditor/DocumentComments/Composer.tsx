@@ -82,13 +82,16 @@ export const migrateDraftToAnchoredScope = (
   }
 };
 
+const getFailedDraftKeyPrefix = (workspaceId: string | null | undefined, documentId: string) =>
+  getDraftKey(workspaceId, documentId, 'anchored-failed:');
+
 /**
  * A failed anchored submission whose shared slot was reclaimed by a newer
  * pick before the request settled: restoring it there would overwrite the
  * newer draft, but discarding it outright loses the reader's typed text and
  * attachments for a network blip that was never their fault. Stash it under
- * its own key, scoped by clientId, instead — no browsing UI reads it back
- * yet, but it survives rather than vanishing silently.
+ * its own key, scoped by clientId, instead; `restoreFailedAnchoredDraft`
+ * hands it back to the shared slot the next time that slot is free.
  */
 export const preserveFailedAnchoredDraft = (
   workspaceId: string | null | undefined,
@@ -97,12 +100,75 @@ export const preserveFailedAnchoredDraft = (
 ): void => {
   try {
     window.localStorage.setItem(
-      getDraftKey(workspaceId, documentId, `anchored-failed:${draft.clientId}`),
+      `${getFailedDraftKeyPrefix(workspaceId, documentId)}${draft.clientId}`,
       JSON.stringify(draft),
     );
   } catch {
     // ignore write failures (private mode, quota)
   }
+};
+
+/**
+ * Removes and returns one stashed failed anchored draft of this document
+ * (oldest key first, so repeated failures come back in a stable order), or
+ * `null` when there is none. A stash without an anchor or without content is
+ * nothing the gutter could show and is dropped on the way.
+ */
+export const takeFailedAnchoredDraft = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+): Draft | null => {
+  try {
+    const prefix = getFailedDraftKeyPrefix(workspaceId, documentId);
+    const keys: string[] = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    for (const key of keys.sort()) {
+      const raw = window.localStorage.getItem(key);
+      window.localStorage.removeItem(key);
+      if (!raw) continue;
+      try {
+        const draft = JSON.parse(raw) as Draft;
+        if (draft.selectionAnchor && (draft.content || draft.editorData)) return draft;
+      } catch {
+        // a malformed stash is unrecoverable; keep looking
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Puts a stashed failed anchored draft back into the shared 'anchored' slot
+ * once nothing else owns it — the newer draft that displaced it has since
+ * been sent or cancelled — and returns it so the caller can republish its
+ * anchor, which is what mounts the gutter composer beside the text again
+ * with the failed words and attachments in it, ready to retry. Returns
+ * `null` when the slot still holds content of its own or there is nothing
+ * stashed. An empty-but-present slot record (what `submit` and `cancel`
+ * leave behind) does not count as content, as in `readLegacyRootDraft`.
+ */
+export const restoreFailedAnchoredDraft = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+): Draft | null => {
+  try {
+    const raw = window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'anchored'));
+    if (raw) {
+      const current = JSON.parse(raw) as Draft;
+      if (current.content || current.editorData || current.selectionAnchor) return null;
+    }
+  } catch {
+    // an unreadable slot is treated as free; the stash is worth more than it
+  }
+  const failed = takeFailedAnchoredDraft(workspaceId, documentId);
+  if (!failed) return null;
+  migrateDraftToAnchoredScope(workspaceId, documentId, failed);
+  return failed;
 };
 
 /**
@@ -375,6 +441,24 @@ const Composer = memo<ComposerProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [anchorMode, isRootComposer, documentId, workspaceId]);
 
+    // A failed gutter submission stashed while a newer draft owned the shared
+    // slot (see `submit`'s failure branch) is handed back by the provider in
+    // a panel-capable layout, where no composer is mounted while the slot is
+    // free. Here the inline box is always mounted and already holds the
+    // slot's state, so it adopts the stash itself: the provider writing
+    // storage behind its back would be clobbered by this box's next write.
+    // Runs before the legacy upgrade below, whose own read then sees the
+    // adopted content in 'anchored' and stands down.
+    useEffect(() => {
+      if (anchorMode !== 'inline' || !isRootComposer) return;
+      const failed = restoreFailedAnchoredDraft(workspaceId, documentId);
+      if (failed) setDraft(failed);
+      // Deliberately excludes `draft` and `setDraft`: this effect is what
+      // writes the draft, and depending on it would re-check on every
+      // keystroke instead of once per document.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [anchorMode, isRootComposer, documentId, workspaceId]);
+
     // One-time upgrade: before gutter and inline shared a scope, inline mode
     // stored every root draft — anchored or not — under 'root'. Adopt a
     // legacy draft still sitting there once, on mount, before this
@@ -541,6 +625,8 @@ const Composer = memo<ComposerProps>(
           persistDraft(submittedDraft);
           setPendingCommentAnchor({ anchor, documentId });
         } else if (isGutterComposer && anchor) {
+          // Stashed, not dropped: the provider hands it back into the slot
+          // once the newer draft that took it has been sent or cancelled.
           preserveFailedAnchoredDraft(workspaceId, documentId, submittedDraft);
         } else {
           setDraft((current) => (current.content ? current : submittedDraft));
