@@ -303,7 +303,13 @@ export interface ProjectFileIndexResult {
   entries: ProjectFileIndexEntry[];
   indexedAt: string;
   root: string;
-  source: 'git' | 'glob';
+  source: 'git' | 'glob' | 'sandbox';
+  /**
+   * The host stopped short of the whole tree. Set only by hosts that cap a
+   * listing; a tree that is missing entries and does not say so is worse than
+   * one that refuses, because it reads as complete.
+   */
+  truncated?: boolean;
 }
 
 export interface ProjectDirectoryListParams {

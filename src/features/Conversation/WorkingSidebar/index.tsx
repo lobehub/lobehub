@@ -38,6 +38,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 
 import { useBusinessWorkingSidebarTabs } from '@/business/client/features/WorkingSidebarTabs';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -61,6 +62,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -373,12 +375,45 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // actions enabled.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
   const isLocalExecution = effectiveTarget === 'local';
+  // A cloud-sandbox run keeps its files in the persistent workspace, so it has a
+  // tree to show too — read through the topic's warm session rather than a
+  // device. Only when the run actually persists: a throwaway box keeps nothing,
+  // and pointing the panel at the workspace would let another conversation's
+  // files read as this one's.
+  const sandboxMode = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.sandboxMode);
+  const sandboxInstanceId = useChatStore(
+    (s) => topicSelectors.currentTopicMetadata(s)?.sandboxInstanceId,
+  );
+  const isSandboxExecution = effectiveTarget === 'sandbox' && sandboxMode === 'persistent';
+  const sandboxTopicId = isSandboxExecution ? (topicId ?? undefined) : undefined;
+  // Scoped to the bound instance's directory, or the workspace root when the
+  // run keeps files without one. The empty string IS the root here, which is
+  // why the tab's gate is the topic rather than a truthy path.
+  const { data: sandboxInstances } = useSWR(
+    sandboxTopicId && sandboxInstanceId ? ['sandbox-instance-dir', sandboxInstanceId] : null,
+    () => sandboxWorkspaceService.getInstance({ id: sandboxInstanceId! }),
+  );
+  const sandboxDirectory = sandboxInstances?.workingDirectory ?? '';
+
   const filesystemEnvironmentAvailable = isLocalExecution || isDeviceMode;
   const environmentWorkingDirectory = filesystemEnvironmentAvailable ? workingDirectory : undefined;
   const environmentRepoType = filesystemEnvironmentAvailable ? repoType : undefined;
   // Files tab is an agent-mode affordance — in plain chat mode the working
   // directory is irrelevant to the user, so hide the tab even when one resolves.
-  const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
+  // Which directory the tree shows, and therefore whether there is a tree at
+  // all. Kept as one value rather than a pair of conditions: the sandbox's root
+  // is the empty string, so "has a directory" and "is truthy" part ways here,
+  // and the tab's availability has to follow the value it will render.
+  // A directory is only showable when something can actually read it: the
+  // sandbox through its workspace API, a device or this machine through the
+  // filesystem. A topic can carry a path persisted on a desktop the web client
+  // has no way to reach, and that path is not a tree — it is a string.
+  const filesDirectory = sandboxTopicId
+    ? sandboxDirectory
+    : filesystemEnvironmentAvailable
+      ? workingDirectory
+      : undefined;
+  const filesAvailable = !isChatMode && filesDirectory !== undefined;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const snapshotConfig =
     (topicDeviceId ? topicDeviceId === targetDeviceId : isLocalExecution) &&
@@ -1130,7 +1165,11 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                 {filesAvailable && (
                   <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>
                     <Flexbox className={styles.pane}>
-                      <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
+                      <Files
+                        deviceId={remoteDeviceId}
+                        sandboxTopicId={sandboxTopicId}
+                        workingDirectory={filesDirectory}
+                      />
                     </Flexbox>
                   </Activity>
                 )}
