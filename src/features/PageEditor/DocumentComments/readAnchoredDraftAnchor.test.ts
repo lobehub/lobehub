@@ -108,6 +108,19 @@ describe('readLegacyRootDraft', () => {
     expect(readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
   });
 
+  it('still migrates once the anchored scope holds only an empty (cancelled or sent) draft', () => {
+    // `submit` and `cancel` both clear their scope by writing a fresh empty
+    // draft, not by removing the key — so the key's mere presence must not
+    // be read as "has content of its own to protect".
+    window.localStorage.setItem(LEGACY_KEY, JSON.stringify(legacyDraft));
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ clientId: 'c2', content: '', editorData: null }),
+    );
+
+    expect(readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID)).toEqual(legacyDraft);
+  });
+
   it('returns null for an empty legacy draft (nothing worth migrating)', () => {
     window.localStorage.setItem(
       LEGACY_KEY,
@@ -115,6 +128,14 @@ describe('readLegacyRootDraft', () => {
     );
 
     expect(readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('does not itself clear the legacy key — callers decide when the migrated copy is safe to drop', () => {
+    window.localStorage.setItem(LEGACY_KEY, JSON.stringify(legacyDraft));
+
+    readLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID);
+
+    expect(window.localStorage.getItem(LEGACY_KEY)).not.toBeNull();
   });
 });
 

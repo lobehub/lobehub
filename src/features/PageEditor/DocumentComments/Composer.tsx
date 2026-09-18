@@ -109,14 +109,24 @@ export const preserveFailedAnchoredDraft = (
  * Before gutter and inline shared a scope, inline mode stored every root
  * draft — anchored or not — under 'root'. Returns a legacy draft still
  * sitting there, or `null` when there is nothing to migrate or the new
- * ('anchored') scope already has content of its own to protect.
+ * ('anchored') scope already has content of its own to protect. A cancelled
+ * or already-submitted anchored draft leaves an empty-but-present record
+ * behind (see `submit`'s and `cancel`'s up-front clear), which doesn't count
+ * as "content of its own" — otherwise the very first cancel or send in
+ * anchored/gutter mode would block this migration forever.
  */
 export const readLegacyRootDraft = (
   workspaceId: string | null | undefined,
   documentId: string,
 ): Draft | null => {
   try {
-    if (window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'anchored'))) return null;
+    const anchoredRaw = window.localStorage.getItem(
+      getDraftKey(workspaceId, documentId, 'anchored'),
+    );
+    if (anchoredRaw) {
+      const anchored = JSON.parse(anchoredRaw) as Draft;
+      if (anchored.content || anchored.editorData || anchored.selectionAnchor) return null;
+    }
     const raw = window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'root'));
     if (!raw) return null;
     const legacy = JSON.parse(raw) as Draft;
@@ -192,6 +202,10 @@ const Composer = memo<ComposerProps>(
     const editorRef = useRef<DocumentCommentEditorRef>(null);
     const inputRef = useRef<HTMLDivElement>(null);
     const rootRef = useRef<HTMLDivElement>(null);
+    // Set by the legacy-migration effect below when this mount adopted an
+    // unanchored 'root' draft into 'anchored'; `submit` clears the original
+    // once that migrated copy is actually sent.
+    const migratedUnanchoredLegacyRef = useRef(false);
     const submittingRef = useRef(false);
     // Only a root comment can be anchored; a reply shares its thread's anchor.
     const isRootComposer = !parentCommentId;
@@ -304,16 +318,21 @@ const Composer = memo<ComposerProps>(
     // composer's own 'anchored'-scope draft has ever been written, so an
     // unfinished plain comment from before the upgrade doesn't just vanish.
     useEffect(() => {
+      migratedUnanchoredLegacyRef.current = false;
       if (anchorMode !== 'inline' || !isRootComposer) return;
       const legacy = readLegacyRootDraft(workspaceId, documentId);
       if (!legacy) return;
       setDraft(legacy);
       // An anchored legacy draft belongs exclusively in the new scope now.
-      // An unanchored one never adopted an anchor to begin with, so it still
-      // belongs to 'none' mode's own composer too — leave that copy in
-      // place; clearing it here would orphan it again the next time this
-      // document opens without a gutter, showing neither copy.
+      // An unanchored one never adopted an anchor to begin with, so 'none'
+      // mode's own composer still needs it until this migrated copy is
+      // actually sent — clearing it here, before that, would orphan it if
+      // the pane widens back to a gutter layout first. `submit` clears it
+      // once the migrated copy it is standing in for has gone out, using
+      // this ref (both scopes can only be written from this one composer
+      // while it's mounted, since 'none' and 'inline' never coexist).
       if (legacy.selectionAnchor) clearLegacyRootDraft(workspaceId, documentId);
+      else migratedUnanchoredLegacyRef.current = true;
       // Deliberately excludes `draft` and `setDraft`: this effect is what
       // writes the draft, and depending on it would re-check on every
       // keystroke instead of once per document.
@@ -429,6 +448,14 @@ const Composer = memo<ComposerProps>(
           editorData: editorValue.editorData,
           selectionAnchor: anchor,
         });
+        // The migrated legacy copy this submission was standing in for has
+        // now gone out; the original 'root' record would otherwise freeze at
+        // its pre-migration text and resurface it — already-sent — the next
+        // time this document opens in a panel-capable layout.
+        if (migratedUnanchoredLegacyRef.current) {
+          clearLegacyRootDraft(workspaceId, documentId);
+          migratedUnanchoredLegacyRef.current = false;
+        }
         onSuccess?.();
       } catch {
         // Releasing the anchor unmounted this box, so the reader could have
