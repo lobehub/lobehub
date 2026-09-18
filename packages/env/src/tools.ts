@@ -62,6 +62,8 @@ export const getToolsConfig = () => {
       MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS: process.env.MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS,
       SEARCH_PROVIDERS: process.env.SEARCH_PROVIDERS,
       SEARXNG_URL: process.env.SEARXNG_URL,
+      SOLVER_SERVICE_API_KEY: process.env.SOLVER_SERVICE_API_KEY,
+      SOLVER_SERVICE_URL: process.env.SOLVER_SERVICE_URL,
       TOOL_NAME_MAX_LENGTH: process.env.TOOL_NAME_MAX_LENGTH,
       MULTIMODAL_UNDERSTANDING_MODEL: multimodalUnderstandingModel,
       MULTIMODAL_UNDERSTANDING_PROVIDER: multimodalUnderstandingProvider,
@@ -75,6 +77,14 @@ export const getToolsConfig = () => {
       MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS: multimodalImageFormatsEnv,
       SEARCH_PROVIDERS: z.string().optional(),
       SEARXNG_URL: z.string().url().optional(),
+      /**
+       * Constraint-solver service connection for the
+       * `builtin-solver` builtin tool. Both must be set for the tool to be
+       * offered to agents; server-only, never exposed to the client (the
+       * client sees only the `enableSolverService` flag in the server config).
+       */
+      SOLVER_SERVICE_API_KEY: z.string().optional(),
+      SOLVER_SERVICE_URL: z.string().url().optional(),
       /**
        * Length at which a function-call tool name is compressed to an opaque
        * `MD5HASH_…` (OpenAI caps function names at 64). `0` disables

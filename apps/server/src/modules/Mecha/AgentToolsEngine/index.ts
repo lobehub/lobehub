@@ -16,6 +16,7 @@ import { resolveToolRules } from '@lobechat/mecha';
 import { type BuiltinToolManifest, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
+import { toolsEnv } from '@/envs/tools';
 import { isDeviceLockedPlan, resolveExecutionTarget } from '@/helpers/executionTarget';
 import { buildAllowedBuiltinTools } from '@/server/services/aiAgent/deviceToolRegistry';
 
@@ -236,6 +237,9 @@ export const createServerAgentToolsEngine = (
       canUseFC: context.isModelSupportToolUse(model, provider),
       hasImageOutput: !!modelAbilities?.imageOutput,
     },
+    // The solver tool is only usable when this deployment has a solver
+    // service configured; the rules drop it otherwise.
+    solverServiceEnabled: !!(toolsEnv.SOLVER_SERVICE_URL && toolsEnv.SOLVER_SERVICE_API_KEY),
     useApplicationBuiltinSearchTool,
   });
 

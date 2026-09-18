@@ -49,6 +49,10 @@ keep an **in-place Retry** on the error state so recovery isn't "delete it and r
 inputs by hand". Absent cancel is a class norm miss on any generation surface (Runway / Kling
 / Sora / Midjourney all cancel a queued or running job).
 
+An **agent that resolves a trade-off on the user's behalf** owes the user the choice first. When a request cannot be satisfied as stated and the fix means changing something the user explicitly asked for — raising a stated budget, dropping a required option, shortening a fixed date range — the options belong to the user: render them as choices (buttons that send the pick back, or an ask-the-user intervention) and let the agent proceed on the answer. Applying one relaxation silently and narrating it afterwards ("我改动了什么…") is disclosure, not consent; the user learns about a 3× budget change after the plan is already built on it. The agent may auto-pick only when the user delegated that decision, and then must still say what changed.
+
+> ❌ **Constraint solver** infeasible card (`builtin-tool-solver` `InfeasibleResult.tsx:41-52`) renders `suggestedRelaxations` as plain text with no action; the agent then raised the user's $100 budget to $306 on its own and reported it in the reply. ✅ Relaxations as choices ("预算放宽到 $306" / "少去一个城市"), the pick sent back to the agent, which re-solves on it. See `ux-audit/references/example/solver-tool.md`.
+
 An **optimistic mutation** — a create / rename / duplicate that shows its result
 immediately, before the server confirms — owes the same done/error honesty. If the write
 fails, the caller must **catch and tell the user**; a store action fired without a `.catch`

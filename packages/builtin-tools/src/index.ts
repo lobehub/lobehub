@@ -36,6 +36,7 @@ import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteratio
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
 import { SkillStoreManifest } from '@lobechat/builtin-tool-skill-store';
 import { resolveSkillsManifest, SkillsManifest } from '@lobechat/builtin-tool-skills';
+import { SolverManifest } from '@lobechat/builtin-tool-solver';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
@@ -448,6 +449,15 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: CalculatorManifest.identifier,
     manifest: CalculatorManifest,
+    type: 'builtin',
+  },
+  {
+    // Server-side constraint solver (external service). Offered to agents
+    // only when SOLVER_SERVICE_URL + SOLVER_SERVICE_API_KEY are configured —
+    // the gates live in the server AgentToolsEngine (physical manifest drop)
+    // and the frontend toolEngineering mirror.
+    identifier: SolverManifest.identifier,
+    manifest: SolverManifest,
     type: 'builtin',
   },
   {

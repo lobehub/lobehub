@@ -24,6 +24,7 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { getToolStoreState } from '@/store/tool';
 import {
   composioStoreSelectors,
@@ -247,6 +248,9 @@ export const createAgentToolsEngine = (
       )(getAiInfraStoreState()),
     },
     runtimePluginIds: pluginIds,
+    // The client cannot read the server's solver env; the server config
+    // carries the resolved boolean instead.
+    solverServiceEnabled: !!getServerConfigStoreState()?.serverConfig?.enableSolverService,
     useApplicationBuiltinSearchTool: searchConfig.useApplicationBuiltinSearchTool,
   });
 

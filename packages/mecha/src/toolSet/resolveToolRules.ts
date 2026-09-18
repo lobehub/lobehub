@@ -7,6 +7,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { SolverManifest } from '@lobechat/builtin-tool-solver';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import {
   alwaysOnToolIds,
@@ -97,6 +98,10 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     // and only while the run still has a device decision to make. The wall
     // below is the authoritative gate; this rule is defense in depth.
     [RemoteDeviceManifest.identifier]: deviceCapable && !!device && !deviceLocked,
+    // The solver runs against an external service and is opt-in: the host must
+    // have one configured and the agent must have pinned the tool.
+    [SolverManifest.identifier]:
+      !!request.solverServiceEnabled && pinnedPluginIds.includes(SolverManifest.identifier),
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
 
@@ -105,6 +110,9 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   const excludedIdentifiers = new Set(request.disabledPluginIds ?? []);
   if (device && !device.supportedTools?.includes(AuvManifest.identifier))
     excludedIdentifiers.add(AuvManifest.identifier);
+  // No solver service: drop the manifest so explicit activation cannot offer a
+  // tool that would fail at call time.
+  if (!request.solverServiceEnabled) excludedIdentifiers.add(SolverManifest.identifier);
   if (deviceAccess) {
     if (!deviceAccess.canUseDevice) {
       for (const identifier of DEVICE_TOOL_IDENTIFIERS) excludedIdentifiers.add(identifier);

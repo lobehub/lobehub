@@ -553,3 +553,37 @@ material, not as the page.
 - [ ] An embedded document folds to a **titled row** (first meaningful line as label) that expands to full text — no first-N-px cropped preview with a fade. _(Natural)_
 - [ ] Quoted/embedded content is visually subordinated: a quiet container + capped heading scale, never sharing the host page's typographic hierarchy. _(Meaningful)_
 - [ ] A mask/fade helper's `size` unit is verified against its implementation (px vs %) before shipping — a wrong unit blanks real content. _(Certainty)_
+
+## 1.14 An agent tool's result card is evidence with a job, not a second answer・Meaningful・Certainty
+
+In a chat, the assistant's reply **is** the answer; a builtin tool's Render card sits in the same stream and competes with it. A card with no stated job becomes a smaller, greyer copy of what the model is about to write anyway — the user reads the result twice, and the better version comes second. Decide the card's job before designing it: either it is **evidence** (collapsed by default to a self-sufficient one-line summary; expanded, it shows only what the prose cannot — what the agent understood, how strong the guarantee is, how the options differ), or it is **the artifact** (a structured view the prose then refers to instead of restating). Never both.
+
+Three consequences follow for any tool whose output the user must trust:
+
+1. **Show what the agent understood when extraction is the failure mode.** If the tool is only as right as the agent's reading of the request (a formalized spec, parsed filters, a generated query), the card must surface that reading in human terms and make it correctable. A card that shows only a derived subset under a "satisfied" label vouches for a wrong reading — the exact failure the user most needs to catch.
+2. **Fold the check into the thing it checks.** A verification step is a trust signal about a result, not a peer result. Render it as a badge on that result ("verified 13/13 ✓") with failures expanded, not as a separate card listing every passing row.
+3. **Label the guarantee honestly.** Distinguish proven from best-effort outcomes in both the one-line summary and the card; a time-limited or partial result must never read as optimal/complete.
+
+When the card **is the artifact** (a plan, an itinerary, a generated table — the thing the user will act on), four more rules apply:
+
+4. **Carry the whole artifact, not a lossy summary.** Every field the user decides on belongs on the card (for a trip: each day's legs with duration and cost, meals, attractions, stay). If the card drops half the plan, the model has to restate it in prose, and the structured, verified result degrades into an LLM paraphrase.
+5. **Lead with the brief.** Open the artifact with what it was built for (route, dates, travelers, budget, required vs preferred conditions). That header is also the understanding check from rule 1, and each item in it is a place to correct and regenerate.
+6. **Tell the model the card is the answer.** The tool prompt must say the card already shows the artifact, so the reply covers why this option, what was traded off or relaxed, and the next step, never a restatement. Change the prompt only after the card can carry the artifact, or the user loses the content entirely.
+7. **Put refinement on the artifact.** Adjust a condition and re-run, pick among alternatives (tabs with trade-off labels, recommended first), and open the full view in a Portal when it outgrows the chat stream. Don't scroll it inside the tool area.
+
+> ❌ **Constraint solver** as a plan artifact: the real plan has breakfast / lunch / dinner / attraction per day and transport legs with duration and distance, but the card renders only city / transport mode / stay (`CandidateList.tsx:37-48,186-196`), hides the day-by-day behind a closed toggle (`:69`), and the prompt asks the model to "present" the result (`systemRole.ts:53`). The reply therefore rewrites the whole itinerary. There is no brief header, no refine action, and no Portal.
+
+> ✅ **Constraint solver** marks `feasible_timeout` as its own state — an info alert ("best within the time limit, optimality not proven"), a per-candidate time-limited badge, and a distinct Inspector status (`builtin-tool-solver` `Render/Solve/index.tsx:36-43`, `CandidateList.tsx:121-123`) — and its Inspector line alone reads as the outcome ("最优解 ($306)", "不可行 (1 个冲突)", "通过 (13/13)").
+> ❌ The same tool's solve card lists route /stay/cost in 12px grey text that the model's markdown reply immediately repeats in a better layout; "满足的约束" shows a spec-derived subset (`CandidateList.tsx:97-104`) so a mis-extracted request still reads as satisfied; and verify renders as a separate card with all 13 passing snake\_case rows (`Render/Verify.tsx:52-71`). See `ux-audit/references/example/solver-tool.md`.
+
+**Checklist**
+
+- [ ] The tool card has one stated job — collapsed evidence or the primary artifact — and does not restate what the assistant's reply says. _(Meaningful)_
+- [ ] Collapsed, the tool step's one-line summary is self-sufficient: outcome + the key number (cost, count, pass ratio). _(Natural)_
+- [ ] When correctness depends on the agent's reading of the request, the card shows that reading in human terms (hard vs soft, every extracted field) with a way to correct it; "satisfied" is claimed only for independently checked items. _(Certainty)_
+- [ ] A verification of a result is a badge on that result with failures expanded, not a separate card listing every passing check. _(Natural)_
+- [ ] Proven vs best-effort / time-limited / partial outcomes are labeled distinctly in both the summary line and the card. _(Certainty)_
+- [ ] An artifact card carries every field the user acts on (not a lossy summary), is expanded by default, and opens a Portal full view when it outgrows the stream instead of scrolling inside the tool area. _(Meaningful)_
+- [ ] An artifact card leads with the brief it was built for (required vs preferred conditions), and each item is correctable and regenerates the artifact. _(Certainty)_
+- [ ] The tool prompt tells the model the card is the answer; the reply covers rationale, trade-offs and next step, never the artifact itself. The prompt changes only after the card can carry the artifact. _(Meaningful)_
+- [ ] Alternatives are switchable on the artifact with trade-off labels and a recommended default, not stacked copies that differ only in one number. _(Natural)_

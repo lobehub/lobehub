@@ -261,6 +261,7 @@
     "@lobechat/builtin-tool-skill-maintainer": "workspace:*",
     "@lobechat/builtin-tool-skill-store": "workspace:*",
     "@lobechat/builtin-tool-skills": "workspace:*",
+    "@lobechat/builtin-tool-solver": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
     "@lobechat/builtin-tool-topic-reference": "workspace:*",
     "@lobechat/builtin-tool-user-interaction": "workspace:*",
