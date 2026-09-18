@@ -61,6 +61,7 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
+import { getPendingSandboxSelection } from '@/store/chat/pendingSandboxSelection';
 import { getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import {
   dbMessageSelectors,
@@ -1303,10 +1304,28 @@ export class ConversationLifecycleActionImpl {
             newTopicDeviceId
             ? { boundDeviceId: newTopicDeviceId }
             : undefined;
+    // Chosen in the composer while no topic existed to write it to. Not gated
+    // on runtime: the map is only ever filled by the sandbox picker, which only
+    // renders under a cloud-sandbox target.
+    const pendingSandboxSelection =
+      willCreateNewTopic && operationContext.agentId
+        ? getPendingSandboxSelection(operationContext.agentId)
+        : undefined;
+    const sandboxInstanceMetadata: ChatTopicMetadata | undefined = pendingSandboxSelection
+      ? {
+          sandboxInstanceId: pendingSandboxSelection.instanceId,
+          sandboxMode: pendingSandboxSelection.mode,
+        }
+      : undefined;
     /** First-send persistence bypasses turnSetup, so both runtime paths must carry the effort snapshot. */
-    const optimisticTopicMetadata = newTopicReasoningSnapshot
-      ? { ...workingDirectoryMetadata, ...newTopicReasoningSnapshot }
-      : workingDirectoryMetadata;
+    const optimisticTopicMetadata =
+      newTopicReasoningSnapshot || sandboxInstanceMetadata
+        ? {
+            ...workingDirectoryMetadata,
+            ...sandboxInstanceMetadata,
+            ...newTopicReasoningSnapshot,
+          }
+        : workingDirectoryMetadata;
 
     // The sidebar row was already inserted (title + model) before the awaits
     // above; the cwd/repos metadata only resolves here, so patch it on now.

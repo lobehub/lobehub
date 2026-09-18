@@ -1,9 +1,16 @@
 'use client';
 
 import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BoxIcon, CircleSlashIcon, FolderOpenIcon, PlusIcon } from 'lucide-react';
+import {
+  AppWindowMacIcon,
+  ChevronDownIcon,
+  FolderOpenIcon,
+  FolderTreeIcon,
+  PlusIcon,
+  TimerIcon,
+} from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -13,6 +20,7 @@ import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 import { useChatStore } from '@/store/chat';
 
 import { gitChipStyles } from './gitChipStyles';
+import OptionRow from './OptionRow';
 
 const styles = createStaticStyles(({ css }) => ({
   environment: css`
@@ -21,9 +29,15 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
   `,
-  footer: css`
-    padding-block-start: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  header: css`
+    padding-block: 2px 6px;
+    padding-inline: 8px;
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
+  modes: css`
+    padding-block-end: 4px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   row: css`
     cursor: pointer;
@@ -40,17 +54,32 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
-  selected: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
 }));
 
+/**
+ * What a conversation runs in, as one answer rather than two settings.
+ *
+ * `ephemeral` keeps nothing: the box is discarded when the run ends. The two
+ * persistent shapes differ only in whether an environment supplies the folder
+ * and its installed state, so they belong on the same list as the throwaway one
+ * — a user deciding where their files go is making a single choice.
+ */
+export interface SandboxSelection {
+  /** Only meaningful with `persistent`; absent means the workspace root. */
+  instanceId?: string;
+  mode: 'ephemeral' | 'persistent';
+}
+
 interface SandboxInstancePickerProps {
-  onChange: (instanceId: string | undefined) => Promise<void>;
-  /** Topic whose warm sandbox session serves the workspace file panel. */
-  topicId: string;
-  /** Currently chosen environment instance. */
-  value?: string;
+  onChange: (selection: SandboxSelection) => Promise<void>;
+  /**
+   * Topic whose warm sandbox session serves the workspace file panel. Absent on
+   * a conversation that has not been created yet — the calls below all take it
+   * as an optimization, never as a scope, so they simply pay a cold start.
+   */
+  topicId?: string;
+  /** What this conversation runs in today. */
+  value: SandboxSelection;
 }
 
 /**
@@ -73,8 +102,21 @@ interface SandboxInstancePickerProps {
  * session to answer, and a picker that takes seconds to open is a picker people
  * stop opening. The settings page is where sizes are worth the wait.
  */
+/**
+ * What each way of running looks like. Declared once because the chip and the
+ * row it stands for are the same thing seen closed and open: a chip drawn from
+ * its own icon drifts into naming one state while picturing another.
+ */
+const EPHEMERAL_ICON = TimerIcon;
+const ROOT_ICON = FolderOpenIcon;
+const INSTANCE_ICON = AppWindowMacIcon;
+
 const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topicId, value }) => {
-  const { t } = useTranslation('chat');
+  const boundInstanceId = value.mode === 'persistent' ? value.instanceId : undefined;
+  // The slot's own name comes from the device namespace on purpose: the local
+  // picker and this one are the same slot, and a second string meaning
+  // "working directory" would be one more pair to keep in step.
+  const { t } = useTranslation(['chat', 'device']);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState<string | undefined>();
   const navigate = useWorkspaceAwareNavigate();
@@ -85,7 +127,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
   // leaves the closed chip with nothing to look up, so a topic that has chosen
   // an instance still reads "pick one" until the menu happens to be open.
   const { data, mutate } = useSWR(
-    open || value ? ['sandbox-instances', topicId] : null,
+    open || boundInstanceId ? ['sandbox-instances', topicId] : null,
     () => sandboxWorkspaceService.listInstances({ topicId, withSizes: false }),
     { revalidateOnFocus: false },
   );
@@ -99,16 +141,40 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
 
   const instances = data?.instances ?? [];
   const environments = environmentData?.environments ?? [];
-  const current = instances.find((instance) => instance.id === value);
+  const current = instances.find((instance) => instance.id === boundInstanceId);
+
+  const chip =
+    value.mode === 'ephemeral'
+      ? { icon: EPHEMERAL_ICON, label: t('sandboxWorkspace.ephemeral') }
+      : current
+        ? { icon: INSTANCE_ICON, label: current.name }
+        : { icon: ROOT_ICON, label: t('sandboxWorkspace.root') };
 
   // Only once the list has actually arrived. An undefined list is "not known
   // yet", not "none", and sending someone to settings on a pending fetch would
   // take them away from a menu that was about to have their environments in it.
   const hasNoEnvironments = Boolean(environmentData) && environments.length === 0;
 
-  const select = async (instanceId: string | undefined) => {
+  /**
+   * Browsing belongs to a place that keeps files. An ephemeral box keeps none —
+   * its files are gone when the run ends — so offering it there would point at
+   * the persistent workspace and let it read as this conversation's output.
+   */
+  const browseAction = (path?: string) => (
+    <ActionIcon
+      icon={FolderTreeIcon}
+      size={'small'}
+      title={t('sandboxWorkspace.browseFiles')}
+      onClick={() => {
+        openSandboxWorkspace(path);
+        setOpen(false);
+      }}
+    />
+  );
+
+  const select = async (selection: SandboxSelection) => {
     setOpen(false);
-    await onChange(instanceId);
+    await onChange(selection);
   };
 
   const createIn = async (environmentId: string) => {
@@ -116,7 +182,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
     try {
       const created = await sandboxWorkspaceService.createInstanceForEnvironment({ environmentId });
       await mutate();
-      await select(created.id);
+      await select({ instanceId: created.id, mode: 'persistent' });
     } finally {
       setCreating(undefined);
     }
@@ -144,6 +210,32 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
       trigger={'click'}
       content={
         <Flexbox gap={2} style={{ minWidth: 280 }}>
+          <Text className={styles.header}>{t('workingDirectory.title', { ns: 'device' })}</Text>
+
+          {/* The two ways to run without an environment, above the ones with.
+              Both belong on this list because the user is making one choice —
+              where these files go — and the throwaway box is one of the
+              answers. Leaving it unnamed is what made the mode invisible: a
+              conversation was ephemeral until it happened to touch this menu,
+              and could never be told so or sent back. */}
+          <Flexbox className={styles.modes} gap={2}>
+            <OptionRow
+              active={value.mode === 'ephemeral'}
+              desc={t('sandboxWorkspace.ephemeralDesc')}
+              icon={<Icon icon={EPHEMERAL_ICON} size={16} />}
+              label={t('sandboxWorkspace.ephemeral')}
+              onClick={() => void select({ mode: 'ephemeral' })}
+            />
+            <OptionRow
+              active={value.mode === 'persistent' && !value.instanceId}
+              desc={t('sandboxWorkspace.rootDesc')}
+              extra={browseAction()}
+              icon={<Icon icon={ROOT_ICON} size={16} />}
+              label={t('sandboxWorkspace.root')}
+              onClick={() => void select({ mode: 'persistent' })}
+            />
+          </Flexbox>
+
           {environments.map((environment) => (
             <Flexbox gap={2} key={environment.id}>
               <Text ellipsis className={styles.environment}>
@@ -153,90 +245,41 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
               {instances
                 .filter((instance) => instance.environmentId === environment.id)
                 .map((instance) => (
-                  <Flexbox
-                    horizontal
-                    align={'center'}
-                    className={`${styles.row} ${instance.id === value ? styles.selected : ''}`}
-                    gap={6}
+                  <OptionRow
+                    active={instance.id === boundInstanceId}
+                    desc={instance.workingDirectory}
+                    extra={browseAction(instance.workingDirectory)}
+                    icon={<Icon icon={INSTANCE_ICON} size={16} />}
                     key={instance.id}
-                    onClick={() => select(instance.id)}
-                  >
-                    <Text ellipsis fontSize={13} style={{ flex: 1 }}>
-                      {instance.name}
-                    </Text>
-                    {instance.stale && (
-                      <Tag size={'small'}>{t('sandboxWorkspace.instanceStale')}</Tag>
-                    )}
-                  </Flexbox>
+                    label={instance.name}
+                    tag={instance.stale ? t('sandboxWorkspace.instanceStale') : undefined}
+                    onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
+                  />
                 ))}
 
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.row}
-                gap={6}
+              <OptionRow
+                icon={<Icon icon={PlusIcon} size={16} />}
+                label={
+                  creating === environment.id
+                    ? t('sandboxWorkspace.creatingInstance')
+                    : t('sandboxWorkspace.newInstance')
+                }
                 onClick={() => {
                   if (!creating) void createIn(environment.id);
                 }}
-              >
-                <Icon icon={PlusIcon} size={14} />
-                <Text fontSize={13} type={'secondary'}>
-                  {creating === environment.id
-                    ? t('sandboxWorkspace.creatingInstance')
-                    : t('sandboxWorkspace.newInstance')}
-                </Text>
-              </Flexbox>
+              />
             </Flexbox>
           ))}
-
-          {/* Choosing nothing is a choice: the run then happens at the
-              workspace root, which is where a topic starts. Without a way back
-              to it an instance could not even be deleted — deletion is refused
-              while a conversation still holds one. */}
-          <Flexbox className={styles.footer}>
-            {value !== undefined && (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.row}
-                gap={6}
-                onClick={() => void select(undefined)}
-              >
-                <Icon icon={CircleSlashIcon} size={14} />
-                <Text fontSize={13} type={'secondary'}>
-                  {t('sandboxWorkspace.useRoot')}
-                </Text>
-              </Flexbox>
-            )}
-
-            {/* The workspace file panel has no other way in. It is not part of
-                choosing an instance, so it sits below the choice rather than
-                inside it. */}
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={styles.row}
-              gap={6}
-              onClick={() => {
-                openSandboxWorkspace();
-                setOpen(false);
-              }}
-            >
-              <Icon icon={FolderOpenIcon} size={14} />
-              <Text fontSize={13} type={'secondary'}>
-                {t('sandboxWorkspace.browseFiles')}
-              </Text>
-            </Flexbox>
-          </Flexbox>
         </Flexbox>
       }
       onOpenChange={setOpen}
     >
       <div className={gitChipStyles.prTrigger}>
-        <Icon icon={BoxIcon} size={14} />
+        <Icon icon={chip.icon} size={14} />
         <Text ellipsis style={{ maxWidth: 160 }}>
-          {current?.name ?? t('sandboxWorkspace.selectInstance')}
+          {chip.label}
         </Text>
+        <Icon icon={ChevronDownIcon} size={12} />
       </div>
     </Popover>
   );

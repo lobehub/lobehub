@@ -13,9 +13,15 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
  * - `workingDirectory` — directory picker + git status, for a run on this
  *   machine or on a bound device
  * - `cloudRepo`        — cloud repo switcher (web has no local filesystem)
+ * - `sandbox`          — the cloud sandbox's own working directory: a throwaway
+ *   box, the workspace root, or an environment instance
  * - `undefined`        — nothing; the run has no browsable workspace here
+ *
+ * One slot, one answer. The sandbox case used to render outside this switch and
+ * gate itself, which left "these never both appear" as a claim about two
+ * independent conditions rather than something the shape of the code enforces.
  */
-export type WorkspaceSurface = 'cloudRepo' | 'workingDirectory' | undefined;
+export type WorkspaceSurface = 'cloudRepo' | 'sandbox' | 'workingDirectory' | undefined;
 
 export interface ResolveWorkspaceSurfaceParams {
   /** The EFFECTIVE config — shared row merged with this member's device override. */
@@ -51,12 +57,27 @@ export const resolveWorkspaceSurface = ({
   // Web has no local filesystem — cloud / heterogeneous agents browse the repo
   // through the cloud repo switcher instead.
   if (!clientExecutionAvailable) {
-    return isHetero || alwaysShowWorkspace ? 'cloudRepo' : undefined;
+    // Both are relevant to such a run — which repository, and which instance it
+    // runs in — and the repo switcher is the one that was already there, so the
+    // sandbox claims only what this branch used to leave with nothing.
+    if (isHetero || alwaysShowWorkspace) return 'cloudRepo';
+
+    return effectiveTarget === 'sandbox' ? 'sandbox' : undefined;
   }
 
   // Desktop: local working directory + git branch / diff / PR. Shown when the
   // run is local, or always for heterogeneous agents (they always have a cwd).
   if (alwaysShowWorkspace || effectiveTarget === 'local') return 'workingDirectory';
+
+  // Last, so no run that already has a surface loses it: a sandbox target is
+  // also what a web `local` pick coerces to, and a heterogeneous agent on that
+  // same target browses its repository through `cloudRepo`. This claims only
+  // the case that had nothing — a plain run in the cloud sandbox, whose
+  // working directory is the instance it runs in.
+  //
+  // Whether the member may actually use one (lab flag, entitlement) is the
+  // section's own business; this resolver answers about targets.
+  if (effectiveTarget === 'sandbox') return 'sandbox';
 
   return undefined;
 };

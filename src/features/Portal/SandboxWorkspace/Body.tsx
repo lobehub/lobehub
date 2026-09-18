@@ -10,6 +10,7 @@ import useSWR from 'swr';
 
 import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   crumb: css`
@@ -71,7 +72,10 @@ const joinPath = (base: string, name: string) => (base ? `${base}/${name}` : nam
  */
 const Body = memo(() => {
   const { t } = useTranslation('chat');
-  const [path, setPath] = useState('');
+  // Opened at a place the caller named, when there was one. Only the initial
+  // value — the panel navigates from there on its own.
+  const initialPath = useChatStore(chatPortalSelectors.sandboxWorkspacePath);
+  const [path, setPath] = useState(initialPath ?? '');
   const topicId = useChatStore((s) => s.activeTopicId);
   const openLocalFile = useChatStore((s) => s.openLocalFile);
 
