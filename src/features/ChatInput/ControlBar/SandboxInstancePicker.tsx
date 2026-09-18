@@ -1,13 +1,12 @@
 'use client';
 
 import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AppWindowMacIcon,
   ChevronDownIcon,
   FolderOpenIcon,
-  FolderTreeIcon,
   PlusIcon,
   TimerIcon,
 } from 'lucide-react';
@@ -17,7 +16,6 @@ import useSWR from 'swr';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
-import { useChatStore } from '@/store/chat';
 
 import { gitChipStyles } from './gitChipStyles';
 import OptionRow from './OptionRow';
@@ -120,7 +118,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState<string | undefined>();
   const navigate = useWorkspaceAwareNavigate();
-  const openSandboxWorkspace = useChatStore((s) => s.openSandboxWorkspace);
 
   // Also fetched while CLOSED whenever an instance is bound, because the chip
   // names it by looking it up in this list: gating the list on `open` alone
@@ -154,23 +151,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
   // yet", not "none", and sending someone to settings on a pending fetch would
   // take them away from a menu that was about to have their environments in it.
   const hasNoEnvironments = Boolean(environmentData) && environments.length === 0;
-
-  /**
-   * Browsing belongs to a place that keeps files. An ephemeral box keeps none —
-   * its files are gone when the run ends — so offering it there would point at
-   * the persistent workspace and let it read as this conversation's output.
-   */
-  const browseAction = (path?: string) => (
-    <ActionIcon
-      icon={FolderTreeIcon}
-      size={'small'}
-      title={t('sandboxWorkspace.browseFiles')}
-      onClick={() => {
-        openSandboxWorkspace(path);
-        setOpen(false);
-      }}
-    />
-  );
 
   const select = async (selection: SandboxSelection) => {
     setOpen(false);
@@ -229,7 +209,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
             <OptionRow
               active={value.mode === 'persistent' && !value.instanceId}
               desc={t('sandboxWorkspace.rootDesc')}
-              extra={browseAction()}
               icon={<Icon icon={ROOT_ICON} size={16} />}
               label={t('sandboxWorkspace.root')}
               onClick={() => void select({ mode: 'persistent' })}
@@ -248,7 +227,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
                   <OptionRow
                     active={instance.id === boundInstanceId}
                     desc={instance.workingDirectory}
-                    extra={browseAction(instance.workingDirectory)}
                     icon={<Icon icon={INSTANCE_ICON} size={16} />}
                     key={instance.id}
                     label={instance.name}
