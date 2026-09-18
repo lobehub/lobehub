@@ -577,7 +577,6 @@
   "debug.error": "Error log",
   "debug.function_call": "Function call",
   "debug.intervention": "Skill intervention",
-  "debug.loadStoredResult": "Load full result",
   "debug.off": "Debug off",
   "debug.on": "View Skill call info",
   "debug.payload": "Skill payload",

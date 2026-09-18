@@ -588,7 +588,6 @@ export default {
   'debug.on': 'View Skill call info',
   'debug.payload': 'Skill payload',
   'debug.pluginState': 'Skill state',
-  'debug.loadStoredResult': 'Load full result',
   'debug.response': 'Response',
   'debug.title': 'Skill details',
   'debug.tool_call': 'Skill call request',

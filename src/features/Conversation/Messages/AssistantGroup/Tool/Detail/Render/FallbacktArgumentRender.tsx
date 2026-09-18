@@ -1,7 +1,7 @@
 import { Block, Flexbox, Highlighter } from '@lobehub/ui';
-import { Button, Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { Divider } from 'antd';
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToolResultPayload } from '@/hooks/useToolResultPayload';
@@ -19,9 +19,12 @@ interface FallbackArgumentRenderProps {
 export const FallbackArgumentRender = memo<FallbackArgumentRenderProps>(
   ({ toolCallId, content, requestArgs, toolMessageId }) => {
     const { t } = useTranslation('plugin');
-    const [requested, setRequested] = useState(false);
-    const { isLoading, payload } = useToolResultPayload(toolMessageId, requested);
 
+    // An empty body on a real tool message means the read path projected it
+    // away, so fetch it. This component only mounts once the row is expanded,
+    // which is the user asking to see the result — a conversation load leaves
+    // every row collapsed and fetches nothing.
+    const { isLoading, payload } = useToolResultPayload(toolMessageId, !content && !!toolMessageId);
     const body = payload?.content ?? content;
 
     // Parse and display result content
@@ -38,49 +41,35 @@ export const FallbackArgumentRender = memo<FallbackArgumentRenderProps>(
       }
     }, [body]);
 
-    // An empty body on a real tool message is ambiguous: the tool may have
-    // returned nothing, or the read path may have projected the body away. Offer
-    // to fetch rather than guess — and never fetch on mount, which would undo
-    // the projection for every conversation load.
-    const canLoadStored = !body && !!toolMessageId && !requested;
-
     return (
       <Block id={toolCallId} variant={'outlined'} width={'100%'}>
         <Arguments arguments={requestArgs} />
-        {canLoadStored && (
-          <>
-            <Divider style={{ marginBlock: 0 }} />
-            <Flexbox align={'flex-start'} paddingBlock={8} paddingInline={16}>
-              <Button size={'small'} onClick={() => setRequested(true)}>
-                {t('debug.loadStoredResult')}
-              </Button>
-            </Flexbox>
-          </>
-        )}
-        {requested && isLoading && (
-          <Flexbox paddingBlock={8} paddingInline={16}>
-            <Skeleton height={80} width={'100%'} />
-          </Flexbox>
-        )}
-        {body && (
+        {(isLoading || body) && (
           <>
             <Divider style={{ marginBlock: 0 }} />
             <Flexbox paddingBlock={'8px 0'} paddingInline={16}>
               <Text>{t('debug.response')}</Text>
             </Flexbox>
-            <Highlighter
-              language={language}
-              variant={'filled'}
-              style={{
-                background: 'transparent',
-                borderRadius: 0,
-                maxHeight: 300,
-                overflow: 'auto',
-              }}
-            >
-              {data}
-            </Highlighter>
           </>
+        )}
+        {isLoading && !body && (
+          <Flexbox paddingBlock={8} paddingInline={16}>
+            <Skeleton height={72} width={'100%'} />
+          </Flexbox>
+        )}
+        {body && (
+          <Highlighter
+            language={language}
+            variant={'filled'}
+            style={{
+              background: 'transparent',
+              borderRadius: 0,
+              maxHeight: 300,
+              overflow: 'auto',
+            }}
+          >
+            {data}
+          </Highlighter>
         )}
       </Block>
     );
