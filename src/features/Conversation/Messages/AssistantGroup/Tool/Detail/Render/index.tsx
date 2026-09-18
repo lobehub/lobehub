@@ -35,6 +35,7 @@ const ToolRender = memo<ToolRenderProps>(
         content={content}
         requestArgs={plugin?.arguments}
         toolCallId={toolCallId}
+        toolMessageId={messageId}
       />
     );
   },

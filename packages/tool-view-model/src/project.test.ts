@@ -103,7 +103,12 @@ describe('projectToolViewModels', () => {
 });
 
 describe('registry', () => {
-  it('ships empty so this change is inert until a projector is added', () => {
-    expect(listProjectedTools()).toEqual([]);
+  it('projects exactly the tools that were measured and audited', () => {
+    expect(listProjectedTools().sort()).toEqual([
+      'lobe-agent-documents/readDocument',
+      'lobe-local-system/runCommand',
+      'lobe-web-browsing/crawlMultiPages',
+      'lobe-web-browsing/crawlSinglePage',
+    ]);
   });
 });

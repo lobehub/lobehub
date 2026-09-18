@@ -175,6 +175,15 @@ export class MessageService {
     return data as unknown as UIChatMessage[];
   };
 
+  /**
+   * Stored tool payload for a message whose projected copy dropped it
+   * (`UIChatMessage.payloadOmitted`). Called by detail surfaces on open, never
+   * as part of loading a conversation.
+   */
+  getToolResultPayload = async (messageId: string) => {
+    return lambdaClient.message.getToolResultPayload.query({ messageId });
+  };
+
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
     return lambdaClient.message.diagnoseTopic.query(params);
   };

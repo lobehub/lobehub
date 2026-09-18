@@ -157,6 +157,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
                   requestArgs={requestArgs}
                   result={result}
                   toolCallId={id}
+                  toolMessageId={toolMessageId}
                   type={type}
                 />
               )}

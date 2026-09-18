@@ -70,12 +70,24 @@ describe('MessageService', () => {
     it('runs the UI read path through the tool view-model projector', async () => {
       vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
 
-      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+      const [projected] = await messageService.queryMessages({ topicId: 'topic-1' });
 
       expect(projectToolViewModels).toHaveBeenCalledWith([toolRow]);
-      // Inert until a projector is registered: today the stored payload still
-      // reaches the client untouched.
-      expect(result).toEqual([toolRow]);
+      expect(projected.content).toBe('');
+      expect(projected.contentLength).toBe('RAW BODY'.length);
+      expect(projected.payloadOmitted).toBe(true);
+    });
+
+    it('leaves a tool without a projector exactly as stored', async () => {
+      const unprojected = {
+        ...toolRow,
+        plugin: { apiName: 'noSuchApi', arguments: '{}', identifier: 'some-mcp-server' },
+      };
+      vi.mocked(mockMessageModel.query).mockResolvedValue([unprojected]);
+
+      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+
+      expect(result).toEqual([unprojected]);
     });
   });
 

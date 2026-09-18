@@ -101,6 +101,7 @@ const Tool = memo<InspectorProps>(
                     requestArgs={requestArgs}
                     result={result}
                     toolCallId={toolCallId}
+                    toolMessageId={toolMessage?.id}
                     type={type}
                   />
                 )}

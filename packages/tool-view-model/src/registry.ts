@@ -1,3 +1,6 @@
+import { readDocumentProjector } from './projectors/agentDocuments';
+import { runCommandProjector } from './projectors/localSystem';
+import { crawlProjector } from './projectors/webBrowsing';
 import type { ToolProjector } from './types';
 
 /**
@@ -9,7 +12,18 @@ import type { ToolProjector } from './types';
  * missing from here keeps today's behaviour (raw payload passes through), so
  * the map can be filled one tool at a time.
  */
-const toolProjectors: Record<string, Record<string, ToolProjector>> = {};
+const toolProjectors: Record<string, Record<string, ToolProjector>> = {
+  'lobe-agent-documents': {
+    readDocument: readDocumentProjector,
+  },
+  'lobe-local-system': {
+    runCommand: runCommandProjector,
+  },
+  'lobe-web-browsing': {
+    crawlMultiPages: crawlProjector,
+    crawlSinglePage: crawlProjector,
+  },
+};
 
 export const getToolProjector = (
   identifier?: string | null,

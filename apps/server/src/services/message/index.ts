@@ -188,6 +188,30 @@ export class MessageService {
   }
 
   /**
+   * The stored tool payload behind a projected message.
+   *
+   * The UI read path hands back a view model (see `@lobechat/tool-view-model`),
+   * which is all the inline card renders. Surfaces that show the real thing —
+   * the crawl detail portal, the raw/debug viewer — call this when the message
+   * they hold is flagged `payloadOmitted`.
+   *
+   * Ownership is enforced by the two model reads, so a foreign message id
+   * resolves to `undefined` rather than another user's tool output.
+   */
+  async getToolResultPayload(
+    messageId: string,
+  ): Promise<{ content: string; pluginState?: unknown } | undefined> {
+    const [message, plugin] = await Promise.all([
+      this.messageModel.findById(messageId),
+      this.messageModel.findMessagePlugin(messageId),
+    ]);
+
+    if (!message) return undefined;
+
+    return { content: message.content ?? '', pluginState: plugin?.state };
+  }
+
+  /**
    * Quiet write-behind batch for streaming runtimes. Unlike createMessage /
    * updateMessage, this intentionally does not query the full message list after
    * each write; callers flush before reconciliation boundaries themselves.

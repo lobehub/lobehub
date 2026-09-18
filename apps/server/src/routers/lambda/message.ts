@@ -393,6 +393,14 @@ export const messageRouter = router({
       return ctx.topicDoctorRepo.repair(input);
     }),
 
+  /**
+   * Raw tool payload for one message, fetched on demand when the projected
+   * read path dropped it (`UIChatMessage.payloadOmitted`).
+   */
+  getToolResultPayload: messageProcedure
+    .input(z.object({ messageId: z.string() }))
+    .query(async ({ input, ctx }) => ctx.messageService.getToolResultPayload(input.messageId)),
+
   getHeatmaps: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.getHeatmaps();
   }),
