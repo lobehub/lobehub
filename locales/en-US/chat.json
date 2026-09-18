@@ -1467,6 +1467,7 @@
   "sandboxWorkspace.setUpEnvironment": "Set up an environment",
   "sandboxWorkspace.truncated": "Only the first entries are shown",
   "sandboxWorkspace.upgrade": "Keep sandbox files",
+  "sandboxWorkspace.useRoot": "Run at the workspace root",
   "search.grounding.imageSearchQueries": "Image Search Keywords",
   "search.grounding.imageTitle": "Found {{count}} images",
   "search.grounding.searchQueries": "Search Keywords",

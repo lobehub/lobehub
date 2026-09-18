@@ -583,7 +583,16 @@ export const sandboxWorkspaceRouter = router({
       // that refusal is the one the user needs to see.
       await ctx.client
         .deleteEnvironment({ name: instance.id, topicId: input.topicId })
-        .catch(mapWorkspaceError);
+        .catch((error: unknown) => {
+          // No snapshot there is the state this call exists to reach, so a 404
+          // is this step succeeding, not failing. An instance nothing has ever
+          // run in has nothing on the execution plane — and treating that as an
+          // error strands the row permanently, because the environment holding
+          // it cannot be deleted either while an instance references it.
+          if (error instanceof SandboxWorkspaceFilesError && error.status === 404) return;
+
+          return mapWorkspaceError(error);
+        });
 
       return ctx.instanceModel.delete(input.id);
     }),

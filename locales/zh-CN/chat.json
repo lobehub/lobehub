@@ -1467,6 +1467,7 @@
   "sandboxWorkspace.setUpEnvironment": "去创建环境",
   "sandboxWorkspace.truncated": "仅显示前若干条",
   "sandboxWorkspace.upgrade": "保留沙箱文件",
+  "sandboxWorkspace.useRoot": "在工作区根目录运行",
   "search.grounding.imageSearchQueries": "图片搜索关键词",
   "search.grounding.imageTitle": "找到 {{count}} 张图片",
   "search.grounding.searchQueries": "搜索关键词",

@@ -1282,6 +1282,7 @@ export default {
   'sandboxWorkspace.newInstance': 'New instance',
   'sandboxWorkspace.creatingInstance': 'Creating…',
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
+  'sandboxWorkspace.useRoot': 'Run at the workspace root',
   'sandboxWorkspace.instanceStale': 'Needs rebuild',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
