@@ -277,10 +277,15 @@ export const contextEngineering = async ({
   // In manual mode: only expose user-selected skills (filtered by pluginIds).
   let enabledSkills: OperationSkillSet['skills'] | undefined;
   if (plugins) {
-    // Manual mode does not hide the other skills: it withholds the discovery
-    // tools that would let the model activate them, matching the server
-    // runtime. The listing stays, so the model can tell the user what exists.
-    enabledSkills = (await resolveClientSkills(plugins, disabledPluginIds)).skills;
+    // Manual mode narrows the pool itself, so an unselected skill is neither
+    // listed nor resolvable by `activateSkill`.
+    enabledSkills = (
+      await resolveClientSkills(
+        plugins,
+        disabledPluginIds,
+        agentChatConfigSelectors.skillActivateMode(agentStoreState),
+      )
+    ).skills;
   }
 
   // One timezone for every date the prompt renders — the core's temporal

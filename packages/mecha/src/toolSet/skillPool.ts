@@ -59,6 +59,14 @@ export interface AssembleSkillPoolOptions {
    * shared; an empty list collapses the pool to nothing.
    */
   shareAllowedIds?: readonly string[];
+  /**
+   * The agent's skill activation mode. `manual` means what the UI promises —
+   * "only user-selected tools and skills are available to AI" — so the
+   * selectable sources collapse to `enabledPluginIds`. Withholding the
+   * discovery tools is not enough on its own: `activateSkill` ships with the
+   * always-on `lobe-skills` tool and resolves against this pool.
+   */
+  skillActivateMode?: 'auto' | 'manual';
 }
 
 /**
@@ -73,11 +81,21 @@ export const assembleSkillPool = (
   sources: SkillPoolSources,
   options: AssembleSkillPoolOptions = {},
 ): OperationSkillSet => {
+  const enabledPluginIds = new Set(options.enabledPluginIds ?? []);
+  // Manual mode exposes only what the user picked. Project / device skills are
+  // discovered from the run's working directory and can never be picked in the
+  // UI, so the mode does not speak about them and they stay.
+  const selectable =
+    options.skillActivateMode === 'manual'
+      ? (skills: readonly SkillMeta[] = []) =>
+          skills.filter((skill) => enabledPluginIds.has(skill.identifier))
+      : (skills: readonly SkillMeta[] = []) => skills;
+
   const ordered = [
     ...(sources.project ?? []),
-    ...(sources.db ?? []),
-    ...(sources.agentSkills ?? []),
-    ...(sources.builtin ?? []),
+    ...selectable(sources.db),
+    ...selectable(sources.agentSkills),
+    ...selectable(sources.builtin),
   ];
   const disabled = new Set(options.disabledIds ?? []);
   const shareAllowed = options.shareAllowedIds ? new Set(options.shareAllowedIds) : undefined;
@@ -110,5 +128,5 @@ export const assembleSkillPool = (
       }),
     skills,
   });
-  return engine.generate([...(options.enabledPluginIds ?? [])]);
+  return engine.generate([...enabledPluginIds]);
 };

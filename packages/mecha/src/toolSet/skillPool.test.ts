@@ -77,6 +77,35 @@ describe('assembleSkillPool', () => {
     ).toEqual([AgentBrowserIdentifier, 'artifacts']);
   });
 
+  it('exposes only the selected skills in manual mode, keeping the discovered project ones', () => {
+    const sources = {
+      agentSkills: [skill('agent-skills:notes', 'agent-skills:notes')],
+      builtin: [skill('artifacts')],
+      db: [skill('picked'), skill('not-picked')],
+      // Project / device skills come from the working directory and can never
+      // be picked in the UI, so the mode does not speak about them.
+      project: [skill('project:deploy', 'deploy')],
+    };
+
+    const manual = assembleSkillPool(sources, {
+      enabledPluginIds: ['picked'],
+      skillActivateMode: 'manual',
+    });
+    expect(manual.skills.map((s) => s.identifier)).toEqual(['project:deploy', 'picked']);
+
+    const auto = assembleSkillPool(sources, {
+      enabledPluginIds: ['picked'],
+      skillActivateMode: 'auto',
+    });
+    expect(auto.skills.map((s) => s.identifier)).toEqual([
+      'project:deploy',
+      'picked',
+      'not-picked',
+      'agent-skills:notes',
+      'artifacts',
+    ]);
+  });
+
   it('pairs the pool with the run’s enabled plugin ids for the resolver', () => {
     const pool = assembleSkillPool(
       { db: [skill('pinned'), skill('listed')] },

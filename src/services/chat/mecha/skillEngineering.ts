@@ -44,6 +44,7 @@ const buildDbSkillContent = (detail: SkillItem): string | undefined => {
 export const resolveClientSkills = async (
   pluginIds?: string[],
   disabledIds?: string[],
+  skillActivateMode?: 'auto' | 'manual',
 ): Promise<OperationSkillSet> => {
   const toolState = getToolStoreState();
   const pinnedIds = new Set(pluginIds ?? []);
@@ -111,6 +112,7 @@ export const resolveClientSkills = async (
       // The desktop app is itself the execution device.
       canExecuteOnDevice: isDesktop,
       enabledPluginIds: pluginIds,
+      skillActivateMode,
     },
   );
 };

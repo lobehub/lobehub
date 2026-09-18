@@ -838,6 +838,7 @@ export const prepareOperation = async (
         disabledIds: disabledPluginIds,
         enabledPluginIds: agentPlugins ?? [],
         shareAllowedIds: shareAllowedSkillIds,
+        skillActivateMode: agentConfig.chatConfig?.skillActivateMode,
       },
     );
   } catch (error) {
