@@ -1,12 +1,12 @@
-import type { LobeChatDatabase } from '../../type';
-import { PostgresFtsSearchBackend } from './pgSearch';
-import { searchCandidates } from './pgSearch/candidates';
-import { pgLikeDialect } from './pgSearch/dialect';
+import type { LobeChatDatabase } from '../../../type';
+import { PostgresFtsSearchBackend } from '../postgres/backend';
 import type {
   FtsSearchBackendRequest,
   FtsSearchBackendResponse,
   FtsSearchBackendScope,
-} from './types';
+} from '../types';
+import { searchCandidates } from './candidates';
+import { pgLikeDialect } from './dialect';
 
 /**
  * Extension-free PostgreSQL provider built on `ILIKE` substring matching.

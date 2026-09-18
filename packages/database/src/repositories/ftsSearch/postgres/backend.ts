@@ -1,4 +1,10 @@
-import type { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../../type';
+import type {
+  FtsSearchBackend,
+  FtsSearchBackendRequest,
+  FtsSearchBackendResponse,
+  FtsSearchBackendScope,
+} from '../types';
 import {
   searchAgents,
   searchChatGroups,
@@ -6,19 +12,12 @@ import {
   searchKnowledgeBases,
   searchMessages,
   searchTopics,
-} from './pgSearch/command-menu';
-import type { PgFtsSearchDialect } from './pgSearch/dialect';
-import { pgSearchDialect } from './pgSearch/dialect';
-import { searchFolders, searchKnowledgeBaseDocuments, searchPages } from './pgSearch/documents';
-import { searchMemories } from './pgSearch/memories';
-import type { PgSearchFtsSearchContext } from './pgSearch/scope';
-import { createPgSearchFtsSearchContext } from './pgSearch/scope';
-import type {
-  FtsSearchBackend,
-  FtsSearchBackendRequest,
-  FtsSearchBackendResponse,
-  FtsSearchBackendScope,
-} from './types';
+} from './command-menu';
+import type { PostgresFtsSearchContext } from './context';
+import { createPostgresFtsSearchContext } from './context';
+import type { PostgresFtsSearchDialect } from './dialect';
+import { searchFolders, searchKnowledgeBaseDocuments, searchPages } from './documents';
+import { searchMemories } from './memories';
 
 /**
  * Product search over the shared PostgreSQL query modules. Each subclass only
@@ -27,14 +26,14 @@ import type {
 export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
   abstract readonly key: string;
 
-  protected readonly context: PgSearchFtsSearchContext;
+  protected readonly context: PostgresFtsSearchContext;
 
   protected constructor(
     db: LobeChatDatabase,
     scope: FtsSearchBackendScope,
-    dialect: PgFtsSearchDialect,
+    dialect: PostgresFtsSearchDialect,
   ) {
-    this.context = createPgSearchFtsSearchContext(db, scope, dialect);
+    this.context = createPostgresFtsSearchContext(db, scope, dialect);
   }
 
   async search(request: FtsSearchBackendRequest): Promise<FtsSearchBackendResponse> {
@@ -75,14 +74,5 @@ export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
     }
 
     throw new Error(`Unsupported ${this.key} entity: ${entity}`);
-  }
-}
-
-/** pg_search adapter that preserves the existing query and hydration shape. */
-export class PgSearchFtsSearchBackend extends PostgresFtsSearchBackend {
-  readonly key = 'pg_search';
-
-  constructor(db: LobeChatDatabase, scope: FtsSearchBackendScope) {
-    super(db, scope, pgSearchDialect);
   }
 }

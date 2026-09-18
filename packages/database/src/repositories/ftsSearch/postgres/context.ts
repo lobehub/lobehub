@@ -5,11 +5,10 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { LobeChatDatabase } from '../../../type';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type { FtsSearchBackendScope } from '../types';
-import type { PgFtsSearchDialect } from './dialect';
-import { pgSearchDialect } from './dialect';
+import type { PostgresFtsSearchDialect } from './dialect';
 
 /** Columns shared by the workspace-aware tables searched by the PostgreSQL providers. */
-export interface PgSearchFtsSearchWorkspaceScopedColumns {
+export interface PostgresFtsSearchWorkspaceScopedColumns {
   userId: AnyPgColumn;
   visibility?: AnyPgColumn;
   workspaceId: AnyPgColumn;
@@ -17,14 +16,10 @@ export interface PgSearchFtsSearchWorkspaceScopedColumns {
 
 /**
  * Shared state and query-shaping helpers used by the PostgreSQL provider modules.
- *
- * The modules under `pgSearch/` were written for ParadeDB and keep that name, but
- * every provider-specific fragment now goes through `dialect`, so the same query
- * bodies also serve the extension-free `pg_like` provider.
  */
-export interface PgSearchFtsSearchContext {
+export interface PostgresFtsSearchContext {
   db: LobeChatDatabase;
-  dialect: PgFtsSearchDialect;
+  dialect: PostgresFtsSearchDialect;
   liftedScopeWhere: (workspaceIdColumn: SQLWrapper) => SQL | undefined;
   liftsAgentFilter: boolean;
   /**
@@ -36,7 +31,7 @@ export interface PgSearchFtsSearchContext {
   liftsExclusionFilter: boolean;
   liftsWorkspaceFilter: boolean;
   scanCandidateLimit: (limit: number) => number;
-  scanScopeWhere: (cols: PgSearchFtsSearchWorkspaceScopedColumns) => SQL;
+  scanScopeWhere: (cols: PostgresFtsSearchWorkspaceScopedColumns) => SQL;
   scope: FtsSearchBackendScope;
   userId: string;
 }
@@ -72,11 +67,11 @@ const AGENT_SCOPE_CANDIDATE_POOL = 20_000;
  */
 const WORKSPACE_ID_IN_BM25_INDEX = false;
 
-export function createPgSearchFtsSearchContext(
+export function createPostgresFtsSearchContext(
   db: LobeChatDatabase,
   scope: FtsSearchBackendScope,
-  dialect: PgFtsSearchDialect = pgSearchDialect,
-): PgSearchFtsSearchContext {
+  dialect: PostgresFtsSearchDialect,
+): PostgresFtsSearchContext {
   // The original backend copied scope fields in its constructor. Keep the same
   // snapshot semantics instead of retaining a caller-owned mutable object.
   const normalizedScope: FtsSearchBackendScope = {

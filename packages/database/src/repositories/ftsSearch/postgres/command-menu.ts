@@ -28,10 +28,10 @@ import type {
   FtsSearchMessageResult,
   FtsSearchTopicResult,
 } from '../types';
-import type { PgFtsSearchField } from './dialect';
+import type { PostgresFtsSearchContext } from './context';
+import { AGENT_SCOPE_CANDIDATE_POOL } from './context';
+import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, buildSelectedResponse, mapScoresToRelevance, truncate } from './results';
-import type { PgSearchFtsSearchContext } from './scope';
-import { AGENT_SCOPE_CANDIDATE_POOL } from './scope';
 
 /** Topics and messages are displayed by recency after a larger scored candidate pool is fetched. */
 const RECENCY_CANDIDATE_MULTIPLIER = 4;
@@ -40,7 +40,7 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
  * Searchable fields per table. Field order is part of the emitted BM25 SQL, and
  * the weights mirror the Elasticsearch boosts so synthesized scores rank alike.
  */
-const AGENT_FIELDS: PgFtsSearchField[] = [
+const AGENT_FIELDS: PostgresFtsSearchField[] = [
   { column: agents.title, weight: 5 },
   { column: agents.description, weight: 2 },
   { column: agents.slug, weight: 4 },
@@ -48,29 +48,29 @@ const AGENT_FIELDS: PgFtsSearchField[] = [
   { column: agents.systemRole },
 ];
 
-const TOPIC_FIELDS: PgFtsSearchField[] = [
+const TOPIC_FIELDS: PostgresFtsSearchField[] = [
   { column: topics.title, weight: 2 },
   { column: topics.content },
   { column: topics.description },
 ];
 
-const MESSAGE_FIELDS: PgFtsSearchField[] = [{ column: messages.content }];
+const MESSAGE_FIELDS: PostgresFtsSearchField[] = [{ column: messages.content }];
 
-const FILE_FIELDS: PgFtsSearchField[] = [{ column: files.name, weight: 4 }];
+const FILE_FIELDS: PostgresFtsSearchField[] = [{ column: files.name, weight: 4 }];
 
-const CHAT_GROUP_FIELDS: PgFtsSearchField[] = [
+const CHAT_GROUP_FIELDS: PostgresFtsSearchField[] = [
   { column: chatGroups.title, weight: 4 },
   { column: chatGroups.description, weight: 2 },
 ];
 
-const KNOWLEDGE_BASE_FIELDS: PgFtsSearchField[] = [
+const KNOWLEDGE_BASE_FIELDS: PostgresFtsSearchField[] = [
   { column: knowledgeBases.name, weight: 4 },
   { column: knowledgeBases.description },
 ];
 
 /** Search agents by title, description, slug, tags, and system role. */
 export async function searchAgents(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
 ): Promise<FtsSearchBackendResponse<FtsSearchAgentResult>> {
@@ -141,7 +141,7 @@ export async function searchAgents(
 
 /** Search topics by title, content, and description. */
 export async function searchTopics(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   agentId?: string,
@@ -258,7 +258,7 @@ export async function searchTopics(
 
 /** Search messages by content. */
 export async function searchMessages(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   agentId?: string,
@@ -367,7 +367,7 @@ export async function searchMessages(
 
 /** Search files by name. */
 export async function searchFiles(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   excludeKbIds?: string[],
@@ -460,7 +460,7 @@ export async function searchFiles(
 
 /** Search chat groups by title and description. */
 export async function searchChatGroups(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
 ): Promise<FtsSearchBackendResponse<FtsSearchChatGroupResult>> {
@@ -517,7 +517,7 @@ export async function searchChatGroups(
 
 /** Search knowledge bases by name and description. */
 export async function searchKnowledgeBases(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   excludeIds?: string[],

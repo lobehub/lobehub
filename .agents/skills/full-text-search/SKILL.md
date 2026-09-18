@@ -43,10 +43,10 @@ router/service -> createFtsSearchRepo -> FtsSearchRepo -> selected backend -> ex
 - Provider errors, missing configuration, and unsupported candidate behavior must remain visible.
   Never silently retry through another provider. `pg_like` is an explicitly selected lightweight
   provider, not an implicit fallback: a missing extension or unreachable service must still fail.
-- `pg_search` and `pg_like` share the query modules under
-  `packages/database/src/repositories/ftsSearch/pgSearch/`; only `pgSearch/dialect.ts` differs
-  (match predicate, score expression, query preparation). Keep scoping, joins, pagination, and
-  hydration in the shared modules rather than forking per provider.
+- `packages/database/src/repositories/ftsSearch/postgres/` owns the query, permission, pagination,
+  and hydration layer shared by PostgreSQL providers. `pgSearch/` and `pgLike/` own only their
+  provider adapter, dialect, and provider-specific candidate behavior. Neither provider directory
+  may import the other, so either provider can be retired without owning shared functionality.
 - Before selecting Elasticsearch, require coverage tests proving that it supports every entity in
   the provider-neutral backend contract. Do not add per-entity routing between providers.
 - Preserve `userId`, `workspaceId`, and caller-agent visibility throughout every provider. Candidate

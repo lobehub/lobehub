@@ -10,17 +10,17 @@ import type {
   FtsSearchKnowledgeBaseDocumentHit,
   FtsSearchPageResult,
 } from '../types';
-import type { PgFtsSearchField } from './dialect';
+import type { PostgresFtsSearchContext } from './context';
+import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, truncate } from './results';
-import type { PgSearchFtsSearchContext } from './scope';
 
-const FOLDER_FIELDS: PgFtsSearchField[] = [
+const FOLDER_FIELDS: PostgresFtsSearchField[] = [
   { column: documents.title, weight: 4 },
   { column: documents.slug, weight: 3 },
   { column: documents.description, weight: 2 },
 ];
 
-const PAGE_FIELDS: PgFtsSearchField[] = [
+const PAGE_FIELDS: PostgresFtsSearchField[] = [
   { column: documents.title, weight: 4 },
   { column: documents.slug, weight: 3 },
   { column: documents.content },
@@ -30,7 +30,7 @@ const KNOWLEDGE_BASE_DOCUMENT_FIELDS = PAGE_FIELDS;
 
 /** Search folders (documents with `file_type=DOCUMENT_FOLDER_TYPE`). */
 export async function searchFolders(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   excludeKbIds?: string[],
@@ -109,7 +109,7 @@ export async function searchFolders(
 
 /** Search pages (documents with `file_type='custom/document'`). */
 export async function searchPages(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   excludeKbIds?: string[],
@@ -204,7 +204,7 @@ export async function searchPages(
  * ParadeDB rejects a disjunctive shape spanning BM25 and non-BM25 predicates.
  */
 export async function searchKnowledgeBaseDocuments(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   knowledgeBaseIds: string[],
   limit: number = 20,

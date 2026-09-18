@@ -1,28 +1,28 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../core/getTestDB';
-import { agents } from '../../schemas/agent';
-import { chatGroups } from '../../schemas/chatGroup';
-import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../../schemas/file';
-import { messages } from '../../schemas/message';
-import { sessions } from '../../schemas/session';
-import { topics } from '../../schemas/topic';
-import { users } from '../../schemas/user';
+import { getTestDB } from '../../../core/getTestDB';
+import { agents } from '../../../schemas/agent';
+import { chatGroups } from '../../../schemas/chatGroup';
+import { documents, files, knowledgeBaseFiles, knowledgeBases } from '../../../schemas/file';
+import { messages } from '../../../schemas/message';
+import { sessions } from '../../../schemas/session';
+import { topics } from '../../../schemas/topic';
+import { users } from '../../../schemas/user';
 import {
   userMemories,
   userMemoriesActivities,
   userMemoriesContexts,
-} from '../../schemas/userMemories';
-import { workspaces } from '../../schemas/workspace';
-import type { LobeChatDatabase } from '../../type';
+} from '../../../schemas/userMemories';
+import { workspaces } from '../../../schemas/workspace';
+import type { LobeChatDatabase } from '../../../type';
 import {
   describeFtsSearchProductBehavior,
   otherUserId,
   userId,
-} from './__tests__/productSearchBehavior';
-import { FtsSearchRepo } from './index';
-import { PgLikeFtsSearchBackend } from './pgLike';
+} from '../__tests__/productSearchBehavior';
+import { FtsSearchRepo } from '../index';
+import { PgLikeFtsSearchBackend } from './index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

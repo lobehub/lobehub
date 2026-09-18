@@ -2,11 +2,11 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { userMemories } from '../../../schemas';
 import type { FtsSearchBackendResponse, FtsSearchMemoryResult } from '../types';
-import type { PgFtsSearchField } from './dialect';
+import type { PostgresFtsSearchContext } from './context';
+import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, truncate } from './results';
-import type { PgSearchFtsSearchContext } from './scope';
 
-const MEMORY_FIELDS: PgFtsSearchField[] = [
+const MEMORY_FIELDS: PostgresFtsSearchField[] = [
   { column: userMemories.title, weight: 4 },
   { column: userMemories.summary, weight: 2 },
   { column: userMemories.details },
@@ -14,7 +14,7 @@ const MEMORY_FIELDS: PgFtsSearchField[] = [
 
 /** Search user memories by title, summary, and details. */
 export async function searchMemories(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
 ): Promise<FtsSearchBackendResponse<FtsSearchMemoryResult>> {

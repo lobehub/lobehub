@@ -36,6 +36,8 @@ import {
 } from '../../../schemas';
 import { searchableMessage } from '../../../utils/searchableMessage';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
+import type { PostgresFtsSearchContext } from '../postgres/context';
+import type { PostgresFtsSearchField } from '../postgres/dialect';
 import type {
   FtsSearchBackendCandidate,
   FtsSearchBackendEntity,
@@ -44,8 +46,6 @@ import type {
   FtsSearchBackendResponse,
   FtsSearchBackendScope,
 } from '../types';
-import type { PgFtsSearchField } from './dialect';
-import type { PgSearchFtsSearchContext } from './scope';
 
 /**
  * Bounded candidate requests over-fetch so authorization hydration can still fill
@@ -63,7 +63,7 @@ interface CandidateTarget {
   /** Field names used when the request does not narrow `query.fields`. */
   defaultFields: string[] | ((filters: FtsSearchBackendFilters) => string[]);
   /** Elasticsearch document field name → searchable columns backing it. */
-  fields: Record<string, PgFtsSearchField[]>;
+  fields: Record<string, PostgresFtsSearchField[]>;
   id: AnyPgColumn;
   /** Join predicate for layer tables whose document embeds parent memory text. */
   parentJoin?: SQL;
@@ -71,7 +71,7 @@ interface CandidateTarget {
   where: (
     scope: FtsSearchBackendScope,
     filters: FtsSearchBackendFilters,
-    db: PgSearchFtsSearchContext['db'],
+    db: PostgresFtsSearchContext['db'],
   ) => (SQL | undefined)[];
 }
 
@@ -79,7 +79,7 @@ const parentMemoryFields = {
   parent_details: [{ column: userMemories.details }],
   parent_summary: [{ column: userMemories.summary }],
   parent_title: [{ column: userMemories.title, weight: 4 }],
-} satisfies Record<string, PgFtsSearchField[]>;
+} satisfies Record<string, PostgresFtsSearchField[]>;
 
 const parentMemoryJoin = (layer: { userId: AnyPgColumn; userMemoryId: AnyPgColumn }): SQL =>
   and(eq(userMemories.id, layer.userMemoryId), eq(userMemories.userId, layer.userId)) as SQL;
@@ -208,7 +208,7 @@ const memoryLayerWhere =
   ];
 
 /** Files whose membership in a restricted knowledge base hides them entirely. */
-const restrictedKnowledgeBaseFileIds = (db: PgSearchFtsSearchContext['db'], kbIds: string[]) =>
+const restrictedKnowledgeBaseFileIds = (db: PostgresFtsSearchContext['db'], kbIds: string[]) =>
   db
     .select({ fileId: knowledgeBaseFiles.fileId })
     .from(knowledgeBaseFiles)
@@ -220,7 +220,7 @@ const restrictedKnowledgeBaseFileIds = (db: PgSearchFtsSearchContext['db'], kbId
  * restricted.
  */
 const documentKnowledgeBaseExclusion = (
-  db: PgSearchFtsSearchContext['db'],
+  db: PostgresFtsSearchContext['db'],
   filters: FtsSearchBackendFilters,
 ): SQL | undefined => {
   const kbIds = filters.excludeKnowledgeBaseIds;
@@ -236,7 +236,7 @@ const documentKnowledgeBaseExclusion = (
 };
 
 const documentKindWhere = (
-  db: PgSearchFtsSearchContext['db'],
+  db: PostgresFtsSearchContext['db'],
   filters: FtsSearchBackendFilters,
 ): (SQL | undefined)[] => {
   const { documentKind } = filters;
@@ -543,7 +543,7 @@ const resolveFields = (
   target: CandidateTarget,
   filters: FtsSearchBackendFilters,
   requested?: string[],
-): PgFtsSearchField[] => {
+): PostgresFtsSearchField[] => {
   const defaultFields =
     typeof target.defaultFields === 'function'
       ? target.defaultFields(filters)
@@ -559,7 +559,7 @@ const resolveFields = (
  * themselves. Returns ids ordered by the dialect score; `items` stays empty.
  */
 export async function searchCandidates(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   request: FtsSearchBackendRequest,
 ): Promise<FtsSearchBackendResponse> {
   const target = CANDIDATE_TARGETS[request.entity];
