@@ -482,6 +482,7 @@ export interface DeviceGitPullRequestDetail {
   additions: number;
   author: string;
   autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
   baseRefName: string;
   body: string;
   changedFiles: number;
@@ -516,6 +517,14 @@ export interface DeviceGitPullRequestDetailResult {
 
 export type DeviceGitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
 
+/** Result of the `getPullRequestMergeContext` device RPC. */
+export interface DeviceGitPullRequestMergeContext {
+  baseBehindBy: number;
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
 /** One `gh pr` mutation dispatched by the `runPullRequestAction` device RPC. */
 export type DeviceGitPullRequestAction =
   | {
@@ -532,7 +541,8 @@ export type DeviceGitPullRequestAction =
   | { body: string; type: 'comment' }
   | { type: 'close' }
   | { type: 'reopen' }
-  | { head: string; type: 'deleteBranch' };
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
 
 export interface DeviceGitPullRequestActionResult {
   error?: string;

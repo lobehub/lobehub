@@ -63,6 +63,14 @@ export const usePullRequestActions = ({
               key[1] === cacheDeviceId &&
               key[2] === workingDirectory,
           ),
+          mutate(
+            (key: unknown) =>
+              Array.isArray(key) &&
+              key[0] === deviceKeys.gitPullRequestMergeContext.root &&
+              key[1] === cacheDeviceId &&
+              key[2] === workingDirectory &&
+              key[3] === number,
+          ),
           mutate(deviceKeys.gitAheadBehind(cacheDeviceId, workingDirectory)),
           mutate(deviceKeys.gitWorkingTreeStatus(cacheDeviceId, workingDirectory)),
         ]);
@@ -74,7 +82,7 @@ export const usePullRequestActions = ({
         setBusy(undefined);
       }
     },
-    [deviceId, mutateDetail, workingDirectory],
+    [deviceId, mutateDetail, number, workingDirectory],
   );
 
   const run = useCallback(

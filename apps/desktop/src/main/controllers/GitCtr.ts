@@ -12,6 +12,7 @@ import type {
   GitPullRequestAction,
   GitPullRequestActionResult,
   GitPullRequestDetailResult,
+  GitPullRequestMergeContext,
   GitPullResult,
   GitPushResult,
   GitRemoteBranchListItem,
@@ -73,6 +74,18 @@ export default class GitController extends ControllerModule {
   }): Promise<GitPullRequestDetailResult> {
     const { getPullRequestDetail: computePullRequestDetail } = await loadGit();
     return computePullRequestDetail(payload);
+  }
+
+  @IpcMethod()
+  async getPullRequestMergeContext(payload: {
+    baseRefName: string;
+    headRefOid: string;
+    number: number;
+    path: string;
+    repo: { name: string; owner: string };
+  }): Promise<GitPullRequestMergeContext> {
+    const { getPullRequestMergeContext: computeMergeContext } = await loadGit();
+    return computeMergeContext(payload);
   }
 
   @IpcMethod()

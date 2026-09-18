@@ -9,6 +9,7 @@ const makeDetail = (
   additions: 10,
   author: 'innei',
   autoMerge: null,
+  baseBehindBy: 0,
   baseRefName: 'main',
   body: '',
   changedFiles: 2,
@@ -40,26 +41,25 @@ const makeInput = (overrides: Partial<MergeDockInput> = {}): MergeDockInput => (
   ...overrides,
 });
 
-const rowKeys = (result: ReturnType<typeof resolveMergeDock>) => result.rows.map((row) => row.key);
-const rowTones = (result: ReturnType<typeof resolveMergeDock>) =>
-  result.rows.map((row) => row.tone);
+const reasonKeys = (result: ReturnType<typeof resolveMergeDock>) =>
+  result.reasons.map((reason) => reason.labelKey);
 
 describe('resolveMergeDock', () => {
-  it('clean: green merge action, ready rules row', () => {
+  it('clean: ready status, green merge action, merge hint', () => {
     const result = resolveMergeDock(makeInput());
-    expect(rowKeys(result)).toEqual(['review', 'checks', 'base', 'rules']);
-    expect(rowTones(result)).toEqual(['success', 'success', 'success', 'success']);
+    expect(result.status).toMatchObject({ key: 'ready', tone: 'success' });
+    expect(result.reasons).toEqual([]);
     expect(result.action).toEqual({
       admin: false,
       kind: 'merge',
       method: 'squash',
       tone: 'success',
     });
-    expect(result.showBypass).toBe(false);
+    expect(result.bypassAvailable).toBe(false);
     expect(result.hintKey).toBe(PR_KEYS.hint.merge);
   });
 
-  it('pending: required check pending under BLOCKED offers auto-merge', () => {
+  it('pending: required check pending under BLOCKED waits and offers auto-merge', () => {
     const result = resolveMergeDock(
       makeInput({
         detail: makeDetail({
@@ -69,11 +69,46 @@ describe('resolveMergeDock', () => {
       }),
     );
     expect(result.checksStatus).toBe('pending');
-    expect(result.action).toEqual({ kind: 'autoMerge', method: 'squash', tone: 'warning' });
+    expect(result.status).toMatchObject({ key: 'waiting', tone: 'warning' });
+    expect(reasonKeys(result)).toEqual([PR_KEYS.reason.checksPending]);
+    expect(result.action).toEqual({ kind: 'autoMerge', method: 'squash', tone: 'plain' });
     expect(result.hintKey).toBeUndefined();
   });
 
-  it('autoMerge: already armed shows the row and a disabled waiting action', () => {
+  it('pendingUnprotected: mergeable while checks run turns the merge action amber', () => {
+    const result = resolveMergeDock(
+      makeInput({
+        detail: makeDetail({ checks: [{ name: 'ci', required: false, status: 'pending' }] }),
+      }),
+    );
+    expect(result.status.key).toBe('waiting');
+    expect(result.action).toEqual({
+      admin: false,
+      kind: 'merge',
+      method: 'squash',
+      tone: 'plain',
+    });
+  });
+
+  it('unstable: optional check failing warns but still allows merging', () => {
+    const result = resolveMergeDock(
+      makeInput({
+        detail: makeDetail({
+          checks: [
+            { name: 'ci', required: true, status: 'success' },
+            { name: 'verify', required: false, status: 'failure' },
+          ],
+        }),
+      }),
+    );
+    expect(result.status).toMatchObject({ key: 'unstable', tone: 'warning' });
+    expect(result.reasons).toEqual([
+      { labelKey: PR_KEYS.reason.optionalFailing, labelParams: { count: 1 } },
+    ]);
+    expect(result.action).toMatchObject({ kind: 'merge', tone: 'plain' });
+  });
+
+  it('autoMerge: armed status with method and a disabled waiting action', () => {
     const result = resolveMergeDock(
       makeInput({
         detail: makeDetail({
@@ -83,29 +118,37 @@ describe('resolveMergeDock', () => {
         }),
       }),
     );
-    expect(rowKeys(result)).toEqual(['autoMerge', 'review', 'checks', 'base', 'rules']);
+    expect(result.status).toMatchObject({
+      key: 'autoMerge',
+      labelParams: { method: 'squash' },
+      tone: 'merged',
+    });
     expect(result.action).toEqual({ kind: 'disabled', labelKey: PR_KEYS.action.waiting });
-    expect(result.hintKey).toBe(PR_KEYS.hint.autoMerge);
-    expect(result.hintParams).toEqual({ method: 'squash' });
   });
 
-  it('ciFailed: required check failing disables the action', () => {
+  it('ciFailed: blocked status lists the failing count and disables the action', () => {
     const result = resolveMergeDock(
       makeInput({
         detail: makeDetail({
-          checks: [{ name: 'ci', required: true, status: 'failure' }],
+          checks: [
+            { name: 'ci', required: true, status: 'failure' },
+            { name: 'lint', required: true, status: 'cancelled' },
+          ],
           mergeStateStatus: 'BLOCKED',
         }),
       }),
     );
     expect(result.checksStatus).toBe('failure');
+    expect(result.status).toMatchObject({ key: 'blocked', tone: 'error' });
+    expect(result.reasons).toEqual([
+      { labelKey: PR_KEYS.reason.checksFailing, labelParams: { count: 2 } },
+    ]);
     expect(result.action).toEqual({ kind: 'disabled', labelKey: PR_KEYS.method.squash });
-    expect(result.showBypass).toBe(false);
-    const rules = result.rows.find((row) => row.key === 'rules')!;
-    expect(rules.labelKey).toBe(PR_KEYS.row.rules.blocked);
+    expect(result.bypassAvailable).toBe(false);
+    expect(result.hintKey).toBeUndefined();
   });
 
-  it('ciFailed+bypass: viewerCanBypass with bypass ticked merges with --admin', () => {
+  it('ciFailed+bypass: bypass status keeps the blockers listed and merges with --admin', () => {
     const result = resolveMergeDock(
       makeInput({
         detail: makeDetail({
@@ -116,25 +159,29 @@ describe('resolveMergeDock', () => {
         ui: { bypass: true, method: 'squash' },
       }),
     );
+    expect(result.status).toMatchObject({ key: 'bypass', tone: 'error' });
+    expect(reasonKeys(result)).toEqual([PR_KEYS.reason.checksFailing]);
     expect(result.action).toEqual({ admin: true, kind: 'merge', method: 'squash', tone: 'error' });
-    expect(result.showBypass).toBe(true);
-    expect(result.hintKey).toBe(PR_KEYS.hint.bypass);
-    const rules = result.rows.find((row) => row.key === 'rules')!;
-    expect(rules.tone).toBe('error');
-    expect(rules.labelKey).toBe(PR_KEYS.row.rules.bypass);
-    expect(rules.trailingKey).toBeUndefined();
+    expect(result.bypassAvailable).toBe(true);
   });
 
-  it('reviewRequired: red review row with no trailing', () => {
+  it('blockedByRules: BLOCKED with nothing else failing names the branch rules', () => {
+    const result = resolveMergeDock(
+      makeInput({ detail: makeDetail({ mergeStateStatus: 'BLOCKED' }) }),
+    );
+    expect(result.status.key).toBe('blocked');
+    expect(reasonKeys(result)).toEqual([PR_KEYS.reason.rules]);
+  });
+
+  it('reviewRequired: blocked with a review reason', () => {
     const result = resolveMergeDock(
       makeInput({ detail: makeDetail({ reviewDecision: 'REVIEW_REQUIRED' }) }),
     );
-    const review = result.rows.find((row) => row.key === 'review')!;
-    expect(review.tone).toBe('error');
-    expect(review.trailingKey).toBeUndefined();
+    expect(result.status.key).toBe('blocked');
+    expect(reasonKeys(result)).toEqual([PR_KEYS.reason.reviewRequired]);
   });
 
-  it('changesRequested: red review row lists requesting authors', () => {
+  it('changesRequested: reason lists the requesting authors', () => {
     const result = resolveMergeDock(
       makeInput({
         detail: makeDetail({
@@ -146,43 +193,80 @@ describe('resolveMergeDock', () => {
         }),
       }),
     );
-    const review = result.rows.find((row) => row.key === 'review')!;
-    expect(review.tone).toBe('error');
-    expect(review.trailingParams).toEqual({ authors: 'foo, bar' });
+    expect(result.status.key).toBe('blocked');
+    expect(result.reasons).toEqual([
+      { labelKey: PR_KEYS.reason.changesRequested, labelParams: { authors: 'foo, bar' } },
+    ]);
   });
 
-  it('conflicts: CONFLICTING disables the action and errors the base row', () => {
+  it('multipleBlockers: reasons are ordered checks → review → base', () => {
+    const result = resolveMergeDock(
+      makeInput({
+        detail: makeDetail({
+          checks: [{ name: 'ci', required: true, status: 'failure' }],
+          mergeStateStatus: 'BLOCKED',
+          reviewDecision: 'REVIEW_REQUIRED',
+        }),
+        local: { ahead: 1, dirtyFiles: 0 },
+      }),
+    );
+    expect(reasonKeys(result)).toEqual([
+      PR_KEYS.reason.checksFailing,
+      PR_KEYS.reason.reviewRequired,
+      PR_KEYS.reason.localAhead,
+    ]);
+  });
+
+  it('conflicts: conflict status names the base and disables the action', () => {
     const result = resolveMergeDock(
       makeInput({ detail: makeDetail({ mergeable: 'CONFLICTING' }) }),
     );
-    const base = result.rows.find((row) => row.key === 'base')!;
-    expect(base.tone).toBe('error');
-    expect(base.icon).toBe('conflict');
+    expect(result.status).toMatchObject({
+      icon: 'conflict',
+      key: 'conflicts',
+      labelParams: { base: 'main' },
+      tone: 'error',
+    });
+    expect(result.reasons).toEqual([]);
     expect(result.action).toEqual({ kind: 'disabled', labelKey: PR_KEYS.action.conflicting });
   });
 
-  it('behind: offers updateBranch and omits a trailing commit count', () => {
+  it('behind: blocked with a behind reason and an updateBranch action', () => {
     const result = resolveMergeDock(
       makeInput({ detail: makeDetail({ mergeStateStatus: 'BEHIND' }) }),
     );
-    const base = result.rows.find((row) => row.key === 'base')!;
-    expect(base.tone).toBe('warning');
-    expect(base.trailingKey).toBeUndefined();
+    expect(result.status.key).toBe('blocked');
+    expect(result.reasons).toEqual([
+      { labelKey: PR_KEYS.reason.behind, labelParams: { base: 'main' } },
+    ]);
     expect(result.action).toEqual({ kind: 'updateBranch', tone: 'success' });
   });
 
-  it('draft: single neutral state row plus checks, ready action', () => {
-    const result = resolveMergeDock(makeInput({ detail: makeDetail({ isDraft: true }) }));
-    expect(rowKeys(result)).toEqual(['base', 'checks']);
-    expect(result.rows[0].tone).toBe('neutral');
-    expect(result.action).toEqual({ kind: 'ready' });
-    expect(result.showBypass).toBe(false);
+  it('behindUnprotected: base moved ahead without BEHIND offers Update branch beside merge', () => {
+    const result = resolveMergeDock(makeInput({ detail: makeDetail({ baseBehindBy: 3 }) }));
+    expect(result.action).toMatchObject({ kind: 'merge' });
+    expect(result.showUpdateBranch).toBe(true);
   });
 
-  it('merged: single merged-tone row and deleteBranch action', () => {
+  it('behindProtected: BEHIND promotes Update branch to the primary action only', () => {
+    const result = resolveMergeDock(
+      makeInput({ detail: makeDetail({ baseBehindBy: 3, mergeStateStatus: 'BEHIND' }) }),
+    );
+    expect(result.action).toEqual({ kind: 'updateBranch', tone: 'success' });
+    expect(result.showUpdateBranch).toBe(false);
+  });
+
+  it('draft: neutral draft status, no reasons, ready action', () => {
+    const result = resolveMergeDock(makeInput({ detail: makeDetail({ isDraft: true }) }));
+    expect(result.status).toMatchObject({ key: 'draft', tone: 'neutral' });
+    expect(result.reasons).toEqual([]);
+    expect(result.action).toEqual({ kind: 'ready' });
+    expect(result.bypassAvailable).toBe(false);
+  });
+
+  it('merged: merged-tone status and deleteBranch action', () => {
     const result = resolveMergeDock(makeInput({ detail: makeDetail({ state: 'merged' }) }));
-    expect(rowKeys(result)).toEqual(['base']);
-    expect(result.rows[0].tone).toBe('merged');
+    expect(result.status).toMatchObject({ key: 'merged', tone: 'merged' });
     expect(result.action).toEqual({ kind: 'deleteBranch' });
     expect(result.hintKey).toBe(PR_KEYS.hint.merged);
     expect(result.hintParams).toEqual({ head: 'feat/x' });
@@ -204,43 +288,53 @@ describe('resolveMergeDock', () => {
     expect(result.hintKey).toBe(PR_KEYS.hint.merged);
   });
 
-  it('closed: single error-tone row and reopen action', () => {
+  it('closed: error-tone status and reopen action', () => {
     const result = resolveMergeDock(makeInput({ detail: makeDetail({ state: 'closed' }) }));
-    expect(rowKeys(result)).toEqual(['base']);
-    expect(result.rows[0].tone).toBe('error');
+    expect(result.status).toMatchObject({ key: 'closed', tone: 'error' });
     expect(result.action).toEqual({ kind: 'reopen' });
   });
 
-  it('unpushed: local-ahead row shows and push button pairs with the merge action', () => {
-    const result = resolveMergeDock(makeInput({ local: { ahead: 2, dirtyFiles: 0 } }));
-    expect(rowKeys(result)).toEqual(['review', 'checks', 'base', 'local', 'rules']);
+  it('unpushed: local reasons replace the hint and push pairs with the merge action', () => {
+    const result = resolveMergeDock(makeInput({ local: { ahead: 2, dirtyFiles: 3 } }));
+    expect(result.status.key).toBe('ready');
+    expect(result.reasons).toEqual([
+      { labelKey: PR_KEYS.reason.localAhead, labelParams: { count: 2 } },
+      { labelKey: PR_KEYS.reason.localDirty, labelParams: { count: 3 } },
+    ]);
     expect(result.showPush).toBe(true);
-    expect(result.hintKey).toBe(PR_KEYS.hint.localAhead);
-    expect(result.hintParams).toEqual({ count: 2 });
+    expect(result.hintKey).toBeUndefined();
   });
 
-  it('readOnly: no action, no bypass, and a readOnly hint naming the repo', () => {
-    const result = resolveMergeDock(makeInput({ detail: makeDetail({ viewerCanWrite: false }) }));
+  it('readOnly: no action, no bypass, and the readOnly hint survives reasons', () => {
+    const result = resolveMergeDock(
+      makeInput({
+        detail: makeDetail({ reviewDecision: 'REVIEW_REQUIRED', viewerCanWrite: false }),
+      }),
+    );
     expect(result.action).toBeUndefined();
-    expect(result.showBypass).toBe(false);
+    expect(result.bypassAvailable).toBe(false);
+    expect(reasonKeys(result)).toEqual([PR_KEYS.reason.reviewRequired]);
     expect(result.hintKey).toBe(PR_KEYS.hint.readOnly);
     expect(result.hintParams).toEqual({ repo: 'lobehub/lobe-chat' });
   });
 
-  it('unknown: UNKNOWN mergeability shows a spinner row and disables the action', () => {
+  it('unknown: UNKNOWN mergeability shows a spinner status and disables the action', () => {
     const result = resolveMergeDock(makeInput({ detail: makeDetail({ mergeable: 'UNKNOWN' }) }));
-    const base = result.rows.find((row) => row.key === 'base')!;
-    expect(base.icon).toBe('spinner');
-    expect(rowKeys(result)).not.toContain('rules');
+    expect(result.status).toMatchObject({ icon: 'spinner', key: 'calculating' });
+    expect(result.reasons).toEqual([]);
     expect(result.action).toEqual({ kind: 'disabled', labelKey: PR_KEYS.action.calculating });
     expect(result.hintKey).toBe(PR_KEYS.hint.calculating);
   });
 
-  it('actionError: adds an error row and clears the hint without changing the action', () => {
+  it('actionError: error status carries the message and clears the hint', () => {
     const result = resolveMergeDock(
       makeInput({ ui: { bypass: false, error: 'gh: failed', method: 'squash' } }),
     );
-    expect(rowKeys(result)).toContain('error');
+    expect(result.status).toMatchObject({
+      key: 'error',
+      labelParams: { message: 'gh: failed' },
+      tone: 'error',
+    });
     expect(result.hintKey).toBeUndefined();
     expect(result.action).toEqual({
       admin: false,
@@ -248,6 +342,19 @@ describe('resolveMergeDock', () => {
       method: 'squash',
       tone: 'success',
     });
+  });
+
+  it('contextLoading: disables the action without flashing the readOnly hint', () => {
+    const result = resolveMergeDock(
+      makeInput({
+        detail: makeDetail({ viewerCanBypass: false, viewerCanWrite: false }),
+        ui: { bypass: false, contextLoading: true, method: 'squash' },
+      }),
+    );
+    expect(result.status.key).toBe('ready');
+    expect(result.action).toEqual({ kind: 'disabled', labelKey: PR_KEYS.action.calculating });
+    expect(result.hintKey).toBeUndefined();
+    expect(result.bypassAvailable).toBe(false);
   });
 
   it('busy: keeps the action kind/tone and attaches a busyLabelKey', () => {

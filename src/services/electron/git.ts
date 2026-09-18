@@ -12,6 +12,7 @@ import {
   type GitPullRequestAction,
   type GitPullRequestActionResult,
   type GitPullRequestDetailResult,
+  type GitPullRequestMergeContext,
   type GitPullResult,
   type GitPushResult,
   type GitRemoteBranchListItem,
@@ -56,6 +57,16 @@ class ElectronGitService {
     path: string;
   }): Promise<GitPullRequestDetailResult> {
     return this.ipc.git.getPullRequestDetail(params);
+  }
+
+  async getPullRequestMergeContext(params: {
+    baseRefName: string;
+    headRefOid: string;
+    number: number;
+    path: string;
+    repo: { name: string; owner: string };
+  }): Promise<GitPullRequestMergeContext> {
+    return this.ipc.git.getPullRequestMergeContext(params);
   }
 
   async runPullRequestAction(params: {

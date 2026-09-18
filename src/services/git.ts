@@ -16,6 +16,7 @@ import type {
   DeviceGitPullRequestAction,
   DeviceGitPullRequestActionResult,
   DeviceGitPullRequestDetailResult,
+  DeviceGitPullRequestMergeContext,
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
@@ -250,6 +251,24 @@ class GitService {
           status: 'error',
         })
       : electronGitService.getPullRequestDetail({ number, path });
+  }
+
+  /** Branch protection, viewer permission and base drift for a pull request. */
+  async getPullRequestMergeContext({
+    deviceId,
+    ...params
+  }: {
+    baseRefName: string;
+    deviceId?: string;
+    headRefOid: string;
+    number: number;
+    path: string;
+    repo: { name: string; owner: string };
+  }): Promise<DeviceGitPullRequestMergeContext | null> {
+    return deviceId
+      ? ((await lambdaClient.device.gitPullRequestMergeContext.query({ deviceId, ...params })) ??
+          null)
+      : electronGitService.getPullRequestMergeContext(params);
   }
 
   /** Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a pull request. */

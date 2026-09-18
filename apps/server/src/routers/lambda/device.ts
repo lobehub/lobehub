@@ -270,6 +270,26 @@ export const deviceRouter = router({
       return result ?? null;
     }),
 
+  gitPullRequestMergeContext: deviceProcedure
+    .input(
+      z.object({
+        baseRefName: z.string(),
+        deviceId: z.string(),
+        headRefOid: z.string().regex(/^[a-f\d]{40}$/i),
+        number: z.number().int().positive(),
+        path: z.string(),
+        repo: z.object({ name: z.string(), owner: z.string() }),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.gitPullRequestMergeContext({
+        ...input,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
   gitWorkingTreeStatus: deviceProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -569,6 +589,7 @@ export const deviceRouter = router({
           z.object({ type: z.literal('close') }),
           z.object({ type: z.literal('reopen') }),
           z.object({ head: z.string(), type: z.literal('deleteBranch') }),
+          z.object({ base: z.string(), type: z.literal('changeBase') }),
         ]),
         deviceId: z.string(),
         number: z.number().int().positive(),

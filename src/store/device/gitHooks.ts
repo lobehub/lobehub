@@ -5,7 +5,9 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type {
   DeviceGitAheadBehind,
+  DeviceGitPullRequestDetail,
   DeviceGitPullRequestDetailResult,
+  DeviceGitPullRequestMergeContext,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
 } from '@lobechat/types';
@@ -237,6 +239,37 @@ export const useFetchGitPullRequestDetail = (
       revalidateOnFocus: true,
       shouldRetryOnError: false,
     },
+  );
+
+/**
+ * Slow merge context (permission, branch protection, base drift), keyed on the
+ * PR head so a push refetches it. Runs after the detail so the pane paints first.
+ */
+export const useFetchGitPullRequestMergeContext = (
+  deviceId: string | undefined,
+  path: string | undefined,
+  detail:
+    Pick<DeviceGitPullRequestDetail, 'baseRefName' | 'headRefOid' | 'number' | 'repo'> | undefined,
+) =>
+  useClientDataSWR<DeviceGitPullRequestMergeContext | null | undefined>(
+    detail && isEnabled(deviceId, path)
+      ? deviceKeys.gitPullRequestMergeContext(
+          deviceId ?? 'local',
+          path,
+          detail.number,
+          detail.headRefOid,
+        )
+      : null,
+    () =>
+      gitService.getPullRequestMergeContext({
+        baseRefName: detail!.baseRefName,
+        deviceId,
+        headRefOid: detail!.headRefOid,
+        number: detail!.number,
+        path: path!,
+        repo: detail!.repo,
+      }),
+    { focusThrottleInterval: 60 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );
 
 /**

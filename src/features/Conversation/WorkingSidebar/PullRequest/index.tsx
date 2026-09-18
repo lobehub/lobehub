@@ -1,14 +1,15 @@
 import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, ScrollArea, Skeleton } from '@lobehub/ui/base-ui';
+import { Button, ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { GlobeIcon, RefreshCwIcon, TriangleAlertIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
 import {
   useFetchGitAheadBehind,
   useFetchGitPullRequestDetail,
+  useFetchGitPullRequestMergeContext,
   useFetchGitWorkingTreeStatus,
 } from '@/store/device';
 
@@ -17,6 +18,7 @@ import { sectionStyles } from '../Overview/sectionStyles';
 import Header from './Header';
 import MergeDock from './MergeDock';
 import Sections from './Sections';
+import PullRequestSkeleton from './Skeleton';
 import { usePullRequestActions } from './usePullRequestActions';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -56,6 +58,11 @@ const PullRequest = memo<PullRequestProps>(
       isLoading,
       mutate,
     } = useFetchGitPullRequestDetail(deviceId, workingDirectory, number, { active });
+    const { data: context } = useFetchGitPullRequestMergeContext(
+      deviceId,
+      workingDirectory,
+      data?.detail ?? undefined,
+    );
     const { data: aheadBehind } = useFetchGitAheadBehind(deviceId, workingDirectory);
     const { data: workingTree } = useFetchGitWorkingTreeStatus(deviceId, workingDirectory);
     const actions = usePullRequestActions({
@@ -65,15 +72,21 @@ const PullRequest = memo<PullRequestProps>(
       workingDirectory,
     });
 
-    const detail = data?.detail;
+    const detail = useMemo(() => {
+      const core = data?.detail;
+      if (!core || !context) return core ?? undefined;
+      const required = new Set(context.requiredChecks);
+      return {
+        ...core,
+        baseBehindBy: context.baseBehindBy,
+        checks: core.checks.map((check) => ({ ...check, required: required.has(check.name) })),
+        viewerCanBypass: context.viewerCanBypass,
+        viewerCanWrite: context.viewerCanWrite,
+      };
+    }, [data?.detail, context]);
     const externalUrl = detail?.url ?? url;
 
-    if (isLoading && !data)
-      return (
-        <div className={sectionStyles.skeleton}>
-          <Skeleton.Text rows={6} />
-        </div>
-      );
+    if (isLoading && !data) return <PullRequestSkeleton />;
 
     if (data?.status === 'gh-missing')
       return (
@@ -137,7 +150,12 @@ const PullRequest = memo<PullRequestProps>(
           contentProps={{ className: styles.scrollContent }}
           viewportProps={{ className: styles.viewport, style: { overflowX: 'hidden' } }}
         >
-          <Header detail={detail} onAction={actions.run} />
+          <Header
+            detail={detail}
+            deviceId={deviceId}
+            workingDirectory={workingDirectory}
+            onAction={actions.run}
+          />
           <Sections
             busy={actions.busy}
             detail={detail}
@@ -147,6 +165,7 @@ const PullRequest = memo<PullRequestProps>(
         </ScrollArea>
         <MergeDock
           busy={actions.busy}
+          contextLoading={context === undefined}
           detail={detail}
           error={actions.error}
           local={local}

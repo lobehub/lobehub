@@ -11,6 +11,7 @@ import {
   getGitWorkingTreeStatus,
   getLinkedPullRequest,
   getPullRequestDetail,
+  getPullRequestMergeContext,
   type GitPullRequestAction,
   listGitBranches,
   listGitRemoteBranches,
@@ -73,6 +74,7 @@ export const DEVICE_RPC_METHODS = [
   'getGitBranch',
   'getLinkedPullRequest',
   'getPullRequestDetail',
+  'getPullRequestMergeContext',
   'runPullRequestAction',
   'getGitWorkingTreeStatus',
   'getGitWorkingTreeFiles',
@@ -209,6 +211,18 @@ export const executeDeviceRpc = async (
 
     case 'getPullRequestDetail': {
       return getPullRequestDetail(params as { number: number; path: string });
+    }
+
+    case 'getPullRequestMergeContext': {
+      return getPullRequestMergeContext(
+        params as {
+          baseRefName: string;
+          headRefOid: string;
+          number: number;
+          path: string;
+          repo: { name: string; owner: string };
+        },
+      );
     }
 
     case 'runPullRequestAction': {

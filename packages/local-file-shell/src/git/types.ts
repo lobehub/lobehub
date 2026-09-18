@@ -86,6 +86,7 @@ export interface GitPullRequestDetail {
   additions: number;
   author: string;
   autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
   baseRefName: string;
   body: string;
   changedFiles: number;
@@ -119,6 +120,19 @@ export interface GitPullRequestDetailResult {
 
 export type GitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
 
+/**
+ * Slow, permission-dependent merge context resolved separately from the PR
+ * detail so the pane can paint before branch protection / compare calls land.
+ */
+export interface GitPullRequestMergeContext {
+  /** Commits the base branch has that the PR head does not. */
+  baseBehindBy: number;
+  /** Status-check contexts required by branch protection on the base branch. */
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
 export type GitPullRequestAction =
   | {
       admin?: boolean;
@@ -134,7 +148,8 @@ export type GitPullRequestAction =
   | { body: string; type: 'comment' }
   | { type: 'close' }
   | { type: 'reopen' }
-  | { head: string; type: 'deleteBranch' };
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
 
 export interface GitPullRequestActionResult {
   error?: string;

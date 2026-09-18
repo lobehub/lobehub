@@ -9,6 +9,7 @@ const detailResult = (
   detail: {
     additions: 0,
     author: 'octocat',
+    baseBehindBy: 0,
     baseRefName: 'main',
     body: '',
     changedFiles: 0,

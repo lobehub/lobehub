@@ -15,7 +15,6 @@ import {
   LoaderCircleIcon,
   RefreshCwIcon,
   ShieldAlertIcon,
-  ShieldCheckIcon,
   TriangleAlertIcon,
 } from 'lucide-react';
 
@@ -25,7 +24,7 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 
-import type { DockRow, Tone } from './mergeDockData';
+import type { DockIcon, Tone } from './mergeDockData';
 
 dayjs.extend(relativeTime);
 
@@ -39,7 +38,7 @@ export const TONE_COLOR: Record<Tone, string> = {
   warning: cssVar.colorWarning,
 };
 
-export const DOCK_ICON: Record<DockRow['icon'], LucideIcon> = {
+export const DOCK_ICON: Record<DockIcon, LucideIcon> = {
   behind: RefreshCwIcon,
   check: CheckIcon,
   conflict: TriangleAlertIcon,
@@ -47,7 +46,6 @@ export const DOCK_ICON: Record<DockRow['icon'], LucideIcon> = {
   merge: GitMergeIcon,
   push: ArrowUpIcon,
   shieldAlert: ShieldAlertIcon,
-  shieldCheck: ShieldCheckIcon,
   spinner: LoaderCircleIcon,
   x: CircleXIcon,
 };

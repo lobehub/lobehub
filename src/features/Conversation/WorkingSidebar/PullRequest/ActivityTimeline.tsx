@@ -11,6 +11,8 @@ import { CheckIcon, CircleSlashIcon, EyeIcon, GitCommitHorizontalIcon, XIcon } f
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { electronSystemService } from '@/services/electron/system';
+
 import type { Tone } from './mergeDockData';
 import { timeAgo, TONE_COLOR, type TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
@@ -86,7 +88,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       font-size: 11px;
     }
   `,
+  sha: css`
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
 }));
+
+const githubAvatar = (login: string) => `https://github.com/${login}.png?size=36`;
 
 const REVIEW_VISUAL: Record<
   DeviceGitPullRequestReview['state'],
@@ -160,7 +173,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(({ busy, detail, onAction }
           return (
             <div className={styles.comment} key={entry.id}>
               <Flexbox horizontal align={'center'} className={styles.commentHead} gap={8}>
-                <Avatar avatar={entry.author[0]?.toUpperCase()} size={18} />
+                <Avatar avatar={githubAvatar(entry.author)} size={18} />
                 <strong>{entry.author}</strong>
                 <span>{timeAgo(entry.at)}</span>
               </Flexbox>
@@ -194,8 +207,19 @@ const ActivityTimeline = memo<ActivityTimelineProps>(({ busy, detail, onAction }
             />
             <span>
               <strong>{entry.author}</strong> {tr(visual.labelKey)}{' '}
-              {entry.kind === 'commit' && <code>{entry.sha.slice(0, 7)}</code>} ·{' '}
-              {timeAgo(entry.at)}
+              {entry.kind === 'commit' && (
+                <code
+                  className={styles.sha}
+                  onClick={() =>
+                    void electronSystemService.openExternalLink(
+                      `https://github.com/${detail.repo.owner}/${detail.repo.name}/pull/${detail.number}/commits/${entry.sha}`,
+                    )
+                  }
+                >
+                  {entry.sha.slice(0, 7)}
+                </code>
+              )}{' '}
+              · {timeAgo(entry.at)}
             </span>
           </Flexbox>
         );

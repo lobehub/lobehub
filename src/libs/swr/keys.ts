@@ -876,6 +876,16 @@ export const deviceKeys = {
       number,
     ],
   ),
+  gitPullRequestMergeContext: def(
+    'device:gitPullRequestMergeContext',
+    (deviceId: string, path: string, number: number, headRefOid?: string) => [
+      'device:gitPullRequestMergeContext',
+      deviceId,
+      path,
+      number,
+      ...(headRefOid === undefined ? [] : [headRefOid]),
+    ],
+  ),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
     deviceId,

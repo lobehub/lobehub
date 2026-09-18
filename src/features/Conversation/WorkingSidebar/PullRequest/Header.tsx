@@ -1,18 +1,29 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
 import { copyToClipboard, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { ArrowRightIcon, EllipsisIcon, ExternalLinkIcon, LinkIcon } from 'lucide-react';
-import { memo } from 'react';
+import { createStaticStyles, cx } from 'antd-style';
+import {
+  ArrowRightIcon,
+  ChevronDownIcon,
+  EllipsisIcon,
+  ExternalLinkIcon,
+  LinkIcon,
+} from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
+import { useGitRemoteBranches } from '@/store/device';
 
 import { rowStyles } from '../Overview/OverviewRow';
 import { sectionStyles } from '../Overview/sectionStyles';
 import { getDetailVisual } from './prVisual';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  actions: css`
+    flex-shrink: 0;
+    margin-block-start: -2px;
+  `,
   head: css`
     padding-block: 10px 8px;
     padding-inline: 8px;
@@ -42,36 +53,66 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillSecondary};
   `,
+  refButton: css`
+    cursor: pointer;
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
   stats: css`
     font-variant-numeric: tabular-nums;
   `,
   title: css`
     flex: 1;
 
-    font-size: 14px;
+    min-width: 0;
+
+    font-size: 15px;
     font-weight: 600;
-    line-height: 20px;
+    line-height: 22px;
     color: ${cssVar.colorText};
-    text-wrap: balance;
+    overflow-wrap: anywhere;
   `,
 }));
 
 interface HeaderProps {
   detail: DeviceGitPullRequestDetail;
+  deviceId?: string;
   onAction: (action: DeviceGitPullRequestAction) => Promise<boolean>;
+  workingDirectory: string;
 }
 
-const Header = memo<HeaderProps>(({ detail, onAction }) => {
+const Header = memo<HeaderProps>(({ detail, deviceId, onAction, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const visual = getDetailVisual(detail);
+  const canChangeBase = detail.viewerCanWrite && detail.state === 'open';
+  const [basePickerOpen, setBasePickerOpen] = useState(false);
+  const { data: remoteBranches } = useGitRemoteBranches(
+    workingDirectory,
+    canChangeBase && basePickerOpen,
+    deviceId,
+  );
+  const baseItems: DropdownItem[] = remoteBranches
+    ? remoteBranches
+        .map((branch) => branch.name.replace(/^[^/]+\//, ''))
+        .filter((name) => name !== detail.headRefName)
+        .map((name) => ({
+          key: name,
+          label: name,
+          onClick: () => {
+            if (name !== detail.baseRefName) void onAction({ base: name, type: 'changeBase' });
+          },
+        }))
+    : [{ disabled: true, key: 'loading', label: t('workingPanel.review.baseRef.loading') }];
+
+  const openOnGithub = () => void electronSystemService.openExternalLink(detail.url);
 
   const menuItems: DropdownItem[] = [
-    {
-      icon: <Icon icon={ExternalLinkIcon} size={14} />,
-      key: 'open',
-      label: t('workingPanel.pr.menu.openOnGithub'),
-      onClick: () => void electronSystemService.openExternalLink(detail.url),
-    },
     {
       icon: <Icon icon={LinkIcon} size={14} />,
       key: 'copy',
@@ -107,9 +148,17 @@ const Header = memo<HeaderProps>(({ detail, onAction }) => {
           <span className={rowStyles.num}>#{detail.number}</span>
           {detail.title}
         </span>
-        <DropdownMenu items={menuItems} placement={'bottomRight'}>
-          <ActionIcon icon={EllipsisIcon} size={'small'} />
-        </DropdownMenu>
+        <Flexbox horizontal className={styles.actions} gap={2}>
+          <ActionIcon
+            icon={ExternalLinkIcon}
+            size={'small'}
+            title={t('workingPanel.pr.menu.openOnGithub')}
+            onClick={openOnGithub}
+          />
+          <DropdownMenu items={menuItems} placement={'bottomRight'}>
+            <ActionIcon icon={EllipsisIcon} size={'small'} />
+          </DropdownMenu>
+        </Flexbox>
       </Flexbox>
       <Flexbox horizontal align={'center'} className={styles.meta} gap={6}>
         <span
@@ -126,9 +175,28 @@ const Header = memo<HeaderProps>(({ detail, onAction }) => {
           {detail.headRefName}
         </span>
         <Icon icon={ArrowRightIcon} size={11} />
-        <span className={styles.ref} title={detail.baseRefName}>
-          {detail.baseRefName}
-        </span>
+        {canChangeBase ? (
+          <DropdownMenu
+            virtual
+            items={baseItems}
+            placement={'bottomLeft'}
+            onOpenChange={setBasePickerOpen}
+          >
+            <span
+              className={cx(styles.ref, styles.refButton)}
+              role={'button'}
+              tabIndex={0}
+              title={t('workingPanel.pr.header.changeBase')}
+            >
+              {detail.baseRefName}
+              <Icon icon={ChevronDownIcon} size={10} />
+            </span>
+          </DropdownMenu>
+        ) : (
+          <span className={styles.ref} title={detail.baseRefName}>
+            {detail.baseRefName}
+          </span>
+        )}
         <span>· {t('workingPanel.pr.header.commits', { count: detail.commits.length })}</span>
         <span className={styles.stats}>
           <span className={rowStyles.changeAdditions}>+{detail.additions}</span>{' '}

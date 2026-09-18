@@ -32,38 +32,56 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   toneSuccess: css`
     ${tone(cssVar.colorSuccess, cssVar.colorSuccessHover)}
   `,
-  toneWarning: css`
-    ${tone(cssVar.colorWarning, cssVar.colorWarningHover)}
-  `,
 }));
 
 const TONE_CLASS = {
   error: styles.toneError,
+  plain: undefined,
   success: styles.toneSuccess,
-  warning: styles.toneWarning,
 };
 
 type SplitAction = Extract<DockAction, { kind: 'merge' | 'autoMerge' | 'updateBranch' }>;
 
+const UPDATE_BRANCH_ACTION: SplitAction = { kind: 'updateBranch', tone: 'success' };
+
 interface DockActionButtonProps {
   action: DockAction;
   busy?: PullRequestBusy;
+  bypass?: boolean;
   detail: DeviceGitPullRequestDetail;
   onAction: (action: DeviceGitPullRequestAction) => Promise<boolean>;
   onPickMethod: (method: DeviceGitPullRequestMergeMethod) => void;
+  onToggleBypass: (bypass: boolean) => void;
+  secondary?: boolean;
 }
 
 const DockActionButton = memo<DockActionButtonProps>(
-  ({ action, busy, detail, onAction, onPickMethod }) => {
+  ({ action, busy, bypass, detail, onAction, onPickMethod, onToggleBypass, secondary }) => {
     const { t } = useTranslation('chat');
     const tr = t as unknown as TranslateKey;
 
-    const methodItems: DropdownItem[] = MERGE_METHODS.map((item) => ({
-      desc: tr(`workingPanel.pr.method.${item}.desc`, { base: detail.baseRefName }),
-      key: item,
-      label: tr(PR_KEYS.method[item]),
-      onClick: () => onPickMethod(item),
-    }));
+    const methodItems: DropdownItem[] = [
+      ...MERGE_METHODS.map((item) => ({
+        desc: tr(`workingPanel.pr.method.${item}.desc`, { base: detail.baseRefName }),
+        key: item,
+        label: tr(PR_KEYS.method[item]),
+        onClick: () => onPickMethod(item),
+      })),
+      ...(bypass === undefined
+        ? []
+        : [
+            { type: 'divider' as const },
+            {
+              checked: bypass,
+              danger: true,
+              desc: t('workingPanel.pr.hint.bypass'),
+              key: 'bypass',
+              label: t('workingPanel.pr.bypass'),
+              onCheckedChange: onToggleBypass,
+              type: 'checkbox' as const,
+            },
+          ]),
+    ];
 
     const splitButton = (
       split: SplitAction,
@@ -72,10 +90,10 @@ const DockActionButton = memo<DockActionButtonProps>(
       onClick: () => void,
     ) => (
       <SplitButton
-        className={TONE_CLASS[split.tone]}
+        className={secondary ? undefined : TONE_CLASS[split.tone]}
         loading={split.busy}
         size={'small'}
-        type={'primary'}
+        type={secondary || split.tone === 'plain' ? 'default' : 'primary'}
       >
         <SplitButton.Main onClick={onClick}>
           {split.busy && split.busyLabelKey ? tr(split.busyLabelKey) : label}
@@ -117,7 +135,7 @@ const DockActionButton = memo<DockActionButtonProps>(
       }
       case 'updateBranch': {
         return splitButton(
-          action,
+          secondary ? { ...UPDATE_BRANCH_ACTION, busy: busy === 'updateBranch' } : action,
           t('workingPanel.pr.action.updateBranch'),
           [
             {

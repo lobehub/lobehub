@@ -8,6 +8,7 @@ import type {
   GitPullRequestCheck,
   GitPullRequestDetail,
   GitPullRequestDetailResult,
+  GitPullRequestMergeContext,
 } from './types';
 
 const log = createLogger('local-file-shell:git');
@@ -77,7 +78,7 @@ type GithubPullRequestDetailPayload = {
   url: string;
 };
 
-export type GithubRepoInfo = { name: string; owner: string; viewerPermission?: string | null };
+export type GithubRepoInfo = { name: string; owner: string };
 
 const failureConclusions = new Set([
   'action_required',
@@ -110,10 +111,7 @@ const normalizeCheckStatus = (node: GithubStatusCheckRollupNode): GitPullRequest
   return 'pending';
 };
 
-const normalizeCheck = (
-  node: GithubStatusCheckRollupNode,
-  requiredChecks: Set<string>,
-): GitPullRequestCheck => {
+const normalizeCheck = (node: GithubStatusCheckRollupNode): GitPullRequestCheck => {
   const name = node.name ?? node.context ?? '';
   const detailsUrl = node.detailsUrl ?? node.targetUrl ?? undefined;
   const startedAt = node.startedAt ?? node.createdAt ?? undefined;
@@ -122,7 +120,7 @@ const normalizeCheck = (
     ...(node.completedAt ? { completedAt: node.completedAt } : {}),
     ...(detailsUrl ? { detailsUrl } : {}),
     name,
-    required: requiredChecks.has(name),
+    required: false,
     ...(startedAt ? { startedAt } : {}),
     status: normalizeCheckStatus(node),
   };
@@ -134,22 +132,26 @@ const toMergeMethod = (raw?: string | null): 'merge' | 'rebase' | 'squash' | und
   return undefined;
 };
 
+export const repoFromPullRequestUrl = (url: string): GithubRepoInfo => {
+  const match = /github\.com\/([^/]+)\/([^/]+)\/pull\//.exec(url ?? '');
+  return { name: match?.[2] ?? '', owner: match?.[1] ?? '' };
+};
+
 export const normalizePullRequestDetail = (
   raw: GithubPullRequestDetailPayload,
   repo: GithubRepoInfo,
-  requiredChecks: Set<string>,
 ): GitPullRequestDetail => {
-  const viewerPermission = repo.viewerPermission ?? '';
   const autoMergeMethod = toMergeMethod(raw.autoMergeRequest?.mergeMethod);
 
   return {
     additions: raw.additions,
     author: raw.author?.login ?? '',
     autoMerge: autoMergeMethod ? { method: autoMergeMethod } : null,
+    baseBehindBy: 0,
     baseRefName: raw.baseRefName,
     body: raw.body ?? '',
     changedFiles: raw.changedFiles,
-    checks: (raw.statusCheckRollup ?? []).map((node) => normalizeCheck(node, requiredChecks)),
+    checks: (raw.statusCheckRollup ?? []).map(normalizeCheck),
     comments: (raw.comments ?? []).map((comment) => ({
       author: comment.author?.login ?? '',
       body: comment.body ?? '',
@@ -182,6 +184,53 @@ export const normalizePullRequestDetail = (
     state: raw.mergedAt ? 'merged' : toLowerOrUndefined(raw.state) === 'closed' ? 'closed' : 'open',
     title: raw.title,
     url: raw.url,
+    viewerCanBypass: false,
+    viewerCanWrite: false,
+  };
+};
+
+const MERGE_CONTEXT_GRAPHQL = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    viewerPermission
+    pullRequest(number: $number) {
+      baseRef {
+        branchProtectionRule { requiredStatusCheckContexts }
+      }
+    }
+  }
+}`.trim();
+
+type MergeContextPayload = {
+  data?: {
+    repository?: {
+      pullRequest?: {
+        baseRef?: {
+          branchProtectionRule?: { requiredStatusCheckContexts?: string[] | null } | null;
+        } | null;
+      } | null;
+      viewerPermission?: string | null;
+    } | null;
+  };
+};
+
+const EMPTY_MERGE_CONTEXT: GitPullRequestMergeContext = {
+  baseBehindBy: 0,
+  requiredChecks: [],
+  viewerCanBypass: false,
+  viewerCanWrite: false,
+};
+
+export const normalizeMergeContext = (
+  payload: MergeContextPayload,
+  baseBehindBy: number,
+): GitPullRequestMergeContext => {
+  const repository = payload.data?.repository;
+  const viewerPermission = repository?.viewerPermission ?? '';
+  return {
+    baseBehindBy,
+    requiredChecks:
+      repository?.pullRequest?.baseRef?.branchProtectionRule?.requiredStatusCheckContexts ?? [],
     viewerCanBypass: viewerPermission === 'ADMIN',
     viewerCanWrite:
       viewerPermission === 'ADMIN' ||
@@ -190,32 +239,55 @@ export const normalizePullRequestDetail = (
   };
 };
 
-const getRequiredStatusCheckNames = async (
-  dirPath: string,
-  repo: { name: string; owner: string },
-  baseRefName: string,
-): Promise<Set<string>> => {
-  try {
-    const { stdout } = await execFileAsync(
-      'gh',
-      [
-        'api',
-        `repos/${repo.owner}/${repo.name}/branches/${baseRefName}/protection/required_status_checks`,
-      ],
-      { cwd: dirPath, timeout: 8000 },
-    );
-    const parsed = JSON.parse(stdout.trim() || '{}') as {
-      checks?: { context: string }[];
-      contexts?: string[];
-    };
-    return new Set([
-      ...(parsed.contexts ?? []),
-      ...(parsed.checks?.map((check) => check.context) ?? []),
-    ]);
-  } catch {
-    // No branch protection, no admin access to read it, or gh failed — treat as none required.
-    return new Set();
-  }
+export const getPullRequestMergeContext = async (payload: {
+  baseRefName: string;
+  headRefOid: string;
+  number: number;
+  path: string;
+  repo: GithubRepoInfo;
+}): Promise<GitPullRequestMergeContext> => {
+  const { path: dirPath, number, repo, baseRefName, headRefOid } = payload;
+  assertBranchName(baseRefName);
+  if (!/^[a-f\d]{40}$/i.test(headRefOid)) return EMPTY_MERGE_CONTEXT;
+  const exec = (args: string[]) => execFileAsync('gh', args, { cwd: dirPath, timeout: 8000 });
+
+  const [graphql, compare] = await Promise.allSettled([
+    exec([
+      'api',
+      'graphql',
+      '-F',
+      `owner=${repo.owner}`,
+      '-F',
+      `name=${repo.name}`,
+      '-F',
+      `number=${number}`,
+      '-f',
+      `query=${MERGE_CONTEXT_GRAPHQL}`,
+    ]),
+    exec([
+      'api',
+      `repos/${repo.owner}/${repo.name}/compare/${baseRefName}...${headRefOid}`,
+      '--jq',
+      '.behind_by',
+    ]),
+  ]);
+
+  if (graphql.status === 'rejected')
+    log.debug('[getPullRequestMergeContext] failed', { number, stderr: graphql.reason?.stderr });
+  const parsed =
+    graphql.status === 'fulfilled'
+      ? (JSON.parse(graphql.value.stdout.trim() || '{}') as MergeContextPayload)
+      : {};
+  const baseBehindBy =
+    compare.status === 'fulfilled' ? Number(compare.value.stdout.trim()) || 0 : 0;
+  return normalizeMergeContext(parsed, baseBehindBy);
+};
+
+const VALID_BRANCH_NAME = /^[\w./-]+$/;
+
+const assertBranchName = (name: string) => {
+  if (!VALID_BRANCH_NAME.test(name) || name.split('/').includes('..'))
+    throw new Error('Invalid branch name');
 };
 
 const isGhMissing = (error: any): boolean => {
@@ -231,36 +303,18 @@ export const getPullRequestDetail = async (payload: {
   const { path: dirPath, number } = payload;
 
   try {
-    const [{ stdout: prStdout }, { stdout: repoStdout }] = await Promise.all([
-      execFileAsync(
-        'gh',
-        ['pr', 'view', String(number), '--json', GITHUB_PULL_REQUEST_DETAIL_FIELDS],
-        {
-          cwd: dirPath,
-          timeout: 8000,
-        },
-      ),
-      execFileAsync('gh', ['repo', 'view', '--json', 'owner,name,viewerPermission'], {
-        cwd: dirPath,
-        timeout: 8000,
-      }),
-    ]);
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['pr', 'view', String(number), '--json', GITHUB_PULL_REQUEST_DETAIL_FIELDS],
+      { cwd: dirPath, timeout: 8000 },
+    );
 
-    const raw = JSON.parse(prStdout.trim() || '{}') as GithubPullRequestDetailPayload;
-    const repoRaw = JSON.parse(repoStdout.trim() || '{}') as {
-      name: string;
-      owner?: { login?: string };
-      viewerPermission?: string;
+    const raw = JSON.parse(stdout.trim() || '{}') as GithubPullRequestDetailPayload;
+
+    return {
+      detail: normalizePullRequestDetail(raw, repoFromPullRequestUrl(raw.url)),
+      status: 'ok',
     };
-    const repo: GithubRepoInfo = {
-      name: repoRaw.name,
-      owner: repoRaw.owner?.login ?? '',
-      viewerPermission: repoRaw.viewerPermission,
-    };
-
-    const requiredChecks = await getRequiredStatusCheckNames(dirPath, repo, raw.baseRefName);
-
-    return { detail: normalizePullRequestDetail(raw, repo, requiredChecks), status: 'ok' };
   } catch (error: any) {
     if (isGhMissing(error)) return { detail: null, status: 'gh-missing' };
     log.debug('[getPullRequestDetail] failed', {
@@ -271,8 +325,6 @@ export const getPullRequestDetail = async (payload: {
     return { detail: null, status: 'error' };
   }
 };
-
-const VALID_BRANCH_NAME = /^[\w./-]+$/;
 
 export const pullRequestActionArgs = (number: number, action: GitPullRequestAction): string[][] => {
   const n = String(number);
@@ -332,10 +384,12 @@ export const pullRequestActionArgs = (number: number, action: GitPullRequestActi
       return [['pr', 'reopen', n]];
     }
     case 'deleteBranch': {
-      const segments = action.head.split('/');
-      if (!VALID_BRANCH_NAME.test(action.head) || segments.includes('..'))
-        throw new Error('Invalid branch name');
+      assertBranchName(action.head);
       return [['api', '-X', 'DELETE', `repos/{owner}/{repo}/git/refs/heads/${action.head}`]];
+    }
+    case 'changeBase': {
+      assertBranchName(action.base);
+      return [['pr', 'edit', n, '--base', action.base]];
     }
   }
 };

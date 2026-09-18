@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   getPullRequestDetail,
+  normalizeMergeContext,
   normalizePullRequestDetail,
   pullRequestActionArgs,
+  repoFromPullRequestUrl,
   runPullRequestAction,
 } from '../pullRequest';
 import type { GitPullRequestAction } from '../types';
@@ -21,7 +23,7 @@ vi.mock('node:child_process', () => {
 });
 
 describe('normalizePullRequestDetail', () => {
-  const repo = { name: 'lobe-chat', owner: 'lobehub', viewerPermission: 'WRITE' };
+  const repo = { name: 'lobe-chat', owner: 'lobehub' };
 
   const basePayload = {
     additions: 12,
@@ -70,8 +72,8 @@ describe('normalizePullRequestDetail', () => {
     url: 'https://github.com/lobehub/lobe-chat/pull/42',
   };
 
-  it('normalizes a mixed CheckRun/StatusContext payload with required tagging', () => {
-    const detail = normalizePullRequestDetail(basePayload, repo, new Set(['legacy-status']));
+  it('normalizes a mixed CheckRun/StatusContext payload; required is resolved by merge context', () => {
+    const detail = normalizePullRequestDetail(basePayload, repo);
 
     expect(detail.isCrossRepository).toBe(true);
     expect(detail.headRefOid).toBe(basePayload.headRefOid);
@@ -87,7 +89,7 @@ describe('normalizePullRequestDetail', () => {
       {
         detailsUrl: 'https://ci/run/2',
         name: 'legacy-status',
-        required: true,
+        required: false,
         status: 'pending',
       },
     ]);
@@ -97,7 +99,6 @@ describe('normalizePullRequestDetail', () => {
     const detail = normalizePullRequestDetail(
       { ...basePayload, mergedAt: '2026-09-02T00:00:00Z', state: 'OPEN' },
       repo,
-      new Set(),
     );
 
     expect(detail.state).toBe('merged');
@@ -105,35 +106,76 @@ describe('normalizePullRequestDetail', () => {
   });
 
   it('maps closed and open states', () => {
-    expect(
-      normalizePullRequestDetail({ ...basePayload, state: 'CLOSED' }, repo, new Set()).state,
-    ).toBe('closed');
-    expect(normalizePullRequestDetail(basePayload, repo, new Set()).state).toBe('open');
+    expect(normalizePullRequestDetail({ ...basePayload, state: 'CLOSED' }, repo).state).toBe(
+      'closed',
+    );
+    expect(normalizePullRequestDetail(basePayload, repo).state).toBe('open');
   });
 
   it('maps autoMergeRequest to a lowercased method', () => {
     const detail = normalizePullRequestDetail(
       { ...basePayload, autoMergeRequest: { mergeMethod: 'SQUASH' } },
       repo,
-      new Set(),
     );
 
     expect(detail.autoMerge).toEqual({ method: 'squash' });
   });
 
-  it('maps viewer permission to viewerCanWrite / viewerCanBypass', () => {
-    expect(
-      normalizePullRequestDetail(basePayload, { ...repo, viewerPermission: 'READ' }, new Set()),
-    ).toMatchObject({ viewerCanBypass: false, viewerCanWrite: false });
-    expect(
-      normalizePullRequestDetail(basePayload, { ...repo, viewerPermission: 'WRITE' }, new Set()),
-    ).toMatchObject({ viewerCanBypass: false, viewerCanWrite: true });
-    expect(
-      normalizePullRequestDetail(basePayload, { ...repo, viewerPermission: 'MAINTAIN' }, new Set()),
-    ).toMatchObject({ viewerCanBypass: false, viewerCanWrite: true });
-    expect(
-      normalizePullRequestDetail(basePayload, { ...repo, viewerPermission: 'ADMIN' }, new Set()),
-    ).toMatchObject({ viewerCanBypass: true, viewerCanWrite: true });
+  it('leaves permission and base drift unset until merge context resolves', () => {
+    expect(normalizePullRequestDetail(basePayload, repo)).toMatchObject({
+      baseBehindBy: 0,
+      viewerCanBypass: false,
+      viewerCanWrite: false,
+    });
+  });
+});
+
+describe('repoFromPullRequestUrl', () => {
+  it('parses owner and repo from the PR url', () => {
+    expect(repoFromPullRequestUrl('https://github.com/lobehub/lobe-chat/pull/42')).toEqual({
+      name: 'lobe-chat',
+      owner: 'lobehub',
+    });
+    expect(repoFromPullRequestUrl('')).toEqual({ name: '', owner: '' });
+  });
+});
+
+describe('normalizeMergeContext', () => {
+  const payload = (viewerPermission: string, contexts: string[] | null = ['ci']) => ({
+    data: {
+      repository: {
+        pullRequest: {
+          baseRef: {
+            branchProtectionRule: { requiredStatusCheckContexts: contexts },
+            name: 'main',
+          },
+          headRefOid: 'a'.repeat(40),
+        },
+        viewerPermission,
+      },
+    },
+  });
+
+  it.each([
+    ['READ', false, false],
+    ['WRITE', true, false],
+    ['MAINTAIN', true, false],
+    ['ADMIN', true, true],
+  ])('maps %s permission', (permission, canWrite, canBypass) => {
+    expect(normalizeMergeContext(payload(permission), 2)).toEqual({
+      baseBehindBy: 2,
+      requiredChecks: ['ci'],
+      viewerCanBypass: canBypass,
+      viewerCanWrite: canWrite,
+    });
+  });
+
+  it('treats a missing protection rule as no required checks', () => {
+    expect(normalizeMergeContext(payload('WRITE', null), 0).requiredChecks).toEqual([]);
+    expect(normalizeMergeContext({}, 0)).toMatchObject({
+      requiredChecks: [],
+      viewerCanWrite: false,
+    });
   });
 });
 
@@ -179,6 +221,7 @@ describe('pullRequestActionArgs', () => {
       { head: 'fix/bug', type: 'deleteBranch' },
       [['api', '-X', 'DELETE', 'repos/{owner}/{repo}/git/refs/heads/fix/bug']],
     ],
+    [{ base: 'canary', type: 'changeBase' }, [['pr', 'edit', '42', '--base', 'canary']]],
   ];
 
   it.each(cases)('maps %o to argv', (action, expected) => {
@@ -186,9 +229,12 @@ describe('pullRequestActionArgs', () => {
   });
 
   it.each([['../fix'], ['fix/../../etc'], ['fix bug'], ['fix;rm -rf']])(
-    'rejects an unsafe branch name %s for deleteBranch',
-    (head) => {
-      expect(() => pullRequestActionArgs(42, { head, type: 'deleteBranch' })).toThrow(
+    'rejects an unsafe branch name %s for deleteBranch and changeBase',
+    (name) => {
+      expect(() => pullRequestActionArgs(42, { head: name, type: 'deleteBranch' })).toThrow(
+        'Invalid branch name',
+      );
+      expect(() => pullRequestActionArgs(42, { base: name, type: 'changeBase' })).toThrow(
         'Invalid branch name',
       );
     },

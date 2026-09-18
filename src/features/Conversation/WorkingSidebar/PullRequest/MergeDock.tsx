@@ -1,15 +1,13 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Checkbox, ScrollArea } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { ArrowUpIcon, ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cx } from 'antd-style';
+import { ArrowUpIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { OverviewRow } from '../Overview/OverviewRow';
-import ChecksList from './ChecksList';
 import DockActionButton from './DockActionButton';
-import { type DockRow, type MergeDockInput, resolveMergeDock } from './mergeDockData';
+import { type DockAction, type MergeDockInput, resolveMergeDock } from './mergeDockData';
 import { readMergeMethod, writeMergeMethod } from './mergeMethodStorage';
 import { DOCK_ICON, TONE_COLOR, type TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
@@ -21,45 +19,59 @@ const BUSY_MAP: Partial<Record<PullRequestBusy, NonNullable<MergeDockInput['ui']
   updateBranch: 'update',
 };
 
+const UPDATE_BRANCH: DockAction = { kind: 'updateBranch', tone: 'success' };
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBar: css`
-    padding-block: 6px 0;
-    padding-inline: 8px;
-  `,
-  bypass: css`
-    padding-block: 4px 0;
-    padding-inline: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  checks: css`
-    overflow: hidden;
-  `,
-  checksViewport: css`
-    overflow-x: hidden;
-    max-height: 200px;
+    flex-wrap: wrap;
+    padding-block-start: 10px;
   `,
   dock: css`
     flex-shrink: 0;
 
-    padding-block: 8px 10px;
-    padding-inline: 8px;
+    padding-block: 10px 12px;
+    padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
   `,
-  hint: css`
-    padding-block: 4px 0;
-    padding-inline: 8px;
+  headline: css`
+    overflow: hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 20px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  headlineWrap: css`
+    overflow-wrap: anywhere;
+    white-space: normal;
+  `,
+  icon: css`
+    flex-shrink: 0;
+  `,
+  sub: css`
+    padding-inline-start: 22px;
 
     font-size: 12px;
     line-height: 18px;
     color: ${cssVar.colorTextTertiary};
+    overflow-wrap: anywhere;
+  `,
+  trailing: css`
+    flex-shrink: 0;
+    margin-inline-end: -6px;
   `,
 }));
 
 interface MergeDockProps {
   busy?: PullRequestBusy;
+  contextLoading?: boolean;
   detail: DeviceGitPullRequestDetail;
   error?: string;
   local?: MergeDockInput['local'];
@@ -70,28 +82,51 @@ interface MergeDockProps {
 }
 
 const MergeDock = memo<MergeDockProps>(
-  ({ busy, detail, error, local, onAction, onDismissError, onPush, onRetry }) => {
+  ({ busy, contextLoading, detail, error, local, onAction, onDismissError, onPush, onRetry }) => {
     const { t } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
     const tr = t as unknown as TranslateKey;
     const [bypass, setBypass] = useState(false);
     const [method, setMethod] = useState(readMergeMethod);
-    const [checksOpen, setChecksOpen] = useState(false);
 
     const model = resolveMergeDock({
       detail,
       local,
-      ui: { busy: busy && BUSY_MAP[busy], bypass, error, method },
+      ui: { busy: busy && BUSY_MAP[busy], bypass, contextLoading, error, method },
     });
+    const { status } = model;
+    const isError = status.key === 'error';
 
-    const rowTrailing = (row: DockRow) => {
-      switch (row.key) {
-        case 'checks': {
-          return <Icon icon={checksOpen ? ChevronDownIcon : ChevronRightIcon} size={12} />;
-        }
-        case 'autoMerge': {
-          return (
+    return (
+      <div className={styles.dock}>
+        <Flexbox horizontal align={'flex-start'} gap={8}>
+          <Icon
+            className={styles.icon}
+            color={TONE_COLOR[status.tone]}
+            icon={DOCK_ICON[status.icon]}
+            size={14}
+            spin={status.icon === 'spinner'}
+            style={{ marginBlockStart: 3 }}
+          />
+          <span
+            className={cx(styles.headline, isError && styles.headlineWrap)}
+            style={isError ? { color: TONE_COLOR.error } : undefined}
+          >
+            {tr(status.labelKey, status.labelParams)}
+          </span>
+          {isError && (
+            <Flexbox horizontal className={styles.trailing} gap={2}>
+              <Button size={'small'} type={'text'} onClick={onDismissError}>
+                {t('workingPanel.pr.dismiss')}
+              </Button>
+              <Button size={'small'} type={'text'} onClick={onRetry}>
+                {tCommon('retry')}
+              </Button>
+            </Flexbox>
+          )}
+          {status.key === 'autoMerge' && (
             <Button
+              className={styles.trailing}
               loading={busy === 'disableAutoMerge'}
               size={'small'}
               type={'text'}
@@ -99,64 +134,14 @@ const MergeDock = memo<MergeDockProps>(
             >
               {t('workingPanel.pr.action.disableAutoMerge')}
             </Button>
-          );
-        }
-        case 'error': {
-          return (
-            <>
-              <Button size={'small'} type={'text'} onClick={onDismissError}>
-                {t('workingPanel.pr.dismiss')}
-              </Button>
-              <Button size={'small'} type={'text'} onClick={onRetry}>
-                {tCommon('retry')}
-              </Button>
-            </>
-          );
-        }
-        default: {
-          return row.trailingKey ? tr(row.trailingKey, row.trailingParams) : undefined;
-        }
-      }
-    };
-
-    return (
-      <div className={styles.dock}>
-        {model.rows.map((row) => {
-          const label = tr(row.labelKey, row.labelParams);
-          return (
-            <Flexbox key={row.key}>
-              <OverviewRow
-                icon={DOCK_ICON[row.icon]}
-                iconColor={TONE_COLOR[row.tone]}
-                spin={row.icon === 'spinner'}
-                title={row.key === 'error' ? label : undefined}
-                trailing={rowTrailing(row)}
-                value={label}
-                weak={row.tone === 'neutral'}
-                onClick={row.expandable ? () => setChecksOpen((open) => !open) : undefined}
-              />
-              {row.key === 'checks' && checksOpen && (
-                <ScrollArea
-                  disableContentFit
-                  className={styles.checks}
-                  viewportProps={{
-                    className: styles.checksViewport,
-                    style: { overflowX: 'hidden' },
-                  }}
-                >
-                  <ChecksList checks={detail.checks} />
-                </ScrollArea>
-              )}
-            </Flexbox>
-          );
-        })}
-        {model.showBypass && (
-          <div className={styles.bypass}>
-            <Checkbox checked={bypass} onChange={setBypass}>
-              {t('workingPanel.pr.bypass')}
-            </Checkbox>
+          )}
+        </Flexbox>
+        {model.reasons.length > 0 && (
+          <div className={styles.sub}>
+            {model.reasons.map((reason) => tr(reason.labelKey, reason.labelParams)).join(' · ')}
           </div>
         )}
+        {model.hintKey && <div className={styles.sub}>{tr(model.hintKey, model.hintParams)}</div>}
         {model.action && (
           <Flexbox horizontal align={'center'} className={styles.actionBar} gap={8}>
             {model.showPush && (
@@ -171,11 +156,24 @@ const MergeDock = memo<MergeDockProps>(
                   : t('workingPanel.pr.action.push', { count: local?.ahead ?? 0 })}
               </Button>
             )}
+            {model.showUpdateBranch && (
+              <DockActionButton
+                secondary
+                action={UPDATE_BRANCH}
+                busy={busy}
+                detail={detail}
+                onAction={onAction}
+                onPickMethod={() => {}}
+                onToggleBypass={() => {}}
+              />
+            )}
             <DockActionButton
               action={model.action}
               busy={busy}
+              bypass={model.bypassAvailable ? bypass : undefined}
               detail={detail}
               onAction={onAction}
+              onToggleBypass={setBypass}
               onPickMethod={(next) => {
                 setMethod(next);
                 writeMergeMethod(next);
@@ -183,7 +181,6 @@ const MergeDock = memo<MergeDockProps>(
             />
           </Flexbox>
         )}
-        {model.hintKey && <div className={styles.hint}>{tr(model.hintKey, model.hintParams)}</div>}
       </div>
     );
   },
