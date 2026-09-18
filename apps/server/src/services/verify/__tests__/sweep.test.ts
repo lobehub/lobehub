@@ -8,7 +8,11 @@ const {
   settleFailedRepair,
   claimVerifying,
   findStuckVerifying,
+  findStuckCollectingEvidence,
+  listOperationTree,
+  loadAgentState,
   operationFindById,
+  recordHeterogeneousDeliverableEvidence,
   recompute,
   resultListByRun,
   upsertByCheckItem,
@@ -18,7 +22,11 @@ const {
   claimVerifying: vi.fn(),
   finalizeVerifyRun: vi.fn(),
   findStuckVerifying: vi.fn(),
+  findStuckCollectingEvidence: vi.fn(),
+  listOperationTree: vi.fn(),
+  loadAgentState: vi.fn(),
   operationFindById: vi.fn(),
+  recordHeterogeneousDeliverableEvidence: vi.fn(),
   recompute: vi.fn(),
   resultListByRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
@@ -29,7 +37,7 @@ vi.mock('@/database/models/verifyRun', () => ({
     vi.fn(function () {
       return {};
     }),
-    { findStuckVerifying },
+    { findStuckVerifying, findStuckCollectingEvidence },
   ),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
@@ -39,7 +47,7 @@ vi.mock('@/database/models/verifyCheckResult', () => ({
 }));
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn(function () {
-    return { findById: operationFindById };
+    return { findById: operationFindById, listOperationTree };
   }),
 }));
 vi.mock('../statusService', () => ({
@@ -49,6 +57,10 @@ vi.mock('../statusService', () => ({
 }));
 vi.mock('../repairTerminal', () => ({ settleFailedRepair }));
 vi.mock('../settle', () => ({ finalizeVerifyRun }));
+vi.mock('../evidenceSubmission', () => ({ recordHeterogeneousDeliverableEvidence }));
+vi.mock('@/server/modules/AgentRuntime', () => ({
+  createAgentStateManager: () => ({ loadAgentState }),
+}));
 
 const db = {} as any;
 const NOW = new Date('2026-08-10T00:00:00Z');
@@ -71,22 +83,28 @@ const singlePage = (runs: unknown[]) => {
   findStuckVerifying.mockResolvedValueOnce(runs).mockResolvedValue([]);
 };
 
+beforeEach(() => {
+  [
+    settleFailedRepair,
+    claimVerifying,
+    finalizeVerifyRun,
+    findStuckVerifying,
+    findStuckCollectingEvidence,
+    listOperationTree,
+    loadAgentState,
+    operationFindById,
+    recordHeterogeneousDeliverableEvidence,
+    recompute,
+    resultListByRun,
+    upsertByCheckItem,
+  ].forEach((m) => m.mockReset());
+  findStuckVerifying.mockResolvedValue([]);
+  findStuckCollectingEvidence.mockResolvedValue([]);
+  resultListByRun.mockResolvedValue([]);
+  claimVerifying.mockResolvedValue(true);
+});
+
 describe('sweepStuckVerifyRuns', () => {
-  beforeEach(() => {
-    [
-      settleFailedRepair,
-      claimVerifying,
-      finalizeVerifyRun,
-      findStuckVerifying,
-      operationFindById,
-      recompute,
-      resultListByRun,
-      upsertByCheckItem,
-    ].forEach((m) => m.mockReset());
-    findStuckVerifying.mockResolvedValue([]);
-    resultListByRun.mockResolvedValue([]);
-    claimVerifying.mockResolvedValue(true);
-  });
 
   it('recomputes a run whose checks all landed but whose rollup was lost', async () => {
     // The exact state a killed post-response judge leaves behind: every verdict
@@ -301,5 +319,109 @@ describe('sweepStuckVerifyRuns', () => {
     expect((await sweepStuckVerifyRuns(db, { now: NOW })).abandoned).toEqual(['run-1']);
     expect(settleFailedRepair).toHaveBeenCalledWith(db, 'u1', 'op-1', undefined);
     expect(finalizeVerifyRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('sweepStuckVerifyRuns — collecting_evidence', () => {
+  /** A run the evidence turn stranded: no rows submitted, op terminal. */
+  const evidenceRun = (overrides?: Partial<Record<string, unknown>>) => ({
+    id: 'ev-run-1',
+    operationId: 'op-1',
+    plan: [{ id: 'c1', required: true }],
+    updatedAt: new Date(NOW.getTime() - VERIFY_ABANDONED_MS - 1000),
+    userId: 'u1',
+    workspaceId: null,
+    ...overrides,
+  });
+
+  const singleEvidencePage = (runs: unknown[]) => {
+    findStuckCollectingEvidence.mockResolvedValueOnce(runs).mockResolvedValue([]);
+  };
+
+  const deadOps = () => [
+    { id: 'op-1', parentOperationId: null, status: 'done' },
+    { id: 'op-1-evidence', parentOperationId: 'op-1', status: 'error' },
+  ];
+
+  beforeEach(() => {
+    listOperationTree.mockResolvedValue(deadOps());
+  });
+
+  it('scans collecting_evidence runs at the abandoned bound', async () => {
+    await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(findStuckCollectingEvidence).toHaveBeenCalledWith(
+      db,
+      new Date(NOW.getTime() - VERIFY_ABANDONED_MS),
+      expect.objectContaining({ after: undefined }),
+    );
+  });
+
+  it('backfills the deliverable as inline evidence and judges', async () => {
+    singleEvidencePage([evidenceRun()]);
+    loadAgentState.mockResolvedValue({
+      host: {
+        hooks: [
+          {
+            id: 'acceptance-evidence-on-complete',
+            type: 'onComplete',
+            webhook: { url: '/api/workflows/verify/on-evidence-complete', body: { deliverable: 'final patch text' } },
+          },
+        ],
+      },
+    });
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(recordHeterogeneousDeliverableEvidence).toHaveBeenCalledWith(
+      expect.objectContaining({ deliverable: 'final patch text', userId: 'u1' }),
+    );
+    expect(upsertByCheckItem).not.toHaveBeenCalled();
+    expect(outcome.evidenceRecovered).toEqual(['ev-run-1']);
+    expect(finalizeVerifyRun).toHaveBeenCalledWith(db, 'u1', 'op-1', {}, undefined);
+  });
+
+  it('skips a run whose evidence turn is still live', async () => {
+    singleEvidencePage([evidenceRun()]);
+    listOperationTree.mockResolvedValue([
+      { id: 'op-1', parentOperationId: null, status: 'done' },
+      { id: 'op-1-evidence', parentOperationId: 'op-1', status: 'running' },
+    ]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.skipped).toBe(1);
+    expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
+    expect(claimVerifying).not.toHaveBeenCalled();
+  });
+
+  it('judges instead of backfilling when evidence rows already exist', async () => {
+    singleEvidencePage([evidenceRun()]);
+    resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'pending', verdict: null }]);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
+    expect(outcome.settled).toEqual(['ev-run-1']);
+  });
+
+  it('degrades to the errored-rows ending when the agent state is gone', async () => {
+    singleEvidencePage([evidenceRun()]);
+    loadAgentState.mockResolvedValue(null);
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(recordHeterogeneousDeliverableEvidence).not.toHaveBeenCalled();
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
+  });
+
+  it('degrades to the errored-rows ending when Redis is unreachable', async () => {
+    singleEvidencePage([evidenceRun()]);
+    loadAgentState.mockRejectedValue(new Error('Redis is required'));
+
+    const outcome = await sweepStuckVerifyRuns(db, { now: NOW });
+
+    expect(outcome.abandoned).toEqual(['ev-run-1']);
+    expect(finalizeVerifyRun).toHaveBeenCalled();
   });
 });

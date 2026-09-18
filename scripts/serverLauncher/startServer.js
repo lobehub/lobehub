@@ -175,6 +175,10 @@ const startGateway = async () => {
 // The goal sweep is not an optimization: a Goal Graph advances on events, so a
 // dropped delivery or a process that dies after dispatch would strand the goal
 // forever with nothing to notice. The sweep is what makes that recoverable.
+// The verify sweep is the same story one layer down: verification runs strand
+// in `verifying` / `collecting_evidence` when the post-response judge or the
+// evidence turn dies after the durable status write, and nothing else re-reads
+// the stranded rows (see `sweepStuckVerifyRuns`).
 const QSTASH_SCHEDULES = [
   {
     cron: '*/10 * * * *',
@@ -185,6 +189,11 @@ const QSTASH_SCHEDULES = [
     cron: '*/5 * * * *',
     id: 'lobe-goal-sweep',
     path: '/api/workflows/goal/sweep',
+  },
+  {
+    cron: '*/10 * * * *',
+    id: 'lobe-verify-sweep',
+    path: '/api/workflows/verify/sweep',
   },
 ];
 
