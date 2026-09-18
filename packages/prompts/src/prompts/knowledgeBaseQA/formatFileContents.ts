@@ -1,9 +1,39 @@
+/**
+ * Line window a file's `content` was cut to. Present only when the caller
+ * sliced the file (see `readKnowledge`), so callers that still pass whole
+ * files render exactly as before.
+ */
+export interface FileContentRange {
+  /** 1-based, inclusive. `0` when the window is empty. */
+  endLine: number;
+  /** 1-based, inclusive. */
+  startLine: number;
+  totalCharCount: number;
+  totalLineCount: number;
+  /** True when lines after `endLine` exist and the model should page. */
+  truncated: boolean;
+}
+
 export interface FileContent {
   content: string;
   error?: string;
   fileId: string;
   filename: string;
+  range?: FileContentRange;
 }
+
+const formatRangeAttributes = (range: FileContentRange): string =>
+  ` lines="${range.startLine}-${range.endLine}" totalLines="${range.totalLineCount}" totalChars="${range.totalCharCount}" truncated="${range.truncated}"`;
+
+const formatRangeNotice = (range: FileContentRange): string => {
+  if (range.endLine === 0) {
+    return `\n[offset ${range.startLine} is past the end of this ${range.totalLineCount}-line file; nothing returned. The file is not empty.]`;
+  }
+
+  if (!range.truncated) return '';
+
+  return `\n[Showing lines ${range.startLine}-${range.endLine} of ${range.totalLineCount}. Call readKnowledge again with offset=${range.endLine + 1} to continue.]`;
+};
 
 /**
  * Formats a single file content with XML tags
@@ -13,8 +43,11 @@ const formatFileContent = (file: FileContent): string => {
     return `<file id="${file.fileId}" name="${file.filename}" error="${file.error}" />`;
   }
 
-  return `<file id="${file.fileId}" name="${file.filename}">
-${file.content}
+  const rangeAttributes = file.range ? formatRangeAttributes(file.range) : '';
+  const rangeNotice = file.range ? formatRangeNotice(file.range) : '';
+
+  return `<file id="${file.fileId}" name="${file.filename}"${rangeAttributes}>
+${file.content}${rangeNotice}
 </file>`;
 };
 
