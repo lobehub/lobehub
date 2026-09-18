@@ -24,6 +24,8 @@ export const config = {
     '/labs',
     '/eval',
     '/eval(.*)',
+    '/project',
+    '/project(.*)',
     /** Shared-agent pages need the same SPA rewrite as the other client routes. */
     '/a',
     '/a/(.*)',
