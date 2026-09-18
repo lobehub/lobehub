@@ -1,10 +1,11 @@
 import { Flexbox } from '@lobehub/ui';
-import { Segmented, Text } from '@lobehub/ui/base-ui';
-import { useState } from 'react';
+import { Tabs, Text } from '@lobehub/ui/base-ui';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useProjectStore } from '@/store/project';
 
@@ -13,7 +14,8 @@ import { ProjectWorkingDirectories } from './index';
 
 export function ProjectDirectoriesPage() {
   const { t } = useTranslation('project');
-  const [section, setSection] = useState('general');
+  const { section = 'general' } = useParams<{ section?: string }>();
+  const navigate = useWorkspaceAwareNavigate();
   const { projectId } = useActiveRouteParams<{ projectId: string }>();
   const { data, error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectDetail)(
     projectId,
@@ -27,13 +29,14 @@ export function ProjectDirectoriesPage() {
         <Text fontSize={24} weight={600}>
           {t('settings.title')}
         </Text>
-        <Segmented
-          value={section}
-          options={[
-            { label: t('settings.general'), value: 'general' },
-            { label: t('settings.environments'), value: 'environments' },
+        <Tabs
+          activeKey={section}
+          variant="square"
+          items={[
+            { label: t('settings.general'), key: 'general' },
+            { label: t('settings.environments'), key: 'environments' },
           ]}
-          onChange={setSection}
+          onChange={(key) => navigate(`/project/${projectId}/settings/${key}`)}
         />
         {section === 'general' ? (
           <GeneralSettings key={data.data.project.id} project={data.data.project} />

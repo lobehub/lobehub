@@ -1,4 +1,3 @@
-import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
@@ -14,6 +13,7 @@ import { cssVar } from 'antd-style';
 import { PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
@@ -24,31 +24,46 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
+import { getProjectConversationPath } from '../Layout/navigation';
+import { openAddDirectoryModal } from './AddDirectoryModal';
+import { openEnvironmentModal } from './EnvironmentModal';
 import { directoryAgentName, useDirectoryAgent } from './useDirectoryAgent';
 
 function StartDirectoryContent({
   directories,
   coordinatorAgentId,
+  projectId,
+  initialDirectoryId,
 }: {
   directories: ProjectDirectory[];
   coordinatorAgentId: string;
+  projectId: string;
+  initialDirectoryId?: string;
 }) {
-  const [directoryId, setDirectoryId] = useState(directories[0].id);
-  const directory = directories.find((d) => d.id === directoryId)!;
+  const [directoryId, setDirectoryId] = useState(
+    initialDirectoryId ?? (directories.length === 1 ? directories[0].id : ''),
+  );
+  const liveDirectories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const locations = liveDirectories.data?.data ?? directories;
+  const directory = locations.find((d) => d.id === directoryId);
+  const attachEnvironment = useProjectDirectoryStore((s) => s.attachEnvironment);
   const { t } = useTranslation('project');
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const { agentId, agentName, setAgentId } = useDirectoryAgent(coordinatorAgentId);
   const startTopic = useProjectDirectoryStore((s) => s.startTopic);
+  const createTopic = useProjectDirectoryStore((s) => s.createProjectTopic);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
   const start = async () => {
     setPending(true);
     setError(undefined);
     try {
-      const topic = await startTopic(directory.id, agentId, t('directories.untitled'));
+      const topic = directory
+        ? await startTopic(directory.id, agentId, t('directories.untitled'))
+        : await createTopic({ projectId, agentId, title: t('directories.untitled') });
       close();
-      navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
+      navigate(getProjectConversationPath(projectId, topic.id));
     } catch (error) {
       console.error('Failed to start directory work', error);
       setError(error);
@@ -59,20 +74,35 @@ function StartDirectoryContent({
   return (
     <>
       <Flexbox gap={16} padding={16}>
-        {directories.length > 1 ? (
-          <Select
-            aria-label={t('directories.device')}
-            value={directoryId}
-            options={directories.map((d) => ({
-              value: d.id,
-              label: `${d.deviceName || d.deviceId} · ${d.path}`,
-            }))}
-            onChange={(id) => id && setDirectoryId(id)}
-          />
-        ) : (
-          <Text type="secondary">
-            {directory.deviceName || directory.deviceId} · {directory.path}
-          </Text>
+        <Text>{t('topics.executionContext')}</Text>
+        <Select
+          aria-label={t('topics.executionContext')}
+          disabled={pending}
+          value={directoryId || '__none__'}
+          options={[
+            { value: '__none__', label: t('topics.conversationOnly') },
+            ...locations
+              .filter((d) => d.instanceId)
+              .map((d) => ({
+                value: d.id,
+                label: `${d.environmentName || d.name} · ${d.deviceName || d.deviceId} · ${d.path}`,
+              })),
+          ]}
+          onChange={(id) => setDirectoryId(id === '__none__' ? '' : (id ?? ''))}
+        />
+        {!locations.length && (
+          <Button
+            onClick={() =>
+              openEnvironmentModal({
+                onSaved: async (env) => {
+                  await attachEnvironment(projectId, env.id);
+                  openAddDirectoryModal(projectId, env.id);
+                },
+              })
+            }
+          >
+            {t('settings.addDirectory')}
+          </Button>
         )}
         <AssigneeAgentSelector
           currentAgentId={agentId}
@@ -100,90 +130,6 @@ function StartDirectoryContent({
     </>
   );
 }
-function DirectoryTopics({
-  directories,
-  name,
-  coordinatorAgentId,
-}: {
-  directories: ProjectDirectory[];
-  name: string;
-  coordinatorAgentId: string;
-}) {
-  const directory = directories[0];
-  const { t } = useTranslation('project');
-  const navigate = useWorkspaceAwareNavigate();
-  const request = useProjectDirectoryStore((s) => s.useFetchEnvironmentTopics)(
-    directories.map((d) => d.id),
-  );
-  const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const agentLabel = (topic: {
-    agentId: string | null;
-    agentName: string | null;
-    agentTitle: string | null;
-  }) =>
-    directoryAgentName(
-      { name: topic.agentName, title: topic.agentTitle },
-      topic.agentId === inboxId,
-      t('inbox.title', { ns: 'chat' }),
-    ) ?? t('untitledAgent', { ns: 'chat' });
-  return (
-    <Flexbox gap={4} paddingBlock={8}>
-      <Flexbox horizontal align="center" justify="space-between" paddingInline={8}>
-        <Text ellipsis fontSize={12} type="secondary">
-          {name}
-        </Text>
-        <ActionIcon
-          aria-label={t('directories.start')}
-          disabled={!directory?.instanceId}
-          icon={PlusIcon}
-          size="small"
-          title={t('directories.start')}
-          onClick={() =>
-            createModal({
-              title: t('directories.start'),
-              content: (
-                <StartDirectoryContent
-                  coordinatorAgentId={coordinatorAgentId}
-                  directories={directories}
-                />
-              ),
-              footer: null,
-              styles: { content: { padding: 0 } },
-              width: 440,
-            })
-          }
-        />
-      </Flexbox>
-      {request.error ? (
-        <AsyncError error={request.error} variant="inline" onRetry={request.mutate} />
-      ) : request.isLoading ? (
-        <Text>{t('loading', { ns: 'common' })}</Text>
-      ) : request.data?.data.length ? (
-        request.data.data.map((topic) => (
-          <NavItem
-            key={topic.id}
-            title={topic.title || t('directories.untitled')}
-            titleColor={cssVar.colorText}
-            slots={{
-              titlePrefix: (
-                <Avatar
-                  avatar={topic.agentAvatar || agentLabel(topic)}
-                  size={20}
-                  title={agentLabel(topic)}
-                />
-              ),
-            }}
-            onClick={() => topic.agentId && navigate(AGENT_CHAT_TOPIC_URL(topic.agentId, topic.id))}
-          />
-        ))
-      ) : (
-        <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
-          {t('directories.noConversations')}
-        </Text>
-      )}
-    </Flexbox>
-  );
-}
 export function ProjectDirectoryTopics({
   projectId,
   coordinatorAgentId,
@@ -191,42 +137,147 @@ export function ProjectDirectoryTopics({
   projectId: string;
   coordinatorAgentId: string;
 }) {
-  const request = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
-  const environments = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const { t } = useTranslation('project');
+  const navigate = useWorkspaceAwareNavigate();
+  const { topicId } = useParams<{ topicId?: string }>();
+  const [groupBy, setGroupBy] = useState('status');
+  const request = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(projectId);
+  const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const groups = new Map<string, NonNullable<typeof request.data>['data']>();
+  const labels = new Map<string, string>();
+  for (const topic of request.data?.data ?? []) {
+    const name =
+      directoryAgentName(
+        { name: topic.agentName, title: topic.agentTitle },
+        topic.agentId === inboxId,
+        t('inbox.title', { ns: 'chat' }),
+      ) ?? t('untitledAgent', { ns: 'chat' });
+    const key =
+      groupBy === 'agent'
+        ? topic.agentId!
+        : groupBy === 'status'
+          ? topic.status || 'active'
+          : 'all';
+    labels.set(
+      key,
+      groupBy === 'agent'
+        ? name
+        : key === 'all'
+          ? t('topics.all')
+          : t(`topics.status.${key}`, { defaultValue: key }),
+    );
+    groups.set(key, [...(groups.get(key) ?? []), topic]);
+  }
+  const order = [
+    'waitingForHuman',
+    'failed',
+    'unread',
+    'running',
+    'active',
+    'scheduled',
+    'completed',
+    'archived',
+  ];
+  const entries = [...groups].sort(([a], [b]) =>
+    groupBy === 'status' ? order.indexOf(a) - order.indexOf(b) : 0,
+  );
   return (
-    <Flexbox gap={4}>
-      {request.error || environments.error ? (
-        <AsyncError
-          error={request.error || environments.error}
-          variant="inline"
-          onRetry={() => Promise.all([request.mutate(), environments.mutate()])}
+    <Flexbox gap={8} paddingBlock={12}>
+      <Flexbox horizontal align="center" justify="space-between" paddingInline={8}>
+        <Text weight={600}>{t('topics.title')}</Text>
+        <ActionIcon
+          aria-label={t('sidebar.newConversation')}
+          disabled={directories.isLoading || !!directories.error}
+          icon={PlusIcon}
+          title={t('sidebar.newConversation')}
+          onClick={() =>
+            createModal({
+              title: t('sidebar.newConversation'),
+              content: (
+                <StartDirectoryContent
+                  coordinatorAgentId={coordinatorAgentId}
+                  directories={directories.data?.data ?? []}
+                  projectId={projectId}
+                />
+              ),
+              footer: null,
+              width: 520,
+            })
+          }
         />
-      ) : (
-        environments.data?.data.map((environment) => {
-          const directories = (request.data?.data ?? []).filter(
-            (d) => d.environmentId === environment.id,
-          );
-          return (
-            <DirectoryTopics
-              coordinatorAgentId={coordinatorAgentId}
-              directories={directories}
-              key={environment.id}
-              name={environment.name}
-            />
-          );
-        })
-      )}
-      {!request.error &&
-        request.data?.data
-          .filter((d) => !d.environmentId)
-          .map((directory) => (
-            <DirectoryTopics
-              coordinatorAgentId={coordinatorAgentId}
-              directories={[directory]}
-              key={directory.id}
-              name={directory.name}
+      </Flexbox>
+      <Select
+        aria-label={t('topics.groupBy')}
+        value={groupBy}
+        options={(['status', 'all', 'agent'] as const).map((value) => ({
+          value,
+          label: t(`topics.group.${value}`),
+        }))}
+        onChange={(value) => setGroupBy(value ?? 'status')}
+      />
+      {request.error || directories.error ? (
+        <AsyncError
+          error={request.error || directories.error}
+          onRetry={() => Promise.all([request.mutate(), directories.mutate()])}
+        />
+      ) : null}
+      {request.isLoading ? (
+        <Text>{t('loading', { ns: 'common' })}</Text>
+      ) : !request.data?.data.length && !request.error ? (
+        <Text type="secondary">{t('directories.noConversations')}</Text>
+      ) : null}
+      {entries.map(([key, topics]) => (
+        <Flexbox gap={4} key={key}>
+          {groupBy !== 'all' && (
+            <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
+              {labels.get(key)} · {topics.length}
+            </Text>
+          )}
+          {topics.map((topic) => (
+            <NavItem
+              active={topic.id === topicId}
+              key={topic.id}
+              title={topic.title || t('directories.untitled')}
+              titleColor={cssVar.colorText}
+              extra={
+                groupBy !== 'status' && (
+                  <Text fontSize={12} type="secondary">
+                    {t(`topics.status.${topic.status || 'active'}`, {
+                      defaultValue: topic.status || 'active',
+                    })}
+                  </Text>
+                )
+              }
+              slots={{
+                titlePrefix: (
+                  <Avatar
+                    avatar={topic.agentAvatar || topic.agentName || topic.agentTitle || '🤖'}
+                    size={20}
+                    title={topic.agentName || topic.agentTitle || undefined}
+                  />
+                ),
+              }}
+              onClick={() => navigate(getProjectConversationPath(projectId, topic.id))}
             />
           ))}
+        </Flexbox>
+      ))}
     </Flexbox>
   );
+}
+
+export function openProjectTopicModal(options: {
+  projectId: string;
+  coordinatorAgentId: string;
+  directories: ProjectDirectory[];
+  initialDirectoryId?: string;
+  title: string;
+}) {
+  return createModal({
+    title: options.title,
+    content: <StartDirectoryContent {...options} />,
+    footer: null,
+    width: 520,
+  });
 }

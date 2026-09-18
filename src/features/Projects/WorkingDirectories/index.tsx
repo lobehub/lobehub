@@ -1,18 +1,25 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Select, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Select, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FolderIcon, GitBranchIcon, MonitorIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { useDeviceStore } from '@/store/device';
+import { useProjectStore } from '@/store/project';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
+import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openBindDirectoryModal } from './BindDirectoryModal';
 import { openEnvironmentModal } from './EnvironmentModal';
+import { openProjectTopicModal } from './SidebarTopics';
 
 export function ProjectWorkingDirectories({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project');
+  const project = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
+  useDeviceStore((s) => s.useFetchDevices)(true);
+  const devices = useDeviceStore((s) => s.devices);
   const linked = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const available = useProjectDirectoryStore((s) => s.useFetchEnvironments)();
   const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
@@ -134,11 +141,15 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
                     >
                       {source.url.replace('https://github.com/', 'GitHub · ')}
                     </a>
-                  ) : (
+                  ) : null}
+                  <Flexbox horizontal align="center" justify="space-between">
                     <Text fontSize={13} type="secondary">
-                      {t('settings.noRepository')}
+                      {t('settings.workLocations')}
                     </Text>
-                  )}
+                    <Button size="small" onClick={() => openAddDirectoryModal(projectId, env.id)}>
+                      {t('settings.addDirectory')}
+                    </Button>
+                  </Flexbox>
                   <Flexbox gap={8}>
                     {bindings.length ? (
                       bindings.map((d) => (
@@ -149,7 +160,32 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
                             style={{ marginTop: 3, flexShrink: 0 }}
                           />
                           <Flexbox gap={2}>
-                            <Text fontSize={13}>{d.deviceName || d.deviceId}</Text>
+                            <Flexbox horizontal align="center" gap={8} justify="space-between">
+                              <Text fontSize={13}>{d.deviceName || d.deviceId}</Text>
+                              <Text fontSize={12} type="secondary">
+                                {t(
+                                  devices.find((device) => device.deviceId === d.deviceId)?.online
+                                    ? 'settings.deviceOnline'
+                                    : 'settings.deviceOffline',
+                                )}
+                              </Text>
+                              <Button
+                                disabled={!project.data?.data.project.coordinatorAgentId}
+                                size="small"
+                                onClick={() =>
+                                  openProjectTopicModal({
+                                    projectId,
+                                    coordinatorAgentId:
+                                      project.data!.data.project.coordinatorAgentId,
+                                    directories: bindings,
+                                    initialDirectoryId: d.id,
+                                    title: t('directories.start'),
+                                  })
+                                }
+                              >
+                                {t('directories.start')}
+                              </Button>
+                            </Flexbox>
                             <Text
                               fontSize={12}
                               style={{ overflowWrap: 'anywhere' }}

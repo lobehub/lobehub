@@ -29,6 +29,61 @@ const write = procedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string().uuid() });
 
 export const projectWorkingDirectoryRouter = router({
+  associateTopic: write
+    .input(
+      z.object({
+        projectId: z.string(),
+        topicId: z.string(),
+        directoryId: z.string().uuid().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [input.topicId],
+      );
+      return {
+        data: await ctx.directoryModel.associateTopic(
+          input.projectId,
+          input.topicId,
+          input.directoryId,
+        ),
+        success: true,
+      };
+    }),
+  createProjectTopic: procedure
+    .use(withScopedPermission('topic:create'))
+    .input(
+      z.object({
+        projectId: z.string(),
+        agentId: z.string(),
+        title: z.string().trim().min(1).max(255),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseConversationTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [{ agentId: input.agentId }],
+      );
+      return {
+        data: await ctx.directoryModel.createProjectTopic(
+          input.projectId,
+          input.agentId,
+          input.title,
+        ),
+        success: true,
+      };
+    }),
+  listProjectTopics: procedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const data = await ctx.directoryModel.listProjectTopics(input.projectId);
+      await assertCanViewTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        data.map((topic) => topic.id),
+      );
+      return { data, success: true };
+    }),
   attachEnvironment: write
     .input(z.object({ projectId: z.string(), environmentId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => ({

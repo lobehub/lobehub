@@ -30,6 +30,7 @@ import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { openAssociateTopicModal } from '@/features/Projects/WorkingDirectories/AssociateTopicModal';
 import { openShareModal } from '@/features/ShareModal';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -43,6 +44,7 @@ import { useGlobalStore } from '@/store/global';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 export interface TopicItemDropdownMenuProps {
+  completionLabel?: string;
   fav?: boolean;
   id?: string;
   status?: ChatTopicStatus | null;
@@ -50,6 +52,7 @@ export interface TopicItemDropdownMenuProps {
 }
 
 export const useTopicItemDropdownMenu = ({
+  completionLabel,
   fav,
   id,
   status,
@@ -97,11 +100,23 @@ export const useTopicItemDropdownMenu = ({
     if (!id) return [];
 
     return [
+      ...(canEditTopic
+        ? [
+            {
+              key: 'associate-project',
+              label: t('directories.bind', { ns: 'project' }),
+              icon: <Icon icon={FolderInput} />,
+              onClick: () => openAssociateTopicModal(id, activeAgentId),
+            },
+          ]
+        : []),
       {
         disabled: !canEditTopic,
         icon: <Icon icon={isCompleted ? ArchiveRestore : Archive} />,
         key: 'markCompleted',
-        label: isCompleted ? t('actions.unmarkCompleted') : t('actions.markCompleted'),
+        label:
+          completionLabel ??
+          (isCompleted ? t('actions.unmarkCompleted') : t('actions.markCompleted')),
         onClick: () => {
           if (isCompleted) {
             unmarkTopicCompleted(id);
@@ -307,6 +322,7 @@ export const useTopicItemDropdownMenu = ({
     id,
     fav,
     isCompleted,
+    completionLabel,
     title,
     canCreateTopic,
     canEditTopic,

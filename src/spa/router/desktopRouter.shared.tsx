@@ -49,7 +49,11 @@ import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/route
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
-import { projectDirectoriesRouteMeta, projectsRouteMeta } from '@/features/Projects/routeMeta';
+import {
+  projectConversationRouteMeta,
+  projectDirectoriesRouteMeta,
+  projectsRouteMeta,
+} from '@/features/Projects/routeMeta';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
@@ -995,8 +999,17 @@ export const sharedMainAreaChildren: RouteObject[] = [
   {
     children: [
       {
-        element: redirectElement('tasks'),
+        element: redirectElement('conversation'),
         index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/project/[projectId]/conversation'),
+          'Desktop > Project Conversation',
+          { preloadId: 'project-conversation' },
+        ),
+        handle: { meta: projectConversationRouteMeta },
+        path: 'conversation/:topicId?',
       },
       {
         element: dynamicElement(
@@ -1013,7 +1026,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
           { preloadId: 'project-settings' },
         ),
         handle: { meta: projectDirectoriesRouteMeta },
-        path: 'settings',
+        path: 'settings/:section?',
       },
       {
         element: dynamicElement(

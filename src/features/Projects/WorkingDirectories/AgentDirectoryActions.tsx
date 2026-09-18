@@ -67,12 +67,13 @@ export function AgentDirectoryActions({
         items={[
           ...bindings.map((directory) => ({
             key: `open-${directory.id}`,
-            label: t('directories.openProject', { name: directory.projectName }),
+            label: t('topics.viewProject'),
             onClick: () => navigate(`/project/${directory.projectSlug ?? directory.projectId}`),
           })),
+          ...(bindings.length ? [{ type: 'divider' as const }] : []),
           ...bindings.map((directory) => ({
             key: `settings-${directory.id}`,
-            label: t('settings.title'),
+            label: t('topics.settings'),
             onClick: () =>
               navigate(`/project/${directory.projectSlug ?? directory.projectId}/settings`),
           })),

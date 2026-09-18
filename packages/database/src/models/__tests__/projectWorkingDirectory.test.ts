@@ -280,3 +280,60 @@ describe('project environment settings', () => {
     ]);
   });
 });
+
+describe('project topic journeys', () => {
+  it('lists conversations without directories alongside directory topics, retaining each agent', async () => {
+    const plain = await model.createProjectTopic(
+      base.projectId,
+      'directory-coordinator',
+      'Planning',
+    );
+    const directory = await model.bind(base);
+    const work = await model.startTopic(directory.id, 'directory-agent', 'Implementation');
+    const list = await model.listProjectTopics(base.projectId);
+    expect(list).toHaveLength(2);
+    expect(list.find((t) => t.id === plain.id)).toMatchObject({
+      agentId: 'directory-coordinator',
+      projectWorkingDirectoryId: null,
+    });
+    expect(list.find((t) => t.id === work.id)).toMatchObject({
+      agentId: 'directory-agent',
+      projectWorkingDirectoryId: directory.id,
+    });
+    await expect(other.listProjectTopics(base.projectId)).rejects.toThrow('access denied');
+  });
+  it('associates an existing conversation without changing its agent or metadata', async () => {
+    await db.insert(topics).values({
+      id: 'existing',
+      agentId: 'directory-agent',
+      userId,
+      metadata: { workingDirectory: undefined },
+    });
+    await model.associateTopic(base.projectId, 'existing');
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'existing'));
+    expect(topic).toMatchObject({
+      projectId: base.projectId,
+      agentId: 'directory-agent',
+      metadata: {},
+      projectWorkingDirectoryId: null,
+    });
+    await expect(other.associateTopic(base.projectId, 'existing')).rejects.toThrow('access denied');
+  });
+  it('refuses running topics and mismatched execution locations without partially changing ownership', async () => {
+    const directory = await model.bind(base);
+    await db.insert(topics).values([
+      { id: 'running', agentId: 'directory-agent', userId, status: 'running' },
+      {
+        id: 'different-path',
+        agentId: 'directory-agent',
+        userId,
+        metadata: { workingDirectory: '/elsewhere' },
+      },
+    ]);
+    await expect(model.associateTopic(base.projectId, 'running')).rejects.toThrow('running');
+    await expect(
+      model.associateTopic(base.projectId, 'different-path', directory.id),
+    ).rejects.toThrow('existing device');
+    expect((await db.select().from(topics)).every((t) => t.projectId === null)).toBe(true);
+  });
+});

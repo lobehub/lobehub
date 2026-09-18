@@ -1,5 +1,6 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import {
+  Avatar,
   Button,
   createModal,
   ModalFooter,
@@ -52,7 +53,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
         style={{ maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' }}
       >
         <Text type="secondary">{t('directories.bindDescription')}</Text>
-        <Flexbox gap={8}>
+        <Flexbox gap={4}>
           <Flexbox horizontal align="center" gap={8}>
             <Icon icon={MonitorIcon} size={16} />
             <Text>{deviceName}</Text>
@@ -75,7 +76,12 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
             value={projectId}
             options={[
               ...(projects.data?.data ?? []).map((project) => ({
-                label: project.name,
+                label: (
+                  <Flexbox horizontal align="center" gap={8}>
+                    <Avatar avatar={project.avatar || '📁'} size={20} />
+                    {project.name}
+                  </Flexbox>
+                ),
                 value: project.id,
               })),
               {
@@ -108,12 +114,11 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
               const env = environments.data?.data.find((env) => env.id === option.value);
               const source = env?.configuration.sources?.find((source) => source.kind === 'git');
               return (
-                <Flexbox gap={2}>
+                <Flexbox horizontal align="center" gap={8}>
                   <Text>{option.label}</Text>
-                  {env && (
+                  {source && (
                     <Text fontSize={12} type="secondary">
-                      {source?.url.replace('https://github.com/', 'GitHub · ') ||
-                        t('settings.noRepository')}
+                      {source.url.replace('https://github.com/', 'GitHub · ')}
                     </Text>
                   )}
                 </Flexbox>

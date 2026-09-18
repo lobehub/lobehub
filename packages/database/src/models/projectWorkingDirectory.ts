@@ -2,7 +2,7 @@ import nodePath from 'node:path';
 
 import type { ChatTopicMetadata, EnvironmentConfiguration } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
-import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -447,6 +447,121 @@ export class ProjectWorkingDirectoryModel {
       })
       .returning();
     return topic;
+  }
+
+  async listProjectTopics(projectId: string) {
+    await this.project(projectId);
+    return this.db
+      .select({
+        id: topics.id,
+        title: topics.title,
+        status: topics.status,
+        agentId: topics.agentId,
+        agentTitle: agents.title,
+        agentName: agents.name,
+        agentAvatar: agents.avatar,
+        updatedAt: topics.updatedAt,
+        projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+      })
+      .from(topics)
+      .innerJoin(agents, eq(agents.id, topics.agentId))
+      .where(
+        and(
+          eq(topics.projectId, projectId),
+          buildWorkspaceWhere(this.scope(), topics),
+          buildWorkspaceWhere(this.scope(), agents),
+          isNull(topics.deletedAt),
+        ),
+      )
+      .orderBy(desc(topics.updatedAt));
+  }
+
+  async createProjectTopic(projectId: string, agentId: string, title: string) {
+    await this.project(projectId, true);
+    const [agent] = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, agentId), buildWorkspaceWhere(this.scope(), agents)));
+    if (!agent) throw new Error('Agent not found or access denied');
+    const [topic] = await this.db
+      .insert(topics)
+      .values({
+        projectId,
+        agentId,
+        title,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      })
+      .returning();
+    return topic;
+  }
+
+  async associateTopic(projectId: string, topicId: string, directoryId?: string) {
+    await this.project(projectId, true);
+    const directory = directoryId ? await this.resolve(directoryId, projectId) : undefined;
+    return this.db.transaction(async (tx) => {
+      const [topic] = await tx
+        .select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.id, topicId),
+            eq(topics.userId, this.userId),
+            buildWorkspaceWhere(this.scope(), topics),
+            isNull(topics.deletedAt),
+          ),
+        )
+        .for('update');
+      if (!topic) throw new Error('Topic not found or access denied');
+      if (topic.projectId && topic.projectId !== projectId)
+        throw new Error('Topic already belongs to another project');
+      if (topic.status === 'running' || topic.metadata?.runningOperation)
+        throw new Error('Wait for the running topic to finish before associating it');
+      const source = getWorkingDirSourcePath(
+        topic.metadata?.workingDirectoryConfig ?? topic.metadata?.workingDirectory,
+      );
+      if (source && !directory) throw new Error('Select the existing working directory');
+      const pinned = topic.metadata?.projectExecution?.deviceId ?? topic.metadata?.boundDeviceId;
+      if (
+        directory &&
+        ((source && source.replace(/[\\/]+$/, '') !== directory.path.replace(/[\\/]+$/, '')) ||
+          (pinned && pinned !== directory.deviceId))
+      )
+        throw new Error('Keep the existing device and working directory');
+      if (topic.projectWorkingDirectoryId && topic.projectWorkingDirectoryId !== directoryId)
+        throw new Error('Keep the existing project directory binding');
+      if (directory && topic.agentId) {
+        const [agent] = await tx
+          .select()
+          .from(agents)
+          .where(and(eq(agents.id, topic.agentId), buildWorkspaceWhere(this.scope(), agents)));
+        if (
+          !agent ||
+          (agent.agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+            agent.agencyConfig.boundDeviceId !== directory.deviceId)
+        )
+          throw new Error('Agent cannot use this execution target');
+      }
+      const [updated] = await tx
+        .update(topics)
+        .set({
+          projectId,
+          ...(directory
+            ? {
+                projectWorkingDirectoryId: directory.id,
+                metadata: {
+                  ...topic.metadata,
+                  projectExecution: { deviceId: directory.deviceId },
+                  workingDirectory: directory.path,
+                  workingDirectoryConfig: { path: directory.path },
+                },
+              }
+            : {}),
+        })
+        .where(eq(topics.id, topicId))
+        .returning();
+      return updated;
+    });
   }
 
   async listTopics(directoryId: string) {
