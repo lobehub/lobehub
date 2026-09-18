@@ -3129,14 +3129,20 @@ export const aiAgentRouter = router({
       // Zod's z.any() infers `data?: any`, but the wire shape always includes
       // a `data` field (may be null). Cast at the boundary instead of widening
       // the shared `AgentStreamEvent` type or the service signature.
-      await heteroService.heteroIngest({
+      const outcome = await heteroService.heteroIngest({
         agentType,
         assistantMessageId,
         events: events as AgentStreamEvent[],
         operationId,
         topicId,
       });
-      return { ack: true as const };
+
+      // A refused batch is reported in the ack, not as a transport error: it is
+      // permanent (every later batch is refused too), so a producer must stop
+      // and fail the run rather than burn its retry budget on it. Returned
+      // alongside the original `ack` so producers that predate this field keep
+      // working — the row marker `heteroIngest` stamps is what covers them.
+      return { ack: true as const, ...outcome };
     } catch (error: any) {
       // Preserve deliberate auth errors (e.g. the ownership FORBIDDEN) instead
       // of masking them as a generic 500.
