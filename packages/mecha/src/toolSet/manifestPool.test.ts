@@ -146,6 +146,16 @@ describe('assembleManifestPool', () => {
       { excludedIdentifiers: ['gone', 'lobe-remote-device'] },
     );
     expect(pool.manifests.map((m) => m.identifier)).toEqual(['kept']);
+    // Counts what the exclusion actually removed: both `gone` and the
+    // device identifier were contributed by a source. An excluded id that
+    // no source contributed must not inflate this.
+    expect(pool.excludedCount).toBe(2);
+    expect(
+      assembleManifestPool(
+        { installedPlugins: [manifest('kept')] },
+        { excludedIdentifiers: ['never-here'] },
+      ).excludedCount,
+    ).toBe(0);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('composio'), [
       { identifier: 'broken', reason: 'missing `api` field (expected array)' },
     ]);

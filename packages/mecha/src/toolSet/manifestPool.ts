@@ -173,6 +173,12 @@ export interface AssembleManifestPoolOptions {
 export interface ManifestPool {
   /** Identifiers served by a connector manifest; same-named plugins were dropped. */
   connectorIdentifiers: Set<string>;
+  /**
+   * How many manifests the exclusion actually removed — not the size of the
+   * excluded set, which may name identifiers no source contributed (a device
+   * builtin the walls already dropped, say). Diagnostics read this.
+   */
+  excludedCount: number;
   manifests: LobeToolManifest[];
 }
 
@@ -217,14 +223,15 @@ export const assembleManifestPool = (
   const additionalManifests = dropInvalidManifests(sources.additional ?? [], 'additionalManifests');
 
   const excluded = new Set(options.excludedIdentifiers ?? []);
-  const manifests = [
+  const merged = [
     ...pluginManifests,
     ...builtinManifests,
     ...composioManifests,
     ...lobehubSkillManifests,
     ...connectorManifests,
     ...additionalManifests,
-  ].filter((m) => !excluded.has(m.identifier));
+  ];
+  const manifests = merged.filter((m) => !excluded.has(m.identifier));
 
-  return { connectorIdentifiers, manifests };
+  return { connectorIdentifiers, excludedCount: merged.length - manifests.length, manifests };
 };

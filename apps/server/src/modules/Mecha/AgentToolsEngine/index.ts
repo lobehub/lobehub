@@ -61,7 +61,7 @@ export const createServerToolsEngine = (
   // browser; the builtin list arrives pre-filtered by the device walls and
   // `excludeIdentifiers` closes the second half of that wall for the other
   // sources.
-  const { manifests } = assembleManifestPool(
+  const { excludedCount, manifests } = assembleManifestPool(
     {
       additional: additionalManifests,
       builtinTools: builtinToolsOverride,
@@ -77,7 +77,7 @@ export const createServerToolsEngine = (
     manifests.length,
     context.installedPlugins.length,
     additionalManifests.length,
-    excludeIdentifiers?.size ?? 0,
+    excludedCount,
   );
 
   return new ToolsEngine({
