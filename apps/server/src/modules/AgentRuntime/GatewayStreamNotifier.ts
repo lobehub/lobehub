@@ -235,10 +235,10 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     }
 
     void this.pushEvent(operationId, {
-      // Share-visitor runs must not receive the creator's raw operation
-      // metadata (agentConfig / system prompt, modelRuntimeConfig, userId,
-      // workspaceId) over their WS channel — see `buildPublicInitEventData`.
-      data: isShareInit ? buildPublicInitEventData(initialState) : initialState,
+      // Every run, not just share visitors: nothing on the other end reads this
+      // event's data, while the raw `initialState` is the whole `AgentState` —
+      // the LLM context plus the tool-set maps. See `buildPublicInitEventData`.
+      data: buildPublicInitEventData(initialState),
       operationId,
       stepIndex: 0,
       timestamp: Date.now(),

@@ -69,11 +69,17 @@ export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction =
 };
 
 /**
- * Public `agent_runtime_init` DTO pushed to the Gateway for shared-agent
- * visitor runs. The full operation metadata must never cross the WS boundary to
- * the visitor. The client doesn't render anything from this event today —
- * `runAgent.ts`'s `agent_runtime_init` case only logs it — so `status` is the
- * only field forwarded.
+ * The `agent_runtime_init` DTO pushed to the Gateway.
+ *
+ * Applied to EVERY run, not just shared-agent visitors. No consumer reads this
+ * event's data: the web handler logs it and breaks, the CLI prints a fixed
+ * line, and the gateway transport does not handle the type at all. What the raw
+ * `initialState` would otherwise carry is the entire `AgentState` — the LLM
+ * context in `messages` plus the tool-set maps that `stripStateForStream`
+ * already treats as the size problem on `finalState`, and for a visitor the
+ * creator's `agentConfig` / system prompt on top.
+ *
+ * `status` is kept because it is the one field the shape has ever needed.
  */
 export const buildPublicInitEventData = (initialState: any): { status?: unknown } => ({
   status: initialState?.status,

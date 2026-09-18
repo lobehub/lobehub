@@ -150,6 +150,31 @@ describe('GatewayStreamNotifier', () => {
       expect(inner.calls.publishAgentRuntimeInit[0]).toEqual(['op-1', initialState]);
     });
 
+    it('pushes only the status, never the whole AgentState', async () => {
+      // Nothing on the other end reads this event's data, while the raw state
+      // carries the LLM context and every enabled tool's manifest.
+      await notifier.publishAgentRuntimeInit('op-1', {
+        agentConfig: { systemRole: 'secret prompt' },
+        messages: [{ content: 'x'.repeat(50_000), role: 'user' }],
+        status: 'running',
+        toolManifestMap: { big: 'manifest' },
+        userId: 'user-1',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const push = mockFetch.mock.calls.find((c: any[]) =>
+        String(c[0]).endsWith('/api/operations/push-event'),
+      );
+      const pushed = JSON.parse(push![1].body);
+      const initEvent = (pushed.events ?? [pushed.event ?? pushed]).find(
+        (e: any) => e?.type === 'agent_runtime_init' || e?.event?.type === 'agent_runtime_init',
+      );
+      const data = (initEvent?.data ?? initEvent?.event?.data) as Record<string, unknown>;
+
+      expect(data).toEqual({ status: 'running' });
+    });
+
     it('calls gateway init and push-event endpoints', async () => {
       await notifier.publishAgentRuntimeInit('op-1', { userId: 'user-1' });
 
