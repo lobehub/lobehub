@@ -5,22 +5,33 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { LobeChatDatabase } from '../../../type';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type { FtsSearchBackendScope } from '../types';
+import type { PostgresFtsSearchDialect } from './dialect';
 
-/** Columns shared by the workspace-aware tables searched by pg_search. */
-export interface PgSearchFtsSearchWorkspaceScopedColumns {
+/** Columns shared by the workspace-aware tables searched by the PostgreSQL providers. */
+export interface PostgresFtsSearchWorkspaceScopedColumns {
   userId: AnyPgColumn;
   visibility?: AnyPgColumn;
   workspaceId: AnyPgColumn;
 }
 
-/** Shared state and query-shaping helpers used by the pg_search provider modules. */
-export interface PgSearchFtsSearchContext {
+/**
+ * Shared state and query-shaping helpers used by the PostgreSQL provider modules.
+ */
+export interface PostgresFtsSearchContext {
   db: LobeChatDatabase;
+  dialect: PostgresFtsSearchDialect;
   liftedScopeWhere: (workspaceIdColumn: SQLWrapper) => SQL | undefined;
   liftsAgentFilter: boolean;
+  /**
+   * Whether non-indexed exclusions (restricted knowledge bases) sit above the
+   * scored scan. ParadeDB keeps them out of its TopN scan and lets restricted
+   * rows consume pool slots; plain PostgreSQL applies them inside the exact
+   * scan so a restricted top hit cannot take a slot from an authorized one.
+   */
+  liftsExclusionFilter: boolean;
   liftsWorkspaceFilter: boolean;
   scanCandidateLimit: (limit: number) => number;
-  scanScopeWhere: (cols: PgSearchFtsSearchWorkspaceScopedColumns) => SQL;
+  scanScopeWhere: (cols: PostgresFtsSearchWorkspaceScopedColumns) => SQL;
   scope: FtsSearchBackendScope;
   userId: string;
 }
@@ -56,10 +67,11 @@ const AGENT_SCOPE_CANDIDATE_POOL = 20_000;
  */
 const WORKSPACE_ID_IN_BM25_INDEX = false;
 
-export function createPgSearchFtsSearchContext(
+export function createPostgresFtsSearchContext(
   db: LobeChatDatabase,
   scope: FtsSearchBackendScope,
-): PgSearchFtsSearchContext {
+  dialect: PostgresFtsSearchDialect,
+): PostgresFtsSearchContext {
   // The original backend copied scope fields in its constructor. Keep the same
   // snapshot semantics instead of retaining a caller-owned mutable object.
   const normalizedScope: FtsSearchBackendScope = {
@@ -67,14 +79,21 @@ export function createPgSearchFtsSearchContext(
     userId: scope.userId,
     workspaceId: scope.workspaceId,
   };
-  const liftsWorkspaceFilter = !WORKSPACE_ID_IN_BM25_INDEX && !normalizedScope.workspaceId;
-  const liftsAgentFilter = WORKSPACE_ID_IN_BM25_INDEX || !normalizedScope.workspaceId;
+  // Lifting filters above the scan only pays off for ParadeDB's TopN scan. A plain
+  // PostgreSQL dialect keeps every filter inline, which collapses each query to a
+  // single exact stage with the requested limit.
+  const liftsWorkspaceFilter =
+    dialect.isolatesScoredScan && !WORKSPACE_ID_IN_BM25_INDEX && !normalizedScope.workspaceId;
+  const liftsAgentFilter =
+    dialect.isolatesScoredScan && (WORKSPACE_ID_IN_BM25_INDEX || !normalizedScope.workspaceId);
 
   return {
     db,
+    dialect,
     liftedScopeWhere: (workspaceIdColumn) =>
       liftsWorkspaceFilter ? (isNull(workspaceIdColumn) as SQL) : undefined,
     liftsAgentFilter,
+    liftsExclusionFilter: dialect.isolatesScoredScan,
     liftsWorkspaceFilter,
     scanCandidateLimit: (limit) =>
       liftsWorkspaceFilter

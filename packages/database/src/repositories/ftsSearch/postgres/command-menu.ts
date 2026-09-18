@@ -1,3 +1,4 @@
+import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
 
 import {
@@ -10,7 +11,6 @@ import {
   messages,
   topics,
 } from '../../../schemas';
-import { sanitizeBm25Query } from '../../../utils/bm25';
 import {
   libraryVisibleFileSource,
   notAgentShareFileReference,
@@ -28,21 +28,55 @@ import type {
   FtsSearchMessageResult,
   FtsSearchTopicResult,
 } from '../types';
+import type { PostgresFtsSearchContext } from './context';
+import { AGENT_SCOPE_CANDIDATE_POOL } from './context';
+import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, buildSelectedResponse, mapScoresToRelevance, truncate } from './results';
-import type { PgSearchFtsSearchContext } from './scope';
-import { AGENT_SCOPE_CANDIDATE_POOL } from './scope';
 
-/** Topics and messages are displayed by recency after a larger BM25 candidate pool is fetched. */
+/** Topics and messages are displayed by recency after a larger scored candidate pool is fetched. */
 const RECENCY_CANDIDATE_MULTIPLIER = 4;
+
+/**
+ * Searchable fields per table. Field order is part of the emitted BM25 SQL, and
+ * the weights mirror the Elasticsearch boosts so synthesized scores rank alike.
+ */
+const AGENT_FIELDS: PostgresFtsSearchField[] = [
+  { column: agents.title, weight: 5 },
+  { column: agents.description, weight: 2 },
+  { column: agents.slug, weight: 4 },
+  { column: agents.tags, jsonb: true, weight: 3 },
+  { column: agents.systemRole },
+];
+
+const TOPIC_FIELDS: PostgresFtsSearchField[] = [
+  { column: topics.title, weight: 2 },
+  { column: topics.content },
+  { column: topics.description },
+];
+
+const MESSAGE_FIELDS: PostgresFtsSearchField[] = [{ column: messages.content }];
+
+const FILE_FIELDS: PostgresFtsSearchField[] = [{ column: files.name, weight: 4 }];
+
+const CHAT_GROUP_FIELDS: PostgresFtsSearchField[] = [
+  { column: chatGroups.title, weight: 4 },
+  { column: chatGroups.description, weight: 2 },
+];
+
+const KNOWLEDGE_BASE_FIELDS: PostgresFtsSearchField[] = [
+  { column: knowledgeBases.name, weight: 4 },
+  { column: knowledgeBases.description },
+];
 
 /** Search agents by title, description, slug, tags, and system role. */
 export async function searchAgents(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
 ): Promise<FtsSearchBackendResponse<FtsSearchAgentResult>> {
-  const bm25Query = sanitizeBm25Query(query);
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(agents.id, AGENT_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -52,7 +86,7 @@ export async function searchAgents(
       description: agents.description,
       id: agents.id,
       name: agents.name,
-      score: sql<number>`paradedb.score(${agents.id})`.as('score'),
+      score: score.as('score'),
       slug: agents.slug,
       tags: agents.tags,
       title: agents.title,
@@ -60,13 +94,8 @@ export async function searchAgents(
       workspaceId: agents.workspaceId,
     })
     .from(agents)
-    .where(
-      and(
-        context.scanScopeWhere(agents),
-        sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query} OR ${agents.slug} @@@ ${bm25Query} OR ${agents.tags} @@@ ${bm25Query} OR ${agents.systemRole} @@@ ${bm25Query})`,
-      ),
-    )
-    .orderBy(sql`paradedb.score(${agents.id}) DESC`)
+    .where(and(context.scanScopeWhere(agents), dialect.match(AGENT_FIELDS, preparedQuery)))
+    .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('agent_hits');
 
@@ -112,14 +141,15 @@ export async function searchAgents(
 
 /** Search topics by title, content, and description. */
 export async function searchTopics(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   agentId?: string,
 ): Promise<FtsSearchBackendResponse<FtsSearchTopicResult>> {
-  const bm25Query = sanitizeBm25Query(query);
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(topics.id, TOPIC_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -129,7 +159,7 @@ export async function searchTopics(
       favorite: topics.favorite,
       groupId: topics.groupId,
       id: topics.id,
-      score: sql<number>`paradedb.score(${topics.id})`.as('score'),
+      score: score.as('score'),
       sessionId: topics.sessionId,
       title: topics.title,
       updatedAt: topics.updatedAt,
@@ -144,10 +174,15 @@ export async function searchTopics(
         // the creator's command-menu search.
         notShareVisitorTopic(),
         agentId && !context.liftsAgentFilter ? eq(topics.agentId, agentId) : undefined,
-        sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
+        dialect.match(TOPIC_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`paradedb.score(${topics.id}) DESC`)
+    // LIKE scores tie frequently; keep recent hits before the candidate cutoff.
+    // ParadeDB retains its score-only ordering to preserve the TopN scan.
+    .orderBy(
+      sql`${score} DESC`,
+      ...(dialect.isolatesScoredScan ? [] : [desc(topics.updatedAt), topics.id]),
+    )
     // `agent_id` is not a BM25 field, so when score ordering is valid its
     // filter lives above the scan and the pool deepens to compensate.
     .limit(
@@ -223,14 +258,15 @@ export async function searchTopics(
 
 /** Search messages by content. */
 export async function searchMessages(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   agentId?: string,
 ): Promise<FtsSearchBackendResponse<FtsSearchMessageResult>> {
-  const bm25Query = sanitizeBm25Query(query);
   const candidateLimit = limit * RECENCY_CANDIDATE_MULTIPLIER;
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(messages.id, MESSAGE_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -241,7 +277,7 @@ export async function searchMessages(
       id: messages.id,
       model: messages.model,
       role: messages.role,
-      score: sql<number>`paradedb.score(${messages.id})`.as('score'),
+      score: score.as('score'),
       summary: messages.summary,
       topicId: messages.topicId,
       updatedAt: messages.updatedAt,
@@ -256,10 +292,15 @@ export async function searchMessages(
         // userId and are only identifiable through their parent topic.
         notShareVisitorMessage(),
         agentId && !context.liftsAgentFilter ? eq(messages.agentId, agentId) : undefined,
-        sql`${messages.content} @@@ ${bm25Query}`,
+        dialect.match(MESSAGE_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`paradedb.score(${messages.id}) DESC`)
+    // Message recency follows creation time, even when older messages are edited.
+    // Preserve ParadeDB's score-only TopN scan.
+    .orderBy(
+      sql`${score} DESC`,
+      ...(dialect.isolatesScoredScan ? [] : [desc(messages.createdAt), messages.id]),
+    )
     // `agent_id` is not a BM25 field, so when score ordering is valid its
     // filter lives above the scan and the pool deepens to compensate.
     .limit(
@@ -326,13 +367,26 @@ export async function searchMessages(
 
 /** Search files by name. */
 export async function searchFiles(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   excludeKbIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchFileResult>> {
-  const bm25Query = sanitizeBm25Query(query);
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(files.id, FILE_FIELDS, preparedQuery);
+  // A file linked to any restricted KB is fully hidden. The subquery avoids
+  // leaking it through a different joined membership row.
+  const excludeKb = (fileId: SQLWrapper) =>
+    excludeKbIds && excludeKbIds.length > 0
+      ? notInArray(
+          fileId,
+          db
+            .select({ fileId: knowledgeBaseFiles.fileId })
+            .from(knowledgeBaseFiles)
+            .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
+        )
+      : undefined;
 
   const hits = db
     .select({
@@ -340,7 +394,7 @@ export async function searchFiles(
       fileType: files.fileType,
       id: files.id,
       name: files.name,
-      score: sql<number>`paradedb.score(${files.id})`.as('score'),
+      score: score.as('score'),
       size: files.size,
       updatedAt: files.updatedAt,
       url: files.url,
@@ -353,10 +407,11 @@ export async function searchFiles(
         ne(files.fileType, 'custom/document'),
         // Keep non-library files out of command-menu search.
         libraryVisibleFileSource(files.source),
-        sql`${files.name} @@@ ${bm25Query}`,
+        context.liftsExclusionFilter ? undefined : excludeKb(files.id),
+        dialect.match(FILE_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`paradedb.score(${files.id}) DESC`)
+    .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('file_hits');
 
@@ -381,17 +436,7 @@ export async function searchFiles(
         context.liftedScopeWhere(hits.workspaceId),
         // ParadeDB only supports indexed predicates inside its BM25 scan.
         notAgentShareFileReference(db, hits.id),
-        // A file linked to any restricted KB is fully hidden. The subquery
-        // avoids leaking it through a different joined membership row.
-        excludeKbIds && excludeKbIds.length > 0
-          ? notInArray(
-              hits.id,
-              db
-                .select({ fileId: knowledgeBaseFiles.fileId })
-                .from(knowledgeBaseFiles)
-                .where(inArray(knowledgeBaseFiles.knowledgeBaseId, excludeKbIds)),
-            )
-          : undefined,
+        context.liftsExclusionFilter ? excludeKb(hits.id) : undefined,
       ),
     )
     .orderBy(desc(hits.score))
@@ -415,12 +460,13 @@ export async function searchFiles(
 
 /** Search chat groups by title and description. */
 export async function searchChatGroups(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
 ): Promise<FtsSearchBackendResponse<FtsSearchChatGroupResult>> {
-  const bm25Query = sanitizeBm25Query(query);
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(chatGroups.id, CHAT_GROUP_FIELDS, preparedQuery);
 
   const hits = db
     .select({
@@ -429,19 +475,14 @@ export async function searchChatGroups(
       createdAt: chatGroups.createdAt,
       description: chatGroups.description,
       id: chatGroups.id,
-      score: sql<number>`paradedb.score(${chatGroups.id})`.as('score'),
+      score: score.as('score'),
       title: chatGroups.title,
       updatedAt: chatGroups.updatedAt,
       workspaceId: chatGroups.workspaceId,
     })
     .from(chatGroups)
-    .where(
-      and(
-        context.scanScopeWhere(chatGroups),
-        sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
-      ),
-    )
-    .orderBy(sql`paradedb.score(${chatGroups.id}) DESC`)
+    .where(and(context.scanScopeWhere(chatGroups), dialect.match(CHAT_GROUP_FIELDS, preparedQuery)))
+    .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('chat_group_hits');
 
@@ -476,13 +517,16 @@ export async function searchChatGroups(
 
 /** Search knowledge bases by name and description. */
 export async function searchKnowledgeBases(
-  context: PgSearchFtsSearchContext,
+  context: PostgresFtsSearchContext,
   query: string,
   limit: number,
   excludeIds?: string[],
 ): Promise<FtsSearchBackendResponse<FtsSearchKnowledgeBaseResult>> {
-  const bm25Query = sanitizeBm25Query(query);
-  const { db } = context;
+  const { db, dialect } = context;
+  const preparedQuery = dialect.prepare(query);
+  const score = dialect.score(knowledgeBases.id, KNOWLEDGE_BASE_FIELDS, preparedQuery);
+  const excludeIdsWhere = (id: SQLWrapper) =>
+    excludeIds && excludeIds.length > 0 ? notInArray(id, excludeIds) : undefined;
 
   const hits = db
     .select({
@@ -491,7 +535,7 @@ export async function searchKnowledgeBases(
       description: knowledgeBases.description,
       id: knowledgeBases.id,
       name: knowledgeBases.name,
-      score: sql<number>`paradedb.score(${knowledgeBases.id})`.as('score'),
+      score: score.as('score'),
       updatedAt: knowledgeBases.updatedAt,
       workspaceId: knowledgeBases.workspaceId,
     })
@@ -499,10 +543,11 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.scanScopeWhere(knowledgeBases),
-        sql`(${knowledgeBases.name} @@@ ${bm25Query} OR ${knowledgeBases.description} @@@ ${bm25Query})`,
+        context.liftsExclusionFilter ? undefined : excludeIdsWhere(knowledgeBases.id),
+        dialect.match(KNOWLEDGE_BASE_FIELDS, preparedQuery),
       ),
     )
-    .orderBy(sql`paradedb.score(${knowledgeBases.id}) DESC`)
+    .orderBy(sql`${score} DESC`)
     .limit(context.scanCandidateLimit(limit))
     .as('knowledge_base_hits');
 
@@ -520,9 +565,9 @@ export async function searchKnowledgeBases(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
-        // Keep excluded knowledge bases out of the inner BM25 scan so TopN
-        // ranking remains intact; restricted rows only consume pool slots.
-        excludeIds && excludeIds.length > 0 ? notInArray(hits.id, excludeIds) : undefined,
+        // ParadeDB keeps excluded knowledge bases out of the inner scored scan so
+        // TopN ranking remains intact; restricted rows only consume pool slots.
+        context.liftsExclusionFilter ? excludeIdsWhere(hits.id) : undefined,
       ),
     )
     .orderBy(desc(hits.score))
