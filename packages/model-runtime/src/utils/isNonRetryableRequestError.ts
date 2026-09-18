@@ -1,17 +1,9 @@
 import { toRecord } from '@lobechat/utils';
 
+import { getErrorCodeSpec } from '../errors/specs';
 import { AgentRuntimeErrorType } from '../types/error';
 import { isErrorCausedByContentFilter } from './isErrorCausedByContentFilter';
 
-const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
-  AgentRuntimeErrorType.ExceededContextWindow,
-  AgentRuntimeErrorType.InvalidRequestFormat,
-  AgentRuntimeErrorType.ProviderContentPolicyViolation,
-  AgentRuntimeErrorType.ProviderNoImageGenerated,
-  // Avoid amplifying an oversized payload across channels, accepting that proxy limits can differ.
-  AgentRuntimeErrorType.RequestBodyTooLarge,
-]);
-const RETRYABLE_ERROR_TYPES = new Set<string>([AgentRuntimeErrorType.RemoteMediaDownloadTimeout]);
 const RETRYABLE_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
 const RETRYABLE_ERROR_CODES = new Set([
   'accountdeactivated',
@@ -185,8 +177,8 @@ export const isNonRetryableRequestError = (error: unknown): boolean => {
   if (error && typeof error === 'object') {
     const errorType = (error as { errorType?: unknown }).errorType;
     if (typeof errorType === 'string') {
-      if (RETRYABLE_ERROR_TYPES.has(errorType)) return false;
-      if (NON_RETRYABLE_ERROR_TYPES.has(errorType)) return true;
+      const routeFallback = getErrorCodeSpec(errorType)?.routeFallback;
+      if (routeFallback !== undefined) return !routeFallback;
     }
   }
 

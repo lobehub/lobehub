@@ -51,6 +51,9 @@ export interface ErrorCodeSpec {
   /** Whether transport-level retry is allowed. */
   retryable: boolean;
 
+  /** Whether RouterRuntime may continue with a different route option. */
+  routeFallback?: boolean;
+
   severity: ErrorSeverity;
 }
 
@@ -282,6 +285,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 400,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Prompt + tool payload exceeds the model context window.',
   },
@@ -315,6 +319,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 400,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Upstream rejected the request as malformed (bad JSON / schema / parameters).',
   },
@@ -326,6 +331,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 400,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Upstream rejected the serialized request body as too large.',
   },
@@ -374,7 +380,8 @@ export const ERROR_CODE_SPECS: SpecMap = {
     severity: 'warning',
     attribution: 'system',
     httpStatus: 504,
-    retryable: true,
+    retryable: false,
+    routeFallback: true,
     countAsFailure: false,
     description: 'Provider timed out while downloading a remote image or file URL.',
   },
@@ -514,6 +521,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'provider',
     httpStatus: 471,
     retryable: false,
+    routeFallback: false,
     countAsFailure: true,
     description: 'Image-generation provider returned no image.',
   },
@@ -591,6 +599,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 471,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Provider blocked the request or generated output due to content policy.',
   },
