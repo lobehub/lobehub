@@ -1617,11 +1617,13 @@ const authorizeOperationCallback = async (
   },
   operationId: string,
   capability: 'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read',
+  options: { allowTerminalOperation?: boolean } = {},
 ) => {
   if (ctx.heteroAuthKind !== 'operation') return;
   if (!ctx.heteroOperation) throw new TRPCError({ code: 'UNAUTHORIZED' });
   try {
     await resolveActiveHeteroOperationPrincipal({
+      allowTerminalOperation: options.allowTerminalOperation,
       capability,
       claims: ctx.heteroOperation,
       db: ctx.serverDB,
@@ -3105,7 +3107,14 @@ export const aiAgentRouter = router({
   heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, events, operationId, topicId } = input;
 
-    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
+    // "The operation already ended" is one of the two refusals this procedure
+    // exists to report, so it has to survive the door check — rejecting it here
+    // would make the producer retry a permanent refusal through its whole
+    // budget and leave no record that its output was dropped. The batch still
+    // cannot be persisted: the service refuses it on the very same status.
+    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest', {
+      allowTerminalOperation: true,
+    });
 
     log(
       'heteroIngest: topic=%s op=%s type=%s count=%d',
@@ -3201,7 +3210,13 @@ export const aiAgentRouter = router({
   heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, error, operationId, result, sessionId, topicId } = input;
 
-    await authorizeOperationCallback(ctx, operationId, 'hetero:finish');
+    // A terminal row is the normal state for a finish that lost a race (gateway
+    // completion, a settle from another tab). The service already has the stale
+    // branches for it; turning it away here would drop the run's outcome instead
+    // — no error bubble, no lifecycle hooks, no bot callback.
+    await authorizeOperationCallback(ctx, operationId, 'hetero:finish', {
+      allowTerminalOperation: true,
+    });
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 
