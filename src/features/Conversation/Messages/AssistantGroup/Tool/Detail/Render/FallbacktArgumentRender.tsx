@@ -52,7 +52,7 @@ export const FallbackArgumentRender = memo<FallbackArgumentRenderProps>(
             <Divider style={{ marginBlock: 0 }} />
             <Flexbox align={'flex-start'} paddingBlock={8} paddingInline={16}>
               <Button size={'small'} onClick={() => setRequested(true)}>
-                {t('debug.response')}
+                {t('debug.loadStoredResult')}
               </Button>
             </Flexbox>
           </>

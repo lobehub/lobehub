@@ -490,9 +490,14 @@ export const messageRouter = router({
       const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
       const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
 
-      return messageModel.query(queryParams, {
+      const messages = await messageModel.query(queryParams, {
         postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
       });
+
+      // This branch reads through its own `MessageModel` (different query
+      // options than `MessageService.queryMessages`), so it applies the tool
+      // view-model step explicitly rather than inheriting it.
+      return new MessageService(ctx.serverDB, ctx.userId, wsId).projectToolPayloads(messages);
     }),
 
   rankModels: messageProcedure.query(async ({ ctx }) => {

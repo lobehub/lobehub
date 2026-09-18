@@ -214,9 +214,19 @@ export class MessageService {
       ...(options?.allowShareVisitor && { allowShareVisitor: true }),
     });
 
-    // The UI read path hands back render-facing view models — but only for the
-    // mux cohort, whose runs always execute server-side. See
-    // `isToolProjectionEnabled`.
+    return this.projectToolPayloads(messages);
+  }
+
+  /**
+   * Reduce tool payloads to render-facing view models, for the mux cohort only.
+   *
+   * Public because `message.getMessages` reads through its own `MessageModel`
+   * rather than {@link queryMessages} — it passes different query options — so
+   * the router applies this step itself. Both UI reads must go through here;
+   * only the shared-topic branch stays unprojected, since an anonymous visitor
+   * has no authenticated way to fetch the stored payload back.
+   */
+  async projectToolPayloads(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
     return (await this.isToolProjectionEnabled()) ? projectToolViewModels(messages) : messages;
   }
 
