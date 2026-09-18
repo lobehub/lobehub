@@ -64,6 +64,8 @@ the next free number of that prefix.
 - **L-S20** Read the managed containers' host ports from `docker ps` and pass `DB_PORT`/`REDIS_PORT` to every `init-dev-env.sh` subcommand; `auth_failed` on migrate is a port mismatch.
 - **L-S21** In a worktree, invoke scripts by absolute path and prove the SPA's identity (Vite pid cwd, changed module from the Vite origin) before trusting any gate or evidence.
 - **L-S22** A per-account cap that a round consumes (artifact deployments) is cleared for the account the surface actually authenticates as, and re-cleared between rounds.
+- **L-S23** A hand-built `node_modules` symlink farm runs unit tests but cannot start the dev server; clone a working checkout's `node_modules` instead of a fresh install, which this lockfile-less repo resolves against a moving registry.
+- **L-S24** Read the dev server's URL from its own log, and treat "ready" as any status but `000` — `/` answers `302` to `/signin` when signed out.
 
 ## Entries
 
@@ -569,3 +571,38 @@ authenticates as the seeded runtime user, still held three.
 the `user_id` on the seeded API key row) and clear the cap for _that_ id before
 and between rounds. A quota error mid-round is an environment fact until the
 account has been checked; do not debug it as product behaviour.
+
+### L-S23 — Substituting a symlink farm for an install in a fresh worktree
+
+`since 2026-09-18` · `holds-while: pnpm-workspace.yaml sets lockfile: false, and Turbopack resolves next/package.json from the workspace root it detects`
+
+**Trap:** a new worktree has no `node_modules`, and a farm of symlinks into a
+working checkout is quick and makes `vitest` and `tsgo` pass — so the tree looks
+ready. The dev server then dies on `Could not find the Next.js package
+(next/package.json)`, every route 500s, and the visible errors point elsewhere
+(`Failed to resolve import "anser"` from a package-level dependency the farm
+never linked). Falling back to `pnpm install` can fail outright: this repo
+commits no lockfile, so a fresh resolve hits whatever the registry holds today
+(seen: `No matching version found for @aws-sdk/token-providers@3.1134.0`).
+
+**Rule:** for anything that boots the app, copy a working checkout's
+`node_modules` — `cp -Rc` (APFS clonefile) takes \~100s and almost no disk for
+6.8 GB. Copy the per-package `node_modules` too (\~100 of them; the root tree
+alone leaves package-level deps unresolved), then symlink any workspace package
+the branch adds into `node_modules/@lobechat/`. The `@lobechat/*` links inside
+are relative and resolve to the worktree's own `packages/`, which is what keeps
+the code under test in the path. A farm is fine for unit tests only.
+
+### L-S24 — Waiting for a readiness code the server never returns
+
+`since 2026-09-18` · `holds-while: the dev script allocates a free port per run and the app redirects unauthenticated root requests`
+
+**Trap:** polling a remembered port (3010) for HTTP `200`. The script allocates a
+port per run and prints it (`🔁 Next server URL: http://localhost:<port>/`, plus
+a separate Vite port in the Debug Proxy line); and the app answers `/` with
+`302` to `/signin` until the surface is authenticated. Both mistakes read as
+"the server never came up" while it has been serving for minutes.
+
+**Rule:** take both URLs from the log, never from memory or a default. Probe with
+PROJECT.md's predicate as written — any code but `000` — and confirm health by
+following the redirect, not by demanding `200` at the root.
