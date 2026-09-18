@@ -8,6 +8,7 @@ import {
   ChevronDownIcon,
   FolderOpenIcon,
   PlusIcon,
+  SettingsIcon,
   TimerIcon,
 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -33,9 +34,19 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
   `,
+  footer: css`
+    padding-block-start: 4px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
   modes: css`
     padding-block-end: 4px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  notice: css`
+    padding-block: 8px;
+    padding-inline: 8px;
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
   `,
   row: css`
     cursor: pointer;
@@ -132,7 +143,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
   // chip DOES, and a decision made on the click cannot wait for a fetch started
   // by it. The query is answered from the database alone, and the whole section
   // is already behind the lab flag, a sandbox target and an entitlement.
-  const { data: environmentData } = useSWR('sandbox-environments', () =>
+  const { data: environmentData, error: environmentError } = useSWR('sandbox-environments', () =>
     sandboxWorkspaceService.listEnvironments(),
   );
 
@@ -150,6 +161,10 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
   // Only once the list has actually arrived. An undefined list is "not known
   // yet", not "none", and sending someone to settings on a pending fetch would
   // take them away from a menu that was about to have their environments in it.
+  //
+  // A list that FAILED is a third thing again, and the one worth naming: left
+  // to fall through it renders as a menu with no environments in it, which is
+  // exactly what someone who has none sees. The menu says which it is.
   const hasNoEnvironments = Boolean(environmentData) && environments.length === 0;
 
   const select = async (selection: SandboxSelection) => {
@@ -215,6 +230,10 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
             />
           </Flexbox>
 
+          {environmentError && (
+            <Text className={styles.notice}>{t('sandboxWorkspace.environmentsUnavailable')}</Text>
+          )}
+
           {environments.map((environment) => (
             <Flexbox gap={2} key={environment.id}>
               <Text ellipsis className={styles.environment}>
@@ -248,6 +267,19 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
               />
             </Flexbox>
           ))}
+          {/* Selecting an environment and shaping one are different jobs, so
+              this leaves rather than expands — and it is the only way out of a
+              menu whose list is empty or could not be read. */}
+          <Flexbox className={styles.footer}>
+            <OptionRow
+              icon={<Icon icon={SettingsIcon} size={16} />}
+              label={t('sandboxWorkspace.manageEnvironments')}
+              onClick={() => {
+                setOpen(false);
+                navigate('/settings/environments');
+              }}
+            />
+          </Flexbox>
         </Flexbox>
       }
       onOpenChange={setOpen}
