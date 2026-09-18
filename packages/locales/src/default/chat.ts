@@ -1276,6 +1276,8 @@ export default {
   'sandboxWorkspace.newInstance': 'New instance',
   'sandboxWorkspace.creatingInstance': 'Creating…',
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
+  'sandboxWorkspace.manageEnvironments': 'Manage environments',
+  'sandboxWorkspace.environmentsUnavailable': 'Environments could not be loaded',
   'sandboxWorkspace.ephemeral': 'Ephemeral directory',
   'sandboxWorkspace.ephemeralDesc': 'Discarded when the run ends',
   'sandboxWorkspace.rootDesc': 'Files are kept, without an environment',
