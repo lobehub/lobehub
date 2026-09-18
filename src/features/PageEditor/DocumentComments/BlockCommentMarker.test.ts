@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { inMarkerBridge, lineAt } from './BlockCommentMarker';
+import { blockAt, inMarkerBridge, lineAt } from './BlockCommentMarker';
 
 const rect = (partial: Partial<DOMRect>): DOMRect =>
   ({ bottom: 0, left: 0, right: 0, top: 0, ...partial }) as DOMRect;
@@ -78,5 +78,28 @@ describe('inMarkerBridge', () => {
 
   it('rejects a point entirely outside the combined body+marker span', () => {
     expect(inMarkerBridge(500, 24, bodyRect, markerRect)).toBe(false);
+  });
+});
+
+describe('blockAt', () => {
+  const body = document.createElement('div');
+  const block = document.createElement('p');
+  const inline = document.createElement('strong');
+  block.append(inline);
+  body.append(block);
+  document.body.append(body);
+
+  it('resolves a nested target to its top-level block', () => {
+    expect(blockAt(body, inline)).toBe(block);
+    expect(blockAt(body, block)).toBe(block);
+  });
+
+  it('returns null over the root-owned whitespace between blocks (the body itself)', () => {
+    expect(blockAt(body, body)).toBeNull();
+  });
+
+  it('returns null outside the body', () => {
+    expect(blockAt(body, document.body)).toBeNull();
+    expect(blockAt(body, null)).toBeNull();
   });
 });

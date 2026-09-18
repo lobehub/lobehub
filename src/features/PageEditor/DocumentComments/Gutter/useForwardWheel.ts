@@ -38,18 +38,27 @@ const innerScrollerTakesIt = (target: EventTarget | null, host: HTMLElement, del
   return false;
 };
 
-const INTERACTIVE_TAGS = new Set(['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA']);
+const EDITABLE_TAGS = new Set(['INPUT', 'SELECT', 'TEXTAREA']);
+const CONTROL_TAGS = new Set(['A', 'BUTTON']);
 
 /**
- * Whether the target owns Space/PageDown itself — a button's activation, a
- * link's follow, typing in a field — so paging the document instead would
- * take the key away from the control the reader is actually using.
+ * Whether the focused target owns this key itself, so paging the document
+ * instead would take it away from the control the reader is actually using.
+ * Ownership is per key: a field or editable region owns everything typed
+ * into it, including PageUp/PageDown, which move its own caret. A button or
+ * link owns Space (its activation) and nothing else — PageUp/PageDown on a
+ * focused card action have no meaning to the control and cannot page the
+ * sibling document pane by default, so they are still forwarded.
  */
-const isInteractiveTarget = (target: EventTarget | null, host: HTMLElement) => {
+export const isKeyOwnedByTarget = (
+  key: string,
+  target: EventTarget | null,
+  host: HTMLElement,
+): boolean => {
   let node = target instanceof HTMLElement ? target : null;
   while (node && node !== host) {
-    if (node.isContentEditable || INTERACTIVE_TAGS.has(node.tagName) || node.hasAttribute('role'))
-      return true;
+    if (node.isContentEditable || EDITABLE_TAGS.has(node.tagName)) return true;
+    if (key === ' ' && (CONTROL_TAGS.has(node.tagName) || node.hasAttribute('role'))) return true;
     node = node.parentElement;
   }
   return false;
@@ -104,10 +113,10 @@ export const useForwardWheel = (
     };
 
     // Space and PageUp/PageDown are how a reader without a pointer pages a
-    // scroll region once focus lands inside it; skip a target that already
-    // owns the key itself (a button's activation, a field's typed space).
+    // scroll region once focus lands inside it; skip a key the target already
+    // owns itself (a button's Space activation, anything typed into a field).
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isInteractiveTarget(event.target, host)) return;
+      if (event.defaultPrevented || isKeyOwnedByTarget(event.key, event.target, host)) return;
       let direction: -1 | 1 | undefined;
       if (event.key === 'PageDown') direction = 1;
       else if (event.key === 'PageUp') direction = -1;

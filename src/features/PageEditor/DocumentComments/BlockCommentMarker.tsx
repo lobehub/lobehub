@@ -84,8 +84,11 @@ const sameRange = (left: Range | undefined, right: Range) =>
   left!.endContainer === right.endContainer &&
   left!.endOffset === right.endOffset;
 
-/** The body's top-level block the pointer is over, if any. */
-const blockAt = (body: HTMLElement, target: EventTarget | null): HTMLElement | null => {
+/**
+ * The body's top-level block the pointer is over, or `null` over the body's
+ * own (root-owned) whitespace between and after blocks, and outside it.
+ */
+export const blockAt = (body: HTMLElement, target: EventTarget | null): HTMLElement | null => {
   if (!(target instanceof Node)) return null;
   let node: Node | null = target;
   while (node && node.parentNode !== body) node = node.parentNode;
@@ -135,9 +138,37 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
     const host = hostRef.current;
     if (!enabled || !bodyElement || !host) return;
 
+    // The marker sits outside the body's DOM subtree, past the column's own
+    // padding — neither a body-only `pointerleave` (old approach) nor a
+    // target-containment check on host `pointermove` (still real, but the
+    // pointer visiting the gap between body and marker generates its own
+    // `pointermove` there too) survives the crossing: both clear the target
+    // the instant the pointer is over the gap itself, before it ever reaches
+    // the marker. Treat the rectangle spanning body and marker, at the
+    // marker's own row height, as one continuous hoverable bridge — the
+    // natural path from a highlighted line to its marker never leaves it.
+    const pointerStaysWithMarker = (event: PointerEvent) => {
+      const marker = markerRef.current;
+      if (!marker) return false;
+      if (event.target instanceof Node && marker.contains(event.target)) return true;
+      return inMarkerBridge(
+        event.clientX,
+        event.clientY,
+        bodyElement.getBoundingClientRect(),
+        marker.getBoundingClientRect(),
+      );
+    };
     const handleMove = (event: PointerEvent) => {
       const block = blockAt(bodyElement, event.target);
-      if (!block) return;
+      // Root-owned whitespace between or after blocks is no line at all; the
+      // marker for the last line the pointer crossed must not stay actionable
+      // there — unless the pointer is on the bridge to that very marker, the
+      // one path it is meant to survive (the bridge's row is inside the body
+      // too, so the host-level handler never sees these moves).
+      if (!block) {
+        if (!pointerStaysWithMarker(event)) setTarget(null);
+        return;
+      }
       // A line with nothing to quote (an empty paragraph, a divider) has no
       // marker: the anchor it would produce is empty.
       const range = lineAt(block, event.clientY);
@@ -151,30 +182,10 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
       setTarget({ range, top });
     };
     const handleLeave = () => setTarget(null);
-    // The marker sits outside the body's DOM subtree, past the column's own
-    // padding — neither a body-only `pointerleave` (old approach) nor a
-    // target-containment check on host `pointermove` (still real, but the
-    // pointer visiting the gap between body and marker generates its own
-    // `pointermove` there too) survives the crossing: both clear the target
-    // the instant the pointer is over the gap itself, before it ever reaches
-    // the marker. Treat the rectangle spanning body and marker, at the
-    // marker's own row height, as one continuous hoverable bridge — the
-    // natural path from a highlighted line to its marker never leaves it.
     const handleHostMove = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Node && bodyElement.contains(target)) return;
-      const marker = markerRef.current;
-      if (marker) {
-        if (marker.contains(target as Node)) return;
-        const inBridge = inMarkerBridge(
-          event.clientX,
-          event.clientY,
-          bodyElement.getBoundingClientRect(),
-          marker.getBoundingClientRect(),
-        );
-        if (inBridge) return;
-      }
-      setTarget(null);
+      if (!pointerStaysWithMarker(event)) setTarget(null);
     };
 
     bodyElement.addEventListener('pointermove', handleMove);

@@ -196,6 +196,32 @@ describe('useForwardWheel', () => {
       expect(event.defaultPrevented).toBe(false);
     });
 
+    it('still pages the document on PageDown/PageUp from a focused button or link', () => {
+      const { host, pane } = setup();
+      const button = document.createElement('button');
+      const link = document.createElement('a');
+      host.append(button, link);
+
+      const down = key(button, { key: 'PageDown' });
+      expect(pane.scrollTop).toBe(700);
+      expect(down.defaultPrevented).toBe(true);
+
+      const up = key(link, { key: 'PageUp' });
+      expect(pane.scrollTop).toBe(100);
+      expect(up.defaultPrevented).toBe(true);
+    });
+
+    it('leaves PageDown to a focused text field, where it moves the caret', () => {
+      const { host, pane } = setup();
+      const textarea = document.createElement('textarea');
+      host.append(textarea);
+
+      const event = key(textarea, { key: 'PageDown' });
+
+      expect(pane.scrollTop).toBe(100);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
     it('leaves Space to a focused text field instead of paging the document', () => {
       const { host, pane } = setup();
       const input = document.createElement('input');
