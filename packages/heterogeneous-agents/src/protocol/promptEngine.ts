@@ -1,7 +1,19 @@
+import { lobeHubCliGuide } from './lobeHubCliGuide';
 import type { AgentContentBlock, AgentImageBlock } from './types';
 
 export interface HeterogeneousPromptEngineInput {
   imageList?: HeterogeneousPromptImage[];
+  /**
+   * Whether this prompt opens a fresh agent session rather than continuing one
+   * the CLI resumes natively. Dispatch sites derive it from their own resume
+   * state (`!resumeSessionId`) — the engine cannot see it.
+   *
+   * Session-scoped context (the `lh` guide) is attached only when true: these
+   * blocks are prepended to a USER message, so on a resumed session every
+   * earlier turn's copy is still in the CLI's transcript. Re-sending it each
+   * turn would stack duplicates for the whole life of the conversation.
+   */
+  isNewSession?: boolean;
   prompt: string;
   systemContext?: string;
 }
@@ -28,7 +40,16 @@ const topicReferenceGuidanceProvider: HeterogeneousPromptContextProvider = {
   name: 'TopicReferenceGuidanceProvider',
 };
 
-const defaultContextProviders = [topicReferenceGuidanceProvider];
+/**
+ * Teach the agent that the LobeHub platform is reachable from its own shell.
+ * Session-scoped: see `isNewSession`.
+ */
+const lobeHubCliProvider: HeterogeneousPromptContextProvider = {
+  getContext: ({ isNewSession }) => (isNewSession ? lobeHubCliGuide : undefined),
+  name: 'LobeHubCliProvider',
+};
+
+const defaultContextProviders = [lobeHubCliProvider, topicReferenceGuidanceProvider];
 
 /**
  * Builds the semantic prompt shared by every heterogeneous-agent transport.
