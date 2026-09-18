@@ -9,7 +9,6 @@ import {
   FolderOpenIcon,
   PlusIcon,
   SettingsIcon,
-  TimerIcon,
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +19,9 @@ import { sandboxWorkspaceService } from '@/services/sandboxWorkspace';
 
 import { gitChipStyles } from './gitChipStyles';
 import OptionRow from './OptionRow';
+import type { SandboxSelection } from './useSandboxMode';
+
+export type { SandboxSelection } from './useSandboxMode';
 
 const styles = createStaticStyles(({ css }) => ({
   environment: css`
@@ -65,20 +67,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/**
- * What a conversation runs in, as one answer rather than two settings.
- *
- * `ephemeral` keeps nothing: the box is discarded when the run ends. The two
- * persistent shapes differ only in whether an environment supplies the folder
- * and its installed state, so they belong on the same list as the throwaway one
- * — a user deciding where their files go is making a single choice.
- */
-export interface SandboxSelection {
-  /** Only meaningful with `persistent`; absent means the workspace root. */
-  instanceId?: string;
-  mode: 'ephemeral' | 'persistent';
-}
-
 interface SandboxInstancePickerProps {
   onChange: (selection: SandboxSelection) => Promise<void>;
   /**
@@ -87,7 +75,7 @@ interface SandboxInstancePickerProps {
    * as an optimization, never as a scope, so they simply pay a cold start.
    */
   topicId?: string;
-  /** What this conversation runs in today. */
+  /** Where this conversation keeps its files; always `persistent` here. */
   value: SandboxSelection;
 }
 
@@ -113,10 +101,8 @@ interface SandboxInstancePickerProps {
  */
 /**
  * What each way of running looks like. Declared once because the chip and the
- * row it stands for are the same thing seen closed and open: a chip drawn from
- * its own icon drifts into naming one state while picturing another.
+ * row it stands for are the same thing seen closed and open.
  */
-const EPHEMERAL_ICON = TimerIcon;
 const ROOT_ICON = FolderOpenIcon;
 const INSTANCE_ICON = AppWindowMacIcon;
 
@@ -151,12 +137,9 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
   const environments = environmentData?.environments ?? [];
   const current = instances.find((instance) => instance.id === boundInstanceId);
 
-  const chip =
-    value.mode === 'ephemeral'
-      ? { icon: EPHEMERAL_ICON, label: t('sandboxWorkspace.ephemeral') }
-      : current
-        ? { icon: INSTANCE_ICON, label: current.name }
-        : { icon: ROOT_ICON, label: t('sandboxWorkspace.root') };
+  const chip = current
+    ? { icon: INSTANCE_ICON, label: current.name }
+    : { icon: ROOT_ICON, label: t('sandboxWorkspace.root') };
 
   // Only once the list has actually arrived. An undefined list is "not known
   // yet", not "none", and sending someone to settings on a pending fetch would
@@ -207,22 +190,13 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
         <Flexbox gap={2} style={{ minWidth: 280 }}>
           <Text className={styles.header}>{t('workingDirectory.title', { ns: 'device' })}</Text>
 
-          {/* The two ways to run without an environment, above the ones with.
-              Both belong on this list because the user is making one choice —
-              where these files go — and the throwaway box is one of the
-              answers. Leaving it unnamed is what made the mode invisible: a
-              conversation was ephemeral until it happened to touch this menu,
-              and could never be told so or sent back. */}
+          {/* Running without an environment is still a place — the workspace
+              root — so it sits above the environments as the first answer to
+              "which directory". Whether files are kept at all is not asked
+              here: that switch is on the execution-device menu. */}
           <Flexbox className={styles.modes} gap={2}>
             <OptionRow
-              active={value.mode === 'ephemeral'}
-              desc={t('sandboxWorkspace.ephemeralDesc')}
-              icon={<Icon icon={EPHEMERAL_ICON} size={16} />}
-              label={t('sandboxWorkspace.ephemeral')}
-              onClick={() => void select({ mode: 'ephemeral' })}
-            />
-            <OptionRow
-              active={value.mode === 'persistent' && !value.instanceId}
+              active={!value.instanceId}
               desc={t('sandboxWorkspace.rootDesc')}
               icon={<Icon icon={ROOT_ICON} size={16} />}
               label={t('sandboxWorkspace.root')}
