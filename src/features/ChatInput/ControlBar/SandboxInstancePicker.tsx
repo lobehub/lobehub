@@ -3,7 +3,7 @@
 import { Flexbox, Icon, Popover } from '@lobehub/ui';
 import { Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BoxIcon, FolderOpenIcon, PlusIcon } from 'lucide-react';
+import { BoxIcon, CircleSlashIcon, FolderOpenIcon, PlusIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -189,10 +189,29 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
             </Flexbox>
           ))}
 
-          {/* The workspace file panel has no other way in. It is not part of
-              choosing an instance, so it sits below the choice rather than
-              inside it. */}
+          {/* Choosing nothing is a choice: the run then happens at the
+              workspace root, which is where a topic starts. Without a way back
+              to it an instance could not even be deleted — deletion is refused
+              while a conversation still holds one. */}
           <Flexbox className={styles.footer}>
+            {value !== undefined && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={styles.row}
+                gap={6}
+                onClick={() => void select(undefined)}
+              >
+                <Icon icon={CircleSlashIcon} size={14} />
+                <Text fontSize={13} type={'secondary'}>
+                  {t('sandboxWorkspace.useRoot')}
+                </Text>
+              </Flexbox>
+            )}
+
+            {/* The workspace file panel has no other way in. It is not part of
+                choosing an instance, so it sits below the choice rather than
+                inside it. */}
             <Flexbox
               horizontal
               align={'center'}

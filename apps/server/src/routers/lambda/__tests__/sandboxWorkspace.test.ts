@@ -42,11 +42,15 @@ vi.mock('@/database/models/environmentInstance', () => ({
 }));
 
 const mockCopyEnvironment = vi.fn();
+const mockDeleteEnvironment = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
     return {
-      getSandboxWorkspaceClient: () => ({ copyEnvironment: mockCopyEnvironment }),
+      getSandboxWorkspaceClient: () => ({
+        copyEnvironment: mockCopyEnvironment,
+        deleteEnvironment: mockDeleteEnvironment,
+      }),
     };
   }),
 }));
@@ -58,6 +62,7 @@ vi.mock('@/server/services/sandbox', () => ({
 }));
 
 const { sandboxWorkspaceRouter } = await import('../sandboxWorkspace');
+const { SandboxWorkspaceFilesError } = await import('@/server/services/sandbox/workspaceFiles');
 
 /** Shaped like the driver error drizzle surfaces, nested behind `cause`. */
 const uniqueViolation = (constraint: string) => {
@@ -120,6 +125,38 @@ describe('sandboxWorkspaceRouter', () => {
           workingDirectory: 'projects/atlas',
         }),
       ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_INSTANCE_DIRECTORY' });
+    });
+  });
+
+  describe('removeInstance', () => {
+    const instanceId = '0726286c-f1a1-4c9e-980d-80a8e837321d';
+
+    beforeEach(() => {
+      mockInstanceFindById.mockResolvedValue({ id: instanceId });
+    });
+
+    it('deletes the row when the execution plane has no snapshot for it', async () => {
+      // An instance nothing has ever run in has nothing on the far side, so a
+      // 404 is this step's goal already met. Treating it as a failure strands
+      // the row: the environment holding it refuses to go while it is there.
+      mockDeleteEnvironment.mockRejectedValue(new SandboxWorkspaceFilesError('gone', 404));
+
+      await sandboxWorkspaceRouter.createCaller(ctx).removeInstance({ id: instanceId });
+
+      expect(mockInstanceDelete).toHaveBeenCalledWith(instanceId);
+    });
+
+    it('keeps the row when a session is still using the snapshot', async () => {
+      // The one refusal the user can act on, and the reason the snapshot is
+      // deleted first: dropping the row here would leave storage nobody can
+      // see, name or reclaim.
+      mockDeleteEnvironment.mockRejectedValue(new SandboxWorkspaceFilesError('in use', 409));
+
+      await expect(
+        sandboxWorkspaceRouter.createCaller(ctx).removeInstance({ id: instanceId }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      expect(mockInstanceDelete).not.toHaveBeenCalled();
     });
   });
 
