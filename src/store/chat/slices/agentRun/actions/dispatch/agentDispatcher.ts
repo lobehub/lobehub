@@ -78,6 +78,13 @@ export interface RuntimeSelectionContext {
    */
   isWorkspaceAgent?: boolean;
   /**
+   * The agent's model comes from a provider that only this device can reach —
+   * a local inference server (LM Studio / Ollama / vLLM) on a loopback or
+   * private-network `baseURL` that the user asked to call from their client.
+   * See `isLocalOnlyModelProvider`.
+   */
+  modelProviderIsLocalOnly?: boolean;
+  /**
    * Explicit override that wins over automatic selection.
    *
    * Used by sub-agent dispatches (`directMentionRoute`, `callAgent`) so child
@@ -109,6 +116,8 @@ interface SelectRuntimeTypeOptions {
  * not require re-deriving the routing rules.
  *
  * Priority: `parentRuntime` > `hetero` (desktop only) > `gateway` > `client`.
+ * A local-only model provider downgrades `gateway` to `client` — the server
+ * cannot reach the user's machine.
  */
 export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
@@ -179,6 +188,14 @@ export const selectRuntimeType = (
     );
     return target === 'local' ? 'hetero' : 'gateway';
   }
+  // A local-only provider is unreachable from the Gateway: the run executes on
+  // the server, so a loopback / private-network `baseURL` resolves to the
+  // server's own network and the request dies as a bare "Connection error."
+  // The provider connectivity check never goes through the Gateway — it always
+  // runs via `chatService` on this device — which is why the check passes while
+  // the conversation fails (#19526). Keep the run on the client, the runtime
+  // that `fetchOnClient` already routes such providers through.
+  if (ctx.isGatewayMode && ctx.modelProviderIsLocalOnly) return 'client';
   if (ctx.isGatewayMode) return 'gateway';
   return 'client';
 };
