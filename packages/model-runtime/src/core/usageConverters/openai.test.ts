@@ -701,4 +701,23 @@ describe('convertOpenAIImageUsage', () => {
       cost: 0.16647, // Based on pricing: 14 * 5/1M + 0 * 10/1M + 4160 * 40/1M = 0.00007 + 0 + 0.1664 = 0.16647
     });
   });
+
+  it('should tolerate image usage without input token details', () => {
+    const usageWithoutDetails = {
+      input_tokens: 100,
+      output_tokens: 900,
+      total_tokens: 1000,
+    } as OpenAI.Images.ImagesResponse.Usage;
+
+    const result = convertOpenAIImageUsage(usageWithoutDetails);
+
+    expect(result).toEqual({
+      inputImageTokens: 0,
+      inputTextTokens: 100,
+      outputImageTokens: 900,
+      totalInputTokens: 100,
+      totalOutputTokens: 900,
+      totalTokens: 1000,
+    });
+  });
 });
