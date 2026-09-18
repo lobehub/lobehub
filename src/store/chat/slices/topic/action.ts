@@ -717,22 +717,44 @@ export class ChatTopicActionImpl {
    * Returns the row to trust: the fetched one, or the fetched one with the
    * pending status re-applied when it predates the write.
    */
-  #applyPendingStatusWrite = (item: ChatTopic): ChatTopic => {
+  #applyPendingStatusWrite = (item: ChatTopic, confirmMatchingStatus = true): ChatTopic => {
     const pending = this.#pendingTopicStatusWrites.get(item.id);
     if (!pending) return item;
-    if (pending.expiresAt <= Date.now() || item.status === pending.status) {
+    if (pending.expiresAt <= Date.now()) {
       this.#pendingTopicStatusWrites.delete(item.id);
+      return item;
+    }
+    if (item.status === pending.status) {
+      if (confirmMatchingStatus) this.#pendingTopicStatusWrites.delete(item.id);
       return item;
     }
     return { ...item, status: pending.status };
   };
 
-  #reconcileFetchedTopics = (items: ChatTopic[], currentItems?: ChatTopic[]): ChatTopic[] => {
-    let next = items;
+  /**
+   * Apply pending terminal statuses before a fetched topic list enters SWR.
+   *
+   * Reconciling only in `onData` keeps Zustand correct but is too late for the
+   * persisted cache: SWR has already accepted the older raw response and can
+   * flush `running` to IndexedDB. After the 15-second pin expires, remounting
+   * the sidebar restores that stale spinner. This step deliberately
+   * handles statuses only; client-only optimistic rows are still added later by
+   * {@link #reconcileFetchedTopics} and never enter the persisted response.
+   */
+  #applyPendingStatusWrites = (
+    items: ChatTopic[],
+    options?: { confirmMatchingStatus?: boolean },
+  ): ChatTopic[] => {
+    if (this.#pendingTopicStatusWrites.size === 0) return items;
+    return items.map((item) => this.#applyPendingStatusWrite(item, options?.confirmMatchingStatus));
+  };
 
-    if (this.#pendingTopicStatusWrites.size > 0) {
-      next = next.map((item) => this.#applyPendingStatusWrite(item));
-    }
+  #reconcileFetchedTopics = (
+    items: ChatTopic[],
+    currentItems?: ChatTopic[],
+    options?: { confirmMatchingStatus?: boolean },
+  ): ChatTopic[] => {
+    let next = this.#applyPendingStatusWrites(items, options);
 
     // In-flight first-send optimistic rows are client-only, so any refetch
     // landing mid-send (e.g. the fire-and-forget refreshTopic after a previous
@@ -1200,7 +1222,7 @@ export class ChatTopicActionImpl {
           this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
         }
 
-        return result;
+        return { ...result, items: this.#applyPendingStatusWrites(result.items) };
       },
       {
         // onData: responsible for state updates (fires for both cached and fresh data)
@@ -1210,7 +1232,11 @@ export class ChatTopicActionImpl {
           const { total: totalCount } = result;
 
           const currentData = this.#get().topicDataMap[containerKey];
-          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, {
+            // `result` can be a cached response or a list already normalized by
+            // the fetcher. Neither proves the server observed the pending write.
+            confirmMatchingStatus: false,
+          });
 
           // Fire BEFORE the no-change early return below: on a cold boot the
           // cached list arrives with no `currentData`, and that first delivery
