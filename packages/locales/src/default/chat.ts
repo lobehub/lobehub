@@ -1271,13 +1271,8 @@ export default {
   'gatewayMode.cardTitle': 'Agent Gateway Mode',
   'gatewayMode.desc':
     "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
-  'sandboxWorkspace.browseFiles': 'Browse files',
-  'sandboxWorkspace.delete': 'Delete',
-  'sandboxWorkspace.panelTitle': 'Workspace files',
-  'sandboxWorkspace.emptyDirectory': 'No subdirectories here',
   'sandboxWorkspace.upgrade': 'Keep sandbox files',
   'sandboxWorkspace.root': 'Workspace root',
-  'sandboxWorkspace.truncated': 'Only the first entries are shown',
   'sandboxWorkspace.newInstance': 'New instance',
   'sandboxWorkspace.creatingInstance': 'Creating…',
   'sandboxWorkspace.setUpEnvironment': 'Set up an environment',

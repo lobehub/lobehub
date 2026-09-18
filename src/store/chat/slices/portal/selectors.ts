@@ -251,12 +251,6 @@ const messageDetailId = (s: ChatStoreState): string | undefined => {
   return view?.messageId;
 };
 
-/** Where the workspace panel should open, when the caller named a place. */
-const sandboxWorkspacePath = (s: ChatStoreState): string | undefined => {
-  const view = getStackViewData(s, PortalViewType.SandboxWorkspace);
-  return view?.path;
-};
-
 // Task Detail selectors
 const taskDetailId = (s: ChatStoreState): string | undefined => {
   const view = getStackViewData(s, PortalViewType.TaskDetail);
@@ -372,9 +366,6 @@ export const chatPortalSelectors = {
 
   // Message detail data
   messageDetailId,
-
-  // Sandbox workspace panel
-  sandboxWorkspacePath,
 
   // Task detail data
   taskDetailId,
