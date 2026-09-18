@@ -42,6 +42,7 @@ const anchors = (
   bodyElement: null,
   getAnchorMatch: () => null,
   getAnchorRange: () => rangeAt(120),
+  getPendingAnchorMatch: () => null,
   getPendingAnchorRange: () => null,
   locateInBody: () => {},
   orphanedRootIds: new Set(),
@@ -129,5 +130,48 @@ describe('useGutterLayout', () => {
     act(() => frames.flush());
 
     expect(result.current.tops.get(PENDING_CARD_ID)).toBe(40);
+  });
+
+  it('keeps an earlier-in-text comment above a pending draft anchored later on the same line', () => {
+    // Both runs sit on the same line (same measured top), so only the text
+    // order — not vertical position — can tell them apart.
+    const frames = fakeFrames();
+    const pane = document.createElement('div');
+    pane.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    const track = document.createElement('div');
+    const host = document.createElement('div');
+    host.append(track);
+    document.body.append(pane, host);
+    const existingCard = document.createElement('div');
+    Object.defineProperty(existingCard, 'offsetHeight', { value: 50 });
+    const pendingCard = document.createElement('div');
+    Object.defineProperty(pendingCard, 'offsetHeight', { value: 50 });
+
+    const value = anchors({
+      getAnchorMatch: () => ({ end: 9, start: 5 }),
+      getAnchorRange: () => rangeAt(100),
+      getPendingAnchorMatch: () => ({ end: 25, start: 20 }),
+      getPendingAnchorRange: () => rangeAt(100),
+    });
+    const { result } = renderHook(
+      () =>
+        useGutterLayout({
+          activeId: null,
+          hasPending: true,
+          ids: ['a'],
+          paneRef: { current: pane },
+          trackRef: { current: track },
+        }),
+      {
+        wrapper: ({ children }: { children: ReactNode }) =>
+          createElement(DocumentCommentAnchorsProvider, { children, value }),
+      },
+    );
+    act(() => result.current.registerCard('a')(existingCard));
+    act(() => result.current.registerCard(PENDING_CARD_ID)(pendingCard));
+    act(() => frames.flush());
+
+    expect(result.current.tops.get('a')).toBe(100);
+    expect(result.current.tops.get(PENDING_CARD_ID)).toBe(158);
   });
 });

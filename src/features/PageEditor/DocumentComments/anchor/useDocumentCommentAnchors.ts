@@ -124,6 +124,8 @@ export interface DocumentCommentAnchorsValue {
   getAnchorMatch: (rootCommentId: string) => AnchorMatch | null;
   /** A live DOM range over a thread's quote; `null` when orphaned or not yet resolved. */
   getAnchorRange: (rootCommentId: string) => Range | null;
+  /** Where the selection being composed sits in the flattened body text; `null` when unresolved. */
+  getPendingAnchorMatch: () => AnchorMatch | null;
   /** A live DOM range over the selection being composed, if any. */
   getPendingAnchorRange: () => Range | null;
   /** Scroll the body to a thread's anchor and select it. No-op for an orphaned anchor. */
@@ -261,6 +263,8 @@ export const useDocumentCommentAnchors = (
     return match ? buildAnchorRange(flatRef.current, match) : null;
   }, []);
 
+  const getPendingAnchorMatch = useCallback(() => pendingMatchRef.current, []);
+
   const locateInBody = useCallback((rootCommentId: string) => {
     const match = matchesRef.current.get(rootCommentId);
     if (!match) return;
@@ -323,6 +327,7 @@ export const useDocumentCommentAnchors = (
       bodyElement: element,
       getAnchorMatch,
       getAnchorRange,
+      getPendingAnchorMatch,
       getPendingAnchorRange,
       locateInBody,
       orphanedRootIds,
@@ -337,6 +342,7 @@ export const useDocumentCommentAnchors = (
       element,
       getAnchorMatch,
       getAnchorRange,
+      getPendingAnchorMatch,
       getPendingAnchorRange,
       locateInBody,
       orphanedRootIds,

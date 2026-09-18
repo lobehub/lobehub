@@ -2,7 +2,7 @@
 
 import { Center, Flexbox } from '@lobehub/ui';
 import { Button, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -12,7 +12,24 @@ import Composer from './Composer';
 import { useDocumentComments } from './context';
 import { styles } from './styles';
 import Thread from './Thread';
+import type { DocumentCommentFocus } from './useDocumentCommentDeepLink';
 import type { DocumentCommentsState } from './useDocumentCommentsState';
+
+/**
+ * An anchored thread mounted in the gutter has two copies on screen at once;
+ * only the gutter one sits beside its run, so a deep link scrolls through it
+ * alone — the flat copy below the body just highlights, or its own scroll
+ * would race the gutter's and could win, throwing the reader past a target
+ * that was already in view beside the text.
+ */
+export const resolveListThreadFocus = (
+  focus: DocumentCommentFocus | undefined,
+  gutterShownIds: ReadonlySet<string>,
+  rootId: string,
+): DocumentCommentFocus | undefined => {
+  if (focus?.rootCommentId !== rootId) return undefined;
+  return gutterShownIds.has(rootId) ? { ...focus, scroll: false } : focus;
+};
 
 const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) => {
   const { t } = useTranslation('file');
@@ -21,6 +38,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
     documentId,
     documentThreads,
     focus,
+    gutterThreads,
     handleCreate,
     handlePinnedRootUpdate,
     handleReplyFocusMissing,
@@ -30,6 +48,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
     isAnchoredRetrying,
     listThreads,
     panelAvailable,
+    pinnedThreadInGutter,
     pinnedThreadInList,
     refresh,
     refreshPinned,
@@ -44,6 +63,15 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
   // The document and anchored queries are independent; one failing or still
   // loading must not hide comments the other already fetched successfully.
   const hasAnyItems = listThreads.length > 0 || Boolean(pinnedThreadInList);
+  // An anchored thread also mounted in the gutter has two copies on screen at
+  // once; only that copy sits beside its run, so a deep link scrolls through
+  // it alone — this one just highlights, or the flat copy's own scroll would
+  // race it down to the list below the body.
+  const gutterShownIds = useMemo(() => {
+    const ids = new Set(gutterThreads.map(({ root }) => root.id));
+    if (pinnedThreadInGutter) ids.add(pinnedThreadInGutter.root.id);
+    return ids;
+  }, [gutterThreads, pinnedThreadInGutter]);
 
   return (
     <Flexbox
@@ -83,7 +111,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
           {pinnedThreadInList && (
             <Thread
               documentId={documentId}
-              focus={focus}
+              focus={resolveListThreadFocus(focus, gutterShownIds, pinnedThreadInList.root.id)}
               key={pinnedThreadInList.root.id}
               replyCount={pinnedThreadInList.replyCount}
               root={pinnedThreadInList.root}
@@ -98,7 +126,7 @@ const DocumentCommentList = memo<{ state: DocumentCommentsState }>(({ state }) =
             listThreads.map(({ replyCount, root }) => (
               <Thread
                 documentId={documentId}
-                focus={focus?.rootCommentId === root.id ? focus : undefined}
+                focus={resolveListThreadFocus(focus, gutterShownIds, root.id)}
                 key={root.id}
                 replyCount={replyCount}
                 root={root}

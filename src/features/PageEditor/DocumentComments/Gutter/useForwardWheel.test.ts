@@ -89,4 +89,131 @@ describe('useForwardWheel', () => {
     expect(pane.scrollTop).toBe(100);
     expect(event.defaultPrevented).toBe(false);
   });
+
+  describe('touch', () => {
+    const touch = (
+      target: Element,
+      type: 'touchend' | 'touchmove' | 'touchstart',
+      clientY?: number,
+    ) => {
+      const event = new TouchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        touches: clientY === undefined ? [] : ([{ clientY }] as unknown as Touch[]),
+      });
+      target.dispatchEvent(event);
+      return event;
+    };
+
+    it('scrolls by the distance a one-finger drag crosses', () => {
+      const { host, pane } = setup();
+
+      touch(host, 'touchstart', 300);
+      const event = touch(host, 'touchmove', 260);
+
+      expect(pane.scrollTop).toBe(140);
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('tracks a drag across several moves instead of only the first one', () => {
+      const { host, pane } = setup();
+
+      touch(host, 'touchstart', 300);
+      touch(host, 'touchmove', 260);
+      touch(host, 'touchmove', 240);
+
+      expect(pane.scrollTop).toBe(160);
+    });
+
+    it('leaves a scrollable element inside the panel to scroll itself', () => {
+      const { host, pane } = setup();
+      const inner = document.createElement('div');
+      inner.style.overflowY = 'auto';
+      Object.defineProperty(inner, 'clientHeight', { configurable: true, value: 100 });
+      Object.defineProperty(inner, 'scrollHeight', { configurable: true, value: 500 });
+      host.append(inner);
+
+      touch(inner, 'touchstart', 300);
+      const event = touch(inner, 'touchmove', 260);
+
+      expect(pane.scrollTop).toBe(100);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('starts a fresh drag after the finger lifts', () => {
+      const { host, pane } = setup();
+
+      touch(host, 'touchstart', 300);
+      touch(host, 'touchend');
+      touch(host, 'touchmove', 260);
+
+      expect(pane.scrollTop).toBe(100);
+    });
+  });
+
+  describe('keyboard', () => {
+    const key = (target: Element, init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+      target.dispatchEvent(event);
+      return event;
+    };
+
+    it('pages the document down on PageDown', () => {
+      const { host, pane } = setup();
+
+      const event = key(host, { key: 'PageDown' });
+
+      expect(pane.scrollTop).toBe(700);
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('pages the document up on PageUp', () => {
+      const { host, pane } = setup();
+
+      key(host, { key: 'PageUp' });
+
+      expect(pane.scrollTop).toBe(-500);
+    });
+
+    it('pages down on Space and up on Shift+Space', () => {
+      const { host, pane } = setup();
+
+      key(host, { key: ' ' });
+      expect(pane.scrollTop).toBe(700);
+
+      key(host, { key: ' ', shiftKey: true });
+      expect(pane.scrollTop).toBe(100);
+    });
+
+    it('leaves Space to a focused button instead of paging the document', () => {
+      const { host, pane } = setup();
+      const button = document.createElement('button');
+      host.append(button);
+
+      const event = key(button, { key: ' ' });
+
+      expect(pane.scrollTop).toBe(100);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('leaves Space to a focused text field instead of paging the document', () => {
+      const { host, pane } = setup();
+      const input = document.createElement('input');
+      host.append(input);
+
+      const event = key(input, { key: ' ' });
+
+      expect(pane.scrollTop).toBe(100);
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('ignores unrelated keys', () => {
+      const { host, pane } = setup();
+
+      const event = key(host, { key: 'ArrowDown' });
+
+      expect(pane.scrollTop).toBe(100);
+      expect(event.defaultPrevented).toBe(false);
+    });
+  });
 });

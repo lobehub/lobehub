@@ -149,6 +149,47 @@ export const clearLegacyRootDraft = (
 };
 
 /**
+ * The mirror image of `readLegacyRootDraft`: a plain comment started in
+ * `AgentDocumentPage` (no panel, so its composer shares the gutter's
+ * 'anchored' scope even though it never adopted a selection there) is
+ * invisible once the same document opens in a panel-capable layout, whose
+ * document-level composer only ever reads 'root'. Returns that draft, or
+ * `null` when there is nothing to adopt or 'root' already has content of
+ * its own to protect.
+ */
+export const readUnanchoredDraftFromAnchoredScope = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+): Draft | null => {
+  try {
+    const rootRaw = window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'root'));
+    if (rootRaw) {
+      const root = JSON.parse(rootRaw) as Draft;
+      if (root.content || root.editorData) return null;
+    }
+    const raw = window.localStorage.getItem(getDraftKey(workspaceId, documentId, 'anchored'));
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Draft;
+    if (draft.selectionAnchor) return null;
+    if (!draft.content && !draft.editorData) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+};
+
+export const clearAnchoredScopeDraft = (
+  workspaceId: string | null | undefined,
+  documentId: string,
+): void => {
+  try {
+    window.localStorage.removeItem(getDraftKey(workspaceId, documentId, 'anchored'));
+  } catch {
+    // ignore
+  }
+};
+
+/**
  * How a root composer relates to the selection being commented on.
  *
  * - `gutter`: the composer beside the text. Exists only while a selection is
@@ -206,6 +247,9 @@ const Composer = memo<ComposerProps>(
     // unanchored 'root' draft into 'anchored'; `submit` clears the original
     // once that migrated copy is actually sent.
     const migratedUnanchoredLegacyRef = useRef(false);
+    // Same idea, the other direction: set when this 'none'-mode mount adopted
+    // an unanchored draft that a panel-less page had left under 'anchored'.
+    const adoptedUnanchoredFromAnchoredRef = useRef(false);
     const submittingRef = useRef(false);
     // Only a root comment can be anchored; a reply shares its thread's anchor.
     const isRootComposer = !parentCommentId;
@@ -311,6 +355,25 @@ const Composer = memo<ComposerProps>(
       setPendingCommentAnchor,
       workspaceId,
     ]);
+
+    // The mirror image of the effect above: a plain comment started in
+    // AgentDocumentPage (no panel, so its composer shares the gutter's
+    // 'anchored' scope even though it never adopted a selection) is
+    // invisible once this same document opens in a panel-capable layout,
+    // whose own composer only ever reads 'root'. Adopt it on mount, before
+    // this composer's own 'root' draft has ever been written.
+    useEffect(() => {
+      adoptedUnanchoredFromAnchoredRef.current = false;
+      if (anchorMode !== 'none' || !isRootComposer) return;
+      const orphaned = readUnanchoredDraftFromAnchoredScope(workspaceId, documentId);
+      if (!orphaned) return;
+      setDraft(orphaned);
+      // Leave 'anchored' in place until this adopted copy is actually sent —
+      // see `submit` — or narrowing back to a panel-less layout before then
+      // would orphan it again.
+      adoptedUnanchoredFromAnchoredRef.current = true;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [anchorMode, isRootComposer, documentId, workspaceId]);
 
     // One-time upgrade: before gutter and inline shared a scope, inline mode
     // stored every root draft — anchored or not — under 'root'. Adopt a
@@ -455,6 +518,13 @@ const Composer = memo<ComposerProps>(
         if (migratedUnanchoredLegacyRef.current) {
           clearLegacyRootDraft(workspaceId, documentId);
           migratedUnanchoredLegacyRef.current = false;
+        }
+        // Same idea for the copy adopted from 'anchored': once this submit
+        // sends it, the panel-less page's own draft is no longer standing in
+        // for an unfinished comment and can be dropped.
+        if (adoptedUnanchoredFromAnchoredRef.current) {
+          clearAnchoredScopeDraft(workspaceId, documentId);
+          adoptedUnanchoredFromAnchoredRef.current = false;
         }
         onSuccess?.();
       } catch {

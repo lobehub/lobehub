@@ -2,11 +2,13 @@ import type { DocumentCommentSelectionAnchor } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  clearAnchoredScopeDraft,
   clearLegacyRootDraft,
   migrateDraftToAnchoredScope,
   preserveFailedAnchoredDraft,
   readAnchoredDraftAnchor,
   readLegacyRootDraft,
+  readUnanchoredDraftFromAnchoredScope,
 } from './Composer';
 
 const DOCUMENT_ID = 'doc-1';
@@ -146,6 +148,77 @@ describe('clearLegacyRootDraft', () => {
     clearLegacyRootDraft(WORKSPACE_ID, DOCUMENT_ID);
 
     expect(window.localStorage.getItem(LEGACY_KEY)).toBeNull();
+  });
+});
+
+describe('readUnanchoredDraftFromAnchoredScope', () => {
+  const inlineDraft = {
+    clientId: 'c1',
+    content: 'a plain comment started in AgentDocumentPage',
+    editorData: null,
+  };
+
+  it('returns null when there is nothing under the anchored scope', () => {
+    expect(readUnanchoredDraftFromAnchoredScope(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('adopts an unanchored draft left under the anchored scope', () => {
+    window.localStorage.setItem(KEY, JSON.stringify(inlineDraft));
+
+    expect(readUnanchoredDraftFromAnchoredScope(WORKSPACE_ID, DOCUMENT_ID)).toEqual(inlineDraft);
+  });
+
+  it('leaves a genuinely anchored draft alone — it belongs to the gutter, not the document-level composer', () => {
+    window.localStorage.setItem(KEY, JSON.stringify({ ...inlineDraft, selectionAnchor: anchor }));
+
+    expect(readUnanchoredDraftFromAnchoredScope(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it("returns null once 'root' already has its own content to protect", () => {
+    window.localStorage.setItem(KEY, JSON.stringify(inlineDraft));
+    window.localStorage.setItem(
+      LEGACY_KEY,
+      JSON.stringify({ clientId: 'c2', content: 'a fresh root draft', editorData: null }),
+    );
+
+    expect(readUnanchoredDraftFromAnchoredScope(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('still adopts once root holds only an empty (cancelled or sent) draft', () => {
+    window.localStorage.setItem(KEY, JSON.stringify(inlineDraft));
+    window.localStorage.setItem(
+      LEGACY_KEY,
+      JSON.stringify({ clientId: 'c2', content: '', editorData: null }),
+    );
+
+    expect(readUnanchoredDraftFromAnchoredScope(WORKSPACE_ID, DOCUMENT_ID)).toEqual(inlineDraft);
+  });
+
+  it('returns null for an empty anchored draft (nothing worth adopting)', () => {
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ clientId: 'c1', content: '', editorData: null }),
+    );
+
+    expect(readUnanchoredDraftFromAnchoredScope(WORKSPACE_ID, DOCUMENT_ID)).toBeNull();
+  });
+
+  it('does not itself clear the anchored key — callers decide when the adopted copy is safe to drop', () => {
+    window.localStorage.setItem(KEY, JSON.stringify(inlineDraft));
+
+    readUnanchoredDraftFromAnchoredScope(WORKSPACE_ID, DOCUMENT_ID);
+
+    expect(window.localStorage.getItem(KEY)).not.toBeNull();
+  });
+});
+
+describe('clearAnchoredScopeDraft', () => {
+  it('removes the anchored-scope draft', () => {
+    window.localStorage.setItem(KEY, JSON.stringify({ clientId: 'c1' }));
+
+    clearAnchoredScopeDraft(WORKSPACE_ID, DOCUMENT_ID);
+
+    expect(window.localStorage.getItem(KEY)).toBeNull();
   });
 });
 

@@ -72,8 +72,14 @@ export const useGutterLayout = ({
   paneRef,
   trackRef,
 }: GutterLayoutParams) => {
-  const { bodyElement, getAnchorMatch, getAnchorRange, getPendingAnchorRange, resolvedAt } =
-    useCommentAnchors();
+  const {
+    bodyElement,
+    getAnchorMatch,
+    getAnchorRange,
+    getPendingAnchorMatch,
+    getPendingAnchorRange,
+    resolvedAt,
+  } = useCommentAnchors();
   const [tops, setTops] = useState<ReadonlyMap<string, number>>(EMPTY_TOPS);
   const topsRef = useRef(tops);
   const elements = useSingleton(() => new Map<string, HTMLElement>());
@@ -213,7 +219,10 @@ export const useGutterLayout = ({
       if (hasPendingRef.current) {
         const pendingRange = getPendingAnchorRange();
         if (pendingRange) {
-          push(PENDING_CARD_ID, pendingRange, 0);
+          // A hardcoded 0 here would sort the pending card before every real
+          // comment whose run starts later on the same line, regardless of
+          // where its own run actually sits in the text.
+          push(PENDING_CARD_ID, pendingRange, getPendingAnchorMatch()?.start ?? 0);
         } else {
           // An orphaned draft (its quote no longer resolves — edited or
           // removed, e.g. by a collaborator) has no run to sit beside; dock it
@@ -265,6 +274,7 @@ export const useGutterLayout = ({
     elements,
     getAnchorMatch,
     getAnchorRange,
+    getPendingAnchorMatch,
     getPendingAnchorRange,
     paneRef,
     syncTrack,
