@@ -34,6 +34,7 @@ import {
   SeedNumberInput,
   SizeSelect,
   StepsSliderInput,
+  ThinkingLevelSelect,
 } from '@/routes/(main)/(create)/image/features/ConfigPanel';
 import ImageModelItem from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ModelSelect/ImageModelItem';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -168,6 +169,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportQuality = useImageStore(isSupportedParamSelector('quality'));
   const isSupportResolution = useImageStore(isSupportedParamSelector('resolution'));
   const isSupportSize = useImageStore(isSupportedParamSelector('size'));
+  const isSupportThinkingLevel = useImageStore(isSupportedParamSelector('thinkingLevel'));
   const isSupportSeed = useImageStore(isSupportedParamSelector('seed'));
   const isSupportSteps = useImageStore(isSupportedParamSelector('steps'));
   const isSupportCfg = useImageStore(isSupportedParamSelector('cfg'));
@@ -352,6 +354,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                     <Flexbox gap={6}>
                       <Text fontSize={12}>{t('config.size.label')}</Text>
                       <SizeSelect />
+                    </Flexbox>
+                  )}
+                  {isSupportThinkingLevel && (
+                    <Flexbox gap={6}>
+                      <Text fontSize={12}>{t('config.thinkingLevel.label')}</Text>
+                      <ThinkingLevelSelect />
                     </Flexbox>
                   )}
                   {showDimensionControl && <DimensionControlGroup />}
