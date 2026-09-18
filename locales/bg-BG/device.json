@@ -13,7 +13,6 @@
   "workingDirectory.branchesLoadFailed": "Неуспешно зареждане на клонове",
   "workingDirectory.branchesLoading": "Зареждане на клонове…",
   "workingDirectory.branchesNoMatch": "Няма съвпадащи клонове",
-  "workingDirectory.branchesTruncated": "{{count}} още — въведете, за да филтрирате",
   "workingDirectory.browseDescription": "Изберете папка на свързаното устройство.",
   "workingDirectory.browseFolders": "Преглед на папки",
   "workingDirectory.cancel": "Отказ",
