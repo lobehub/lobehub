@@ -18,8 +18,8 @@ vi.mock('@/server/services/expertise/ingestion', () => ({
   },
 }));
 
-const settle = (verifyRunId: string, userId = 'user-1') =>
-  ExpertiseRejectionWorkflow.trigger({ acceptanceId: 'acc-1', userId, verifyRunId });
+const settle = (verifyRunId: string, userId = 'user-1', workspaceId?: string) =>
+  ExpertiseRejectionWorkflow.trigger({ acceptanceId: 'acc-1', userId, verifyRunId, workspaceId });
 
 /** Resolves once every microtask queued by the triggers has run. */
 const drain = async () => {
@@ -73,6 +73,18 @@ describe('ExpertiseRejectionWorkflow.trigger without a queue', () => {
     expect(ingestAcceptanceRound).toHaveBeenCalledTimes(2);
   });
 
+  it('serializes two workspace members, who share one lesson catalog', async () => {
+    ingestAcceptanceRound.mockReturnValue(new Promise(() => {}));
+
+    await settle('run-1', 'user-1', 'ws-1');
+    await settle('run-2', 'user-2', 'ws-1');
+    await drain();
+
+    // Domains and their bindings are workspace-wide, so two members racing would each mint a
+    // different default domain and split the catalog in two.
+    expect(ingestAcceptanceRound).toHaveBeenCalledTimes(1);
+  });
+
   it('does not serialize across reviewers', async () => {
     ingestAcceptanceRound.mockReturnValue(new Promise(() => {}));
 
@@ -81,6 +93,19 @@ describe('ExpertiseRejectionWorkflow.trigger without a queue', () => {
     await drain();
 
     expect(ingestAcceptanceRound).toHaveBeenCalledTimes(2);
+  });
+
+  it('keys the queue by the workspace when there is one', async () => {
+    appEnv.enableQueueAgentRuntime = true;
+
+    await settle('run-1', 'user-1', 'ws-1');
+    await drain();
+
+    expect(workflowClient.trigger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flowControl: { key: 'expertise-rejection.workspace.ws-1', parallelism: 1 },
+      }),
+    );
   });
 
   it('hands off to the queue when one is configured, without running locally', async () => {
@@ -92,7 +117,7 @@ describe('ExpertiseRejectionWorkflow.trigger without a queue', () => {
     expect(ingestAcceptanceRound).not.toHaveBeenCalled();
     expect(workflowClient.trigger).toHaveBeenCalledWith(
       expect.objectContaining({
-        flowControl: { key: 'expertise-rejection.user-1', parallelism: 1 },
+        flowControl: { key: 'expertise-rejection.user.user-1', parallelism: 1 },
       }),
     );
   });

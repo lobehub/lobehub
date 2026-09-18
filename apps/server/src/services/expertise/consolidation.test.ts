@@ -122,6 +122,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
       instance('c3', '表格头下面这条线不要'),
     ]);
     generateObject.mockResolvedValue({
+      currentLimitsArePlaceholder: true,
       generalized: true,
       limits: [],
       note: 'I1–I3 都是未被要求的分隔线',
@@ -159,6 +160,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
       instance('c3', '这两个我觉得应该并排放'),
     ]);
     generateObject.mockResolvedValue({
+      currentLimitsArePlaceholder: true,
       generalized: false,
       limits: [],
       note: '三条都是位置问题，但不是同一条标准',
@@ -171,8 +173,9 @@ describe('ExpertiseConsolidationService.consolidate', () => {
     const result = await new ExpertiseConsolidationService(db, 'user_1').consolidate('lesson_1');
 
     expect(result).toMatchObject({ generalized: false, reason: 'nothing-new' });
-    // Nothing is rewritten — but the pass is logged, or the same instances get re-read every round.
-    expect(updates).toHaveLength(0);
+    // Nothing is rewritten — the only write is the revision counter moving with the logged pass,
+    // which a refusal still records, or the same instances get re-read every round.
+    expect(updates).toEqual([{ currentRevision: 1 }]);
     // …and records what it looked at, so "not one standard" can be checked against the same rows.
     expect(inserts[0]).toMatchObject({
       evidence: { instances: ['c1', 'c2', 'c3'] },
@@ -190,17 +193,17 @@ describe('ExpertiseConsolidationService.consolidate', () => {
       ],
     );
     generateObject.mockResolvedValue({
+      currentLimitsArePlaceholder: true,
       generalized: true,
       limits: [
         {
-          keptFromCurrent: false,
           shippedRefs: ['S1'],
           text: '下拉菜单里隔离危险操作的分隔线不受此限',
         },
         // Cites nothing the reviewer shipped — an invented exemption.
-        { keptFromCurrent: false, shippedRefs: [], text: '卡片内部的分隔线不受此限' },
+        { shippedRefs: [], text: '卡片内部的分隔线不受此限' },
         // Cites a rejected instance, which can never justify an exemption.
-        { keptFromCurrent: false, shippedRefs: ['I2'], text: '表单里的分隔线不受此限' },
+        { shippedRefs: ['I2'], text: '表单里的分隔线不受此限' },
       ],
       note: '',
       reasonKind: 'mechanism',
@@ -233,6 +236,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
       { ...LESSON, sections: [...LESSON.sections, { body: stated, key: 'limits' }] },
     );
     generateObject.mockResolvedValue({
+      currentLimitsArePlaceholder: true,
       generalized: true,
       limits: [],
       note: '',
@@ -258,6 +262,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
       instance('c3', 'c'),
     ]);
     generateObject.mockResolvedValue({
+      currentLimitsArePlaceholder: true,
       generalized: true,
       limits: [],
       note: '',
@@ -280,6 +285,7 @@ describe('ExpertiseConsolidationService.consolidate', () => {
       { ...LESSON, reasonKind: 'mechanism' },
     );
     generateObject.mockResolvedValue({
+      currentLimitsArePlaceholder: true,
       generalized: true,
       limits: [],
       note: '',
@@ -350,35 +356,49 @@ describe('ExpertiseConsolidationService.dueForConsolidation', () => {
 });
 
 describe('resolveLimits', () => {
-  it('carries over a limit the reviewer already stated, even re-wrapped', () => {
-    const { boundaries, texts } = resolveLimits(
-      [{ keptFromCurrent: true, shippedRefs: [], text: '表格表头  下方的线\n不受此限' }],
-      [],
-      '表格表头下方的线不受此限',
-    );
+  it('keeps every limit the standard already carries, even ones the model never mentions', () => {
+    const { texts } = resolveLimits([{ shippedRefs: ['S1'], text: '新的豁免' }], ['ok_1'], {
+      isPlaceholder: false,
+      text: '表格表头下方的线不受此限\n侧栏分组之间的线不受此限',
+    });
 
-    expect(texts).toEqual(['表格表头  下方的线\n不受此限']);
-    // It rests on the reviewer's words, not on a delivery, so it is not a boundary with ids.
-    expect(boundaries).toEqual([]);
+    // The reviewer drew these. A pass that had to echo them back to keep them would widen the
+    // standard the first time the model forgot one.
+    expect(texts).toEqual(['表格表头下方的线不受此限', '侧栏分组之间的线不受此限', '新的豁免']);
   });
 
-  it('refuses a "kept" limit the current standard never had', () => {
-    const { texts } = resolveLimits(
-      [{ keptFromCurrent: true, shippedRefs: [], text: '图表里的线不受此限' }],
-      [],
-      '表格表头下方的线不受此限',
-    );
+  it('drops the "no boundary stated" placeholder only once a real exemption replaces it', () => {
+    const placeholder = { isPlaceholder: true, text: '边界未由评审者说明' };
 
-    expect(texts).toEqual([]);
+    expect(
+      resolveLimits([{ shippedRefs: ['S1'], text: '真的豁免' }], ['ok_1'], placeholder).texts,
+    ).toEqual(['真的豁免']);
+    // Nothing valid arrived, so the standard keeps the section it had.
+    expect(
+      resolveLimits([{ shippedRefs: [], text: '编的豁免' }], ['ok_1'], placeholder).texts,
+    ).toEqual(['边界未由评审者说明']);
   });
 
   it('ignores labels that were never listed and does not repeat an id', () => {
     const { boundaries } = resolveLimits(
-      [{ keptFromCurrent: false, shippedRefs: ['S1', 'S1', 'S9'], text: 'x' }],
+      [{ shippedRefs: ['S1', 'S1', 'S9'], text: 'x' }],
       ['ok_1'],
-      '',
+      { isPlaceholder: false, text: '' },
     );
 
     expect(boundaries).toEqual([{ checkResultIds: ['ok_1'], limit: 'x' }]);
+  });
+
+  it('does not add a boundary the standard already states', () => {
+    const { texts } = resolveLimits(
+      [{ shippedRefs: ['S1'], text: '表格表头下方的线  不受此限' }],
+      ['ok_1'],
+      {
+        isPlaceholder: false,
+        text: '表格表头下方的线不受此限',
+      },
+    );
+
+    expect(texts).toEqual(['表格表头下方的线不受此限']);
   });
 });

@@ -344,6 +344,10 @@ export const EXPERTISE_CONSOLIDATION_JSON_SCHEMA = {
   schema: {
     additionalProperties: false,
     properties: {
+      // Whether the standard's current `limits` is ingestion's "the reviewer stated no boundary"
+      // placeholder rather than a boundary. The service keeps existing limits verbatim, so this is
+      // the one thing it cannot decide for itself: only a reader of that text knows which it is.
+      currentLimitsArePlaceholder: { type: 'boolean' },
       // `false` is a real answer, not a failure: instances that only share a category do not
       // share a standard, and rewriting them into one invents a rule nobody stated.
       generalized: { type: 'boolean' },
@@ -351,17 +355,17 @@ export const EXPERTISE_CONSOLIDATION_JSON_SCHEMA = {
       // can name what it rests on. The service resolves every ref to a check result id and drops
       // any entry that resolves to nothing — which turns "never invent an exemption" from a request
       // into something enforced.
+      // Additions only. The limits the standard already carries are never echoed back and never
+      // re-derived from the answer — the service keeps them verbatim, because a model that forgets
+      // to repeat one would silently widen a standard the reviewer had bounded.
       limits: {
         items: {
           additionalProperties: false,
           properties: {
-            // A limit the reviewer already stated on the current standard, carried over. Checked
-            // against the current text, so it cannot smuggle in a new exemption.
-            keptFromCurrent: { type: 'boolean' },
             shippedRefs: { items: { type: 'string' }, type: 'array' },
             text: { type: 'string' },
           },
-          required: ['keptFromCurrent', 'shippedRefs', 'text'],
+          required: ['shippedRefs', 'text'],
           type: 'object',
         },
         type: 'array',
@@ -374,7 +378,16 @@ export const EXPERTISE_CONSOLIDATION_JSON_SCHEMA = {
       subject: { type: 'string' },
       title: { type: 'string' },
     },
-    required: ['generalized', 'limits', 'note', 'reasonKind', 'reasoning', 'subject', 'title'],
+    required: [
+      'currentLimitsArePlaceholder',
+      'generalized',
+      'limits',
+      'note',
+      'reasonKind',
+      'reasoning',
+      'subject',
+      'title',
+    ],
     type: 'object',
   },
 } as const satisfies ExpertiseGenerateObjectSchema;
@@ -400,10 +413,11 @@ If the instances do not share a standard, answer \`generalized\`: false and retu
 
 Look for a shipped delivery whose frame plainly shows this standard's subject, in the state the standard objects to — and which the reviewer accepted anyway. That is a boundary the reviewer drew with their own hands: the standard stops somewhere before that delivery. Write it as where the standard stops, pointing at what is different about the case they let through.
 
-Return \`limits\` as a list. Each entry is one exemption:
+Return \`limits\` as the exemptions you are ADDING. Each entry:
 - \`text\` — where the standard stops, in the reviewer's language.
-- \`shippedRefs\` — the labels of the SHIPPED deliveries it was read from (for example ["S2"]). Every new exemption must name at least one. An entry that names none, or names an instance, is discarded — and so is any label that is not listed.
-- \`keptFromCurrent\` — true only for a limit the reviewer already stated in the standard as it stands, which you are carrying over unchanged. Copy its wording; do not widen it. Never mark the placeholder "边界未由评审者说明" (in any language) as a limit.
+- \`shippedRefs\` — the labels of the SHIPPED deliveries it was read from (for example ["S2"]). Every entry must name at least one. An entry that names none, or names an instance, is discarded — and so is any label that is not listed.
+
+Do not repeat the limits the standard already carries; they are kept for you, word for word, and nothing you write can remove one. Set \`currentLimitsArePlaceholder\` to true only when the standard's current \`limits\` is ingestion's "边界未由评审者说明" placeholder (in any language) rather than a boundary the reviewer drew — that is the one case where the existing text is dropped, and only if you supply a real exemption to replace it.
 
 Rules on this, in order:
 - Only a shipped delivery whose frame you have actually read can justify a new exemption. Never infer one from the instances, from the standard's own wording, or from what a reasonable person "would obviously" exempt — an invented exemption silently narrows a standard the reviewer stated without limit.

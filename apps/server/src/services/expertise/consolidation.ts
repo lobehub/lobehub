@@ -61,14 +61,9 @@ const MAX_FRAMES = 10;
 const pct = (value: number) => `${Math.round(value * 100)}%`;
 
 const ConsolidationSchema = z.object({
+  currentLimitsArePlaceholder: z.boolean(),
   generalized: z.boolean(),
-  limits: z.array(
-    z.object({
-      keptFromCurrent: z.boolean(),
-      shippedRefs: z.array(z.string()),
-      text: z.string(),
-    }),
-  ),
+  limits: z.array(z.object({ shippedRefs: z.array(z.string()), text: z.string() })),
   note: z.string(),
   reasonKind: z.enum(['mechanism', 'taste']),
   reasoning: z.string(),
@@ -76,36 +71,33 @@ const ConsolidationSchema = z.object({
   title: z.string(),
 });
 
-/** Whitespace-insensitive, so a carried-over limit survives the model re-wrapping it. */
+/** Whitespace-insensitive, so the same limit written twice is not kept twice. */
 const squash = (text: string) => text.replaceAll(/\s+/g, '');
 
 /**
- * The limits a pass may write, each tied to what it rests on.
+ * The limits a consolidated standard ends up with, and what each new one rests on.
  *
- * A new exemption survives only if it names a shipped delivery that was actually offered; a
- * carried-over one only if its wording is already in the standard. Everything else — no refs, an
- * instance ref, a label that was never listed, a "kept" limit the standard never had — is dropped.
- * This is where "never invent a boundary" stops being a request to the model.
+ * Existing limits are kept verbatim and are never re-derived from the model's answer: they were
+ * drawn by the reviewer, and a pass that forgot to echo one back would silently widen a standard
+ * they had bounded. The single exception is ingestion's "no boundary stated" placeholder, which is
+ * dropped only when a real exemption arrives to replace it — and only the model can tell the two
+ * apart, since the placeholder is written in whatever language the reviewer used.
+ *
+ * A new exemption survives only if it names a shipped delivery that was actually offered. No refs,
+ * an instance's ref, a label that was never listed — all dropped. This is where "never invent a
+ * boundary" stops being a request to the model.
  */
 export const resolveLimits = (
   limits: z.infer<typeof ConsolidationSchema>['limits'],
   shippedIds: string[],
-  currentLimits: string,
+  current: { isPlaceholder: boolean; text: string },
 ) => {
   const byRef = new Map(shippedIds.map((id, index) => [`S${index + 1}`, id]));
-  const current = squash(currentLimits);
-  const kept: string[] = [];
   const boundaries: ExpertiseRevisionEvidence['boundaries'] = [];
 
   for (const limit of limits) {
     const text = limit.text.trim();
     if (!text) continue;
-
-    if (limit.keptFromCurrent) {
-      if (current && current.includes(squash(text))) kept.push(text);
-      continue;
-    }
-
     const checkResultIds = [
       ...new Set(
         limit.shippedRefs
@@ -117,7 +109,19 @@ export const resolveLimits = (
     boundaries.push({ checkResultIds, limit: text });
   }
 
-  return { boundaries, texts: [...kept, ...boundaries.map((boundary) => boundary.limit)] };
+  const existing = current.text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  // The placeholder only goes away once something real replaces it; with no additions the standard
+  // keeps exactly the limits section it had.
+  const kept = current.isPlaceholder && boundaries.length > 0 ? [] : existing;
+  const seen = new Set(kept.map((line) => squash(line)));
+  const added = boundaries
+    .map((boundary) => boundary.limit)
+    .filter((text) => !seen.has(squash(text)) && seen.add(squash(text)));
+
+  return { boundaries, texts: [...kept, ...added] };
 };
 
 export interface ConsolidationResult {
@@ -194,6 +198,7 @@ export class ExpertiseConsolidationService {
     const [lesson] = await this.db
       .select({
         code: expertiseLessons.code,
+        currentRevision: expertiseLessons.currentRevision,
         domainId: expertiseLessons.domainId,
         id: expertiseLessons.id,
         reasonKind: expertiseLessons.reasonKind,
@@ -265,7 +270,10 @@ export class ExpertiseConsolidationService {
         ? 'taste'
         : result.reasonKind;
     const shippedIds = shipped.map((delivery) => delivery.id);
-    const { boundaries, texts } = resolveLimits(result.limits, shippedIds, section('limits'));
+    const { boundaries, texts } = resolveLimits(result.limits, shippedIds, {
+      isPlaceholder: result.currentLimitsArePlaceholder,
+      text: section('limits'),
+    });
     const evidence: ExpertiseRevisionEvidence = {
       boundaries,
       instances: instances.map((instance) => instance.id),
@@ -276,10 +284,13 @@ export class ExpertiseConsolidationService {
     // every subsequent rejection, and "these do not share a standard" is the honest answer for a
     // category like placement, where only 11% of complaints repeat.
     if (!result.generalized || !result.title.trim()) {
-      await this.recordRevision(lesson, lesson.sections, result.note, {
-        evidence,
-        generalized: false,
-      });
+      await this.db.transaction(async (tx) =>
+        this.recordRevision(lesson, lesson.sections, result.note, {
+          evidence,
+          generalized: false,
+          tx,
+        }),
+      );
       return { generalized: false, lessonId, note: result.note, reason: 'nothing-new' };
     }
 
@@ -467,18 +478,24 @@ export class ExpertiseConsolidationService {
   };
 
   private recordRevision = async (
-    lesson: { id: string; title: string },
+    lesson: { currentRevision?: null | number; id: string; title: string },
     sections: ExpertiseLessonSection[],
     note: string,
-    options: { evidence: ExpertiseRevisionEvidence; generalized: boolean; tx?: LobeChatDatabase },
+    options: { evidence: ExpertiseRevisionEvidence; generalized: boolean; tx: LobeChatDatabase },
   ) => {
-    const db = options.tx ?? this.db;
+    const db = options.tx;
     const [prior] = await db
       .select({ revision: expertiseLessonRevisions.revision })
       .from(expertiseLessonRevisions)
       .where(eq(expertiseLessonRevisions.lessonId, lesson.id))
       .orderBy(desc(expertiseLessonRevisions.revision))
       .limit(1);
+
+    // Both the log's own maximum and the lesson's counter, because a user edit numbers from
+    // `currentRevision + 1` against a unique `(lesson, revision)`: leaving the counter behind makes
+    // the reviewer's NEXT edit collide, and taking the larger of the two also repairs a lesson
+    // whose counter has already drifted.
+    const revision = Math.max(prior?.revision ?? 0, lesson.currentRevision ?? 0) + 1;
 
     await db.insert(expertiseLessonRevisions).values({
       changedBy: 'system',
@@ -489,9 +506,13 @@ export class ExpertiseConsolidationService {
       // The title before the rewrite is what makes a pass auditable at a glance; a refusal keeps
       // the same title on both sides, which is exactly how a refusal should read.
       prevTitle: lesson.title,
-      revision: (prior?.revision ?? 0) + 1,
+      revision,
       sections,
     });
+    await db
+      .update(expertiseLessons)
+      .set({ currentRevision: revision })
+      .where(eq(expertiseLessons.id, lesson.id));
     log('recorded %s revision for %s', options.generalized ? 'generalize' : 'no-change', lesson.id);
   };
 }
