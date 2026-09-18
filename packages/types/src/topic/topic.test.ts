@@ -110,6 +110,20 @@ describe('chatTopicMetadataUpdateSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('carries the sandbox binding through — a stripped key writes nothing and still answers 200', () => {
+    const metadata = { sandboxInstanceId: 'a2c1d0e4-0000-4000-8000-000000000000' };
+
+    expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
+  });
+
+  it('carries the sandbox mode through, and rejects a mode outside the pair', () => {
+    for (const sandboxMode of ['ephemeral', 'persistent'] as const) {
+      expect(chatTopicMetadataUpdateSchema.parse({ sandboxMode })).toEqual({ sandboxMode });
+    }
+
+    expect(chatTopicMetadataUpdateSchema.safeParse({ sandboxMode: 'forever' }).success).toBe(false);
+  });
+
   it('keeps the onboarding feedback comment limit at the shared contract boundary', () => {
     const result = chatTopicMetadataUpdateSchema.safeParse({
       onboardingFeedback: {
