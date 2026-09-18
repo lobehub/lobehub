@@ -1,4 +1,4 @@
-import type { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://openrouter.ai/docs/api-reference/list-available-models
 const openrouterChatModels: AIChatModelCard[] = [
@@ -848,6 +848,198 @@ const openrouterChatModels: AIChatModelCard[] = [
   },
 ];
 
-export const allModels = [...openrouterChatModels];
+/*
+ * Image generation models served by OpenRouter's dedicated image API
+ * (`POST /api/v1/images`). Model list and per-model parameters:
+ * https://openrouter.ai/api/v1/images/models
+ */
+const openrouterImageModels: AIImageModelCard[] = [
+  {
+    description:
+      "Nano Banana 2 (Gemini 3.1 Flash Image) is Google's state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed.",
+    displayName: 'Nano Banana 2',
+    enabled: true,
+    id: 'google/gemini-3.1-flash-image',
+    parameters: {
+      aspectRatio: {
+        default: '1:1',
+        enum: [
+          '1:1',
+          '1:4',
+          '1:8',
+          '2:3',
+          '3:2',
+          '3:4',
+          '4:1',
+          '4:3',
+          '4:5',
+          '5:4',
+          '9:16',
+          '16:9',
+          '21:9',
+        ],
+      },
+      imageUrls: { default: [], maxCount: 14 },
+      prompt: { default: '' },
+      resolution: { default: '1K', enum: ['512', '1K', '2K', '4K'] },
+    },
+    pricing: {
+      units: [{ name: 'imageOutput', rate: 60, strategy: 'fixed', unit: 'millionTokens' }],
+    },
+    releasedAt: '2026-02-26',
+    type: 'image',
+  },
+  {
+    description:
+      "Nano Banana Pro (Gemini 3 Pro Image) is Google's most advanced image generation and editing model, with improved multimodal reasoning and high-fidelity visual synthesis.",
+    displayName: 'Nano Banana Pro',
+    enabled: true,
+    id: 'google/gemini-3-pro-image',
+    parameters: {
+      aspectRatio: {
+        default: '1:1',
+        enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+      },
+      imageUrls: { default: [], maxCount: 14 },
+      prompt: { default: '' },
+      resolution: { default: '1K', enum: ['1K', '2K', '4K'] },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-18',
+    type: 'image',
+  },
+  {
+    description:
+      'Nano Banana (Gemini 2.5 Flash Image) is a state of the art image generation model with contextual understanding, capable of image generation and edits.',
+    displayName: 'Nano Banana',
+    // The `:image` suffix disambiguates from the chat entry with the same id
+    // (same convention as google.ts); the runtime strips it before the request.
+    id: 'google/gemini-2.5-flash-image:image',
+    parameters: {
+      aspectRatio: {
+        default: '1:1',
+        enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+      },
+      imageUrls: { default: [], maxCount: 3 },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [
+        { name: 'imageInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-08-26',
+    type: 'image',
+  },
+  {
+    description: 'ChatGPT native multimodal image generation model.',
+    displayName: 'GPT Image 1',
+    enabled: true,
+    id: 'openai/gpt-image-1',
+    parameters: {
+      imageUrls: { default: [], maxCount: 16 },
+      prompt: { default: '' },
+      quality: { default: 'auto', enum: ['auto', 'low', 'medium', 'high'] },
+    },
+    pricing: {
+      units: [{ name: 'imageOutput', rate: 40, strategy: 'fixed', unit: 'millionTokens' }],
+    },
+    releasedAt: '2025-04-23',
+    type: 'image',
+  },
+  {
+    description:
+      'A lower-cost GPT Image 1 variant with native text and image input and image output.',
+    displayName: 'GPT Image 1 Mini',
+    id: 'openai/gpt-image-1-mini',
+    parameters: {
+      imageUrls: { default: [], maxCount: 16 },
+      prompt: { default: '' },
+      quality: { default: 'auto', enum: ['auto', 'low', 'medium', 'high'] },
+    },
+    pricing: {
+      units: [{ name: 'imageOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' }],
+    },
+    releasedAt: '2025-10-06',
+    type: 'image',
+  },
+  {
+    description:
+      'Seedream 4.5 is an image generation model from ByteDance Seed, supporting text and image inputs with highly controllable, high-quality image generation.',
+    displayName: 'Seedream 4.5',
+    enabled: true,
+    id: 'bytedance-seed/seedream-4.5',
+    parameters: {
+      aspectRatio: {
+        default: '1:1',
+        enum: [
+          '1:1',
+          '1:2',
+          '2:1',
+          '2:3',
+          '3:2',
+          '3:4',
+          '4:3',
+          '4:5',
+          '5:4',
+          '9:16',
+          '16:9',
+          '21:9',
+        ],
+      },
+      imageUrls: { default: [], maxCount: 14 },
+      prompt: { default: '' },
+      // Seedream 4.5 requires at least ~3.7MP output, so the 1K tier is rejected upstream
+      resolution: { default: '2K', enum: ['2K', '4K'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-11-26',
+    type: 'image',
+  },
+  {
+    description:
+      'FLUX.2 Pro from Black Forest Labs delivers state of the art image generation with high prompt adherence and photorealistic detail.',
+    displayName: 'FLUX.2 Pro',
+    enabled: true,
+    id: 'black-forest-labs/flux.2-pro',
+    parameters: {
+      imageUrls: { default: [], maxCount: 8 },
+      prompt: { default: '' },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.03, strategy: 'fixed', unit: 'megapixel' }],
+    },
+    releasedAt: '2025-11-25',
+    type: 'image',
+  },
+  {
+    description:
+      'FLUX.2 Klein 4B is a compact, cost-efficient FLUX.2 variant for fast image generation and editing.',
+    displayName: 'FLUX.2 Klein 4B',
+    id: 'black-forest-labs/flux.2-klein-4b',
+    parameters: {
+      imageUrls: { default: [], maxCount: 4 },
+      prompt: { default: '' },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.014, strategy: 'fixed', unit: 'megapixel' }],
+    },
+    releasedAt: '2026-01-13',
+    type: 'image',
+  },
+];
+
+export const allModels = [...openrouterChatModels, ...openrouterImageModels];
 
 export default allModels;
