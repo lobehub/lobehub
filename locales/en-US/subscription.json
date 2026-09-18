@@ -496,6 +496,8 @@
   "plansModal.messengerWechat.title": "Connect WeChat after upgrading",
   "plansModal.modelAccess.desc": "This model is available on paid plans. Upgrade to use the full model lineup.",
   "plansModal.modelAccess.title": "Unlock all models",
+  "plansModal.persistentSandbox.desc": "Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.",
+  "plansModal.persistentSandbox.title": "Keep your sandbox files",
   "qa.desc": "If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.",
   "qa.detail": "View Details",
   "qa.list.credit.a": "Credits are how {{cloud}} measures AI model usage. Different AI models consume different amounts of credits.",

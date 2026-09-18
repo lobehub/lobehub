@@ -630,6 +630,15 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
 
+  /**
+   * Browse the persistent sandbox workspace. Takes no path — the panel starts
+   * at the workspace root and navigates on its own, so reopening it never
+   * strands the user wherever they happened to be last time.
+   */
+  openSandboxWorkspace = (): void => {
+    this.#get().pushPortalView({ type: PortalViewType.SandboxWorkspace });
+  };
+
   openTaskDetail = (taskId: string): void => {
     this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
   };

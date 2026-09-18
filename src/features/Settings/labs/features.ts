@@ -24,6 +24,7 @@ type LabFeatureI18nKey =
   | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
+  | 'persistentSandbox'
   | 'projects'
   | 'selfLearning'
   | 'topicAcceptance';
@@ -100,6 +101,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'oauthApps',
     searchKeywords: ['oauth', 'oauth apps'],
     stage: 'beta',
+  },
+  {
+    flag: 'enablePersistentSandbox',
+    i18nKey: 'persistentSandbox',
+    searchKeywords: ['persistent sandbox', 'workspace', 'sandbox storage'],
+    stage: 'alpha',
   },
   {
     flag: 'enableArtifactDeployment',

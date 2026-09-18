@@ -18,6 +18,7 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { WorkspaceModel } from '@/database/models/workspace';
+import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { appEnv } from '@/envs/app';
 import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters/composioConnectedIds';
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
@@ -311,6 +312,23 @@ export const createServerContextFactProviders = ({
 
     listSandboxFiles: async (topicId) =>
       new FileModel(db, userId).findFilesToInitInSandbox(topicId),
+
+    // Resolved from the same inputs the cloud-sandbox runtime uses, so the model
+    // is never told its files persist while its tools write to a directory that
+    // does not — or the reverse. Keyed on `ctx.workspaceId` for the same reason
+    // the runtime is: that is the workspace the trust token carries, and the
+    // entitlement has to agree with the token that presents it.
+    resolveSandboxPersistence: async () => {
+      const { mode, cwd, claim } = await resolveSandboxSessionConfig({
+        isShareVisitorRun: Boolean(ctx.agentShareVisitor),
+        serverDB: db,
+        topicId: ctx.topicId ?? state.origin?.topicId,
+        userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      return claim ? { cwd, mode } : undefined;
+    },
 
     listTopicMessages: async (topic) => {
       const messages = await new MessageModel(db, userId, ctx.workspaceId).query(

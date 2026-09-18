@@ -7,6 +7,10 @@ import pMap from 'p-map';
 
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import {
+  createSandboxWorkspaceClient,
+  type SandboxWorkspaceClient,
+} from '@/server/services/sandbox/workspaceFiles';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 
 import {
@@ -928,6 +932,21 @@ export class MarketService {
     const result = await response.json();
     log('uploadCredFile success: fileHashId=%s', result.fileHashId);
     return result;
+  }
+
+  /**
+   * Client for the persistent sandbox workspace's file API.
+   *
+   * Not on the SDK yet, so it is hand-written against the same endpoints; it
+   * lives in its own module and only borrows this service's auth headers, so
+   * replacing it with the generated client later is a deletion. The workspace it
+   * addresses is always the one the caller's signed entitlement names.
+   */
+  getSandboxWorkspaceClient(): SandboxWorkspaceClient {
+    return createSandboxWorkspaceClient({
+      baseURL: MARKET_BASE_URL,
+      headers: this.oauthProxyHeaders,
+    });
   }
 
   // ============================== Direct SDK Access ==============================

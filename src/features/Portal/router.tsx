@@ -22,6 +22,7 @@ import { LocalFile } from './LocalFile';
 import { MessageDetail } from './MessageDetail';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
+import { SandboxWorkspace } from './SandboxWorkspace';
 import { TaskDetail } from './TaskDetail';
 import { TaskResult } from './TaskResult';
 import { Thread } from './Thread';
@@ -48,6 +49,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.GoalMetric]: GoalMetric,
   [PortalViewType.GoalNode]: GoalNode,
   [PortalViewType.LocalFile]: LocalFile,
+  [PortalViewType.SandboxWorkspace]: SandboxWorkspace,
   [PortalViewType.MessageDetail]: MessageDetail,
   [PortalViewType.ToolUI]: Plugins,
   [PortalViewType.TaskDetail]: TaskDetail,

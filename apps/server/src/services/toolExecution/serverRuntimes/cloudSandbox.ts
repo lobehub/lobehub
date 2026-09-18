@@ -5,7 +5,7 @@ import debug from 'debug';
 import { UserModel } from '@/database/models/user';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
-import { createSandboxService } from '@/server/services/sandbox';
+import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import {
   isLhCommand,
   preprocessLhCommand,
@@ -125,14 +125,43 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
       // non-fatal — MarketService will fall back to trustedClientToken
     }
 
+    // Persistence for this run: the entitlement that goes on the trust token,
+    // and the topic's own preferences that go on each request.
+    //
+    // Keyed on the RAW `context.workspaceId`, the same value the token carries,
+    // not on the recovered `resolveContentWorkspaceId` below. The two disagree
+    // only on dispatch/resume paths that drop the id, and there the claim must
+    // follow the token: signing `ws-org-<id>` onto a token market reads as
+    // personal would mount an organization's directory inside a personal
+    // session. Self-consistency is the property that protects the storage.
+    // The cost is real and worth writing down — such a run stores into the
+    // member's personal workspace instead of the organization's. Fixing it
+    // means making the recovered id authoritative for `MarketService` here AND
+    // in `creds.ts`, which also decides which sandbox session credentials are
+    // injected into; that is a routing change, not a storage one, and does not
+    // belong in this feature.
+    const sandbox = await resolveSandboxSessionConfig({
+      isShareVisitorRun: Boolean(context.agentShareVisitor),
+      serverDB: context.serverDB,
+      topicId: context.topicId,
+      userId: context.userId,
+      workspaceId: context.workspaceId,
+    });
+
     const marketService = new MarketService({
       accessToken,
-      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+      userInfo: {
+        sandboxWorkspace: sandbox.claim,
+        userId: context.userId,
+        workspaceId: context.workspaceId,
+      },
     });
     const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const sandboxService = createSandboxService({
       fileService,
       marketService,
+      sandboxCwd: sandbox.cwd,
+      sandboxMode: sandbox.mode,
       serverDB: context.serverDB,
       topicId: context.topicId,
       userId: context.userId,

@@ -151,6 +151,15 @@ export interface ContextFactProviders {
   ) => Promise<{ description?: string | null; id: string; title?: string | null }[] | undefined>;
   /** Files synced into the topic's sandbox upload dir. */
   listSandboxFiles?: (topicId: string) => Promise<{ name: string; size?: number }[] | undefined>;
+  /**
+   * Whether this run's cloud sandbox keeps its working directory, and which
+   * subdirectory it works in. Resolved by the host because it depends on a
+   * signed entitlement the browser cannot see; absent means the sandbox is
+   * ephemeral, which is what every run without one gets.
+   */
+  resolveSandboxPersistence?: () => Promise<
+    { cwd?: string; mode: 'ephemeral' | 'persistent' } | undefined
+  >;
   /** Messages of a referenced topic, oldest first. */
   listTopicMessages?: (
     topic: TopicFacts,

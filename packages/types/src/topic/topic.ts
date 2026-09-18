@@ -304,6 +304,33 @@ export interface ChatTopicMetadata {
     threadId?: string | null;
   } | null;
   /**
+   * Working directory for this topic's CLOUD SANDBOX, relative to the
+   * persistent workspace root (`reports/q3`, never an absolute path). Empty or
+   * absent means the workspace root itself.
+   *
+   * A preference, not a security boundary: the execution plane composes it onto
+   * the workspace directory the signed entitlement names and fences the result,
+   * so a value pointing outside is rejected there rather than trusted here.
+   * Ignored entirely when the run has no persistent workspace, which is why it
+   * survives a downgrade — resubscribing restores the directory the user chose.
+   *
+   * The desktop counterpart is {@link ChatTopicMetadata.workingDirectory}; the
+   * two never interact, one addresses the user's machine and the other a
+   * directory inside a remote volume.
+   */
+  sandboxCwd?: string;
+  /**
+   * Whether this topic's cloud sandbox should persist its working directory.
+   * Absent means ephemeral — persistence is an explicit choice, since not every
+   * task wants to leave files behind. Mirrors `SandboxMode` in
+   * `@lobechat/builtin-tool-cloud-sandbox`, inlined to keep this package free of
+   * a dependency on the tool layer.
+   *
+   * Only half the decision: a run is persistent when this says so AND the
+   * caller's entitlement grants a workspace.
+   */
+  sandboxMode?: 'ephemeral' | 'persistent';
+  /**
    * A deferred agent run on this topic. Present iff the topic status is
    * `scheduled`. Set to `null` to clear it (same clear-convention as
    * `runningOperation`); every reader treats a nullish value as "not scheduled".

@@ -260,6 +260,12 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // Member-to-member ownership handover: accepting/declining is an interactive
   // human decision, not something a restricted key should automate.
   resourceTransferRequest: 'blocked',
+  // Reads and DELETES files in the caller's persistent sandbox working
+  // directory. No existing scope honestly describes that store: granting it
+  // under `file:*` would let a key given knowledge-base write access delete
+  // working files too, which is not what that grant means. Blocked until the
+  // feature ships with a scope of its own (full-access keys still reach it).
+  sandboxWorkspace: 'blocked',
   search: rw('chat:read', null),
   session: rw('chat:read', 'chat:write'),
   sessionGroup: rw('chat:read', 'chat:write'),

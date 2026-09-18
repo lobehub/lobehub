@@ -32,6 +32,8 @@
   "features.messageTextSelectionActions.title": "消息文本选择操作",
   "features.oauthApps.desc": "在个人和工作区设置中显示 OAuth 应用管理入口。此功能默认隐藏。",
   "features.oauthApps.title": "OAuth 应用",
+  "features.persistentSandbox.desc": "让云端沙箱写下的文件留存。工作目录在会话回收后依然存在，并在你的各个话题间共享，而不是随沙箱一起丢弃。需要付费套餐；体积大的依赖和数据集仍应放在 /tmp。",
+  "features.persistentSandbox.title": "持久化沙箱",
   "features.projects.desc": "将长期目标组织到独立工作空间中，并集中管理相关智能体、资料库与任务。",
   "features.projects.title": "项目工作空间",
   "features.selfLearning.desc": "看见每个 agent 从真实实践里学到了什么 —— 它的规则库、哪些规则真的用得上、哪几层还是空的。",

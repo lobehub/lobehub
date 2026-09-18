@@ -3,6 +3,7 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   CloudSandboxIdentifier,
+  formatSandboxWorkspacePromptVariables,
   formatUploadedFilesPrompt,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
@@ -455,6 +456,10 @@ export const gatherContextFacts = async (
           : undefined,
       ),
     () =>
+      attempt('sandboxPersistence', () =>
+        sandboxEnabled ? providers.resolveSandboxPersistence?.() : undefined,
+      ),
+    () =>
       attempt('topic', () =>
         request.topicId ? providers.findTopic?.(request.topicId) : undefined,
       ),
@@ -473,6 +478,7 @@ export const gatherContextFacts = async (
     onboardingContext,
     planTodo,
     sandboxFiles,
+    sandboxPersistence,
     topic,
     topicReferences,
     userInfo,
@@ -507,6 +513,12 @@ export const gatherContextFacts = async (
       memory_effort: String(request.agent.chatConfig?.memory?.effort ?? ''),
       sandbox_enabled: String(sandboxEnabled),
       sandbox_uploaded_files: sandboxFiles ? formatUploadedFilesPrompt(sandboxFiles) : '',
+      // Left out entirely for an ephemeral run so the variable generators'
+      // fallback renders the original wording; spelling it out here would mean
+      // two copies of the same ephemeral text to keep in step.
+      ...(sandboxPersistence?.mode === 'persistent'
+        ? formatSandboxWorkspacePromptVariables(sandboxPersistence)
+        : {}),
       topic_id: request.topicId ?? '',
       topic_title: topic?.title ?? '',
       username: userInfo?.username ?? '',

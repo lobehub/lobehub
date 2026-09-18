@@ -1,3 +1,4 @@
+import { formatSandboxWorkspacePromptVariables } from '@lobechat/builtin-tool-cloud-sandbox';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import type { VariableGenerators } from '@lobechat/context-engine';
 
@@ -93,6 +94,13 @@ export const createVariableGenerators = ({
     userDataPath: () => '(not reported)',
     videosPath: () => '(not reported)',
     workingDirectory: () => '(not specified, use user Home directory as default)',
+    // Leak-guards for the cloud-sandbox `{{sandbox_workspace}}` /
+    // `{{sandbox_session_files}}` sections. The persistent-workspace wording
+    // arrives through `variables` only for a run that actually got one
+    // (entitlement claim AND persistent mode); every other run renders the
+    // original ephemeral-session text rather than leaking the literal tokens.
+    sandbox_session_files: () => formatSandboxWorkspacePromptVariables().sandbox_session_files,
+    sandbox_workspace: () => formatSandboxWorkspacePromptVariables().sandbox_workspace,
   };
 
   return {

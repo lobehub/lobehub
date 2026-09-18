@@ -556,6 +556,9 @@ export default {
   'plans.workspace.freeMembers': 'Up to 3 members (including you)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
+  'plansModal.persistentSandbox.desc':
+    'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
+  'plansModal.persistentSandbox.title': 'Keep your sandbox files',
   'plansModal.artifactDeploymentLimit.desc':
     'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
   'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',
