@@ -37,10 +37,19 @@ export async function deliverWebhook(
 ): Promise<void> {
   const { url, delivery = 'fetch', fallback = 'fetch' } = webhook;
 
-  // Resolve URL: relative paths joined with INTERNAL_APP_URL or APP_URL
-  const resolvedUrl = url.startsWith('http')
-    ? url
-    : urlJoin(process.env.INTERNAL_APP_URL || process.env.APP_URL || '', url);
+  // Resolve URL: relative paths joined with the base the *receiver* can reach.
+  //
+  // QStash deliveries are relayed by the QStash service (Upstash cloud or a
+  // self-hosted container), which typically cannot reach this process's
+  // loopback — in Compose-style deployments INTERNAL_APP_URL is exactly that.
+  // Those must carry an APP_URL the relay resolves (host-gateway, public
+  // origin). Plain fetch fires from this process itself, so the internal
+  // address is preferred there to keep server-to-server traffic off the
+  // public path.
+  const relayBase = process.env.APP_URL || process.env.INTERNAL_APP_URL || '';
+  const directBase = process.env.INTERNAL_APP_URL || process.env.APP_URL || '';
+  const base = delivery === 'qstash' ? relayBase : directBase;
+  const resolvedUrl = url.startsWith('http') ? url : urlJoin(base, url);
 
   if (delivery === 'qstash') {
     try {
