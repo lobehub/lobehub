@@ -15,11 +15,6 @@ import { useChatStore } from '@/store/chat';
 import { gitChipStyles } from './gitChipStyles';
 
 const styles = createStaticStyles(({ css }) => ({
-  empty: css`
-    padding-block: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
   environment: css`
     padding-block: 6px 2px;
     padding-inline: 8px;
@@ -71,6 +66,9 @@ interface SandboxInstancePickerProps {
  * nothing from the user that the environment does not already say, so the
  * "new instance" row asks for nothing and binds what it made.
  *
+ * With no environment at all there is no choice to present, so the chip stops
+ * being a menu and becomes the way to make the first one.
+ *
  * Names, not sizes: sizes live in the snapshot store, which needs a live sandbox
  * session to answer, and a picker that takes seconds to open is a picker people
  * stop opening. The settings page is where sizes are worth the wait.
@@ -91,13 +89,22 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
     () => sandboxWorkspaceService.listInstances({ topicId, withSizes: false }),
     { revalidateOnFocus: false },
   );
-  const { data: environmentData } = useSWR(open || value ? 'sandbox-environments' : null, () =>
+  // Not gated on `open`, unlike the instances above: this one decides what the
+  // chip DOES, and a decision made on the click cannot wait for a fetch started
+  // by it. The query is answered from the database alone, and the whole section
+  // is already behind the lab flag, a sandbox target and an entitlement.
+  const { data: environmentData } = useSWR('sandbox-environments', () =>
     sandboxWorkspaceService.listEnvironments(),
   );
 
   const instances = data?.instances ?? [];
   const environments = environmentData?.environments ?? [];
   const current = instances.find((instance) => instance.id === value);
+
+  // Only once the list has actually arrived. An undefined list is "not known
+  // yet", not "none", and sending someone to settings on a pending fetch would
+  // take them away from a menu that was about to have their environments in it.
+  const hasNoEnvironments = Boolean(environmentData) && environments.length === 0;
 
   const select = async (instanceId: string | undefined) => {
     setOpen(false);
@@ -115,6 +122,20 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
     }
   };
 
+  // Nothing to choose between, so the chip is not a menu: it is the way to make
+  // the first environment. A popover whose only row says "go to settings" is a
+  // step that exists only to be clicked through.
+  if (hasNoEnvironments) {
+    return (
+      <div className={gitChipStyles.prTrigger} onClick={() => navigate('/settings/environments')}>
+        <Icon icon={PlusIcon} size={14} />
+        <Text ellipsis style={{ maxWidth: 160 }}>
+          {t('sandboxWorkspace.setUpEnvironment')}
+        </Text>
+      </div>
+    );
+  }
+
   return (
     <Popover
       arrow={false}
@@ -123,20 +144,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(({ onChange, topi
       trigger={'click'}
       content={
         <Flexbox gap={2} style={{ minWidth: 280 }}>
-          {environments.length === 0 && (
-            <Flexbox
-              className={styles.row}
-              onClick={() => {
-                setOpen(false);
-                navigate('/settings/environments');
-              }}
-            >
-              <Text className={styles.empty} fontSize={12}>
-                {t('sandboxWorkspace.noEnvironments')}
-              </Text>
-            </Flexbox>
-          )}
-
           {environments.map((environment) => (
             <Flexbox gap={2} key={environment.id}>
               <Text ellipsis className={styles.environment}>

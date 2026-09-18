@@ -43,8 +43,13 @@ const EnvironmentRow = memo<EnvironmentRowProps>(({ environment }) => {
             {environment.name}
           </Text>
           <Text fontSize={12} type={'secondary'}>
+            {/* The count needs its own key: `empty` has no plural form, so
+                passing it a count rendered "no instances yet" over an
+                environment that had some. */}
             {environment.description ||
-              t('environments.instances.empty', { count: instances.length })}
+              (instances.length === 0
+                ? t('environments.instances.empty')
+                : t('environments.instances.count', { count: instances.length }))}
           </Text>
         </Flexbox>
         <ActionIcon

@@ -3810,6 +3810,8 @@ When I am ___, I need ___
   'environments.instances.desc':
     'Each instance has its own folder and its own installed state, so two conversations can run side by side without overwriting each other.',
   'environments.instances.empty': 'No instances yet',
+  'environments.instances.count_one': '{{count}} instance',
+  'environments.instances.count_other': '{{count}} instances',
   'environments.instances.add': 'New instance',
   'environments.instances.namePlaceholder': 'Instance name',
   'environments.instances.directoryPlaceholder': 'reports/q3',

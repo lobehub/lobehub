@@ -1281,7 +1281,7 @@ export default {
   'sandboxWorkspace.selectInstance': 'Pick an environment',
   'sandboxWorkspace.newInstance': 'New instance',
   'sandboxWorkspace.creatingInstance': 'Creating…',
-  'sandboxWorkspace.noEnvironments': 'No environments yet — set one up in settings',
+  'sandboxWorkspace.setUpEnvironment': 'Set up an environment',
   'sandboxWorkspace.instanceStale': 'Needs rebuild',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',

@@ -497,6 +497,8 @@
   "environments.form.staleWarning": "Saving marks every instance as needing a rebuild",
   "environments.hasInstances": "Remove its instances first",
   "environments.instances.add": "New instance",
+  "environments.instances.count_one": "{{count}} instance",
+  "environments.instances.count_other": "{{count}} instances",
   "environments.instances.desc": "Each instance has its own folder and its own installed state, so two conversations can run side by side without overwriting each other.",
   "environments.instances.directoryHint": "Where this instance keeps what you want to keep — reports, data, exports. Source code lives with the environment, not here.",
   "environments.instances.directoryPlaceholder": "reports/q3",
