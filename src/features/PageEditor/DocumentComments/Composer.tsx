@@ -180,7 +180,20 @@ const Composer = memo<ComposerProps>(
     // draft; gutter and inline never coexist (inline only exists without a
     // gutter), so they safely share the same scope across that layout switch
     // instead of stranding one side's content when it happens.
-    const draftScope = parentCommentId ?? (adoptsAnchor ? 'anchored' : 'root');
+    //
+    // A reply box is different: an anchored thread with a gutter open renders
+    // twice (gutter + flat list, see Thread's `compact` prop, which `plain`
+    // mirrors 1:1 for a reply composer), and both copies stay independently
+    // interactive. Sharing one draft key would hydrate both with the same
+    // `clientId`; submitting either one first would then have the other's
+    // later submit reuse that id as an idempotency key and silently return
+    // the first reply instead of creating a second one. Key a reply's scope
+    // by which copy it is so the two can never collide.
+    const draftScope = parentCommentId
+      ? `${parentCommentId}${plain ? ':compact' : ''}`
+      : adoptsAnchor
+        ? 'anchored'
+        : 'root';
     const draftKey = getDraftKey(workspaceId, documentId, draftScope);
     const [draft, setDraft] = useLocalStorageState<Draft>(draftKey, {
       clientId: nanoid(),

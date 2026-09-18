@@ -93,6 +93,23 @@ const blockAt = (body: HTMLElement, target: EventTarget | null): HTMLElement | n
 };
 
 /**
+ * Whether a point sits in the corridor bridging the body and the marker, at
+ * the marker's own row height — the natural path from a highlighted line to
+ * its (not directly adjoining) marker. Direction-agnostic: works whether the
+ * marker sits to the body's physical left or right (RTL vs LTR).
+ */
+export const inMarkerBridge = (
+  x: number,
+  y: number,
+  bodyRect: DOMRect,
+  markerRect: DOMRect,
+): boolean => {
+  const left = Math.min(bodyRect.left, markerRect.left);
+  const right = Math.max(bodyRect.right, markerRect.right);
+  return x >= left && x <= right && y >= markerRect.top && y <= markerRect.bottom;
+};
+
+/**
  * The comment marker that appears in the body's right margin next to the
  * line under the pointer. Clicking it comments on that visual line, so a
  * reader can annotate a sentence without selecting it first.
@@ -135,20 +152,28 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
     };
     const handleLeave = () => setTarget(null);
     // The marker sits outside the body's DOM subtree, past the column's own
-    // padding — a `pointerleave` on the body alone fires the instant the
-    // pointer crosses into that gap, `relatedTarget` still the gap itself,
-    // and clears the marker before the pointer ever reaches it. Recompute
-    // from where the pointer actually is instead: moving anywhere in the
-    // host that is neither the body nor the marker clears it; the gap is
-    // exactly such a place, and simply crossing it no longer counts as a
-    // leave.
+    // padding — neither a body-only `pointerleave` (old approach) nor a
+    // target-containment check on host `pointermove` (still real, but the
+    // pointer visiting the gap between body and marker generates its own
+    // `pointermove` there too) survives the crossing: both clear the target
+    // the instant the pointer is over the gap itself, before it ever reaches
+    // the marker. Treat the rectangle spanning body and marker, at the
+    // marker's own row height, as one continuous hoverable bridge — the
+    // natural path from a highlighted line to its marker never leaves it.
     const handleHostMove = (event: PointerEvent) => {
       const target = event.target;
-      if (
-        target instanceof Node &&
-        (bodyElement.contains(target) || markerRef.current?.contains(target))
-      )
-        return;
+      if (target instanceof Node && bodyElement.contains(target)) return;
+      const marker = markerRef.current;
+      if (marker) {
+        if (marker.contains(target as Node)) return;
+        const inBridge = inMarkerBridge(
+          event.clientX,
+          event.clientY,
+          bodyElement.getBoundingClientRect(),
+          marker.getBoundingClientRect(),
+        );
+        if (inBridge) return;
+      }
       setTarget(null);
     };
 
