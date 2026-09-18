@@ -24,7 +24,6 @@ export enum PortalViewType {
   LocalFile = 'localFile',
   MessageDetail = 'messageDetail',
   Notebook = 'notebook',
-  SandboxWorkspace = 'sandboxWorkspace',
   TaskDetail = 'taskDetail',
   TaskResult = 'taskResult',
   Thread = 'thread',
@@ -81,7 +80,6 @@ export type PortalViewData =
   | { type: PortalViewType.Notebook }
   | { file: PortalFile; type: PortalViewType.FilePreview }
   | { type: PortalViewType.LocalFile }
-  | { path?: string; type: PortalViewType.SandboxWorkspace }
   | { messageId: string; type: PortalViewType.MessageDetail }
   | {
       identifier: string;

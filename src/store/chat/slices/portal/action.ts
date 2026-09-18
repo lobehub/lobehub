@@ -630,19 +630,6 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
 
-  /**
-   * Browse the persistent sandbox workspace, optionally starting somewhere
-   * other than its root.
-   *
-   * A path is passed only when the caller is pointing at a specific place —
-   * "show me what is in THIS instance". It is not a resumed location: reopening
-   * with no path still starts at the root rather than stranding the user
-   * wherever they last happened to be.
-   */
-  openSandboxWorkspace = (path?: string): void => {
-    this.#get().pushPortalView({ path, type: PortalViewType.SandboxWorkspace });
-  };
-
   openTaskDetail = (taskId: string): void => {
     this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
   };
