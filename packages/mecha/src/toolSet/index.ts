@@ -1,3 +1,4 @@
+export * from './builtinSkillGate';
 export * from './deviceTools';
 export * from './discoveryPool';
 export * from './manifestPool';

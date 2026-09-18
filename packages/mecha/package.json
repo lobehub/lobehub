@@ -2,6 +2,10 @@
   "name": "@lobechat/mecha",
   "version": "0.0.1",
   "description": "Host-agnostic Mecha layer: resolving an agent's effective run configuration and the context it runs on",
+  "exports": {
+    ".": "./src/index.ts",
+    "./builtinSkillGate": "./src/toolSet/builtinSkillGate.ts"
+  },
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest",

@@ -1,9 +1,12 @@
 import { isDesktop } from '@lobechat/const';
+// Imported from the leaf module rather than the package barrel: this helper
+// is used by store slices and settings UI, which must not pull the whole
+// agent-runtime graph in behind a two-line gate.
 import {
   type BuiltinSkillEnvironment,
   isBuiltinSkillEnabled,
   USER_HIDDEN_BUILTIN_SKILLS,
-} from '@lobechat/mecha';
+} from '@lobechat/mecha/builtinSkillGate';
 import { type BuiltinSkill } from '@lobechat/types';
 
 export type BuiltinSkillFilterContext = BuiltinSkillEnvironment;
