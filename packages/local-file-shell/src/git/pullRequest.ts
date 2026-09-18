@@ -14,7 +14,7 @@ const log = createLogger('local-file-shell:git');
 const execFileAsync = promisify(execFile);
 
 const GITHUB_PULL_REQUEST_DETAIL_FIELDS =
-  'number,title,body,state,isDraft,isCrossRepository,mergedAt,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,baseRefName,headRefName,url,author,additions,deletions,changedFiles,commits,comments,reviews,statusCheckRollup';
+  'number,title,body,state,isDraft,isCrossRepository,mergedAt,mergeable,mergeStateStatus,reviewDecision,autoMergeRequest,baseRefName,headRefName,headRefOid,url,author,additions,deletions,changedFiles,commits,comments,reviews,statusCheckRollup';
 
 type GithubPullRequestAuthor = { login?: string | null } | null;
 
@@ -62,6 +62,7 @@ type GithubPullRequestDetailPayload = {
   commits?: GithubPullRequestCommit[] | null;
   deletions: number;
   headRefName: string;
+  headRefOid: string;
   isCrossRepository?: boolean;
   isDraft?: boolean;
   mergeable?: string | null;
@@ -163,6 +164,7 @@ export const normalizePullRequestDetail = (
     })),
     deletions: raw.deletions,
     headRefName: raw.headRefName,
+    headRefOid: raw.headRefOid,
     isCrossRepository: raw.isCrossRepository ?? false,
     isDraft: raw.isDraft ?? false,
     mergeable: (raw.mergeable as GitPullRequestDetail['mergeable']) ?? 'UNKNOWN',
@@ -274,16 +276,38 @@ const VALID_BRANCH_NAME = /^[\w./-]+$/;
 
 export const pullRequestActionArgs = (number: number, action: GitPullRequestAction): string[][] => {
   const n = String(number);
+  if (
+    (action.type === 'merge' || action.type === 'autoMerge') &&
+    !/^[a-f\d]{40}$/i.test(action.headRefOid ?? '')
+  )
+    throw new Error('A valid pull request head commit is required');
 
   switch (action.type) {
     case 'merge': {
-      const argv = ['pr', 'merge', n, `--${action.method}`];
+      const argv = [
+        'pr',
+        'merge',
+        n,
+        `--${action.method}`,
+        '--match-head-commit',
+        action.headRefOid,
+      ];
       if (action.admin) argv.push('--admin');
       if (action.deleteBranch) argv.push('--delete-branch');
       return [argv];
     }
     case 'autoMerge': {
-      return [['pr', 'merge', n, '--auto', `--${action.method}`]];
+      return [
+        [
+          'pr',
+          'merge',
+          n,
+          '--auto',
+          `--${action.method}`,
+          '--match-head-commit',
+          action.headRefOid,
+        ],
+      ];
     }
     case 'disableAutoMerge': {
       return [['pr', 'merge', n, '--disable-auto']];

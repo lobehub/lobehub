@@ -553,10 +553,15 @@ export const deviceRouter = router({
           z.object({
             admin: z.boolean().optional(),
             deleteBranch: z.boolean().optional(),
+            headRefOid: z.string().regex(/^[a-f\d]{40}$/i),
             method: z.enum(['squash', 'merge', 'rebase']),
             type: z.literal('merge'),
           }),
-          z.object({ method: z.enum(['squash', 'merge', 'rebase']), type: z.literal('autoMerge') }),
+          z.object({
+            headRefOid: z.string().regex(/^[a-f\d]{40}$/i),
+            method: z.enum(['squash', 'merge', 'rebase']),
+            type: z.literal('autoMerge'),
+          }),
           z.object({ type: z.literal('disableAutoMerge') }),
           z.object({ method: z.enum(['merge', 'rebase']), type: z.literal('updateBranch') }),
           z.object({ type: z.literal('ready') }),
@@ -570,16 +575,17 @@ export const deviceRouter = router({
         path: z.string(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      deviceGateway.runGitPullRequestAction({
+    .mutation(async ({ ctx, input }) => {
+      await assertWorkspaceRootApproved(ctx.deviceModel, input.deviceId, input.path);
+      return deviceGateway.runGitPullRequestAction({
         action: input.action,
         deviceId: input.deviceId,
         number: input.number,
         path: input.path,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
-      }),
-    ),
+      });
+    }),
 
   /**
    * Working-tree (unstaged) per-file patches for a directory on a remote device,

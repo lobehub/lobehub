@@ -4,6 +4,7 @@ import {
   getPullRequestDetail,
   normalizePullRequestDetail,
   pullRequestActionArgs,
+  runPullRequestAction,
 } from '../pullRequest';
 import type { GitPullRequestAction } from '../types';
 
@@ -42,6 +43,7 @@ describe('normalizePullRequestDetail', () => {
     ],
     deletions: 4,
     headRefName: 'fix/bug',
+    headRefOid: 'a'.repeat(40),
     isCrossRepository: true,
     isDraft: false,
     mergeable: 'MERGEABLE',
@@ -72,6 +74,7 @@ describe('normalizePullRequestDetail', () => {
     const detail = normalizePullRequestDetail(basePayload, repo, new Set(['legacy-status']));
 
     expect(detail.isCrossRepository).toBe(true);
+    expect(detail.headRefOid).toBe(basePayload.headRefOid);
     expect(detail.checks).toEqual([
       {
         completedAt: '2026-09-01T00:01:00Z',
@@ -136,12 +139,35 @@ describe('normalizePullRequestDetail', () => {
 
 describe('pullRequestActionArgs', () => {
   const cases: [GitPullRequestAction, string[][]][] = [
-    [{ method: 'squash', type: 'merge' }, [['pr', 'merge', '42', '--squash']]],
     [
-      { admin: true, deleteBranch: true, method: 'squash', type: 'merge' },
-      [['pr', 'merge', '42', '--squash', '--admin', '--delete-branch']],
+      { headRefOid: 'a'.repeat(40), method: 'squash', type: 'merge' },
+      [['pr', 'merge', '42', '--squash', '--match-head-commit', 'a'.repeat(40)]],
     ],
-    [{ method: 'rebase', type: 'autoMerge' }, [['pr', 'merge', '42', '--auto', '--rebase']]],
+    [
+      {
+        admin: true,
+        deleteBranch: true,
+        headRefOid: 'a'.repeat(40),
+        method: 'squash',
+        type: 'merge',
+      },
+      [
+        [
+          'pr',
+          'merge',
+          '42',
+          '--squash',
+          '--match-head-commit',
+          'a'.repeat(40),
+          '--admin',
+          '--delete-branch',
+        ],
+      ],
+    ],
+    [
+      { headRefOid: 'a'.repeat(40), method: 'rebase', type: 'autoMerge' },
+      [['pr', 'merge', '42', '--auto', '--rebase', '--match-head-commit', 'a'.repeat(40)]],
+    ],
     [{ type: 'disableAutoMerge' }, [['pr', 'merge', '42', '--disable-auto']]],
     [{ method: 'rebase', type: 'updateBranch' }, [['pr', 'update-branch', '42', '--rebase']]],
     [{ method: 'merge', type: 'updateBranch' }, [['pr', 'update-branch', '42']]],
@@ -165,6 +191,45 @@ describe('pullRequestActionArgs', () => {
       expect(() => pullRequestActionArgs(42, { head, type: 'deleteBranch' })).toThrow(
         'Invalid branch name',
       );
+    },
+  );
+});
+
+describe('runPullRequestAction head protection', () => {
+  beforeEach(() => {
+    childProcessMocks.execFileAsync.mockReset();
+  });
+
+  it.each(['merge', 'autoMerge'] as const)(
+    'rejects missing or invalid heads before executing %s',
+    async (type) => {
+      for (const headRefOid of [undefined, '', 'abc', '--admin']) {
+        const result = await runPullRequestAction({
+          action: { headRefOid, method: 'squash', type } as GitPullRequestAction,
+          number: 42,
+          path: '/repo',
+        });
+        expect(result.success).toBe(false);
+      }
+      expect(childProcessMocks.execFileAsync).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['merge', 'autoMerge'] as const)(
+    'fails %s when the remote head has moved',
+    async (type) => {
+      childProcessMocks.execFileAsync.mockImplementation(async (_command, args) => {
+        if (args[args.indexOf('--match-head-commit') + 1] !== 'b'.repeat(40)) {
+          throw Object.assign(new Error('head changed'), { stderr: 'head changed' });
+        }
+        return { stdout: '' };
+      });
+      const result = await runPullRequestAction({
+        action: { headRefOid: 'a'.repeat(40), method: 'squash', type },
+        number: 42,
+        path: '/repo',
+      });
+      expect(result).toEqual({ error: 'head changed', success: false });
     },
   );
 });

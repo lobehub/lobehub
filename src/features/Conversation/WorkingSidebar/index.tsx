@@ -1100,6 +1100,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                       <PullRequest
                         active={!!showRightPanel && activeTab === 'pr'}
                         deviceId={remoteDeviceId}
+                        key={JSON.stringify([remoteDeviceId, workingDirectory, pullRequest.number])}
                         number={pullRequest.number}
                         url={pullRequest.url}
                         workingDirectory={workingDirectory}

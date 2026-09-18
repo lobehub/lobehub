@@ -204,8 +204,12 @@ export const pullRequestDetailRefreshInterval = (
   detail: DeviceGitPullRequestDetailResult | undefined,
   active: boolean,
 ): number => {
-  if (!active || !detail?.detail) return 0;
+  if (!active || !detail?.detail || detail.detail.state !== 'open') return 0;
   const isPending =
+    !!detail.detail.autoMerge ||
+    detail.detail.reviewDecision === 'REVIEW_REQUIRED' ||
+    detail.detail.reviewDecision === 'CHANGES_REQUESTED' ||
+    detail.detail.mergeStateStatus === 'BLOCKED' ||
     detail.detail.mergeable === 'UNKNOWN' ||
     detail.detail.checks.some((c) => c.status === 'pending');
   return isPending ? PULL_REQUEST_DETAIL_REFRESH_INTERVAL : 0;
@@ -213,7 +217,7 @@ export const pullRequestDetailRefreshInterval = (
 
 /**
  * Full pull request detail for the Working Sidebar's Pull Request tab. Polls
- * every 30s while a check is still pending or mergeability hasn't resolved
+ * every 30s while checks, reviews, auto-merge, or mergeability haven't resolved
  * yet, and stops once the PR settles into a steady state.
  */
 export const useFetchGitPullRequestDetail = (

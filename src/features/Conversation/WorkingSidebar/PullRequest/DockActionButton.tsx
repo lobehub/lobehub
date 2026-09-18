@@ -93,7 +93,13 @@ const DockActionButton = memo<DockActionButtonProps>(
           action,
           label,
           methodItems,
-          () => void onAction({ admin: action.admin, method: action.method, type: 'merge' }),
+          () =>
+            void onAction({
+              admin: action.admin,
+              headRefOid: detail.headRefOid,
+              method: action.method,
+              type: 'merge',
+            }),
         );
       }
       case 'autoMerge': {
@@ -101,7 +107,12 @@ const DockActionButton = memo<DockActionButtonProps>(
           action,
           t('workingPanel.pr.action.autoMerge'),
           methodItems,
-          () => void onAction({ method: action.method, type: 'autoMerge' }),
+          () =>
+            void onAction({
+              headRefOid: detail.headRefOid,
+              method: action.method,
+              type: 'autoMerge',
+            }),
         );
       }
       case 'updateBranch': {

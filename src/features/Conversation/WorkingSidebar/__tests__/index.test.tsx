@@ -40,6 +40,35 @@ const effectiveConfig = vi.hoisted(() => ({
 }));
 
 const platform = vi.hoisted(() => ({ isDesktop: true }));
+const linkedPR = vi.hoisted(() => ({ number: undefined as number | undefined }));
+
+vi.mock('@/store/device', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useFetchGitBranch: () => ({ data: { branch: 'feature' } }),
+  useFetchGitLinkedPR: () => ({
+    data: {
+      pullRequest: linkedPR.number
+        ? { number: linkedPR.number, state: 'open', url: 'https://github.com/test/repo/pull/1' }
+        : undefined,
+    },
+  }),
+}));
+
+vi.mock('../PullRequest', async () => {
+  const { useState } = await import('react');
+  return {
+    default: function PullRequestDraft() {
+      const [draft, setDraft] = useState('');
+      return (
+        <input
+          aria-label="PR draft"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+      );
+    },
+  };
+});
 
 const filesProps = vi.hoisted(() => ({
   current: undefined as { deviceId?: string; workingDirectory: string } | undefined,
@@ -384,6 +413,7 @@ beforeEach(() => {
   effectiveConfig.agencyConfig = undefined;
   effectiveConfig.workspaceScoped = false;
   platform.isDesktop = true;
+  linkedPR.number = undefined;
   filesProps.current = undefined;
   renderedReview.current = undefined;
   reviewState.repoType = undefined;
@@ -411,6 +441,22 @@ afterEach(() => {
 });
 
 describe('AgentWorkingSidebar — controlled panel width', () => {
+  it('resets PR state when the PR number or directory changes', () => {
+    reviewState.repoType = 'github';
+    reviewState.workingDirectory = '/repo';
+    linkedPR.number = 1;
+    globalStore.status.workingSidebarTab = 'pr';
+    localStorageState.openTabsByContext = { 'draft:default:none': ['pr'] };
+    const { rerender } = render(<AgentWorkingSidebar />);
+    fireEvent.change(screen.getByLabelText('PR draft'), { target: { value: 'old draft' } });
+    linkedPR.number = 2;
+    rerender(<AgentWorkingSidebar availableWidth={1600} />);
+    expect(screen.getByLabelText('PR draft')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('PR draft'), { target: { value: 'another draft' } });
+    reviewState.workingDirectory = '/other';
+    rerender(<AgentWorkingSidebar availableWidth={1601} />);
+    expect(screen.getByLabelText('PR draft')).toHaveValue('');
+  });
   it('seeds the RightPanel with the default width', () => {
     render(<AgentWorkingSidebar />);
 

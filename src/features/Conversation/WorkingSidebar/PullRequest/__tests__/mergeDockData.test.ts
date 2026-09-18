@@ -17,6 +17,7 @@ const makeDetail = (
   commits: [{ author: 'innei', committedAt: '2026-09-13T00:00:00Z', message: 'fix', sha: 'abc' }],
   deletions: 2,
   headRefName: 'feat/x',
+  headRefOid: 'a'.repeat(40),
   isCrossRepository: false,
   isDraft: false,
   mergeable: 'MERGEABLE',

@@ -88,6 +88,7 @@ export interface GitPullRequestDetail {
   commits: GitPullRequestCommit[];
   deletions: number;
   headRefName: string;
+  headRefOid: string;
   isCrossRepository: boolean;
   isDraft: boolean;
   mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
@@ -113,8 +114,14 @@ export interface GitPullRequestDetailResult {
 export type GitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
 
 export type GitPullRequestAction =
-  | { admin?: boolean; deleteBranch?: boolean; method: GitPullRequestMergeMethod; type: 'merge' }
-  | { method: GitPullRequestMergeMethod; type: 'autoMerge' }
+  | {
+      admin?: boolean;
+      deleteBranch?: boolean;
+      headRefOid: string;
+      method: GitPullRequestMergeMethod;
+      type: 'merge';
+    }
+  | { headRefOid: string; method: GitPullRequestMergeMethod; type: 'autoMerge' }
   | { type: 'disableAutoMerge' }
   | { method: 'merge' | 'rebase'; type: 'updateBranch' }
   | { type: 'ready' }

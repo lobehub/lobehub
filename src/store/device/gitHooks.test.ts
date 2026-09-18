@@ -17,6 +17,7 @@ const detailResult = (
     commits: [],
     deletions: 0,
     headRefName: 'feature',
+    headRefOid: 'a'.repeat(40),
     isCrossRepository: false,
     isDraft: false,
     mergeable: 'MERGEABLE',
@@ -36,6 +37,22 @@ const detailResult = (
 });
 
 describe('pullRequestDetailRefreshInterval', () => {
+  it.each([
+    { reviewDecision: 'REVIEW_REQUIRED' as const },
+    { reviewDecision: 'CHANGES_REQUESTED' as const },
+    { mergeStateStatus: 'BLOCKED' as const },
+    { autoMerge: { method: 'squash' as const } },
+  ])('keeps polling after checks finish while awaiting %o', (overrides) => {
+    const result = detailResult({
+      ...overrides,
+      checks: [{ name: 'ci', required: true, status: 'success' }],
+    });
+    expect(pullRequestDetailRefreshInterval(result, true)).toBe(30_000);
+    expect(pullRequestDetailRefreshInterval(result, false)).toBe(0);
+    for (const state of ['closed', 'merged'] as const) {
+      expect(pullRequestDetailRefreshInterval(detailResult({ ...overrides, state }), true)).toBe(0);
+    }
+  });
   it('returns 0 when not active', () => {
     expect(pullRequestDetailRefreshInterval(detailResult(), false)).toBe(0);
   });

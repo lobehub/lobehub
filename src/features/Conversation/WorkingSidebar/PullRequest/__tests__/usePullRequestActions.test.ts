@@ -41,11 +41,16 @@ describe('usePullRequestActions', () => {
 
     let run!: Promise<boolean>;
     act(() => {
-      run = result.current.run({ admin: true, method: 'squash', type: 'merge' });
+      run = result.current.run({
+        admin: true,
+        headRefOid: 'a'.repeat(40),
+        method: 'squash',
+        type: 'merge',
+      });
     });
     expect(result.current.busy).toBe('merge');
     expect(runPullRequestAction).toHaveBeenCalledWith({
-      action: { admin: true, method: 'squash', type: 'merge' },
+      action: { admin: true, headRefOid: 'a'.repeat(40), method: 'squash', type: 'merge' },
       deviceId: 'dev-1',
       number: 7,
       path: '/repo',
@@ -82,7 +87,9 @@ describe('usePullRequestActions', () => {
     );
 
     await act(async () => {
-      expect(await result.current.run({ method: 'rebase', type: 'merge' })).toBe(false);
+      expect(
+        await result.current.run({ headRefOid: 'a'.repeat(40), method: 'rebase', type: 'merge' }),
+      ).toBe(false);
     });
     expect(result.current.error).toBe('base moved');
     expect(mutate).not.toHaveBeenCalled();
@@ -93,7 +100,9 @@ describe('usePullRequestActions', () => {
       result.current.retry();
     });
     expect(runPullRequestAction).toHaveBeenLastCalledWith(
-      expect.objectContaining({ action: { method: 'rebase', type: 'merge' } }),
+      expect.objectContaining({
+        action: { headRefOid: 'a'.repeat(40), method: 'rebase', type: 'merge' },
+      }),
     );
     expect(result.current.error).toBeUndefined();
   });

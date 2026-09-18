@@ -490,6 +490,7 @@ export interface DeviceGitPullRequestDetail {
   commits: DeviceGitPullRequestCommit[];
   deletions: number;
   headRefName: string;
+  headRefOid: string;
   isCrossRepository: boolean;
   isDraft: boolean;
   mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
@@ -520,10 +521,11 @@ export type DeviceGitPullRequestAction =
   | {
       admin?: boolean;
       deleteBranch?: boolean;
+      headRefOid: string;
       method: DeviceGitPullRequestMergeMethod;
       type: 'merge';
     }
-  | { method: DeviceGitPullRequestMergeMethod; type: 'autoMerge' }
+  | { headRefOid: string; method: DeviceGitPullRequestMergeMethod; type: 'autoMerge' }
   | { type: 'disableAutoMerge' }
   | { method: 'merge' | 'rebase'; type: 'updateBranch' }
   | { type: 'ready' }
