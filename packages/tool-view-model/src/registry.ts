@@ -1,5 +1,6 @@
 import { readDocumentProjector } from './projectors/agentDocuments';
 import { runCommandProjector } from './projectors/localSystem';
+import { readFileProjector } from './projectors/readFile';
 import { crawlProjector } from './projectors/webBrowsing';
 import type { ToolProjector } from './types';
 
@@ -28,6 +29,7 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
     readDocument: readDocumentProjector,
   },
   'lobe-local-system': {
+    readFile: readFileProjector,
     runCommand: runCommandProjector,
   },
   'lobe-web-browsing': {

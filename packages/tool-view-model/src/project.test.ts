@@ -117,6 +117,7 @@ describe('registry', () => {
       'claude-code/Bash',
       'codex/command_execution',
       'lobe-agent-documents/readDocument',
+      'lobe-local-system/readFile',
       'lobe-local-system/runCommand',
       'lobe-web-browsing/crawlMultiPages',
       'lobe-web-browsing/crawlSinglePage',
