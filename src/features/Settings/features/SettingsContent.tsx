@@ -28,7 +28,6 @@ const COMPACT_HEADER_TABS = [
   SettingsTabs.Appearance,
   SettingsTabs.Billing,
   SettingsTabs.Credits,
-  SettingsTabs.Devices,
   SettingsTabs.Hotkey,
   SettingsTabs.Labels,
   SettingsTabs.Labs,
@@ -59,7 +58,6 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
     [SettingsTabs.Appearance]: t('setting:tab.appearance'),
     [SettingsTabs.Billing]: t('subscription:tab.billing'),
     [SettingsTabs.Credits]: t('subscription:tab.credits'),
-    [SettingsTabs.Devices]: t('setting:devices.title'),
     [SettingsTabs.Hotkey]: t('setting:tab.hotkey'),
     [SettingsTabs.Labels]: t('setting:tab.labels'),
     // Labs has no `setting:tab.*` entry — the nav label comes from the labs namespace.
@@ -97,6 +95,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
     if (
       [
         SettingsTabs.About,
+        SettingsTabs.Devices,
         SettingsTabs.ServiceModel,
         SettingsTabs.Provider,
         SettingsTabs.Profile,
@@ -125,6 +124,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
     <>
       {Object.keys(componentMap).map((tabKey) => {
         const isFullWidth =
+          tabKey === SettingsTabs.Devices ||
           tabKey === SettingsTabs.Provider ||
           tabKey === SettingsTabs.Skill ||
           tabKey === SettingsTabs.Connector ||
@@ -144,11 +144,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
             >
               {compactHeaderTitle && <Text weight={500}>{compactHeaderTitle}</Text>}
             </NavHeader>
-            <SettingContainer
-              maxWidth={tabKey === SettingsTabs.Devices ? 'none' : 1024}
-              paddingBlock={'24px 128px'}
-              paddingInline={24}
-            >
+            <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
               {content}
             </SettingContainer>
           </Fragment>

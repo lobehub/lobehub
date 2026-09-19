@@ -3,7 +3,6 @@
 import { isDesktop } from '@lobechat/const';
 import { Flexbox, Form, Icon } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { MonitorUpIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,26 +14,16 @@ import {
   DeviceManager,
   useDeviceList,
 } from '@/features/DeviceManager';
+import NavHeader from '@/features/NavHeader';
+import RightPanel from '@/features/RightPanel';
+import SettingContainer from '@/features/Setting/SettingContainer';
 import { useElectronStore } from '@/store/electron';
 
-const styles = createStaticStyles(({ css }) => ({
-  detailPane: css`
-    overflow: hidden;
-    align-self: stretch;
+interface PageProps {
+  mobile?: boolean;
+}
 
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  listPane: css`
-    flex: 0 1 1024px;
-    min-width: 400px;
-  `,
-}));
-
-const Page = memo(() => {
+const Page = memo<PageProps>(({ mobile }) => {
   const { t } = useTranslation('setting');
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'cli' | 'desktop'>();
@@ -56,73 +45,109 @@ const Page = memo(() => {
   useFetchDeviceInfo();
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  return (
-    <>
-      <Flexbox horizontal align={'flex-start'} gap={16} width={'100%'}>
-        <Form
-          className={styles.listPane}
-          collapsible={false}
-          itemsType={'group'}
-          variant={'filled'}
-          items={[
-            {
-              children: (
-                <DeviceManager
-                  inlineDetail={false}
-                  scope={'personal'}
-                  selectedDeviceId={selectedDeviceId}
-                  onConnect={handleConnect}
-                  onSelectedDeviceChange={setSelectedDeviceId}
-                />
-              ),
-              extra: (
-                <Flexbox horizontal align={'center'} gap={8}>
-                  {devices.length > 0 && (
-                    <Text fontSize={12} type={'secondary'} weight={500}>
-                      {t('devices.selection.total', { count: devices.length })}
-                    </Text>
-                  )}
-                  <Button
-                    icon={<Icon icon={MonitorUpIcon} />}
-                    size={'small'}
-                    onClick={() => handleConnect()}
-                  >
-                    {t('devices.connectWizard.button')}
-                  </Button>
-                  <ActionIcon
-                    icon={RefreshCwIcon}
-                    loading={isValidating}
-                    size={'small'}
-                    title={t('devices.actions.refresh')}
-                    onClick={() => mutate()}
-                  />
-                </Flexbox>
-              ),
-              title: t('devices.title'),
-            },
-          ]}
-          {...FORM_STYLE}
-        />
+  // Narrow viewports have no room beside the list, so the detail stays inside
+  // the manager (the master-detail stack DeviceManager owns by default).
+  const externalDetail = !mobile;
 
-        {selectedDevice && (
-          <Flexbox className={styles.detailPane} flex={1}>
-            <DeviceDetailPanel
-              device={selectedDevice}
-              isCurrent={selectedDevice.deviceId === currentDeviceId}
-              key={selectedDevice.deviceId}
-              onClose={() => setSelectedDeviceId(undefined)}
+  const list = (
+    <Form
+      collapsible={false}
+      itemsType={'group'}
+      variant={'filled'}
+      items={[
+        {
+          children: (
+            <DeviceManager
+              inlineDetail={!externalDetail}
+              scope={'personal'}
+              selectedDeviceId={selectedDeviceId}
+              onConnect={handleConnect}
+              onSelectedDeviceChange={setSelectedDeviceId}
             />
-          </Flexbox>
-        )}
-      </Flexbox>
+          ),
+          extra: (
+            <Flexbox horizontal align={'center'} gap={8}>
+              {devices.length > 0 && (
+                <Text fontSize={12} type={'secondary'} weight={500}>
+                  {t('devices.selection.total', { count: devices.length })}
+                </Text>
+              )}
+              <Button
+                icon={<Icon icon={MonitorUpIcon} />}
+                size={'small'}
+                onClick={() => handleConnect()}
+              >
+                {t('devices.connectWizard.button')}
+              </Button>
+              <ActionIcon
+                icon={RefreshCwIcon}
+                loading={isValidating}
+                size={'small'}
+                title={t('devices.actions.refresh')}
+                onClick={() => mutate()}
+              />
+            </Flexbox>
+          ),
+          title: t('devices.title'),
+        },
+      ]}
+      {...FORM_STYLE}
+    />
+  );
 
-      <DeviceConnectModal
-        initialTab={initialTab}
-        open={open}
-        scope={'personal'}
-        onClose={() => setOpen(false)}
-      />
-    </>
+  const connectModal = (
+    <DeviceConnectModal
+      initialTab={initialTab}
+      open={open}
+      scope={'personal'}
+      onClose={() => setOpen(false)}
+    />
+  );
+
+  if (mobile)
+    return (
+      <>
+        {list}
+        {connectModal}
+      </>
+    );
+
+  return (
+    <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
+      <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
+        <NavHeader styles={{ center: { alignItems: 'center' } }}>
+          <Text weight={500}>{t('devices.title')}</Text>
+        </NavHeader>
+        {/* The list keeps the settings reading column — centered at the shared
+            1024 max width — so opening the detail only narrows the space it
+            centers in, it never turns the page into a left-hugging column. */}
+        <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
+          {list}
+        </SettingContainer>
+      </Flexbox>
+      {/* Page-level rail rather than a card beside the list: the detail is a
+          full-height surface with its own scroll, so a device with a long
+          working-directory history stays readable without stretching the page. */}
+      <RightPanel
+        defaultWidth={420}
+        expand={!!selectedDevice}
+        maxWidth={640}
+        minWidth={320}
+        onExpandChange={(next) => {
+          if (!next) setSelectedDeviceId(undefined);
+        }}
+      >
+        {selectedDevice && (
+          <DeviceDetailPanel
+            device={selectedDevice}
+            isCurrent={selectedDevice.deviceId === currentDeviceId}
+            key={selectedDevice.deviceId}
+            onClose={() => setSelectedDeviceId(undefined)}
+          />
+        )}
+      </RightPanel>
+      {connectModal}
+    </Flexbox>
   );
 });
 
