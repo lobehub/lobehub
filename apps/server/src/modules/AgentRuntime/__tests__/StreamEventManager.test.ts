@@ -317,6 +317,49 @@ describe('StreamEventManager', () => {
     });
   });
 
+  it.each([undefined, 'execution_complete'])(
+    'omits finalState from persisted step_complete events (phase=%s)',
+    async (phase) => {
+      const finalState = { initialContext: { prompt: 'context' }, status: 'done' };
+      const data = { finalState, ...(phase && { phase, reason: 'done' }) };
+      mockRedis.xadd.mockResolvedValue('event-1');
+
+      await streamManager.publishStreamEvent('op-1', {
+        data,
+        stepIndex: 1,
+        type: 'step_complete',
+      });
+
+      const args = mockRedis.xadd.mock.calls[0];
+      const stored = JSON.parse(args[args.indexOf('data') + 1]);
+      expect(stored).toEqual(phase ? { phase, reason: 'done' } : {});
+      expect(data.finalState).toBe(finalState);
+    },
+  );
+
+  it('persists an opted-in state snapshot while omitting reconstructible message bodies', async () => {
+    const finalState = {
+      host: { includeFinalState: true },
+      initialContext: { prompt: 'context' },
+      messages: [{ content: 'large history' }],
+      status: 'done',
+    };
+    mockRedis.xadd.mockResolvedValue('event-1');
+    await streamManager.publishStreamEvent('op-1', {
+      data: { finalState, phase: 'execution_complete', reason: 'done' },
+      stepIndex: 1,
+      type: 'step_complete',
+    });
+    const args = mockRedis.xadd.mock.calls[0];
+    const stored = JSON.parse(args[args.indexOf('data') + 1]);
+    expect(stored.finalState).toEqual({
+      host: { includeFinalState: true },
+      initialContext: { prompt: 'context' },
+      status: 'done',
+    });
+    expect(finalState.messages).toHaveLength(1);
+  });
+
   describe('readEventsOnce', () => {
     it("resolves '$' to the current tail and returns it (not '$') on timeout", async () => {
       // Stream has a tail entry; xread then times out (no newer events).

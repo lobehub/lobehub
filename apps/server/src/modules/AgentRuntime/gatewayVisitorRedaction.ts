@@ -185,7 +185,9 @@ const sanitizeErrorEventDataForVisitor = (
  * 4. `uiMessages` additionally goes through {@link toVisitorMessage}'s full
  *    field allowlist, which the private-blob key strip alone does not cover.
  *
- * For a normal run this falls back to the generic
+ * Normal step_complete events omit finalState unless the run opts in. Clients reconcile
+ * messages through message_patch/uiMessages and do not consume runtime state.
+ * Other events in a normal run fall back to the generic
  * {@link stripFinalStateInEventData} (messages / tool-set fields only),
  * matching the Redis xadd chokepoint.
  */
@@ -197,7 +199,7 @@ export const sanitizeGatewayEventData = (
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
 
-  if (!redaction) return stripFinalStateInEventData(data);
+  if (!redaction) return stripFinalStateInEventData(data, eventType);
 
   const withoutFinalState: Record<string, unknown> =
     'finalState' in record

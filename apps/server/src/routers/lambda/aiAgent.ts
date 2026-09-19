@@ -936,6 +936,7 @@ const StartExecutionSchema = z.object({
  */
 const ExecAgentSchema = z
   .object({
+    includeFinalState: z.boolean().optional(),
     /** The agent ID to run (either agentId or slug is required) */
     agentId: z.string().optional(),
     /** Application context for message storage */
@@ -2324,6 +2325,7 @@ export const aiAgentRouter = router({
         appContext,
         autoStart,
         clientIds: input.clientIds,
+        includeFinalState: input.includeFinalState,
         // This procedure serves the composer (`aiAgentService.execAgentTask`).
         // The client already queues follow-ups behind a live run and shows the
         // user a tray; refusing here would only make the message disappear.
@@ -2478,6 +2480,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          includeFinalState: task.includeFinalState,
           agentId,
           appContext,
           autoStart,

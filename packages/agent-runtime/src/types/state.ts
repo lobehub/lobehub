@@ -159,6 +159,8 @@ export interface AgentRunPlan {
 export interface AgentRunHostEnvelope {
   /** Serialized lifecycle hook configs (webhook mode), so a queue worker can rebuild the dispatcher. */
   hooks?: SerializedAgentHook[];
+  /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
+  includeFinalState?: boolean;
   /** Queue retry policy for step scheduling. */
   queue?: { retries?: number; retryDelay?: string };
 }

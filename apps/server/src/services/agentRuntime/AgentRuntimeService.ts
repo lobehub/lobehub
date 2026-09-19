@@ -1064,7 +1064,10 @@ export class AgentRuntimeService {
         }),
         // What the host needs to deliver and retry the run. Hooks are stamped
         // right after creation once the dispatcher has serialized them.
-        host: { queue: { retries: queueRetries, retryDelay: queueRetryDelay } },
+        host: {
+          ...(params.includeFinalState === true && { includeFinalState: true }),
+          queue: { retries: queueRetries, retryDelay: queueRetryDelay },
+        },
         // Run ledger — everything fixed at creation lives in the typed slots.
         metadata: {},
         // Where the run came from — frozen from here on. Mirrors the
@@ -2197,7 +2200,9 @@ export class AgentRuntimeService {
         // Publish step complete event
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
-            finalState: stepResult.newState,
+            ...(stepResult.newState.host?.includeFinalState === true && {
+              finalState: stepResult.newState,
+            }),
             nextStepScheduled,
             stepIndex,
           },
