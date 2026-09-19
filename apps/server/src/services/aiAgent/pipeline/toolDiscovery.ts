@@ -813,11 +813,7 @@ export const discoverTools = async (
     const supportedDeviceTools = systemInfoDeviceId
       ? (
           await traceDiscoveryStage('device_system_info', () =>
-            deviceGateway.queryDeviceSystemInfo(
-              deps.userId,
-              systemInfoDeviceId,
-              activeDeviceScope === 'workspace' ? deps.workspaceId : undefined,
-            ),
+            ctx.runFacts.deviceSystemInfo(systemInfoDeviceId, activeDeviceScope),
           )
         )?.supportedTools
       : undefined;

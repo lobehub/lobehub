@@ -16,6 +16,7 @@ import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import type { EvalRuntimeContext } from '@/server/services/agentRuntime/types';
 
 import type { DeviceAccessReason } from './deviceAccessPolicy';
+import type { RunFacts } from './runFacts';
 import type { AgentShareGate } from './shareGate';
 
 /**
@@ -45,6 +46,11 @@ export interface ExecRunContext {
   provider: string;
   /** The actual executing agent row id resolved from id/slug. */
   resolvedAgentId: string;
+  /**
+   * Turn-invariant facts (device system info, the user's row), read once and
+   * shared by every stage of the send window.
+   */
+  runFacts: RunFacts;
   /**
    * Shared-agent visitor gate for this run, mirrored from
    * {@link InternalExecAgentParams.shareGate} so every extracted pipeline stage

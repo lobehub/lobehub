@@ -69,6 +69,7 @@ import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
 import { discoverTools } from './pipeline/toolDiscovery';
 import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
+import { createRunFacts, type RunFacts } from './runFacts';
 import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
@@ -204,17 +205,19 @@ export class AiAgentService {
     };
   }
 
-  private async getMarketService(): Promise<MarketService> {
+  private async getMarketService(runFacts?: RunFacts): Promise<MarketService> {
     if (this._marketService) return this._marketService;
 
-    let accessToken: string | undefined;
-    try {
-      const userModel = new UserModel(this.db, this.userId);
-      const settings = await userModel.getUserSettings();
-      accessToken = (settings?.market as any)?.accessToken;
-    } catch {
-      // non-fatal — MarketService will fall back to trustedClientToken
-    }
+    // The turn's fact reader already holds this row when a run is underway
+    // (`execAgent` asks it for the memory / timezone settings too); callers
+    // outside a run read it themselves.
+    const settings = runFacts
+      ? await runFacts.userSettings()
+      : await new UserModel(this.db, this.userId).getUserSettings().catch(() => {
+          // non-fatal — MarketService will fall back to trustedClientToken
+          return undefined;
+        });
+    const accessToken = (settings?.market as any)?.accessToken;
 
     this._marketService = new MarketService({
       accessToken,
@@ -1028,6 +1031,14 @@ export class AiAgentService {
     // (`pipeline/*`). Built after the turn rows exist so every stage sees the
     // persisted anchors; `agentConfig` stays the same mutable object so stage
     // systemRole appends remain visible to `createOperation` below.
+    // One reader for the facts that cannot change within this turn, so the
+    // send window asks the routed device and the user's row once each.
+    const runFacts = createRunFacts({
+      db: this.db,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
     const runContext: ExecRunContext = {
       agentConfig,
       appContext,
@@ -1040,6 +1051,7 @@ export class AiAgentService {
       prompt,
       provider,
       resolvedAgentId,
+      runFacts,
       shareGate,
       topicId,
       trigger,
@@ -1051,7 +1063,7 @@ export class AiAgentService {
         {
           bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
           db: this.db,
-          getMarketService: () => this.getMarketService(),
+          getMarketService: () => this.getMarketService(runFacts),
           messageModel: this.messageModel,
           resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
           topicModel: this.topicModel,
@@ -1089,8 +1101,7 @@ export class AiAgentService {
     let enableExpertise = false;
     let userTimezone: string | undefined;
     try {
-      const userModel = new UserModel(this.db, this.userId);
-      const settings = await userModel.getUserSettings();
+      const settings = await runFacts.userSettings();
       const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
 
       globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
@@ -1102,10 +1113,7 @@ export class AiAgentService {
       // `allowReadMemory`), but the timezone has no such gate and must not
       // leak the creator's own setting into a visitor's turn.
       if (shareGate) {
-        const visitorSettings = await new UserModel(
-          this.db,
-          shareGate.visitorUserId,
-        ).getUserSettings();
+        const visitorSettings = await runFacts.userSettings(shareGate.visitorUserId);
         const visitorGeneralSettings = visitorSettings?.general as
           { timezone?: string } | undefined;
         userTimezone = visitorGeneralSettings?.timezone;
@@ -1171,7 +1179,7 @@ export class AiAgentService {
         connectorModel: this.connectorModel,
         connectorToolModel: this.connectorToolModel,
         db: this.db,
-        getMarketService: () => this.getMarketService(),
+        getMarketService: () => this.getMarketService(runFacts),
         messageModel: this.messageModel,
         pluginModel: this.pluginModel,
         userId: this.userId,

@@ -395,14 +395,10 @@ export const prepareOperation = async (
   ): Promise<Record<string, string>> => {
     if (!deviceId) return {};
     try {
-      // Scope the gateway lookup to the principal that owns the connection:
-      // workspace devices need workspaceId; personal devices (including a
-      // workspace run routed to the caller's own machine) must not.
-      const systemInfo = await deviceGateway.queryDeviceSystemInfo(
-        deps.userId,
-        deviceId,
-        activeDeviceScope === 'workspace' ? deps.workspaceId : undefined,
-      );
+      // Tool discovery already asked this device for the same answer earlier
+      // in the send window, so the run's fact reader serves it from there
+      // (it also owns the personal / workspace scoping of the lookup).
+      const systemInfo = await ctx.runFacts.deviceSystemInfo(deviceId, activeDeviceScope);
       if (!systemInfo) return {};
       const device = onlineDevices.find((d) => d.deviceId === deviceId);
       log('execAgent: fetched device system info for %s', deviceId);
