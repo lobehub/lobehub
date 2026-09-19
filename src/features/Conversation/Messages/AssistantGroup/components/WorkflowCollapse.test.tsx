@@ -10,7 +10,7 @@ import type { AssistantContentBlock } from '@/types/index';
 import WorkflowCollapse from './WorkflowCollapse';
 
 let mockIsGenerating = true;
-let mockDbMessages: { createdAt?: Date; id: string }[] = [];
+let mockDbMessages: { createdAt?: Date; id: string; updatedAt?: Date }[] = [];
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -361,6 +361,48 @@ describe('WorkflowCollapse', () => {
 
     expect(screen.getByText('2m')).toBeInTheDocument();
     expect(screen.queryByText('4s')).not.toBeInTheDocument();
+  });
+
+  it('counts a client-executed tool from its result write, not from its start', () => {
+    // Regression: the client runtime creates the tool row BEFORE invoking the
+    // tool and writes the result into it afterwards, so `createdAt` is when the
+    // tool STARTED. Ending the fold there left the tool's whole runtime out.
+    mockIsGenerating = false;
+    mockDbMessages = [
+      { createdAt: new Date('2026-09-20T09:00:00Z'), id: 'block-1' },
+      {
+        createdAt: new Date('2026-09-20T09:00:05Z'),
+        id: 'tool-result-1',
+        updatedAt: new Date('2026-09-20T09:03:05Z'),
+      },
+    ];
+
+    const blocks = makeBlocks({ result: { content: 'ok' }, result_msg_id: 'tool-result-1' });
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
+
+    expect(screen.getByText('3m 5s')).toBeInTheDocument();
+    expect(screen.queryByText('5s')).not.toBeInTheDocument();
+  });
+
+  it('ignores a later edit of the assistant step itself', () => {
+    // An assistant row's `updatedAt` also moves when the message is edited long
+    // after the turn; only tool results may extend the fold.
+    mockIsGenerating = false;
+    mockDbMessages = [
+      {
+        createdAt: new Date('2026-09-20T09:00:00Z'),
+        id: 'block-1',
+        updatedAt: new Date('2026-09-21T09:00:00Z'),
+      },
+      { createdAt: new Date('2026-09-20T09:02:00Z'), id: 'tool-result-1' },
+    ];
+
+    const blocks = makeBlocks({ result: { content: 'ok' }, result_msg_id: 'tool-result-1' });
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
+
+    expect(screen.getByText('2m')).toBeInTheDocument();
   });
 
   it('falls back to model duration when the raw messages are unavailable', () => {
