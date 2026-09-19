@@ -937,6 +937,27 @@ export class GatewayActionImpl {
     const resolvedMessageContext = resolveThread({ ...messageContext, topicId: result.topicId });
     this.#get().moveVoiceMessages(messageContext, resolvedMessageContext);
 
+    if (precreatedResult) {
+      // V2 resolves the intervention before returning this continuation. Apply
+      // that persisted state before subscribing, so the answered form closes
+      // even when the next runtime event is delayed. SWR revalidation alone
+      // can be ignored while the previous operation still appears running.
+      try {
+        const messages = await messageService.getMessages({
+          ...resolvedMessageContext,
+          skipWorks: true,
+        });
+        this.#get().replaceMessages(messages, {
+          context: resolvedMessageContext,
+          preserveWorks: true,
+        });
+      } catch (error) {
+        // The continuation already exists; a failed read must not prevent us
+        // from connecting to it and reconciling through subsequent events.
+        console.error('[Gateway] Failed to refresh messages after intervention resolution:', error);
+      }
+    }
+
     if (result.createdThreadId) {
       // Attachments picked in the subtopic composer were staged under the
       // `_new` key; carry them over so the next turn in the thread still sees
