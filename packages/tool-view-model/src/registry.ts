@@ -13,6 +13,17 @@ import type { ToolProjector } from './types';
  * the map can be filled one tool at a time.
  */
 const toolProjectors: Record<string, Record<string, ToolProjector>> = {
+  // Every tool below renders through the SAME shared card,
+  // `shared-tool-ui/Render/RunCommand` — it reads `stdout || output || content`
+  // for the body and `success` / `exitCode` for the collapsed row. One shape,
+  // so one projector; see `register.ts` for the render registrations that make
+  // this true.
+  'claude-code': {
+    Bash: runCommandProjector,
+  },
+  'codex': {
+    command_execution: runCommandProjector,
+  },
   'lobe-agent-documents': {
     readDocument: readDocumentProjector,
   },
@@ -22,6 +33,12 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
   'lobe-web-browsing': {
     crawlMultiPages: crawlProjector,
     crawlSinglePage: crawlProjector,
+  },
+  'opencode': {
+    bash: runCommandProjector,
+  },
+  'pi': {
+    bash: runCommandProjector,
   },
 };
 
