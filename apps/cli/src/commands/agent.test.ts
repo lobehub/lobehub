@@ -1143,6 +1143,204 @@ describe('agent command', () => {
     });
   });
 
+  /**
+   * The polling fallback runs after the live stream drops, and it is the second
+   * way `lh agent run` failed to exit (#19543).
+   *
+   * `aiAgent.getOperationStatus` answers with an envelope, so the old flat read
+   * `r.status || r.state || 'unknown'` resolved to `'unknown'` on every poll,
+   * never matched a terminal status, and the `for (;;)` loop slept for 10s and
+   * asked again, forever. It logs only on change, so after the first poll the
+   * process looked silent while looping.
+   */
+  describe('run status polling fallback', () => {
+    /** The shape the server actually returns, trimmed to what the CLI reads. */
+    const envelope = (
+      currentState: Record<string, unknown>,
+      rest: Record<string, unknown> = {},
+    ) => ({
+      currentState,
+      hasError: currentState.status === 'error',
+      isActive: currentState.status === 'running',
+      isCompleted: currentState.status === 'done',
+      metadata: { createdAt: '2026-09-15T10:00:00.000Z', totalCost: 0, totalSteps: 0 },
+      needsHumanInput: currentState.status === 'waiting_for_human',
+      operationId: 'op-poll',
+      stats: { lastActiveTime: 0, totalCost: 0, totalMessages: 4, totalSteps: 7, uptime: 1000 },
+      ...rest,
+    });
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.mocked(log.info).mockClear();
+      vi.mocked(log.warn).mockClear();
+      vi.mocked(log.error).mockClear();
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-poll',
+        success: true,
+      });
+      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('gateway down'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const runAgent = () =>
+      createProgram().parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Hi',
+      ]);
+
+    it('reads the terminal status out of the envelope and stops polling', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(
+        envelope({ status: 'done', stepCount: 7 }),
+      );
+
+      await runAgent();
+
+      // One poll, not an endless sequence of them: reading `r.status` at the top
+      // level is what used to make every answer look non-terminal.
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledTimes(1);
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('done'));
+    });
+
+    it('reads the step count out of the envelope', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(
+        envelope({ status: 'done', stepCount: 7 }),
+      );
+
+      await runAgent();
+
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('7 step(s)'));
+    });
+
+    it('surfaces the run error from the envelope', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(
+        envelope({ error: 'model refused the request', status: 'error', stepCount: 2 }),
+      );
+
+      await runAgent();
+
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('Run error: model refused the request'),
+      );
+    });
+
+    it('treats an interrupted run as terminal', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(
+        envelope({ status: 'interrupted', stepCount: 1 }),
+      );
+
+      await runAgent();
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not report success for a run parked on an unanswered approval', async () => {
+      // Stopping is right: the server ends this operation's stream at the park
+      // and the approval continues under a NEW operation id, so this one never
+      // turns into `done`. Exiting 0 was not — nothing on this path can supply
+      // the answer, and the run did not finish.
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(
+        envelope({ status: 'waiting_for_human', stepCount: 3 }),
+      );
+
+      await runAgent();
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('waiting for human input'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('keeps polling a run parked on an async tool, which resumes the same operation', async () => {
+      // The other parked status is not stream-terminal: deferred tools resume
+      // THIS operation id, so it does reach a terminal state and waiting pays off.
+      mockTrpcClient.aiAgent.getOperationStatus.query
+        .mockResolvedValueOnce(envelope({ status: 'waiting_for_async_tool', stepCount: 3 }))
+        .mockResolvedValue(envelope({ status: 'done', stepCount: 4 }));
+
+      const done = runAgent();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await done;
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledTimes(2);
+      expect(exitSpy).not.toHaveBeenCalledWith(1);
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('done'));
+    });
+
+    it('falls back to the envelope summary when no status string is present', async () => {
+      // `isCompleted` / `hasError` are the envelope's own summary of the state,
+      // so they still answer if a later build renames or drops the string.
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({
+        currentState: { stepCount: 5 },
+        hasError: false,
+        isCompleted: true,
+        operationId: 'op-poll',
+        stats: { totalSteps: 5 },
+      });
+
+      await runAgent();
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledTimes(1);
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('done'));
+    });
+
+    it('reports a failed run from the envelope summary alone', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({
+        currentState: { error: 'quota exceeded', stepCount: 2 },
+        hasError: true,
+        isCompleted: false,
+        operationId: 'op-poll',
+      });
+
+      await runAgent();
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledTimes(1);
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Run error: quota exceeded'));
+    });
+
+    it('gives up loudly on an answer whose shape it cannot read', async () => {
+      // The generic guarantee behind the report: an unreadable answer must end
+      // the command rather than silently reschedule itself for ever.
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({
+        operationId: 'op-poll',
+        somethingElse: true,
+      });
+
+      const done = runAgent();
+      await vi.advanceTimersByTimeAsync(20_000);
+      await done;
+
+      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalledTimes(3);
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('answer keys: operationId, somethingElse'),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('gives up at a deadline on a run that never reaches a terminal state', async () => {
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(
+        envelope({ status: 'running', stepCount: 1 }),
+      );
+
+      const done = runAgent();
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      await done;
+
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('did not reach a terminal state within 60 minutes'),
+      );
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
   describe('status', () => {
     it('should display operation status', async () => {
       mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({
@@ -1169,6 +1367,38 @@ describe('agent command', () => {
       await program.parseAsync(['node', 'test', 'agent', 'status', 'op-123', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(data, null, 2));
+    });
+
+    it('renders the envelope the server actually returns', async () => {
+      // Same misread as the polling fallback: without the envelope reader this
+      // printed `Status: unknown` and no steps, tokens or cost for every single
+      // operation, because none of those keys exist at the top level.
+      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({
+        currentState: {
+          cost: { total: 0.0042 },
+          error: 'model refused the request',
+          status: 'done',
+          stepCount: 3,
+          usage: { llm: { tokens: { total: 1500 } } },
+        },
+        hasError: false,
+        isCompleted: true,
+        metadata: { createdAt: '2026-09-15T10:00:00.000Z' },
+        operationId: 'op-123',
+        stats: { totalSteps: 3 },
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent', 'status', 'op-123']);
+
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('done'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Steps:  3'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Tokens: 1500'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Cost:   $0.0042'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('model refused the request'));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Started: 2026-09-15T10:00:00.000Z'),
+      );
     });
 
     it('should pass --history flag', async () => {
