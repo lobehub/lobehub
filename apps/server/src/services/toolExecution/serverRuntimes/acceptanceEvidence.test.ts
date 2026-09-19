@@ -54,12 +54,22 @@ describe('acceptanceEvidenceRuntime', () => {
       id: 'evidence-op',
       parentOperationId: 'parent-op',
     });
-    mocks.runFindByOperation.mockResolvedValue({
-      id: 'run-1',
-      plan: [
-        { id: 'criterion-1', index: 0, required: true, title: 'Document', verifierType: 'llm' },
-      ],
-    });
+    mocks.runFindByOperation.mockImplementation(async (operationId) =>
+      operationId === 'evidence-op'
+        ? null
+        : {
+            id: 'run-1',
+            plan: [
+              {
+                id: 'criterion-1',
+                index: 0,
+                required: true,
+                title: 'Document',
+                verifierType: 'llm',
+              },
+            ],
+          },
+    );
     mocks.resultUpsert.mockResolvedValue({ id: 'result-1' });
     mocks.evidenceCreateMany.mockResolvedValue([]);
     mocks.evidenceListByRun.mockResolvedValue([]);
@@ -127,6 +137,34 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(mocks.resultUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ operationId: 'task-op' }),
     );
+  });
+
+  it('submits repair evidence into the repair round instead of its failed parent', async () => {
+    mocks.operationFindById.mockResolvedValue({ id: 'repair-op', parentOperationId: 'parent-op' });
+    mocks.runFindByOperation.mockImplementation(async (id) => ({
+      id: id === 'repair-op' ? 'repair-run' : 'parent-run',
+      plan: [
+        { id: 'criterion-1', index: 0, required: true, title: 'Document', verifierType: 'llm' },
+      ],
+    }));
+    const runtime = acceptanceEvidenceRuntime.factory({
+      operationId: 'repair-op',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+    expect(
+      (
+        await runtime.submitEvidence({
+          checkItemId: 'criterion-1',
+          evidence: [{ content: 'corrected output', type: 'text' }],
+        })
+      ).success,
+    ).toBe(true);
+    expect(mocks.resultUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'repair-op', verifyRunId: 'repair-run' }),
+    );
+    expect(mocks.runFindByOperation).not.toHaveBeenCalledWith('parent-op');
   });
 
   it('keeps writing into the parent run from the post-run evidence turn', async () => {

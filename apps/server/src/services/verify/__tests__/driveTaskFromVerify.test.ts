@@ -1,6 +1,7 @@
 // @vitest-environment node
 import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_ERRORED_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 
 import { reviewGoalDelivery } from '../goalReview';
+import { maybeAutoRepair } from '../repairService';
 import { driveTaskFromVerify, finalizeVerifyRun } from '../settle';
 
 vi.mock('../goalReview', () => ({ reviewGoalDelivery: vi.fn() }));
@@ -96,6 +98,25 @@ vi.mock('@/server/services/taskResultBridge', () => ({
 const db = {} as any;
 
 describe('driveTaskFromVerify', () => {
+  it('does not overwrite a fast-failed repair when the parent finalizer resumes', async () => {
+    runFindByOperation.mockImplementation(async (id: string) => ({
+      id: id === 'repair-op' ? 'repair-run' : 'parent-run',
+      status: id === 'repair-op' ? 'errored' : 'failed',
+    }));
+    vi.mocked(maybeAutoRepair).mockImplementationOnce(async () => {
+      await driveTaskFromVerify(db, 'u1', 'repair-op');
+      return { repairOperationId: 'repair-op' };
+    });
+    await finalizeVerifyRun(db, 'u1', 'parent-op', {});
+    expect(taskUpdateStatus).toHaveBeenCalledTimes(1);
+    expect(taskUpdateStatus).toHaveBeenCalledWith('task-1', 'paused', {
+      error: VERIFICATION_ERRORED_ERROR,
+    });
+    expect(deliverMock).toHaveBeenCalledTimes(1);
+    expect(runClaimTaskDrive).toHaveBeenCalledWith('repair-run');
+    expect(runClaimTaskDrive).not.toHaveBeenCalledWith('parent-run');
+  });
+
   it('automatically sends a Goal delivery back when Acceptance review rejects a Verify pass', async () => {
     runFindByOperation.mockResolvedValue({
       id: 'run-1',

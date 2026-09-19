@@ -44,6 +44,7 @@ export interface StartOperationInput {
   initialContext: OperationPrepResult['initialContext'];
   initialStepCount?: number;
   maxSteps?: number;
+  onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
   operationId: string;
   operationTaskId?: string;
   parentOperationId?: string;
@@ -234,6 +235,7 @@ export const startOperation = async (
         trigger,
       },
       autoStart,
+      onOperationCreated: input.onOperationCreated,
       botContext,
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
