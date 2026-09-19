@@ -2008,6 +2008,18 @@ describe('AgentRuntimeService', () => {
   });
 
   describe('interruptOperation', () => {
+    let findOperation: MockInstance<AgentOperationModel['findById']>;
+
+    beforeEach(() => {
+      findOperation = vi
+        .spyOn(AgentOperationModel.prototype, 'findById')
+        .mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      findOperation.mockRestore();
+    });
+
     it('should interrupt a running operation', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-1',
@@ -2051,7 +2063,7 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('should return false when state not found', async () => {
+    it('should return false when state and owned operation are not found', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue(null);
 
       const result = await service.interruptOperation('non-existent');
@@ -2061,7 +2073,7 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already done', async () => {
+    it('should acknowledge cancellation when operation already done', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-done',
         status: 'done',
@@ -2070,11 +2082,11 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-done');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already in error state', async () => {
+    it('should acknowledge cancellation when operation already in error state', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-err',
         status: 'error',
@@ -2083,11 +2095,11 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-err');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already interrupted', async () => {
+    it('should acknowledge cancellation when operation already interrupted', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-int',
         status: 'interrupted',
@@ -2096,9 +2108,37 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-int');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
+
+    it.each(['done', 'error', 'interrupted', 'abandoned'] as const)(
+      'acknowledges an expired runtime state when the owned operation is %s',
+      async (status) => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        findOperation.mockResolvedValue({
+          id: 'op-expired',
+          status,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        expect(await service.interruptOperation('op-expired')).toBe(true);
+        expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+        expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['idle', 'running', 'waiting_for_human', 'waiting_for_async_tool'] as const)(
+      'does not treat missing runtime state as stopped when the owned operation is %s',
+      async (status) => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        findOperation.mockResolvedValue({
+          id: 'op-active',
+          status,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        expect(await service.interruptOperation('op-active')).toBe(false);
+        expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+        expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
+      },
+    );
   });
 
   // Stream events at step / operation boundaries should carry the canonical

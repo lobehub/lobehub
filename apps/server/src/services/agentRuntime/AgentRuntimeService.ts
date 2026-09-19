@@ -582,14 +582,25 @@ export class AgentRuntimeService {
    * The agent will stop at the next step boundary (cannot abort an in-flight LLM call).
    * Works with both Redis and InMemory state managers via the coordinator abstraction.
    *
-   * @returns true if the operation was interrupted, false if already in a terminal state or not found
+   * @returns true if interruption is acknowledged (including an already terminal operation),
+   * false if missing runtime state prevents confirming that the operation has stopped.
    */
   async interruptOperation(operationId: string): Promise<boolean> {
     const state = await this.coordinator.loadAgentState(operationId);
-    if (!state) return false;
+    if (!state) {
+      // Runtime state can expire before the task-topic completion callback lands.
+      // Absence alone is not proof of exit (e.g. another in-memory worker owns
+      // the run). Only an owned, durably terminal operation can acknowledge it.
+      const operation = await this.agentOperationModel.findById(operationId);
+      return (
+        !!operation && ['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)
+      );
+    }
 
     if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
-      return false;
+      // A retried stop must be able to settle a stale running task-topic without
+      // overwriting the original completion outcome or emitting another stop.
+      return true;
     }
 
     // Sentinel FIRST: the poller and the step-boundary check read only the
