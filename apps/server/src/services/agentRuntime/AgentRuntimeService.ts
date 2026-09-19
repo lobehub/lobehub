@@ -2197,7 +2197,6 @@ export class AgentRuntimeService {
         // Publish step complete event
         await this.streamManager.publishStreamEvent(operationId, {
           data: {
-            finalState: stepResult.newState,
             nextStepScheduled,
             stepIndex,
           },

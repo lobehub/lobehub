@@ -78,7 +78,8 @@ const stripStateForStream = <T extends Record<string, any>>(
 
 /**
  * Chokepoint helper applied inside every stream-event publish site.
- * If the event `data` carries a `finalState`, strip `expertise`, `messages`,
+ * Step completion events omit finalState entirely; runtime state stays server-side.
+ * For other events carrying a `finalState`, strip `expertise`, `messages`,
  * and the tool-set group off it (see `stripStateForStream` for the rationale).
  *
  * Centralizing the strip here means new callers — including direct
@@ -89,9 +90,13 @@ const stripStateForStream = <T extends Record<string, any>>(
  * Returns the original reference when no stripping is needed so the
  * common path stays allocation-free.
  */
-export const stripFinalStateInEventData = (data: unknown): unknown => {
+export const stripFinalStateInEventData = (data: unknown, eventType?: unknown): unknown => {
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
+  if (eventType === 'step_complete') {
+    const { finalState: _finalState, ...rest } = record;
+    return rest;
+  }
   const finalState = record.finalState;
   if (!finalState || typeof finalState !== 'object') return data;
   return { ...record, finalState: stripStateForStream(finalState as Record<string, any>) };
@@ -185,10 +190,10 @@ export class StreamEventManager {
     const eventData: StreamEvent = {
       ...event,
       // Chokepoint strip — every event passing through here gets its
-      // `data.finalState` trimmed (messages + tool-set fields) before
+      // `data.finalState` removed for step_complete, otherwise trimmed, before
       // serialization so a single xadd can't blow past Upstash's 10 MB
       // request limit on long topics.
-      data: stripFinalStateInEventData(event.data),
+      data: stripFinalStateInEventData(event.data, event.type),
       operationId,
       timestamp: Date.now(),
     };

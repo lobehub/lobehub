@@ -952,7 +952,6 @@ describe('AgentRuntimeService', () => {
         stepIndex: 1,
         data: {
           stepIndex: 1,
-          finalState: mockStepResult.newState,
           nextStepScheduled: false, // Published before nextStepScheduled is updated
         },
       });

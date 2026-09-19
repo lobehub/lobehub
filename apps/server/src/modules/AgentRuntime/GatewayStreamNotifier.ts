@@ -395,7 +395,8 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // payload too. The gateway forwards events verbatim to clients, and
     // downstream consumers don't read these fields, so carrying them
     // would re-introduce the same multi-megabyte serialization that
-    // crashed the xadd path. Additionally, for a shared-agent visitor run,
+    // crashed the xadd path. step_complete drops finalState entirely because
+    // Gateway clients do not consume it. Additionally, for a shared-agent visitor run,
     // drop `finalState` wholesale and scrub the rest — see
     // `sanitizeGatewayEventData`.
     const sanitizedEvent =

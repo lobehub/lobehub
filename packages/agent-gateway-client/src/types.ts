@@ -175,7 +175,6 @@ export interface ToolEndData {
 }
 
 export interface StepCompleteData {
-  finalState?: unknown;
   phase: string;
   reason?: string;
   reasonDetail?: string;

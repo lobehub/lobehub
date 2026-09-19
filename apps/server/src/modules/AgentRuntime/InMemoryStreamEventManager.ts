@@ -49,7 +49,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       // event shape stays identical to the production wire format —
       // tests run against this manager and would otherwise mask
       // regressions in the strip behaviour.
-      data: stripFinalStateInEventData(event.data),
+      data: stripFinalStateInEventData(event.data, event.type),
       id: eventId,
       operationId,
       timestamp: Date.now(),

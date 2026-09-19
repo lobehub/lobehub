@@ -80,6 +80,38 @@ describe('GatewayStreamNotifier', () => {
       );
     });
 
+    it.each([undefined, 'execution_complete'])(
+      'omits unused step_complete state from gateway payloads (phase=%s)',
+      async (phase) => {
+        const finalState = {
+          initialContext: { systemRole: 'system context' },
+          plan: { tools: ['tool'] },
+          status: 'done',
+          world: { agent: { name: 'agent' } },
+        };
+        const data = {
+          finalState,
+          nextStepScheduled: false,
+          ...(phase && { phase, reason: 'done', reasonDetail: 'Finished' }),
+          stepIndex: 2,
+        };
+
+        await notifier.publishStreamEvent('op-1', {
+          data,
+          stepIndex: 2,
+          type: 'step_complete',
+        });
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        const { finalState: _finalState, ...expected } = data;
+        expect(body.event.data).toEqual(expected);
+        expect(body.event.data).not.toHaveProperty('finalState');
+        // The notifier must not mutate the runtime state passed by its caller.
+        expect(inner.calls.publishStreamEvent[0][1].data.finalState).toBe(finalState);
+        expect(data.finalState).toBe(finalState);
+      },
+    );
+
     it('awaits stream_end gateway push before resolving', async () => {
       let resolveFetch!: () => void;
       mockFetch.mockImplementationOnce(
