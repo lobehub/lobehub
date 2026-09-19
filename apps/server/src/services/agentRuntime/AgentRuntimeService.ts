@@ -1683,7 +1683,13 @@ export class AgentRuntimeService {
         }
 
         const gatewayMessagePatchEnabled = await this.usesGatewayMessagePatch(agentState);
-        const stepStartUiMessages = await this.queryUiMessages(agentState, { skipWorks: true });
+        // UI projection and model hydration have different payload/URL contracts,
+        // but neither read depends on the other. Keep the unprojected DB rows
+        // from hydration for device discovery later in this same step.
+        const [stepStartUiMessages, stepEntryMessages] = await Promise.all([
+          this.queryUiMessages(agentState, { skipWorks: true }),
+          this.rehydrateStateMessagesFromDB(agentState),
+        ]);
         await this.streamManager.publishStreamEvent(operationId, {
           data: gatewayMessagePatchEnabled
             ? { messageRevision: stepIndex }
@@ -1696,15 +1702,6 @@ export class AgentRuntimeService {
           ...agentState.metadata,
           externalRetryCount,
         };
-
-        // Rehydrate `messages` from the DB at every step entry. Each step is a
-        // separate invocation that loads state fresh from Redis, so this makes
-        // the DB the single source of truth for the conversation on every path
-        // — not just the async-tool / human-intervention resumes that already
-        // refresh below. With this in place the Redis-persisted state no longer
-        // needs to carry the (potentially multi-MB) `messages` array, which is
-        // what trips Upstash's 10MB single-request limit and drops the op.
-        await this.rehydrateStateMessagesFromDB(agentState);
 
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.world?.agent as
@@ -2003,7 +2000,18 @@ export class AgentRuntimeService {
         // Pre-step computation: extract device context from DB messages
         // Follows front-end computeStepContext pattern — computed at step boundary, not inside executors
         if (!currentState.binding?.device?.id) {
-          const deviceContext = await this.computeDeviceContext(currentState);
+          // Interventions and async resumes can change tool rows after the
+          // entry snapshot. Those paths still need a fresh device read.
+          const canReuseEntryMessages =
+            !humanInput &&
+            !approvedToolCall &&
+            !rejectionReason &&
+            !resumeAsyncTool &&
+            !finishAfterAsyncTool;
+          const deviceContext = await this.computeDeviceContext(
+            currentState,
+            canReuseEntryMessages ? stepEntryMessages : undefined,
+          );
           if (deviceContext) {
             currentState.binding = {
               ...currentState.binding,
@@ -3831,8 +3839,12 @@ export class AgentRuntimeService {
    *   consumers (e.g. `shouldCompress(state.messages)`).
    * - A populated working set is never replaced with an empty one or on a DB
    *   error, so a transient read miss can't blank the conversation mid-op.
+   * Returns the unprojected rows for same-step device discovery. Undefined means
+   * hydration was skipped or failed; an empty array is a successful empty read.
    */
-  private async rehydrateStateMessagesFromDB(state: AgentState): Promise<void> {
+  private async rehydrateStateMessagesFromDB(
+    state: AgentState,
+  ): Promise<UIChatMessage[] | undefined> {
     if (hasNonPersistedMessage(state.messages)) return;
 
     if (!Array.isArray(state.messages)) state.messages = [];
@@ -3840,8 +3852,10 @@ export class AgentRuntimeService {
     if (!state.origin?.agentId || !state.origin?.topicId) return;
 
     try {
-      const refreshed = await this.refreshMessagesFromDB(state);
-      if (refreshed.length > 0) state.messages = refreshed;
+      const dbMessages = await this.queryMessagesFromDB(state);
+      const { flatList } = parse(dbMessages);
+      if (flatList.length > 0) state.messages = flatList as AgentState['messages'];
+      return dbMessages;
     } catch (error) {
       console.error(
         '[rehydrateStateMessagesFromDB] failed, keeping Redis state snapshot: %O',
@@ -4020,19 +4034,21 @@ export class AgentRuntimeService {
    * Compute device context from DB messages at step boundary.
    * Uses findInMessages visitor to scan tool messages for device activation.
    */
-  private async computeDeviceContext(state: any) {
+  private async computeDeviceContext(state: any, entryMessages?: UIChatMessage[]) {
     try {
-      const dbMessages = await this.messageModel.query(
-        {
-          agentId: state.origin?.agentId,
-          // Group runs need groupId or the query returns no group messages
-          // (standard branch filters `groupId IS NULL`), losing the device context.
-          groupId: state.origin?.groupId,
-          threadId: state.origin?.threadId,
-          topicId: state.origin?.topicId,
-        },
-        { allowShareVisitor: true },
-      );
+      const dbMessages =
+        entryMessages ??
+        (await this.messageModel.query(
+          {
+            agentId: state.origin?.agentId,
+            // Group runs need groupId or the query returns no group messages
+            // (standard branch filters `groupId IS NULL`), losing the device context.
+            groupId: state.origin?.groupId,
+            threadId: state.origin?.threadId,
+            topicId: state.origin?.topicId,
+          },
+          { allowShareVisitor: true },
+        ));
 
       return findInMessages(
         dbMessages,

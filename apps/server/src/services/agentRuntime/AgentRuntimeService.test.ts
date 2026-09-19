@@ -806,6 +806,75 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it.each([false, true])(
+      'reuses the entry read for device discovery (device=%s)',
+      async (withDevice) => {
+        const state = {
+          ...mockState,
+          messages: [],
+          origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        };
+        mockCoordinator.loadAgentState.mockResolvedValue(state);
+        const dbMessages = buildPersistedToolChain('full model answer');
+        if (withDevice) {
+          dbMessages[0] = {
+            ...dbMessages[0],
+            role: 'tool',
+            pluginState: { metadata: { activeDeviceId: 'device-1', devicePlatform: 'darwin' } },
+          } as (typeof dbMessages)[number];
+        }
+        const query = (service as any).messageModel.query.mockResolvedValue(dbMessages);
+        vi.spyOn(service, 'queryUiMessages').mockResolvedValue([]);
+        const step = vi.fn().mockImplementation(async (input) => ({
+          events: [],
+          newState: { ...input, stepCount: 2 },
+          nextContext: mockParams.context,
+        }));
+        vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+
+        const result = await service.executeStep(mockParams);
+
+        expect(result.success).toBe(true);
+        expect(query).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('full model answer');
+        expect(step.mock.calls[0][0].binding?.device?.id).toBe(withDevice ? 'device-1' : undefined);
+      },
+    );
+
+    it('starts the model read while the UI snapshot is still pending', async () => {
+      const state = {
+        ...mockState,
+        messages: [],
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      };
+      mockCoordinator.loadAgentState.mockResolvedValue(state);
+      const query = (service as any).messageModel.query.mockResolvedValue([]);
+      let resolveUi!: (messages: []) => void;
+      const uiRead = vi.spyOn(service, 'queryUiMessages').mockReturnValue(
+        new Promise((resolve) => {
+          resolveUi = resolve;
+        }),
+      );
+      const step = vi.fn().mockResolvedValue({
+        events: [],
+        newState: { ...state, stepCount: 2 },
+        nextContext: mockParams.context,
+      });
+      vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+      const running = service.executeStep(mockParams);
+      let startedBeforeUiResolved: boolean;
+      try {
+        await vi.waitFor(() => expect(uiRead).toHaveBeenCalled());
+        startedBeforeUiResolved = query.mock.calls.length > 0;
+        expect(step).not.toHaveBeenCalled();
+      } finally {
+        resolveUi([]);
+        await running;
+      }
+      expect(startedBeforeUiResolved).toBe(true);
+      expect(query).toHaveBeenCalledTimes(1);
+    });
+
     it('should execute step successfully', async () => {
       const mockStepResult = {
         newState: { ...mockState, stepCount: 2, status: 'running' },
