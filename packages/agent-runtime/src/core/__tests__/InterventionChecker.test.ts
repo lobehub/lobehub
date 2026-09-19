@@ -304,6 +304,59 @@ describe('InterventionChecker', () => {
         expect(result.blocked).toBe(false);
       });
 
+      // Regression: the old `rm.*-r.*/\s*$` regex matched this READ-ONLY
+      // command because "te|rm|inal" supplied `rm`, "-|r|egex" supplied `-r`
+      // and the trailing `/` of the ls path supplied the root target.
+      it('should allow read-only jq+ls compound command (original false-positive report)', () => {
+        const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+          command:
+            "jq '.trial // . | {status, error, runner_command}' /Users/arvinxx/CodeProjects/frontierharness/eval/runs/2026-09-10-lobe-smoke/trials/terminal-bench-regex-log/trial.json 2>/dev/null; ls /Users/arvinxx/CodeProjects/frontierharness/eval/runs/2026-09-10-lobe-smoke/trials/terminal-bench-regex-log/",
+        });
+        expect(result.blocked).toBe(false);
+      });
+
+      it('should allow recursive grep over user directories', () => {
+        const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+          command: 'grep -r pattern /Users/alice/notes',
+        });
+        expect(result.blocked).toBe(false);
+      });
+
+      it('should allow recursive deletes inside the home tree', () => {
+        const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+          command: 'rm -rf ~/.cache/some-tool',
+        });
+        expect(result.blocked).toBe(false);
+      });
+
+      it('should still block rm -rf via wrapper commands', () => {
+        for (const command of [
+          'sudo rm -rf /',
+          'sudo -u alice rm -rf ~',
+          'env rm -rf /',
+          'nohup rm -rf ~',
+        ]) {
+          const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+            command,
+          });
+          expect(result.blocked).toBe(true);
+        }
+      });
+
+      it('should block rm -rf with quoted flags (shell strips quotes before argv)', () => {
+        const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+          command: "rm '-rf' /",
+        });
+        expect(result.blocked).toBe(true);
+      });
+
+      it('should block compound commands containing a real rm -rf / segment', () => {
+        const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
+          command: 'echo start && rm -rf /',
+        });
+        expect(result.blocked).toBe(true);
+      });
+
       it('should block fork bomb', () => {
         const result = InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, {
           command: ':(){ :|:& };:',
