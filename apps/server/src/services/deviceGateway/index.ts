@@ -9,7 +9,10 @@ import {
   type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import type { ClaudeCodeQuotaSnapshot } from '@lobechat/heterogeneous-agents/quota';
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
 import type {
   DeviceCopyAssetForPublishResult,
   DeviceDirectoryBrowseResult,
@@ -490,6 +493,22 @@ export class DeviceGateway {
     workspaceId?: string;
   }) {
     return this.invokeDeviceRead<ClaudeCodeQuotaSnapshot>('getClaudeCodeQuota', params, {
+      env: params.env,
+      force: params.force,
+    });
+  }
+
+  /** Codex subscription quota sampled from the login on a remote device. */
+  codexQuota(params: {
+    command?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<CodexQuotaSnapshot>('getCodexQuota', params, {
+      command: params.command,
       env: params.env,
       force: params.force,
     });

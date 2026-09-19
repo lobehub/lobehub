@@ -12,6 +12,23 @@ export interface HeteroQuotaWindow {
   windowMinutes: number;
 }
 
+export interface CodexRateLimitSnapshot {
+  limitId: string;
+  limitName: string | null;
+  primary: HeteroQuotaWindow | null;
+  secondary: HeteroQuotaWindow | null;
+}
+
+export interface CodexQuotaSnapshot {
+  error: string | null;
+  provider: 'codex';
+  rateLimits?: CodexRateLimitSnapshot[];
+  session: HeteroQuotaWindow | null;
+  status: 'error' | 'ok' | 'unavailable';
+  updatedAt: number;
+  weekly: HeteroQuotaWindow | null;
+}
+
 /**
  * Why the quota can't be shown. `external-auth` means the agent is configured
  * with an API key / custom base url, so subscription quota does not apply;

@@ -1,4 +1,4 @@
-import type { ClaudeCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
+import type { ClaudeCodeQuotaSnapshot, CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
@@ -29,3 +29,29 @@ export const fetchClaudeCodeQuotaSnapshot = ({
         ...(force ? { force: true } : {}),
       })
     : heterogeneousAgentService.getClaudeCodeQuota({ env, ...(force ? { force: true } : {}) });
+
+export interface FetchCodexQuotaSnapshotParams {
+  command?: string;
+  deviceId?: string;
+  env?: Record<string, string>;
+  force?: boolean;
+}
+
+export const fetchCodexQuotaSnapshot = ({
+  command,
+  deviceId,
+  env,
+  force,
+}: FetchCodexQuotaSnapshotParams): Promise<CodexQuotaSnapshot | null> =>
+  deviceId
+    ? lambdaClient.device.getCodexQuota.query({
+        command,
+        deviceId,
+        env,
+        ...(force ? { force: true } : {}),
+      })
+    : heterogeneousAgentService.getCodexQuota({
+        command,
+        env,
+        ...(force ? { force: true } : {}),
+      });

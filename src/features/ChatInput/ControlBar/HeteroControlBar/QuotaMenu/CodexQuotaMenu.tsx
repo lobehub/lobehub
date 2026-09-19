@@ -14,6 +14,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+import { fetchCodexQuotaSnapshot } from '@/services/heteroAgentQuota';
 
 import type { FetchQuotaOptions, QuotaMenuHelpers, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
@@ -120,6 +121,7 @@ const getAvailableResetCredits = (credits: CodexRateLimitResetCredit[] | undefin
 
 interface CodexQuotaMenuProps {
   command?: string;
+  deviceId?: string;
   env?: Record<string, string>;
 }
 
@@ -133,9 +135,9 @@ interface ResetFeedback {
   text: string;
 }
 
-const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
+const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, deviceId, env }) => {
   const { t } = useTranslation('chat');
-  const sourceKey = createQuotaSourceKey('codex', command, env);
+  const sourceKey = createQuotaSourceKey('codex', deviceId, command, env);
   const activeSourceKeyRef = useRef(sourceKey);
   const resetAttemptRef = useRef<ResetAttempt | null>(null);
   const [resetFeedback, setResetFeedback] = useState<ResetFeedback>();
@@ -150,12 +152,13 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
 
   const fetchQuota = useCallback(
     (options?: FetchQuotaOptions<CodexQuotaSnapshot>) =>
-      heterogeneousAgentService.getCodexQuota({
+      fetchCodexQuotaSnapshot({
         command,
+        deviceId,
         env,
         ...(options?.force ? { force: true } : {}),
-      }),
-    [command, env],
+      }).then((snapshot) => snapshot ?? createErrorSnapshot('Device is unavailable')),
+    [command, deviceId, env],
   );
 
   const getWindowLabel = useCallback(
@@ -216,8 +219,8 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
   );
 
   const hasExtraData = useCallback(
-    (quota: CodexQuotaSnapshot) => !!quota.rateLimitResetCredits,
-    [],
+    (quota: CodexQuotaSnapshot) => !deviceId && !!quota.rateLimitResetCredits,
+    [deviceId],
   );
 
   const getErrorText = useCallback(
