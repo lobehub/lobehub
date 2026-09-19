@@ -113,7 +113,7 @@ export class ChatForwardActionImpl {
       `lh topic view ${topicId} -L 500`,
       '',
       'Every message it prints is the context from the previous Agent. If the topic has more than 500 messages, page through the remainder with --from and --to. Continue the work from where it left off and handle the remaining request item by item.',
-      note?.trim() ? `Additional instructions from the user:\n\n${note.trim()}` : undefined,
+      'If the CLI is unavailable, continue using the conversation transcript included below.',
     ]
       .filter(Boolean)
       .join('\n');
@@ -138,7 +138,7 @@ export class ChatForwardActionImpl {
         }
 
         const content = config.agencyConfig?.heterogeneousProvider
-          ? cliInstruction
+          ? `${cliInstruction}\n\n${await getTranscript()}`
           : await getTranscript();
 
         const result = await this.#get().sendMessage({

@@ -1591,6 +1591,38 @@ describe('ConversationLifecycle actions', () => {
         );
       });
 
+      it('reports an isolated gateway topic at acceptance and returns its ID', async () => {
+        const onTopicCreated = vi.fn();
+        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+          await params.onTopicCreated?.(TEST_IDS.NEW_TOPIC_ID);
+          expect(onTopicCreated).toHaveBeenCalledWith(TEST_IDS.NEW_TOPIC_ID);
+          useChatStore.getState().completeOperation(params.parentOperationId);
+          return {
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            topicId: TEST_IDS.NEW_TOPIC_ID,
+            userMessageId: TEST_IDS.USER_MESSAGE_ID,
+          };
+        });
+        useChatStore.setState({
+          executeGatewayAgent,
+          isGatewayModeEnabled: () => true,
+        });
+
+        const result = await useChatStore.getState().sendMessage({
+          context: {
+            agentId: TEST_IDS.SESSION_ID,
+            isNew: true,
+            isolatedTopic: true,
+            scope: 'main',
+          },
+          message: 'Continue the forwarded work',
+          onTopicCreated,
+        });
+
+        expect(onTopicCreated).toHaveBeenCalledTimes(1);
+        expect(result?.createdTopicId).toBe(TEST_IDS.NEW_TOPIC_ID);
+      });
+
       it('should stop the sidebar spinner after a gateway send creates the topic', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;

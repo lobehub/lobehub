@@ -1722,6 +1722,7 @@ export class ConversationLifecycleActionImpl {
             ? { ...requestMetadata, steer: true }
             : requestMetadata,
           onMessageAccepted: notifyMessageAccepted,
+          onTopicCreated: context.isolatedTopic ? onTopicCreated : undefined,
           parentOperationId: operationId,
           replacesOperationId: replaceableGatewayOperationId,
           optimisticTopic,
@@ -1795,6 +1796,7 @@ export class ConversationLifecycleActionImpl {
         return {
           assistantMessageId: result.assistantMessageId,
           createdThreadId: result.createdThreadId,
+          createdTopicId: willCreateNewTopic ? result.topicId : undefined,
           userMessageId: result.userMessageId,
         };
       } catch (e) {

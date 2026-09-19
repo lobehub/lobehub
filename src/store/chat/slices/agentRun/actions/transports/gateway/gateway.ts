@@ -637,6 +637,8 @@ export class GatewayActionImpl {
     metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
+    /** Called when a new topic is persisted, before UI hydration and stream setup. */
+    onTopicCreated?: (topicId: string) => void | Promise<void>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
@@ -714,6 +716,7 @@ export class GatewayActionImpl {
       metadata,
       onComplete,
       onMessageAccepted,
+      onTopicCreated,
       optimisticTopic,
       parentMessageId,
       parentOperationId,
@@ -894,6 +897,14 @@ export class GatewayActionImpl {
       console.error('[Gateway] onMessageAccepted callback failed:', error);
     }
 
+    if (isCreateNewTopic && result.topicId) {
+      try {
+        await onTopicCreated?.(result.topicId);
+      } catch (error) {
+        console.error('[Gateway] onTopicCreated callback failed:', error);
+      }
+    }
+
     let hasInterruptedAfterPersistence = false;
     const interruptIfCancelledAfterPersistence = () => {
       if (!abortSignal?.aborted) return false;
@@ -998,10 +1009,12 @@ export class GatewayActionImpl {
         /* non-critical */
       }
 
-      await this.#get().switchTopic(result.topicId, {
-        clearNewKey: true,
-        skipRefreshMessage: true,
-      });
+      if (!messageContext.isolatedTopic) {
+        await this.#get().switchTopic(result.topicId, {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
+      }
 
       // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
       // Unlike the direct-API sendMessage path (which receives topics[] in the

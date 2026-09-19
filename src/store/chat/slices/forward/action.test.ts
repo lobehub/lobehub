@@ -91,7 +91,12 @@ describe('ChatForwardAction', () => {
     expect(result.failed[0].agentId).toBe('missing-agent');
   });
 
-  it('asks the target agent to load the source topic through the LobeHub CLI', async () => {
+  it('includes transcript fallback for a heterogeneous target without LobeHub CLI access', async () => {
+    vi.mocked(messageService.getMessages).mockResolvedValueOnce([
+      message('user', 'question'),
+      message('tool', 'private tool output'),
+      message('assistant', 'answer'),
+    ]);
     vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce({
       agencyConfig: { heterogeneousProvider: { type: 'codex' } },
       id: 'target-agent',
@@ -123,7 +128,9 @@ describe('ChatForwardAction', () => {
       scope: 'main',
     });
     expect(result.succeeded).toEqual([{ agentId: 'target-agent', topicId: 'new-topic' }]);
-    expect(messageService.getMessages).not.toHaveBeenCalled();
+    expect(sendMessage.mock.calls[0][0].message).toContain('question');
+    expect(sendMessage.mock.calls[0][0].message).toContain('answer');
+    expect(sendMessage.mock.calls[0][0].message).not.toContain('private tool output');
   });
 
   it('keeps transcript context when the target agent cannot use the LobeHub CLI', async () => {
