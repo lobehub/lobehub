@@ -181,8 +181,10 @@ Subscribe algorithm (per connection, per op):
 1. Record sub `{ lastSeq: Number(lastEventId ?? 0), executor, state:'replaying' }`.
 2. Call op DO `hub-subscribe`. If it returns a `userId` that ≠ hub's userId ⇒
    `subscribe_failed{forbidden}` and drop the sub. If `userId` is undefined (op not inited
-   yet — the init/subscribe race, LOBE-10443): keep the sub with `state:'pending'`, send
-   `resume_complete{ pending:true, gap:false }` and return; when an `op-lifecycle` with
+   yet — the init/subscribe race: a subscriber that arrives before the op exists must not be
+   answered with an empty replay, because the client reads an empty replay as a finished
+   session and clears the shared `runningOperation`): keep the sub with `state:'pending'`,
+   send `resume_complete{ pending:true, gap:false }` and return; when an `op-lifecycle` with
    status `running` arrives for that op, run steps 3-5 for every pending sub.
 3. Call op DO `replay{ since: String(lastSeq) }`; send each returned message (with
    `operationId` added) in order, updating `lastSeq`.
