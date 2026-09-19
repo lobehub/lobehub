@@ -43,10 +43,10 @@ const ErrorContent = memo<ErrorContentProps>(({ customErrorRender, error, id, on
   return (
     <Alert
       closable
-      extraDefaultExpand
       showIcon
       extraIsolate={false}
       type={'secondary'}
+      variant={'outlined'}
       action={
         onRegenerate && (
           <Button
