@@ -1310,13 +1310,17 @@ export class ConversationLifecycleActionImpl {
       );
       if (this.#get().activeTopicId === optimisticTopic.id) {
         // Cancelling restores the editor before the optimistic topic rolls back.
-        // Keep that draft at the destination key so the topic switch cannot clear it.
+        // Read the live editor: the user may have edited or cleared the restored draft
+        // while the cancelled request was unwinding. Preserve it across the topic switch.
         if (
           !hasNotifiedMessageAccepted &&
           this.#get().operations[operationId]?.status === 'cancelled' &&
           jsonState
         ) {
-          saveDraft(messageMapKey({ ...operationContext, topicId: null }), jsonState);
+          saveDraft(
+            messageMapKey({ ...operationContext, topicId: null }),
+            targetInputEditor?.getJSONState() ?? jsonState,
+          );
         }
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
       }

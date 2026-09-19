@@ -508,29 +508,53 @@ describe('ConversationLifecycle actions', () => {
         expect(sendMessageOperation?.metadata.inputSendErrorMsg).toBeTruthy();
       });
 
-      it('preserves the cancelled first message under the draft key after topic rollback', async () => {
-        const context = createTestContext();
-        const draftKey = messageMapKey(context);
-        const snapshot = { root: { children: [], type: 'root' } };
-        removeDraft(draftKey);
-        const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
-          const store = useChatStore.getState();
-          store.cancelOperation(params.parentOperationId);
-          store.cancelSendMessageInServer(params.messageContext, { setJSONState: vi.fn() } as any);
-          throw new DOMException('Stopped before dispatch', 'AbortError');
-        });
-        useChatStore.setState({ executeGatewayAgent, isGatewayModeEnabled: () => true });
+      it.each(['unchanged', 'edited', 'cleared'] as const)(
+        'preserves the %s live draft when a cancelled first send rolls back asynchronously',
+        async (change) => {
+          const context = createTestContext();
+          const draftKey = messageMapKey(context);
+          const snapshot = {
+            root: { children: [{ text: 'Cancelled first message' }], type: 'root' },
+          };
+          const latestDraft = {
+            root: {
+              children:
+                change === 'cleared' ? [] : [{ text: 'Cancelled first message with edits' }],
+              type: 'root',
+            },
+          };
+          let editorState = snapshot;
+          const editor = {
+            getJSONState: vi.fn(() => editorState),
+            setJSONState: vi.fn((state) => {
+              editorState = state;
+            }),
+          };
+          removeDraft(draftKey);
+          const executeGatewayAgent = vi.fn().mockImplementation(async (params) => {
+            const store = useChatStore.getState();
+            store.cancelOperation(params.parentOperationId);
+            store.cancelSendMessageInServer(params.messageContext, editor as any);
+            expect(editorState).toEqual(snapshot);
+            // User edits after restoration, before the aborted request unwinds.
+            await Promise.resolve();
+            if (change !== 'unchanged') editorState = latestDraft;
+            throw new DOMException('Stopped before dispatch', 'AbortError');
+          });
+          useChatStore.setState({ executeGatewayAgent, isGatewayModeEnabled: () => true });
 
-        await useChatStore.getState().sendMessage({
-          context,
-          editorData: snapshot as any,
-          message: 'Cancelled first message',
-        });
+          await useChatStore.getState().sendMessage({
+            context,
+            editorData: snapshot as any,
+            inputEditor: editor as any,
+            message: 'Cancelled first message',
+          });
 
-        expect(executeGatewayAgent).toHaveBeenCalledOnce();
-        expect(getDraft(draftKey)).toEqual(snapshot);
-        removeDraft(draftKey);
-      });
+          expect(executeGatewayAgent).toHaveBeenCalledOnce();
+          expect(getDraft(draftKey)).toEqual(change === 'unchanged' ? snapshot : latestDraft);
+          removeDraft(draftKey);
+        },
+      );
 
       it('does not restore an accepted gateway message when stopped during setup', async () => {
         const context = { ...createTestContext(), topicId: TEST_IDS.TOPIC_ID };
