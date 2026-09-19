@@ -144,7 +144,11 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
             >
               {compactHeaderTitle && <Text weight={500}>{compactHeaderTitle}</Text>}
             </NavHeader>
-            <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
+            <SettingContainer
+              maxWidth={tabKey === SettingsTabs.Devices ? 'none' : 1024}
+              paddingBlock={'24px 128px'}
+              paddingInline={24}
+            >
               {content}
             </SettingContainer>
           </Fragment>
