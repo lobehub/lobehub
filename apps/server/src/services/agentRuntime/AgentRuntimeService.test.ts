@@ -441,6 +441,15 @@ describe('AgentRuntimeService', () => {
       initialMessages: [],
     };
 
+    it.each([undefined, false, true])(
+      'persists the snapshot opt-in for resumed steps (%s)',
+      async (includeFinalState) => {
+        await service.createOperation({ ...mockParams, autoStart: false, includeFinalState });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host.includeFinalState === true).toBe(includeFinalState === true);
+      },
+    );
+
     it('should create operation successfully with autoStart=true', async () => {
       mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
 

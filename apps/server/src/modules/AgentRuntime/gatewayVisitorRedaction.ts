@@ -185,7 +185,7 @@ const sanitizeErrorEventDataForVisitor = (
  * 4. `uiMessages` additionally goes through {@link toVisitorMessage}'s full
  *    field allowlist, which the private-blob key strip alone does not cover.
  *
- * Normal step_complete events also omit finalState: Gateway clients reconcile
+ * Normal step_complete events omit finalState unless the run opts in. Clients reconcile
  * messages through message_patch/uiMessages and do not consume runtime state.
  * Other events in a normal run fall back to the generic
  * {@link stripFinalStateInEventData} (messages / tool-set fields only),

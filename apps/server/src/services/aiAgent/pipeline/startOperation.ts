@@ -40,6 +40,7 @@ export interface StartOperationInput {
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
+  includeFinalState?: boolean;
   /** Final runtime context — base prep context with 16b/16c overrides applied. */
   initialContext: OperationPrepResult['initialContext'];
   initialStepCount?: number;
@@ -137,6 +138,7 @@ export const startOperation = async (
   // If createOperation fails, we still have valid messages that need error info
   try {
     const result = await deps.agentRuntimeService.createOperation({
+      includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,
       agentConfig,

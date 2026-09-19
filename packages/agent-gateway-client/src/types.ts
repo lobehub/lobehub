@@ -175,6 +175,8 @@ export interface ToolEndData {
 }
 
 export interface StepCompleteData {
+  /** Present only when the run opts into includeFinalState. */
+  finalState?: unknown;
   phase: string;
   reason?: string;
   reasonDetail?: string;

@@ -192,6 +192,7 @@ export const resolveAbortedTools =
 
     await transports.stream.publishEvent({
       data: {
+        ...(newState.host?.includeFinalState === true && { finalState: newState }),
         phase: 'execution_complete',
         reason: USER_ABORTED_REASON,
         reasonDetail: USER_ABORTED_REASON_DETAIL,

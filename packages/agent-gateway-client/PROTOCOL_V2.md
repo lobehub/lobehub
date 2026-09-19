@@ -24,6 +24,15 @@ clients (web without the Labs flag, CLI, desktop).
 Non-goals for this iteration: SharedWorker cross-tab sharing; removing `mirrorToOperationId`
 / `subagent_progress`; migrating CLI; removing v1.
 
+### Optional step state snapshots
+
+`aiAgent.execAgent({ includeFinalState: true, ... })` opts a run into
+`step_complete.data.finalState`. The default is false. The option is persisted in
+`AgentState.host`, so queued and inline steps use the same policy. Snapshots still
+omit reconstructible message history and tool-set fields; share-visitor redaction
+always takes precedence. Internal state persistence and local done events are
+unaffected. This option does not change terminal message-patch reconciliation.
+
 ### 0.1 Native runtime message reconciliation
 
 For the server-owned native agent harness, protocol v2 avoids repeating the complete

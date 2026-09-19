@@ -1,5 +1,6 @@
 import { type AgentStreamEventType } from '@lobechat/agent-gateway-client';
 import { type ChatToolPayload } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
@@ -78,7 +79,7 @@ const stripStateForStream = <T extends Record<string, any>>(
 
 /**
  * Chokepoint helper applied inside every stream-event publish site.
- * Step completion events omit finalState entirely; runtime state stays server-side.
+ * Step completion events omit finalState unless the persisted run host opts in.
  * For other events carrying a `finalState`, strip `expertise`, `messages`,
  * and the tool-set group off it (see `stripStateForStream` for the rationale).
  *
@@ -93,7 +94,10 @@ const stripStateForStream = <T extends Record<string, any>>(
 export const stripFinalStateInEventData = (data: unknown, eventType?: unknown): unknown => {
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
-  if (eventType === 'step_complete') {
+  const state = record.finalState;
+  const includeFinalState =
+    isRecord(state) && isRecord(state.host) && state.host.includeFinalState === true;
+  if (eventType === 'step_complete' && !includeFinalState) {
     const { finalState: _finalState, ...rest } = record;
     return rest;
   }

@@ -20,10 +20,10 @@ export const finish =
     // re-trigger after completion. Best-effort — the adapter swallows failures.
     await transports.operationStore?.clearRunningMark();
 
-    // Publish completion metadata only; the full state stays in the runtime's
-    // local done event and persistence path.
+    // State snapshots are opt-in; internal done events always retain the state.
     await transports.stream.publishEvent({
       data: {
+        ...(state.host?.includeFinalState === true && { finalState: { ...state, status: 'done' } }),
         phase: 'execution_complete',
         reason,
         reasonDetail,

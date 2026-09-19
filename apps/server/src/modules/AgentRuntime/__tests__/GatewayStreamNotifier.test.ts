@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
+import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
 import type { IStreamEventManager } from '../types';
 
@@ -111,6 +112,27 @@ describe('GatewayStreamNotifier', () => {
         expect(data.finalState).toBe(finalState);
       },
     );
+
+    it('forwards opted-in step state without bypassing visitor redaction', async () => {
+      const finalState = {
+        host: { includeFinalState: true },
+        initialContext: { prompt: 'context' },
+        messages: [{ content: 'history' }],
+        status: 'done',
+      };
+      const data = { finalState, phase: 'execution_complete', reason: 'done' };
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 2, type: 'step_complete' });
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.event.data.finalState).toEqual({
+        host: { includeFinalState: true },
+        initialContext: { prompt: 'context' },
+        status: 'done',
+      });
+      expect(sanitizeGatewayEventData(data, FULL_STRIP_REDACTION, 'step_complete')).toEqual({
+        phase: 'execution_complete',
+        reason: 'done',
+      });
+    });
 
     it('awaits stream_end gateway push before resolving', async () => {
       let resolveFetch!: () => void;
