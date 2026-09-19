@@ -20,6 +20,7 @@ import type {
   EvalToolForwardingConfig,
   ExecutionPlan,
   ExpertiseContextSnapshot,
+  FrozenModelFacts,
   LobeAgentChatConfig,
   LobeAgentConfig,
   SecurityBlacklistConfig,
@@ -348,6 +349,15 @@ export interface AgentState {
       video?: boolean;
       vision?: boolean;
     };
+    /**
+     * Every model fact the host read once when the operation was created (cards,
+     * the user's model row, the reasoning config that won the topic pin). Every
+     * LLM attempt of the run resolves its parameters from this snapshot, so an
+     * edit the user makes mid-run lands on the next turn instead of changing the
+     * payload between two steps. Absent on operations created before it existed,
+     * and for an attempt on another model — those resolve live.
+     */
+    modelFacts?: FrozenModelFacts;
     model: string;
     provider: string;
     /**

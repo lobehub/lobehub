@@ -18,11 +18,12 @@ import type {
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { DeviceUnavailableErrorData } from '@lobechat/device-gateway-client';
 import {
+  readFrozenModelFacts,
   resolveClientExecutors,
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
-import type { ChatTopicBotContext, RequestTrigger } from '@lobechat/types';
+import type { ChatTopicBotContext, FrozenModelFacts, RequestTrigger } from '@lobechat/types';
 import {
   agentShareFileAccessScope,
   getActivePluginIds,
@@ -55,6 +56,7 @@ import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/res
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelParams/providers';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import {
   isAgentSignalEnabledForUser,
@@ -146,6 +148,8 @@ export interface ToolDiscoveryResult {
   hasAgentDocuments: boolean;
   hasEnabledKnowledgeBases: boolean;
   lobehubSkillManifests: LobeToolManifest[];
+  /** Model facts read once for the whole operation; see {@link FrozenModelFacts}. */
+  modelFacts: FrozenModelFacts;
   modelMediaCapabilities: Pick<ModelAbilities, 'audio' | 'video' | 'vision'>;
   onlineDevices: DeviceAttachment[];
   operationAgentGroup?: AgentGroupConfig;
@@ -318,6 +322,35 @@ export const discoverTools = async (
       provider,
       userAbilities: activeModelAbilities,
     }) ?? {};
+  // The rest of the run's model facts, read here because this stage already
+  // holds the loaded bank and the user's model row. Everything downstream — one
+  // per step, retries included — reads them back off the operation instead.
+  const modelFacts = await readFrozenModelFacts(
+    {
+      agent: { id: agentConfig.id },
+      mediaCapabilities: modelMediaCapabilities,
+      model,
+      provider,
+      topicId,
+    },
+    {
+      ...createServerModelParamsProviders({
+        builtinModels,
+        serverDB: deps.db,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      }),
+      // Reuse the row read above rather than querying it a second time.
+      getUserModelRow: async () =>
+        activeModelMetadata
+          ? {
+              abilities: activeModelMetadata.abilities,
+              displayName: activeModelMetadata.displayName,
+              extendParams: activeModelMetadata.settings?.extendParams ?? undefined,
+            }
+          : null,
+    },
+  );
   const searchDecision = resolveServerSearchDecision({
     builtinModels,
     chatConfig: agentConfig.chatConfig ?? undefined,
@@ -1097,6 +1130,7 @@ export const discoverTools = async (
     hasAgentDocuments,
     hasEnabledKnowledgeBases,
     lobehubSkillManifests,
+    modelFacts,
     modelMediaCapabilities,
     onlineDevices,
     operationAgentGroup,
