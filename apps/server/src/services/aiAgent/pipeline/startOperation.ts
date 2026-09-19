@@ -274,6 +274,10 @@ export const startOperation = async (
           ...(typeof video === 'boolean' && { video }),
           ...(typeof vision === 'boolean' && { vision }),
         },
+        // Read once during discovery: every LLM attempt of this run resolves its
+        // parameters from here, so no step re-reads the bank, the user's model
+        // row or the reasoning config — and none of them can change mid-run.
+        modelFacts: discovery.modelFacts,
         model,
         provider,
       },
