@@ -4,6 +4,7 @@ Status: design contract shared by three codebases. Every implementer works from 
 if you must deviate, document the deviation at the top of your report.
 
 Repos:
+
 - `agent-gateway` (Cloudflare Worker, Durable Objects) — worktree `/Users/arvinxx/CodeProjects/LobeHub/agent-gateway-wt-user-hub`
 - `lobehub` server (`apps/server`) and client (`packages/agent-gateway-client`, `src/store/chat/.../gateway`) — worktree `/Users/arvinxx/CodeProjects/LobeHub/lobehub-wt-gateway-mux`
 
@@ -23,6 +24,23 @@ clients (web without the Labs flag, CLI, desktop).
 Non-goals for this iteration: SharedWorker cross-tab sharing; removing `mirrorToOperationId`
 / `subagent_progress`; migrating CLI; removing v1.
 
+### 0.1 Native runtime message reconciliation
+
+For the server-owned native agent harness, protocol v2 avoids repeating the complete
+canonical conversation at every step boundary:
+
+- `step_start.data` carries `{ messageRevision }` instead of `uiMessages`.
+- After the step is durable, an `agent_event` with `event.type: 'message_patch'` carries
+  `{ revision, deletes, upserts }`. Each upsert contains the canonical top-level
+  `UIChatMessage` plus its immediate predecessor as `afterId` (`null` for the first row).
+- `agent_runtime_end.data` carries `{ messagePatchMode: true, messageRevision }` and omits
+  both `uiMessages` and `finalState`. The client settles only after it has that revision.
+- A missing revision or insertion anchor falls back to the existing authorized full-message
+  query; patches are an optimization, not a second source of truth.
+
+This extension is intentionally limited to mux (`/v2/ws`) and the native harness. V1,
+heterogeneous CLI ingest, and share visitors keep their existing snapshot behavior.
+
 ## 1. Topology
 
 ```
@@ -35,9 +53,7 @@ Browser tab ──── GET /v2/ws?token=… ───────────�
 Bindings (wrangler.toml): add `USER_HUB` → class `UserHubDO`; migration tag `v3`
 `new_classes = ["UserHubDO"]`. `Env.USER_HUB: DurableObjectNamespace`.
 
-Hub id: `env.USER_HUB.idFromName(\`user:${userId}\`)` where `userId` is the JWT `sub`
-(for share visitors this is the visitor user id — the same value LobeHub sends as
-`streamOwnerUserId`/`userId` in `init`, so ownership checks line up unchanged).
+Hub id: `env.USER_HUB.idFromName(\`user:${userId}\`)`where`userId`is the JWT`sub`(for share visitors this is the visitor user id — the same value LobeHub sends as`streamOwnerUserId`/`userId`in`init\`, so ownership checks line up unchanged).
 
 ## 2. Worker routes (src/index.ts)
 
@@ -59,6 +75,7 @@ Existing routes unchanged. New:
 ## 3. AgentOperationDO changes (src/AgentOperationDO.ts)
 
 ### 3.1 P0 fixes (independent value, land as their own commit)
+
 1. **Persist the sequence.** Replace in-memory `eventCounter` with storage key `seq`
    (number). `nextEventId()` must be monotonic across eviction/hibernation: load `seq` lazily
    in `blockConcurrencyWhile` on construction, increment in memory, and write it in the same
@@ -92,16 +109,20 @@ Leave `interrupt` as-is (documented no-op; the web client interrupts via tRPC). 
 attempt to implement it.
 
 ### 3.2 Init metadata
+
 `POST /api/operations/init` body becomes
+
 ```ts
 { operationId, userId,
   meta?: { topicId?, threadId?, agentId?, groupId?, taskId?, scope?,
            parentOperationId?, mirrorToOperationId?, rootOperationId? } }
 ```
+
 Persist `meta` (storage key `meta`). Unknown fields ignored. Missing `meta` is fine (legacy).
 
 ### 3.3 Forwarding to the hub
-After `init` the op DO knows `userId` ⇒ `hub = env.USER_HUB.get(idFromName(\`user:${userId}\`))`.
+
+After `init` the op DO knows `userId` ⇒ `hub = env.USER_HUB.get(idFromName(\`user:${userId}\`))\`.
 
 Two classes of forward, both `POST` to the hub stub (fire-and-forget via `waitUntil`, 5s
 timeout, errors logged, never fail the backend request):
@@ -121,11 +142,12 @@ Ordering: the hub is called from inside `broadcastAndBuffer` in id order, but fo
 async — include `id` and let the hub order by numeric id (it drops ids ≤ per-socket lastSeq).
 
 ### 3.4 Internal routes on the op DO (called by the hub)
+
 - `POST /api/operations/hub-subscribe` `{}` → sets `hubSubscribed=true`, returns
   `{ userId, status, meta, seq }`. (`userId` undefined ⇒ not inited yet.)
 - `POST /api/operations/hub-unsubscribe` `{}` → `hubSubscribed=false`.
 - `POST /api/operations/replay` `{ since: string }` → `{ events: BufferedEvent['data'][],
-  status?: SessionStatus, gap: boolean, seq: number }` — same semantics as §3.1.2.
+status?: SessionStatus, gap: boolean, seq: number }` — same semantics as §3.1.2.
 - `POST /api/operations/client-message` `{ message: ClientMessage, connectionId }` → the
   op DO handles `tool_result` / `tool_confirmation` / `user_input` / `interrupt` exactly as
   if they had arrived on a v1 socket (refactor the v1 `webSocketMessage` switch into a
@@ -137,13 +159,15 @@ stub calls bypass the worker so they need no token.
 ## 4. UserHubDO (new file src/UserHubDO.ts)
 
 State:
+
 - storage `conn:${connectionId}` → `{ userId, clientId, connectedAt,
-  subs: Record<operationId, { lastSeq: number; executor: boolean; state: 'pending'|'replaying'|'live' }> }`
+subs: Record<operationId, { lastSeq: number; executor: boolean; state: 'pending'|'replaying'|'live' }> }`
   (subscriptions live in storage, NOT in the 2 KB socket attachment; attachment holds only
   `{ connectionId, userId }`).
 - in-memory: per-(connection, op) live-event queue used while `replaying`.
 
 WebSocket handling (Hibernation API):
+
 - `acceptWebSocket(server, [userId, connectionId])` (tags!) so `getWebSockets(tag)` works.
 - `setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"type":"heartbeat"}','{"type":"heartbeat_ack"}'))`
   — heartbeats never wake the DO. Idle check alarm every 120s: close sockets whose
@@ -153,6 +177,7 @@ WebSocket handling (Hibernation API):
   no subscriber left across all connections, call op DO `hub-unsubscribe`.
 
 Client → hub messages (JSON, all carry `operationId` where relevant):
+
 ```ts
 | { type:'subscribe'; operationId; lastEventId?: string; executor?: boolean }
 | { type:'unsubscribe'; operationId }
@@ -162,7 +187,9 @@ Client → hub messages (JSON, all carry `operationId` where relevant):
 | { type:'user_input'; operationId; requestId; content }
 | { type:'interrupt'; operationId }
 ```
+
 Hub → client messages:
+
 ```ts
 | { type:'ready'; userId; connectionId; protocol: 2 }
 | { type:'agent_event'; operationId; id; event }          // event.operationId may differ (mirrored member)
@@ -178,6 +205,7 @@ Hub → client messages:
 ```
 
 Subscribe algorithm (per connection, per op):
+
 1. Record sub `{ lastSeq: Number(lastEventId ?? 0), executor, state:'replaying' }`.
 2. Call op DO `hub-subscribe`. If it returns a `userId` that ≠ hub's userId ⇒
    `subscribe_failed{forbidden}` and drop the sub. If `userId` is undefined (op not inited
@@ -212,7 +240,7 @@ Client messages that target an op: verify the connection is subscribed to it (el
    - `shareChat.issueGatewayUserToken({ agentShareId })` — subject the visitor user id
      resolved the same way `shareChat.refreshGatewayToken` resolves it (reuse its helper),
      without requiring a running operation.
-   Keep `refreshGatewayToken` untouched (v1 path).
+     Keep `refreshGatewayToken` untouched (v1 path).
 3. `src/services/aiAgent.ts` `issueGatewayUserToken()` and `src/services/shareChat.ts`
    `issueGatewayUserToken(agentShareId)` wrappers.
 4. Tests for both procedures and the init body.
@@ -223,29 +251,37 @@ New `src/mux/` exporting `GatewayMuxClient` and `createOperationClient`:
 
 ```ts
 interface GatewayMuxClientOptions {
-  gatewayUrl: string;                       // same base as v1; client appends /v2/ws
-  getToken: () => Promise<string>;          // called before EVERY connect attempt
+  gatewayUrl: string; // same base as v1; client appends /v2/ws
+  getToken: () => Promise<string>; // called before EVERY connect attempt
   clientId?: string;
-  autoReconnect?: boolean;                  // default true
-  heartbeatIntervalMs?: number;             // default 30_000, sends exactly {"type":"heartbeat"}
+  autoReconnect?: boolean; // default true
+  heartbeatIntervalMs?: number; // default 30_000, sends exactly {"type":"heartbeat"}
 }
 class GatewayMuxClient {
-  connect(): Promise<void>; disconnect(): void;         // idempotent; refcount-free (owner decides)
-  readonly status: 'disconnected'|'connecting'|'connected';
-  subscribe(operationId, opts?: { lastEventId?: string; executor?: boolean }): OperationSubscription;
-  on(event: 'lifecycle'|'status_changed'|'error'|'connected'|'disconnected'|'reconnecting', cb): () => void;
+  connect(): Promise<void>;
+  disconnect(): void; // idempotent; refcount-free (owner decides)
+  readonly status: 'disconnected' | 'connecting' | 'connected';
+  subscribe(
+    operationId,
+    opts?: { lastEventId?: string; executor?: boolean },
+  ): OperationSubscription;
+  on(
+    event: 'lifecycle' | 'status_changed' | 'error' | 'connected' | 'disconnected' | 'reconnecting',
+    cb,
+  ): () => void;
 }
 interface OperationSubscription {
   operationId: string;
   on<K extends keyof AgentStreamClientEvents>(event: K, cb: AgentStreamClientEvents[K]): () => void;
   // plus 'resume_complete': (info: { status?: SessionStatus; gap: boolean; pending?: boolean }) => void
-  sendToolResult(result: ToolResultPayload): boolean;   // queued while disconnected, TTL 120s
+  sendToolResult(result: ToolResultPayload): boolean; // queued while disconnected, TTL 120s
   sendInterrupt(): boolean;
   unsubscribe(): void;
 }
 ```
 
 Behavior:
+
 - Single socket; `subscribe` while disconnected triggers `connect()`; on (re)connect the
   client re-sends `subscribe` for every live subscription with its per-op `lastEventId`.
 - Reconnect: exponential 1s→30s **with full jitter**; immediate reconnect on `online` and on
@@ -285,4 +321,4 @@ Behavior:
 - `executor: true` for subscriptions created by `executeGatewayAgent` (this tab started the
   run); `false` for `reconnectToGatewayOperation`.
 - Mux-level `lifecycle` events: store them in a small slice `gatewayFeed[operationId] =
-  { status, meta, at }` (no UI yet; selector only) so later work can drive spinners/reconnect.
+{ status, meta, at }` (no UI yet; selector only) so later work can drive spinners/reconnect.

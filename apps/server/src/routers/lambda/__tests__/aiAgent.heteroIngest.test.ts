@@ -45,7 +45,14 @@ vi.mock('@/server/services/aiChat', () => ({
   }),
 }));
 
-const buildEvent = (type: AgentStreamEvent['type'], stepIndex: number): AgentStreamEvent => ({
+type HeterogeneousAgentStreamEvent = Omit<AgentStreamEvent, 'type'> & {
+  type: Exclude<AgentStreamEvent['type'], 'message_patch'>;
+};
+
+const buildEvent = (
+  type: HeterogeneousAgentStreamEvent['type'],
+  stepIndex: number,
+): HeterogeneousAgentStreamEvent => ({
   data: {},
   operationId: 'op-1',
   stepIndex,

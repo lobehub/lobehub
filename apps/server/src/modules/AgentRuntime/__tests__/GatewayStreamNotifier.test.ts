@@ -514,6 +514,28 @@ describe('GatewayStreamNotifier', () => {
       const body = JSON.parse(pushCall![1].body);
       expect(body.event.data).not.toHaveProperty('uiMessages');
     });
+
+    it('sends only terminal metadata after a protocol-v2 message patch', async () => {
+      await notifier.publishAgentRuntimeEnd({
+        finalState: { messages: ['large'], status: 'done', world: { private: true } },
+        messagePatchMode: true,
+        messageRevision: 5,
+        operationId: 'op-1',
+        reason: 'completed',
+        stepIndex: 4,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data).toMatchObject({
+        messagePatchMode: true,
+        messageRevision: 5,
+        reason: 'completed',
+      });
+      expect(body.event.data).not.toHaveProperty('finalState');
+      expect(body.event.data).not.toHaveProperty('uiMessages');
+    });
   });
 
   // ─── Read/subscribe methods: must delegate directly to inner ───

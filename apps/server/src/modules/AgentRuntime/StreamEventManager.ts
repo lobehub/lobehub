@@ -273,6 +273,8 @@ export class StreamEventManager {
     operationId,
     stepIndex,
     finalState,
+    messagePatchMode,
+    messageRevision,
     reason,
     reasonDetail,
     uiMessages,
@@ -283,7 +285,8 @@ export class StreamEventManager {
     // so the error message remains available.
     return this.publishStreamEvent(operationId, {
       data: {
-        finalState,
+        ...(!messagePatchMode && { finalState }),
+        ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
         operationId,
         phase: 'execution_complete',
         reason: reason || 'completed',

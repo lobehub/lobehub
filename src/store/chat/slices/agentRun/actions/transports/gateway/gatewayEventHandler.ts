@@ -2,6 +2,7 @@ import type {
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamEvent,
+  MessagePatchData,
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
@@ -32,6 +33,8 @@ import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
+import { applyMessagePatch } from './messagePatch';
 
 // `agent_runtime_end` reasons that are NOT a clean completion: a mid-stream
 // cancel and a deferred-tool park. These must NOT mark the topic unread, and
@@ -466,6 +469,7 @@ export const createGatewayEventHandler = (
   // NOT reset on stream boundaries — a seq ≤ these is a redelivered duplicate.
   let lastTextSnapshotSeq = 0;
   let lastReasoningSnapshotSeq = 0;
+  let lastMessagePatchRevision = 0;
   const latestToolStateByCallId = new Map<string, ToolStateChunkData & { operationId: string }>();
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
@@ -1053,11 +1057,25 @@ export const createGatewayEventHandler = (
 
       case 'step_start': {
         const data = event.data as {
+          messageRevision?: number;
           pendingToolsCalling?: unknown[];
           phase?: string;
           requiresApproval?: boolean;
           uiMessages?: UIChatMessage[];
         };
+
+        if (
+          typeof data?.messageRevision === 'number' &&
+          data.messageRevision !== lastMessagePatchRevision
+        ) {
+          enqueue(async () => {
+            const messages = await refreshMessagesFromDb({ skipWorks: true }).catch((error) => {
+              console.error(error);
+              return undefined;
+            });
+            if (messages) lastMessagePatchRevision = data.messageRevision!;
+          });
+        }
 
         // The server's stepIndex is the authoritative step counter — mirror it
         // onto the operation so step-based UI (OpStatusTray) stays correct
@@ -1087,6 +1105,32 @@ export const createGatewayEventHandler = (
           writeTopicStatus('waitingForHuman');
         }
 
+        break;
+      }
+
+      case 'message_patch': {
+        const patch = event.data as MessagePatchData;
+        if (patch.revision <= lastMessagePatchRevision) break;
+
+        const current = get().dbMessagesMap[messageMapKey(context)] ?? [];
+        const next =
+          patch.revision === lastMessagePatchRevision + 1
+            ? applyMessagePatch(current, patch)
+            : undefined;
+
+        if (next) {
+          applyPushedSnapshot(next, { action: 'gateway/message_patch', preserveWorks: true });
+          lastMessagePatchRevision = patch.revision;
+          hasStreamedContent = true;
+        } else {
+          enqueue(async () => {
+            const messages = await refreshMessagesFromDb({ skipWorks: true }).catch((error) => {
+              console.error(error);
+              return undefined;
+            });
+            if (messages) lastMessagePatchRevision = patch.revision;
+          });
+        }
         break;
       }
 
@@ -1210,7 +1254,14 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
-          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
+          const data = event.data as
+            | {
+                messagePatchMode?: boolean;
+                messageRevision?: number;
+                reason?: string;
+                uiMessages?: UIChatMessage[];
+              }
+            | undefined;
 
           void emitAgentSignal({
             payload: {
@@ -1256,6 +1307,16 @@ export const createGatewayEventHandler = (
               applyPushedSnapshot(data.uiMessages, {
                 action: 'gateway/agent_runtime_end',
               });
+            }
+          } else if (data?.messagePatchMode) {
+            if (
+              typeof data.messageRevision === 'number' &&
+              data.messageRevision !== lastMessagePatchRevision
+            ) {
+              terminalMessages = await refreshMessagesFromDb();
+              if (terminalMessages) lastMessagePatchRevision = data.messageRevision;
+            } else {
+              terminalMessages = get().dbMessagesMap[messageMapKey(context)] ?? [];
             }
           } else if (
             (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&

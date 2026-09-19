@@ -1722,6 +1722,38 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     // Did not even attempt the DB query when context is missing.
     expect(queryMock).not.toHaveBeenCalled();
   });
+
+  it('sends only the expected revision for a Gateway mux native run', async () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      gatewayMuxEnabledResolver: async () => true,
+      queueService: null,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      status: 'done',
+      stepCount: 3,
+    });
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    (service as any).messageServiceInstance = {
+      queryMessages: vi.fn().mockResolvedValue([{ id: 'large-history', role: 'user' }]),
+    };
+
+    await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-patch',
+      stepIndex: 5,
+    });
+
+    const stepStartCall = streamManager.publishStreamEvent.mock.calls.find(
+      ([, evt]: any) => evt?.type === 'step_start',
+    );
+    expect(stepStartCall[1].data).toEqual({ messageRevision: 5 });
+  });
 });
 
 describe('AgentRuntimeService.executeStep - pre-snapshot file-Work registration', () => {

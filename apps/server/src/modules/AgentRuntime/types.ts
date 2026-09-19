@@ -7,6 +7,10 @@ import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
 
 export interface PublishAgentRuntimeEndParams {
   finalState: any;
+  /** Protocol-v2 native run: terminal reconciliation arrived as message_patch. */
+  messagePatchMode?: boolean;
+  /** Last message patch revision the client must have applied before settling. */
+  messageRevision?: number;
   operationId: string;
   reason?: string;
   reasonDetail?: string;

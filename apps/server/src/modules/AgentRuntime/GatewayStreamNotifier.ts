@@ -155,10 +155,11 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   ): Promise<string> {
     const result = await this.inner.publishStreamEvent(operationId, event);
     const gatewayEvent = { ...event, operationId, timestamp: Date.now() };
-    if (event.type === 'stream_end') {
+    if (event.type === 'stream_end' || event.type === 'message_patch') {
       // `visible_output_end` may be published immediately after `stream_end`.
-      // Await the Gateway push for this boundary so the client applies
-      // stream_end.finalContent before closing visible loading/reasoning.
+      // Await ordering boundaries so the client applies stream_end.finalContent
+      // before visible_output_end, and its canonical message patch before the
+      // following step_start / agent_runtime_end revision check.
       await this.pushEvent(operationId, gatewayEvent);
     } else {
       void this.pushEvent(operationId, gatewayEvent);
@@ -249,7 +250,16 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   }
 
   async publishAgentRuntimeEnd(params: PublishAgentRuntimeEndParams): Promise<string> {
-    const { operationId, stepIndex, finalState, reason, reasonDetail, uiMessages } = params;
+    const {
+      operationId,
+      stepIndex,
+      finalState,
+      messagePatchMode,
+      messageRevision,
+      reason,
+      reasonDetail,
+      uiMessages,
+    } = params;
     const result = await this.inner.publishAgentRuntimeEnd(params);
 
     const endRedaction = resolveRedactionFromState(finalState);
@@ -289,7 +299,8 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // snapshot, so dropping it here would break the SoT contract.
     const endEventData = {
       errorType,
-      finalState,
+      ...(!messagePatchMode && { finalState }),
+      ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
       reason,
       reasonDetail: effectiveReasonDetail,
       ...(uiMessages !== undefined && { uiMessages }),
