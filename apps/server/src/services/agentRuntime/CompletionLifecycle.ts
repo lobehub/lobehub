@@ -44,7 +44,10 @@ const log = debug('lobe-server:completion-lifecycle');
  * `reason === 'done'` alone silently drops capped runs' artifacts.
  */
 export const isSuccessLikeCompletionReason = (reason: string): boolean =>
-  reason === 'done' || reason === 'max_steps' || reason === 'cost_limit';
+  reason === 'done' ||
+  reason === 'max_steps' ||
+  reason === 'cost_limit' ||
+  reason === 'tool_call_repeat_limit';
 
 /**
  * Triggers whose completion recalls the user with a push notification. Beyond
@@ -343,6 +346,7 @@ export class CompletionLifecycle {
     const completionReason: any =
       reason === 'max_steps' ||
       reason === 'cost_limit' ||
+      reason === 'tool_call_repeat_limit' ||
       reason === 'waiting_for_human' ||
       reason === 'waiting_for_async_tool'
         ? reason

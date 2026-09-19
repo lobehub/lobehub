@@ -420,6 +420,63 @@ describe('AgentRuntimeService', () => {
     });
   });
 
+  describe('determineCompletionReason', () => {
+    const reasonFor = (state: Record<string, any>) =>
+      (service as any).determineCompletionReason(state);
+
+    it('should report a plain completion as done', () => {
+      expect(reasonFor({ status: 'done', stepCount: 3 })).toBe('done');
+    });
+
+    // The guard finalizes the turn without tool calls, which is indistinguishable
+    // from a real answer by status alone — so these runs were all filed as 'done'
+    // and could not be counted.
+    it('should name a run the tool-call repeat guard cut short', () => {
+      expect(
+        reasonFor({
+          status: 'done',
+          stepCount: 250,
+          toolCallRepeatGuard: { counts: {}, stoppedByRepeatLimit: true },
+        }),
+      ).toBe('tool_call_repeat_limit');
+    });
+
+    it('should let a real failure outrank the repeat-guard marker', () => {
+      expect(
+        reasonFor({
+          status: 'error',
+          stepCount: 250,
+          toolCallRepeatGuard: { counts: {}, stoppedByRepeatLimit: true },
+        }),
+      ).toBe('error');
+      expect(
+        reasonFor({
+          status: 'interrupted',
+          stepCount: 250,
+          toolCallRepeatGuard: { counts: {}, stoppedByRepeatLimit: true },
+        }),
+      ).toBe('interrupted');
+    });
+
+    it('should ignore a guard that counted repeats without ever stopping', () => {
+      expect(
+        reasonFor({ status: 'done', stepCount: 3, toolCallRepeatGuard: { counts: { sig: 4 } } }),
+      ).toBe('done');
+    });
+
+    it('should still report the step and cost caps', () => {
+      expect(reasonFor({ status: 'running', maxSteps: 10, stepCount: 10 })).toBe('max_steps');
+      expect(
+        reasonFor({
+          status: 'running',
+          stepCount: 3,
+          cost: { total: 5 },
+          costLimit: { maxTotalCost: 5 },
+        }),
+      ).toBe('cost_limit');
+    });
+  });
+
   describe('createOperation', () => {
     const mockParams: OperationCreationParams = {
       operationId: 'test-operation-1',

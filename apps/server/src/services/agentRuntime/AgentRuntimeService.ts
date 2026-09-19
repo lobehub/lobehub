@@ -4261,11 +4261,15 @@ export class AgentRuntimeService {
    * Determine operation completion reason
    */
   private determineCompletionReason(state: AgentState): StepCompletionReason {
-    if (state.status === 'done') return 'done';
     if (state.status === 'error') return 'error';
     if (state.status === 'interrupted') return 'interrupted';
     if (state.status === 'waiting_for_human') return 'waiting_for_human';
     if (state.status === 'waiting_for_async_tool') return 'waiting_for_async_tool';
+    // Checked ahead of 'done' on purpose: a run the repeat guard cut short ends
+    // in exactly that status, having emitted a turn with no tool calls. Reading
+    // it as a plain 'done' is what made these runs uncountable.
+    if (state.toolCallRepeatGuard?.stoppedByRepeatLimit) return 'tool_call_repeat_limit';
+    if (state.status === 'done') return 'done';
     if (state.maxSteps && state.stepCount >= state.maxSteps) return 'max_steps';
     if (state.costLimit && state.cost?.total >= state.costLimit.maxTotalCost) return 'cost_limit';
     return 'done';

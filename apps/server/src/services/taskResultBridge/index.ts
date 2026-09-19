@@ -29,7 +29,8 @@ const FALLBACK_MAX_LENGTH = 2000;
 const normalizeReason = (reason: string): CallbackReason => {
   if (reason === 'interrupted') return 'interrupted';
   if (reason === 'error') return 'error';
-  // 'done' | 'max_steps' | 'cost_limit' | … → treat as a normal completion.
+  // 'done' | 'max_steps' | 'cost_limit' | 'tool_call_repeat_limit' | … →
+  // treat as a normal completion.
   return 'done';
 };
 

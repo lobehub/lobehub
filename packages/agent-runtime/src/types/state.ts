@@ -451,6 +451,14 @@ export interface AgentState {
    */
   toolCallRepeatGuard?: {
     counts: Record<string, number>;
+    /**
+     * Set on the turn the guard cut short. The run still lands in `status:
+     * 'done'` — the turn was finalized without tool calls, which is what
+     * finishing looks like — so without this marker a loop-death is
+     * indistinguishable from a real answer, and nothing downstream can count
+     * how often the guard fires.
+     */
+    stoppedByRepeatLimit?: boolean;
   };
 
   /** Tool executor map for routing tool execution between server and client */
