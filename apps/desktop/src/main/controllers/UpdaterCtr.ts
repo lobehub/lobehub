@@ -77,7 +77,7 @@ export default class UpdaterCtr extends ControllerModule {
 
     logger.info(`Set update channel requested: ${channel}`);
     this.app.storeManager.set('updateChannel', channel);
-    this.app.rendererUpdateManager.switchChannel(channel);
+    this.app.coreUpdateManager.switchChannel(channel);
     (await this.getUpdaterManager()).switchChannel(channel);
   }
 

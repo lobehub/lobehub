@@ -30,7 +30,7 @@ const mockStoreGet = vi.fn();
 const mockStoreSet = vi.fn();
 
 const mockApp = {
-  rendererUpdateManager: {
+  coreUpdateManager: {
     switchChannel: mockRendererSwitchChannel,
   },
   storeManager: {

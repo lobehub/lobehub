@@ -33,6 +33,9 @@ export default defineConfig(async (env) => {
       reportCompressedSize: false,
       rolldownOptions: {
         external: nodeExternals,
+        output: {
+          dynamicImportInCjs: false,
+        },
       },
       sourcemap: isDev ? 'inline' : false,
       ssr: true,

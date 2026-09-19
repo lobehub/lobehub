@@ -137,15 +137,6 @@ jobs:
           fi
           echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
 
-  renderer-ota:
-    name: Publish Renderer OTA
-    needs: [check-stable]
-    if: ${{ needs.check-stable.outputs.is_stable == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.skip_s3_upload) }}
-    uses: ./.github/workflows/release-desktop-renderer-ota.yml
-    with:
-      channel: stable
-    secrets: inherit
-
   # ============================================
   # 配置构建矩阵 (检查自托管 Runner)
   # ============================================
@@ -213,6 +204,13 @@ jobs:
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Resolve core seq
+        id: core_seq
+        uses: ./.github/actions/desktop-core-seq
+        with:
+          channel: stable
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+
       - name: Set package version
         id: app_version
         run: npm run workflow:set-desktop-version ${{ needs.check-stable.outputs.version }} stable
@@ -244,6 +242,8 @@ jobs:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -268,6 +268,8 @@ jobs:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -286,6 +288,8 @@ jobs:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          RENDERER_OTA_PRIVATE_KEY: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -298,9 +302,8 @@ jobs:
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.name }}
-          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
-          renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
-          update-channel: stable
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          core-signing-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
 
       - name: Preserve desktop build diagnostics
         if: always()
@@ -335,17 +338,6 @@ jobs:
           path: release
           pattern: release-*
           merge-multiple: true
-
-      - name: Validate platform renderer hashes
-        env:
-          BUILD_MATRIX: ${{ needs.configure-build.outputs.matrix }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { validateReleaseInputs } from './apps/desktop/scripts/validateMainHash.mjs';
-          const expected = JSON.parse(process.env.BUILD_MATRIX).include.map(({ name }) => `release-${name}`);
-          const manifest = await validateReleaseInputs('release', expected);
-          console.log(`Validated ${expected.length} platform hashes: ${manifest.mainHash}`);
-          NODE
 
       - name: List downloaded artifacts
         run: ls -R release

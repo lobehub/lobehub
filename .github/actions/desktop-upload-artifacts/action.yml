@@ -9,60 +9,18 @@ inputs:
     description: Number of days to retain artifacts
     required: false
     default: '5'
-  renderer-ota-public-key:
-    description: Public key embedded in the packaged binary
-    required: true
-  renderer-ota-private-key:
-    description: Private key used to sign the r0 renderer OTA baseline
+  update-server-url:
+    description: Update server URL; with core-signing-key, also builds the r0 core release from core-dist
     required: false
     default: ''
-  update-channel:
-    description: Desktop update channel (canary, beta, stable)
+  core-signing-key:
+    description: Ed25519 private key PEM used to sign the r0 core manifest
     required: false
     default: ''
 
 runs:
   using: composite
   steps:
-    - name: Validate renderer OTA base hash
-      shell: bash
-      run: |
-        set -euo pipefail
-        MAIN_HASH=$(cat apps/desktop/release/renderer-mainhash.txt)
-        if [[ ! "$MAIN_HASH" =~ ^[0-9a-f]{64}$ ]]; then
-          echo "Invalid renderer OTA main bundle hash"
-          exit 1
-        fi
-        node --input-type=module <<'NODE'
-        import { readFile, mkdir, writeFile } from 'node:fs/promises';
-        import { validateInputManifest } from './apps/desktop/scripts/validateMainHash.mjs';
-        const release = 'apps/desktop/release';
-        const manifest = JSON.parse(await readFile(`${release}/renderer-mainhash-inputs.json`, 'utf8'));
-        validateInputManifest(manifest);
-        const embedded = (await readFile(`${release}/renderer-mainhash.txt`, 'utf8')).trim();
-        if (embedded !== manifest.mainHash) throw new Error('Packaged hash differs from source inputs');
-        await mkdir(`${release}/renderer-mainhash`, { recursive: true });
-        await writeFile(`${release}/renderer-mainhash/${process.env.ARTIFACT_NAME}.json`, JSON.stringify(manifest, null, 2));
-        NODE
-      env:
-        ARTIFACT_NAME: ${{ inputs.artifact-name }}
-
-    - name: Sign renderer OTA r0 baseline
-      if: runner.os == 'Linux' && inputs.renderer-ota-private-key != '' && inputs.update-channel != ''
-      shell: bash
-      env:
-        RENDERER_OTA_PRIVATE_KEY: ${{ inputs.renderer-ota-private-key }}
-        RENDERER_OTA_PUBLIC_KEY: ${{ inputs.renderer-ota-public-key }}
-      run: |
-        set -euo pipefail
-        MAIN_HASH=$(cat apps/desktop/release/renderer-mainhash.txt)
-        node apps/desktop/scripts/buildRendererManifest.mjs \
-          --renderer=apps/desktop/dist/renderer \
-          --out=apps/desktop/release/renderer-ota \
-          --channel=${{ inputs.update-channel }} \
-          --version=r0 \
-          --mainHash="$MAIN_HASH"
-
     - name: Rename macOS *-mac.yml for multi-architecture support
       if: runner.os == 'macOS'
       shell: bash
@@ -103,6 +61,38 @@ runs:
           apps/desktop/release/*.snap*
           apps/desktop/release/*.rpm*
           apps/desktop/release/*.tar.gz*
-          apps/desktop/release/renderer-mainhash/
-          apps/desktop/release/renderer-ota
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Build r0 core release
+      id: core
+      if: inputs.update-server-url != '' && inputs.core-signing-key != ''
+      shell: bash
+      working-directory: apps/desktop
+      env:
+        RENDERER_OTA_PRIVATE_KEY: ${{ inputs.core-signing-key }}
+        UPDATE_SERVER_URL: ${{ inputs.update-server-url }}
+      run: |
+        set -euo pipefail
+        BASE="${UPDATE_SERVER_URL%/}"
+        case "$BASE" in
+          */stable|*/nightly|*/canary|*/beta) BASE="${BASE%/*}" ;;
+        esac
+        read -r PLATFORM CHANNEL VERSION SEQ SHELL_ABI < <(node -p "const m=require('./core-dist/manifest.json');[m.platform,m.channel,m.version,m.seq,m.shellAbi].join(' ')")
+        node scripts/buildCore.mjs \
+          --core=core-dist \
+          --platform="$PLATFORM" \
+          --channel="$CHANNEL" \
+          --version="$VERSION" \
+          --seq="$SEQ" \
+          --shell-abi="$SHELL_ABI" \
+          --objects-base-url="$BASE/cas" \
+          --out=release/core-ota
+        echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
+
+    - name: Upload r0 core release
+      if: steps.core.outputs.platform != ''
+      uses: actions/upload-artifact@v6
+      with:
+        name: core-r0-${{ steps.core.outputs.platform }}-${{ runner.arch }}
+        path: apps/desktop/release/core-ota
         retention-days: ${{ inputs.retention-days }}

@@ -601,7 +601,7 @@ export default eslint(
   },
   // CommonJS files rely on `require()` by design
   {
-    files: ['**/*.cjs'],
+    files: ['**/*.cjs', 'apps/desktop/shell/**/*.js'],
     rules: {
       '@typescript-eslint/no-require-imports': 0,
     },

@@ -1,0 +1,110 @@
+name: Desktop Publish Core OTA
+description: Upload a buildCore.mjs output tree (cas + core/<platform>) to the update server
+
+inputs:
+  channel:
+    description: 'Update channel (stable, beta, canary)'
+    required: true
+  release-dir:
+    description: 'Directory produced by buildCore.mjs --out'
+    required: true
+  shell-json:
+    description: 'Optional path to a shell.json to publish as <channel>/shell.json before latest.json'
+    required: false
+    default: ''
+  aws-access-key-id:
+    description: 'AWS access key ID'
+    required: true
+  aws-secret-access-key:
+    description: 'AWS secret access key'
+    required: true
+  s3-bucket:
+    description: 'S3 bucket name'
+    required: true
+  s3-region:
+    description: 'S3 region (defaults to us-east-1)'
+    required: false
+    default: 'us-east-1'
+  s3-endpoint:
+    description: 'Custom S3 endpoint (for R2/MinIO etc.)'
+    required: false
+    default: ''
+
+outputs:
+  published:
+    description: 'Whether latest.json was uploaded for at least one platform'
+    value: ${{ steps.upload.outputs.published }}
+  platforms:
+    description: 'Space-separated platforms published'
+    value: ${{ steps.upload.outputs.platforms }}
+
+runs:
+  using: composite
+  steps:
+    - name: Upload core release to S3
+      id: upload
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
+        AWS_REGION: ${{ inputs.s3-region }}
+        S3_BUCKET: ${{ inputs.s3-bucket }}
+        S3_ENDPOINT: ${{ inputs.s3-endpoint }}
+        CHANNEL: ${{ inputs.channel }}
+        RELEASE_DIR: ${{ inputs.release-dir }}
+        SHELL_JSON: ${{ inputs.shell-json }}
+      run: |
+        set -euo pipefail
+        echo "published=false" >> "$GITHUB_OUTPUT"
+        echo "platforms=" >> "$GITHUB_OUTPUT"
+        if [ -z "$S3_BUCKET" ]; then
+          echo "⚠️ S3 bucket is not configured, skipping core OTA upload"
+          exit 0
+        fi
+        ENDPOINT_ARGS=()
+        if [ -n "$S3_ENDPOINT" ]; then
+          ENDPOINT_ARGS=(--endpoint-url "$S3_ENDPOINT")
+        fi
+        IMMUTABLE=(--cache-control "public,max-age=31536000,immutable")
+
+        # Order matters for clients mid-download: objects → packs → snapshot → shell.json → latest.json.
+        if [ -d "$RELEASE_DIR/cas" ]; then
+          echo "📦 Syncing CAS objects"
+          aws s3 sync "$RELEASE_DIR/cas" "s3://$S3_BUCKET/cas" --size-only \
+            --content-type application/zstd "${IMMUTABLE[@]}" "${ENDPOINT_ARGS[@]}"
+        fi
+
+        PLATFORMS=""
+        for platform_dir in "$RELEASE_DIR"/core/*/; do
+          [ -d "$platform_dir" ] || continue
+          platform=$(basename "$platform_dir")
+          target="s3://$S3_BUCKET/$CHANNEL/core/$platform"
+          version=$(jq -r '.version' "$platform_dir/latest.json")
+          echo "🚀 $platform: core $version → $target"
+          if [ -d "$platform_dir/packs" ]; then
+            aws s3 sync "$platform_dir/packs" "$target/packs" --size-only \
+              --content-type application/zip "${IMMUTABLE[@]}" "${ENDPOINT_ARGS[@]}"
+          fi
+          aws s3 cp "$platform_dir/versions/$version.json" "$target/versions/$version.json" \
+            --content-type application/json --cache-control no-store "${ENDPOINT_ARGS[@]}"
+          PLATFORMS="$PLATFORMS $platform"
+        done
+
+        if [ -n "$SHELL_JSON" ]; then
+          echo "📋 Publishing $CHANNEL/shell.json: $(cat "$SHELL_JSON")"
+          aws s3 cp "$SHELL_JSON" "s3://$S3_BUCKET/$CHANNEL/shell.json" \
+            --content-type application/json --cache-control no-store "${ENDPOINT_ARGS[@]}"
+        fi
+
+        for platform in $PLATFORMS; do
+          aws s3 cp "$RELEASE_DIR/core/$platform/latest.json" "s3://$S3_BUCKET/$CHANNEL/core/$platform/latest.json" \
+            --content-type application/json --cache-control no-store "${ENDPOINT_ARGS[@]}"
+        done
+
+        if [ -n "$PLATFORMS" ]; then
+          echo "published=true" >> "$GITHUB_OUTPUT"
+          echo "platforms=${PLATFORMS# }" >> "$GITHUB_OUTPUT"
+          echo "✅ Published core for:$PLATFORMS"
+        else
+          echo "⚠️ No core/<platform> directories found under $RELEASE_DIR"
+        fi

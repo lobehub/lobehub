@@ -146,7 +146,7 @@ export const UpdateNotification: React.FC = () => {
 
   useWatchBroadcast('updateReady', (info) => {
     setUpdateInfo((current) => selectUpdateInfo(current, info));
-    if (info.kind === 'app') setInstallConfirmMode('unconfirm');
+    if (info.kind === 'app' || info.kind === 'core-relaunch') setInstallConfirmMode('unconfirm');
   });
 
   useWatchBroadcast('updateWillInstallLater', () => {
@@ -155,7 +155,7 @@ export const UpdateNotification: React.FC = () => {
     setTimeout(() => setInstallConfirmMode(null), 5000);
   });
 
-  if (updateInfo?.kind === 'renderer') {
+  if (updateInfo?.kind === 'renderer' || updateInfo?.kind === 'core-reload') {
     return (
       <div className={styles.installLaterToast}>
         <span>{tElectron('updater.rendererReady', { version: updateInfo.version })}</span>
@@ -188,6 +188,23 @@ export const UpdateNotification: React.FC = () => {
 
   if (!updateInfo) return null;
 
+  const isCoreRelaunch = updateInfo.kind === 'core-relaunch';
+  const installLater = () => {
+    if (isCoreRelaunch) setUpdateInfo(null);
+    else autoUpdateService.installLater();
+  };
+  const installNow = () => {
+    setIsInstalling(true);
+    if (isCoreRelaunch)
+      rendererOtaService
+        .applyNow()
+        .then((applied) => {
+          if (!applied) setIsInstalling(false);
+        })
+        .catch(() => setIsInstalling(false));
+    else autoUpdateService.installNow();
+  };
+
   if (installConfirmMode === 'installLater') {
     return (
       <div className={styles.installLaterToast}>
@@ -210,30 +227,16 @@ export const UpdateNotification: React.FC = () => {
         <span
           style={{ cursor: 'pointer' }}
           onClick={() => {
-            if (updateInfo) openUpdateDetailModal(updateInfo);
+            if (!isCoreRelaunch) openUpdateDetailModal(updateInfo);
           }}
         >
           {tElectron('updater.updateReady')}
           {isDevMode && updateInfo?.version ? ` · ${updateInfo.version}` : ''}
         </span>
-        <BaseButton
-          size={'small'}
-          type={'text'}
-          onClick={() => {
-            autoUpdateService.installLater();
-          }}
-        >
+        <BaseButton size={'small'} type={'text'} onClick={installLater}>
           {tElectron('updater.later')}
         </BaseButton>
-        <BaseButton
-          loading={isInstalling}
-          size={'small'}
-          type={'primary'}
-          onClick={() => {
-            setIsInstalling(true);
-            autoUpdateService.installNow();
-          }}
-        >
+        <BaseButton loading={isInstalling} size={'small'} type={'primary'} onClick={installNow}>
           {tElectron('updater.upgradeNow')}
         </BaseButton>
       </div>
