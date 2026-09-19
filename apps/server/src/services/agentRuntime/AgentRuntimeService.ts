@@ -163,6 +163,21 @@ const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
 const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 const INTERVENTION_LIFECYCLE_CHECKPOINT_KEY = '_agentInterventionLifecycle';
 
+/**
+ * Drop the frozen model facts from a copy of `modelRuntimeConfig`.
+ *
+ * They exist so a live run's steps stop re-reading the model bank and the
+ * user's rows, and the run reads them back off its Redis state. The durable
+ * `agent_operations` row and the operation metadata only ever surface the model
+ * and provider, so neither needs to keep ~0.5KB of cards per operation — the row
+ * keeps them forever.
+ */
+const withoutFrozenModelFacts = (modelRuntimeConfig?: any) => {
+  if (!modelRuntimeConfig?.modelFacts) return modelRuntimeConfig;
+  const { modelFacts: _frozen, ...rest } = modelRuntimeConfig;
+  return rest;
+};
+
 interface InterventionLifecycleCheckpoint {
   state: 'completed' | 'pending';
   stepIndex: number;
@@ -980,7 +995,7 @@ export class AgentRuntimeService {
           }
         : {}),
       model: modelRuntimeConfig?.model,
-      modelRuntimeConfig,
+      modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
       operationId,
       parentOperationId: parentOperationId ?? null,
       provider: modelRuntimeConfig?.provider,
@@ -1166,7 +1181,7 @@ export class AgentRuntimeService {
             }
           : undefined,
         mirrorToOperationId,
-        modelRuntimeConfig,
+        modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
         // Share-visitor runs execute as the creator (`userId`) but stream only
         // to the visitor — the gateway registers the WS channel under this id.
         streamOwnerUserId: agentShareVisitor?.visitorUserId,

@@ -492,6 +492,37 @@ describe('AgentRuntimeService', () => {
       });
     });
 
+    it('keeps the frozen model facts on the run state but out of durable storage', async () => {
+      const recordStart = vi
+        .spyOn(AgentOperationModel.prototype, 'recordStart')
+        .mockResolvedValue(undefined);
+      const modelFacts = {
+        cards: [{ abilities: { vision: true }, id: 'gpt-4', providerId: 'openai' }],
+        model: 'gpt-4',
+        provider: 'openai',
+      };
+
+      await service.createOperation({
+        ...mockParams,
+        modelRuntimeConfig: { ...mockParams.modelRuntimeConfig, modelFacts },
+      });
+
+      // The steps read the snapshot back off the state.
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          modelRuntimeConfig: expect.objectContaining({ modelFacts }),
+        }),
+      );
+      // The row that outlives the run, and the metadata copy, stay as small as
+      // they were: both only ever surface model / provider.
+      expect(recordStart.mock.calls[0][0].modelRuntimeConfig).toEqual({ model: 'gpt-4' });
+      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({ modelRuntimeConfig: { model: 'gpt-4' } }),
+      );
+    });
+
     it('should create operation successfully with autoStart=false', async () => {
       const params = { ...mockParams, autoStart: false };
 
