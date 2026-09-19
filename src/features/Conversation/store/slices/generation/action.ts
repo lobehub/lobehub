@@ -23,6 +23,7 @@ import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -673,16 +674,13 @@ export const generationSlice: StateCreator<
     const topicId = sourceTopicId ?? get().context.topicId;
     if (!topicId) return;
 
-    const chatStore = useChatStore.getState();
-    const topic = topicSelectors.getTopicById(topicId)(chatStore);
-    if (
-      topic?.status !== 'scheduled' ||
-      topic.metadata?.scheduledRun?.kind !== 'resume_after_rate_limit'
-    )
-      return;
-
-    await chatStore.updateTopicStatus({ status: 'failed', topicId });
-    await chatStore.updateTopicMetadata(topicId, { scheduledRun: null });
+    const result = await topicService.cancelRateLimitContinuation(topicId);
+    if (result)
+      useChatStore.getState().internal_dispatchTopic({
+        id: topicId,
+        type: 'updateTopic',
+        value: { metadata: result.metadata, status: 'failed' },
+      });
   },
   cancelScheduledRun: async () => {
     const { context, dbMessages, editor } = get();

@@ -55,14 +55,14 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface TopicForwardContentProps {
-  onForwardSuccess?: () => void | Promise<void>;
+  cancelSourceContinuation?: boolean;
   sourceAgentId: string;
   topicId: string;
   topicTitle: string;
 }
 
 export const TopicForwardContent = ({
-  onForwardSuccess,
+  cancelSourceContinuation,
   sourceAgentId,
   topicId,
   topicTitle,
@@ -75,7 +75,7 @@ export const TopicForwardContent = ({
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
   const forwardTopic = useForwardTopic({
     agentId: sourceAgentId,
-    onSuccess: onForwardSuccess,
+    cancelSourceContinuation,
     topicId,
   });
 

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -33,6 +33,97 @@ describe('TopicModel', () => {
 
   afterEach(async () => {
     await serverDB.delete(users);
+  });
+
+  describe('rate-limit cancellation', () => {
+    const run = {
+      createdAt: '2026-09-19T00:00:00.000Z',
+      failedAssistantMessageId: 'failed-message',
+      kind: 'resume_after_rate_limit' as const,
+      source: 'heterogeneous_agent' as const,
+      runAt: '2026-09-19T01:00:00.000Z',
+      updatedAt: '2026-09-19T00:00:00.000Z',
+      userMessageId: 'user-message',
+    };
+    const claim = { claimedAt: run.createdAt, expiresAt: run.runAt, id: 'dispatcher' };
+
+    it('cancels status and payload together and prevents a later dispatcher claim', async () => {
+      const topic = await topicModel.create({ title: 'source' });
+      await topicModel.armScheduledRun(topic.id, run);
+      const result = await topicModel.cancelRateLimitContinuation(topic.id);
+      expect(result.status).toBe('cancelled');
+      const [row] = await serverDB.select().from(topics).where(eq(topics.id, topic.id));
+      expect(row.status).toBe('failed');
+      expect(row.metadata?.scheduledRun).toBeNull();
+      expect(await TopicModel.claimScheduledTopic(serverDB, topic.id, claim)).toBe(false);
+    });
+
+    it('refuses cancellation after the dispatcher claims, even if its lease expired', async () => {
+      const topic = await topicModel.create({ title: 'source' });
+      await topicModel.armScheduledRun(topic.id, run);
+      await TopicModel.claimScheduledTopic(serverDB, topic.id, claim, new Date(run.createdAt));
+      expect(await topicModel.cancelRateLimitContinuation(topic.id)).toEqual({ status: 'busy' });
+      const [row] = await serverDB.select().from(topics).where(eq(topics.id, topic.id));
+      expect(row.status).toBe('scheduled');
+      expect(row.metadata?.scheduledRun?.claim?.id).toBe('dispatcher');
+    });
+
+    it('rolls back both fields when the database rejects cancellation', async () => {
+      const topic = await topicModel.create({ title: 'source' }, 'cancel-rejected');
+      await topicModel.armScheduledRun(topic.id, run);
+      await serverDB.execute(
+        sql`ALTER TABLE topics ADD CONSTRAINT test_cancel_failure CHECK (id != 'cancel-rejected' OR status != 'failed')`,
+      );
+      try {
+        await expect(topicModel.cancelRateLimitContinuation(topic.id)).rejects.toThrow();
+        const [row] = await serverDB.select().from(topics).where(eq(topics.id, topic.id));
+        expect(row.status).toBe('scheduled');
+        expect(row.metadata?.scheduledRun).toEqual(run);
+      } finally {
+        await serverDB.execute(sql`ALTER TABLE topics DROP CONSTRAINT test_cancel_failure`);
+      }
+    });
+
+    it('allows only one of a concurrent cancellation and dispatcher claim', async () => {
+      const topic = await topicModel.create({ title: 'source' });
+      await topicModel.armScheduledRun(topic.id, run);
+      const [cancelled, claimed] = await Promise.all([
+        topicModel.cancelRateLimitContinuation(topic.id),
+        TopicModel.claimScheduledTopic(serverDB, topic.id, claim, new Date(run.createdAt)),
+      ]);
+      expect(Number(cancelled.status === 'cancelled') + Number(claimed)).toBe(1);
+    });
+
+    it('also cancels the legacy rate-limit payload the dispatcher can run', async () => {
+      const topic = await topicModel.create({ title: 'legacy' });
+      const { kind: _kind, runAt: _runAt, ...legacy } = run;
+      await serverDB
+        .update(topics)
+        .set({
+          status: 'scheduled',
+          metadata: sql`${JSON.stringify({ scheduledRun: { ...legacy, reason: 'rate_limit' } })}::jsonb`,
+        })
+        .where(eq(topics.id, topic.id));
+      expect((await topicModel.cancelRateLimitContinuation(topic.id)).status).toBe('cancelled');
+    });
+
+    it('does not cancel another user or a delayed-start schedule', async () => {
+      const topic = await topicModel.create({ title: 'source' });
+      await topicModel.armScheduledRun(topic.id, run);
+      expect(
+        await new TopicModel(serverDB, otherUserId).cancelRateLimitContinuation(topic.id),
+      ).toEqual({ status: 'unchanged' });
+      await topicModel.armScheduledRun(topic.id, {
+        createdAt: run.createdAt,
+        kind: 'delayed_start',
+        runAt: run.runAt,
+        updatedAt: run.updatedAt,
+        userMessageId: run.userMessageId,
+      });
+      expect(await topicModel.cancelRateLimitContinuation(topic.id)).toEqual({
+        status: 'unchanged',
+      });
+    });
   });
 
   describe('create', () => {

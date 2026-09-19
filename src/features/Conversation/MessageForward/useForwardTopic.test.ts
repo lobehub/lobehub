@@ -24,7 +24,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: mocks.error, success: mo
 describe('topic handoff acceptance', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('cancels once on the first persisted target, before any target finishes', async () => {
+  it('navigates only to the primary target while target runs are pending', async () => {
     let params!: ForwardTopicParams;
     let finish!: () => void;
     mocks.forwardTopic.mockImplementation((input: ForwardTopicParams) => {
@@ -33,33 +33,39 @@ describe('topic handoff acceptance', () => {
         finish = () => resolve({ succeeded: [{ agentId: 'b' }, { agentId: 'c' }], failed: [] });
       });
     });
-    const onSuccess = vi.fn().mockResolvedValue(undefined);
-    const { result } = renderHook(() =>
-      useForwardTopic({ agentId: 'a', topicId: 'source', onSuccess }),
-    );
+    const { result } = renderHook(() => useForwardTopic({ agentId: 'a', topicId: 'source' }));
     act(() => result.current([{ id: 'b' }, { id: 'c' }]));
-    expect(onSuccess).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
     await act(async () => {
       await params.onTopicCreated?.({ id: 'c' }, 'topic-c');
     });
-    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(mocks.navigate).not.toHaveBeenCalled();
     await act(async () => {
       await params.onTopicCreated?.({ id: 'b' }, 'topic-b');
     });
-    expect(onSuccess).toHaveBeenCalledTimes(1);
-    expect(mocks.navigate).toHaveBeenCalled();
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
     await act(async () => finish());
-    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves the source schedule intact when every target fails before persistence', async () => {
-    mocks.forwardTopic.mockResolvedValue({ succeeded: [], failed: [{ agentId: 'b' }] });
-    const onSuccess = vi.fn();
+  it('explains that the source schedule stays paused after an ambiguous send', async () => {
+    mocks.forwardTopic.mockResolvedValue({
+      succeeded: [],
+      failed: [{ agentId: 'b' }],
+      sourceSchedulePaused: true,
+    });
     const { result } = renderHook(() =>
-      useForwardTopic({ agentId: 'a', topicId: 'source', onSuccess }),
+      useForwardTopic({ agentId: 'a', topicId: 'source', cancelSourceContinuation: true }),
     );
     await act(async () => result.current([{ id: 'b' }]));
-    expect(onSuccess).not.toHaveBeenCalled();
+    expect(mocks.error).toHaveBeenCalledWith('messageForward.topic.sourceSchedulePaused');
+  });
+
+  it('does not navigate when every target fails before persistence', async () => {
+    mocks.forwardTopic.mockResolvedValue({ succeeded: [], failed: [{ agentId: 'b' }] });
+    const { result } = renderHook(() => useForwardTopic({ agentId: 'a', topicId: 'source' }));
+    await act(async () => result.current([{ id: 'b' }]));
+    expect(mocks.navigate).not.toHaveBeenCalled();
     expect(mocks.error).toHaveBeenCalled();
   });
 });

@@ -7,6 +7,7 @@ import type {
   TopicRankItem,
   TopicScheduledRun,
 } from '@lobechat/types';
+import { parseTopicScheduledRun } from '@lobechat/types';
 import type { TimingSink } from '@lobechat/utils';
 import {
   getDurationMs,
@@ -2467,6 +2468,31 @@ export class TopicModel {
         })
         .where(and(eq(topics.id, id), this.ownership()));
       return 'released';
+    });
+
+  /** Atomically cancel an unclaimed rate-limit run, serialized with the dispatcher. */
+  cancelRateLimitContinuation = async (id: string) =>
+    this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ metadata: topics.metadata, status: topics.status })
+        .from(topics)
+        .where(and(eq(topics.id, id), this.ownership()))
+        .for('update');
+      if (!row) return { status: 'unchanged' as const };
+      if (row.status === 'running') return { status: 'busy' as const };
+      const scheduledRun = parseTopicScheduledRun(row.metadata?.scheduledRun);
+      if (row.status !== 'scheduled' || scheduledRun?.kind !== 'resume_after_rate_limit')
+        return { status: 'unchanged' as const };
+      // A lease expiring does not stop its dispatcher. Once claimed, a handoff
+      // must not race that worker, even if its five-minute lease has elapsed.
+      if (scheduledRun.claim) return { status: 'busy' as const };
+
+      const metadata = { ...row.metadata, scheduledRun: null };
+      await tx
+        .update(topics)
+        .set({ metadata, status: 'failed' })
+        .where(and(eq(topics.id, id), this.ownership()));
+      return { metadata, status: 'cancelled' as const };
     });
 
   /**

@@ -6,7 +6,7 @@ import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lob
 import { ChatErrorType } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { Block, Highlighter } from '@lobehub/ui';
-import { type AlertProps, Skeleton } from '@lobehub/ui/base-ui';
+import { type AlertProps, Skeleton, toast } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -279,6 +279,7 @@ interface ErrorExtraProps {
 const ErrorMessageExtra = memo<ErrorExtraProps>(
   ({ error: alertError, data, onRegenerate, retryScopeId }) => {
     const error = data.error;
+    const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const enableBusinessFeatures = useServerConfigStore(
       serverConfigSelectors.enableBusinessFeatures,
@@ -413,7 +414,11 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const schedule: HeterogeneousAgentScheduleState | undefined = isRateLimitError
       ? {
           isScheduled: conversationTopicScheduled,
-          onCancel: () => void cancelHeteroContinuation(conversationTopicId),
+          onCancel: () =>
+            void cancelHeteroContinuation(conversationTopicId).catch((error) => {
+              console.error('[ErrorMessageExtra] Failed to cancel scheduled continuation:', error);
+              toast.error(t('heteroRateLimit.cancelFailed'));
+            }),
           // Same fallback as the retry button: `onRegenerate` is absent on the
           // standalone surfaces, where a bare `onRegenerate?.()` was a no-op.
           onRunNow: handleManualRetry,
@@ -451,7 +456,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
             isRateLimitError && conversationAgentId && conversationTopicId
               ? () =>
                   createTopicForwardModal({
-                    onForwardSuccess: () => cancelHeteroContinuation(conversationTopicId),
+                    cancelSourceContinuation: true,
                     sourceAgentId: conversationAgentId,
                     topicId: conversationTopicId,
                     topicTitle: conversationTopic?.title || '',

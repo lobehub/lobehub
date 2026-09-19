@@ -2,6 +2,7 @@ import type { UIChatMessage } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -23,6 +24,7 @@ export interface ForwardResultItem {
 
 export interface ForwardResult {
   failed: ForwardResultItem[];
+  sourceSchedulePaused?: boolean;
   succeeded: ForwardResultItem[];
 }
 
@@ -34,6 +36,7 @@ export interface ForwardMessagesParams extends ForwardContentOptions {
 }
 
 export interface ForwardTopicParams extends Omit<ForwardMessagesParams, 'messages'> {
+  cancelSourceContinuation?: boolean;
   sourceAgentId: string;
   topicId: string;
 }
@@ -97,6 +100,7 @@ export class ChatForwardActionImpl {
   };
 
   forwardTopic = async ({
+    cancelSourceContinuation,
     header,
     topicId,
     note,
@@ -127,7 +131,8 @@ export class ChatForwardActionImpl {
         });
       return transcriptPromise;
     };
-    const settled = await Promise.allSettled(
+    // Resolve configuration and context before touching the source schedule.
+    const prepared = await Promise.allSettled(
       targets.map(async (target) => {
         let config = agentSelectors.getAgentConfigById(target.id)(getAgentStoreState());
         if (!config) {
@@ -141,26 +146,52 @@ export class ChatForwardActionImpl {
           ? `${cliInstruction}\n\n${await getTranscript()}`
           : await getTranscript();
 
+        return { content, target };
+      }),
+    );
+    const hasReadyTarget = prepared.some((item) => item.status === 'fulfilled');
+    // A claimed source rejects the handoff before any target can start.
+    const cancellation =
+      cancelSourceContinuation && hasReadyTarget
+        ? await topicService.cancelRateLimitContinuation(topicId)
+        : null;
+    if (cancellation)
+      this.#get().internal_dispatchTopic({
+        id: topicId,
+        type: 'updateTopic',
+        value: { metadata: cancellation.metadata, status: 'failed' },
+      });
+    let accepted = false;
+    const settled = await Promise.allSettled(
+      prepared.map(async (item) => {
+        if (item.status === 'rejected') throw item.reason;
+        const { content, target } = item.value;
         const result = await this.#get().sendMessage({
           context: { agentId: target.id, isNew: true, isolatedTopic: true, scope: 'main' },
           message: content,
           messages: [],
-          onTopicCreated: (createdTopicId) => onTopicCreated?.(target, createdTopicId),
+          onTopicCreated: async (createdTopicId) => {
+            accepted = true;
+            await onTopicCreated?.(target, createdTopicId);
+          },
         });
         if (!result?.createdTopicId)
           throw new Error(`Forwarding did not create a topic for ${target.id}`);
 
+        accepted = true;
         return { agentId: target.id, topicId: result.createdTopicId };
       }),
     );
 
+    // A failed response can follow a persisted target. Do not re-arm the source
+    // on ambiguous sends; let the user inspect the target before retrying.
     return settled.reduce<ForwardResult>(
       (result, item, index) => {
         if (item.status === 'fulfilled') result.succeeded.push(item.value);
         else result.failed.push({ agentId: targets[index].id, error: item.reason });
         return result;
       },
-      { failed: [], succeeded: [] },
+      { failed: [], succeeded: [], sourceSchedulePaused: !!cancellation && !accepted },
     );
   };
 }

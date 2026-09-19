@@ -9,11 +9,15 @@ import type { ForwardTarget } from '@/store/chat/slices/forward/action';
 
 interface ForwardTopicSource {
   agentId: string;
-  onSuccess?: () => void | Promise<void>;
+  cancelSourceContinuation?: boolean;
   topicId: string;
 }
 
-export const useForwardTopic = ({ agentId, onSuccess, topicId }: ForwardTopicSource) => {
+export const useForwardTopic = ({
+  agentId,
+  cancelSourceContinuation,
+  topicId,
+}: ForwardTopicSource) => {
   const { t } = useTranslation('chat');
 
   const navigate = useWorkspaceAwareNavigate();
@@ -25,19 +29,11 @@ export const useForwardTopic = ({ agentId, onSuccess, topicId }: ForwardTopicSou
       if (targets.length === 0) return;
 
       const primaryTarget = targets[0];
-      let acceptance: Promise<void> | undefined;
       void forwardTopic({
+        cancelSourceContinuation,
         header: t('messageForward.topic.header'),
         note,
-        onTopicCreated: async (target, createdTopicId) => {
-          // A persisted target owns the handoff; do not wait for its run to finish.
-          acceptance ??= Promise.resolve()
-            .then(onSuccess)
-            .catch((error) => {
-              console.error('[useForwardTopic] Handoff follow-up failed:', error);
-              toast.error(t('messageForward.failed'));
-            });
-          await acceptance;
+        onTopicCreated: (target, createdTopicId) => {
           if (target.id !== primaryTarget.id) return;
           clearPortalStack();
           navigate(AGENT_CHAT_TOPIC_URL(target.id, createdTopicId));
@@ -56,13 +52,26 @@ export const useForwardTopic = ({ agentId, onSuccess, topicId }: ForwardTopicSou
                 : t('messageForward.successMulti', { count: result.succeeded.length }),
             );
           }
-          if (result.failed.length > 0) toast.error(t('messageForward.failed'));
+          if (result.failed.length > 0)
+            toast.error(
+              t(
+                result.sourceSchedulePaused
+                  ? 'messageForward.topic.sourceSchedulePaused'
+                  : 'messageForward.failed',
+              ),
+            );
         })
         .catch((error) => {
           console.error('[useForwardTopic] Forwarding failed:', error);
-          toast.error(t('messageForward.topic.loadFailed'));
+          toast.error(
+            t(
+              cancelSourceContinuation
+                ? 'messageForward.topic.handoffFailed'
+                : 'messageForward.topic.loadFailed',
+            ),
+          );
         });
     },
-    [agentId, clearPortalStack, forwardTopic, navigate, onSuccess, t, topicId],
+    [agentId, cancelSourceContinuation, clearPortalStack, forwardTopic, navigate, t, topicId],
   );
 };

@@ -593,14 +593,14 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
     fireEvent.click(screen.getByText('transfer'));
     expect(createTopicForwardModalMock).toHaveBeenCalledWith({
-      onForwardSuccess: expect.any(Function),
+      cancelSourceContinuation: true,
       sourceAgentId: 'source-agent',
       topicId: 'source-topic',
       topicTitle: '',
     });
   });
 
-  it('cancels the scheduled conversation topic after handoff even when another topic is active', () => {
+  it('requests cancellation of the conversation source even when another topic is active', () => {
     useChatStore.setState({
       activeTopicId: 'main-topic',
       topicDetailMap: {
@@ -641,8 +641,8 @@ describe('ErrorMessageExtra', () => {
     expect(cancelHeteroContinuationMock).not.toHaveBeenCalled();
 
     const props = createTopicForwardModalMock.mock.calls[0][0];
-    props.onForwardSuccess();
-    expect(cancelHeteroContinuationMock).toHaveBeenCalledWith('source-topic');
+    expect(props.cancelSourceContinuation).toBe(true);
+    expect(props.topicId).toBe('source-topic');
   });
 
   it('renders the working-directory guide instead of the CLI install guide', () => {

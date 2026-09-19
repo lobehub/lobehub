@@ -781,6 +781,8 @@ export default {
   'messageAction.regenerate': 'Regenerate',
   'messageAction.select': 'Select',
   'messageLink.openInSideBrowser': 'Open in side browser',
+  'heteroRateLimit.cancelFailed':
+    'Could not cancel the scheduled continuation. It may already be claimed or running. Refresh the conversation to check its status.',
   'messageForward.bar.cancel': 'Cancel',
   'messageForward.bar.delete': 'Delete',
   'messageForward.bar.forward': 'Forward',
@@ -808,6 +810,10 @@ export default {
   'messageForward.successMulti': 'Forwarded to {{count}} agents',
   'messageForward.transcript.header':
     'The following {{count}} messages were forwarded from another conversation. Please use them as context and continue:',
+  'messageForward.topic.handoffFailed':
+    'Transfer did not start because the source continuation could not be cancelled. It may already be running. Refresh the conversation and check its status.',
+  'messageForward.topic.sourceSchedulePaused':
+    'Transfer could not be confirmed. The original scheduled continuation is paused. Check the target conversation before retrying or scheduling again.',
   'messageForward.topic.context': 'Topic context',
   'messageForward.topic.description':
     "The selected Agent will receive this topic's context and continue the work.",

@@ -3,6 +3,7 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { agentSelectors } from '@/store/agent/selectors';
 import * as agentDispatcher from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import * as heterogeneousAgentExecutor from '@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor';
@@ -12,6 +13,8 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
 import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
+
+vi.mock('@/services/topic', () => ({ topicService: { cancelRateLimitContinuation: vi.fn() } }));
 
 // Mock useChatStore
 const mockCancelOperations = vi.fn();
@@ -65,6 +68,7 @@ vi.mock('@/store/chat', () => ({
       executeClientAgent: mockExecuteClientAgent,
       isGatewayModeEnabled: mockIsGatewayModeEnabled,
       executeGatewayAgent: mockExecuteGatewayAgent,
+      internal_dispatchTopic: vi.fn(),
       updateTopicMetadata: mockUpdateTopicMetadata,
       updateTopicStatus: mockUpdateTopicStatus,
     })),
@@ -93,6 +97,17 @@ describe('Generation Actions', () => {
       expect(mockUpdateTopicMetadata).not.toHaveBeenCalled();
     });
 
+    it('propagates cancellation failure instead of clearing metadata separately', async () => {
+      vi.mocked(topicService.cancelRateLimitContinuation).mockRejectedValueOnce(
+        new Error('database failed'),
+      );
+      const store = createStore({
+        context: { agentId: 'agent', topicId: 'source-topic', threadId: null },
+      });
+      await expect(store.getState().cancelHeteroContinuation()).rejects.toThrow('database failed');
+      expect(mockUpdateTopicMetadata).not.toHaveBeenCalled();
+    });
+
     it('cancels the captured source topic after navigation changes the conversation context', async () => {
       const store = createStore({
         context: { agentId: 'target-agent', threadId: null, topicId: 'target-topic' },
@@ -100,11 +115,9 @@ describe('Generation Actions', () => {
 
       await store.getState().cancelHeteroContinuation('source-topic');
 
-      expect(mockUpdateTopicStatus).toHaveBeenCalledWith({
-        status: 'failed',
-        topicId: 'source-topic',
-      });
-      expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('source-topic', { scheduledRun: null });
+      expect(topicService.cancelRateLimitContinuation).toHaveBeenCalledWith('source-topic');
+      expect(mockUpdateTopicStatus).not.toHaveBeenCalled();
+      expect(mockUpdateTopicMetadata).not.toHaveBeenCalled();
     });
   });
 

@@ -248,6 +248,22 @@ const recordTopicShareAudit = async (
 };
 
 export const topicRouter = router({
+  cancelRateLimitContinuation: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+      const result = await ctx.topicModel.cancelRateLimitContinuation(input.id);
+      if (result.status === 'busy')
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The source continuation has already been claimed or started.',
+        });
+      if (result.status === 'unchanged') return null;
+      return { metadata: result.metadata };
+    }),
+
   getTopicDetail: topicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
