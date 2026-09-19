@@ -1,11 +1,12 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { ArrowUpIcon } from 'lucide-react';
+import { ArrowUpIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ChecksList from './ChecksList';
 import DockActionButton from './DockActionButton';
 import { type DockAction, type MergeDockInput, resolveMergeDock } from './mergeDockData';
 import { readMergeMethod, writeMergeMethod } from './mergeMethodStorage';
@@ -25,6 +26,33 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   actionBar: css`
     flex-wrap: wrap;
     padding-block-start: 10px;
+  `,
+  checks: css`
+    margin-inline-start: 22px;
+
+    > summary {
+      cursor: pointer;
+
+      display: flex;
+      gap: 4px;
+      align-items: center;
+
+      font-size: 12px;
+      line-height: 18px;
+      color: ${cssVar.colorTextTertiary};
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+    }
+
+    &[open] > summary svg {
+      transform: rotate(90deg);
+    }
+  `,
+  checksList: css`
+    max-height: min(240px, 35vh);
   `,
   dock: css`
     flex-shrink: 0;
@@ -106,6 +134,12 @@ const MergeDock = memo<MergeDockProps>(
     });
     const { status } = model;
     const isError = status.key === 'error';
+    const hasFailedChecks = detail.checks.some(
+      (check) => check.status === 'failure' || check.status === 'cancelled',
+    );
+    const reasons = model.reasons
+      .map((reason) => tr(reason.labelKey, reason.labelParams))
+      .join(' · ');
 
     return (
       <>
@@ -168,11 +202,30 @@ const MergeDock = memo<MergeDockProps>(
               </Button>
             )}
           </Flexbox>
-          {model.reasons.length > 0 && (
-            <div className={styles.sub}>
-              {model.reasons.map((reason) => tr(reason.labelKey, reason.labelParams)).join(' · ')}
-            </div>
-          )}
+          {model.reasons.length > 0 &&
+            (hasFailedChecks ? (
+              <details className={styles.checks}>
+                <summary>
+                  <Icon icon={ChevronRightIcon} size={12} />
+                  {reasons}
+                </summary>
+                <ScrollArea
+                  disableContentFit
+                  scrollFade
+                  style={{ marginBlockStart: 6 }}
+                  viewportProps={{
+                    'aria-label': t('workingPanel.pr.section.checks'),
+                    'className': styles.checksList,
+                    'role': 'region',
+                    'tabIndex': 0,
+                  }}
+                >
+                  <ChecksList checks={detail.checks} />
+                </ScrollArea>
+              </details>
+            ) : (
+              <div className={styles.sub}>{reasons}</div>
+            ))}
           {model.hintKey && <div className={styles.sub}>{tr(model.hintKey, model.hintParams)}</div>}
           {model.action && (
             <Flexbox horizontal align={'center'} className={styles.actionBar} gap={8}>
