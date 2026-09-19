@@ -415,13 +415,30 @@ export async function searchFiles(
     .limit(context.scanCandidateLimit(limit))
     .as('file_hits');
 
+  // A file can have several parsed documents and library memberships. Each
+  // enrichment must contribute at most one row before the result limit.
+  const fileDocument = db
+    .select({ content: documents.content })
+    .from(documents)
+    .where(eq(documents.fileId, hits.id))
+    .orderBy(documents.id)
+    .limit(1)
+    .as('file_document');
+  const fileKnowledgeBase = db
+    .select({ knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId })
+    .from(knowledgeBaseFiles)
+    .where(eq(knowledgeBaseFiles.fileId, hits.id))
+    .orderBy(knowledgeBaseFiles.knowledgeBaseId)
+    .limit(1)
+    .as('file_knowledge_base');
+
   const rows = await db
     .select({
-      content: documents.content,
+      content: fileDocument.content,
       createdAt: hits.createdAt,
       fileType: hits.fileType,
       id: hits.id,
-      knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+      knowledgeBaseId: fileKnowledgeBase.knowledgeBaseId,
       name: hits.name,
       score: hits.score,
       size: hits.size,
@@ -429,8 +446,8 @@ export async function searchFiles(
       url: hits.url,
     })
     .from(hits)
-    .leftJoin(documents, eq(hits.id, documents.fileId))
-    .leftJoin(knowledgeBaseFiles, eq(hits.id, knowledgeBaseFiles.fileId))
+    .leftJoinLateral(fileDocument, sql`true`)
+    .leftJoinLateral(fileKnowledgeBase, sql`true`)
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
