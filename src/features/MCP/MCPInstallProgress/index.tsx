@@ -1,6 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Progress, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import * as m from 'motion/react-m';
@@ -47,7 +46,7 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
               showInfo={false}
               size="small"
               status="active"
-              strokeColor={{ '0%': cssVar.blue, '100%': cssVar.geekblue }}
+              strokeColor={cssVar.geekblue}
             />
             {stepText && (
               <Text fontSize={11} style={{ marginTop: 4 }} type={'secondary'}>

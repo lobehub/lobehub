@@ -2,9 +2,9 @@
 
 import { OFFICIAL_URL } from '@lobechat/const';
 import { Block, Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, Tabs, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import type { TableColumnsType, UploadProps } from 'antd';
-import { Input as AntInput, Table, Upload } from 'antd';
+import { Avatar, Button, Tabs, Tag, Text, toast, Upload } from '@lobehub/ui/base-ui';
+import type { TableColumnsType } from 'antd';
+import { Input as AntInput, Table } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
@@ -432,13 +432,10 @@ const CommunityWorkspaceSettings = memo(() => {
     [t, uploadWithProgress],
   );
 
-  const handleBannerUpload: UploadProps['customRequest'] = useCallback(
-    async (options: Parameters<NonNullable<UploadProps['customRequest']>>[0]) => {
-      const file = options.file as File;
-
+  const handleBannerUpload = useCallback(
+    async (file: File) => {
       if (file.size > MAX_FILE_SIZE) {
         toast.error(t('user.workspaceProfile.errors.fileTooLarge'));
-        options.onError?.(new Error('File too large'));
         return;
       }
 
@@ -447,18 +444,15 @@ const CommunityWorkspaceSettings = memo(() => {
         const result = await uploadWithProgress({ file });
         if (!result?.url) {
           toast.error(t('user.workspaceProfile.errors.uploadFailed'));
-          options.onError?.(new Error('Upload failed'));
           return;
         }
         const url = result.url.startsWith('/')
           ? `${window.location.origin}${result.url}`
           : result.url;
         setBannerUrl(url);
-        options.onSuccess?.(result);
       } catch (error) {
         console.error('[CommunityWorkspaceSettings] Banner upload failed:', error);
         toast.error(t('user.workspaceProfile.errors.uploadFailed'));
-        options.onError?.(error as Error);
       } finally {
         setBannerUploading(false);
       }
@@ -638,11 +632,10 @@ const CommunityWorkspaceSettings = memo(() => {
             <Flexbox gap={8} width="100%">
               <Upload
                 accept="image/*"
-                customRequest={handleBannerUpload}
                 disabled={!canEdit}
                 maxCount={1}
-                showUploadList={false}
                 style={{ display: 'block', width: '100%' }}
+                onFiles={([file]) => handleBannerUpload(file)}
               >
                 <div
                   style={{

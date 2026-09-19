@@ -1,6 +1,5 @@
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Tag } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { ActionIcon, Progress, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleAlertIcon, CircleCheckIcon, Loader2Icon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -149,11 +148,10 @@ const ContextItem = memo<FileItemProps>((props) => {
                   role={'progressbar'}
                 >
                   <Progress
-                    percent={progress}
+                    percent={progress ?? 0}
                     showInfo={false}
                     size={12}
                     status={'normal'}
-                    strokeWidth={12}
                     type={'circle'}
                   />
                 </span>

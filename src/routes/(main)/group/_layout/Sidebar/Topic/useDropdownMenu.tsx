@@ -1,7 +1,7 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { App, Upload } from 'antd';
+import { confirmModal, toast, Upload } from '@lobehub/ui/base-ui';
+import { App } from 'antd';
 import { css, cx } from 'antd-style';
 import { Archive, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -120,7 +120,6 @@ export const useTopicActionsDropdownMenu = (
           title: t('importError'),
         });
       }
-      return false; // Prevent default upload behavior
     },
     [importTopic, modal, onUploadClose, t],
   );
@@ -159,9 +158,8 @@ export const useTopicActionsDropdownMenu = (
         label: (
           <Upload
             accept=".json"
-            beforeUpload={handleImport}
             disabled={!canCreateTopic}
-            showUploadList={false}
+            onFiles={([file]) => handleImport(file)}
           >
             <div className={cx(hotArea)}>{t('actions.import')}</div>
           </Upload>

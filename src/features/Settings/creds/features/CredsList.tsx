@@ -1,11 +1,10 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import { Empty, Flexbox } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
-import { Empty } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { LogIn } from 'lucide-react';
 import { type FC } from 'react';

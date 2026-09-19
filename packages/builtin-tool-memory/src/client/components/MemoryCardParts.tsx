@@ -1,7 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Tooltip } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { Accordion, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -149,33 +149,36 @@ export const SummaryAccordion = memo<SummaryAccordionProps>(({ details, summary,
   if (!summary && tags.length === 0) return null;
 
   return (
-    <Accordion gap={0}>
-      <AccordionItem
-        itemKey="summary"
-        paddingBlock={8}
-        paddingInline={8}
-        styles={{
-          base: { marginBlock: 4, marginInline: 4 },
-        }}
-        title={
-          <Text fontSize={12} type={'secondary'} weight={500}>
-            Summary
-          </Text>
-        }
-      >
-        <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
-          {summary && <div className={memoryCardStyles.summary}>{summary}</div>}
-          {details && <div className={memoryCardStyles.detail}>{details}</div>}
-          {tags.length > 0 && (
-            <Flexbox horizontal className={memoryCardStyles.tags} gap={8} wrap={'wrap'}>
-              {tags.map((tag, index) => (
-                <Tag key={index}>{tag}</Tag>
-              ))}
+    <Accordion
+      defaultValue={['summary']}
+      gap={0}
+      items={[
+        {
+          children: (
+            <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
+              {summary && <div className={memoryCardStyles.summary}>{summary}</div>}
+              {details && <div className={memoryCardStyles.detail}>{details}</div>}
+              {tags.length > 0 && (
+                <Flexbox horizontal className={memoryCardStyles.tags} gap={8} wrap={'wrap'}>
+                  {tags.map((tag, index) => (
+                    <Tag key={index}>{tag}</Tag>
+                  ))}
+                </Flexbox>
+              )}
             </Flexbox>
-          )}
-        </Flexbox>
-      </AccordionItem>
-    </Accordion>
+          ),
+          key: 'summary',
+          title: (
+            <Text fontSize={12} type={'secondary'} weight={500}>
+              Summary
+            </Text>
+          ),
+        },
+      ]}
+      styles={{
+        item: { marginBlock: 4, marginInline: 4 },
+      }}
+    />
   );
 });
 

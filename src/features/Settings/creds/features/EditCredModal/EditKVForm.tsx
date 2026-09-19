@@ -2,9 +2,9 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Spin } from '@lobehub/ui/base-ui';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input, Spin } from 'antd';
+import { Form, Input } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Minus, Plus } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';

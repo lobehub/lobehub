@@ -2,8 +2,8 @@
 
 import { LoadingOutlined } from '@ant-design/icons';
 import { Flexbox } from '@lobehub/ui';
-import { Button, createModal } from '@lobehub/ui/base-ui';
-import { Input, Spin } from 'antd';
+import { Button, createModal, Spin } from '@lobehub/ui/base-ui';
+import { Input } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
 import { memo, useState } from 'react';

@@ -1,6 +1,5 @@
 import { Flexbox, Popover } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { type TooltipProps } from 'antd';
+import { ActionIcon, type PopoverPlacement } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { XIcon } from 'lucide-react';
@@ -68,7 +67,7 @@ export interface TipGuideProps {
   /**
    * Tooltip placement, defaults to bottom
    */
-  placement?: TooltipProps['placement'];
+  placement?: PopoverPlacement;
   /**
    * style
    */
