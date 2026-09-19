@@ -78,4 +78,22 @@ describe('spawnHeteroSandbox', () => {
     const command = mockCallTool.mock.calls[0][1].command;
     expect(command).toContain("LOBEHUB_WORKSPACE_ID='ws-lobehub'");
   });
+
+  it('appends the GitHub token to ~/.creds/.env, not the decoy ~/.creds/env', async () => {
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      assistantMessageId: 'msg-1',
+      githubToken: 'ghs_test_not_a_real_token',
+      jwt: 'jwt',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const command = mockCallTool.mock.calls[0][1].command as string;
+    expect(command).toContain('>> ~/.creds/.env');
+    expect(command).not.toMatch(/> ~\/\.creds\/env(?!\.)/);
+  });
 });

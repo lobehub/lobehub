@@ -69,7 +69,7 @@ function repoToLocalDir(repo: string): string {
  * Write GitHub credentials into the sandbox in the same format produced by
  * `injectCredsToSandbox(["github"])` so CC can source them from sub-shells:
  *
- *   source ~/.creds/env          # exports GITHUB_ACCESS_TOKEN
+ *   source ~/.creds/.env         # exports GITHUB_ACCESS_TOKEN
  *   echo $GITHUB_ACCESS_TOKEN | gh auth login --hostname github.com --with-token
  *
  * Also authenticates the `gh` CLI upfront so all `gh` commands work out of
@@ -82,8 +82,9 @@ function buildCredsSetupScript(githubToken?: string): string | null {
   const tokenArg = shellQuote(githubToken);
   return [
     'mkdir -p ~/.creds',
-    // Write GITHUB_ACCESS_TOKEN matching the injectCredsToSandbox oauth naming scheme
-    `printf 'GITHUB_ACCESS_TOKEN=%s\\n' ${tokenArg} > ~/.creds/env`,
+    // Append so a later (or earlier) injectCredsToSandbox write to the same
+    // file is not truncated when this sandbox is reused.
+    `printf 'GITHUB_ACCESS_TOKEN=%s\\n' ${tokenArg} >> ~/.creds/.env`,
     // Pre-authenticate gh CLI so CC can use it immediately (gh also picks up
     // GITHUB_TOKEN from env, but explicit login ensures ~/.config/gh/hosts.yml
     // is populated for cases where env is reset in a sub-shell)
@@ -208,7 +209,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   ].join(' ');
   const shellArgs = args.map(shellQuote).join(' ');
   const mainCommand = `echo ${shellQuote(base64Payload)} | base64 -d | ${envVars} ${shellArgs}`;
-  // Creds first (writes ~/.creds/env + authenticates gh CLI), then repo clone.
+  // Creds first (writes ~/.creds/.env + authenticates gh CLI), then repo clone.
   const credsScript = buildCredsSetupScript(githubToken);
   const repoScript = buildRepoSetupScript(repos ?? [], githubToken);
   const setupParts = [credsScript, repoScript].filter(Boolean);
