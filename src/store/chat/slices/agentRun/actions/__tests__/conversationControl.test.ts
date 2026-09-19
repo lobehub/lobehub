@@ -68,6 +68,7 @@ beforeEach(() => {
     });
   useChatStore.setState({
     updateTopicStatus: vi.fn().mockResolvedValue(undefined),
+    questionSubmissions: {},
   });
   useUserStore.setState({ user: undefined, workspaceUserPreference: {} });
 });

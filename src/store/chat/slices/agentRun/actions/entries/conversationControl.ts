@@ -178,8 +178,24 @@ export class ConversationControlActionImpl {
     });
     if (result.handled) {
       this.#interventionResolutionRequestIds.delete(resolutionKey);
+      if (result.state === 'claimed' && params.context) {
+        for (const id of params.toolMessageIds) {
+          this.#get().internal_confirmQuestionSubmission(id, params.action, params.context);
+        }
+      }
       if (result.state === 'already_resolved' && params.context) {
-        await this.#get().refreshMessages(params.context);
+        const submittingQuestions = params.toolMessageIds.filter(
+          (id) => this.#get().questionSubmissions[id],
+        );
+        if (submittingQuestions.length > 0) {
+          await Promise.all(
+            submittingQuestions.map((id) =>
+              this.#get().checkQuestionSubmission(id, params.context!),
+            ),
+          );
+        } else {
+          await this.#get().refreshMessages(params.context);
+        }
       }
     }
     return result;
