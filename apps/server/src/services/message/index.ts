@@ -207,6 +207,13 @@ export class MessageService {
        * authorized may opt in.
        */
       allowShareVisitor?: boolean;
+      /**
+       * Keep the stored tool payloads whole. Set for a shared-agent visitor's
+       * snapshot: it is produced under the CREATOR's identity, but the recovery
+       * RPC runs as the VISITOR against ownership-scoped reads, which cannot see
+       * a creator-owned row — a projected snapshot would be unrecoverable.
+       */
+      skipToolProjection?: boolean;
     },
   ): Promise<UIChatMessage[]> {
     const messages = await this.messageModel.query(params, {
@@ -214,7 +221,7 @@ export class MessageService {
       ...(options?.allowShareVisitor && { allowShareVisitor: true }),
     });
 
-    return this.projectToolPayloads(messages);
+    return options?.skipToolProjection ? messages : this.projectToolPayloads(messages);
   }
 
   /**

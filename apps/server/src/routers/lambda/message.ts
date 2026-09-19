@@ -28,6 +28,7 @@ import {
   assertCanUseCreateMessageTargets,
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
+  assertCanViewMessageTargets,
 } from './_helpers/conversationResourceGuard';
 import { projectSharedTopicMessages } from './_helpers/projectSharedTopicMessages';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
@@ -399,7 +400,15 @@ export const messageRouter = router({
    */
   getToolResultPayload: messageProcedure
     .input(z.object({ messageId: z.string() }))
-    .query(async ({ input, ctx }) => ctx.messageService.getToolResultPayload(input.messageId)),
+    .query(async ({ input, ctx }) => {
+      // A message id is a locator, not an authorization. In a workspace the
+      // model reads are workspace-scoped, so without this a member who kept an
+      // id could pull tool output from a conversation they cannot open — the
+      // same guard `getMessages` applies before returning the list.
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.messageId]);
+
+      return ctx.messageService.getToolResultPayload(input.messageId);
+    }),
 
   getHeatmaps: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.getHeatmaps();

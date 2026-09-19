@@ -1316,7 +1316,15 @@ export class AgentRuntimeService {
         // terminal Source of Truth — wiping the conversation the run just
         // produced. Visitor-facing redaction of the pushed snapshot happens in
         // `GatewayStreamNotifier`.
-        { allowShareVisitor: true },
+        //
+        // A visitor snapshot additionally keeps its tool payloads whole: this
+        // query runs as the CREATOR, but the recovery RPC runs as the VISITOR
+        // against ownership-scoped reads that cannot see a creator-owned row,
+        // so a projected snapshot could never be filled back in.
+        {
+          allowShareVisitor: true,
+          skipToolProjection: !!agentState?.principal?.actor?.shareVisitor?.visitorUserId,
+        },
       );
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back

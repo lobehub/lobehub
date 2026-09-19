@@ -121,6 +121,17 @@ describe('MessageService', () => {
       expect(mockUserModel.getUserPreference).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps a share-visitor snapshot whole, since only the creator could fetch it back', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      const result = await messageService.queryMessages(
+        { topicId: 'topic-1' },
+        { allowShareVisitor: true, skipToolProjection: true },
+      );
+
+      expect(result).toEqual([toolRow]);
+    });
+
     it('leaves a tool without a projector exactly as stored', async () => {
       const unprojected = {
         ...toolRow,
