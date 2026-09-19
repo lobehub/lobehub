@@ -152,7 +152,7 @@ ALTER TABLE "quick_note_resources" ADD CONSTRAINT "quick_note_resources_workspac
 ALTER TABLE "quick_note_run_inputs" DROP CONSTRAINT IF EXISTS "quick_note_run_inputs_run_id_quick_note_runs_id_fk";--> statement-breakpoint
 ALTER TABLE "quick_note_run_inputs" ADD CONSTRAINT "quick_note_run_inputs_run_id_quick_note_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."quick_note_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "quick_note_run_inputs" DROP CONSTRAINT IF EXISTS "quick_note_run_inputs_document_history_id_document_histories_id_fk";--> statement-breakpoint
-ALTER TABLE "quick_note_run_inputs" ADD CONSTRAINT "quick_note_run_inputs_document_history_id_document_histories_id_fk" FOREIGN KEY ("document_history_id") REFERENCES "public"."document_histories"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quick_note_run_inputs" ADD CONSTRAINT "quick_note_run_inputs_document_history_id_document_histories_id_fk" FOREIGN KEY ("document_history_id") REFERENCES "public"."document_histories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "quick_note_run_inputs" DROP CONSTRAINT IF EXISTS "quick_note_run_inputs_comment_revision_id_quick_note_comment_revisions_id_fk";--> statement-breakpoint
 ALTER TABLE "quick_note_run_inputs" ADD CONSTRAINT "quick_note_run_inputs_comment_revision_id_quick_note_comment_revisions_id_fk" FOREIGN KEY ("comment_revision_id") REFERENCES "public"."quick_note_comment_revisions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "quick_note_run_inputs" DROP CONSTRAINT IF EXISTS "quick_note_run_inputs_user_id_users_id_fk";--> statement-breakpoint

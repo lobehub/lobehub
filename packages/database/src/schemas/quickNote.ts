@@ -255,9 +255,10 @@ export const quickNoteRunInputs = pgTable(
       .references(() => quickNoteRuns.id, { onDelete: 'cascade' })
       .notNull(),
     role: text('role').$type<QuickNoteRunInputRole>().notNull(),
+    // Explicit document deletion also removes its run input; retention preserves pinned revisions.
     documentHistoryId: varchar('document_history_id', { length: 255 }).references(
       () => documentHistories.id,
-      { onDelete: 'no action' },
+      { onDelete: 'cascade' },
     ),
     commentRevisionId: uuid('comment_revision_id').references(() => quickNoteCommentRevisions.id, {
       onDelete: 'no action',

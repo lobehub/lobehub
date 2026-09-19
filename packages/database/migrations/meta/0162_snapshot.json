@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "b12c631f-d6ae-4a63-b5e5-640b35115bdd",
+  "id": "d1210cf1-b052-40c8-a39a-b7a45aec225a",
   "policies": {},
   "prevId": "7fbbc04c-3010-4db5-9fc3-812de66483e5",
   "roles": {},
@@ -24578,7 +24578,7 @@
           "tableTo": "document_histories",
           "columnsFrom": ["document_history_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "quick_note_run_inputs_comment_revision_id_quick_note_comment_revisions_id_fk": {
