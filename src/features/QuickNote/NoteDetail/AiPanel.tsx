@@ -4,6 +4,7 @@ import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { PanelRightClose, Sparkles } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +32,20 @@ const STATUS_LABEL_KEYS: Record<AiStatus['key'], string | undefined> = {
   scheduled: 'ai.status.scheduled',
 };
 
-const StatusText = memo<{ status: AiStatus }>(({ status }) => {
+const StatusText = memo<{ noteId: string }>(({ noteId }) => {
+  const [now, setNow] = useState(Date.now());
+  const status = useQuickNoteStore((s) => {
+    const note = quickNoteSelectors.noteById(noteId)(s);
+    return note ? resolveAiStatus(note, now) : { key: 'idle' as const };
+  }, isEqual);
+
+  useEffect(() => {
+    if (status.key !== 'scheduled') return;
+
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, [status.key]);
   const { t } = useTranslation('note');
   const labelKey = STATUS_LABEL_KEYS[status.key];
 
@@ -51,37 +65,36 @@ StatusText.displayName = 'QuickNoteAiStatusText';
 
 const AiPanel = memo<{ noteId: string }>(({ noteId }) => {
   const { t } = useTranslation('note');
-  const note = useQuickNoteStore(quickNoteSelectors.noteById(noteId));
+  const [exists, annotationContent, dived, hasContent] = useQuickNoteStore((s) => {
+    const note = quickNoteSelectors.noteById(noteId)(s);
+    return [
+      Boolean(note),
+      note?.annotation?.content,
+      Boolean(note?.annotation?.divedAt),
+      Boolean(note?.content.trim()),
+    ] as const;
+  });
+  const tags = useQuickNoteStore(
+    (s) => quickNoteSelectors.noteById(noteId)(s)?.tags ?? [],
+    isEqual,
+  );
+  const run = useQuickNoteStore((s) => quickNoteSelectors.noteById(noteId)(s)?.run, isEqual);
   const diving = useQuickNoteStore(quickNoteSelectors.isDiving(noteId));
   const [diveInto, toggleAnnotationPanel] = useQuickNoteStore((s) => [
     s.diveInto,
     s.toggleAnnotationPanel,
   ]);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [now, setNow] = useState(Date.now());
   const toggleRightPanelHotkey = useUserStore(
     settingsSelectors.getHotkeyById(HotkeyEnum.ToggleRightPanel),
   );
-
-  const status = note ? resolveAiStatus(note, now) : ({ key: 'idle' } as const);
-  const annotationContent = note?.annotation?.content;
-
-  useEffect(() => {
-    if (status.key !== 'scheduled') return;
-
-    setNow(Date.now());
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [status.key]);
 
   useEffect(() => {
     if (!diving || !bodyRef.current) return;
     bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
   }, [diving, annotationContent]);
 
-  if (!note) return null;
-
-  const dived = Boolean(note.annotation?.divedAt);
+  if (!exists) return null;
 
   return (
     <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
@@ -96,7 +109,7 @@ const AiPanel = memo<{ noteId: string }>(({ noteId }) => {
         <Flexbox horizontal align={'center'} gap={8}>
           <AnalyzeAction noteId={noteId} />
           <Text weight={500}>{t('ai.title')}</Text>
-          <StatusText status={status} />
+          <StatusText noteId={noteId} />
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={4}>
           <AnalyzeSettings />
@@ -111,23 +124,23 @@ const AiPanel = memo<{ noteId: string }>(({ noteId }) => {
       <Flexbox flex={1} style={{ overflow: 'hidden' }}>
         <Flexbox flex={1} ref={bodyRef} style={{ overflowY: 'auto' }}>
           <Flexbox className={styles.section} gap={8}>
-            {note.annotation?.content ? (
+            {annotationContent ? (
               <Markdown fontSize={13} variant={'chat'}>
-                {note.annotation.content}
+                {annotationContent}
               </Markdown>
             ) : (
               <Text color={cssVar.colorTextTertiary} fontSize={12}>
-                {note.content.trim() ? t('annotation.waiting') : t('annotation.emptyNote')}
+                {hasContent ? t('annotation.waiting') : t('annotation.emptyNote')}
               </Text>
             )}
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal gap={6} wrap={'wrap'}>
-                {note.tags.map((tag) => (
+                {tags.map((tag) => (
                   <Tag key={tag}>{tag}</Tag>
                 ))}
               </Flexbox>
               <Button
-                disabled={!note.content.trim()}
+                disabled={!hasContent}
                 icon={Sparkles}
                 loading={diving}
                 style={{ flex: 'none' }}
@@ -138,9 +151,9 @@ const AiPanel = memo<{ noteId: string }>(({ noteId }) => {
             </Flexbox>
           </Flexbox>
           <AgenticSections noteId={noteId} />
-          {note.run && (
+          {run && (
             <Flexbox className={styles.section} gap={8}>
-              <Runs run={note.run} />
+              <Runs run={run} />
             </Flexbox>
           )}
         </Flexbox>

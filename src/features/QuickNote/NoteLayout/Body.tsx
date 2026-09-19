@@ -11,7 +11,9 @@ import Item from '../NoteList/Item';
 import EmptyState from './EmptyState';
 
 const Body = memo(() => {
-  const notes = useQuickNoteStore(quickNoteSelectors.filteredNotes);
+  const noteIds = useQuickNoteStore((s) =>
+    quickNoteSelectors.filteredNotes(s).map((note) => note.id),
+  );
   const notesInit = useQuickNoteStore((s) => s.notesInit);
   const notesLoadError = useQuickNoteStore((s) => s.notesLoadError);
   const searchKeywords = useQuickNoteStore((s) => s.searchKeywords);
@@ -24,12 +26,12 @@ const Body = memo(() => {
         <Flexbox paddingBlock={4} paddingInline={8}>
           <SkeletonList />
         </Flexbox>
-      ) : notes.length === 0 ? (
+      ) : noteIds.length === 0 ? (
         <EmptyState searchActive={Boolean(searchKeywords.trim())} />
       ) : (
         <Flexbox gap={4} paddingBlock={4} paddingInline={8}>
-          {notes.map((note) => (
-            <Item key={note.id} note={note} />
+          {noteIds.map((noteId) => (
+            <Item key={noteId} noteId={noteId} />
           ))}
         </Flexbox>
       )}

@@ -52,7 +52,10 @@ const EditorArea = memo<{ noteId: string }>(({ noteId }) => {
   const removeNote = useQuickNoteStore((s) => s.removeNote);
   const panelExpanded = useQuickNoteStore((s) => s.annotationPanelExpanded);
   const toggleAnnotationPanel = useQuickNoteStore((s) => s.toggleAnnotationPanel);
-  const note = useQuickNoteStore(quickNoteSelectors.noteById(noteId));
+  const noteMeta = useQuickNoteStore((s) => {
+    const note = quickNoteSelectors.noteById(noteId)(s);
+    return note ? formatNoteMeta(note) : undefined;
+  });
   const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
   const toggleRightPanelHotkey = useUserStore(
     settingsSelectors.getHotkeyById(HotkeyEnum.ToggleRightPanel),
@@ -89,7 +92,7 @@ const EditorArea = memo<{ noteId: string }>(({ noteId }) => {
     },
   ];
 
-  if (!note) return null;
+  if (noteMeta === undefined) return null;
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
@@ -104,7 +107,7 @@ const EditorArea = memo<{ noteId: string }>(({ noteId }) => {
         <Flexbox horizontal align={'center'} gap={4}>
           {!showLeftPanel && !isMacDesktop && <ToggleLeftPanelButton />}
           <Text color={cssVar.colorTextTertiary} fontSize={12}>
-            {formatNoteMeta(note)}
+            {noteMeta}
           </Text>
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={8}>

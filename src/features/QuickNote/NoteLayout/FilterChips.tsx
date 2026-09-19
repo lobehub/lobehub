@@ -3,6 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -98,8 +99,8 @@ const FilterChips = memo(() => {
   const [activeCollection, activeTag, setActiveCollection, setActiveTag] = useQuickNoteStore(
     (s) => [s.activeCollection, s.activeTag, s.setActiveCollection, s.setActiveTag],
   );
-  const collections = useQuickNoteStore(quickNoteSelectors.collections);
-  const tags = useQuickNoteStore(quickNoteSelectors.tags);
+  const collections = useQuickNoteStore(quickNoteSelectors.collections, isEqual);
+  const tags = useQuickNoteStore(quickNoteSelectors.tags, isEqual);
   const uncategorizedCount = useQuickNoteStore(quickNoteSelectors.uncategorizedCount);
 
   const { collectionChips, tagChips } = useMemo(

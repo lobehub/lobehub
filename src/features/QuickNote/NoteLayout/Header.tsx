@@ -19,7 +19,7 @@ const Header = memo(() => {
   const [activeCollection, activeTag, searchKeywords, setSearchKeywords] = useQuickNoteStore(
     (s) => [s.activeCollection, s.activeTag, s.searchKeywords, s.setSearchKeywords],
   );
-  const filteredCount = useQuickNoteStore(quickNoteSelectors.filteredNotes).length;
+  const filteredCount = useQuickNoteStore((s) => quickNoteSelectors.filteredNotes(s).length);
   const [searchOpen, setSearchOpen] = useState(Boolean(searchKeywords));
 
   const scopeTitle =

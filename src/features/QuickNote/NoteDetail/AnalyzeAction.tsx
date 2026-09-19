@@ -12,30 +12,43 @@ import { styles } from './style';
 
 const AnalyzeAction = ({ noteId }: { noteId: string }) => {
   const { t } = useTranslation('note');
-  const note = useQuickNoteStore(quickNoteSelectors.noteById(noteId));
+  const [exists, hasContent, runStatus, runKind, analyzeDueAt] = useQuickNoteStore((s) => {
+    const note = quickNoteSelectors.noteById(noteId)(s);
+    return [
+      Boolean(note),
+      Boolean(note?.content.trim()),
+      note?.run?.status,
+      note?.run?.kind,
+      note?.analyzeDueAt,
+    ] as const;
+  });
   const requesting = useQuickNoteStore(quickNoteSelectors.isAnalyzing(noteId));
   const analyzeNote = useQuickNoteStore((s) => s.analyzeNote);
   const [now, setNow] = useState(Date.now());
 
-  const run = note?.run;
-  const runActive = Boolean(run && ['pending', 'running'].includes(run.status));
-  const dueAt = runActive ? undefined : note?.analyzeDueAt;
+  const runActive = runStatus === 'pending' || runStatus === 'running';
+  const dueAt = runActive ? undefined : analyzeDueAt;
 
   useEffect(() => {
     if (!dueAt || dueAt <= Date.now()) return;
 
     setNow(Date.now());
-    const interval = window.setInterval(() => setNow(Date.now()), 100);
+    const interval = window.setInterval(() => {
+      const currentTime = Date.now();
+      setNow(currentTime);
+      // Stop the visual countdown even if the next server update is delayed.
+      if (currentTime >= dueAt) window.clearInterval(interval);
+    }, 100);
     return () => window.clearInterval(interval);
   }, [dueAt]);
 
-  if (!note) return null;
+  if (!exists) return null;
 
   const remaining = dueAt ? Math.max(0, dueAt - now) : 0;
   const scheduled = remaining > 0;
   const circumference = 2 * Math.PI * 12;
   const progress = Math.min(1, remaining / ANALYZE_SETTLE_DELAY);
-  const status = run?.kind === 'analyze' ? run.status : undefined;
+  const status = runKind === 'analyze' ? runStatus : undefined;
   const loading = requesting || status === 'pending' || status === 'running';
   const title =
     status === 'pending'
@@ -52,7 +65,7 @@ const AnalyzeAction = ({ noteId }: { noteId: string }) => {
     <span className={styles.analyzeAction}>
       <ActionIcon
         aria-label={title}
-        disabled={!note.content.trim() || runActive}
+        disabled={!hasContent || runActive}
         icon={Sparkles}
         loading={loading}
         title={title}

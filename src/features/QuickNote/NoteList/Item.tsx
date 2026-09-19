@@ -7,18 +7,28 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import type { QuickNoteItem } from '@/services/quickNote';
-import { useQuickNoteStore } from '@/store/quickNote';
+import { quickNoteSelectors, useQuickNoteStore } from '@/store/quickNote';
 
 import { formatNoteTime, getNoteTitle } from '../utils';
 
-const Item = memo<{ note: QuickNoteItem }>(({ note }) => {
+const Item = memo<{ noteId: string }>(({ noteId }) => {
   const { t } = useTranslation('note');
   const navigate = useWorkspaceAwareNavigate();
-  const active = useQuickNoteStore((s) => s.activeNoteId === note.id);
+  const active = useQuickNoteStore((s) => s.activeNoteId === noteId);
 
-  const title = getNoteTitle(note.content) || t('list.untitled');
-  const footer = [note.tags[0], note.location].filter(Boolean).join(' · ');
+  const preview = useQuickNoteStore((s) => {
+    const note = quickNoteSelectors.noteById(noteId)(s);
+    if (!note) return undefined;
+    return {
+      createdAt: note.createdAt,
+      footer: [note.tags[0], note.location].filter(Boolean).join(' · '),
+      title: getNoteTitle(note.content),
+    };
+  });
+
+  if (!preview) return null;
+  const { createdAt, footer } = preview;
+  const title = preview.title || t('list.untitled');
 
   return (
     <Block
@@ -27,10 +37,10 @@ const Item = memo<{ note: QuickNoteItem }>(({ note }) => {
       paddingBlock={12}
       paddingInline={12}
       variant={active ? 'filled' : 'borderless'}
-      onClick={() => navigate(`/note/${note.id}`)}
+      onClick={() => navigate(`/note/${noteId}`)}
     >
       <Text color={cssVar.colorTextTertiary} fontSize={12}>
-        {formatNoteTime(note.createdAt)}
+        {formatNoteTime(createdAt)}
       </Text>
       <Text ellipsis={{ rows: 2 }}>{title}</Text>
       {footer && (
