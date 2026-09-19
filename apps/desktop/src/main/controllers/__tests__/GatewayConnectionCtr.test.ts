@@ -2238,7 +2238,6 @@ describe('GatewayConnectionCtr', () => {
         json: {
           architecture: 'arm64',
           deviceId: 'my-device',
-          identitySource: 'machine-id',
         },
       });
       expect(MockGatewayClient.lastInstance).toBeNull();

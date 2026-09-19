@@ -311,6 +311,24 @@ export class DeviceModel {
       .where(and(eq(devices.userId, this.userId), eq(devices.deviceId, deviceId)));
   };
 
+  updateDeviceInfo = async (
+    deviceId: string,
+    value: Pick<RegisterDeviceParams, 'architecture' | 'hostname' | 'metadata' | 'platform'>,
+  ) => {
+    const [device] = await this.db
+      .update(devices)
+      .set({ ...value, updatedAt: new Date() })
+      .where(
+        and(
+          eq(devices.userId, this.userId),
+          eq(devices.deviceId, deviceId),
+          isNull(devices.workspaceId),
+        ),
+      )
+      .returning();
+    return device;
+  };
+
   delete = async (deviceId: string) => {
     return this.db
       .delete(devices)

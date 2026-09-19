@@ -1508,4 +1508,23 @@ export const deviceRouter = router({
       await ctx.deviceModel.update(deviceId, { ...value, workingDirs: nextWorkingDirs });
       return { success: true };
     }),
+  updateDeviceInfo: deviceProcedure
+    .input(
+      z.object({
+        architecture: z.string().min(1).max(20).optional(),
+        deviceId: z.string().min(1).max(64),
+        hostname: z.string().optional(),
+        metadata: z
+          .record(z.string().max(64), z.string().max(200))
+          .refine((m) => Object.keys(m).length <= 20, 'metadata supports at most 20 keys')
+          .optional(),
+        platform: z.string().max(20).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { deviceId, ...value } = input;
+      const device = await ctx.deviceModel.updateDeviceInfo(deviceId, value);
+      if (!device) throw new TRPCError({ code: 'NOT_FOUND', message: 'Device not found' });
+      return { success: true };
+    }),
 });

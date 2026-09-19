@@ -29,9 +29,11 @@ describe('backfillDeviceArchitecture', () => {
     await backfillDeviceArchitecture(options);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1][0]).toBe(`${options.serverUrl}/trpc/lambda/device.register`);
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      `${options.serverUrl}/trpc/lambda/device.updateDeviceInfo`,
+    );
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
-      json: { architecture: 'arm64', deviceId: options.deviceId, identitySource: 'machine-id' },
+      json: { architecture: 'arm64', deviceId: options.deviceId },
     });
   });
 

@@ -25,6 +25,43 @@ afterEach(async () => {
 });
 
 describe('DeviceModel', () => {
+  describe('updateDeviceInfo', () => {
+    it('does not create missing devices', async () => {
+      expect(
+        await deviceModel.updateDeviceInfo('missing', { architecture: 'arm64' }),
+      ).toBeUndefined();
+      expect(await deviceModel.findByDeviceId('missing')).toBeUndefined();
+    });
+
+    it('does not update another user’s device', async () => {
+      const other = new DeviceModel(serverDB, otherUserId);
+      await other.register({ deviceId: 'other-device', identitySource: 'machine-id' });
+      expect(
+        await deviceModel.updateDeviceInfo('other-device', { architecture: 'arm64' }),
+      ).toBeUndefined();
+      expect((await other.findByDeviceId('other-device'))?.architecture).toBeNull();
+    });
+
+    it('updates reported metadata without changing user settings or identity', async () => {
+      await deviceModel.register({ deviceId: 'info-device', identitySource: 'machine-id' });
+      await deviceModel.update('info-device', {
+        friendlyName: 'My device',
+        defaultCwd: '/projects',
+      });
+      const updated = await deviceModel.updateDeviceInfo('info-device', {
+        architecture: 'arm64',
+        metadata: { appVersion: '2.0.0' },
+      });
+      expect(updated).toMatchObject({
+        architecture: 'arm64',
+        metadata: { appVersion: '2.0.0' },
+        identitySource: 'machine-id',
+        friendlyName: 'My device',
+        defaultCwd: '/projects',
+      });
+    });
+  });
+
   describe('register', () => {
     it('should insert a new device', async () => {
       const result = await deviceModel.register({
@@ -66,11 +103,7 @@ describe('DeviceModel', () => {
         platform: 'darwin',
       });
 
-      const device = await deviceModel.register({
-        architecture: 'arm64',
-        deviceId: 'dev-backfill',
-        identitySource: 'machine-id',
-      });
+      const device = await deviceModel.updateDeviceInfo('dev-backfill', { architecture: 'arm64' });
 
       expect(device).toMatchObject({
         architecture: 'arm64',

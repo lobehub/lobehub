@@ -24,12 +24,11 @@ export const backfillDeviceArchitecture = async ({
   const device = devices.find(
     (item) => item.deviceId === deviceId && item.scope === 'personal' && item.registered,
   );
-  if (device?.architecture || !device?.identitySource) return;
+  if (!device || device.architecture) return;
 
-  // Reuse registration's upsert without replacing metadata or user-owned settings.
-  const updated = await fetch(`${serverUrl}/trpc/lambda/device.register`, {
+  const updated = await fetch(`${serverUrl}/trpc/lambda/device.updateDeviceInfo`, {
     body: JSON.stringify({
-      json: { architecture, deviceId, identitySource: device.identitySource },
+      json: { architecture, deviceId },
     }),
     headers,
     method: 'POST',
