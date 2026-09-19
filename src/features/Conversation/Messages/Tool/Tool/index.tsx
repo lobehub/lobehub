@@ -115,6 +115,9 @@ const Tool = memo<InspectorProps>(
                   result={result}
                   showCustomToolRender={showCustomToolRender}
                   toolCallId={toolCallId}
+                  // Without this the render has no row to fetch a projected
+                  // body back from, and the expanded card stays empty.
+                  toolMessageId={toolMessage?.id}
                   type={type}
                 />
               </Flexbox>

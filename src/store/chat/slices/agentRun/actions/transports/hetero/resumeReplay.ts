@@ -5,6 +5,21 @@ import pMap from 'p-map';
 const HYDRATE_CONCURRENCY = 6;
 
 /**
+ * Is a restored transcript worth paying for on this adapter?
+ *
+ * Main consumes `resumeReplayMessages` in exactly one place —
+ * `HeterogeneousAgentImpl`'s `ensureClaudeCodeResumeTranscript` — which is
+ * gated on `agentType === 'claude-code'`. Every other adapter is handed the
+ * replay and ignores it, so restoring bodies for them would spend one
+ * authenticated round trip per historical tool, on every turn, for nothing.
+ *
+ * Keep this in step with that call site if another adapter starts rebuilding a
+ * transcript.
+ */
+export const shouldHydrateResumeReplay = (providerType?: string): boolean =>
+  providerType === 'claude-code';
+
+/**
  * Restore the stored body of any tool message the read path projected away,
  * for the ONE consumer that feeds it back to a model.
  *

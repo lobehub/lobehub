@@ -1,7 +1,11 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildResumeReplayMessages, hydrateProjectedToolMessages } from './resumeReplay';
+import {
+  buildResumeReplayMessages,
+  hydrateProjectedToolMessages,
+  shouldHydrateResumeReplay,
+} from './resumeReplay';
 
 const msg = (over: Partial<UIChatMessage>): UIChatMessage =>
   ({ content: '', createdAt: 1_780_000_000_000, id: 'm', role: 'user', ...over }) as UIChatMessage;
@@ -122,5 +126,18 @@ describe('hydrateProjectedToolMessages', () => {
 
     expect(hydrated?.[0]).toBe(user);
     expect(fetchStored).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('shouldHydrateResumeReplay', () => {
+  it('pays for a restored transcript only where one is actually rebuilt', () => {
+    // Main rebuilds a transcript for Claude Code and nothing else; the other
+    // adapters are handed the replay and ignore it, so restoring their bodies
+    // would be one authenticated round trip per historical tool, every turn.
+    expect(shouldHydrateResumeReplay('claude-code')).toBe(true);
+
+    for (const other of ['codex', 'opencode', 'pi', 'droid', undefined]) {
+      expect(shouldHydrateResumeReplay(other)).toBe(false);
+    }
   });
 });
