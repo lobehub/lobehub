@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  *
- * LOBE-14032: after a run ends, a reload briefly repainted the topic row with
- * the running spinner before it vanished again.
+ * After a run ends, a reload briefly repainted the topic row with the running
+ * spinner before it vanished again.
  *
  * The chain under test is the real one: `useFetchTopics` → tiered SWR provider
  * → IndexedDB → "reload" (fresh provider) → first paint before the network
@@ -31,7 +31,7 @@ vi.mock('@/services/topic', () => ({
 }));
 
 const SCOPE = 'topic-cache-user:personal';
-const AGENT_ID = 'agent-lobe-14032';
+const AGENT_ID = 'agent-topic-cache';
 const CONTAINER_KEY = topicMapKey({ agentId: AGENT_ID });
 
 const makeProvider = () =>
@@ -59,7 +59,7 @@ const wrapper =
       children,
     );
 
-const runningTopic = { id: 'tpc-lobe-14032', status: 'running', title: '抚州明天天气查询' };
+const runningTopic = { id: 'tpc-topic-cache', status: 'running', title: '抚州明天天气查询' };
 
 const cachedTopicStatus = async (): Promise<string | undefined> => {
   const entries = await localDataCache.entriesByScope(SCOPE);
