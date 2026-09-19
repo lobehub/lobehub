@@ -6,6 +6,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import type { HomeMode } from '../types';
 import { isHomeModeDisabled, resolvePermittedHomeMode } from './modePermission';
@@ -111,6 +112,8 @@ interface ModeSelectProps {
 
 const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
   const { t } = useTranslation('home');
+  const enableQuickNote = useServerConfigStore((s) => s.featureFlags.enableQuickNote);
+  const modes = MODES.filter((mode) => mode.key !== 'note' || enableQuickNote);
   const { t: tChat } = useTranslation('chat');
   const { allowed: canCreateContent, reason: createContentReason } =
     usePermission('create_content');
@@ -129,11 +132,11 @@ const ModeSelect = memo<ModeSelectProps>(({ onChange, value }) => {
     [onChange],
   );
 
-  const current = MODES.find((mode) => mode.key === value) ?? MODES[0];
+  const current = modes.find((mode) => mode.key === value) ?? MODES[0];
 
   const content = (
     <Flexbox gap={4} role={'menu'} style={{ maxWidth: 320, minWidth: 280 }}>
-      {MODES.map(({ icon, key }) => {
+      {modes.map(({ icon, key }) => {
         const disabled = isHomeModeDisabled(key, canCreateContent);
 
         return (

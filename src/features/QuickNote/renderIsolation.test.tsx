@@ -1,13 +1,17 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { act, Profiler } from 'react';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 import type { QuickNoteItem } from '@/services/quickNote';
 import { useQuickNoteStore } from '@/store/quickNote';
 import { initialState } from '@/store/quickNote/initialState';
+import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 
 import AiPanel from './NoteDetail/AiPanel';
 import AnalyzeAction from './NoteDetail/AnalyzeAction';
+import NoteLayout from './NoteLayout';
 import FilterChips from './NoteLayout/FilterChips';
 
 // NOTICE:
@@ -17,6 +21,7 @@ import FilterChips from './NoteLayout/FilterChips';
 // Remove these mocks if those children gain a shared test transport fixture.
 vi.mock('./NoteDetail/AgenticSections', () => ({ default: () => null }));
 vi.mock('./NoteDetail/AnalyzeSettings', () => ({ default: () => null }));
+vi.mock('./NoteLayout/Sidebar', () => ({ default: () => null }));
 vi.mock('./NoteDetail/CommentComposer', () => ({ default: () => null }));
 vi.mock('@/services/quickNote', () => ({ quickNoteService: {} }));
 vi.mock('@/store/user', () => ({ useUserStore: () => undefined }));
@@ -44,6 +49,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
+  useQuickNoteStore.setState({ initNotes: useQuickNoteStore.getInitialState().initNotes });
 });
 
 /** @example Editing text updates its consumer without committing the AI or filter regions. */
@@ -122,5 +128,35 @@ describe('Quick Note render isolation', () => {
     act(() => vi.advanceTimersByTime(5000));
     /** @example A delayed server response does not keep the expired clock rendering. */
     expect(commits).not.toHaveBeenCalled();
+  });
+  /** @example Direct links wait for resolved flags and never load notes for denied users. */
+  it.each([true, false])('gates a direct note route with enabled=%s', (enabled) => {
+    const initNotes = vi.fn();
+    useQuickNoteStore.setState({ initNotes });
+    const config = initServerConfigStore({
+      featureFlags: mapFeatureFlagsEnvToState({ quick_note: enabled }),
+      serverConfigInit: false,
+    });
+    render(
+      <Provider createStore={() => config}>
+        <MemoryRouter initialEntries={['/note']}>
+          <Routes>
+            <Route element={<span>Home destination</span>} path="/" />
+            <Route element={<NoteLayout />} path="/note">
+              <Route index element={<span>Note destination</span>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </Provider>,
+    );
+    /** @example Unresolved configuration must not prematurely redirect a tester. */
+    expect(screen.queryByText('Home destination')).toBeNull();
+    /** @example Fetching note data waits for the rollout decision. */
+    expect(initNotes).not.toHaveBeenCalled();
+    act(() => config.setState({ serverConfigInit: true }));
+    /** @example Enabled users enter Note, while denied users return to the parent route. */
+    expect(screen.getByText(enabled ? 'Note destination' : 'Home destination')).toBeTruthy();
+    /** @example Only an enabled route initializes the note store. */
+    expect(initNotes).toHaveBeenCalledTimes(enabled ? 1 : 0);
   });
 });

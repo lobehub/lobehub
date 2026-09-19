@@ -13,8 +13,14 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { QuickNoteProcessingService } from '@/server/services/quickNote';
+import { assertQuickNoteEnabled } from '@/server/services/quickNote/featureGate';
 
-const quickNoteProcedure = wsCompatProcedure.use(serverDatabase);
+const quickNoteProcedure = wsCompatProcedure
+  .use(async ({ ctx, next }) => {
+    await assertQuickNoteEnabled(ctx.userId);
+    return next();
+  })
+  .use(serverDatabase);
 const quickNoteWriteProcedure = quickNoteProcedure.use(withScopedPermission('agent:update'));
 
 const idInput = z.object({ id: z.string() });

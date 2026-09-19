@@ -36,6 +36,8 @@ export type IFeatureFlagsState = {
   enableInlineAgentSteps: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
+  /** Whether the current user can access Quick Note. */
+  enableQuickNote: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;

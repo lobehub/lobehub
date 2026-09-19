@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 
 import { QuickNoteModel } from '@/database/models/quickNote';
 import { getServerDB } from '@/database/server';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 /**
@@ -33,6 +34,9 @@ export const sweepQuickNoteAnalyze = async (context: Context) => {
     let enqueued = 0;
 
     for (const candidate of candidates) {
+      const flags = await getServerFeatureFlagsStateFromRuntimeConfig(candidate.userId);
+      if (flags.enableQuickNote !== true) continue;
+
       const model = new QuickNoteModel(db, candidate.userId, candidate.workspaceId ?? undefined);
       const run = await model.claimRun(candidate.id, { kind: 'analyze', trigger: 'automatic' });
       if (!run) continue;
