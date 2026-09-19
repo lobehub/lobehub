@@ -34,6 +34,7 @@ const prefixes = {
   metrics: 'mtr',
   plugins: 'plg',
   projects: 'prj',
+  quickNotes: 'qn',
   sessionGroups: 'sg',
   sessions: 'ssn',
   threads: 'thd',
