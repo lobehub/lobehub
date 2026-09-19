@@ -2,6 +2,7 @@
  * @vitest-environment node
  */
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
+import type { UIChatMessage } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -190,7 +191,7 @@ describe('AgentRuntimeService', () => {
   const buildPersistedToolChain = (
     finalContent: string,
     finalMetadata?: Record<string, unknown>,
-  ) => [
+  ): UIChatMessage[] => [
     {
       content: 'question',
       createdAt: 1,
@@ -824,17 +825,14 @@ describe('AgentRuntimeService', () => {
           origin: { agentId: 'agent-1', topicId: 'topic-1' },
         };
         mockCoordinator.loadAgentState.mockResolvedValue(state);
-        const dbMessages = buildPersistedToolChain('full model answer').map((message) => ({
-          ...message,
-          imageList: [] as { id: string; url: string; alt: string }[],
-        }));
+        const dbMessages = buildPersistedToolChain('full model answer');
         dbMessages[0].imageList = [{ id: 'file-1', url: 'raw/image', alt: 'image' }];
         if (withDevice) {
           dbMessages[0] = {
             ...dbMessages[0],
             role: 'tool',
             pluginState: { metadata: { activeDeviceId: 'device-1', devicePlatform: 'darwin' } },
-          } as (typeof dbMessages)[number];
+          };
         }
         const query = (service as any).messageModel.query.mockResolvedValue(dbMessages);
         vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
@@ -851,7 +849,7 @@ describe('AgentRuntimeService', () => {
         expect(query).toHaveBeenCalledTimes(1);
         expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('full model answer');
         expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('model:raw/image');
-        expect(dbMessages[0].imageList[0].url).toBe('raw/image');
+        expect(dbMessages[0].imageList?.[0].url).toBe('raw/image');
         expect(step.mock.calls[0][0].binding?.device?.id).toBe(withDevice ? 'device-1' : undefined);
       },
     );
