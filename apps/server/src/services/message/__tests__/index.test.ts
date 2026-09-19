@@ -300,6 +300,24 @@ describe('MessageService', () => {
   });
 
   describe('updateMessage', () => {
+    it('normalizes a known error from a legacy client before persistence', async () => {
+      await messageService.updateMessage(
+        'msg-error',
+        {
+          error: { body: { message: 'insufficient quota' }, type: 'ProviderBizError' },
+        },
+        {},
+      );
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', {
+        error: expect.objectContaining({ attribution: 'user', type: 'InsufficientQuota' }),
+      });
+    });
+
+    it('preserves an explicit error clear', async () => {
+      await messageService.updateMessage('msg-error', { error: null }, {});
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', { error: null });
+    });
+
     it('should update message and return { success: true } when no sessionId/topicId provided', async () => {
       const messageId = 'msg-1';
       const value = { content: 'updated content' };
@@ -328,6 +346,25 @@ describe('MessageService', () => {
   });
 
   describe('batchMutate', () => {
+    it('normalizes known errors on creation and batched updates too', async () => {
+      vi.mocked(mockMessageModel.create).mockResolvedValue({ id: 'msg-error' } as any);
+      vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);
+      const error = { type: 'ProviderBizError' as const, body: { message: 'insufficient quota' } };
+      const message = { content: '', error, role: 'assistant' as const };
+      await messageService.createMessage(message);
+      await messageService.batchMutate([
+        { type: 'createMessage', message },
+        { type: 'updateMessage', id: 'msg-error', value: { error } },
+      ]);
+      const normalized = expect.objectContaining({
+        error: expect.objectContaining({ type: 'InsufficientQuota', attribution: 'user' }),
+      });
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(1, normalized, undefined);
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(2, normalized, undefined);
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', normalized);
+      expect(message.error).toBe(error);
+    });
+
     it('quietly applies create/update/tool updates without querying messages', async () => {
       vi.mocked(mockMessageModel.create).mockResolvedValue({ id: 'msg-created' } as any);
       vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);

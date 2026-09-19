@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
@@ -400,7 +401,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
       sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.RateLimit;
     const rateLimitInfo = isHeterogeneousAgentStatusGuideError(sessionErrorBody)
-      ? sessionErrorBody.rateLimitInfo
+      ? readHeterogeneousErrorContext({ type: 'AgentRuntimeError', body: sessionErrorBody })
       : undefined;
 
     const schedule: HeterogeneousAgentScheduleState | undefined = isRateLimitError

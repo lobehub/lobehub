@@ -1,5 +1,13 @@
-import type { ChatErrorBudgetContext } from '@lobechat/types';
+import {
+  formatErrorRef,
+  getErrorCodeSpec,
+  normalizeChatMessageError,
+} from '@lobechat/model-runtime/errors';
+import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 
+import modelRuntimeEnglish from '@/locales/default/modelRuntime';
+
+import modelRuntimeChinese from '../../../../../locales/zh-CN/modelRuntime.json';
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
 // Import from the leaf modules (`const` / `utils`) instead of the
@@ -8,6 +16,7 @@ import { getExtremeAck } from './ackPhrases';
 // Telegram Guest outbound path import this template for localized copy.
 import { type BotReplyLocale } from './platforms/const';
 import { formatDuration } from './platforms/utils';
+import { renderHeterogeneousError } from './renderHeterogeneousError';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
 // because bot-callback webhooks send via DiscordPlatformClient directly
@@ -717,14 +726,44 @@ export function renderAgentError(
   lng?: BotReplyLocale,
   attribution?: string,
   budget?: ChatErrorBudgetContext,
+  heterogeneous?: ChatErrorHeterogeneousContext,
 ): string {
   const strings = getSystemStrings(lng);
+  const heteroReply = renderHeterogeneousError(heterogeneous, lng);
+  if (heteroReply) return appendOperationId(heteroReply, operationId);
+
+  const normalized = normalizeChatMessageError({
+    message: errorMessage,
+    type: errorType ?? 'AgentRuntimeError',
+  });
+  // Classify legacy generic envelopes before selecting channel-specific copy.
+  // Unknown inputs retain the caller's fallback behavior.
+  const spec = getErrorCodeSpec(String(normalized.type));
+  if (spec && !spec.isFallback) {
+    errorType = spec.code;
+    attribution = spec.attribution;
+  }
+  const withReference = (value: string) => {
+    const reference = formatErrorRef(errorType);
+    const footer = reference
+      ? `\n${lng === 'zh-CN' ? '错误码' : 'Error code'}: \`${reference}\``
+      : '';
+    return appendOperationId(`${value}${footer}`, operationId);
+  };
 
   if (isCommandConnectionClosedError(errorType, errorMessage)) {
-    return appendOperationId(strings.errorCommandConnectionClosed, operationId);
+    return withReference(strings.errorCommandConnectionClosed);
   }
 
   const friendlyKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
+  if (!friendlyKey && spec && !spec.isFallback) {
+    // Reuse the same maintained translations as message error cards. Never
+    // interpolate raw provider error text into a shared IM channel.
+    const catalog: Record<string, string> =
+      lng === 'zh-CN' ? modelRuntimeChinese : modelRuntimeEnglish;
+    const copy = catalog[spec.code];
+    if (copy && !copy.includes('{{')) return withReference(`${strings.error}\n${copy}`);
+  }
   const stringKey =
     (friendlyKey && BUDGET_ADMISSION_KEYS.has(friendlyKey) && budget?.budgetTypeAtError
       ? BUDGET_SCOPE_ERROR.get(budget.budgetTypeAtError)
@@ -734,7 +773,7 @@ export function renderAgentError(
   if (stringKey) {
     const value = strings[stringKey];
     if (typeof value === 'string') {
-      return appendOperationId(value, operationId);
+      return withReference(value);
     }
   }
 

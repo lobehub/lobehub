@@ -1,5 +1,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   type CreateMessageParams,
@@ -14,6 +16,15 @@ import { MessageModel } from '@/database/models/message';
 import { UserModel } from '@/database/models/user';
 
 import { FileService } from '../file';
+
+/** Apply the same error contract to single and batched message writes. */
+const normalizeMessageError = <T extends Pick<UpdateMessageParams, 'error'>>(value: T): T =>
+  value.error
+    ? {
+        ...value,
+        error: normalizeHeterogeneousMessageError(normalizeChatMessageError(value.error)),
+      }
+    : value;
 
 interface QueryOptions {
   agentId?: string | null;
@@ -287,7 +298,10 @@ export class MessageService {
     for (const [index, operation] of operations.entries()) {
       try {
         if (operation.type === 'createMessage') {
-          const item = await this.messageModel.create(operation.message, operation.message.id);
+          const item = await this.messageModel.create(
+            normalizeMessageError(operation.message),
+            operation.message.id,
+          );
           results.push({ id: item.id, index, success: true, type: operation.type });
           continue;
         }
@@ -298,7 +312,10 @@ export class MessageService {
           continue;
         }
 
-        const result = await this.messageModel.update(operation.id, operation.value as any);
+        const result = await this.messageModel.update(
+          operation.id,
+          normalizeMessageError(operation.value),
+        );
         results.push({ id: operation.id, index, success: result.success, type: operation.type });
       } catch (error) {
         console.error('[MessageService] batchMutate operation failed:', error);
@@ -327,7 +344,7 @@ export class MessageService {
     //    when present (passing `undefined` falls back to the model's genId
     //    default), so flows that chain parentId across not-yet-created messages
     //    (e.g. the subagent run coordinator) can assign ids up front.
-    const item = await this.messageModel.create(params, params.id);
+    const item = await this.messageModel.create(normalizeMessageError(params), params.id);
 
     // 2. Query all messages for this agent/topic
     // Use agentId field for query
@@ -423,6 +440,8 @@ export class MessageService {
     value: UpdateMessageParams,
     options: QueryOptions,
   ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
+    value = normalizeMessageError(value);
+
     const updateStartedAt = Date.now();
     const modelTiming = createModelTiming(options, 'lambda.message.update.dbUpdate');
     if (modelTiming) {

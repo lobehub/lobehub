@@ -22,6 +22,7 @@ import {
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import type {
   ChatMessageError,
@@ -139,7 +140,10 @@ const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageErro
   return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
 };
 
-const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError => {
+const toRawHeterogeneousAgentMessageError = (
+  error: unknown,
+  agentType?: string,
+): ChatMessageError => {
   const authRequiredError = maybeClassifyCliAuthRequiredError(error, agentType);
   if (authRequiredError) {
     return {
@@ -198,6 +202,12 @@ const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): C
     type: AgentRuntimeErrorType.AgentRuntimeError,
   };
 };
+
+const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError =>
+  normalizeHeterogeneousMessageError(
+    toRawHeterogeneousAgentMessageError(error, agentType),
+    agentType,
+  );
 
 const isRecoverableResumeError = (
   error: unknown,

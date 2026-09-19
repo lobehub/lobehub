@@ -1,3 +1,5 @@
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
@@ -222,9 +224,7 @@ export class MessageService {
   };
 
   updateMessageError = async (id: string, value: ChatMessageError, ctx?: MessageQueryContext) => {
-    const error = value.type
-      ? value
-      : { body: value, message: value.message, type: 'ApplicationRuntimeError' };
+    const error = normalizeHeterogeneousMessageError(normalizeChatMessageError(value));
 
     return lambdaClient.message.update.mutate({
       ...ctx,

@@ -12,13 +12,9 @@ import type {
   ToolStartData,
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
-import type {
-  BuiltinToolResult,
-  ChatMessageError,
-  ConversationContext,
-  UIChatMessage,
-} from '@lobechat/types';
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
+import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { messageService } from '@/services/message';
@@ -277,111 +273,6 @@ const findNextAssistantMessageId = (
       return message.id;
     }
   }
-};
-
-const isErrorType = (value: unknown): value is ChatMessageError['type'] =>
-  typeof value === 'string' || typeof value === 'number';
-
-const getMessageFromErrorData = (data: unknown): string | undefined => {
-  if (!isRecord(data)) return undefined;
-
-  const message = pickNonEmptyString(data.message);
-  if (message) return message;
-
-  const error = data.error;
-  const errorString = pickNonEmptyString(error);
-  if (errorString) return errorString;
-  if (isRecord(error)) {
-    const errorMessage = pickNonEmptyString(error.message);
-    if (errorMessage) return errorMessage;
-
-    const nestedError = error.error;
-    if (isRecord(nestedError)) {
-      const nestedMessage = pickNonEmptyString(nestedError.message);
-      if (nestedMessage) return nestedMessage;
-    }
-  }
-
-  const responseBody = data._responseBody;
-  const responseBodyMessage = getMessageFromErrorData(responseBody);
-  if (responseBodyMessage) return responseBodyMessage;
-
-  const body = data.body;
-  if (isRecord(body)) {
-    const bodyMessage = pickNonEmptyString(body.message);
-    if (bodyMessage) return bodyMessage;
-  }
-};
-
-const mergeGatewayPayloadError = (
-  sourceBody: Record<string, unknown>,
-  payloadError: unknown,
-): Record<string, unknown> => {
-  if (payloadError === undefined) return sourceBody;
-  if (!('error' in sourceBody)) return { ...sourceBody, error: payloadError };
-  if (isRecord(sourceBody.error) && isRecord(payloadError)) {
-    return { ...sourceBody, error: { ...payloadError, ...sourceBody.error } };
-  }
-  return sourceBody;
-};
-
-const buildGatewayRuntimeErrorBody = (
-  data: Record<string, unknown>,
-  message: string,
-): Record<string, unknown> => {
-  const body = toRecord(data.body);
-  const responseBody = toRecord(data._responseBody);
-  const errorBody = toRecord(data.error);
-  const sourceBody = body ?? responseBody ?? errorBody ?? {};
-  const shouldMergePayloadError = body === undefined && data._responseBody !== undefined;
-  const mergedBody = shouldMergePayloadError
-    ? mergeGatewayPayloadError(sourceBody, data.error)
-    : sourceBody;
-
-  return {
-    ...mergedBody,
-    ...(data.budget === undefined || 'budget' in mergedBody ? {} : { budget: data.budget }),
-    ...(typeof data.provider === 'string' && !('provider' in mergedBody)
-      ? { provider: data.provider }
-      : {}),
-    ...('message' in mergedBody ? {} : { message }),
-  };
-};
-
-const toChatMessageError = (data: unknown): ChatMessageError => {
-  if (isRecord(data) && isErrorType(data.type)) {
-    const message =
-      typeof data.message === 'string' && data.message
-        ? data.message
-        : getMessageFromErrorData({ body: data.body });
-
-    return {
-      ...data,
-      ...(message ? { message } : {}),
-      type: data.type,
-    };
-  }
-
-  // Gateway realtime error events can carry the model-runtime payload shape
-  // (`errorType` + `error`) before the terminal DB message is refreshed. Treat
-  // it as the same semantic error instead of falling back to AgentRuntimeError.
-  if (isRecord(data) && isErrorType(data.errorType)) {
-    const message = getMessageFromErrorData(data) || String(data.errorType);
-
-    return {
-      body: buildGatewayRuntimeErrorBody(data, message),
-      message,
-      type: data.errorType,
-    };
-  }
-
-  const message = getMessageFromErrorData(data) || 'Unknown error';
-
-  return {
-    body: { message },
-    message,
-    type: AgentRuntimeErrorType.AgentRuntimeError,
-  };
 };
 
 /**
@@ -1418,7 +1309,9 @@ export const createGatewayEventHandler = (
 
       case 'error': {
         enqueue(async () => {
-          const messageError = toChatMessageError(event.data);
+          const messageError = normalizeHeterogeneousMessageError(
+            normalizeChatMessageError(event.data),
+          );
           const errorMessage = messageError.message;
 
           void emitAgentSignal({

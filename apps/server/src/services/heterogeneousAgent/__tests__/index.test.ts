@@ -108,6 +108,20 @@ const createService = (
 
 describe('HeterogeneousAgentService', () => {
   describe('normalizeHeterogeneousFinishError', () => {
+    it('enriches a flattened weekly limit with the stable quota fields', () => {
+      expect(
+        normalizeHeterogeneousFinishError('claude-code', {
+          message: "You've hit your weekly limit · resets 10pm (Asia/Shanghai)",
+          type: 'AgentRuntimeError',
+        }),
+      ).toMatchObject({
+        errorRef: 'H2001',
+        attribution: 'user',
+        retryable: false,
+        body: { agentType: 'claude-code', code: 'rate_limit', details: { kind: 'usage_limit' } },
+      });
+    });
+
     it('classifies a flattened Claude Code login failure for the frontend status guide', () => {
       expect(
         normalizeHeterogeneousFinishError('claude-code', {
@@ -120,6 +134,7 @@ describe('HeterogeneousAgentService', () => {
           code: 'auth_required',
           stderr: 'Not logged in · Please run /login',
         },
+        errorRef: 'H1001',
         type: 'AgentRuntimeError',
       });
     });
@@ -145,7 +160,7 @@ describe('HeterogeneousAgentService', () => {
         type: 'AgentRuntimeError',
       };
 
-      expect(normalizeHeterogeneousFinishError('claude-code', error)).toBe(error);
+      expect(normalizeHeterogeneousFinishError('claude-code', error)).toMatchObject(error);
     });
   });
 
