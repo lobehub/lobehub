@@ -1162,6 +1162,13 @@
       "when": 1789610500888,
       "tag": "0165_expertise_rejection_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1789816134383,
+      "tag": "0166_device_architecture",
+      "breakpoints": true
     }
   ],
   "version": "6"
