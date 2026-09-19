@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -130,9 +131,14 @@ const TabPane = ({
 
 const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   const { t } = useTranslation('electron');
-  const tabs = useElectronStore((s) => s.tabs);
-  const activeTabId = useElectronStore((s) => s.activeTabId);
-  const splitView = useElectronStore((s) => s.splitView);
+  // Deferred so the strip commits a tab switch before the pane does. Activating a cold
+  // tab mounts its whole router tree; on the urgent lane that mount lands in the same
+  // commit as the strip update, so closing a tab froze mid-spring until the neighbour
+  // finished rendering. As a transition it is time-sliced and, when the page suspends on
+  // a lazy chunk, the outgoing pane stays on screen instead of flashing a fallback.
+  const tabs = useDeferredValue(useElectronStore((s) => s.tabs));
+  const activeTabId = useDeferredValue(useElectronStore((s) => s.activeTabId));
+  const splitView = useDeferredValue(useElectronStore((s) => s.splitView));
   const isPreferenceInit = useUserStore(preferenceSelectors.isPreferenceInit);
   const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const closeSplitView = useElectronStore((s) => s.closeSplitView);

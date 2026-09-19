@@ -1,5 +1,6 @@
 'use client';
 
+import { isMaskedBotCredential } from '@lobechat/const';
 import { Button, toast } from '@lobehub/ui/base-ui';
 import { Form as AntdForm } from 'antd';
 import { Download } from 'lucide-react';
@@ -51,7 +52,11 @@ export const FeishuUserIdExtras = ({
   const feishuFetchOwnerId = useAgentStore((s) => s.feishuFetchOwnerId);
 
   const appId = applicationId?.trim();
-  const secret = appSecret?.trim();
+  const rawSecret = appSecret?.trim();
+  // A masked secret is the server declining to hand the value back, not a
+  // secret — sending it to Feishu only earns an auth failure, so treat it the
+  // same as an empty field and leave the lookup unavailable until it is typed.
+  const secret = isMaskedBotCredential(rawSecret) ? undefined : rawSecret;
   useEffect(() => {
     setLoading(false);
     return () => {

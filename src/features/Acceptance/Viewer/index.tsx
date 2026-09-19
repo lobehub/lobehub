@@ -10,7 +10,6 @@ import { AcceptanceOverview } from './AcceptanceOverview';
 import { AcceptanceBundleGate, AcceptanceScope } from './AcceptanceScope';
 import { FlowPanelHostContext } from './Flow/FlowPanelHost';
 import AcceptanceFocusWorkspace from './Focus/AcceptanceFocusWorkspace';
-import AcceptanceSharedNotice from './Header/AcceptanceSharedNotice';
 import AcceptanceLedgerRail from './History/AcceptanceLedgerRail';
 import { acceptanceScrollLayout } from './layout';
 
@@ -82,18 +81,7 @@ const AcceptancePage = ({
                   gap={16}
                   style={{ minHeight: focused ? 0 : undefined, width: '100%' }}
                 >
-                  {focused ? (
-                    <>
-                      {/* The focused branch zeroes the frame padding, so the
-                      notice carries its own margins. A shared viewer needs
-                      the capability explanation here MOST — this is where
-                      the owner-only review controls are visibly absent. */}
-                      <AcceptanceSharedNotice
-                        style={{ marginBlockStart: 16, marginInline: 20, width: 'auto' }}
-                      />
-                      <AcceptanceFocusWorkspace />
-                    </>
-                  ) : null}
+                  {focused ? <AcceptanceFocusWorkspace /> : null}
                 </Flexbox>
                 {!focused && <AcceptanceOverview onDraftToComposer={onDraftToComposer} />}
               </Flexbox>

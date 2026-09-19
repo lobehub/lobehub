@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Haz clic para copiar",
   "unknownError.desc": "Ocurrió un error inesperado. Puedes intentarlo nuevamente o reportarlo en",
   "unknownError.retry": "Reintentar",
+  "unknownError.sharedDesc": "Por favor, informa de este problema en",
+  "unknownError.sharedTitle": "No se puede generar esta respuesta",
   "unknownError.title": "Vaya, la solicitud se tomó un descanso",
   "unknownError.traceIdLabel": "ID de rastreo:",
   "unlock.addProxyUrl": "Agregar URL de proxy de OpenAI (opcional)",

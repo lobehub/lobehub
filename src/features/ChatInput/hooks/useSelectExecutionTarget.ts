@@ -166,7 +166,11 @@ export const useSelectExecutionTarget = (agentId: string) => {
             ...localSandboxPatch,
           },
         };
-        await updateWorkspaceUserPreference({ agentDeviceOverrides: nextOverrides });
+        try {
+          await updateWorkspaceUserPreference({ agentDeviceOverrides: nextOverrides });
+        } catch {
+          if (!options?.silent) toast.error(t('saveAgentConfigFail', { ns: 'common' }));
+        }
         return;
       }
 

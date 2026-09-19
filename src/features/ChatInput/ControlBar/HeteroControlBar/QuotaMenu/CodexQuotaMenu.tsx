@@ -6,8 +6,8 @@ import type {
   CodexRateLimitResetCredit,
 } from '@lobechat/electron-client-ipc';
 import { uuid } from '@lobechat/utils';
-import { Collapse, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -342,12 +342,10 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
 
       return (
         <Flexbox className={styles.resetCredits}>
-          <Collapse
+          <Accordion
             className={styles.creditCollapse}
-            collapsible={resetCreditCount > 0 || !!resetFeedback}
-            defaultActiveKey={[]}
-            expandIconPlacement={'end'}
-            padding={0}
+            defaultValue={[]}
+            indicatorPlacement={'end'}
             variant={'borderless'}
             items={[
               {
@@ -423,8 +421,9 @@ const CodexQuotaMenu = memo<CodexQuotaMenuProps>(({ command, env }) => {
                     )}
                   </Flexbox>
                 ),
+                disabled: !(resetCreditCount > 0 || !!resetFeedback),
                 key: 'reset-credits',
-                label: (
+                title: (
                   <Flexbox gap={2}>
                     <Flexbox horizontal align={'center'} gap={4}>
                       <Icon icon={RotateCcwIcon} size={14} />

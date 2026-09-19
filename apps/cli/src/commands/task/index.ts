@@ -1,3 +1,4 @@
+import { taskTitleSlug } from '@lobechat/utils/taskSlug';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -549,7 +550,10 @@ export function registerTaskCommand(program: Command) {
         if (options.prefix) input.identifierPrefix = options.prefix;
 
         const result = await client.task.create.mutate(input as any);
-        const url = buildUrl(`/task/${encodeURIComponent(result.data.identifier)}`);
+        const slug = taskTitleSlug(result.data.name);
+        const url = buildUrl(
+          `/task/${encodeURIComponent(result.data.identifier)}${slug ? `/${slug}` : ''}`,
+        );
 
         if (options.json !== undefined) {
           outputJson({ ...result.data, url }, options.json);

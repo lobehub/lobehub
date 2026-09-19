@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "Laden van branches mislukt",
   "workingDirectory.branchesLoading": "Branches laden…",
   "workingDirectory.branchesNoMatch": "Geen overeenkomende branches",
+  "workingDirectory.branchesTruncated": "{{count}} meer — typ om te filteren",
   "workingDirectory.browseDescription": "Kies een map op het aangesloten apparaat.",
   "workingDirectory.browseFolders": "Blader door mappen",
   "workingDirectory.cancel": "Annuleren",

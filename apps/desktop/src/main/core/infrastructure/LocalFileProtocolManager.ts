@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -469,6 +469,40 @@ export class LocalFileProtocolManager {
     };
   }
 
+  async copyExternalFileForPublish({
+    filePath,
+    targetPath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    targetPath: string;
+    workspaceRoot: string;
+  }): Promise<boolean> {
+    const normalizedTarget = normalizeAbsolutePath(targetPath);
+    const normalizedRoot = normalizeAbsolutePath(workspaceRoot);
+    if (!normalizedTarget || !normalizedRoot) return false;
+    const realRoot = normalizeAbsolutePath(await realpath(normalizedRoot));
+    if (!realRoot || !isPathWithinRoot(normalizedTarget, realRoot)) return false;
+
+    const realFilePath = await this.resolveApprovedPreviewPath({
+      allowExternalFile: true,
+      filePath,
+      persistExternalApproval: false,
+      workspaceRoot,
+    });
+    if (!realFilePath) return false;
+
+    const fileStat = await stat(realFilePath);
+    if (!fileStat.isFile()) return false;
+    if (fileStat.size > EXTERNAL_PUBLISH_ASSET_MAX_BYTES) {
+      throw new Error('File is too large to publish');
+    }
+
+    await mkdir(path.dirname(normalizedTarget), { recursive: true });
+    await copyFile(realFilePath, normalizedTarget);
+    return true;
+  }
+
   /**
    * Decode the URL pathname back into an absolute filesystem path.
    *
@@ -622,11 +656,16 @@ export class LocalFileProtocolManager {
     const workspaceRootApproved =
       this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) ||
       this.indexedProjectRoots.has(normalizedRealWorkspaceRoot);
-    if (
-      workspaceRootApproved &&
-      isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)
-    ) {
-      return normalizedRealFilePath;
+    if (workspaceRootApproved) {
+      // Realpath containment: file resolved inside the real workspace root.
+      if (isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)) {
+        return normalizedRealFilePath;
+      }
+      // Non-resolved containment: file appears inside the workspace root even
+      // when the resolved path points elsewhere (symlinked directories).
+      if (isPathWithinRoot(normalizedFilePath, normalizedWorkspaceRoot)) {
+        return normalizedRealFilePath;
+      }
     }
 
     if (this.hasExternalPreviewApproval(normalizedRealFilePath)) return normalizedRealFilePath;

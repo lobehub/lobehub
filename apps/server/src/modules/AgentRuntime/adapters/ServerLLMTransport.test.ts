@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { ModelRuntime } from '@lobechat/model-runtime';
+import { tracer as agentRuntimeTracer } from '@lobechat/observability-otel/modules/agent-runtime';
 import { describe, expect, it, vi } from 'vitest';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -31,5 +32,44 @@ describe('ServerLLMTransport.stream · conversation affinity', () => {
       'topic-1',
       'topic-2',
     ]);
+  });
+});
+
+describe('ServerLLMTransport.createTrace · streaming mode', () => {
+  it('records the streaming mode the built context resolved, not the operation default', () => {
+    const startSpan = vi.spyOn(agentRuntimeTracer, 'startSpan');
+    const ctx = { operationId: 'op-1', stepIndex: 0, userId: 'user-1' } as RuntimeExecutorContext;
+
+    new ServerLLMTransport(ctx).createTrace({
+      assistantMessageId: 'msg-1',
+      context: {
+        messages: [],
+        modelParameters: { stream: false },
+        replayAssistantReasoning: false,
+      },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(startSpan).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        attributes: expect.objectContaining({ 'gen_ai.request.stream': false }),
+      }),
+    );
+
+    // An explicit operation-level stream is already folded into the context;
+    // without any context the operation value still applies.
+    new ServerLLMTransport({ ...ctx, stream: false }).createTrace({
+      assistantMessageId: 'msg-2',
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+    expect(startSpan).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        attributes: expect.objectContaining({ 'gen_ai.request.stream': false }),
+      }),
+    );
   });
 });

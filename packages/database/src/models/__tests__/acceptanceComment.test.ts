@@ -234,8 +234,8 @@ describe('AcceptanceCommentModel', () => {
         clientId: 'd',
         content: 'd',
       });
-      expect(await model.delete(comment.id, owner)).toBe(false);
-      expect(await model.delete(comment.id, reviewer)).toBe('hard');
+      expect(await model.delete(comment.id, { authorUserId: owner })).toBe(false);
+      expect(await model.delete(comment.id, { authorUserId: reviewer })).toBe('hard');
       expect(await model.findById(comment.id)).toBeUndefined();
     });
 
@@ -254,14 +254,14 @@ describe('AcceptanceCommentModel', () => {
         parentCommentId: root.id,
       });
 
-      expect(await model.delete(root.id, reviewer)).toBe('soft');
+      expect(await model.delete(root.id, { authorUserId: reviewer })).toBe('soft');
       const tombstone = await model.findById(root.id);
       expect(tombstone?.deletedAt).not.toBeNull();
       expect(tombstone?.content).toBe('');
       // Already deleted: a second delete is a no-op.
-      expect(await model.delete(root.id, reviewer)).toBe(false);
+      expect(await model.delete(root.id, { authorUserId: reviewer })).toBe(false);
 
-      expect(await model.delete(reply.id, owner)).toBe('hard');
+      expect(await model.delete(reply.id, { authorUserId: owner })).toBe('hard');
       expect(await model.findById(root.id)).toBeUndefined();
     });
 
@@ -282,7 +282,7 @@ describe('AcceptanceCommentModel', () => {
         parentCommentId: root.id,
       });
 
-      expect(await model.delete(root.id, reviewer)).toBe('soft');
+      expect(await model.delete(root.id, { authorUserId: reviewer })).toBe('soft');
 
       // The tombstone exists to hold the reply up. Leaving the editor tree or
       // the attached files behind would keep a deleted remark readable.
@@ -414,7 +414,7 @@ describe('AcceptanceCommentModel', () => {
       });
       await react(root.id, '👍', reviewer);
 
-      expect(await model.delete(root.id, owner)).toBe('hard');
+      expect(await model.delete(root.id, { authorUserId: owner })).toBe('hard');
       expect(await model.listByAcceptance(acceptanceId)).toHaveLength(0);
     });
   });

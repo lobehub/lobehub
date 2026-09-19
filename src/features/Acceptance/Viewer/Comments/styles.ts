@@ -14,6 +14,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 export const TIMELINE_NODE = 32;
 const NODE_GUTTER = 12;
 const EVENT_DOT = 20;
+/** Breathing room under each entry — spacing, never part of the rail. */
+const ENTRY_GAP = 14;
 /**
  * GitHub does not run the rail through the avatars. It runs it just inside the
  * content column's left edge, where the opaque comment boxes cover it and only
@@ -120,6 +122,11 @@ export const styles = createStaticStyles(({ css }) => ({
    * the dot, which read as a smudge rather than as a node on the line.
    */
   eventDot: css`
+    /* Same reason as the message box: the rail is the entry's absolutely
+       positioned pseudo-element, so an unpositioned dot paints under it and the
+       line cuts straight across the circle. */
+    position: relative;
+
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -138,6 +145,22 @@ export const styles = createStaticStyles(({ css }) => ({
     flex: none;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  /** The timestamp doubles as the permalink: quiet until you reach for it. */
+  timeLink: css`
+    cursor: pointer;
+
+    padding: 0;
+    border: none;
+
+    background: none;
+
+    transition: color ${cssVar.motionDurationFast};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      text-decoration: underline;
+    }
   `,
   panelBody: css`
     padding-block-start: 6px;
@@ -229,9 +252,11 @@ export const styles = createStaticStyles(({ css }) => ({
    */
   tailEntry: css`
     /* Outranks the last-of-type truncation, which would otherwise stop the
-       line 10px in and leave the composer hanging off the end. */
+       line 10px in and leave the composer hanging off the end. It stops AT the
+       composer's bottom edge: the entry's own bottom padding is spacing, and a
+       rail drawn through it is a line pointing at nothing. */
     &&&::before {
-      inset-block: 0;
+      inset-block: 0 ${ENTRY_GAP}px;
       height: auto;
     }
   `,
@@ -241,7 +266,7 @@ export const styles = createStaticStyles(({ css }) => ({
    */
   timelineEntry: css`
     position: relative;
-    padding-block-end: 14px;
+    padding-block-end: ${ENTRY_GAP}px;
 
     &::before {
       content: '';

@@ -48,7 +48,7 @@ const RecentWorks = memo(() => {
           {recent.map((item) => (
             // `onRemoved` is required here: this list is `useSWRInfinite`-backed,
             // and `useRemoveWork`'s global refresh skips `$inf$` keys, so without
-            // it a removed orphan card lingers until a page reload (LOBE-13961).
+            // it a removed orphan card lingers until a page reload.
             <WorkPreviewCard item={item} key={item.id} onOpen={openWork} onRemoved={reload} />
           ))}
         </div>

@@ -20,6 +20,7 @@ export interface ElasticsearchFtsSearchSyncRunSummary {
   claimed: number;
   failed: number;
   hasMore: boolean;
+  messageTombstoneItems: number;
   released: number;
   steps: number;
 }
@@ -59,6 +60,7 @@ export const runElasticsearchFtsSearchSync = async ({
     claimed: 0,
     failed: 0,
     hasMore: false,
+    messageTombstoneItems: 0,
     released: 0,
     steps: 0,
   };
@@ -72,6 +74,10 @@ export const runElasticsearchFtsSearchSync = async ({
     summary.claimed += drained.claimed;
     summary.failed += drained.failed;
     summary.hasMore = drained.hasMore;
+    summary.messageTombstoneItems += drained.bulkRequestSamples.reduce(
+      (total, sample) => total + (sample.messageTombstoneItems ?? 0),
+      0,
+    );
     summary.released += drained.released;
     summary.steps += 1;
     logStep({ ...summary });

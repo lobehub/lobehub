@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockDeviceClient = vi.hoisted(() => ({
+  copyAssetForPublish: { mutate: vi.fn() },
   getLocalFilePreview: { query: vi.fn() },
   getProjectFileIndex: { query: vi.fn() },
   readExternalAssetForPublish: { query: vi.fn() },
@@ -8,6 +9,7 @@ const mockDeviceClient = vi.hoisted(() => ({
 }));
 
 const mockLocalFileService = vi.hoisted(() => ({
+  copyAssetForPublish: vi.fn(),
   getLocalFilePreview: vi.fn(),
   getProjectFileIndex: vi.fn(),
   readExternalAssetForPublish: vi.fn(),
@@ -184,6 +186,30 @@ describe('projectFileService', () => {
       workingDirectory: '/repo',
     });
     expect(mockLocalFileService.getLocalFilePreview).not.toHaveBeenCalled();
+  });
+
+  it('copies a publish asset through the remote RPC or the desktop service', async () => {
+    const { projectFileService } = await import('./projectFile');
+    const params = {
+      from: '/outside/logo.png',
+      to: '/repo/.lobe-artifacts/site/logo.png',
+      workingDirectory: '/repo',
+    };
+    mockDeviceClient.copyAssetForPublish.mutate.mockResolvedValue({ success: true });
+    mockLocalFileService.copyAssetForPublish.mockResolvedValue({ success: true });
+
+    await expect(
+      projectFileService.copyAssetForPublish({ deviceId: 'device-1', ...params }),
+    ).resolves.toEqual({ success: true });
+    expect(mockDeviceClient.copyAssetForPublish.mutate).toHaveBeenCalledWith({
+      deviceId: 'device-1',
+      ...params,
+    });
+
+    await expect(projectFileService.copyAssetForPublish(params)).resolves.toEqual({
+      success: true,
+    });
+    expect(mockLocalFileService.copyAssetForPublish).toHaveBeenCalledWith(params);
   });
 
   it('searches remote project files through device RPC', async () => {

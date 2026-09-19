@@ -637,6 +637,8 @@ export interface DeviceGitWorkingTreeFiles {
 
 /** One entry in a device's project file index. Mirrors `ProjectFileIndexEntry`. */
 export interface DeviceProjectFileIndexEntry {
+  /** Directory the index left unexpanded; children come from `listProjectDirectory`. */
+  collapsed?: boolean;
   /** Whether Git ignore rules match this file or directory. */
   gitIgnored?: boolean;
   isDirectory: boolean;
@@ -657,6 +659,15 @@ export interface DeviceProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
+}
+
+/**
+ * Children of one directory on a remote device, returned by the
+ * `listProjectDirectory` device RPC. Fills in a subtree the index collapsed.
+ */
+export interface DeviceProjectDirectoryListResult {
+  entries: DeviceProjectFileIndexEntry[];
+  truncated: boolean;
 }
 
 export interface DeviceProjectFileSearchResult {
@@ -708,6 +719,11 @@ export type DeviceLocalFilePreview =
 export interface DeviceLocalFilePreviewResult {
   error?: string;
   preview?: DeviceLocalFilePreview;
+  success: boolean;
+}
+
+export interface DeviceCopyAssetForPublishResult {
+  error?: string;
   success: boolean;
 }
 

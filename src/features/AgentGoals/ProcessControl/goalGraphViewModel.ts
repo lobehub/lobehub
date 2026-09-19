@@ -76,6 +76,8 @@ export interface GoalNodeView {
   answers: GoalGraphNode[];
   /** Deliverables this node produced, newest first. */
   artifacts: GoalArtifactView[];
+  /** Agent the dispatched Task is assigned to — who is doing the work. */
+  assigneeAgentId?: string;
   attempts: GoalAttempt[];
   /** Unresolved `depends_on` targets — why this node cannot start. */
   blockers: GoalGraphNode[];
@@ -130,6 +132,19 @@ export const hasReviewableResult = (view: GoalNodeView): boolean => {
   if (view.node.kind !== 'task') return false;
   if (isTroubledTaskNode(view)) return false;
   return view.node.status === 'resolved' || view.isVerifying;
+};
+
+/**
+ * Whether clicking a Task node opens its result surface rather than the
+ * original Task detail. A delivery to read opens there, and so does a healthy
+ * run in flight: the result panel shows the live run as it happens, and the
+ * same panel turns into the report once the run settles — one place to watch
+ * and then read. Troubled Tasks still open the original Task detail.
+ */
+export const opensOnResultSurface = (view: GoalNodeView): boolean => {
+  if (view.node.kind !== 'task') return false;
+  if (isTroubledTaskNode(view)) return false;
+  return hasReviewableResult(view) || isRunningNode(view);
 };
 
 /**
@@ -264,6 +279,7 @@ export const buildGoalGraphView = (
 ): GoalGraphView => {
   const {
     acceptances,
+    assignees,
     decisions,
     deliveredAt,
     edges,
@@ -371,6 +387,7 @@ export const buildGoalGraphView = (
           ? [...members].flatMap((id) => artifactsByNode.get(id) ?? [])
           : (artifactsByNode.get(node.id) ?? []),
       ...(acceptances?.[node.id] ? { acceptance: acceptances[node.id] } : {}),
+      ...(assignees?.[node.id] ? { assigneeAgentId: assignees[node.id] } : {}),
       attempts,
       blockers: (dependsOn.get(node.id) ?? [])
         .map((id) => nodeById.get(id))

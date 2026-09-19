@@ -37,6 +37,19 @@ describe('taskDetailPath', () => {
     expect(taskDetailPath('T-1')).toBe('/task/T-1');
   });
 
+  it('appends a readable title slug when the title is known', () => {
+    expect(taskDetailPath('T-1', undefined, 'Ship the Thing')).toBe('/task/T-1/ship-the-thing');
+    expect(taskDetailPath('T-1', 'agt_owner', '飞书适配器支持 POST 图文消息')).toBe(
+      '/agent/agt_owner/task/T-1/飞书适配器支持-post-图文消息',
+    );
+  });
+
+  it('stays at the bare id path when the title yields no slug', () => {
+    expect(taskDetailPath('T-1', undefined, '')).toBe('/task/T-1');
+    expect(taskDetailPath('T-1', undefined, null)).toBe('/task/T-1');
+    expect(taskDetailPath('T-1', undefined, '!!! ???')).toBe('/task/T-1');
+  });
+
   it('uses the route agent by default and allows explicit assignee override', () => {
     mocks.params = { aid: 'agt_current' };
 
@@ -53,6 +66,13 @@ describe('taskDetailPath', () => {
     result.current('T-2', 'agt_child');
 
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-2');
+  });
+
+  it('carries the title through the navigate helper', () => {
+    const { result } = renderHook(() => useNavigateToTaskDetail());
+    result.current('T-2', undefined, 'Ship the Thing');
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-2/ship-the-thing');
   });
 
   it('prefixes the navigation target with the active workspace slug', () => {

@@ -9,6 +9,13 @@ import type { ReactNode } from 'react';
  * screenshot tellable apart; `comment` is what the marker reveals when clicked.
  */
 export interface EvidenceOverlay {
+  /**
+   * The author's face for the pin. A mark on a screenshot is somebody's
+   * remark, and a row of identical speech bubbles says only "there are
+   * remarks" — the face says who is waiting for an answer, the way Figma's
+   * comment pins do.
+   */
+  authorAvatar?: string | null;
   /** Rendered next to the note when the marker is opened. */
   authorName?: string;
   /** Author colour — border, badge and marker share it. Falls back to the error red. */

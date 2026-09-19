@@ -26,6 +26,7 @@ const {
     return { kind: 'redis-stream-event-manager' };
   }),
   mockAppEnv: {
+    AGENT_GATEWAY_INTERNAL_URL: undefined as string | undefined,
     AGENT_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,
     AGENT_GATEWAY_URL: 'https://agent-gateway.lobehub.com',
     enableQueueAgentRuntime: false,
@@ -109,6 +110,7 @@ describe('AgentRuntime factory', () => {
 
   describe('createStreamEventManager', () => {
     beforeEach(() => {
+      mockAppEnv.AGENT_GATEWAY_INTERNAL_URL = undefined;
       mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = undefined;
       mockAppEnv.AGENT_GATEWAY_URL = 'https://agent-gateway.lobehub.com';
     });
@@ -154,6 +156,17 @@ describe('AgentRuntime factory', () => {
 
       expect(result.kind).toBe('gateway-stream-notifier');
       expect(result.url).toBe('https://custom-gateway.example.com');
+    });
+
+    it('pushes to AGENT_GATEWAY_INTERNAL_URL instead of the browser-facing URL when set', () => {
+      mockAppEnv.AGENT_GATEWAY_SERVICE_TOKEN = 'my-token';
+      mockAppEnv.AGENT_GATEWAY_URL = 'http://localhost:8787';
+      mockAppEnv.AGENT_GATEWAY_INTERNAL_URL = 'http://gateway:8787';
+
+      const result = createStreamEventManager() as any;
+
+      expect(result.kind).toBe('gateway-stream-notifier');
+      expect(result.url).toBe('http://gateway:8787');
     });
 
     it('wraps in-memory manager with gateway when no Redis', () => {

@@ -49,7 +49,7 @@ If current branch is `canary`/`main` but there are NO uncommitted changes and no
 
 ### 5. Acceptance gate
 
-A feature or fix needs a published acceptance round before the PR is opened (AGENTS.md → Acceptance). If step 1 found none for this branch, run the `acceptance` skill first and come back with its `https://app.lobehub.com/acceptance/<id>` link. Pure refactors or tooling changes with no user-visible outcome may skip it — state that in the PR body instead of leaving the line out.
+A feature or fix needs a published acceptance round before the PR is opened (AGENTS.md → Acceptance). If step 1 found none for this branch, run the `acceptance` skill first and come back with its `https://app.lobehub.com/acceptance/<id>` link. When the delivery was already verified on the real product earlier in the session, that skill's ingest path publishes the existing observations and artifacts directly — no re-run, no re-plan. Pure refactors or tooling changes with no user-visible outcome may skip it — state that in the PR body instead of leaving the line out.
 
 ### 6. Create PR with `gh pr create --base canary`
 

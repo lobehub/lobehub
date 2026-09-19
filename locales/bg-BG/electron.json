@@ -155,6 +155,8 @@
   "updater.later": "По-късно",
   "updater.newVersionAvailable": "Налична е нова версия",
   "updater.newVersionAvailableDesc": "Открита е нова версия {{version}}, желаете ли да я изтеглите сега?",
+  "updater.rendererReady": "Версия {{version}} е готова",
+  "updater.rendererUpdateError": "Неуспешно инсталиране на актуализацията. Опитайте отново.",
   "updater.restartAndInstall": "Инсталирай актуализацията и рестартирай",
   "updater.updateError": "Грешка при актуализацията",
   "updater.updateReady": "Налична е нова версия",

@@ -1,5 +1,6 @@
 import type {
   BlobStore,
+  ContextBuildOutput,
   LLMAttemptExecution,
   LLMAttemptInput,
   LLMAttemptOutput,
@@ -141,6 +142,19 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
   }
 }
 
+/**
+ * The streaming mode the request really uses: the built context carries the
+ * agent's chat-config decision (with an explicit operation-level `stream`
+ * already folded in), so the payload and the trace must read the same value.
+ */
+const resolveRequestStream = (
+  ctx: RuntimeExecutorContext,
+  context: ContextBuildOutput | undefined,
+): boolean => {
+  const fromContext = (context?.modelParameters as { stream?: boolean } | undefined)?.stream;
+  return fromContext ?? ctx.stream ?? true;
+};
+
 class ServerLLMTrace implements LLMTrace {
   private readonly chatContext: ReturnType<typeof otelTrace.setSpan>;
   private readonly chatSpan: ReturnType<typeof agentRuntimeTracer.startSpan>;
@@ -166,7 +180,7 @@ class ServerLLMTrace implements LLMTrace {
         provider: input.provider,
         requestModel: input.model,
         stepIndex: ctx.stepIndex,
-        stream: ctx.stream ?? true,
+        stream: resolveRequestStream(ctx, input.context),
       }),
       kind: SpanKind.CLIENT,
     });
@@ -307,7 +321,7 @@ export class ServerLLMTransport implements LLMTransport {
     const chatPayload = {
       messages: input.context.messages as ChatStreamPayload['messages'],
       model: input.model,
-      stream: this.ctx.stream ?? true,
+      stream: resolveRequestStream(this.ctx, input.context),
       tools,
       ...(input.context.modelParameters as Partial<ChatStreamPayload>),
       ...(typeof input.context.preserveThinking === 'boolean' && {
@@ -332,16 +346,16 @@ export class ServerLLMTransport implements LLMTransport {
       // Carry the originating request's client IP / user agent from the run's
       // state.metadata into the attempt so the LLM-call metadata can surface them
       // for auditing and spend attribution.
-      clientIp: input.state.metadata?.clientIp,
-      // Projected, not spread: `state.metadata.agentShareVisitor` also carries
+      clientIp: input.state.principal?.audit?.clientIp,
+      // Projected, not spread: `state.principal.actor.shareVisitor` also carries
       // the run's tool/memory restrictions, which have no place in billing
       // metadata. Only the three attribution ids travel.
-      agentShareVisitorIds: input.state.metadata?.agentShareVisitor
-        ? toAgentShareVisitorIds(input.state.metadata.agentShareVisitor)
+      agentShareVisitorIds: input.state.principal?.actor?.shareVisitor
+        ? toAgentShareVisitorIds(input.state.principal?.actor?.shareVisitor)
         : undefined,
-      topicId: input.state.metadata?.topicId,
-      trigger: input.state.metadata?.trigger,
-      userAgent: input.state.metadata?.userAgent,
+      topicId: input.state.origin?.topicId,
+      trigger: input.state.origin?.trigger,
+      userAgent: input.state.principal?.audit?.userAgent,
     });
 
     try {

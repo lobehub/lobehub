@@ -2,11 +2,23 @@ import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   AgentDeviceOverride,
   DeviceExecutionTarget,
+  ExecutionPlan,
   LobeAgentAgencyConfig,
   LobeAgentChatConfig,
   RuntimeEnvMode,
 } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import {
+  executionTargetToRuntimeMode,
+  isDeviceCapablePlan,
+  isDeviceLockedPlan,
+  RequestTrigger,
+  resolveToolMode,
+} from '@lobechat/types';
+
+// The pure mode / plan predicates live in `@lobechat/types` so the shared
+// tool rules in `@lobechat/mecha` can use them; re-exported here for the
+// existing host consumers.
+export { executionTargetToRuntimeMode, isDeviceCapablePlan, isDeviceLockedPlan, resolveToolMode };
 
 /**
  * Whether a workspace config still needs the shared-row safety coercion.
@@ -17,19 +29,6 @@ export const resolveWorkspaceScoped = (
   isWorkspaceAgent: boolean,
   deviceOverride: AgentDeviceOverride | null | undefined,
 ): boolean => isWorkspaceAgent && deviceOverride?.executionTarget === undefined;
-
-/**
- * The agent's tool mode — explicit `chatConfig.toolMode` wins; otherwise derive
- * from `enableAgentMode` (undefined = agent). `chat` = no execution
- * environment (plain chat); `custom` = toolset is exactly the agent's plugins.
- *
- * Single source of truth so client (selectors), server tools engine, and
- * `resolveExecutionPlan` all agree on what counts as chat mode.
- */
-export const resolveToolMode = (
-  chatConfig: LobeAgentChatConfig | undefined,
-): 'agent' | 'chat' | 'custom' =>
-  chatConfig?.toolMode ?? (chatConfig?.enableAgentMode === false ? 'chat' : 'agent');
 
 export interface ResolveExecutionTargetOptions {
   /**
@@ -269,27 +268,6 @@ export const canExecutionTargetReadLocalPaths = (
   (target === 'device' && !!currentDeviceId && agencyConfig?.boundDeviceId === currentDeviceId);
 
 /**
- * Derive the `runtimeMode` tool gate from the unified execution target:
- * `local` → local-system tools, `sandbox` → cloud sandbox, `device`/`auto` →
- * gateway routing, `none` → no run tools (plain chat). `device`/`auto`/`none`
- * all gate to `'none'` — device tools are routed via `resolveExecutionPlan`,
- * not via runtimeMode.
- */
-export const executionTargetToRuntimeMode = (target: DeviceExecutionTarget): RuntimeEnvMode => {
-  switch (target) {
-    case 'local': {
-      return 'local';
-    }
-    case 'sandbox': {
-      return 'cloud';
-    }
-    default: {
-      return 'none';
-    }
-  }
-};
-
-/**
  * The effective `runtimeMode` (server tool gate) from the unified execution
  * target.
  */
@@ -307,44 +285,7 @@ export const resolveRuntimeMode = (
     }),
   );
 
-export type ExecutionPlanUnroutedReason =
-  /** `auto` mode with more than one device online — the model must pick one */
-  | 'ambiguous-online-devices'
-  /** an explicitly bound device exists but is offline — never silently fall back */
-  | 'bound-device-offline'
-  /**
-   * device-capable target (`auto` / `local` / `device`) but no device selected —
-   * nothing bound/requested, and not the `auto` single-online-device case
-   */
-  | 'no-bound-device'
-  /** `auto` mode but no device online at all */
-  | 'no-online-device';
-
-/**
- * Where (and whether) a run executes, resolved ONCE at the entry point.
- * Downstream layers consume the plan instead of re-deriving the answer from
- * `executionTarget` / `boundDeviceId` / online state themselves.
- *
- * `target` is the EFFECTIVE execution target (platform defaults and coercions
- * applied; degraded to `none` when device access is denied) — consumers must
- * read it instead of re-resolving `agencyConfig.executionTarget`.
- */
-export type ExecutionPlan = { target: DeviceExecutionTarget } &
-  /** route execution / device tools to this device (the local machine is a registered device) */
-  (
-    | { deviceId: string; kind: 'device' }
-    /**
-     * Device-targeted but no routable device right now. The run proceeds without
-     * an active device; the remote-device proxy may let the model activate one
-     * mid-run (native agents), or the caller may treat this as a hard error
-     * (hetero dispatch).
-     */
-    | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
-    /** plain chat — no execution environment, no run tools, no device ever */
-    | { kind: 'none' }
-    /** ephemeral cloud sandbox */
-    | { kind: 'sandbox' }
-  );
+export type { ExecutionPlan, ExecutionPlanUnroutedReason } from '@lobechat/types';
 
 export type ExecutionManifestEnvironment = ExecutionPlan['kind'] | 'local';
 
@@ -362,25 +303,6 @@ export const executionPlanToManifestExecutionEnv = (
   plan.kind === 'device' && plan.target === 'local' && plan.deviceId === localDeviceId
     ? 'local'
     : plan.kind;
-
-/** Device tools (local-system / remote-device proxy) only exist in device-capable sessions. */
-export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
-  plan.kind === 'device' || plan.kind === 'device-unrouted';
-
-/**
- * The run is committed to ONE device: either already routed (`device`, which
- * includes the opt-in `auto` single-online activation) or locked to an
- * explicit binding that is currently offline (`bound-device-offline` waits for
- * that machine rather than hopping elsewhere). A locked run has no device
- * decision left, so the remote-device picker must not exist for it — not even
- * as an activator-discoverable manifest, since `allowExplicitActivation`
- * bypasses the rule-layer gates. The picker exists only in the complement:
- * unrouted runs that still need a selection (`no-bound-device` /
- * `ambiguous-online-devices` / `no-online-device`).
- */
-export const isDeviceLockedPlan = (plan: ExecutionPlan): boolean =>
-  plan.kind === 'device' ||
-  (plan.kind === 'device-unrouted' && plan.reason === 'bound-device-offline');
 
 export interface ResolveExecutionPlanParams {
   agencyConfig: LobeAgentAgencyConfig | undefined;

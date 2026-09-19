@@ -38,6 +38,7 @@ const makeDeps = (): DeviceControlDeps => ({
     root: '',
     source: 'glob' as const,
   })),
+  copyAssetForPublish: vi.fn(async () => ({ success: true })),
   readExternalAssetForPublish: vi.fn(async () => ({
     base64: 'AQID',
     contentType: 'image/png',
@@ -213,6 +214,14 @@ describe('executeDeviceRpc', () => {
 
     await executeDeviceRpc('readExternalAssetForPublish', previewParams, deps);
     expect(deps.readExternalAssetForPublish).toHaveBeenCalledWith(previewParams);
+
+    const copyParams = {
+      from: previewParams.path,
+      to: path.join(root, 'copy.md'),
+      workingDirectory: root,
+    };
+    await executeDeviceRpc('copyAssetForPublish', copyParams, deps);
+    expect(deps.copyAssetForPublish).toHaveBeenCalledWith(copyParams);
   });
 
   it('routes a git method (listGitBranches) without touching deps', async () => {

@@ -21,10 +21,12 @@ import {
 } from '@lobechat/local-file-shell/git';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
-import { defaultReadExternalAssetForPublish } from './filePreview';
+import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
+import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
   BrowseDirectoryParams,
+  CopyAssetForPublishParams,
   DeviceControlDeps,
   EnrollWorkspaceParams,
   ExternalAssetForPublishParams,
@@ -33,6 +35,7 @@ import type {
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
+  ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
   UnenrollWorkspaceParams,
@@ -56,9 +59,11 @@ export const DEVICE_RPC_METHODS = [
   'browseDirectory',
   'statPath',
   'getProjectFileIndex',
+  'listProjectDirectory',
   'searchProjectFiles',
   'getLocalFilePreview',
   'readExternalAssetForPublish',
+  'copyAssetForPublish',
   'moveLocalFiles',
   'renameLocalFile',
   'writeLocalFile',
@@ -151,6 +156,10 @@ export const executeDeviceRpc = async (
       return deps.getProjectFileIndex(params as ProjectFileIndexParams);
     }
 
+    case 'listProjectDirectory': {
+      return defaultListProjectDirectory(params as ProjectDirectoryListParams);
+    }
+
     case 'searchProjectFiles': {
       return deps.searchProjectFiles(params as ProjectFileSearchParams);
     }
@@ -162,6 +171,12 @@ export const executeDeviceRpc = async (
     case 'readExternalAssetForPublish': {
       return (deps.readExternalAssetForPublish ?? defaultReadExternalAssetForPublish)(
         params as ExternalAssetForPublishParams,
+      );
+    }
+
+    case 'copyAssetForPublish': {
+      return (deps.copyAssetForPublish ?? defaultCopyAssetForPublish)(
+        params as CopyAssetForPublishParams,
       );
     }
 

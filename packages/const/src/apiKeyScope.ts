@@ -30,6 +30,8 @@ export const API_KEY_SCOPES = [
   API_KEY_FULL_ACCESS_SCOPE,
   'agent:read',
   'agent:write',
+  'eval:read',
+  'eval:write',
   'chat:read',
   'chat:write',
   'model:invoke',
@@ -400,8 +402,9 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
  * blocked here by path prefix.
  */
 export const TRPC_BLOCKED_PATH_PREFIXES: string[] = [
-  // returns an unrestricted user JWT that passes `oidcAuth` as non-API-key
-  // auth and would bypass the scope guard entirely
+  // both return an unrestricted user JWT that passes `oidcAuth` as
+  // non-API-key auth and would bypass the scope guard entirely
+  'aiAgent.issueGatewayUserToken',
   'aiAgent.refreshGatewayToken',
   // sandbox execution mints a full LOBEHUB_JWT for `lh` commands
   // (`preprocessLhCommand`), which would bypass the key's scopes entirely

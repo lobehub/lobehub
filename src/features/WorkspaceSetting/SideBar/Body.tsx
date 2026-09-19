@@ -1,7 +1,7 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Accordion, Text } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -35,7 +35,9 @@ const Body = memo(() => {
     <Flexbox paddingInline={4}>
       <Accordion
         gap={8}
-        defaultExpandedKeys={[
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+        defaultValue={[
           WorkspaceSettingsGroupKey.Account,
           WorkspaceSettingsGroupKey.General,
           WorkspaceSettingsGroupKey.Subscription,
@@ -44,19 +46,14 @@ const Body = memo(() => {
           WorkspaceSettingsGroupKey.System,
           WorkspaceSettingsGroupKey.Developer,
         ]}
-      >
-        {groups.map((group) => (
-          <AccordionItem
-            itemKey={group.key}
-            key={group.key}
-            paddingBlock={4}
-            paddingInline={'8px 4px'}
-            title={
-              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                {group.title}
-              </Text>
-            }
-          >
+        items={groups.map((group) => ({
+          key: group.key,
+          title: (
+            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+              {group.title}
+            </Text>
+          ),
+          children: (
             <Flexbox gap={1} paddingBlock={1}>
               {group.items.map((item) => {
                 const url = `/${slug}/settings/${item.key}`;
@@ -75,9 +72,9 @@ const Body = memo(() => {
                 );
               })}
             </Flexbox>
-          </AccordionItem>
-        ))}
-      </Accordion>
+          ),
+        }))}
+      />
     </Flexbox>
   );
 });

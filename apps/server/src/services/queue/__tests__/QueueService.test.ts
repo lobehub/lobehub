@@ -248,6 +248,77 @@ describe('QueueService', () => {
       expect(qstashMocks.publishJSON.mock.calls[0][0]).toMatchObject({ delay: 2 });
     });
 
+    it('clamps an oversized body instead of letting the publish blow the QStash quota', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // A tool that failed with ~12 MB of command output — the shape that used
+      // to 500 the publish and take the whole operation down with it.
+      const runawayOutput = 'x'.repeat(12 * 1024 * 1024);
+
+      await impl.scheduleMessage({
+        context: {
+          payload: { toolsResult: [{ content: runawayOutput }] },
+          phase: 'llm_result',
+        } as any,
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-oversized',
+        priority: 'normal',
+        stepIndex: 7,
+      });
+
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      const clamped = request.body.context.payload.toolsResult[0].content;
+      expect(clamped.length).toBeLessThan(runawayOutput.length);
+      expect(clamped).toContain('characters omitted so the step could be scheduled');
+      expect(Buffer.byteLength(JSON.stringify(request.body), 'utf8')).toBeLessThan(9 * 1024 * 1024);
+      // Shape is preserved so the worker still reads the step it expects.
+      expect(request.body).toMatchObject({ operationId: 'op-oversized', stepIndex: 7 });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('agent.queue.oversized_message_clamped'),
+      );
+
+      warn.mockRestore();
+    });
+
+    /**
+     * Fragmented oversize: the MCP contract keeps every raw content block in
+     * `state`, so a body can pass the quota through hundreds of mid-sized
+     * strings that a single generous clamp pass would leave untouched.
+     */
+    it('tightens the clamp until a fragmented oversized body actually fits', async () => {
+      qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
+
+      const { QStashQueueServiceImpl } = await import('../impls/qstash');
+      const impl = new QStashQueueServiceImpl({ qstashToken: 'test-qstash-token' });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const blocks = Array.from({ length: 525 }, () => ({ text: 'y'.repeat(20_000) }));
+
+      await impl.scheduleMessage({
+        context: { payload: { state: { content: blocks } }, phase: 'llm_result' } as any,
+        delay: 0,
+        endpoint: 'https://example.com/api/agent/run',
+        operationId: 'op-fragmented',
+        priority: 'normal',
+        stepIndex: 3,
+      });
+
+      const request = qstashMocks.publishJSON.mock.calls[0][0];
+      expect(Buffer.byteLength(JSON.stringify(request.body), 'utf8')).toBeLessThan(9 * 1024 * 1024);
+      expect(request.body.context.payload.state.content).toHaveLength(525);
+      expect(request.body.context.payload.state.content[0].text).toContain(
+        'characters omitted so the step could be scheduled',
+      );
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('"stringKeep":4000'));
+
+      warn.mockRestore();
+    });
+
     it('encodes logical deduplication keys as stable QStash-safe opaque IDs', async () => {
       qstashMocks.publishJSON.mockResolvedValue({ messageId: 'msg-test' });
 

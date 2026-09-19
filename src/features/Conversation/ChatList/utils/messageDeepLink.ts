@@ -1,5 +1,7 @@
 import type { AssistantContentBlock, ChatToolPayload, UIChatMessage } from '@lobechat/types';
 
+import { collectSteerChains } from '../../store/slices/data/steerChains';
+
 export interface MessageDeepLink {
   id: string;
   navigationKey: string;
@@ -45,16 +47,19 @@ function messageContainsMessage(message: UIChatMessage, messageId: string): bool
 /** Resolves a raw database message id to the virtual list row that renders it. */
 export const resolveMessageDeepLink = (
   messages: UIChatMessage[],
+  rowIds: string[],
   deepLink: MessageDeepLink | undefined,
 ): ResolvedMessageDeepLink | undefined => {
   if (!deepLink) return;
 
-  const index = messages.findIndex((message) => messageContainsMessage(message, deepLink.id));
+  const owner = messages.find((message) => messageContainsMessage(message, deepLink.id));
+  if (!owner) return;
+
+  const displayMessageId = rowIds.includes(owner.id)
+    ? owner.id
+    : (collectSteerChains(messages).hostOf.get(owner.id) ?? owner.id);
+  const index = rowIds.indexOf(displayMessageId);
   if (index < 0) return;
 
-  return {
-    ...deepLink,
-    displayMessageId: messages[index].id,
-    index,
-  };
+  return { ...deepLink, displayMessageId, index };
 };

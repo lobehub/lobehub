@@ -1,7 +1,11 @@
 import { copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import pathUtils from 'node:path';
 
-import type { CompletionSoundSettings } from '@lobechat/electron-client-ipc';
+import {
+  COMPLETION_BUILTIN_SOUNDS,
+  type CompletionSoundPlayback,
+  type CompletionSoundSettings,
+} from '@lobechat/electron-client-ipc';
 import { app, dialog } from 'electron';
 import { z } from 'zod';
 
@@ -13,9 +17,9 @@ import { ControllerModule, IpcMethod } from './index';
 
 const settingsSchema = z
   .object({
+    builtin: z.enum(COMPLETION_BUILTIN_SOUNDS).optional(),
     enabled: z.boolean().optional(),
     notificationSound: z.enum(['lobehub', 'system']).optional(),
-    reset: z.boolean().optional(),
     volume: z.number().min(0).max(1).optional(),
   })
   .strict();
@@ -36,22 +40,24 @@ export default class CompletionSoundCtr extends ControllerModule {
     return { ...this.readSettings(), systemSoundDisabled: await this.isSystemSoundDisabled() };
   }
 
+  /** Picking a built-in sound drops the imported pack so the two never compete. */
   @IpcMethod()
   async setSettings(input: {
+    builtin?: CompletionSoundSettings['builtin'];
     enabled?: boolean;
     notificationSound?: CompletionSoundSettings['notificationSound'];
-    reset?: boolean;
     volume?: number;
   }): Promise<CompletionSoundSettings> {
-    const { reset, ...changes } = settingsSchema.parse(input);
+    const changes = settingsSchema.parse(input);
     const previous = this.app.storeManager.get('completionSound');
     this.app.storeManager.set('completionSound', {
-      ...(reset
+      ...(changes.builtin
         ? { ...this.readSettings(), name: undefined }
         : { ...this.readSettings(), ...previous }),
       ...changes,
     });
-    if (reset && previous?.directory) await this.removeImportedDirectory(previous.directory);
+    if (changes.builtin && previous?.directory)
+      await this.removeImportedDirectory(previous.directory);
     return this.getSettings();
   }
 
@@ -111,14 +117,13 @@ export default class CompletionSoundCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async getPlayback(input?: {
-    preview?: boolean;
-  }): Promise<{ dataUrl?: string; play: boolean; volume: number }> {
+  async getPlayback(input?: { preview?: boolean }): Promise<CompletionSoundPlayback> {
     const settings = this.readSettings();
     const play = (settings.enabled || !!input?.preview) && settings.volume > 0;
     if (!play) return { play: false, volume: settings.volume };
     const saved = this.app.storeManager.get('completionSound');
-    if (!saved?.directory || !saved.files?.length) return { play, volume: settings.volume };
+    if (!saved?.directory || !saved.files?.length)
+      return { builtin: settings.builtin, play, volume: settings.volume };
     const candidates =
       saved.files.length > 1
         ? saved.files.filter(({ file }) => file !== this.lastFile)
@@ -136,6 +141,7 @@ export default class CompletionSoundCtr extends ControllerModule {
   private readSettings(): CompletionSoundSettings {
     const settings = this.app.storeManager.get('completionSound');
     return {
+      builtin: settings?.builtin ?? 'lobehub',
       enabled: settings?.enabled ?? false,
       name: settings?.name,
       notificationSound: settings?.notificationSound ?? 'system',

@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "انقر للنسخ",
   "unknownError.desc": "حدث خطأ غير متوقع. يمكنك إعادة المحاولة أو الإبلاغ عنه.",
   "unknownError.retry": "إعادة المحاولة",
+  "unknownError.sharedDesc": "يرجى الإبلاغ عن هذه المشكلة على",
+  "unknownError.sharedTitle": "غير قادر على إنشاء هذه الإجابة",
   "unknownError.title": "عذرًا، الطلب أخذ قسطًا من الراحة",
   "unknownError.traceIdLabel": "معرّف التتبع:",
   "unlock.addProxyUrl": "إضافة عنوان وكيل OpenAI (اختياري)",

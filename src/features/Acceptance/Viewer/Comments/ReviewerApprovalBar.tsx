@@ -8,6 +8,9 @@ import { nanoid } from 'nanoid';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
+
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canReviewAcceptance } from '../visibility';
@@ -29,9 +32,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 /**
- * The reviewer's counterpart of the decision bar. A teammate who can comment
+ * The reviewer's counterpart of the decision bar. A teammate who can review
  * but cannot close the acceptance says "fine by me" here; it lands as an
  * approval row the owner reads, and the acceptance status stays untouched.
+ *
+ * A visitor who only holds the public link is not offered it: they can answer
+ * the evidence in the discussion, but accepting a delivery is the team's call.
  *
  * An approval is never final while the round is open: review is a moving
  * opinion, so it can be withdrawn and given again at any point. Only the state
@@ -41,11 +47,12 @@ const ReviewerApprovalBar = memo(() => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
   const { data } = useAcceptanceBundle(acceptanceId);
-  const { canComment, create, items, remove } = useAcceptanceComments(acceptanceId);
+  const { canApprove, create, items, remove } = useAcceptanceComments(acceptanceId);
+  const viewerId = useUserStore(userProfileSelectors.userId);
   const [summary, setSummary] = useState('');
   const [pending, setPending] = useState(false);
 
-  if (!data || !canComment || canReviewAcceptance(data)) return null;
+  if (!data || !canApprove || canReviewAcceptance(data)) return null;
   if (data.acceptance.status === 'accepted' || data.acceptance.status === 'closed') return null;
 
   // Nothing has been delivered yet, so there is nothing to approve. Allowing it
@@ -55,9 +62,18 @@ const ReviewerApprovalBar = memo(() => {
   const currentRound = data.rounds.at(-1)?.run;
   if (!currentRound) return null;
 
-  // `canDelete` is only ever true on the caller's own live rows, so it doubles
-  // as "mine" without a user store lookup.
-  const mine = [...items].reverse().find((item) => item.kind === 'approval' && item.canDelete);
+  // Read ownership from the author. `canDelete` also turns on for someone who
+  // may moderate this acceptance, so borrowing it here would show a reviewer
+  // their teammate's approval as their own and let them withdraw it.
+  const mine = [...items]
+    .reverse()
+    .find(
+      (item) =>
+        item.kind === 'approval' &&
+        !item.deletedAt &&
+        Boolean(viewerId) &&
+        item.authorUserId === viewerId,
+    );
   const approvedCurrentRound = mine?.contextRoundIndex === currentRound.roundIndex;
 
   const run = async (action: () => Promise<unknown>) => {

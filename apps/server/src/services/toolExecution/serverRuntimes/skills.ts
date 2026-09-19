@@ -36,6 +36,7 @@ import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { createSandboxService, normalizeSandboxCommandResult } from '@/server/services/sandbox';
 import { SkillResourceService } from '@/server/services/skill/resource';
+import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
   buildDeviceLhEnv,
   isLhCommand,
@@ -244,6 +245,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       if (!response.success) {
         return {
+          error: response.error,
           executionEnv: 'sandbox',
           exitCode: 1,
           output: '',
@@ -256,6 +258,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     } catch (error) {
       log('Error running command: %O', error);
       return {
+        error: getToolAccessDeniedError(error, 'Command execution failed') ?? {
+          message: (error as Error).message,
+        },
         executionEnv: 'sandbox',
         exitCode: 1,
         output: '',
@@ -577,6 +582,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
 
       if (!response.success) {
         return {
+          error: response.error,
           executionEnv: 'sandbox',
           exitCode: 1,
           output: '',
@@ -589,6 +595,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     } catch (error) {
       log('Error executing script: %O', error);
       return {
+        error: getToolAccessDeniedError(error, 'Command execution failed') ?? {
+          message: (error as Error).message,
+        },
         executionEnv: 'sandbox',
         exitCode: 1,
         output: '',
@@ -621,6 +630,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       const result = await sandboxService.exportAndUploadFile(path, filename);
 
       return {
+        error: result.error,
         fileId: result.fileId,
         filename: result.filename,
         mimeType: result.mimeType,
@@ -631,6 +641,9 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     } catch (error) {
       log('Error exporting file: %O', error);
       return {
+        error: getToolAccessDeniedError(error, 'File export failed') ?? {
+          message: (error as Error).message,
+        },
         filename,
         success: false,
       };
@@ -685,9 +698,16 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       context.userId,
       context.workspaceId,
     );
+    /**
+     * `workspaceId` decides which sandbox session this runtime reaches: the
+     * session is keyed by the acting account, so a token without it acts as the
+     * personal account while `lobe-creds` and `lobe-cloud-sandbox` — which do
+     * pass it — act as the workspace. Omitting it split one workspace topic
+     * across two sandboxes, leaving injected credentials invisible here.
+     */
     const marketService = new MarketService({
       accessToken: marketAccessToken,
-      userInfo: { userId: context.userId },
+      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
     });
     const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);

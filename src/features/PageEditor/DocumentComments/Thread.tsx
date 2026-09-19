@@ -1,11 +1,11 @@
 import type { DocumentCommentItem, DocumentCommentThread } from '@lobechat/types';
 import { Center, Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Skeleton } from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { documentCommentService } from '@/services/documentComment';
 
 import CommentCard from './CommentCard';
@@ -31,6 +31,8 @@ import type {
 } from './useDocumentCommentDeepLink';
 
 interface ThreadProps extends DocumentCommentThread {
+  /** Narrow-column layout for a thread in the gutter. */
+  compact?: boolean;
   documentId: string;
   /** Deep-link target inside this thread; forces replies to load and highlights the card. */
   focus?: DocumentCommentFocus;
@@ -42,8 +44,33 @@ interface ThreadProps extends DocumentCommentThread {
   onSummaryChange: (delta: number) => void | Promise<unknown>;
 }
 
+/** At most this many placeholder rows while a thread's replies load. */
+const REPLY_SKELETON_MAX = 3;
+
+/**
+ * Placeholder rows shaped like the replies they stand in for — one per
+ * expected reply, capped — rather than a generic five-card list that towers
+ * over a thread with a single answer.
+ */
+const ReplySkeleton = memo<{ compact: boolean; count: number }>(({ compact, count }) => (
+  <Flexbox gap={compact ? 12 : 16} paddingBlock={compact ? 4 : 8}>
+    {Array.from({ length: Math.min(Math.max(count, 1), REPLY_SKELETON_MAX) }).map((_, index) => (
+      <Flexbox gap={8} key={index}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Skeleton height={28} radius={14} width={28} />
+          <Skeleton height={14} width={96 + (index % 2) * 24} />
+        </Flexbox>
+        <Skeleton height={14} width={`${48 + (index % 3) * 14}%`} />
+      </Flexbox>
+    ))}
+  </Flexbox>
+));
+
+ReplySkeleton.displayName = 'DocumentCommentReplySkeleton';
+
 const Thread = memo<ThreadProps>(
   ({
+    compact = false,
     documentId,
     focus,
     onFocusMissing,
@@ -58,10 +85,17 @@ const Thread = memo<ThreadProps>(
     const [replyTargetId, setReplyTargetId] = useState<string | null>(null);
     const { containerRef, shouldLoad } = useAutoLoadReplies(replyCount > 0);
     const focusedReplyId = focus && focus.commentId !== root.id ? focus.commentId : undefined;
-    const replies = useDocumentCommentReplies(
-      root.id,
-      shouldLoad || Boolean(replyTargetId) || Boolean(focusedReplyId),
-    );
+    // Once the replies have been asked for they stay subscribed. Closing the
+    // reply box after sending would otherwise drop the key for a render or
+    // two (until the auto-load observer catches up), which empties the list,
+    // discards the optimistic reply on screen, and brings the skeleton back
+    // while the server page is refetched.
+    const wantsReplies = shouldLoad || Boolean(replyTargetId) || Boolean(focusedReplyId);
+    const [repliesLatched, setRepliesLatched] = useState(wantsReplies);
+    useEffect(() => {
+      if (wantsReplies) setRepliesLatched(true);
+    }, [wantsReplies]);
+    const replies = useDocumentCommentReplies(root.id, wantsReplies || repliesLatched);
     const createOptimistic = useOptimisticDocumentComment();
     const mutateReplies = replies.mutate;
     const reloadReplies = replies.reload;
@@ -232,8 +266,11 @@ const Thread = memo<ThreadProps>(
       <Fragment key={reply.id}>
         <CommentCard
           comment={reply}
+          compact={compact}
+          focusScroll={focus?.scroll}
           focusToken={focusedReplyId === reply.id ? focus?.token : undefined}
           replying={replyTargetId === reply.id}
+          threadAuthor={root.author}
           variant={'reply'}
           onMutated={refreshThread}
           onReply={() => toggleReplyTarget(reply.id)}
@@ -244,6 +281,8 @@ const Thread = memo<ThreadProps>(
             documentId={documentId}
             key={`reply:${reply.id}`}
             parentCommentId={reply.id}
+            plain={compact}
+            onCancel={() => setReplyTargetId(null)}
             onSubmit={handleReplySubmit}
             onSuccess={() => setReplyTargetId(null)}
           />
@@ -252,9 +291,11 @@ const Thread = memo<ThreadProps>(
     );
 
     return (
-      <Flexbox className={styles.thread} ref={containerRef}>
+      <Flexbox className={cx(styles.thread, compact && styles.threadCompact)} ref={containerRef}>
         <CommentCard
           comment={root}
+          compact={compact}
+          focusScroll={focus?.scroll}
           focusToken={focus && focus.commentId === root.id ? focus.token : undefined}
           replying={replyTargetId === root.id}
           onMutated={onMutated}
@@ -263,19 +304,21 @@ const Thread = memo<ThreadProps>(
         />
 
         {(replyCount > 0 || replyTargetId || focusedReplyId) && (
-          <Flexbox className={styles.replyList}>
+          <Flexbox className={cx(styles.replyList, compact && styles.replyListCompact)}>
             {replyTargetId === root.id && (
               <Composer
                 documentId={documentId}
                 key={`reply:${root.id}`}
                 parentCommentId={root.id}
+                plain={compact}
+                onCancel={() => setReplyTargetId(null)}
                 onSubmit={handleReplySubmit}
                 onSuccess={() => setReplyTargetId(null)}
               />
             )}
             {pinnedReply && renderReply(pinnedReply)}
             {replies.isLoadingInitial && replyCount > 0 ? (
-              <SurfaceSkeleton header={false} variant={'list'} />
+              <ReplySkeleton compact={compact} count={replyCount} />
             ) : replies.isInitialError ? (
               <AsyncError
                 error={replies.error}

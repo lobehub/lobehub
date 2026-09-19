@@ -1,10 +1,11 @@
-import { mkdtemp, rm, truncate, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  defaultCopyAssetForPublish,
   defaultGetLocalFilePreview,
   defaultReadExternalAssetForPublish,
   EXTERNAL_PUBLISH_ASSET_MAX_BYTES,
@@ -183,5 +184,42 @@ describe('defaultReadExternalAssetForPublish', () => {
     });
 
     expect(result).toEqual({ error: 'File is too large to publish', success: false });
+  });
+});
+
+describe('defaultCopyAssetForPublish', () => {
+  it('copies an outside file into a nested workspace directory', async () => {
+    const to = path.join(root, '.lobe-artifacts', 'site', 'secret.txt');
+    const result = await defaultCopyAssetForPublish({
+      from: path.join(outside, 'secret.txt'),
+      to,
+      workingDirectory: root,
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(await readFile(to, 'utf8')).toBe('do not read\n');
+  });
+
+  it('refuses a destination outside the workspace', async () => {
+    const result = await defaultCopyAssetForPublish({
+      from: path.join(outside, 'secret.txt'),
+      to: path.join(outside, 'copy.txt'),
+      workingDirectory: root,
+    });
+
+    expect(result).toEqual({
+      error: 'Destination is outside the approved workspace',
+      success: false,
+    });
+  });
+
+  it('refuses a destination that escapes through dot segments', async () => {
+    const result = await defaultCopyAssetForPublish({
+      from: path.join(outside, 'secret.txt'),
+      to: path.join(root, '..', path.basename(outside), 'copy.txt'),
+      workingDirectory: root,
+    });
+
+    expect(result.success).toBe(false);
   });
 });

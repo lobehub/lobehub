@@ -176,23 +176,11 @@ const CommentReactions = memo<CommentReactionsProps>(({ onReact, reactions }) =>
     </Flexbox>
   );
 
+  // The button leads and the emoji follow: it is the one fixed thing in this
+  // row, so it stays where the reader last clicked it instead of sliding right
+  // by one chip every time somebody reacts.
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} gap={6} wrap={'wrap'}>
-      {reactions.map((reaction) => (
-        <Tooltip
-          key={reaction.emoji}
-          title={reaction.authorNames.length > 0 ? reaction.authorNames.join('、') : reaction.emoji}
-        >
-          <span
-            className={cx(styles.chip, reaction.mine && styles.chipMine)}
-            style={onReact ? undefined : { cursor: 'default' }}
-            onClick={onReact ? () => void fire(reaction.emoji, !reaction.mine) : undefined}
-          >
-            <span>{reaction.emoji}</span>
-            <span className={styles.count}>{reaction.count}</span>
-          </span>
-        </Tooltip>
-      ))}
       {onReact && (
         <Popover
           content={picker}
@@ -215,6 +203,21 @@ const CommentReactions = memo<CommentReactionsProps>(({ onReact, reactions }) =>
           </span>
         </Popover>
       )}
+      {reactions.map((reaction) => (
+        <Tooltip
+          key={reaction.emoji}
+          title={reaction.authorNames.length > 0 ? reaction.authorNames.join('、') : reaction.emoji}
+        >
+          <span
+            className={cx(styles.chip, reaction.mine && styles.chipMine)}
+            style={onReact ? undefined : { cursor: 'default' }}
+            onClick={onReact ? () => void fire(reaction.emoji, !reaction.mine) : undefined}
+          >
+            <span>{reaction.emoji}</span>
+            <span className={styles.count}>{reaction.count}</span>
+          </span>
+        </Tooltip>
+      ))}
     </Flexbox>
   );
 });

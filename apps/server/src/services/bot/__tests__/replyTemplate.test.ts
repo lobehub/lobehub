@@ -417,7 +417,7 @@ describe('replyTemplate', () => {
 
     // The admission gate emits one of three codes for the same "the allowance
     // can't cover this" outcome; the plan-limit pair used to fall to the `user`
-    // tier and tell the user to check their input (LOBE-13726).
+    // tier and tell the user to check their input.
     it('gives every budget-exhaustion code its own credits copy, not "check your input"', () => {
       const expected: Record<string, string> = {
         FreePlanLimit: 'Free plan limit reached',
@@ -450,7 +450,7 @@ describe('replyTemplate', () => {
       }
     });
 
-    // LOBE-13726: a workspace member's own allowance ran out and the reply told
+    // A workspace member's own allowance ran out and the reply told
     // them to top up — which does nothing for that allowance — while the numbers
     // that would have identified the real fault stayed in the trace.
     describe('budget scope', () => {

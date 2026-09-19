@@ -25,6 +25,12 @@ export interface TopicListItem extends ChatTopic {
   agentId?: string | null;
   lastAssistantMessage?: string | null;
   /**
+   * Visibility of the owning agent/group. `'private'` conversations stay out of
+   * team listings even when the viewer created them; null for legacy rows with
+   * no resolvable parent.
+   */
+  parentVisibility?: 'private' | 'public' | null;
+  /**
    * Start time of the topic's current run (latest top-level running
    * `agent_operations` row). Only set for `running` topics; null when the run
    * never wrote an operation row (e.g. client-mode) — keep a fallback.

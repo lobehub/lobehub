@@ -84,6 +84,11 @@ export interface AcceptanceCommentItem extends AcceptanceCommentAnchor {
   /** The agent that signed it, when an agent wrote the row. */
   authorAgentId: string | null;
   authorUserId: string | null;
+  /**
+   * Whether THIS reader may remove the row: its author, or someone who may
+   * moderate the acceptance. Never a stand-in for "I wrote this" — compare
+   * `authorUserId` for that.
+   */
   canDelete: boolean;
   clientId: string;
   content: string;
@@ -121,7 +126,9 @@ export interface AcceptanceApprovalSummary {
 }
 
 export interface AcceptanceCommentList {
-  /** May the caller write comments / approvals here? */
+  /** May the caller approve a round — speak for the delivery rather than about it? */
+  canApprove: boolean;
+  /** May the caller write comments, annotations and reactions here? */
   canComment: boolean;
   items: AcceptanceCommentItem[];
 }

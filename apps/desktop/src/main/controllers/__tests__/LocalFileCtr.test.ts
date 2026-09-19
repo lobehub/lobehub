@@ -35,6 +35,7 @@ vi.mock('electron', () => ({
   shell: {
     openPath: vi.fn(),
     showItemInFolder: vi.fn(),
+    trashItem: vi.fn(),
   },
 }));
 
@@ -81,6 +82,7 @@ const mockLocalFileProtocolManager = {
   approveIndexedProjectRoot: vi.fn(),
   approveProjectRootFromScope: vi.fn(),
   createPreviewUrl: vi.fn(),
+  copyExternalFileForPublish: vi.fn(),
   readExternalFileForPublish: vi.fn(),
   readPreviewFile: vi.fn(),
 };
@@ -370,6 +372,37 @@ describe('LocalFileCtr', () => {
         contentType: 'image/png',
         success: true,
       });
+    });
+  });
+
+  describe('copyAssetForPublish', () => {
+    it('copies through the protocol manager gate', async () => {
+      mockLocalFileProtocolManager.copyExternalFileForPublish.mockResolvedValue(true);
+
+      const result = await localFileCtr.copyAssetForPublish({
+        from: '/outside/image.png',
+        to: '/workspace/.lobe-artifacts/site/image.png',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.copyExternalFileForPublish).toHaveBeenCalledWith({
+        filePath: '/outside/image.png',
+        targetPath: '/workspace/.lobe-artifacts/site/image.png',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({ success: true });
+    });
+
+    it('reports a refused copy as a failure', async () => {
+      mockLocalFileProtocolManager.copyExternalFileForPublish.mockResolvedValue(false);
+
+      const result = await localFileCtr.copyAssetForPublish({
+        from: '/outside/image.png',
+        to: '/elsewhere/image.png',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result.success).toBe(false);
     });
   });
 
@@ -1665,6 +1698,50 @@ describe('LocalFileCtr', () => {
       await localFileCtr.handleGrepContent(params);
 
       expect(mockContentSearchService.grep).toHaveBeenCalledWith(params);
+    });
+  });
+
+  describe('trashLocalFiles', () => {
+    it('reports every path when a later one fails, so earlier trashed items are not lost', async () => {
+      vi.mocked(mockShell.trashItem)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('Operation not permitted'))
+        .mockResolvedValueOnce(undefined);
+
+      const result = await localFileCtr.trashLocalFiles({
+        paths: ['/p/first.txt', '/p/locked.txt', '/p/third.txt'],
+      });
+
+      // The batch is not atomic: first and third really are in the trash, so a
+      // bare { success: false } would strand them in the caller's tree.
+      expect(result.success).toBe(false);
+      expect(result.items).toEqual([
+        { path: '/p/first.txt', success: true },
+        { error: 'Operation not permitted', path: '/p/locked.txt', success: false },
+        { path: '/p/third.txt', success: true },
+      ]);
+      expect(mockShell.trashItem).toHaveBeenCalledTimes(3);
+    });
+
+    it('succeeds only when every path was trashed', async () => {
+      vi.mocked(mockShell.trashItem).mockResolvedValue(undefined);
+
+      const result = await localFileCtr.trashLocalFiles({ paths: ['/p/a.txt', '/p/b.txt'] });
+
+      expect(result).toEqual({
+        items: [
+          { path: '/p/a.txt', success: true },
+          { path: '/p/b.txt', success: true },
+        ],
+        success: true,
+      });
+    });
+
+    it('rejects an empty batch without touching the trash', async () => {
+      const result = await localFileCtr.trashLocalFiles({ paths: [] });
+
+      expect(result).toEqual({ items: [], success: false });
+      expect(mockShell.trashItem).not.toHaveBeenCalled();
     });
   });
 });

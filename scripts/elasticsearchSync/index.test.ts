@@ -129,7 +129,20 @@ describe('runElasticsearchFtsSearchSyncCli', () => {
   });
 
   it('returns zero and emits only bounded numeric summaries after a successful drain', async () => {
-    const { runtime } = createRuntime([drainResult()]);
+    const { runtime } = createRuntime([
+      drainResult({
+        bulkRequestSamples: [
+          {
+            bytes: 100,
+            durationMs: 10,
+            entities: { messages: { bytes: 100, items: 1, result: 'success' } },
+            items: 1,
+            messageTombstoneItems: 1,
+            result: 'success',
+          },
+        ],
+      }),
+    ]);
     const logSuccess = vi.fn();
 
     await expect(
@@ -141,6 +154,9 @@ describe('runElasticsearchFtsSearchSyncCli', () => {
     ).resolves.toBe(0);
     expect(logSuccess).toHaveBeenLastCalledWith(
       expect.stringContaining('"type":"fts_search_sync_completed"'),
+    );
+    expect(logSuccess).toHaveBeenLastCalledWith(
+      expect.stringContaining('"messageTombstoneItems":1'),
     );
   });
 

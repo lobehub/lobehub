@@ -14,6 +14,12 @@ import { styles } from './styles';
 
 interface CommentThreadProps {
   canComment: boolean;
+  /**
+   * Whether closing THIS thread is the caller's to make. Replying is open to
+   * every reader; declaring a concern handled belongs to whoever raised it and
+   * to the delivery's reviewers.
+   */
+  canResolve: boolean;
   onDelete: (id: string) => Promise<void>;
   onReply: (rootId: string, content: string, attachments: { fileId: string }[]) => Promise<void>;
   onResolve: (rootId: string, resolved: boolean) => Promise<void>;
@@ -30,7 +36,7 @@ interface CommentThreadProps {
  * carries a success colour any more.
  */
 const CommentThread = memo<CommentThreadProps>(
-  ({ canComment, onDelete, onReply, onResolve, thread }) => {
+  ({ canComment, canResolve, onDelete, onReply, onResolve, thread }) => {
     const { t } = useTranslation('verify');
     const [replying, setReplying] = useState(false);
     const [resolving, setResolving] = useState(false);
@@ -107,15 +113,17 @@ const CommentThread = memo<CommentThreadProps>(
               <Button outdent size={'small'} type={'text'} onClick={() => setReplying(true)}>
                 {t('acceptance.comments.reply')}
               </Button>
-              <Button
-                outdent
-                loading={resolving}
-                size={'small'}
-                type={'text'}
-                onClick={() => void toggleResolved()}
-              >
-                {resolved ? t('acceptance.comments.reopen') : t('acceptance.comments.resolve')}
-              </Button>
+              {canResolve && (
+                <Button
+                  outdent
+                  loading={resolving}
+                  size={'small'}
+                  type={'text'}
+                  onClick={() => void toggleResolved()}
+                >
+                  {resolved ? t('acceptance.comments.reopen') : t('acceptance.comments.resolve')}
+                </Button>
+              )}
               {resolved && (
                 <Button outdent size={'small'} type={'text'} onClick={() => setOpenOverride(false)}>
                   {t('acceptance.comments.collapseThread')}

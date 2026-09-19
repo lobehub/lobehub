@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { AcceptanceEvidence } from '../Checks/types';
 import { AnnotatedImage } from '../Evidence/Annotation';
-import { acceptanceAuthorColor } from './authorColor';
+import { useAcceptanceAuthorColor } from './authorColor';
 
 const THUMBNAIL_WIDTH = 220;
 
@@ -42,12 +42,13 @@ interface ThreadEvidenceProps {
  */
 const ThreadEvidence = memo<ThreadEvidenceProps>(({ comment, evidence, roundIndex, stale }) => {
   const { t } = useTranslation('verify');
+  const authorColor = useAcceptanceAuthorColor();
   if (!evidence.fileUrl || !comment.rect) return null;
 
   return (
     <Flexbox className={styles.wrapper} gap={4}>
       <AnnotatedImage
-        annotations={[{ color: acceptanceAuthorColor(comment.authorUserId), rect: comment.rect }]}
+        annotations={[{ color: authorColor(comment.authorUserId), rect: comment.rect }]}
         imageStyle={{ width: THUMBNAIL_WIDTH }}
         showComments={false}
         src={evidence.fileUrl}

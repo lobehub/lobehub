@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Kopyalamak için tıklayın",
   "unknownError.desc": "Beklenmedik bir hata oluştu. Tekrar deneyebilir veya bildirebilirsiniz",
   "unknownError.retry": "Tekrar Dene",
+  "unknownError.sharedDesc": "Lütfen bu sorunu bildirin",
+  "unknownError.sharedTitle": "Bu yanıt oluşturulamadı",
   "unknownError.title": "Hata, istek kısa bir mola verdi",
   "unknownError.traceIdLabel": "İzleme Kimliği:",
   "unlock.addProxyUrl": "OpenAI proxy URL'si ekle (isteğe bağlı)",

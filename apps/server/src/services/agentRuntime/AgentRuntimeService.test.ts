@@ -450,12 +450,10 @@ describe('AgentRuntimeService', () => {
           status: 'idle',
           stepCount: 0,
           messages: [],
-          metadata: {
-            agentConfig: mockParams.agentConfig,
-            modelRuntimeConfig: mockParams.modelRuntimeConfig,
-            userId: mockParams.userId,
-          },
+          modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          origin: expect.objectContaining({ userId: mockParams.userId }),
           toolManifestMap: {},
+          world: expect.objectContaining({ agent: mockParams.agentConfig }),
         }),
       );
 
@@ -509,7 +507,7 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('should pass evalContext to metadata when provided', async () => {
+    it('should place evalContext on the world snapshot when provided', async () => {
       mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
 
       const evalContext = { envPrompt: 'You are in a test environment' };
@@ -518,9 +516,29 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
-          metadata: expect.objectContaining({
-            evalContext,
-          }),
+          world: expect.objectContaining({ eval: evalContext }),
+        }),
+      );
+    });
+
+    it('should persist the system-message context on the world snapshot', async () => {
+      mockQueueService.scheduleMessage.mockResolvedValueOnce('message-123');
+
+      const projectInstructions = [{ content: 'Use bun.', source: 'AGENTS.md' }];
+      const connectorOwnershipNote = 'Gmail runs on Alice’s account.';
+      await service.createOperation({
+        ...mockParams,
+        connectorOwnershipNote,
+        projectInstructions,
+      });
+
+      // Steps can be claimed by another worker, so anything the context engine
+      // needs has to survive on the persisted operation state — in the typed
+      // `world` slot, which is the only place the engine reads it from.
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          world: expect.objectContaining({ connectorOwnershipNote, projectInstructions }),
         }),
       );
     });
@@ -735,8 +753,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        metadata: {
-          agentConfig: { chatConfig: { enableContextCompression: true } },
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'gpt-4o-mini', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -770,8 +788,8 @@ describe('AgentRuntimeService', () => {
       });
 
       await (serviceWithFactory as any).createAgentRuntime({
-        metadata: {
-          agentConfig: { chatConfig: { enableContextCompression: true } },
+        agentState: {
+          world: { agent: { chatConfig: { enableContextCompression: true } } as any },
           modelRuntimeConfig: { model: 'unknown-model', provider: 'openai' },
         },
         operationId: 'test-operation-1',
@@ -1962,6 +1980,33 @@ describe('AgentRuntimeService', () => {
     });
   });
 
+  describe('setQueuedMessages', () => {
+    it('writes the flag for an operation owned by the caller', async () => {
+      mockCoordinator.getOperationMetadata.mockResolvedValue({ userId: mockUserId });
+      mockCoordinator.setQueuedMessages.mockResolvedValue(undefined);
+
+      await expect(service.setQueuedMessages('op-1', true)).resolves.toBe(true);
+
+      expect(mockCoordinator.setQueuedMessages).toHaveBeenCalledWith('op-1', true);
+    });
+
+    it("refuses another user's operation", async () => {
+      mockCoordinator.getOperationMetadata.mockResolvedValue({ userId: 'someone-else' });
+
+      await expect(service.setQueuedMessages('op-1', true)).resolves.toBe(false);
+
+      expect(mockCoordinator.setQueuedMessages).not.toHaveBeenCalled();
+    });
+
+    it('refuses an unknown operation', async () => {
+      mockCoordinator.getOperationMetadata.mockResolvedValue(null);
+
+      await expect(service.setQueuedMessages('op-missing', false)).resolves.toBe(false);
+
+      expect(mockCoordinator.setQueuedMessages).not.toHaveBeenCalled();
+    });
+  });
+
   describe('interruptOperation', () => {
     it('should interrupt a running operation', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
@@ -2070,7 +2115,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const result = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages).toHaveBeenCalledWith(
@@ -2090,7 +2135,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
@@ -2105,7 +2150,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', threadId: 'thd_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages).toHaveBeenCalledWith(
@@ -2119,7 +2164,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(queryMessages.mock.calls[0][0].threadId).toBeUndefined();
@@ -2130,10 +2175,10 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const noAgent = await service.queryUiMessages({
-        metadata: { topicId: 'tpc_1' },
+        origin: { topicId: 'tpc_1' },
       } as any);
       const noTopic = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1' },
+        origin: { agentId: 'agt_1' },
       } as any);
       const noMeta = await service.queryUiMessages({} as any);
 
@@ -2148,7 +2193,7 @@ describe('AgentRuntimeService', () => {
       stubMessageService(service, queryMessages);
 
       const result = await service.queryUiMessages({
-        metadata: { agentId: 'agt_1', topicId: 'tpc_1' },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
       } as any);
 
       expect(result).toBeUndefined();
@@ -2471,7 +2516,7 @@ describe('AgentRuntimeService', () => {
         { content: 'question', role: 'user' },
         { content: 'final answer', role: 'assistant' },
       ],
-      metadata: { agentId: 'agent-a' },
+      origin: { agentId: 'agent-a' },
       modelRuntimeConfig: { model: 'gpt-test' },
       status: 'done',
       usage: { llm: { tokens: { total: 42 } }, tools: { totalCalls: 2 } },

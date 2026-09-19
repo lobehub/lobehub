@@ -205,6 +205,12 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, execFileSync: execFileSyncMock, spawn: spawnMock };
 });
 
+const findHeteroExecProcessesMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/utils/heteroExecProcess', () => ({
+  findHeteroExecProcesses: findHeteroExecProcessesMock,
+}));
+
 vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
   resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
   resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
@@ -1248,15 +1254,17 @@ describe('GatewayConnectionCtr', () => {
 
         // Simulate the child exiting normally.
         mockChild.emit('exit', 0, null);
+        findHeteroExecProcessesMock.mockResolvedValueOnce([]);
 
-        // After exit, cancelHeteroTask should report no task found.
+        // After exit, the registry no longer holds the task, so cancellation
+        // falls back to the OS process table and confirms nothing is running.
         const cancelResult = await ctr['cancelHeteroTask']({
           signal: 'SIGINT',
           taskId: 'op-cleanup',
         });
         const parsed = JSON.parse(cancelResult);
-        expect(parsed.success).toBe(false);
-        expect(parsed.message).toContain('No task found');
+        expect(findHeteroExecProcessesMock).toHaveBeenCalledWith('op-cleanup');
+        expect(parsed).toMatchObject({ exited: true, reason: 'not_found', success: true });
       });
 
       it('keeps the process-group escalation after the wrapper exits', async () => {
@@ -1597,6 +1605,125 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.cancelLhHeteroExec).toHaveBeenCalledWith({
         operationId: 'op-codex',
         signal: 'SIGINT',
+      });
+      expect(findHeteroExecProcessesMock).not.toHaveBeenCalled();
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: 'req-cancel-codex',
+          result: expect.objectContaining({
+            state: { exited: true, pid: 7777, signal: 'SIGINT', taskId: 'op-codex' },
+            success: true,
+          }),
+        }),
+      );
+    });
+
+    /**
+     * Regression: after a desktop restart both in-memory registries are empty.
+     * The server keeps the task stuck until the device confirms `exited: true`,
+     * so the device must ask the OS instead of answering "No task found".
+     */
+    describe('when neither registry knows the operation (app restarted)', () => {
+      it('confirms the exit when no hetero exec process is alive', async () => {
+        findHeteroExecProcessesMock.mockResolvedValueOnce([]);
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+        const parsed = JSON.parse(
+          await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-restarted' }),
+        );
+
+        expect(findHeteroExecProcessesMock).toHaveBeenCalledWith('op-restarted');
+        expect(parsed).toEqual({
+          exited: true,
+          reason: 'not_found',
+          success: true,
+          taskId: 'op-restarted',
+        });
+        expect(killSpy).not.toHaveBeenCalled();
+        killSpy.mockRestore();
+      });
+
+      it('terminates an orphaned wrapper group and confirms only after it exits', async () => {
+        findHeteroExecProcessesMock.mockResolvedValueOnce([{ pid: 4242 }]);
+        const alive = new Set([4242]);
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal?) => {
+          const target = Math.abs(Number(pid));
+          if (signal === 0) {
+            if (!alive.has(target)) throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' });
+            return true;
+          }
+          return true;
+        });
+
+        const pending = ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-orphaned' });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGINT');
+
+        // Still alive: the device must not confirm yet.
+        let settled = false;
+        void pending.then(() => {
+          settled = true;
+        });
+        await vi.advanceTimersByTimeAsync(500);
+        expect(settled).toBe(false);
+
+        alive.delete(4242);
+        await vi.advanceTimersByTimeAsync(100);
+        const parsed = JSON.parse(await pending);
+
+        expect(parsed).toEqual({
+          exited: true,
+          pids: [4242],
+          reason: 'orphan_terminated',
+          signal: 'SIGINT',
+          success: true,
+          taskId: 'op-orphaned',
+        });
+        expect(killSpy).not.toHaveBeenCalledWith(-4242, 'SIGKILL');
+        killSpy.mockRestore();
+      });
+
+      it('escalates and reports unconfirmed when the orphan will not die', async () => {
+        findHeteroExecProcessesMock.mockResolvedValueOnce([{ pid: 4343 }]);
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+        const pending = ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-stubborn' });
+        await vi.advanceTimersByTimeAsync(6000);
+        const parsed = JSON.parse(await pending);
+
+        expect(killSpy).toHaveBeenCalledWith(-4343, 'SIGINT');
+        expect(killSpy).toHaveBeenCalledWith(-4343, 'SIGKILL');
+        expect(parsed).toMatchObject({
+          exited: false,
+          pids: [4343],
+          reason: 'orphan_alive',
+          success: false,
+          taskId: 'op-stubborn',
+        });
+        killSpy.mockRestore();
+      });
+
+      it('does not claim an exit when the process table cannot be read', async () => {
+        findHeteroExecProcessesMock.mockRejectedValueOnce(new Error('spawn ps ENOENT'));
+
+        const parsed = JSON.parse(
+          await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-no-ps' }),
+        );
+
+        expect(parsed).toMatchObject({ exited: false, reason: 'lookup_failed', success: false });
+      });
+
+      it('keeps the previous unconfirmed answer on Windows', async () => {
+        const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+        const parsed = JSON.parse(
+          await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-win' }),
+        );
+
+        expect(findHeteroExecProcessesMock).not.toHaveBeenCalled();
+        expect(parsed.success).toBe(false);
+        expect(parsed.exited).toBeUndefined();
+        platformSpy.mockRestore();
       });
     });
 

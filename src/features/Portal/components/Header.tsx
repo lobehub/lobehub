@@ -19,10 +19,11 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 const Header = memo<{
+  onClose?: () => void;
   paddingInline?: number;
   rightExtra?: ReactNode;
   title: ReactNode;
-}>(({ paddingInline = 8, rightExtra, title }) => {
+}>(({ onClose, paddingInline = 8, rightExtra, title }) => {
   const { t } = useTranslation('common');
   const location = useLocation();
   const navigate = useWorkspaceAwareNavigate();
@@ -64,6 +65,11 @@ const Header = memo<{
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             title={t('close')}
             onClick={() => {
+              if (onClose) {
+                onClose();
+                return;
+              }
+
               if (params.aid && params.topicId && isTopicPageRoute) {
                 navigate(AGENT_CHAT_TOPIC_URL(params.aid, params.topicId));
                 return;

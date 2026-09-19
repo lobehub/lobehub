@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +10,7 @@ import {
   unregisterNavPanelContent,
 } from './registry';
 import NavPanelShell from './Shell';
+import SideBarLayout from './SideBarLayout';
 
 const panelRender = vi.fn();
 
@@ -25,6 +26,7 @@ interface NavPanelDraggableMockProps {
     key: string;
     node: ReactNode;
   };
+  homeContent?: ReactNode;
 }
 
 const workspaceState: WorkspaceMock = {
@@ -43,10 +45,10 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
 }));
 
 vi.mock('./components/NavPanelDraggable', () => ({
-  NavPanelDraggable: ({ activeContent }: NavPanelDraggableMockProps) => {
+  NavPanelDraggable: ({ activeContent, homeContent }: NavPanelDraggableMockProps) => {
     panelRender();
     return (
-      <div data-nav-key={activeContent.key} data-testid="nav-panel">
+      <div data-has-home={!!homeContent} data-nav-key={activeContent.key} data-testid="nav-panel">
         {activeContent.node}
       </div>
     );
@@ -102,6 +104,21 @@ describe('NavPanel', () => {
     });
     expect(screen.getByTestId('nav-panel')).toHaveAttribute('data-nav-key', 'workspace-settings');
     expect(screen.queryByText('Home sidebar')).not.toBeInTheDocument();
+  });
+
+  it('keeps handing the Home entry down while a route-owned panel is active', async () => {
+    const owner = Symbol('workspace-settings');
+    registerNavPanelContent('workspace-settings', owner, <div>Workspace settings sidebar</div>);
+    render(<NavPanel />);
+
+    expect(screen.getByTestId('nav-panel')).toHaveAttribute('data-has-home', 'false');
+
+    act(() => registerNavPanelContent('home', Symbol('home'), <div>Home sidebar</div>));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('nav-panel')).toHaveAttribute('data-has-home', 'true');
+    });
+    expect(screen.getByTestId('nav-panel')).toHaveAttribute('data-nav-key', 'workspace-settings');
   });
 
   it('uses the Home entry for routes without a dedicated navigation panel', async () => {
@@ -233,5 +250,35 @@ describe('NavPanelShell', () => {
       expect(screen.getByTestId('nav-sidebar-skeleton')).toBeInTheDocument();
     });
     expect(screen.queryByText('Home sidebar')).not.toBeInTheDocument();
+  });
+});
+
+describe('SideBarLayout scroll restoration', () => {
+  const getViewport = (container: HTMLElement) =>
+    container.querySelector('[data-id$="-viewport"]') as HTMLDivElement;
+
+  it('restores the scroll offset for the same nav key after a remount', () => {
+    pathname = '/';
+    const first = render(<SideBarLayout body={<div>body</div>} />);
+    const viewport = getViewport(first.container);
+    viewport.scrollTop = 120;
+    fireEvent.scroll(viewport);
+    first.unmount();
+
+    const second = render(<SideBarLayout body={<div>body</div>} />);
+    expect(getViewport(second.container).scrollTop).toBe(120);
+  });
+
+  it('keeps offsets isolated per nav key', () => {
+    pathname = '/community';
+    const first = render(<SideBarLayout body={<div>body</div>} />);
+    const viewport = getViewport(first.container);
+    viewport.scrollTop = 80;
+    fireEvent.scroll(viewport);
+    first.unmount();
+
+    pathname = '/memory';
+    const second = render(<SideBarLayout body={<div>body</div>} />);
+    expect(getViewport(second.container).scrollTop).toBe(0);
   });
 });

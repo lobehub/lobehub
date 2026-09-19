@@ -1428,6 +1428,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             });
           }
 
+          case 413: {
+            return AgentRuntimeError.chat({
+              endpoint: desensitizedEndpoint,
+              error: error as any,
+              errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
+              provider: this.id,
+            });
+          }
+
           default: {
             break;
           }

@@ -1,3 +1,4 @@
+import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LOADING_FLAT } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
@@ -24,6 +25,7 @@ import {
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DeviceModel } from '@/database/models/device';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
@@ -52,6 +54,7 @@ import {
 } from '../helpers/heteroErrors';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
 import type { ExecRunContext } from '../types';
+import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -171,6 +174,78 @@ const finalizeHeteroDispatchError = async (
     await deps.topicModel.settleRunningOperation(topicId, operationId, 'active');
   } catch (err) {
     log('finalizeHeteroDispatchError: clear runningOperation failed (non-fatal): %O', err);
+  }
+};
+
+/**
+ * Liveness probe for the ONE dispatch failure that races a live run: the cloud
+ * sandbox `runCommand` call (see the `spawnHeteroSandbox` catch below). Every
+ * other `finalizeHeteroDispatchError` caller rejects synchronously, before any
+ * agent process can exist, so none of them needs this.
+ *
+ * `runCommand` is issued with `background: true` and is supposed to return as
+ * soon as the command is handed to the sandbox — but the sandbox gateway can
+ * sit on the connection and answer `Gateway Timeout` a minute or more later,
+ * long after the sandbox actually booted and started streaming events back
+ * through `heteroIngest`. Finalizing on that rejection blindly treats a
+ * transient gateway 504 as "the run never started": it blanks the assistant
+ * message, stamps an error bubble on a turn the user already read, marks the
+ * op row + its task failed, and closes the UI stream out from under a run that
+ * is still producing output.
+ *
+ * Two cheap reads tell a stranded dispatch apart from a live one:
+ *
+ * 1. `agent_operations.status` — anything other than `running` means the run
+ *    reached `heteroFinish` (or a park) on its own. Nothing left to finalize.
+ * 2. `topics.metadata.heteroCurrentMsgId` — the ingest path repoints this at
+ *    every assistant turn it persists, scoped by `operationId`. It naming THIS
+ *    operation is proof the sandbox is alive and writing.
+ *
+ * When neither fires the sandbox really never came up and the caller finalizes
+ * as before. A run that passes this probe and then dies is not stranded: the
+ * agent-gateway inactivity watchdog still reaps it through `finalizeAbandoned`.
+ */
+const hasHeteroRunStarted = async (
+  deps: HeteroDispatchDeps,
+  params: { operationId: string; topicId: string },
+): Promise<boolean> => {
+  const { operationId, topicId } = params;
+
+  try {
+    const operation = await new AgentOperationModel(
+      deps.db,
+      deps.userId,
+      deps.workspaceId,
+    ).findById(operationId);
+
+    if (operation && operation.status !== 'running') {
+      log(
+        'hasHeteroRunStarted: op=%s already settled (status=%s) — skipping spawn-failure finalize',
+        operationId,
+        operation.status,
+      );
+      return true;
+    }
+
+    const topic = await deps.topicModel.findById(topicId);
+    if (topic?.metadata?.heteroCurrentMsgId?.operationId === operationId) {
+      log(
+        'hasHeteroRunStarted: op=%s has ingested turns — skipping spawn-failure finalize',
+        operationId,
+      );
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    // A probe that cannot read must not swallow a real spawn failure: fall
+    // back to the pre-existing behaviour and finalize.
+    log(
+      'hasHeteroRunStarted: probe failed for op=%s (treating as not started): %O',
+      operationId,
+      err,
+    );
+    return false;
   }
 };
 
@@ -301,7 +376,10 @@ export const dispatchHeteroAgent = async (
   let operationJwt: string;
   try {
     operationJwt = await signHeteroOperationJWT({
-      capabilities: ['hetero:ingest', 'hetero:finish', 'hetero:intervention:read'],
+      // A `/goal` run also gets `goal:manage` so it can create the goal the agent
+      // supervises; the server still derives the agent and topic from this
+      // operation, never from the CLI.
+      capabilities: heteroOperationCapabilities(prompt),
       operationId,
       userId: deps.userId,
       workspaceId: deps.workspaceId,
@@ -378,8 +456,14 @@ export const dispatchHeteroAgent = async (
   // Build the primary context without conversation history. If native resume
   // fails, the CLI switches to the complete fallback prompt on its fresh
   // retry; successful same-session runs never consume the duplicate history.
+  // `/goal` reaches a hetero agent as instructions, not a tool: it creates and
+  // plans the goal through `lh` in this same run.
+  const agentSystemContext = withConversationGoalPrompt(
+    agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+    prompt,
+  );
   const systemContext = buildCloudHeteroContext({
-    agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+    agentSystemContext,
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
     githubToken,
     repos: topicRepos,
@@ -387,7 +471,7 @@ export const dispatchHeteroAgent = async (
   const resumeFallbackSystemContext =
     resumeSessionId && conversationHistory
       ? buildCloudHeteroContext({
-          agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+          agentSystemContext,
           conversationHistory,
           githubToken,
           repos: topicRepos,
@@ -420,7 +504,9 @@ export const dispatchHeteroAgent = async (
     imageList: heteroImageList,
     jwt: operationJwt,
     operationId,
-    prompt,
+    // The CLI receives only the request: `/goal` is already in the system
+    // context, and Claude Code's own `/goal` command would otherwise take it.
+    prompt: stripGoalCommand(prompt),
     repos: topicRepos,
     resumeFallbackSystemContext,
     resumeSessionId,
@@ -888,13 +974,13 @@ export const dispatchHeteroAgent = async (
       // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
       // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
       const deviceSystemContext = buildRemoteDeviceHeteroContext({
-        agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+        agentSystemContext,
         conversationHistory: resumeSessionId ? undefined : conversationHistory,
       });
       const deviceResumeFallbackSystemContext =
         resumeSessionId && conversationHistory
           ? buildRemoteDeviceHeteroContext({
-              agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+              agentSystemContext,
               conversationHistory,
             })
           : undefined;
@@ -1028,6 +1114,13 @@ export const dispatchHeteroAgent = async (
         // the same terminal funnel so the stranded run surfaces an error and
         // its task is marked failed instead of hanging in `running`.
         log('execAgent: hetero sandbox spawn failed: %O', err);
+
+        // ...unless the run is demonstrably alive or already finished. This
+        // call is the only dispatch failure that can land AFTER the agent
+        // started, so a rejection here is not by itself evidence that nothing
+        // ran — see `hasHeteroRunStarted`.
+        if (await hasHeteroRunStarted(deps, { operationId, topicId })) return;
+
         await finalizeHeteroDispatchError(deps, {
           agentId: resolvedAgentId,
           assistantMessageId,

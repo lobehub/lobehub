@@ -6,7 +6,7 @@ import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFact
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { isDeepSeekV4FamilyModel } from '../../utils/modelParse';
-import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { assertContextWithinWindow, resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { deepseekRuntimeModels } from './runtimeModels';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
@@ -127,6 +127,12 @@ export const buildDeepSeekAnthropicPayload = async (
     payload.messages,
     shouldEnableDeepSeekThinking(payload),
   );
+
+  // resolveSafeMaxTokens skips explicit completion budgets, but the input must
+  // still fit the model's context window before the upstream request is sent.
+  if (payload.max_tokens !== undefined) {
+    assertContextWithinWindow({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels);
+  }
 
   const resolvedMaxTokens =
     payload.max_tokens ??

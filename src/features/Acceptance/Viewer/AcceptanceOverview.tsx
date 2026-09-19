@@ -21,7 +21,6 @@ import AcceptanceEnterFocus from './Focus/AcceptanceEnterFocus';
 import AcceptanceGoal from './Header/AcceptanceGoal';
 import AcceptanceGoalEdit from './Header/AcceptanceGoalEdit';
 import AcceptanceIdentity from './Header/AcceptanceIdentity';
-import AcceptanceSharedNotice from './Header/AcceptanceSharedNotice';
 import AcceptanceStatusControl from './Header/AcceptanceStatusControl';
 import type { AcceptanceTabKey } from './Header/AcceptanceTabs';
 import AcceptanceTabs from './Header/AcceptanceTabs';
@@ -90,7 +89,6 @@ export const AcceptanceOverview = ({
     <>
       <Flexbox className={styles.headerBand}>
         <Flexbox className={styles.column} gap={12}>
-          <AcceptanceSharedNotice />
           <AcceptanceIdentity
             focusSlot={<AcceptanceEnterFocus />}
             statusSlot={<AcceptanceStatusControl />}

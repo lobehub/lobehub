@@ -17,6 +17,7 @@ const {
   mockPluginQuery,
   mockQueryDeviceList,
   mockQueryDeviceSystemInfo,
+  mockFindWorkspaceDeviceById,
   mockQueryWorkspaceDevices,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
@@ -29,6 +30,7 @@ const {
   mockPluginQuery: vi.fn(),
   mockQueryDeviceList: vi.fn(),
   mockQueryDeviceSystemInfo: vi.fn(),
+  mockFindWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
   mockQueryWorkspaceDevices: vi.fn(),
 }));
 
@@ -66,7 +68,7 @@ vi.mock('@/database/models/device', () => ({
   DeviceModel: vi.fn().mockImplementation(function () {
     return {
       findByDeviceId: vi.fn().mockResolvedValue(undefined),
-      findWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
+      findWorkspaceDeviceById: mockFindWorkspaceDeviceById,
       queryPersonal: vi.fn().mockResolvedValue([]),
       queryWorkspaceDevices: mockQueryWorkspaceDevices,
       queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue([]),
@@ -769,6 +771,69 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.deviceSystemInfo).toBeUndefined();
+    });
+  });
+
+  /**
+   * Pins the stage order the assembled system message depends on. Carrying a
+   * real payload end to end through here needs the whole device workspace-scan
+   * chain stood up — an active device, a device row, a fresh cached scan, and
+   * the skill lookup that shares its `try` — which is why the payload itself is
+   * covered link by link instead (`AgentRuntimeService`,
+   * `serverCallLlmContextBuilder`, `serverMessagesEngine`).
+   */
+  describe('system-message run context', () => {
+    const withScannedProject = () => {
+      mockQueryWorkspaceDevices.mockResolvedValue([
+        {
+          deviceId: 'ws-dev-1',
+          friendlyName: null,
+          hostname: 'workspace-mac',
+          lastSeenAt: new Date('2026-09-09T00:00:00.000Z'),
+          platform: 'darwin',
+        },
+      ]);
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'ws-dev-1', hostname: 'workspace-mac', online: true, platform: 'darwin' },
+      ]);
+      mockQueryDeviceSystemInfo.mockResolvedValue({
+        arch: 'arm64',
+        homePath: '/Users/me',
+        platform: 'darwin',
+      });
+      // A device whose bound project root already carries a FRESH scan, so the
+      // run reads the cache instead of going out to the gateway.
+      mockFindWorkspaceDeviceById.mockResolvedValue({
+        defaultCwd: '/repo',
+        deviceId: 'ws-dev-1',
+        workingDirs: [
+          {
+            path: '/repo',
+            workspace: {
+              instructions: [{ content: 'Use bun, not npm.', source: 'AGENTS.md' }],
+              skills: [],
+            },
+            workspaceScannedAt: Date.now(),
+          },
+        ],
+      });
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
+      );
+    };
+
+    it('discovers tools before preparing the operation', async () => {
+      withScannedProject();
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+      // Tool discovery resolves the device the workspace scan then reads, which
+      // is also why connector attribution precedes the project instructions in
+      // the assembled system message. Pinning it here keeps that ordering
+      // argument from resting on a comment.
+      const discoveryCall = mockQueryDeviceList.mock.invocationCallOrder[0];
+      const prepCall = mockFindWorkspaceDeviceById.mock.invocationCallOrder[0];
+      expect(discoveryCall).toBeLessThan(prepCall);
     });
   });
 });

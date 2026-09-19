@@ -35,7 +35,7 @@ interface UserMessageProps {
 
 const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
-  const { content, createdAt, error, role, extra, targetId, sender } = item;
+  const { content, createdAt, error, role, extra, targetId, sender, metadata } = item;
   const botSender = getBotSender(item);
 
   const { t } = useTranslation('chat');
@@ -108,9 +108,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       avatar={{ avatar, title }}
       belowMessage={<ScheduledRunFooter id={id} />}
       editing={editing}
+      headerAddon={metadata?.steer ? <Tag>{t('steer.tag')}</Tag> : undefined}
       id={id}
       message={content}
-      messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
+      messageExtra={<UserMessageExtra extra={extra} id={id} />}
       placement={'right'}
       showAvatar={showSender}
       showTitle={showSender}

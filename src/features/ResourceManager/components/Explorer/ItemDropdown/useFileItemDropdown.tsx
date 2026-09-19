@@ -328,7 +328,7 @@ export const useFileItemDropdown = ({
               domEvent.stopPropagation();
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
-                content: <VisibilityConfirmContent variant="makePrivate" />,
+                content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
                 okButtonProps: { danger: true },
                 okText: t('continue', { ns: 'common' }),
                 title: t('makePrivate.confirm.title', { ns: 'common' }),

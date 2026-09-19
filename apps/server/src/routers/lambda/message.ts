@@ -29,6 +29,7 @@ import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
 } from './_helpers/conversationResourceGuard';
+import { projectSharedTopicMessages } from './_helpers/projectSharedTopicMessages';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
 import {
   assertCreatorMessageTargets,
@@ -444,7 +445,7 @@ export const messageRouter = router({
         const messageModel = new MessageModel(ctx.serverDB, share.ownerId, shareWorkspaceId);
         const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
 
-        return messageModel.query(
+        const messages = await messageModel.query(
           // Force skipWorks: Work summaries join LIVE task/version state (not a
           // share-time snapshot), so serving them here would leak post-share
           // mutations to anonymous visitors. Share pages render no Work chips.
@@ -454,6 +455,8 @@ export const messageRouter = router({
               fileService.getFileAccessUrl({ id: file.id, url: path }),
           },
         );
+
+        return projectSharedTopicMessages(messages);
       }
 
       // Authenticated access - require userId

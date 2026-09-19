@@ -73,9 +73,10 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
       taskDetailPath(
         task.identifier,
         routeScope === 'agent' ? (task.assigneeAgentId ?? undefined) : undefined,
+        task.name,
       ),
     );
-  }, [navigate, routeScope, task.assigneeAgentId, task.identifier]);
+  }, [navigate, routeScope, task.assigneeAgentId, task.identifier, task.name]);
 
   const handleRequestSubtasks = useCallback(async () => {
     const detail = await fetchTaskDetail(task.identifier);
@@ -83,8 +84,10 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
   }, [fetchTaskDetail, task.identifier]);
 
   const handleSubtaskClick = useCallback(
-    (identifier: string, assigneeAgentId?: string) => {
-      navigate(taskDetailPath(identifier, routeScope === 'agent' ? assigneeAgentId : undefined));
+    (identifier: string, assigneeAgentId?: string, name?: string) => {
+      navigate(
+        taskDetailPath(identifier, routeScope === 'agent' ? assigneeAgentId : undefined, name),
+      );
     },
     [navigate, routeScope],
   );

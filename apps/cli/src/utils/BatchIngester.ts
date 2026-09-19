@@ -1,5 +1,15 @@
 import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
 
+/**
+ * Server verdict on one batch. `accepted: false` means the server took the
+ * batch and threw it away — the operation is over on its side — so the events
+ * are lost for good and retrying cannot help.
+ */
+export interface IngestAck {
+  accepted: boolean;
+  reason?: string;
+}
+
 export interface IngestSink {
   finish: (params: {
     error?: {
@@ -16,17 +26,29 @@ export interface IngestSink {
     result: 'cancelled' | 'error' | 'success';
     sessionId?: string;
   }) => Promise<void>;
-  ingest: (events: AgentStreamEvent[]) => Promise<void>;
+  ingest: (events: AgentStreamEvent[]) => Promise<IngestAck>;
 }
 
 export class NoopIngestSink implements IngestSink {
   async finish(_params: Parameters<IngestSink['finish']>[0]): Promise<void> {}
-  async ingest(_events: AgentStreamEvent[]): Promise<void> {}
+  async ingest(_events: AgentStreamEvent[]): Promise<IngestAck> {
+    return { accepted: true };
+  }
 }
 
 const MAX_BATCH = 50;
 const FLUSH_INTERVAL_MS = 250;
 const MAX_RETRIES = 5;
+
+/** The server acknowledged a batch and discarded it — see {@link IngestAck}. */
+export class IngestRejectedError extends Error {
+  constructor(readonly reason?: string) {
+    super(
+      `Server discarded the agent's output${reason ? ` (${reason})` : ''}: this run is no longer the topic's active operation, so nothing it produced was saved`,
+    );
+    this.name = 'IngestRejectedError';
+  }
+}
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -121,9 +143,20 @@ export class BatchIngester {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (this.fatalError) throw this.fatalError;
       try {
-        await this.sink.ingest(batch);
+        const ack = await this.sink.ingest(batch);
+        // A refusal is terminal, not transport noise: the server has closed the
+        // operation and will discard every later batch the same way. Fail the
+        // stream instead of retrying, so the run stops buffering and reports the
+        // loss at `drain()` rather than exiting 0 on output nobody stored.
+        if (ack && ack.accepted === false) {
+          throw new IngestRejectedError(ack.reason);
+        }
         return;
       } catch (error) {
+        if (error instanceof IngestRejectedError) {
+          this.fatalError = error;
+          throw error;
+        }
         if (attempt === MAX_RETRIES) throw error;
         await sleep(delay);
         delay = Math.min(delay * 2, 8_000);

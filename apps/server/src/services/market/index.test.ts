@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 
-import { extractAccessToken, LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS, MarketService } from './index';
+import {
+  extractAccessToken,
+  LOBEHUB_SKILL_DISCOVERY_CONCURRENCY,
+  LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS,
+  MarketService,
+} from './index';
 
 // Mock dependencies before importing the module under test
 vi.mock('@lobehub/market-sdk', () => {
@@ -673,7 +678,9 @@ describe('MarketService', () => {
 
       const manifests = await service.getLobehubSkillManifests();
 
-      expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
+      expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog', {
+        signal: expect.any(AbortSignal),
+      });
       expect((service as any).market.skills.listTools).not.toHaveBeenCalled();
       expect(manifests).toHaveLength(1);
       expect(manifests[0]).toMatchObject({
@@ -764,6 +771,126 @@ describe('MarketService', () => {
       const manifests = await service.getLobehubSkillManifests();
       expect(manifests).toHaveLength(1);
       expect(manifests[0].identifier).toBe('working');
+    });
+
+    it('should fetch provider tools concurrently and keep connection order', async () => {
+      const service = new MarketService();
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [
+          { providerId: 'linear', providerName: 'Linear' },
+          { providerId: 'github', providerName: 'GitHub' },
+        ],
+      });
+      const pending = new Map<string, (value: unknown) => void>();
+      (service as any).market.skills.listTools = vi.fn().mockImplementation(
+        (id: string) =>
+          new Promise((resolve) => {
+            pending.set(id, resolve);
+          }),
+      );
+
+      const result = service.getLobehubSkillManifests();
+
+      // A serial loop would only have issued the first request here.
+      await vi.waitFor(() =>
+        expect((service as any).market.skills.listTools).toHaveBeenCalledTimes(2),
+      );
+
+      pending.get('github')!({ tools: [{ description: 'Repo', inputSchema: {}, name: 'repo' }] });
+      pending.get('linear')!({ tools: [{ description: 'Issue', inputSchema: {}, name: 'issue' }] });
+
+      const manifests = await result;
+      expect(manifests.map((manifest) => manifest.identifier)).toEqual(['linear', 'github']);
+    });
+
+    it('should cap how many provider tool lists are fetched at once', async () => {
+      const service = new MarketService();
+      const connectionCount = LOBEHUB_SKILL_DISCOVERY_CONCURRENCY + 3;
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: Array.from({ length: connectionCount }, (_, index) => ({
+          providerId: `provider-${index}`,
+        })),
+      });
+      let inFlight = 0;
+      let maxInFlight = 0;
+      (service as any).market.skills.listTools = vi.fn().mockImplementation(async () => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return { tools: [{ description: 'Do', inputSchema: {}, name: 'do' }] };
+      });
+
+      const manifests = await service.getLobehubSkillManifests();
+
+      expect(manifests).toHaveLength(connectionCount);
+      expect(maxInFlight).toBe(LOBEHUB_SKILL_DISCOVERY_CONCURRENCY);
+    });
+
+    it('should bound each provider request and fall back to static tools on live timeout', async () => {
+      const service = new MarketService();
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+      const timeoutError = new Error('The operation was aborted due to timeout');
+      timeoutError.name = 'TimeoutError';
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [{ providerId: 'posthog', providerName: 'Workspace' }],
+      });
+      (service as any).market.skills.listLiveTools = vi.fn().mockRejectedValue(timeoutError);
+      (service as any).market.skills.listTools = vi.fn().mockResolvedValue({
+        tools: [{ description: 'Query', inputSchema: {}, name: 'query' }],
+      });
+
+      try {
+        const manifests = await service.getLobehubSkillManifests();
+
+        expect(manifests.map((manifest) => manifest.identifier)).toEqual(['posthog']);
+        const signalArg = { signal: expect.any(AbortSignal) };
+        expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith(
+          'posthog',
+          signalArg,
+        );
+        expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog', signalArg);
+        // listConnections + live probe + static fallback each get their own budget.
+        expect(timeoutSpy).toHaveBeenCalledTimes(3);
+        expect(timeoutSpy).toHaveBeenCalledWith(LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS);
+      } finally {
+        timeoutSpy.mockRestore();
+      }
+    });
+
+    it('should report each failed provider through onError', async () => {
+      const service = new MarketService();
+      const onError = vi.fn();
+      const providerError = new Error('Failed');
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [{ providerId: 'failing' }, { providerId: 'working' }],
+      });
+      (service as any).market.skills.listTools = vi
+        .fn()
+        .mockImplementation((id: string) =>
+          id === 'failing'
+            ? Promise.reject(providerError)
+            : Promise.resolve({ tools: [{ description: 'Work', inputSchema: {}, name: 'work' }] }),
+        );
+
+      const manifests = await service.getLobehubSkillManifests({ onError });
+
+      expect(manifests.map((manifest) => manifest.identifier)).toEqual(['working']);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(providerError, 'failing');
+    });
+
+    it('should report a failed connection lookup through onError', async () => {
+      const service = new MarketService();
+      const onError = vi.fn();
+      const lookupError = new Error('The operation was aborted due to timeout');
+      (service as any).market.connect.listConnections = vi.fn().mockRejectedValue(lookupError);
+
+      const manifests = await service.getLobehubSkillManifests({ onError });
+
+      expect(manifests).toEqual([]);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(lookupError);
     });
   });
 

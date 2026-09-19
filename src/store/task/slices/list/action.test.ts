@@ -120,6 +120,58 @@ describe('TaskListSliceAction', () => {
       });
     });
 
+    it('keys and requests the "My tasks" board apart from the all-agents board', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskGroupList({
+          automated: false,
+          groupBy: 'status',
+          scope: 'assigned',
+        }),
+      );
+
+      // Its own scope key, so the `assigned` / `created` sub-views and the
+      // all-agents board can never serve each other's groups.
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:groupList', '__mine__:assigned', 'all', { automated: false }],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      expect(useTaskStore.getState().listAgentId).toBe('__mine__:assigned');
+
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
+      await fetcher();
+      expect(taskService.groupList).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeAgentId: undefined, scope: 'assigned' }),
+      );
+    });
+
+    it('ignores the visibility chip on the "My tasks" board, like its list view does', async () => {
+      const { useClientDataSWR } = await import('@/libs/swr');
+      const { taskService } = await import('@/services/task');
+      // The chip is not offered inside "My tasks"; a value left over from the
+      // ordinary tab must not narrow the board, or the list ↔ board switch
+      // would silently change the row set.
+      useTaskStore.setState({ listVisibility: 'private' });
+
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskGroupList({ groupBy: 'status', scope: 'created' }),
+      );
+
+      expect(useClientDataSWR).toHaveBeenCalledWith(
+        ['task:groupList', '__mine__:created', 'all'],
+        expect.any(Function),
+        expect.any(Object),
+      );
+      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => unknown;
+      await fetcher();
+      expect(taskService.groupList).toHaveBeenCalledWith(
+        expect.objectContaining({ scope: 'created', visibility: undefined }),
+      );
+    });
+
     it('resets a changed group query scope after render and gates stale data meanwhile', () => {
       useTaskStore.setState({
         isTaskGroupListInit: true,
@@ -307,6 +359,28 @@ describe('TaskListSliceAction', () => {
       expect(state.tasks).toEqual([]);
       expect(state.tasksTotal).toBe(0);
       expect(state.isTaskListInit).toBe(false);
+    });
+
+    it('leaves the shared scope alone while the list query is disabled', () => {
+      // The "My tasks" board keeps this page's all-agents list mounted but
+      // disabled. `listAgentId` is one shared slot that the board's group
+      // query owns while it is up — a disabled list query claiming it would
+      // wipe `taskGroups` on every render.
+      useTaskStore.setState({
+        isTaskGroupListInit: true,
+        listAgentId: '__mine__:assigned',
+        taskGroups: [{ key: 'backlog', tasks: [{ identifier: 'T-1' }], total: 1 }] as any,
+      });
+
+      renderHook(() =>
+        useTaskStore.getState().useFetchTaskList({ allAgents: true, enabled: false }),
+      );
+
+      expect(useTaskStore.getState()).toMatchObject({
+        isTaskGroupListInit: true,
+        listAgentId: '__mine__:assigned',
+      });
+      expect(useTaskStore.getState().taskGroups).toHaveLength(1);
     });
 
     it('resets stale task data when an embedded visibility override changes the query scope', () => {

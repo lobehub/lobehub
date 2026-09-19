@@ -38,6 +38,7 @@ import {
 } from '../store';
 import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
+import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
 import { sendVoiceMessage } from './sendVoiceMessage';
@@ -465,6 +466,10 @@ const ChatInput = memo<ChatInputProps>(
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
             <GoalTray
+              topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
+            />
+            {/* Goals this conversation planned; sits last so it rides flush on the input. */}
+            <LinkedGoalTray
               topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
             />
           </Flexbox>

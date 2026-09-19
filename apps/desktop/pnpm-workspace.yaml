@@ -47,6 +47,7 @@ publicHoistPattern:
   - 'pdfjs-dist'
 
 allowBuilds:
+  '@sentry/cli': true
   electron: true
   electron-builder: true
   electron-winstaller: false

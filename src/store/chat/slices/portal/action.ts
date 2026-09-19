@@ -638,6 +638,11 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ taskId, type: PortalViewType.TaskResult });
   };
 
+  /** The whole goal's progress, opened beside the conversation that planned it. */
+  openGoal = (goalId: string): void => {
+    this.#get().pushPortalView({ goalId, type: PortalViewType.Goal });
+  };
+
   openGoalNode = (goalId: string, nodeId: string): void => {
     this.#get().pushPortalView({ goalId, nodeId, type: PortalViewType.GoalNode });
   };

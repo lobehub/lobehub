@@ -107,7 +107,16 @@ const styles = createStaticStyles(({ css }) => ({
     position: absolute;
     border: 2px solid ${cssVar.colorError};
     border-radius: 4px;
-    box-shadow: 0 0 0 1px ${cssVar.colorFillSecondary};
+
+    /*
+     * Two rings instead of one: the dark outside separates the box from a white
+     * screenshot, the light inside separates it from a dark one. The evidence
+     * image can be either, and neither the hue nor the reader's theme can tell
+     * us which — so the box carries its own contrast.
+     */
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 45%),
+      inset 0 0 0 1px rgb(255 255 255 / 45%);
   `,
   resizeHandle: css`
     cursor: nwse-resize;

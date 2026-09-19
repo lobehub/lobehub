@@ -90,6 +90,7 @@
     "e2e": "cd e2e && npm run test",
     "e2e:install": "playwright install",
     "e2e:ui": "playwright test --ui",
+    "fts-search:cleanup-ineligible-messages": "cross-env MIGRATION_DB=1 bun run scripts/elasticsearchCleanupIneligibleMessages/cli.ts",
     "fts-search:reindex": "node scripts/elasticsearchReindex/runner.mjs",
     "fts-search:sync": "cross-env MIGRATION_DB=1 bun run scripts/elasticsearchSync/cli.ts",
     "hotfix:branch": "tsx ./scripts/hotfixWorkflow/index.ts",
@@ -297,6 +298,7 @@
     "@lobechat/llm-generation-tracing": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/markdown-patch": "workspace:*",
+    "@lobechat/mecha": "workspace:*",
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/observability-otel": "workspace:*",
@@ -311,11 +313,11 @@
     "@lobehub/analytics": "^1.6.4",
     "@lobehub/charts": "^5.4.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
-    "@lobehub/editor": "^4.27.0",
+    "@lobehub/editor": "^4.27.3",
     "@lobehub/icons": "^5.18.0",
     "@lobehub/market-sdk": "0.41.0",
     "@lobehub/tts": "^5.1.2",
-    "@lobehub/ui": "^5.42.2",
+    "@lobehub/ui": "^5.47.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@neondatabase/serverless": "^1.1.0",
     "@next/third-parties": "^16.3.0",
@@ -583,7 +585,7 @@
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "5.0.0"
   },
-  "packageManager": "pnpm@12.3.4+sha512.961aa41fb077da3a04a441d9f8e15ebc0c96da8ef710b2eb67bf9ee7cb0610eabd48f1fd85f51cffe73846785fa0f87c56a3a872a1d893f8446741b5cce45457",
+  "packageManager": "pnpm@12.4.1+sha512.2e81e399d73fe8390dab25e06aa788ab7a5908248d2f5a370f82b481147a6a7a367bf8048f9a6fdb6460f21a66f0542dedb8b94ca2c8723596741920b1656d4c",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"

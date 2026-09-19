@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "載入分支失敗",
   "workingDirectory.branchesLoading": "正在載入分支…",
   "workingDirectory.branchesNoMatch": "沒有匹配的分支",
+  "workingDirectory.branchesTruncated": "還有 {{count}} 個 — 輸入以篩選",
   "workingDirectory.browseDescription": "選擇已連接設備上的資料夾。",
   "workingDirectory.browseFolders": "瀏覽資料夾",
   "workingDirectory.cancel": "取消",

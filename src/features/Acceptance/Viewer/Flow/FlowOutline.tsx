@@ -31,18 +31,31 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: start;
     white-space: normal;
   `,
+  // A branch is the condition for reaching the next step, not a step of its own.
+  // Row-width and body-size type made it read as one more item in the list, so
+  // it shrinks to caption scale and hugs its own text.
   branch: css`
     justify-content: flex-start;
 
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
     height: auto;
-    min-height: 32px;
-    padding-block: 4px;
+    min-height: 24px;
+
+    /* Same inline padding as a step row, so the branch glyph sits on the same
+       axis as the status glyphs above and below it. */
+    padding-block: 2px;
     padding-inline: 12px;
 
-    color: ${cssVar.colorTextSecondary};
+    font-size: 12px;
+    line-height: 18px;
     text-align: start;
     white-space: normal;
+  `,
+  // The button carries its own colour rule, so the caption tone has to sit on
+  // the content it wraps.
+  branchContent: css`
+    color: ${cssVar.colorTextTertiary};
   `,
   nested: css`
     margin-inline-start: 18px;
@@ -117,11 +130,13 @@ export function FlowOutline({
         type="text"
         onClick={() => onSelect(branch.edge.id)}
       >
-        <Flexbox horizontal align="center" gap={8}>
+        {/* Top-aligned: a caption that wraps keeps its glyph on the first line and
+            its later lines under the text, not under the glyph. */}
+        <Flexbox horizontal align="flex-start" className={styles.branchContent} gap={6}>
           <Icon
             icon={reference ? ArrowRight : CornerDownRight}
-            size={14}
-            style={{ flex: 'none' }}
+            size={12}
+            style={{ flex: 'none', marginBlockStart: 3 }}
           />
           <span>{reference ? `${label} → ${branch.target.data.title}` : label}</span>
         </Flexbox>

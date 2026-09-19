@@ -182,6 +182,9 @@ const groupListSchema = z
       .optional(),
     parentTaskId: z.string().nullish(),
     projectId: z.string().optional(),
+    // Same "My tasks" narrowing as `listSchema.scope`, so the board renders the
+    // exact set its list view does. Always resolved against `ctx.userId`.
+    scope: z.enum(['assigned', 'created']).optional(),
     visibility: z.enum(['private', 'public']).optional(),
   })
   .refine(({ groupBy, groups }) => Boolean(groupBy) !== Boolean(groups), {
@@ -1012,7 +1015,12 @@ export const taskRouter = router({
   groupList: taskProcedure.input(groupListSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const groups = await model.groupList(input);
+      const { scope, ...query } = input;
+      const groups = await model.groupList({
+        ...query,
+        ...(scope === 'assigned' ? { assigneeUserId: ctx.userId } : {}),
+        ...(scope === 'created' ? { createdByUserId: ctx.userId } : {}),
+      });
       return { data: groups, success: true };
     } catch (error) {
       console.error('[task:groupList]', error);

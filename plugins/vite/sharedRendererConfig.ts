@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import type { ModulePreloadOptions, Plugin } from 'vite';
 
+import { viteCompletionSounds } from './completionSounds';
 import { viteEmotionSpeedy } from './emotionSpeedy';
 import { lobeIconImports } from './lobeIconImports';
 import { lobeUiImports } from './lobeUiImports';
@@ -403,6 +404,7 @@ interface SharedRendererOptions {
 
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
+    viteCompletionSounds(),
     viteEmotionSpeedy(),
     viteMarkdownImport(),
     viteNodeModuleStub(),

@@ -11,6 +11,7 @@ import { z } from 'zod';
 
 import {
   ACCEPTANCE_COMMENT_PARENT_NOT_FOUND,
+  ACCEPTANCE_COMMENT_RATE_LIMITED,
   AcceptanceCommentModel,
   acceptanceReactionClientId,
 } from '@/database/models/acceptanceComment';
@@ -23,6 +24,7 @@ import {
   workspaceMembers,
 } from '@/database/schemas';
 import type { AcceptanceCommentRow } from '@/database/schemas/acceptanceComment';
+import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
@@ -106,11 +108,24 @@ const deactivatedAuthor: AcceptanceCommentAuthor = {
  * Join author profiles and round indexes onto raw rows. Membership status is
  * read against the acceptance's own workspace so a departed teammate renders
  * as `former` rather than vanishing from the discussion.
+ *
+ * That inference only holds on a delivery nobody outside could write on. Once
+ * the link is public, most people in the discussion never had a seat in that
+ * workspace and "left" would be a lie about every one of them, so the label is
+ * dropped there rather than guessed.
  */
 const enrich = async (
   db: LobeChatDatabase,
   rows: AcceptanceCommentRow[],
-  scope: { ownerUserId: string; userId?: string | null; workspaceId: string | null },
+  scope: {
+    /** Whether this reader may take down a remark that is not theirs. */
+    canModerate?: boolean;
+    ownerUserId: string;
+    userId?: string | null;
+    /** Only a private delivery can prove a non-member once had a seat. */
+    visibility: AcceptanceItem['visibility'];
+    workspaceId: string | null;
+  },
 ): Promise<AcceptanceCommentItem[]> => {
   const authorIds = [
     ...new Set(rows.flatMap((row) => (row.authorUserId ? [row.authorUserId] : []))),
@@ -204,8 +219,10 @@ const enrich = async (
       };
     const profile = authorUserId ? profileById.get(authorUserId) : undefined;
     if (!profile) return deactivatedAuthor;
-    // Without a workspace there is no membership to lapse from.
-    const active = !scope.workspaceId || activeIds.has(profile.id);
+    // Without a workspace there is no membership to lapse from, and on a public
+    // delivery a non-member is an invited reader rather than a departed one.
+    const active =
+      !scope.workspaceId || scope.visibility !== 'private' || activeIds.has(profile.id);
     return { ...profile, status: active ? 'active' : 'former', type: 'user' as const };
   };
 
@@ -247,7 +264,10 @@ const enrich = async (
       author: getAuthor(row.authorUserId, row.authorAgentId),
       authorAgentId: row.authorAgentId,
       authorUserId: row.authorUserId,
-      canDelete: !row.deletedAt && Boolean(scope.userId) && row.authorUserId === scope.userId,
+      canDelete:
+        !row.deletedAt &&
+        Boolean(scope.userId) &&
+        (row.authorUserId === scope.userId || Boolean(scope.canModerate)),
       checkItemId: row.checkItemId,
       clientId: row.clientId,
       content: row.content,
@@ -292,9 +312,14 @@ const requireComment = async (
  *
  * `author_agent_id` decides whose name, title and avatar the discussion shows,
  * and a public acceptance shows it to anyone with the link. Without this gate a
- * participant could name any agent id that exists and impersonate it. The scope
- * is the acceptance's own workspace, because that is the audience the agent is
- * being presented to.
+ * participant could name any agent id that exists and impersonate it.
+ *
+ * The scope is the acceptance's workspace ONLY for callers who belong to it.
+ * The workspace scope answers "is this agent visible in that workspace", not
+ * "may this caller use it", so handing it to a visitor who merely opened a
+ * public link would let them post under any agent of that workspace — and the
+ * discussion payload hands them the ids to pick from. A visitor falls back to
+ * personal scope, where they can only sign as their own agents.
  */
 const assertAuthorAgentUsable = async (
   db: LobeChatDatabase,
@@ -345,6 +370,20 @@ const assertReferencesBelongToAcceptance = async (
   }
 };
 
+/**
+ * What a visitor may land on one acceptance in one minute. The discussion is
+ * open to whoever holds the link, so the cost of flooding it has to sit
+ * somewhere; a reader answering evidence writes a handful of remarks, and a
+ * flood writes hundreds. Reviewers are exempt — the round-publishing tools post
+ * on their behalf in bursts.
+ *
+ * A retry of a remark that already landed is not a new remark: the ceiling is
+ * charged where the row is written, so an idempotent replay of the tenth one
+ * still answers with that row instead of a refusal.
+ */
+const VISITOR_COMMENT_WINDOW_MS = 60_000;
+const VISITOR_COMMENTS_PER_WINDOW = 10;
+
 export const acceptanceCommentRouter = router({
   create: writeProcedure.input(createSchema).mutation(async ({ ctx, input }) => {
     const access = await resolveAcceptanceCommentAccess(
@@ -353,10 +392,14 @@ export const acceptanceCommentRouter = router({
       input.acceptanceId,
     );
     if (!access.canComment) throw new TRPCError({ code: 'FORBIDDEN', message: 'Read-only access' });
+    // An approval and a round introduction are the delivery speaking, not a
+    // reader answering it: a visitor holding the public link writes remarks.
+    if ((input.kind === 'approval' || input.kind === 'proposal') && !access.canApprove)
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a reviewer of this acceptance' });
 
     await assertAuthorAgentUsable(
       ctx.serverDB,
-      { userId: ctx.userId, workspaceId: access.acceptance.workspaceId ?? undefined },
+      { userId: ctx.userId, workspaceId: access.memberOfWorkspaceId },
       input.authorAgentId,
     );
     await assertReferencesBelongToAcceptance(ctx.serverDB, access.acceptance.id, {
@@ -377,11 +420,26 @@ export const acceptanceCommentRouter = router({
         editorData: input.editorData as never,
         kind: input.kind,
         parentCommentId: input.parentCommentId,
+        /*
+         * The ceiling travels INTO the write so it is counted and charged in
+         * one transaction: checked out here it would be advisory only, and a
+         * burst of parallel requests would each read the same under-limit
+         * count. Reactions take another path, and each (comment, emoji) pair is
+         * one idempotent row per person anyway.
+         */
+        rateLimit: access.canApprove
+          ? undefined
+          : {
+              max: VISITOR_COMMENTS_PER_WINDOW,
+              since: new Date(Date.now() - VISITOR_COMMENT_WINDOW_MS),
+            },
         workspaceId: access.acceptance.workspaceId,
       });
       const [item] = await enrich(ctx.serverDB, [comment], {
+        canModerate: access.canApprove,
         ownerUserId: access.acceptance.userId,
         userId: ctx.userId,
+        visibility: access.acceptance.visibility,
         workspaceId: access.acceptance.workspaceId,
       });
       return { data: item, success: true };
@@ -389,6 +447,11 @@ export const acceptanceCommentRouter = router({
       if (error instanceof TRPCError) throw error;
       if (error instanceof Error && error.message === ACCEPTANCE_COMMENT_PARENT_NOT_FOUND)
         throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+      if (error instanceof Error && error.message === ACCEPTANCE_COMMENT_RATE_LIMITED)
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: 'Too many comments on this acceptance, try again in a minute',
+        });
       console.error('[acceptanceComment:create]', error);
       throw new TRPCError({
         cause: error,
@@ -398,13 +461,26 @@ export const acceptanceCommentRouter = router({
     }
   }),
 
+  /**
+   * Take a remark down. Its author always may; the acceptance's reviewers may
+   * take down anyone's, because the discussion is open to whoever holds the
+   * link and the author of an unwanted remark is exactly who will not remove
+   * it. The row becomes the same tombstone either way.
+   */
   delete: writeProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const { comment } = await requireComment(ctx, input.id);
-      if (comment.authorUserId !== ctx.userId)
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the author may delete' });
-      const result = await ctx.acceptanceCommentModel.delete(comment.id, ctx.userId);
+      const { access, comment } = await requireComment(ctx, input.id);
+      const own = comment.authorUserId === ctx.userId;
+      if (!own && !access.canApprove)
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only the author or a reviewer of this acceptance may delete',
+        });
+      const result = await ctx.acceptanceCommentModel.delete(
+        comment.id,
+        own ? { authorUserId: ctx.userId } : { moderator: true },
+      );
       return { data: { deleted: result !== false }, success: true };
     }),
 
@@ -418,11 +494,13 @@ export const acceptanceCommentRouter = router({
       );
       const rows = await ctx.acceptanceCommentModel.listByAcceptance(access.acceptance.id);
       const items = await enrich(ctx.serverDB, rows, {
+        canModerate: access.canApprove,
         ownerUserId: access.acceptance.userId,
         userId: ctx.userId,
+        visibility: access.acceptance.visibility,
         workspaceId: access.acceptance.workspaceId,
       });
-      return { canComment: access.canComment, items };
+      return { canApprove: access.canApprove, canComment: access.canComment, items };
     }),
 
   /**
@@ -468,9 +546,13 @@ export const acceptanceCommentRouter = router({
   setResolved: writeProcedure
     .input(z.object({ id: z.string().min(1), resolved: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      const { comment } = await requireComment(ctx, input.id);
+      const { access, comment } = await requireComment(ctx, input.id);
       if (comment.parentCommentId)
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Only a thread root can be resolved' });
+      // Closing a thread is a verdict on it. Whoever opened it may close their
+      // own; everyone else's is the reviewers' call, not any reader's.
+      if (!access.canApprove && comment.authorUserId !== ctx.userId)
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a reviewer of this acceptance' });
       const row = await ctx.acceptanceCommentModel.setResolved(
         comment.id,
         input.resolved,

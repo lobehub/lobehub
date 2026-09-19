@@ -4,12 +4,15 @@ import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
+  CopyAssetForPublishParams,
+  CopyAssetForPublishResult,
   ExternalAssetForPublishParams,
   ExternalAssetForPublishResult,
   SkillDirectoryDeps,
 } from '@lobechat/device-control';
 import {
   defaultGetProjectFileIndex,
+  defaultListProjectDirectory,
   defaultSearchProjectFiles,
 } from '@lobechat/device-control/project-file-index';
 import {
@@ -38,6 +41,8 @@ import {
   type PickFileResult,
   type PrepareSkillDirectoryParams,
   type PrepareSkillDirectoryResult,
+  type ProjectDirectoryListParams,
+  type ProjectDirectoryListResult,
   type ProjectFileIndexParams,
   type ProjectFileIndexResult,
   type ProjectFileSearchParams,
@@ -49,6 +54,9 @@ import {
   type ShowOpenDialogResult,
   type ShowSaveDialogParams,
   type ShowSaveDialogResult,
+  type TrashLocalFilesParams,
+  type TrashLocalFilesResult,
+  type TrashLocalFilesResultItem,
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import {
@@ -607,6 +615,27 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async copyAssetForPublish({
+    from,
+    to,
+    workingDirectory,
+  }: CopyAssetForPublishParams): Promise<CopyAssetForPublishResult> {
+    try {
+      const copied = await this.app.localFileProtocolManager.copyExternalFileForPublish({
+        filePath: from,
+        targetPath: to,
+        workspaceRoot: workingDirectory,
+      });
+      return copied
+        ? { success: true }
+        : { error: 'Failed to copy publish asset into the workspace', success: false };
+    } catch (error) {
+      logger.error('Failed to copy publish asset:', error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  @IpcMethod()
   async getLocalFilePreview({
     accept,
     allowExternalFile,
@@ -720,6 +749,51 @@ export default class LocalFileCtr extends ControllerModule {
     await this.approveProjectRootForPreview(result.root);
 
     return result;
+  }
+
+  /**
+   * Children of one directory inside an already-indexed project. The file tree
+   * calls this when the user expands a directory the index collapsed, so an
+   * ignored subtree costs a read only when someone opens it.
+   */
+  @IpcMethod()
+  async listProjectDirectory(
+    params: ProjectDirectoryListParams,
+  ): Promise<ProjectDirectoryListResult> {
+    logger.debug('Listing project directory', {
+      relativePath: params.relativePath,
+      root: params.root,
+    });
+
+    return defaultListProjectDirectory(params);
+  }
+
+  /**
+   * Move files/folders to the OS trash. Recoverable by design — the file tree
+   * never hard-deletes, so a misclick can be undone from Finder / Explorer.
+   */
+  @IpcMethod()
+  async trashLocalFiles({ paths }: TrashLocalFilesParams): Promise<TrashLocalFilesResult> {
+    if (paths.length === 0) return { items: [], success: false };
+
+    logger.debug('Trashing local files', { count: paths.length });
+
+    // Every path is attempted and reported. Stopping at the first failure would
+    // leave the caller unable to tell which earlier paths are already in the
+    // trash, so it could neither refresh its tree nor safely retry the batch.
+    const items: TrashLocalFilesResultItem[] = [];
+    for (const rawPath of paths) {
+      const targetPath = expandTilde(rawPath) ?? rawPath;
+      try {
+        await shell.trashItem(targetPath);
+        items.push({ path: rawPath, success: true });
+      } catch (error) {
+        logger.error('Failed to trash local file:', error);
+        items.push({ error: (error as Error).message, path: rawPath, success: false });
+      }
+    }
+
+    return { items, success: items.every((item) => item.success) };
   }
 
   /**

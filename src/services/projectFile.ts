@@ -170,6 +170,22 @@ class ProjectFileService {
     };
   }
 
+  async copyAssetForPublish({
+    deviceId,
+    from,
+    to,
+    workingDirectory,
+  }: {
+    deviceId?: string;
+    from: string;
+    to: string;
+    workingDirectory: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    return deviceId
+      ? lambdaClient.device.copyAssetForPublish.mutate({ deviceId, from, to, workingDirectory })
+      : localFileService.copyAssetForPublish({ from, to, workingDirectory });
+  }
+
   /**
    * Move one or more files/folders within a project working directory. Batched:
    * each item succeeds or fails independently.

@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "點擊以複製",
   "unknownError.desc": "發生了意外錯誤。您可以重試或進行報告。",
   "unknownError.retry": "重試",
+  "unknownError.sharedDesc": "請在此回報此問題",
+  "unknownError.sharedTitle": "無法生成此答案",
   "unknownError.title": "哎呀，請求打了個盹",
   "unknownError.traceIdLabel": "追蹤 ID:",
   "unlock.addProxyUrl": "新增 OpenAI 代理網址（選填）",

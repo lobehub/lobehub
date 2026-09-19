@@ -3,8 +3,9 @@
 import { Flexbox, Icon, Image } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Check, MessageSquare } from 'lucide-react';
+import { Check, MessageSquare, X } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { EvidenceOverlay } from './overlay';
 import {
@@ -62,14 +63,16 @@ const styles = createStaticStyles(({ css }) => ({
     inset-inline-end: -10px;
 
     display: inline-flex;
-    gap: 2px;
     align-items: center;
     justify-content: center;
 
-    padding-block: 2px;
-    padding-inline: 5px;
+    /* A circle, not a pill: the face inside is round, and a rounded rectangle
+       hugging it reads as a squashed oval. Same 18px as the numbered badge on
+       the opposite corner, so the two corners of one box match. */
+    width: 18px;
+    height: 18px;
     border: none;
-    border-radius: 999px;
+    border-radius: 50%;
 
     font-size: 10px;
     font-weight: 600;
@@ -104,6 +107,9 @@ const styles = createStaticStyles(({ css }) => ({
     width: min(280px, 76%);
     padding: 12px;
 
+    /* Room for the close control, so it never lands on the author's name. */
+    padding-inline-end: 32px;
+
     /* No frame: an elevated surface is the whole affordance, the way Figma's
        comments read. A 1px box around content that already sits in a box is
        what made the earlier rounds look like wireframes. */
@@ -117,6 +123,35 @@ const styles = createStaticStyles(({ css }) => ({
     @media (width >= 1440px) {
       inset-inline: calc(100% + 12px) auto;
       width: 240px;
+    }
+  `,
+  /** Sits in the gutter the note reserves for it, clear of the panel's text. */
+  noteClose: css`
+    cursor: pointer;
+
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-end: 8px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: none;
+
+    transition: all ${cssVar.motionDurationFast};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   noteFallbackHead: css`
@@ -155,6 +190,18 @@ const styles = createStaticStyles(({ css }) => ({
       inset-inline: calc(100% + 12px) auto;
     }
   `,
+  /** The avatar fills the pin; the pin's own colour stays visible as its rim. */
+  pinFace: css`
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+  `,
+  pinInitial: css`
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+  `,
   /** Positioning context for the floating note; the frame itself clips. */
   stage: css`
     position: relative;
@@ -173,7 +220,15 @@ const styles = createStaticStyles(({ css }) => ({
     border: 2px solid ${cssVar.colorError};
     border-radius: ${cssVar.borderRadiusXS};
 
-    box-shadow: 0 0 0 1px ${cssVar.colorFillSecondary};
+    /*
+     * Two rings instead of one: the dark outside separates the box from a white
+     * screenshot, the light inside separates it from a dark one. The evidence
+     * image can be either, and neither the hue nor the reader's theme can tell
+     * us which — so the box carries its own contrast.
+     */
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 45%),
+      inset 0 0 0 1px rgb(255 255 255 / 45%);
   `,
   swatch: css`
     flex: none;
@@ -226,7 +281,15 @@ const OverlayRect = memo<OverlayRectProps>(
             type={'button'}
             onClick={() => onToggle(index)}
           >
-            <Icon icon={annotation.resolved ? Check : MessageSquare} size={10} />
+            {annotation.resolved ? (
+              <Icon icon={Check} size={10} />
+            ) : (
+              <AnnotationFace
+                name={annotation.authorName}
+                size={14}
+                src={annotation.authorAvatar}
+              />
+            )}
           </button>
         )}
       </div>
@@ -235,6 +298,35 @@ const OverlayRect = memo<OverlayRectProps>(
 );
 
 OverlayRect.displayName = 'AcceptanceOverlayRect';
+
+/**
+ * The author inside a pin. An avatar when we have one, their initial when we
+ * do not, and the speech bubble only when the author is unknown — a pin with
+ * no face is indistinguishable from the next pin along.
+ */
+const AnnotationFace = memo<{ name?: string; size?: number; src?: string | null }>(
+  ({ name, size = 18, src }) => {
+    if (src)
+      return (
+        <img
+          alt={name ?? ''}
+          className={styles.pinFace}
+          src={src}
+          style={{ height: size, width: size }}
+        />
+      );
+    const initial = name?.trim().slice(0, 1);
+    if (initial)
+      return (
+        <span className={styles.pinInitial} style={{ fontSize: size < 16 ? 9 : 11 }}>
+          {initial.toUpperCase()}
+        </span>
+      );
+    return <Icon icon={MessageSquare} size={size < 16 ? 10 : 12} />;
+  },
+);
+
+AnnotationFace.displayName = 'AcceptanceAnnotationFace';
 
 interface ScreenshotTilesProps {
   alt: string;
@@ -249,6 +341,7 @@ interface ScreenshotTilesProps {
 
 export const ScreenshotTiles = memo<ScreenshotTilesProps>(
   ({ alt, annotations, caption, fileHeight, fileWidth, flat = false, src }) => {
+    const { t } = useTranslation('verify');
     const [natural, setNatural] = useState(
       fileWidth && fileHeight ? { height: fileHeight, width: fileWidth } : undefined,
     );
@@ -276,6 +369,20 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
         className={styles.note}
         style={{ insetBlockStart: `${Math.min(Math.max(opened.rect.y, 0), 0.62) * 100}%` }}
       >
+        {/*
+         * Opening a note hides every pin, including the one that opened it, so
+         * without this the only way back is the small marker on the box itself
+         * — findable if you know it is there, and nowhere near where the reader
+         * is looking.
+         */}
+        <button
+          className={styles.noteClose}
+          title={t('acceptance.comments.collapseThread')}
+          type={'button'}
+          onClick={() => setOpenedNote(undefined)}
+        >
+          <Icon icon={X} size={12} />
+        </button>
         {opened.panel ?? (
           <Flexbox gap={4}>
             <Flexbox horizontal align={'center'} className={styles.noteFallbackHead} gap={6}>
@@ -311,7 +418,11 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
             }}
             onClick={() => toggleNote(index)}
           >
-            <Icon icon={annotation.resolved ? Check : MessageSquare} size={12} />
+            {annotation.resolved ? (
+              <Icon icon={Check} size={12} />
+            ) : (
+              <AnnotationFace name={annotation.authorName} src={annotation.authorAvatar} />
+            )}
           </button>
         ) : null,
       );

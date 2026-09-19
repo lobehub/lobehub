@@ -1377,6 +1377,29 @@ describe('LobeOpenAICompatibleFactory', () => {
         });
       });
 
+      it('should classify an HTML 413 response as RequestBodyTooLarge', async () => {
+        const apiError = new OpenAI.APIError(
+          413,
+          null as any,
+          'Failed to buffer request body',
+          new Headers({ 'content-type': 'text/html' }),
+        );
+
+        vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
+
+        await expect(
+          instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'deepseek-chat',
+            temperature: 0,
+          }),
+        ).rejects.toMatchObject({
+          error: { status: 413 },
+          errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
+          provider,
+        });
+      });
+
       it('should throw AgentRuntimeError with invalidErrorType if no apiKey is provided', async () => {
         try {
           new LobeMockProvider({});

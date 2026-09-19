@@ -900,6 +900,53 @@ describe('DeviceGateway', () => {
     });
   });
 
+  describe('copyAssetForPublish', () => {
+    it('invokes the copy RPC when the destination is inside the workspace', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.invokeRpc.mockResolvedValue({ data: { success: true }, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.copyAssetForPublish({
+        deviceId: 'dev-1',
+        from: '/outside/image.png',
+        to: '/proj/.lobe-artifacts/site/image.png',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        {
+          method: 'copyAssetForPublish',
+          params: {
+            from: '/outside/image.png',
+            to: '/proj/.lobe-artifacts/site/image.png',
+            workingDirectory: '/proj',
+          },
+        },
+      );
+    });
+
+    it('throws without invoking the rpc when the destination escapes the workspace', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const proxy = new DeviceGateway();
+
+      await expect(
+        proxy.copyAssetForPublish({
+          deviceId: 'dev-1',
+          from: '/outside/image.png',
+          to: '/proj/../image.png',
+          userId: 'user-1',
+          workingDirectory: '/proj',
+        }),
+      ).rejects.toThrow(/outside the approved workspace/);
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
+  });
+
   describe('file mutation containment', () => {
     const configure = () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';

@@ -4,13 +4,14 @@ import type {
   AcceptanceReviewAnnotation,
   DocumentCommentJson,
 } from '@lobechat/types';
-import { and, count, desc, eq, isNull, ne } from 'drizzle-orm';
+import { and, count, desc, eq, gte, isNull, ne, sql } from 'drizzle-orm';
 
 import type { AcceptanceCommentRow } from '../schemas/acceptanceComment';
 import { acceptanceComments } from '../schemas/acceptanceComment';
 import type { LobeChatDatabase } from '../type';
 
 export const ACCEPTANCE_COMMENT_PARENT_NOT_FOUND = 'Parent comment not found in this acceptance';
+export const ACCEPTANCE_COMMENT_RATE_LIMITED = 'Too many comments in the window';
 
 /**
  * One person's emoji on one comment is one row, and the idempotency key is
@@ -43,6 +44,13 @@ export interface CreateAcceptanceCommentParams {
   editorData?: DocumentCommentJson;
   kind?: AcceptanceCommentKind;
   parentCommentId?: string;
+  /**
+   * Ceiling for this author on this acceptance, enforced inside the write's own
+   * transaction. Counting outside it would be advisory only: a handful of
+   * parallel requests all read the same under-limit count before any of them
+   * commits, which is exactly how a flood arrives.
+   */
+  rateLimit?: { max: number; since: Date };
   workspaceId?: string | null;
 }
 
@@ -70,6 +78,14 @@ export class AcceptanceCommentModel {
     params: CreateAcceptanceCommentParams,
   ): Promise<CreateAcceptanceCommentResult> => {
     return this.db.transaction(async (tx) => {
+      if (params.rateLimit)
+        // One author on one acceptance is the contended pair, and the lock is
+        // released when this transaction ends either way. Everybody else writes
+        // in parallel exactly as before.
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${params.acceptanceId}), hashtext(${params.authorUserId}))`,
+        );
+
       let parentCommentId: string | undefined;
       if (params.parentCommentId) {
         const [parent] = await tx
@@ -122,7 +138,26 @@ export class AcceptanceCommentModel {
         })
         .returning();
 
-      if (inserted) return { comment: inserted, isDuplicate: false };
+      if (inserted) {
+        if (params.rateLimit) {
+          const [recent] = await tx
+            .select({ total: count() })
+            .from(acceptanceComments)
+            .where(
+              and(
+                eq(acceptanceComments.acceptanceId, params.acceptanceId),
+                eq(acceptanceComments.authorUserId, params.authorUserId),
+                ne(acceptanceComments.kind, 'reaction'),
+                gte(acceptanceComments.createdAt, params.rateLimit.since),
+              ),
+            );
+          // The row just written is part of this count, so the first one over
+          // the ceiling rolls itself back and nothing lands.
+          if ((recent?.total ?? 0) > params.rateLimit.max)
+            throw new Error(ACCEPTANCE_COMMENT_RATE_LIMITED);
+        }
+        return { comment: inserted, isDuplicate: false };
+      }
 
       const [existing] = await tx
         .select()
@@ -169,11 +204,26 @@ export class AcceptanceCommentModel {
   };
 
   /**
-   * Delete the author's own comment. A root that still has replies becomes a
-   * tombstone so the replies keep their context; a reply whose tombstoned root
-   * has no other replies takes the root with it.
+   * Remove one comment. A root that still has replies becomes a tombstone so
+   * the replies keep their context; a reply whose tombstoned root has no other
+   * replies takes the root with it.
+   *
+   * `by.authorUserId` scopes the removal to that author's own row — the normal
+   * case. `by.moderator` skips the author check for someone the caller has
+   * already established may moderate this acceptance: since the discussion is
+   * open to anyone holding a public link, its owner needs a way to take a
+   * remark down, and the author of an unwanted remark is exactly who will not
+   * remove it. The router decides who that is; the model only obeys.
    */
-  delete = async (id: string, authorUserId: string): Promise<'hard' | 'soft' | false> => {
+  delete = async (
+    id: string,
+    by: { authorUserId: string } | { moderator: true },
+  ): Promise<'hard' | 'soft' | false> => {
+    const authorUserId = 'authorUserId' in by ? by.authorUserId : undefined;
+    const ownRow = (rowId: string) =>
+      authorUserId
+        ? and(eq(acceptanceComments.id, rowId), eq(acceptanceComments.authorUserId, authorUserId))
+        : eq(acceptanceComments.id, rowId);
     return this.db.transaction(async (tx) => {
       const [target] = await tx
         .select({
@@ -182,9 +232,7 @@ export class AcceptanceCommentModel {
           parentCommentId: acceptanceComments.parentCommentId,
         })
         .from(acceptanceComments)
-        .where(
-          and(eq(acceptanceComments.id, id), eq(acceptanceComments.authorUserId, authorUserId)),
-        )
+        .where(ownRow(id))
         .limit(1);
       if (!target) return false;
 
@@ -216,9 +264,7 @@ export class AcceptanceCommentModel {
               parentCommentId: acceptanceComments.parentCommentId,
             })
             .from(acceptanceComments)
-            .where(
-              and(eq(acceptanceComments.id, id), eq(acceptanceComments.authorUserId, authorUserId)),
-            )
+            .where(ownRow(id))
             .limit(1)
             .for('update')
         : [{ ...target, deletedAt: root.deletedAt }];

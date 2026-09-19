@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm';
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as InternalJwtModule from '@/libs/trpc/utils/internalJwt';
 import {
   assertCanPerformResourceAction,
   getResourceMeta,
@@ -89,6 +90,14 @@ vi.mock('@/server/services/file', () => ({
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanPerformResourceAction: vi.fn(),
   getResourceMeta: vi.fn(),
+}));
+
+// The user-hub token is a real RS256 signature in production; the integration
+// DB has no JWKS_KEY, so pin the signer and assert the subject it is asked for.
+const mockSignUserJWT = vi.fn();
+vi.mock('@/libs/trpc/utils/internalJwt', async (importOriginal) => ({
+  ...(await importOriginal<typeof InternalJwtModule>()),
+  signUserJWT: (...args: any[]) => mockSignUserJWT(...args),
 }));
 
 // Mock model-bank with dynamic import to preserve other exports
@@ -479,6 +488,21 @@ describe('AI Agent Router Integration Tests', () => {
       // Should have 1 assistant message with parentId pointing to the user message
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0].parentId).toBe(userMsg.id);
+    });
+  });
+
+  describe('issueGatewayUserToken', () => {
+    // Protocol v2: one Gateway WebSocket per user. The token is bound to the
+    // caller's identity only — no topic / running-operation precondition like
+    // `refreshGatewayToken`, because the hub authorizes each `subscribe`
+    // against the op's registered owner instead.
+    it('signs a per-user token for the caller without any operation context', async () => {
+      mockSignUserJWT.mockResolvedValue('user-hub-jwt');
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await expect(caller.issueGatewayUserToken()).resolves.toEqual({ token: 'user-hub-jwt' });
+      expect(mockSignUserJWT).toHaveBeenCalledTimes(1);
+      expect(mockSignUserJWT).toHaveBeenCalledWith(userId);
     });
   });
 

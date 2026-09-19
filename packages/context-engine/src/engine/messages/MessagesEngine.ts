@@ -37,6 +37,7 @@ import {
   AgentIdentityInjector,
   AgentManagementContextInjector,
   BotPlatformContextInjector,
+  ConnectorOwnershipInjector,
   ContextSelectionsInjector,
   DiscordContextProvider,
   EvalContextSystemInjector,
@@ -55,6 +56,7 @@ import {
   PageEditorContextInjector,
   PageSelectionsInjector,
   PlanInjector,
+  ProjectInstructionsInjector,
   RuntimeAdditionalContextProvider,
   selectActivatedSkills,
   SelectedSkillInjector,
@@ -176,7 +178,9 @@ export class MessagesEngine {
       botPlatformContext,
       workspaceContext,
       discordContext,
+      connectorOwnershipNote,
       evalContext,
+      projectInstructions,
       onboardingContext,
       agentManagementContext,
       groupAgentBuilderContext,
@@ -289,6 +293,17 @@ export class MessagesEngine {
       new AgentDocumentBeforeSystemInjector(agentDocConfig),
       // Agent's system role (creates the initial system message)
       new SystemRoleInjector({ systemRole }),
+      // Both sit directly after the persona because that is exactly where they
+      // used to be: the server concatenated them onto `agentConfig.systemRole`
+      // several pipeline stages before the engine ran. Moving them later would
+      // push them behind every other Phase 2 provider.
+      //
+      // Connector attribution precedes the project instructions because
+      // `discoverTools` runs before `prepareOperation` in the agent pipeline,
+      // so that is the order the appends produced. Reversing these two changes
+      // which block the model reads last.
+      new ConnectorOwnershipInjector({ note: connectorOwnershipNote }),
+      new ProjectInstructionsInjector({ instructions: projectInstructions }),
       // Agent identity (name/title) — lets the model answer "who are you?"
       // with the user-given name. Group chat establishes identity through
       // GroupContextInjector instead, so it is suppressed there.

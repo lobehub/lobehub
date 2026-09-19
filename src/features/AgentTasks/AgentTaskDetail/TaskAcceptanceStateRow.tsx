@@ -21,6 +21,7 @@ import { useAcceptanceBySubject } from '@/features/Acceptance';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
+import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import { useOpenAcceptanceInPanel } from './useOpenAcceptanceInPanel';
 
 /**
@@ -34,7 +35,7 @@ import { useOpenAcceptanceInPanel } from './useOpenAcceptanceInPanel';
  * task — the same destination the checklist and run tags use. The standalone
  * `/acceptance/:id` page is a public, workspace-less route: navigating there
  * from a workspace task drops the slug from the URL and flips the whole app
- * back to personal scope (LOBE-13898).
+ * back to personal scope.
  *
  * `delivered` alone cannot be rendered honestly: a converged delivery and a
  * budget-exhausted one both land there. The latest round's verdict (shipped
@@ -115,9 +116,8 @@ const TaskAcceptanceStateRow = memo(() => {
       clickable
       horizontal
       align={'center'}
-      gap={10}
-      paddingBlock={4}
-      paddingInline={8}
+      className={styles.propertyItem}
+      gap={8}
       // The label may be truncated below, so the hover title carries it in
       // full ahead of the "click to review" hint.
       title={`${label} · ${t('taskDetail.acceptanceState.hint')}`}
@@ -131,9 +131,9 @@ const TaskAcceptanceStateRow = memo(() => {
         spin={'spin' in meta && meta.spin}
         style={{ flex: 'none' }}
       />
-      {/* The 200px properties block is narrower than several labels; one
-          line with an ellipsis keeps every row the same height, and the
-          `title` above still carries the full label and hint on hover. */}
+      {/* The sidebar form is narrower than several labels; one line with an
+          ellipsis keeps every row the same height, and the `title` above
+          still carries the full label and hint on hover. */}
       <Text ellipsis style={{ minWidth: 0 }} weight={500}>
         {label}
       </Text>

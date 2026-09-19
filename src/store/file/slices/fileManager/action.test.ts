@@ -26,13 +26,6 @@ vi.mock('i18next', () => ({
 }));
 
 // Mock message
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    info: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
-
 // Mock unzipFile
 vi.mock('@/utils/unzipFile', () => ({
   unzipFile: vi.fn(),

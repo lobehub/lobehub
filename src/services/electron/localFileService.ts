@@ -282,6 +282,14 @@ class LocalFileService {
     return fetchLocalFileBytes(result.url);
   }
 
+  async copyAssetForPublish(params: {
+    from: string;
+    to: string;
+    workingDirectory: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    return ensureElectronIpc().localSystem.copyAssetForPublish(params);
+  }
+
   async prepareSkillDirectory(
     params: PrepareSkillDirectoryParams,
   ): Promise<PrepareSkillDirectoryResult> {

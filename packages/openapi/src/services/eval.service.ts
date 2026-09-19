@@ -1,4 +1,5 @@
 import type { EvalRunTopicResult } from '@lobechat/types';
+import { and, eq } from 'drizzle-orm';
 
 import {
   AgentEvalDatasetModel,
@@ -6,15 +7,15 @@ import {
   AgentEvalRunTopicModel,
 } from '@/database/models/agentEval';
 import type { AgentEvalRunItem } from '@/database/schemas';
+import { agentEvalExperiments, agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from '@/server/services/agentEvalRun';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 import { BaseService } from '../common/base.service';
-import { processPaginationConditions } from '../helpers/pagination';
+import { projectRun } from '../helpers/eval-run';
 import {
   projectPublicEvalDataset,
-  projectPublicEvalRun,
   projectPublicEvalRunTopic,
   projectPublicEvalTestCase,
 } from '../helpers/public-fields';
@@ -30,22 +31,20 @@ import type {
   EvalRunTopicListQuery,
   EvalRunTopicListResponse,
 } from '../types/eval.type';
-
-const projectRun = (run: AgentEvalRunItem): EvalRunResponse => ({
-  createdAt: run.createdAt,
-  datasetId: run.datasetId,
-  id: run.id,
-  metrics: run.metrics,
-  name: run.name,
-  startedAt: run.startedAt,
-  status: run.status,
-  targetAgentId: run.targetAgentId,
-  updatedAt: run.updatedAt,
-});
+import { evalPagination as processPaginationConditions } from '../types/eval-resource.type';
+import { EvalResourceService } from './eval-resource.service';
 
 const projectResult = (value: EvalRunTopicResult | null): EvalRunTopicResult | null => {
   if (!value) return null;
+  const external = value as EvalRunTopicResult & {
+    externalResult?: Record<string, unknown>;
+    externalThreadResults?: Record<string, unknown>;
+  };
   return {
+    ...('externalResult' in external ? { externalResult: external.externalResult } : {}),
+    ...('externalThreadResults' in external
+      ? { externalThreadResults: external.externalThreadResults }
+      : {}),
     awaitingExternalEval: value.awaitingExternalEval,
     completionReason: value.completionReason,
     cost: value.cost,
@@ -97,8 +96,34 @@ export class EvalService extends BaseService {
   async createRun(request: CreateEvalRunRequest): Promise<EvalRunResponse> {
     let run: AgentEvalRunItem;
     try {
-      run = await this.runService.createRun({ ...request, mode: 'internal' });
+      const resources = new EvalResourceService(this.db, this.userId, this.workspaceId);
+      await resources.getDataset(request.datasetId);
+      if (
+        !(
+          await this.db
+            .select({ id: agents.id })
+            .from(agents)
+            .where(and(eq(agents.id, request.targetAgentId), this.buildWorkspaceWhere(agents)))
+            .limit(1)
+        )[0]
+      )
+        throw this.createNotFoundError('Agent not found');
+      if (request.experimentId) {
+        const [experiment] = await this.db
+          .select({ id: agentEvalExperiments.id })
+          .from(agentEvalExperiments)
+          .where(
+            and(
+              eq(agentEvalExperiments.id, request.experimentId),
+              this.buildWorkspaceWhere(agentEvalExperiments),
+            ),
+          );
+        if (!experiment) throw this.createNotFoundError('Experiment not found');
+      }
+      const { executionMode, ...params } = request;
+      run = await this.runService.createRun({ ...params, mode: executionMode ?? 'internal' });
     } catch (error) {
+      if (error instanceof Error && error.name === 'NotFoundError') throw error;
       if (error instanceof Error && error.message === RUN_CREATE_ID_CONFLICT) {
         throw this.createConflictError('Eval run id already exists with different parameters');
       }
@@ -106,6 +131,8 @@ export class EvalService extends BaseService {
         error instanceof Error ? error.message : 'Failed to create eval run',
       );
     }
+
+    if (request.executionMode === 'external') return projectRun(run);
 
     // queue() is conditional idle -> pending. An idempotent retry sees the
     // existing pending/running/terminal run and does not dispatch twice.
@@ -127,14 +154,18 @@ export class EvalService extends BaseService {
 
   async listRuns(query: EvalRunListQuery): Promise<EvalRunListResponse> {
     const { limit, offset } = processPaginationConditions(query);
-    const filter = { datasetId: query.datasetId, status: query.status };
+    const filter = {
+      datasetId: query.datasetId,
+      experimentId: query.experimentId,
+      status: query.status,
+    };
 
     const [runs, total] = await Promise.all([
       this.runModel.query({ ...filter, limit, offset }),
       this.runModel.count(filter),
     ]);
 
-    return { runs: runs.map(projectPublicEvalRun), total };
+    return { runs: runs.map(projectRun), total };
   }
 
   async listDatasets(query: EvalDatasetListQuery): Promise<EvalDatasetListResponse> {
@@ -190,10 +221,16 @@ export class EvalService extends BaseService {
     return projectRun(detail);
   }
 
-  async getRunResults(id: string): Promise<EvalRunResultsResponse> {
+  async getRunResults(
+    id: string,
+    query: EvalRunTopicListQuery = {},
+  ): Promise<EvalRunResultsResponse> {
     const run = await this.runModel.findById(id);
     if (!run) throw this.createNotFoundError('Eval run not found');
-    const topics = await this.runTopicModel.findByRunId(id);
+    const [topics, total] = await Promise.all([
+      this.runTopicModel.findByRunId(id, processPaginationConditions(query)),
+      this.runTopicModel.countByRunId(id),
+    ]);
 
     return {
       results: topics.map((topic) => ({
@@ -207,7 +244,7 @@ export class EvalService extends BaseService {
         topicId: topic.topicId,
       })),
       runId: id,
-      total: topics.length,
+      total,
     };
   }
 }

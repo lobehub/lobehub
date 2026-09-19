@@ -282,7 +282,7 @@ export const searchElasticsearchCandidates = async (
   if (request.filters.agentId && (entity === 'topics' || entity === 'messages')) {
     filter.push({ term: { agent_id: request.filters.agentId } });
   }
-  if (entity === 'messages' && request.mode !== 'candidates') {
+  if (entity === 'messages') {
     mustNot.push({ term: { role: 'tool' } });
   }
   if (request.filters.excludeVirtual && entity === 'agents') {

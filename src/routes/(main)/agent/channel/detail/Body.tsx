@@ -1,5 +1,6 @@
 'use client';
 
+import { isMaskedBotCredential } from '@lobechat/const';
 import { Block, Flexbox, Form, FormGroup, FormItem, Icon } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui/base-ui';
 import { Button, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
@@ -121,19 +122,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 // --------------- Validation rules builder ---------------
 
-function buildRules(field: FieldSchema, t: (key: string) => string) {
+export function buildRules(field: FieldSchema, t: (key: string) => string) {
   const rules: any[] = [];
 
   if (field.required) {
     rules.push({ message: t(field.label), required: true });
   }
 
-  // Format constraint declared by the platform schema. antd's validator skips
-  // `pattern` on empty values, so an untouched optional field stays valid.
+  // Format constraint declared by the platform schema. Empty stays valid, so an
+  // untouched optional field does not trip it, and so does the placeholder the
+  // server returns in place of a stored secret — the save path swaps that back
+  // for the real value, and holding it to the platform's format here would make
+  // every unrelated edit demand the secret be retyped.
   if (field.pattern) {
+    const pattern = new RegExp(field.pattern);
+    const message = field.patternMessage ? t(field.patternMessage) : t(field.label);
+
     rules.push({
-      message: field.patternMessage ? t(field.patternMessage) : t(field.label),
-      pattern: new RegExp(field.pattern),
+      validator: (_: unknown, value: unknown) => {
+        if (typeof value !== 'string' || !value) return Promise.resolve();
+        if (isMaskedBotCredential(value)) return Promise.resolve();
+        return pattern.test(value) ? Promise.resolve() : Promise.reject(new Error(message));
+      },
     });
   }
 

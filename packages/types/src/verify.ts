@@ -192,8 +192,10 @@ export type AcceptanceCheckReviewAction = 'accept' | 'ignore' | 'reject';
 export type AcceptanceRejectIntent = 'unmet' | 'new-idea' | 'no-evidence';
 
 /** What an automated reviewer proposes for a check — never `ignore`, which is a
- *  statement about the reviewer's priorities rather than about the delivery. */
-export type ReviewPredictionAction = 'accept' | 'reject';
+ *  statement about the reviewer's priorities rather than about the delivery.
+ *  `unjudgeable` means no capture could settle the criterion from the reviewer's
+ *  side; see `reviewPredictionActions` in `@lobechat/const/verify`. */
+export type ReviewPredictionAction = 'accept' | 'reject' | 'unjudgeable';
 
 /**
  * How a review attempt ended — see `@lobechat/const/verify` for why this is
@@ -567,7 +569,13 @@ export interface VerifyRunMetadata {
   goalReview?: {
     feedback: string;
     predictionIds: string[];
-    status: 'passed' | 'rejected' | 'errored';
+    /**
+     * `unjudgeable` is separate from `rejected` on purpose: it means the review
+     * could not decide from evidence, not that the delivery fell short. Folding
+     * it into `rejected` both sent the builder off to fix nothing and made the
+     * two indistinguishable in the agreement statistics.
+     */
+    status: 'passed' | 'rejected' | 'errored' | 'unjudgeable';
   };
   interactionCost?: VerifyInteractionCost;
   /**

@@ -64,3 +64,27 @@ export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 /** The verifier itself could not run, so the delivery was never evaluated. */
 export const VERIFICATION_ERRORED_ERROR =
   'Verification could not run (internal error); the delivery was not evaluated.';
+/**
+ * The review read the evidence and found the criterion undecidable from it — it
+ * asks for an action the review layer cannot perform (re-running the delivered
+ * scripts, building, driving a live system).
+ *
+ * Deliberately has NO recovery branch, so it falls through to the human gate.
+ * Another attempt cannot help: the builder would re-deliver the same artifacts
+ * against the same unprovable criterion, which is how one such check ate an
+ * entire attempt budget before this outcome existed.
+ */
+export const VERIFICATION_UNJUDGEABLE_ERROR =
+  'Acceptance review could not judge the delivery from evidence alone; the criterion needs a judge that can act on the system.';
+/**
+ * The delivery's own verifiers ran and passed, but the Acceptance review layered
+ * on top of them could not run — a provider outage that outlived the in-place
+ * retry, a reviewer without credentials, an artifact the review model could not
+ * open.
+ *
+ * Deliberately has NO recovery branch. Recovering it like a rejection started a
+ * fresh builder attempt, which re-delivered into the same broken review and spent
+ * the Task's attempt budget without the delivery ever being judged.
+ */
+export const ACCEPTANCE_REVIEW_ERRORED_ERROR =
+  'Acceptance review could not run; the delivery passed its verifiers but was never reviewed.';

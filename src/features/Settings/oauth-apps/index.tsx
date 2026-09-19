@@ -13,6 +13,7 @@ import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors'
 
 import { createOAuthAppModal } from './features/CreateAppModal';
 import OAuthApps from './features/OAuthApps';
+import { showClientSecretModal } from './features/SecretModal';
 
 const CreateAppButton = () => {
   const { t } = useTranslation('auth');
@@ -30,6 +31,10 @@ const CreateAppButton = () => {
       onSubmit: async (values) => {
         const created = await lambdaClient.oauthApp.create.mutate(values);
         navigate(`/settings/oauth-apps/${created.id}`);
+
+        // Web apps get a confidential secret, and this is the one and only
+        // render of its plaintext.
+        if (created.clientSecret) showClientSecretModal({ clientSecret: created.clientSecret });
       },
     });
   };

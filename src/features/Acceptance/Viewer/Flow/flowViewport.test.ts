@@ -1,57 +1,81 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { getSelectedFlowNodeId, isRectInView, revealSelectionAfterResize } from './flowViewport';
+import { getSelectedFlowNodeId, isRectVisible, panNodeIntoView } from './flowViewport';
 
 const size = { height: 600, width: 1000 };
 
-describe('isRectInView', () => {
+describe('isRectVisible', () => {
   it('accepts a rect inside the canvas at the current zoom', () => {
     expect(
-      isRectInView({ height: 100, width: 200, x: 100, y: 50 }, { x: 0, y: 0, zoom: 1 }, size),
+      isRectVisible({ height: 100, width: 200, x: 100, y: 50 }, { x: 0, y: 0, zoom: 1 }, size),
     ).toBe(true);
   });
 
-  it('rejects a rect crossing the right edge after zooming in', () => {
+  it('accepts a rect the canvas edge merely clips', () => {
     expect(
-      isRectInView({ height: 100, width: 200, x: 500, y: 50 }, { x: -100, y: 0, zoom: 2 }, size),
+      isRectVisible({ height: 100, width: 200, x: 900, y: 50 }, { x: 0, y: 0, zoom: 1 }, size),
+    ).toBe(true);
+  });
+
+  it('rejects a rect pushed past the edge entirely', () => {
+    expect(
+      isRectVisible({ height: 100, width: 200, x: 1100, y: 50 }, { x: 0, y: 0, zoom: 1 }, size),
+    ).toBe(false);
+    expect(
+      isRectVisible({ height: 100, width: 200, x: 500, y: 50 }, { x: -800, y: 0, zoom: 1 }, size),
     ).toBe(false);
   });
 });
 
-describe('revealSelectionAfterResize', () => {
+describe('panNodeIntoView', () => {
   const flow = (
-    viewport = { x: 0, y: 0, zoom: 1.4 },
-    bounds = { height: 80, width: 200, x: 100, y: 100 },
+    viewport = { x: 0, y: 0, zoom: 1 },
+    bounds = { height: 100, width: 200, x: 100, y: 50 },
   ) => ({
-    fitView: vi.fn().mockResolvedValue(true),
     getNodesBounds: vi.fn().mockReturnValue(bounds),
     getViewport: vi.fn().mockReturnValue(viewport),
+    setViewport: vi.fn(),
   });
 
-  it('keeps the zoomed viewport untouched when nothing is selected', () => {
-    const api = flow();
-    revealSelectionAfterResize(api, size, undefined);
-    expect(api.fitView).not.toHaveBeenCalled();
+  it('does nothing without a node, without a layout, or when it is fully visible', () => {
+    const idle = flow();
+    panNodeIntoView(idle, size, undefined);
+    panNodeIntoView(idle, size, 'node-1');
+    const unlaid = flow({ x: 0, y: 0, zoom: 1 }, { height: 0, width: 0, x: 0, y: 0 });
+    panNodeIntoView(unlaid, size, 'node-1');
+    expect(idle.setViewport).not.toHaveBeenCalled();
+    expect(unlaid.setViewport).not.toHaveBeenCalled();
   });
 
-  it('keeps the zoomed viewport untouched when the selected node is still visible', () => {
-    const api = flow();
-    revealSelectionAfterResize(api, size, 'node-1');
-    expect(api.fitView).not.toHaveBeenCalled();
+  it('holds the canvas still for a node the narrower panel only clipped', () => {
+    const api = flow({ x: 0, y: 0, zoom: 1 }, { height: 100, width: 200, x: 900, y: 50 });
+    panNodeIntoView(api, size, 'node-1');
+    expect(api.setViewport).not.toHaveBeenCalled();
   });
 
-  it('pans at the same zoom when the panel pushes the selected node out of view', () => {
-    const api = flow({ x: 0, y: 0, zoom: 1.4 }, { height: 80, width: 200, x: 620, y: 100 });
-    revealSelectionAfterResize(api, size, 'node-1');
-    expect(api.fitView).toHaveBeenCalledWith(
-      expect.objectContaining({ maxZoom: 1.4, minZoom: 1.4, nodes: [{ id: 'node-1' }] }),
-    );
+  it('rescues a node pushed off screen entirely, by the least distance', () => {
+    // 1100..1300 against a 1000 canvas: 324px back, not a centring jump.
+    const api = flow({ x: 0, y: 0, zoom: 1 }, { height: 100, width: 200, x: 1100, y: 50 });
+    panNodeIntoView(api, size, 'node-1');
+    expect(api.setViewport).toHaveBeenCalledWith({ x: -324, y: 0, zoom: 1 });
   });
 
-  it('ignores a selection whose node is not laid out yet', () => {
-    const api = flow(undefined, { height: 0, width: 0, x: 0, y: 0 });
-    revealSelectionAfterResize(api, size, 'node-1');
-    expect(api.fitView).not.toHaveBeenCalled();
+  it('leaves the axis that still fits completely alone', () => {
+    const api = flow({ x: 0, y: 0, zoom: 1 }, { height: 100, width: 200, x: -300, y: 200 });
+    panNodeIntoView(api, size, 'node-1');
+    expect(api.setViewport).toHaveBeenCalledWith({ x: 324, y: 0, zoom: 1 });
+  });
+
+  it('aligns the leading edge of a node too tall to fit', () => {
+    const api = flow({ x: 0, y: 0, zoom: 1 }, { height: 900, width: 200, x: 100, y: 700 });
+    panNodeIntoView(api, size, 'node-1');
+    expect(api.setViewport).toHaveBeenCalledWith({ x: 0, y: -676, zoom: 1 });
+  });
+
+  it('scales the shift with the zoom', () => {
+    const api = flow({ x: 0, y: 0, zoom: 0.5 }, { height: 100, width: 200, x: 2200, y: 50 });
+    panNodeIntoView(api, size, 'node-1');
+    expect(api.setViewport).toHaveBeenCalledWith({ x: -224, y: 0, zoom: 0.5 });
   });
 });
 

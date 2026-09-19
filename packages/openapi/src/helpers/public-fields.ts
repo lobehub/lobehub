@@ -1,3 +1,5 @@
+import { parsePluginEntry } from '@lobechat/types';
+
 import type {
   AgentEvalDatasetItem,
   AgentEvalRunItem,
@@ -276,7 +278,9 @@ export const PUBLIC_EVAL_RUN_TOPIC_FIELDS = [
   'topicId',
 ] as const satisfies readonly (keyof AgentEvalRunTopicItem)[];
 
-export type PublicAgent = Pick<AgentItem, (typeof PUBLIC_AGENT_FIELDS)[number]>;
+export type PublicAgent = Pick<AgentItem, (typeof PUBLIC_AGENT_FIELDS)[number]> & {
+  plugins: ReturnType<typeof parsePluginEntry>[];
+};
 export type PublicUser = Pick<UserItem, (typeof PUBLIC_USER_FIELDS)[number]>;
 export type PublicProvider = Pick<AiProviderSelectItem, (typeof PUBLIC_PROVIDER_FIELDS)[number]>;
 export type PublicModel = Pick<AiModelSelectItem, (typeof PUBLIC_MODEL_FIELDS)[number]>;
@@ -305,8 +309,10 @@ export type PublicEvalRunTopic = Pick<
 export type PublicRole = Pick<RoleItem, (typeof PUBLIC_ROLE_FIELDS)[number]>;
 export type PublicPermission = Pick<PermissionItem, (typeof PUBLIC_PERMISSION_FIELDS)[number]>;
 
-export const projectPublicAgent = (value: AgentItem): PublicAgent =>
-  pickPublicFields(value, PUBLIC_AGENT_FIELDS);
+export const projectPublicAgent = (value: AgentItem): PublicAgent => ({
+  ...pickPublicFields(value, PUBLIC_AGENT_FIELDS),
+  plugins: (value.plugins ?? []).map(parsePluginEntry),
+});
 
 export const projectPublicUser = (value: UserItem): PublicUser =>
   pickPublicFields(value, PUBLIC_USER_FIELDS);

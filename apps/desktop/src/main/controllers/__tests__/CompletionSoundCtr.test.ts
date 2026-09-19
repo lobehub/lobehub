@@ -79,8 +79,9 @@ describe('local completion sound settings', () => {
       volume: 0.3,
     });
     const oldDirectory = saved!.directory!;
-    await controller.setSettings({ reset: true });
+    await controller.setSettings({ builtin: 'glassBell' });
     expect(await controller.getSettings()).toEqual({
+      builtin: 'glassBell',
       enabled: true,
       name: undefined,
       notificationSound: 'system',
@@ -88,6 +89,22 @@ describe('local completion sound settings', () => {
       volume: 0.3,
     });
     await expect(readFile(path.join(oldDirectory, '0.wav'))).rejects.toThrow();
+    expect(await controller.getPlayback()).toEqual({
+      builtin: 'glassBell',
+      play: true,
+      volume: 0.3,
+    });
+  });
+
+  it('keeps the chosen built-in sound while other settings change', async () => {
+    await controller.setSettings({ builtin: 'xylophone' });
+    await controller.setSettings({ enabled: true, volume: 0.5 });
+    expect(await controller.getPlayback()).toEqual({
+      builtin: 'xylophone',
+      play: true,
+      volume: 0.5,
+    });
+    await expect(controller.setSettings({ builtin: 'missing' as never })).rejects.toThrow();
   });
 
   it('keeps prior settings when the picker is canceled or a new import is invalid', async () => {
@@ -111,7 +128,11 @@ describe('local completion sound settings', () => {
 
   it('keeps the in-app chime off by default while a preview still plays', async () => {
     expect(await controller.getPlayback()).toEqual({ play: false, volume: 0.7 });
-    expect(await controller.getPlayback({ preview: true })).toEqual({ play: true, volume: 0.7 });
+    expect(await controller.getPlayback({ preview: true })).toEqual({
+      builtin: 'lobehub',
+      play: true,
+      volume: 0.7,
+    });
     await controller.setSettings({ volume: 0 });
     expect(await controller.getPlayback({ preview: true })).toEqual({ play: false, volume: 0 });
   });

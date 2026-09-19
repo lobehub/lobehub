@@ -1,9 +1,13 @@
-import { AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT } from '@lobechat/const';
+import {
+  AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
+  AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
 import { AgentShareModel } from '@/database/models/agentShare';
+import { FileModel } from '@/database/models/file';
 import { TopicModel } from '@/database/models/topic';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -37,6 +41,8 @@ export const agentShareConfigSchema = z
   .object({
     allowCreatorViewSessions: z.boolean().optional(),
     allowReadMemory: z.boolean().optional(),
+    /** Bytes; `0` is a real value (attachments off), so non-negative rather than positive. */
+    maxFileStorage: z.number().int().nonnegative().optional(),
     /**
      * The visitor topic list (`TopicModel.queryBySender`) is not paginated
      * and is bounded by `AGENT_SHARE_VISITOR_TOPIC_LIST_LIMIT`, so a cap
@@ -121,18 +127,26 @@ export const agentShareRouter = router({
    * Visitor counts come from `topics.senderId` (set for share-originated
    * topics only); `monthlySpend` comes from the billing business slot and is
    * `null` in deployments that do not meter share spend, which the UI renders
-   * as "no spend data" rather than as zero.
+   * as "no spend data" rather than as zero. `fileStorageUsed` is the settled
+   * bytes visitors have uploaded through this share — the same sum
+   * `shareChat.createUploadUrl` holds against `maxFileStorage` (minus
+   * in-flight reservations, which are transient) — so the owner can see how
+   * close the share is to its cap, including drafts visitors never sent.
    */
   getShareStats: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
     const share = requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
 
     const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
-    const [visitors, monthlySpend] = await Promise.all([
+    const fileModel = new FileModel(ctx.serverDB, ctx.userId);
+    const [visitors, monthlySpend, fileStorageUsed] = await Promise.all([
       topicModel.countShareVisitors({ agentId: input.agentId }),
       getAgentShareMonthlySpend({ agentId: input.agentId, ownerUserId: ctx.userId }),
+      fileModel.countAgentShareUsage(share.id),
     ]);
 
     return {
+      fileStorageUsed,
+      maxFileStorage: share.shareConfig.maxFileStorage ?? AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
       monthlySpend,
       monthlySpendLimit: share.shareConfig.monthlySpendLimit,
       topicCount: visitors.topicCount,

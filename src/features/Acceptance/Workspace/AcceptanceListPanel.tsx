@@ -1,12 +1,12 @@
 'use client';
 
-import { Accordion, AccordionItem, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import type { DraggablePanelProps, DropdownItem } from '@lobehub/ui/base-ui';
 import {
+  Accordion,
   ActionIcon,
   Button,
   Checkbox,
-  confirmModal,
   DraggablePanel,
   DraggablePanelContainer,
   DropdownMenu,
@@ -47,6 +47,7 @@ import { useAcceptanceList, useAcceptanceListInfinite } from '../hooks';
 import { acceptanceHomePath } from '../Viewer/routes';
 import type { AcceptanceStatusAction } from '../Viewer/statusActions';
 import AcceptanceBatchBar from './AcceptanceBatchBar';
+import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
 import {
   acceptanceListEmptyVariant,
   type AcceptanceListFilter,
@@ -60,6 +61,7 @@ import {
   acceptanceSelectAllState,
   chunkAcceptanceBatch,
   nextAcceptanceSelectAll,
+  rangeAcceptanceSelection,
   toggleAcceptanceSelection,
   visibleAcceptanceSelection,
 } from './batchSelection';
@@ -374,6 +376,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
     const [selecting, setSelecting] = useState(false);
     const [selected, setSelected] = useState<string[]>([]);
+    const [anchorId, setAnchorId] = useState<string | null>(null);
     const [batchPending, setBatchPending] = useState(false);
     const selectedVisible = visibleAcceptanceSelection(selected, items);
     const selectAllState = acceptanceSelectAllState(items.length, selectedVisible.length);
@@ -381,6 +384,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     const leaveSelecting = () => {
       setSelecting(false);
       setSelected([]);
+      setAnchorId(null);
     };
 
     /**
@@ -535,15 +539,9 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       const targets = selectedVisible;
       if (targets.length === 0) return;
 
-      confirmModal({
-        cancelText: t('actions.cancel'),
-        content: t('acceptance.workspace.batch.deleteConfirmDescription', {
-          count: targets.length,
-        }),
-        okButtonProps: { danger: true },
-        okText: t('actions.delete'),
-        title: t('acceptance.workspace.batch.deleteConfirmTitle', { count: targets.length }),
-        onOk: async () => {
+      openAcceptanceDeleteConfirm({
+        ids: targets,
+        onDelete: async (purge) => {
           setBatchPending(true);
           try {
             // `allSettled`, never `all`: a rejected chunk must not hide the ones
@@ -552,8 +550,11 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
             // chunk had just removed.
             const chunks = chunkAcceptanceBatch(targets);
             const settled = await Promise.allSettled(
-              chunks.map((chunk) => verifyService.deleteAcceptanceBatch(chunk)),
+              chunks.map((chunk) => verifyService.deleteAcceptanceBatch(chunk, purge)),
             );
+
+            if (settled.every((part): part is PromiseRejectedResult => part.status === 'rejected'))
+              throw settled[0].reason;
 
             let deleted = 0;
             const failedIds: string[] = [];
@@ -573,9 +574,6 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               navigate(acceptanceHomePath(), { replace: true });
             await settleBatch(targets, [], failedIds);
             reportBatch(deleted, targets.length, 'acceptance.workspace.batch.deleteSuccess');
-          } catch (cause) {
-            console.error('[acceptance:batchDelete]', cause);
-            toast.error(t('acceptance.workspace.batch.error'));
           } finally {
             setBatchPending(false);
           }
@@ -587,15 +585,34 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
     // to carry it on the row or the affiliation is simply not on screen.
     const showRowProject = groupMode !== 'project';
 
-    const rowSelectionProps = (id: string) =>
-      selecting
-        ? {
-            selectable: true,
-            selected: selectedVisible.includes(id),
-            onToggleSelect: () =>
-              setSelected((previous) => toggleAcceptanceSelection(previous, id)),
-          }
-        : undefined;
+    const orderedIds = (showGroups ? groups.flatMap((group) => group.items) : items).map(
+      (item) => item.id,
+    );
+
+    // Shift/⌘-click on a row while browsing enters selection on the spot: a
+    // shift range starts from the open record, a ⌘ pick from nothing.
+    const pickRow = (id: string, shift: boolean) => {
+      if (!selecting) {
+        setSelecting(true);
+        setSelected(
+          shift ? rangeAcceptanceSelection(orderedIds, acceptanceId ?? null, id, []) : [id],
+        );
+        setAnchorId(id);
+        return;
+      }
+      if (shift) {
+        setSelected((previous) => rangeAcceptanceSelection(orderedIds, anchorId, id, previous));
+        return;
+      }
+      setSelected((previous) => toggleAcceptanceSelection(previous, id));
+      setAnchorId(id);
+    };
+
+    const rowSelectionProps = (id: string) => ({
+      selectable: selecting,
+      selected: selecting && selectedVisible.includes(id),
+      onToggleSelect: (shift: boolean) => pickRow(id, shift),
+    });
 
     // Grouping shares the filter's popover rather than taking a fourth icon in a
     // 260px header: both answer "what does this list show me", and one of them
@@ -801,49 +818,40 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
               </Center>
             )
           ) : (
-            <div className={styles.list}>
+            <div className={styles.list} style={selecting ? { userSelect: 'none' } : undefined}>
               {showGroups ? (
                 <Accordion
-                  expandedKeys={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
                   gap={4}
-                  onExpandedChange={(keys) =>
-                    setCollapsedGroups((previous) =>
-                      nextCollapsedGroupKeys(previous, groups, keys.map(String)),
-                    )
-                  }
-                >
-                  {groups.map((group) => (
-                    <AccordionItem
-                      itemKey={group.key}
-                      key={group.key}
-                      paddingBlock={4}
-                      paddingInline={8}
-                      action={
-                        groupMode === 'project' && projectActionItems ? (
-                          <DropdownMenu
-                            items={projectActionItems(group.projectName ? group.key : undefined)}
-                            placement={'bottomRight'}
-                          >
-                            <ActionIcon
-                              icon={MoreHorizontal}
-                              size={'small'}
-                              title={t('acceptance.workspace.groups.actions')}
-                            />
-                          </DropdownMenu>
-                        ) : undefined
-                      }
-                      title={
-                        <span className={styles.groupTitle}>
-                          {/* The folder reads as "project"; a status or age
-                                bucket is not a folder and must not wear one. */}
-                          {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
-                          <span>
-                            {group.name ??
-                              t(group.labelKey as 'acceptance.workspace.groups.ungrouped')}
-                          </span>
+                  indicatorPlacement="inline"
+                  styles={{ trigger: { paddingBlock: 4, paddingInline: 8 } }}
+                  value={expandedAcceptanceGroupKeys(groups, collapsedGroups)}
+                  items={groups.map((group) => ({
+                    key: group.key,
+                    action:
+                      groupMode === 'project' && projectActionItems ? (
+                        <DropdownMenu
+                          items={projectActionItems(group.projectName ? group.key : undefined)}
+                          placement={'bottomRight'}
+                        >
+                          <ActionIcon
+                            icon={MoreHorizontal}
+                            size={'small'}
+                            title={t('acceptance.workspace.groups.actions')}
+                          />
+                        </DropdownMenu>
+                      ) : undefined,
+                    title: (
+                      <span className={styles.groupTitle}>
+                        {/* The folder reads as "project"; a status or age
+                              bucket is not a folder and must not wear one. */}
+                        {groupMode === 'project' && <Icon icon={FolderClosed} size={14} />}
+                        <span>
+                          {group.name ??
+                            t(group.labelKey as 'acceptance.workspace.groups.ungrouped')}
                         </span>
-                      }
-                    >
+                      </span>
+                    ),
+                    children: (
                       <div className={styles.groupList}>
                         {group.items.map((item) => (
                           <AcceptanceRow
@@ -856,9 +864,14 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                           />
                         ))}
                       </div>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
+                    ),
+                  }))}
+                  onValueChange={(keys) =>
+                    setCollapsedGroups((previous) =>
+                      nextCollapsedGroupKeys(previous, groups, keys.map(String)),
+                    )
+                  }
+                />
               ) : (
                 items.map((item) => (
                   <AcceptanceRow

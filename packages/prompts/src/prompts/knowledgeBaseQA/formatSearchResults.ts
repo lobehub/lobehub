@@ -109,7 +109,7 @@ ${docsXml}
       : fileResults.length > 0
         ? 'Source type: <files> (vector search, chunk-level). '
         : 'Source type: <documents> (full-text search, document-level). '
-  }Use the readKnowledge tool with the returned IDs (file_* or docs_*) to fetch complete content.${errorNote}`;
+  }Use the readKnowledge tool with the returned IDs (file_* or docs_*) to read the relevant content; it returns bounded windows, so page with offset when a result is truncated.${errorNote}`;
 
   return `<knowledge_base_search_results query="${query}" totalCount="${totalCount}">
 <instruction>${instruction}</instruction>

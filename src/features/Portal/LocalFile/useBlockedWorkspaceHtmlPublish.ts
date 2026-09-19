@@ -41,6 +41,7 @@ export interface BlockedWorkspaceHtmlPublishInput {
   ) => void;
   plan: OutsideWorkspacePlan;
   publish: WorkspaceHtmlArtifactPublisher['publish'];
+  runPublish?: (input: { plan: ReadyWorkspaceHtmlPublishPlan; successMessage?: string }) => void;
   sandboxTopicId?: string;
   topicId: string;
   workingDirectory: string;
@@ -58,6 +59,7 @@ export const useBlockedWorkspaceHtmlPublish = ({
   onPublished,
   plan,
   publish,
+  runPublish,
   sandboxTopicId,
   topicId,
   workingDirectory,
@@ -98,20 +100,23 @@ export const useBlockedWorkspaceHtmlPublish = ({
 
   const openConfirm = (ready: ReadyWorkspaceHtmlPublishPlan, copiedDirectory?: string) => {
     close();
+    const successMessage = copiedDirectory
+      ? t('workingPanel.localFile.publish.outsideWorkspace.copiedToast', { dir: copiedDirectory })
+      : undefined;
     openWorkspaceHtmlPublishConfirm({
       hasExisting,
       plan: ready,
       onOk: () => {
+        if (runPublish) {
+          runPublish({ plan: ready, successMessage });
+          return;
+        }
         void publishPreparedWorkspaceHtml({
           agentId,
           onError,
           plan: ready,
           publish,
-          successMessage: copiedDirectory
-            ? t('workingPanel.localFile.publish.outsideWorkspace.copiedToast', {
-                dir: copiedDirectory,
-              })
-            : undefined,
+          successMessage,
           topicId,
         }).then((result) => {
           if (result) onPublished?.(result, ready);

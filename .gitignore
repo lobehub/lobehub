@@ -162,6 +162,14 @@ docs/superpowers/
 # Kagura agent runtime
 .kagura/
 
+# AUV computer-use runtime: run records plus captured screenshots, written
+# relative to whatever directory the CLI was invoked from, so this can appear
+# at the repo root or inside an app.
+.auv/
+
 # Amp agent runtime
-.amp/*
-!.amp/settings.json
+.amp/
+
+# synthesized by plugins/vite/completionSounds.ts
+public/sounds/
+apps/desktop/resources/sounds/

@@ -12,7 +12,7 @@ import {
   toggleReaction,
 } from './threads';
 
-const EMPTY: AcceptanceCommentList = { canComment: false, items: [] };
+const EMPTY: AcceptanceCommentList = { canApprove: false, canComment: false, items: [] };
 
 /**
  * The whole discussion of one acceptance, read once and shared by every
@@ -79,11 +79,12 @@ export const useAcceptanceComments = (acceptanceId: string | undefined) => {
 
   return {
     approvals,
+    canApprove: data.canApprove,
     canComment: data.canComment,
     /**
      * A failed read is not a permission answer. Without this the page falls
-     * back to `canComment: false` and tells the owner to join the workspace,
-     * which is both wrong and unactionable.
+     * back to `canComment: false` and tells the owner to sign in, which is
+     * both wrong and unactionable.
      */
     error: swr.error as Error | undefined,
     create,

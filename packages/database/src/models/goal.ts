@@ -118,6 +118,25 @@ export class GoalModel {
       .where(and(eq(goals.id, id), this.ownership()));
   };
 
+  /**
+   * Patch only `config.taskAgentId` (or drop it with `null`), for the same
+   * reason as `updatePauseReason`: a whole-config write here would race budget
+   * and acceptance edits on the same column and discard whichever landed first.
+   */
+  updateTaskAgentId = async (id: string, taskAgentId: string | null) => {
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        config: taskAgentId
+          ? sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{taskAgentId}', ${JSON.stringify(taskAgentId)}::jsonb)`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - 'taskAgentId'`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()))
+      .returning();
+    return row as GoalItem | undefined;
+  };
+
   /** Compare-and-swap only the supervisor namespace; concurrent budget edits survive. */
   updateSupervisorState = async (
     id: string,
@@ -322,9 +341,11 @@ export class GoalModel {
       offset?: number;
       projectId?: string;
       statuses?: GoalStatus[];
+      /** Goals created from this conversation (`subject_type = 'topic'`). */
+      topicId?: string;
     } = {},
   ): Promise<{ goals: GoalListItem[]; total: number }> => {
-    const { agentId, limit = 50, offset = 0, projectId, statuses } = options;
+    const { agentId, limit = 50, offset = 0, projectId, statuses, topicId } = options;
 
     // Only goals that actually have a graph. Rows created by the earlier
     // task-carried flow have no `goal_nodes`, so they would render as a
@@ -334,6 +355,7 @@ export class GoalModel {
     if (agentId) conditions.push(eq(goals.agentId, agentId));
     if (projectId) conditions.push(eq(goals.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));
+    if (topicId) conditions.push(eq(goals.subjectType, 'topic'), eq(goals.subjectId, topicId));
 
     const [countRow] = await this.db
       .select({ count: sql<number>`count(*)` })

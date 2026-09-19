@@ -40,6 +40,7 @@ const VITE_JS_TARGETS = [
 const STATIC_IMPORT_RE =
   /(?:^|[;{}\s)])(?:import(?:[\w$*{},\s]+from\s*)?|export\s*(?:\*|\{[^}]*\})\s*from\s*)["']([^"']+\.js)["']/g;
 const ASAR_SEARCH_ROOT = 'apps/desktop/release';
+const PNPM_STORE_DIR = 'node_modules/.pnpm';
 
 const die = (message) => {
   console.error(`❌ ${message}`);
@@ -156,6 +157,43 @@ const measureEntryGraph = (root, htmlFile = 'index.html') => {
   return { chunks, count: visited.size, entry, gz };
 };
 
+// pnpm-workspace.yaml sets `lockfile: false`, so the only record of what a build
+// actually resolved is the virtual store directory: `<name>@<version>[_<peer-hash>]`.
+const readResolvedDeps = (storeDir = PNPM_STORE_DIR) => {
+  if (!fs.existsSync(storeDir)) return [];
+  const deps = new Set();
+  for (const entry of fs.readdirSync(storeDir)) {
+    if (entry.startsWith('.') || entry === 'lock.yaml' || entry === 'node_modules') continue;
+    const at = entry.indexOf('@', 1);
+    if (at < 1) continue;
+    const version = entry.slice(at + 1).split('_')[0];
+    deps.add(`${entry.slice(0, at).replace('+', '/')}@${version}`);
+  }
+  return [...deps].sort();
+};
+
+const diffResolvedDeps = (baseline = [], current = []) => {
+  const versionsOf = (list) => {
+    const map = new Map();
+    for (const dep of list) {
+      const at = dep.lastIndexOf('@');
+      const name = dep.slice(0, at);
+      if (!map.has(name)) map.set(name, []);
+      map.get(name).push(dep.slice(at + 1));
+    }
+    return map;
+  };
+  const base = versionsOf(baseline);
+  const cur = versionsOf(current);
+  const drift = [];
+  for (const name of new Set([...base.keys(), ...cur.keys()])) {
+    const before = (base.get(name) || []).join(', ');
+    const after = (cur.get(name) || []).join(', ');
+    if (before !== after) drift.push({ after, before, name });
+  }
+  return drift.sort((a, b) => a.name.localeCompare(b.name));
+};
+
 const measure = (args) => {
   const { type, out } = args;
   if (!type || !out) die('measure requires --type <web|asar> and --out <file.json>');
@@ -172,7 +210,7 @@ const measure = (args) => {
     }
     if (Object.keys(sizes).length === 0) die('no dist targets found — did the build run?');
     sizes.total = Object.values(sizes).reduce((sum, size) => sum + size, 0);
-    result = { sizes, type };
+    result = { resolvedDeps: readResolvedDeps(), sizes, type };
   } else if (type === 'entry-graph') {
     const sizes = {};
     const graphs = {};
@@ -337,6 +375,14 @@ const check = (args) => {
     }
   }
 
+  const drift =
+    baselineReport.resolvedDeps && currentReport.resolvedDeps
+      ? diffResolvedDeps(baselineReport.resolvedDeps, currentReport.resolvedDeps)
+      : null;
+  const driftRows = (drift || []).map(
+    ({ name, before, after }) => `| ${name} | ${before || '—'} | ${after || '—'} |`,
+  );
+
   const section = [
     `### ${failed ? '❌' : '✅'} ${label}`,
     '',
@@ -365,6 +411,20 @@ const check = (args) => {
           `> Static graph chunk names are informational; the gate above uses the total Vite JS output file count.`,
         ]
       : []),
+    ...(drift
+      ? [
+          '',
+          `<details><summary>Resolved dependency drift vs baseline: ${drift.length} package(s)</summary>`,
+          '',
+          ...(drift.length > 0
+            ? [`| Package | Baseline | Current |`, `| --- | --- | --- |`, ...driftRows]
+            : ['No dependency version changed between the baseline install and this install.']),
+          '',
+          `> No lockfile is committed, so every install re-resolves. Size deltas with drift but no package.json change come from upstream releases, not this PR.`,
+          '',
+          '</details>',
+        ]
+      : []),
   ].join('\n');
 
   console.log(`\n${section}\n`);
@@ -377,11 +437,23 @@ const check = (args) => {
       `❌ ${label} exceeds the gate: size increase > max(${percent}%, ${humanSize(floor)}) or Vite JS output file count increases by more than ${jsChunkPercent}% from baseline. ` +
         'Inspect the added dependencies or imports, or adjust SIZE_GATE_PERCENT / SIZE_GATE_FLOOR_BYTES / SIZE_GATE_JS_CHUNK_PERCENT if this is expected.',
     );
+    if (drift?.length) {
+      console.error(
+        `⚠️ ${drift.length} resolved dependency version(s) differ from the baseline install; see the drift table before attributing the increase to this PR.`,
+      );
+    }
     process.exit(1);
   }
 };
 
-module.exports = { countJsFiles, measureEntryGraph, measureViteJsChunks, stripHash };
+module.exports = {
+  countJsFiles,
+  diffResolvedDeps,
+  measureEntryGraph,
+  measureViteJsChunks,
+  readResolvedDeps,
+  stripHash,
+};
 
 if (require.main === module) {
   const [command, ...rest] = process.argv.slice(2);

@@ -6,11 +6,14 @@ import type {
   ChatFileItem,
   ChatTopicMetadata,
   ChatVideoItem,
+  FileAccessScope,
   HeterogeneousProviderConfig,
   HeterogeneousTopicPin,
 } from '@lobechat/types';
 import {
+  agentShareFileAccessScope,
   ChatErrorType,
+  ordinaryFileAccessScope,
   RequestTrigger,
   resolveHeterogeneousProviderTopicModel,
 } from '@lobechat/types';
@@ -144,10 +147,12 @@ const resolveRunAttachments = async (
   deps: TurnSetupDeps,
   {
     attachedFileIds,
+    fileAccessScope,
     files,
     throwIfAborted,
   }: {
     attachedFileIds?: string[];
+    fileAccessScope: FileAccessScope;
     files?: InternalExecAgentParams['files'];
     throwIfAborted: (stage: string) => Promise<void>;
   },
@@ -270,6 +275,7 @@ const resolveRunAttachments = async (
     try {
       const resolved = await resolveAttachmentsByFileIds({
         db: deps.db,
+        fileAccessScope,
         fileIds: attachedFileIds,
         userId: deps.userId,
         workspaceId: deps.workspaceId,
@@ -338,6 +344,8 @@ export interface TurnSetupInput {
   runFromHistory: boolean;
   /** Shared-agent visitor gate — set only by the shareChat router. */
   shareGate?: AgentShareGate;
+  /** The prompt was queued behind a running turn; see `ExecAgentParams.steer`. */
+  steer?: boolean;
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   title?: string;
   trigger?: string;
@@ -359,6 +367,7 @@ export interface TurnSetupResult {
   provider: string;
   requestTriggerMetadata: {
     agentDispatch?: { kind: 'callAgent'; visibility: 'internal' };
+    steer?: true;
     trigger?: RequestTrigger;
   };
   runAttachments: RunAttachments;
@@ -409,6 +418,7 @@ export const setupTurn = async (
     resume,
     runFromHistory,
     shareGate,
+    steer,
     throwIfExecutionAborted,
     title,
     trigger,
@@ -649,12 +659,16 @@ export const setupTurn = async (
     // Bot-channel turns are inserted under the OWNER's userId; keep the real
     // platform author alongside so the UI can attribute the bubble correctly.
     ...(botSender ? { botSender } : undefined),
+    // A follow-up queued behind a running turn renders as that turn's
+    // continuation; the client's optimistic row is replaced by this one.
+    ...(steer ? { steer: true as const } : undefined),
   };
 
   // Attachment ingestion: raw bot/IM `files` → S3, pre-uploaded
   // `attachedFileIds` → signed URLs + classification.
   const runAttachments = await resolveRunAttachments(deps, {
     attachedFileIds,
+    fileAccessScope: shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
     files,
     throwIfAborted: throwIfExecutionAborted,
   });

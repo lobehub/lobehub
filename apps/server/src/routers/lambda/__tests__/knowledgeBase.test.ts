@@ -193,15 +193,17 @@ describe('knowledgeBaseRouter', () => {
       expect(mockKnowledgeBaseModelAddFiles).toHaveBeenCalledWith('kb-1', ['file-1']);
     });
 
-    it('rejects assigning a resource to a library with different visibility', async () => {
+    it('files a private resource into a shared library', async () => {
+      // A library is a directory of references, so it does not force its rows
+      // to share its visibility: filing a draft now and sharing it when it is
+      // ready is the ordinary move. Who sees the row is still decided by the
+      // row's own `visibility`, which every listing filters on.
       mockFileModelFindByIds.mockResolvedValue([{ id: 'file-1', visibility: 'private' }]);
       mockDocumentModelFindByIds.mockResolvedValue([]);
 
-      await expect(
-        caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      await caller.addFilesToKnowledgeBase({ ids: ['file-1'], knowledgeBaseId: 'kb-1' });
 
-      expect(mockKnowledgeBaseModelAddFiles).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelAddFiles).toHaveBeenCalledWith('kb-1', ['file-1']);
     });
 
     it('fails the whole batch when any resource is inaccessible', async () => {

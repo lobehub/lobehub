@@ -1,5 +1,3 @@
-const MAX_KEYWORD_LENGTH = 32;
-
 // Arg keys checked in priority order. NAME_KEYS (model-written description /
 // title) lead because they state what the step does; then query/pattern
 // outranks path (Grep/Glob-style calls carry both, and the pattern is the
@@ -35,9 +33,6 @@ const SHELL_RUNNERS = new Set([
   'yarn',
   'zsh',
 ]);
-
-const truncate = (value: string, maxLength = MAX_KEYWORD_LENGTH): string =>
-  value.length > maxLength ? value.slice(0, maxLength) + '…' : value;
 
 const basename = (path: string): string => {
   const trimmed = path.replace(/[/\\]+$/, '');
@@ -105,22 +100,22 @@ export const extractToolKeyword = (args?: Record<string, unknown>): string | und
   // command-running tool schema asks for one, so prefer it over distilling
   // fragments (flags, session names) out of the raw command.
   const description = pickString(args, NAME_KEYS);
-  if (description) return truncate(description);
+  if (description) return description;
 
   const command = pickString(args, COMMAND_KEYS);
   if (command) {
     const keyword = extractCommandKeyword(command);
-    if (keyword) return truncate(keyword);
+    if (keyword) return keyword;
   }
 
   const query = pickString(args, QUERY_KEYS);
-  if (query) return truncate(query);
+  if (query) return query;
 
   const path = pickString(args, PATH_KEYS);
-  if (path) return truncate(basename(path));
+  if (path) return basename(path);
 
   const url = pickString(args, URL_KEYS);
-  if (url) return truncate(extractUrlKeyword(url));
+  if (url) return extractUrlKeyword(url);
 
   return undefined;
 };

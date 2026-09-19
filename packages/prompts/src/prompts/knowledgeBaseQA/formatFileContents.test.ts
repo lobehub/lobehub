@@ -115,4 +115,80 @@ Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu 
     const result = promptFileContents(fileContents);
     expect(result).toMatchSnapshot();
   });
+
+  it('should explain an empty window whose offset is past the end of the file', () => {
+    const result = promptFileContents([
+      {
+        content: '',
+        fileId: 'file-eof',
+        filename: 'short.md',
+        range: {
+          endLine: 0,
+          startLine: 900,
+          totalCharCount: 100,
+          totalLineCount: 800,
+          truncated: false,
+        },
+      },
+    ]);
+
+    expect(result).toContain('lines="900-0"');
+    expect(result).toContain('offset 900 is past the end of this 800-line file');
+  });
+
+  it('should explain a line that was cut to fit the per-call cap', () => {
+    const result = promptFileContents([
+      {
+        content: 'x'.repeat(10),
+        fileId: 'file-cut',
+        filename: 'minified.json',
+        range: {
+          cutLine: { keptChars: 10, line: 1, totalChars: 30_000 },
+          endLine: 1,
+          startLine: 1,
+          totalCharCount: 30_002,
+          totalLineCount: 2,
+          truncated: true,
+        },
+      },
+    ]);
+
+    expect(result).toContain('Line 1 is 30000 characters long and was cut at 10');
+    expect(result).toContain('offset=2 to continue with the next line');
+  });
+
+  it('should render a paged window with range attributes and a continue notice', () => {
+    const fileContents: FileContent[] = [
+      {
+        content: 'line 1\nline 2',
+        fileId: 'file-paged',
+        filename: 'long.md',
+        range: {
+          endLine: 2,
+          startLine: 1,
+          totalCharCount: 30_334,
+          totalLineCount: 800,
+          truncated: true,
+        },
+      },
+      {
+        content: 'tail line',
+        fileId: 'file-complete',
+        filename: 'short.md',
+        range: {
+          endLine: 1,
+          startLine: 1,
+          totalCharCount: 9,
+          totalLineCount: 1,
+          truncated: false,
+        },
+      },
+    ];
+
+    const result = promptFileContents(fileContents);
+    expect(result).toMatchSnapshot();
+    expect(result).toContain('lines="1-2" totalLines="800" totalChars="30334" truncated="true"');
+    expect(result).toContain('Call readKnowledge again with offset=3 to continue.');
+    expect(result).not.toContain('offset=2 to continue');
+  });
 });

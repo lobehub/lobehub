@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Fai clic per copiare",
   "unknownError.desc": "Si è verificato un errore imprevisto. Puoi riprovare o segnalare su",
   "unknownError.retry": "Riprova",
+  "unknownError.sharedDesc": "Segnala questo problema su",
+  "unknownError.sharedTitle": "Impossibile generare questa risposta",
   "unknownError.title": "Ops, la richiesta si è presa una pausa",
   "unknownError.traceIdLabel": "ID Traccia:",
   "unlock.addProxyUrl": "Aggiungi URL proxy OpenAI (opzionale)",

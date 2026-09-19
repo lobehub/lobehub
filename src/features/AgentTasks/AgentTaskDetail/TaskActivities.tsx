@@ -4,8 +4,8 @@ import type {
   TaskDetailActivity,
   TaskDetailActivityAuthor,
 } from '@lobechat/types';
-import { Accordion, AccordionItem, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
+import { Block, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Collapsible, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
@@ -19,7 +19,7 @@ import {
   UserRoundCog,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
@@ -29,6 +29,7 @@ import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 
 import { PRIORITY_META } from '../features/TaskPriorityTag';
+import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
 import { resolveAssignmentActivityCopy } from './assignmentActivityCopy';
 import CommentCard from './CommentCard';
@@ -385,6 +386,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   const activities = useTaskStore(taskActivitySelectors.activeTaskActivities);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const refreshTaskDetail = useTaskStore((s) => s.internal_refreshTaskDetail);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const refreshActiveTask = useCallback(async () => {
     if (activeTaskId) await refreshTaskDetail(activeTaskId);
@@ -495,26 +497,31 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
   if (variant === 'result') return <Flexbox gap={12}>{rows}</Flexbox>;
 
   return (
-    <Accordion defaultExpandedKeys={['activities']} gap={0}>
-      <AccordionItem
-        itemKey="activities"
+    <Flexbox gap={8}>
+      <Block
+        clickable
+        horizontal
+        align="center"
+        gap={8}
         paddingBlock={4}
         paddingInline={8}
-        title={
-          <Flexbox horizontal align="center" gap={8}>
-            <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
-            <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
-              {t('taskDetail.activities')}
-            </Text>
-          </Flexbox>
-        }
+        style={{ cursor: 'pointer', width: 'fit-content' }}
+        variant="borderless"
+        onClick={() => setIsExpanded((prev) => !prev)}
       >
-        <Flexbox gap={12} paddingBlock={12} paddingInline={12}>
+        <Icon color={cssVar.colorTextDescription} icon={BotMessageSquare} size={16} />
+        <Text color={cssVar.colorTextSecondary} fontSize={13} weight={500}>
+          {t('taskDetail.activities')}
+        </Text>
+        <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
+      </Block>
+      <Collapsible open={isExpanded}>
+        <Flexbox gap={12} paddingBlock={4} paddingInline={12}>
           {commentInput}
           {rows}
         </Flexbox>
-      </AccordionItem>
-    </Accordion>
+      </Collapsible>
+    </Flexbox>
   );
 });
 

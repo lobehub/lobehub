@@ -1,28 +1,29 @@
-import { Button } from '@lobehub/ui/base-ui';
 import type { Edge, EdgeProps } from '@xyflow/react';
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@xyflow/react';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 
 import { getFlowEdgeLabelLayout } from './flowEdgeLabel';
 
 const styles = createStaticStyles(({ css }) => ({
+  // The caption reads the branch condition out; it is not a control. Clicking it
+  // used to open the details panel, which narrows the canvas and shifts the page
+  // column, so the caption moved out from under the pointer as if it had gone.
+  // Clicks fall through to the canvas instead; the state card is the way in.
   label: css`
-    pointer-events: all;
+    pointer-events: none;
 
     position: absolute;
 
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 5;
 
-    max-width: 180px;
-    height: auto;
-    min-height: 0;
-    max-height: 42px;
-    padding-block: 3px;
-    padding-inline: 2px;
-    border-radius: 4px;
+    max-width: 200px;
+    max-height: 94px;
+    padding-block: 5px;
+    padding-inline: 10px;
+    border-radius: 8px;
 
     font-size: 12px;
     line-height: 18px;
@@ -30,11 +31,15 @@ const styles = createStaticStyles(({ css }) => ({
     overflow-wrap: anywhere;
     white-space: normal;
 
-    background: ${cssVar.colorBgContainer};
+    /* Filled, and opaque in both themes: the fill token is translucent, so it
+       is layered over a solid surface rather than over the edge running
+       underneath, which would otherwise strike the text through. */
+    background-color: ${cssVar.colorBgContainer};
+    background-image: linear-gradient(${cssVar.colorFillQuaternary}, ${cssVar.colorFillQuaternary});
   `,
 }));
 
-type TransitionEdge = Edge<{ onSelect: (id: string) => void; laneOffset?: number }>;
+type TransitionEdge = Edge<{ laneOffset?: number }>;
 
 /** Labels share the graph scale so zooming out preserves their spacing. */
 export function FlowEdge(props: EdgeProps<TransitionEdge>) {
@@ -51,19 +56,15 @@ export function FlowEdge(props: EdgeProps<TransitionEdge>) {
     <>
       <BaseEdge id={props.id} markerEnd={props.markerEnd} path={path} style={props.style} />
       <EdgeLabelRenderer>
-        <Button
-          className={cx(styles.label, 'nodrag', 'nopan')}
-          size="small"
-          title={typeof props.label === 'string' ? props.label : undefined}
-          type="text"
+        <div
+          className={styles.label}
           style={{
             maxWidth: label.maxWidth,
             transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y}px)`,
           }}
-          onClick={() => props.data?.onSelect(props.id)}
         >
           {props.label}
-        </Button>
+        </div>
       </EdgeLabelRenderer>
     </>
   );

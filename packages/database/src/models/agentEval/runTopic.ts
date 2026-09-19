@@ -59,7 +59,7 @@ export class AgentEvalRunTopicModel {
       .leftJoin(agentEvalTestCases, eq(agentEvalRunTopics.testCaseId, agentEvalTestCases.id))
       .leftJoin(topics, eq(agentEvalRunTopics.topicId, topics.id))
       .where(and(eq(agentEvalRunTopics.runId, runId), this.ownership()))
-      .orderBy(asc(agentEvalTestCases.sortOrder))
+      .orderBy(asc(agentEvalTestCases.sortOrder), asc(agentEvalRunTopics.topicId))
       .$dynamic();
 
     if (pagination?.limit !== undefined) {

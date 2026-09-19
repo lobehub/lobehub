@@ -111,6 +111,7 @@ vi.mock('electron', () => ({
     getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
     isPackaged: false,
     on: vi.fn(),
+    quit: vi.fn(),
   },
   ipcMain: { handle: vi.fn() },
 }));
@@ -159,6 +160,11 @@ const {
   traeAcpSessionConstructMock,
   traeAcpSessionInterruptMock,
   traeAcpSessionRunMock,
+  piRpcSessionAbortMock,
+  piRpcSessionCloseMock,
+  piRpcSessionConstructMock,
+  piRpcSessionRebindMock,
+  piRpcSessionRunMock,
 } = vi.hoisted(() => ({
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
@@ -193,6 +199,11 @@ const {
   traeAcpSessionConstructMock: vi.fn(),
   traeAcpSessionInterruptMock: vi.fn(),
   traeAcpSessionRunMock: vi.fn(),
+  piRpcSessionAbortMock: vi.fn(),
+  piRpcSessionCloseMock: vi.fn(),
+  piRpcSessionConstructMock: vi.fn(),
+  piRpcSessionRebindMock: vi.fn(),
+  piRpcSessionRunMock: vi.fn(),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -545,6 +556,46 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   };
 });
 
+vi.mock('@lobechat/heterogeneous-agents/rpc', () => {
+  class MockPiRpcSession {
+    isReusable = true;
+    constructor(private readonly options: any) {
+      piRpcSessionConstructMock(options);
+    }
+
+    async abort() {
+      return piRpcSessionAbortMock();
+    }
+
+    async close() {
+      piRpcSessionCloseMock();
+    }
+
+    rebind(callbacks: any) {
+      piRpcSessionRebindMock(callbacks);
+    }
+
+    async run() {
+      if (piRpcSessionRunMock.getMockImplementation()) {
+        return piRpcSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onSessionId('pi_sess_1');
+      await this.options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'pi-rpc' },
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      return { aborted: false };
+    }
+  }
+
+  return { PiRpcSession: MockPiRpcSession };
+});
+
 const { consumeCodexRateLimitResetCreditMock, fetchCodexQuotaMock } = vi.hoisted(() => ({
   consumeCodexRateLimitResetCreditMock: vi.fn(),
   fetchCodexQuotaMock: vi.fn(),
@@ -716,6 +767,11 @@ describe('HeterogeneousAgentCtr', () => {
     traeAcpSessionConstructMock.mockReset();
     traeAcpSessionInterruptMock.mockReset();
     traeAcpSessionRunMock.mockReset();
+    piRpcSessionAbortMock.mockReset();
+    piRpcSessionCloseMock.mockReset();
+    piRpcSessionConstructMock.mockReset();
+    piRpcSessionRebindMock.mockReset();
+    piRpcSessionRunMock.mockReset();
     droidAcpSessionCloseMock.mockReset();
     droidAcpSessionConstructMock.mockReset();
     droidAcpSessionInterruptMock.mockReset();
@@ -726,6 +782,7 @@ describe('HeterogeneousAgentCtr', () => {
     vi.mocked(statSync).mockReturnValue(asDirectory);
     delete process.env.LOBE_CLAUDE_CODE_SDK;
     delete process.env.LOBE_CODEX_APP_SERVER;
+    delete process.env.LOBE_PI_RPC_IDLE_TIMEOUT_MS;
   });
 
   afterEach(async () => {
@@ -2455,7 +2512,6 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('injects a Pi operation token into its Responses credential env', async () => {
-      nextFakeProc = createFakeProc().proc;
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
@@ -2483,15 +2539,18 @@ describe('HeterogeneousAgentCtr', () => {
         operationId: 'op-server-default-pi',
         topicId: 'topic-1',
       });
-      expect(spawnCalls[0].args).toEqual(
-        expect.arrayContaining([
-          '--provider',
-          'lobehub-server-default',
-          '--model',
-          'lobehub/kimi-k2.6',
-        ]),
+      expect(piRpcSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            '--provider',
+            'lobehub-server-default',
+            '--model',
+            'lobehub/kimi-k2.6',
+          ]),
+          env: expect.objectContaining({ LOBEHUB_PI_API_KEY: 'operation-token' }),
+        }),
       );
-      expect(spawnCalls[0].options.env.LOBEHUB_PI_API_KEY).toBe('operation-token');
+      expect(spawnCalls).toHaveLength(0);
       expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
         cancelled: false,
         operationId: 'op-server-default-pi',
@@ -4115,6 +4174,264 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (pi rpc)', () => {
+    it('routes pi prompts through the RPC transport with resume args and captures the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        args: ['--provider', 'anthropic'],
+        command: 'pi',
+        resumeSessionId: 'prev_sess',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-pi', prompt: 'hello pi', sessionId });
+
+      expect(piRpcSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--provider', 'anthropic'],
+          commandPath: 'pi',
+          operationId: 'op-pi',
+          resumeSessionId: 'prev_sess',
+          uploadImage: expect.any(Function),
+        }),
+      );
+      expect(spawnCalls).toHaveLength(0);
+      // Native session id captured for the next turn's resume.
+      const sessionInfo = await ctr.getSessionInfo({ sessionId });
+      expect(sessionInfo.agentSessionId).toBe('pi_sess_1');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('waits for RPC cancellation instead of killing the process tree', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      let resolveRun: ((result: { aborted: boolean }) => void) | undefined;
+      piRpcSessionRunMock.mockImplementation(
+        () =>
+          new Promise<{ aborted: boolean }>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+      });
+
+      const sendPromise = ctr.sendPrompt({ operationId: 'op-pi-abort', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(piRpcSessionConstructMock).toHaveBeenCalled());
+
+      let finishAbort!: () => void;
+      piRpcSessionAbortMock.mockReturnValue(
+        new Promise<void>((resolve) => (finishAbort = resolve)),
+      );
+      const confirmed = vi.fn();
+      const cancellation = ctr.cancelSession({ sessionId }).then(confirmed);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(piRpcSessionAbortMock).toHaveBeenCalled();
+      expect(confirmed).not.toHaveBeenCalled();
+      expect(spawnCalls).toHaveLength(0);
+      // The run resolves as aborted → the session completes, not errors.
+      resolveRun?.({ aborted: true });
+      await sendPromise;
+      finishAbort();
+      await cancellation;
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it.each(['cancelSession', 'stopSession'] as const)(
+      'does not confirm %s when Pi shutdown fails',
+      async (method) => {
+        let finishRun!: (result: { aborted: boolean }) => void;
+        piRpcSessionRunMock.mockReturnValue(
+          new Promise<{ aborted: boolean }>((resolve) => (finishRun = resolve)),
+        );
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+        const run = ctr.sendPrompt({ operationId: 'op-pi', prompt: 'work', sessionId });
+        await vi.waitFor(() => expect(piRpcSessionRunMock).toHaveBeenCalled());
+        piRpcSessionAbortMock.mockRejectedValue(new Error('still alive after SIGKILL'));
+
+        await expect(ctr[method]({ sessionId })).rejects.toThrow('still alive after SIGKILL');
+
+        finishRun({ aborted: true });
+        await run;
+      },
+    );
+
+    it('reuses the pooled process across turns of the same conversation', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      // Turn 1: no native id yet → spawn a fresh process.
+      const env = { LOBEHUB_AGENT_ID: 'agent-pi', LOBEHUB_TOPIC_ID: 'topic-pi' };
+      const first = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        env: { ...env, LOBEHUB_OPERATION_ID: 'op-1' },
+      });
+      await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
+      await ctr.stopSession({ sessionId: first.sessionId });
+
+      // Turn 2: resumes with the native id captured on turn 1 → the pool
+      // returns the SAME PiRpcSession instead of constructing a new one.
+      const second = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        env: { ...env, LOBEHUB_OPERATION_ID: 'op-2' },
+        resumeSessionId: 'pi_sess_1',
+      });
+      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId: second.sessionId });
+      await ctr.stopSession({ sessionId: second.sessionId });
+
+      expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(1);
+      expect(piRpcSessionConstructMock.mock.calls[0][0].shellOperationId).toBe('op-1');
+      expect(piRpcSessionRebindMock.mock.calls[0][0].shellOperationId).toBe('op-2');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
+        sessionId: first.sessionId,
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
+        sessionId: second.sessionId,
+      });
+    });
+
+    it.each([
+      {
+        firstOptions: { args: ['--provider', 'anthropic'] },
+        secondOptions: { args: ['--provider', 'openai'] },
+      },
+      {
+        firstOptions: { env: { PI_ACCEPTANCE_CONFIG: 'first' } },
+        secondOptions: { env: { PI_ACCEPTANCE_CONFIG: 'second' } },
+      },
+      {
+        firstOptions: { env: { LOBEHUB_TOPIC_ID: 'topic-1' } },
+        secondOptions: { env: { LOBEHUB_TOPIC_ID: 'topic-2' } },
+      },
+    ])(
+      'spawns fresh when runtime options change between turns: $secondOptions',
+      async ({ firstOptions, secondOptions }) => {
+        const send = vi.fn();
+        mockGetAllWindows.mockReturnValue([
+          {
+            isDestroyed: () => false,
+            webContents: { send },
+          },
+        ]);
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+
+        // Turn 1 with one runtime configuration.
+        const first = await ctr.startSession({
+          ...firstOptions,
+          agentType: 'pi',
+          command: 'pi',
+        });
+        await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
+        await ctr.stopSession({ sessionId: first.sessionId });
+
+        // A changed argument or explicit env value must invalidate the pool hit.
+        const second = await ctr.startSession({
+          ...secondOptions,
+          agentType: 'pi',
+          command: 'pi',
+          resumeSessionId: 'pi_sess_1',
+        });
+        await ctr.sendPrompt({
+          operationId: 'op-2',
+          prompt: 'second',
+          sessionId: second.sessionId,
+        });
+        await ctr.stopSession({ sessionId: second.sessionId });
+
+        expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(2);
+      },
+    );
+
+    it('reaps an idle pooled pi process after the grace window', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      process.env.LOBE_PI_RPC_IDLE_TIMEOUT_MS = '60';
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+      await ctr.sendPrompt({ operationId: 'op-idle', prompt: 'x', sessionId });
+
+      // The process is released to the pool; after the idle window it is
+      // closed (graceful EOF) even though no IPC session references it.
+      await vi.waitFor(() => expect(piRpcSessionCloseMock).toHaveBeenCalled(), { timeout: 2_000 });
+    });
+
+    it('surfaces pi RPC failures as session errors without a json fallback', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      piRpcSessionRunMock.mockRejectedValue(new Error('pi RPC exited unexpectedly (code 1)'));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-pi-err', prompt: 'x', sessionId }),
+      ).rejects.toThrow('pi RPC exited unexpectedly');
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentSessionError',
+        expect.objectContaining({ sessionId }),
+      );
+      // No spawn of `pi --mode json` happened — pi is RPC-only.
+      expect(spawnCalls).toHaveLength(0);
+    });
+  });
+
   describe('pre-launch cancellation for local transports', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
@@ -4160,6 +4477,14 @@ describe('HeterogeneousAgentCtr', () => {
         constructMock: traeAcpSessionConstructMock,
         label: 'TRAE ACP',
         runMock: traeAcpSessionRunMock,
+        useCodexAppServer: false,
+      },
+      {
+        agentType: 'pi',
+        command: 'pi',
+        constructMock: piRpcSessionConstructMock,
+        label: 'Pi RPC',
+        runMock: piRpcSessionRunMock,
         useCodexAppServer: false,
       },
     ] as const)(
@@ -4252,7 +4577,7 @@ describe('HeterogeneousAgentCtr', () => {
       const [spawnCall] = spawnCalls;
       expect(spawnCall.command).toBe(process.execPath);
       expect(spawnCall.args.slice(0, 7)).toEqual([
-        '/fake/cli/dist/index.js',
+        path.normalize('/fake/cli/dist/index.js'),
         'hetero',
         'exec',
         '--type',
@@ -4378,7 +4703,7 @@ describe('HeterogeneousAgentCtr', () => {
       } as any);
 
       await expect(ctr.spawnLhHeteroExec(params)).resolves.toEqual({
-        reason: 'Embedded CLI not found at /fake/cli/dist/index.js',
+        reason: `Embedded CLI not found at ${path.normalize('/fake/cli/dist/index.js')}`,
         status: 'rejected',
       });
       expect(spawnCalls).toHaveLength(0);
@@ -4834,12 +5159,57 @@ describe('HeterogeneousAgentCtr', () => {
     const captureRegisteredHandler = (
       registerSpy: ReturnType<typeof vi.fn> | ReturnType<typeof vi.spyOn>,
       eventName: string,
-    ): (() => void) => {
+    ): ((event?: { preventDefault: () => void }) => void) => {
       const calls = (registerSpy as any).mock.calls as Array<[string, () => void]>;
       const match = calls.findLast(([evt]) => evt === eventName);
       if (!match) throw new Error(`no handler registered for "${eventName}"`);
       return match[1];
     };
+
+    it('holds quit until both an unpooled Pi run and the pool have closed', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      electron.app.quit.mockClear();
+      vi.spyOn(process, 'on').mockImplementation(() => process);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+      const session = (ctr as any).sessions.get(sessionId);
+      let finishActive!: () => void;
+      let finishPool!: () => void;
+      const close = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishActive = resolve;
+          }),
+      );
+      session.piRpcSession = { close };
+      vi.spyOn((ctr as any).piRpcPool, 'closeAll').mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPool = resolve;
+          }),
+      );
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      const event = { preventDefault: vi.fn() };
+      beforeQuit(event);
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(close).toHaveBeenCalledOnce();
+      expect(session.cancelledByUs).toBe(true);
+      beforeQuit(event);
+      expect(close).toHaveBeenCalledOnce();
+      finishActive();
+      await Promise.resolve();
+      expect(electron.app.quit).not.toHaveBeenCalled();
+      finishPool();
+      await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+      event.preventDefault.mockClear();
+      beforeQuit(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
 
     it('before-quit closes a running TRAE ACP session', async () => {
       const electron = (await import('electron')) as any;
@@ -4854,7 +5224,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       ctr.afterAppReady();
       const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
-      beforeQuit();
+      beforeQuit({ preventDefault: vi.fn() });
 
       expect(traeAcpSessionCloseMock).toHaveBeenCalledOnce();
       expect(session.cancelledByUs).toBe(true);
@@ -4875,7 +5245,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       ctr.afterAppReady();
       const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
-      beforeQuit();
+      beforeQuit({ preventDefault: vi.fn() });
 
       await expect(access(fileA)).rejects.toThrow();
       await expect(access(fileB)).rejects.toThrow();
@@ -4949,7 +5319,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       ctr.afterAppReady();
       const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
-      expect(() => beforeQuit()).not.toThrow();
+      expect(() => beforeQuit({ preventDefault: vi.fn() })).not.toThrow();
     });
   });
 });

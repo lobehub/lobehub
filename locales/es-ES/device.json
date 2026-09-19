@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "Error al cargar ramas",
   "workingDirectory.branchesLoading": "Cargando ramas…",
   "workingDirectory.branchesNoMatch": "No hay ramas coincidentes",
+  "workingDirectory.branchesTruncated": "{{count}} más — escribe para filtrar",
   "workingDirectory.browseDescription": "Elige una carpeta en el dispositivo conectado.",
   "workingDirectory.browseFolders": "Explorar carpetas",
   "workingDirectory.cancel": "Cancelar",

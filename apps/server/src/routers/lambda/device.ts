@@ -28,7 +28,11 @@ import { type DeviceAttachment, deviceGateway } from '@/server/services/deviceGa
 import { filterAuthorizedDevicePresence } from '@/server/services/deviceGateway/scopedDevicePresence';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
-import { assertWorkspaceDeviceVisible, assertWorkspaceRootApproved } from './deviceWorkspaceGuard';
+import {
+  assertWorkspaceDeviceVisible,
+  assertWorkspaceRootApproved,
+  registerDeviceSkillRoots,
+} from './deviceWorkspaceGuard';
 
 // Derive the zod enum from the canonical config so new platforms are
 // automatically covered without touching this file.
@@ -608,6 +612,24 @@ export const deviceRouter = router({
     }),
 
   /**
+   * Children of one directory inside a project on a remote device. The Files
+   * tree calls this when the user expands a directory the index collapsed
+   * (a fully git-ignored folder). Returns `null` when offline.
+   */
+  listProjectDirectory: deviceProcedure
+    .input(z.object({ deviceId: z.string(), relativePath: z.string(), root: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.listProjectDirectory({
+        deviceId: input.deviceId,
+        relativePath: input.relativePath,
+        root: input.root,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  /**
    * Browse one directory level on a remote device. Personal devices belong to
    * the caller. A workspace device may expose new paths only to its enroller or
    * a workspace owner; other members continue to use its approved recents.
@@ -698,6 +720,19 @@ export const deviceRouter = router({
       });
     }),
 
+  copyAssetForPublish: workspaceFileProcedure
+    .input(z.object({ from: z.string(), to: z.string() }))
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.copyAssetForPublish({
+        deviceId: input.deviceId,
+        from: input.from,
+        to: input.to,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      }),
+    ),
+
   readExternalAssetForPublish: workspaceFileProcedure
     .input(z.object({ path: z.string() }))
     .query(async ({ ctx, input }) =>
@@ -724,6 +759,17 @@ export const deviceRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
+
+      // Register device-scoped skill roots (~/.agents/skills / ~/.claude/skills)
+      // in an in-memory cache so subsequent getLocalFilePreview calls pass the
+      // workspace root guard without polluting the UI's working-directory list.
+      if (result?.skills) {
+        const skillRoots = [
+          ...new Set(result.skills.filter((s) => s.scope === 'device').map((s) => s.previewRoot)),
+        ].filter(Boolean);
+        registerDeviceSkillRoots(input.deviceId, skillRoots);
+      }
+
       return result ?? null;
     }),
 

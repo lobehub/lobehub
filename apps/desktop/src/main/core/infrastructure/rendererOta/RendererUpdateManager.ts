@@ -80,7 +80,8 @@ export class RendererUpdateManager {
   }
 
   private get otaDir() {
-    return path.join(this.otaRootDir, this.activeChannel);
+    // Patch numbers restart at r0 for each full release, even when mainHash is unchanged.
+    return path.join(this.otaRootDir, this.activeChannel, APP_VERSION);
   }
 
   private get disabledReasons() {
@@ -231,7 +232,7 @@ export class RendererUpdateManager {
     this.stagedManifest = null;
     this.state = 'idle';
     this.applyServingRoot();
-    this.reloadAllWindows();
+    this.reloadAllWindows(true);
     // Hot apply is an in-place reload from local disk: the bundle must
     // evaluate within seconds, so a missing load ping fails fast. Cold-boot
     // arming (initialize) keeps only the long mount timeout.
@@ -335,7 +336,7 @@ export class RendererUpdateManager {
       reason = 'notification-failed';
       this.app.browserManager.broadcastToAllWindows('updateReady', {
         kind: 'renderer',
-        version: manifest.appVersion,
+        version: `${manifest.appVersion}.${manifest.version}`,
       });
       outcome = 'staged';
       reason = 'staged';
@@ -650,10 +651,10 @@ export class RendererUpdateManager {
     });
   }
 
-  private reloadAllWindows() {
+  private reloadAllWindows(ignoreBeforeUnload = false) {
     this.app.browserManager.browsers.forEach((browser) => {
       try {
-        browser.browserWindow.webContents.reloadIgnoringCache();
+        browser.reloadIgnoringCache(ignoreBeforeUnload);
       } catch {
         /* window may be destroyed */
       }

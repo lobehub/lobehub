@@ -236,7 +236,7 @@ describe('AgentBridgeService', () => {
     expect(mockExecAgent.mock.calls[0][0].toolModeOverride).toBeUndefined();
   });
 
-  describe('current-conversation injection (LOBE-13803)', () => {
+  describe('current-conversation injection', () => {
     it('injects the platform + channelId the message tool needs into botPlatformContext', async () => {
       const service = new AgentBridgeService(FAKE_DB, USER_ID);
       const thread = createThread();

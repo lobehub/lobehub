@@ -1,6 +1,6 @@
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import type { LucideIcon } from 'lucide-react';
+import { Loader2Icon, type LucideIcon } from 'lucide-react';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -125,7 +125,7 @@ export const ToolbarActionButton = memo<ToolbarActionButtonProps>(
         type={'button'}
         onClick={onClick}
       >
-        <Icon icon={icon} size={14} spin={loading} />
+        <Icon icon={loading ? Loader2Icon : icon} size={14} spin={loading} />
         {label && <span className={styles.actionLabel}>{label}</span>}
       </button>
     );

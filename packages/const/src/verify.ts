@@ -283,8 +283,16 @@ export type AcceptanceRejectIntent = (typeof acceptanceRejectIntents)[number];
 
 /** What an automated reviewer proposes for a check. Deliberately narrower than
  *  the human's vocabulary: a model never proposes `ignore`, which is a statement
- *  about the reviewer's priorities rather than about the delivery. */
-export const reviewPredictionActions = ['accept', 'reject'] as const;
+ *  about the reviewer's priorities rather than about the delivery.
+ *
+ *  `unjudgeable` is NOT a softer `reject`. It means the criterion asks for
+ *  something no reader can confirm — re-running the delivered scripts, building,
+ *  driving a live system — so no capture could ever settle it and another
+ *  delivery attempt is wasted. Thin or missing evidence stays a `reject`,
+ *  because a builder can fix that. The two are separate values because folding
+ *  them together made "the delivery fell short" and "this reviewer cannot decide"
+ *  indistinguishable in the agreement statistics. */
+export const reviewPredictionActions = ['accept', 'reject', 'unjudgeable'] as const;
 export type ReviewPredictionAction = (typeof reviewPredictionActions)[number];
 
 /**
@@ -376,7 +384,7 @@ export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
  * (`tasks.config.verify.maxIterations`). Their product is the worst-case number
  * of agent runs a goal can pay for.
  */
-export const DEFAULT_GOAL_MAX_ROUNDS = 3;
+export const DEFAULT_GOAL_MAX_ROUNDS = 8;
 
 /** Bounds the round budget a goal may be created with. */
 export const GOAL_MAX_ROUNDS_RANGE = { max: 10, min: 2 } as const;

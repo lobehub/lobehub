@@ -18,6 +18,9 @@ vi.mock('@lobehub/ui/base-ui', () => ({
 
 const editorProps = vi.hoisted(() => ({
   last: undefined as any,
+  image: undefined as any,
+  /** Props of the `<InlineToolbar>` handed to the toolbar plugin, if any. */
+  toolbar: undefined as any,
 }));
 
 vi.mock('@lobehub/editor/react', () => ({
@@ -26,7 +29,13 @@ vi.mock('@lobehub/editor/react', () => ({
       editorProps.last = props;
       return <div data-testid="editor" />;
     }),
-    { withProps: (plugin: unknown) => plugin },
+    {
+      withProps: (plugin: unknown, props: any) => {
+        if (props?.defaultBlockImage) editorProps.image = props;
+        if (props?.children?.props?.floating) editorProps.toolbar = props.children.props;
+        return plugin;
+      },
+    },
   ),
   useEditorState: () => ({}),
 }));
@@ -43,6 +52,8 @@ vi.mock('@lobehub/editor', () => ({
 vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
   createChatInputRichPlugins: () => [],
 }));
+
+vi.mock('./rehostImage', () => ({ needsImageRehost: () => true, rehostImage: vi.fn() }));
 
 vi.mock('./InlineToolbar', () => ({
   default: () => <div />,
@@ -79,6 +90,26 @@ describe('InternalEditor readonly state', () => {
     editorProps.last = undefined;
   });
 
+  it('only rehosts images while the live editor is editable', () => {
+    let editable = false;
+    const liveEditor = {
+      ...editor,
+      getLexicalEditor: () => ({
+        isEditable: () => editable,
+        registerCommand: vi.fn(() => vi.fn()),
+        registerRootListener: vi.fn(() => vi.fn()),
+        registerUpdateListener: vi.fn(() => vi.fn()),
+      }),
+    } as unknown as IEditor;
+    render(<InternalEditor editor={liveEditor} />);
+    expect(editorProps.image.handleRehost).toBeTypeOf('function');
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(false);
+    editable = true;
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(true);
+    editable = false;
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(false);
+  });
+
   it('passes editable=false to the editor when disabled', () => {
     render(<InternalEditor disabled editor={editor} />);
 
@@ -111,6 +142,54 @@ describe('InternalEditor readonly state', () => {
     render(<InternalEditor disabled editor={editor} />);
 
     expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+  });
+
+  describe('readonly selection items', () => {
+    const commentItem = { key: 'comment', label: 'Comment', onClick: () => {} };
+    const askItem = { key: 'ask', label: 'Ask', onClick: () => {} };
+
+    beforeEach(() => {
+      editorProps.toolbar = undefined;
+    });
+
+    it('keeps selection actions reachable on a locked page through a selection-only toolbar', () => {
+      render(
+        <InternalEditor editable={false} editor={editor} readonlySelectionItems={[commentItem]} />,
+      );
+
+      expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+      expect(editorProps.toolbar).toMatchObject({
+        extraItems: [commentItem],
+        floating: true,
+        selectionOnly: true,
+      });
+    });
+
+    it('offers the formatting toolbar with its own extras while editable', () => {
+      render(
+        <InternalEditor
+          editor={editor}
+          readonlySelectionItems={[commentItem]}
+          toolbarExtraItems={[askItem, commentItem]}
+        />,
+      );
+
+      expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+      expect(editorProps.toolbar).toMatchObject({ extraItems: [askItem, commentItem] });
+      expect(editorProps.toolbar?.selectionOnly).toBeUndefined();
+    });
+
+    it('registers nothing when not editable and there is nothing to act on', () => {
+      render(<InternalEditor editable={false} editor={editor} readonlySelectionItems={[]} />);
+
+      expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+    });
+
+    it('never surfaces a toolbar while disabled', () => {
+      render(<InternalEditor disabled editor={editor} readonlySelectionItems={[commentItem]} />);
+
+      expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+    });
   });
 
   it('renders the current file upload percentage', () => {

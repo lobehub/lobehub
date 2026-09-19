@@ -355,7 +355,11 @@ export class GatewayHttpClient {
     deviceId: string,
     workspaceId?: string,
   ): Promise<{ success: boolean; systemInfo?: DeviceSystemInfo }> {
-    const res = await this.post('/api/device/system-info', { deviceId, userId, workspaceId });
+    const res = await this.post(
+      '/api/device/system-info',
+      { deviceId, userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
     if (!res.ok) {
       return { success: false };
     }

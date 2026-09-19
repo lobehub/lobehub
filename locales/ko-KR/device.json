@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "브랜치를 로드하지 못했습니다",
   "workingDirectory.branchesLoading": "브랜치 로드 중…",
   "workingDirectory.branchesNoMatch": "일치하는 브랜치 없음",
+  "workingDirectory.branchesTruncated": "{{count}}개 더 보기 — 필터링하려면 입력하세요",
   "workingDirectory.browseDescription": "연결된 장치에서 폴더를 선택하세요.",
   "workingDirectory.browseFolders": "폴더 탐색",
   "workingDirectory.cancel": "취소",

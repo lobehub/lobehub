@@ -30,6 +30,7 @@ import { FileService } from '@/server/services/file';
 
 import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
+import { resolveModelReadableFrameUrl } from './modelFrames';
 import { planItemToPendingResult } from './resultSnapshot';
 import { BatchVerdictSchema, type SingleVerdict, SingleVerdictSchema } from './schema';
 import { VerifyStatusService } from './statusService';
@@ -234,10 +235,7 @@ export class VerifyExecutorService {
         if (!item.fileId || (item.type !== 'screenshot' && item.type !== 'gif')) return item;
         const file = await this.fileModel.findById(item.fileId);
         if (!file) return item;
-        return {
-          ...item,
-          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
-        };
+        return { ...item, accessUrl: await resolveModelReadableFrameUrl(this.fileService, file) };
       }),
     );
   }

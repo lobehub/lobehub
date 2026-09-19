@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import type { ConversationContext } from '@lobechat/types';
+import type { ConversationContext, TaskDetailActivity } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
 import { copyToClipboard, DropdownMenu, Flexbox, Freeze } from '@lobehub/ui';
 import { ActionIcon, confirmModal, FloatingPanel, Tag, Text, toast } from '@lobehub/ui/base-ui';
@@ -22,6 +22,7 @@ import ChatList from '@/features/Conversation/ChatList';
 import { ConversationProvider } from '@/features/Conversation/ConversationProvider';
 import { TaskCardScopeProvider } from '@/features/Conversation/Markdown/plugins/Task';
 import MessageItem from '@/features/Conversation/Messages';
+import { PortalContent } from '@/features/Portal/router';
 import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -40,6 +41,7 @@ import { authSelectors } from '@/store/user/selectors';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
+import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
 import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
@@ -52,11 +54,16 @@ export interface TopicChatDrawerBodyProps {
   agentId: string;
   defaultInputExpanded?: boolean;
   disableInputCollapse?: boolean;
+  /**
+   * The run to resume streaming from. Hosts that embed the body outside the
+   * drawer pass it themselves; the drawer falls back to its own topic's run.
+   */
+  runningOperation?: TaskDetailActivity['runningOperation'];
   topicId: string;
 }
 
 export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
-  ({ agentId, defaultInputExpanded, disableInputCollapse, topicId }) => {
+  ({ agentId, defaultInputExpanded, disableInputCollapse, runningOperation, topicId }) => {
     const isLogin = useUserStore(authSelectors.isLogin);
     const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
@@ -77,12 +84,12 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
     const replaceMessages = useChatStore((s) => s.replaceMessages);
     const operationState = useOperationState(context);
 
-    const runningOperation = useTaskStore(
+    const drawerRunningOperation = useTaskStore(
       (s) => taskActivitySelectors.activeDrawerTopicActivity(s)?.runningOperation,
     );
     // Pass this drawer's agent explicitly — the run drawer also mounts on the
     // home surface, where the chat store's `activeAgentId` is unset.
-    useGatewayReconnect(topicId, runningOperation, agentId);
+    useGatewayReconnect(topicId, runningOperation ?? drawerRunningOperation, agentId);
 
     const itemContent = useCallback(
       (index: number, id: string) => <MessageItem disableEditing id={id} index={index} key={id} />,
@@ -131,6 +138,8 @@ const TopicChatDrawer = memo(() => {
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
   const deleteTopic = useTaskStore((s) => s.deleteTopic);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
+  const showArtifactPortal = useTopicDrawerArtifactPortal();
+  const closeArtifact = useChatStore((s) => s.closeArtifact);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
   const { allowed: canEditTask } = usePermission('create_content');
@@ -346,7 +355,14 @@ const TopicChatDrawer = memo(() => {
           task: a run opened from the home inbox may have no parent task at all,
           and gating on one renders a titled but empty panel. */}
       <Freeze frozen={!open}>
-        {open && <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />}
+        {open &&
+          (showArtifactPortal ? (
+            <Flexbox height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+              <PortalContent onClose={closeArtifact} />
+            </Flexbox>
+          ) : (
+            <TopicChatDrawerBody agentId={agentId!} topicId={topicId!} />
+          ))}
       </Freeze>
     </FloatingPanel>
   );

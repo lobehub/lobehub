@@ -729,7 +729,13 @@ export const verifyReviewPredictions = pgTable(
      */
     action: text('action', { enum: reviewPredictionActions }),
 
-    /** Why a `skipped` / `errored` attempt produced no verdict. */
+    /**
+     * Why a `skipped` / `errored` attempt produced no verdict — and, on a
+     * `judged` row, which artifacts the request had to withhold from the model
+     * (frames past the cap, unreadable media, unresolved payloads). A verdict
+     * reached while part of the evidence was invisible is not comparable to one
+     * reached on the whole check, so the caveat travels with the row.
+     */
     statusReason: text('status_reason'),
 
     /**

@@ -40,6 +40,7 @@ childConcurrency: 1
 allowBuilds:
   '@google/genai': true
   '@lobehub/editor': true
+  '@sentry/cli': true
   '@vercel/speed-insights': true
   core-js: false
   es5-ext: false

@@ -144,18 +144,74 @@ describe('ScreenCaptureManager', () => {
     expect(mockBrowserWindow.moveTop).toHaveBeenCalled();
   });
 
+  it('opens the composer without checking permission or enumerating windows', async () => {
+    mockGetScreenCaptureStatus.mockReturnValue('denied');
+    const manager = new ScreenCaptureManager(createApp());
+
+    await manager.startSession();
+
+    expect(mockGetScreenCaptureStatus).not.toHaveBeenCalled();
+    expect(mockDialogShowMessageBox).not.toHaveBeenCalled();
+    expect(mockEnumerateWindows).not.toHaveBeenCalled();
+    expect(mockBrowserWindow.show).toHaveBeenCalled();
+    expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith(
+      'screenCaptureSession',
+      expect.objectContaining({ windows: [] }),
+    );
+  });
+
+  describe('beginCapture', () => {
+    it('enumerates windows and pushes them to the overlay once permission is granted', async () => {
+      const windows = [
+        {
+          appName: 'Safari',
+          bounds: { height: 200, width: 300, x: 5, y: 6 },
+          order: 0,
+          overlayBounds: { height: 200, width: 300, x: 5, y: 6 },
+          title: 'Docs',
+          windowId: 42,
+        },
+      ];
+      mockEnumerateWindows.mockResolvedValue(windows);
+      const manager = new ScreenCaptureManager(createApp());
+      await manager.startSession();
+      mockBrowserWindow.webContents.send.mockClear();
+
+      await expect(manager.beginCapture()).resolves.toBe(true);
+
+      expect(mockEnumerateWindows).toHaveBeenCalledWith(
+        { height: 900, width: 1440, x: 0, y: 0 },
+        2,
+      );
+      expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith(
+        'screenCaptureSession',
+        expect.objectContaining({ windows }),
+      );
+    });
+
+    it('returns false without an active session', async () => {
+      const manager = new ScreenCaptureManager(createApp());
+
+      await expect(manager.beginCapture()).resolves.toBe(false);
+
+      expect(mockEnumerateWindows).not.toHaveBeenCalled();
+    });
+  });
+
   describe('permission caching', () => {
-    it('queries screen capture status only once across sessions when granted', async () => {
+    it('queries screen capture status only once across captures when granted', async () => {
       const manager = new ScreenCaptureManager(createApp());
 
       await manager.startSession();
+      await manager.beginCapture();
       manager.close();
       await manager.startSession();
+      await manager.beginCapture();
 
       expect(mockGetScreenCaptureStatus).toHaveBeenCalledTimes(1);
     });
 
-    it('skips the status query in startSession after prewarm', async () => {
+    it('skips the status query in beginCapture after prewarm', async () => {
       const manager = new ScreenCaptureManager(createApp());
 
       manager.prewarmPermissionCheck();
@@ -163,31 +219,36 @@ describe('ScreenCaptureManager', () => {
       expect(mockGetScreenCaptureStatus).toHaveBeenCalledTimes(1);
 
       await manager.startSession();
+      await expect(manager.beginCapture()).resolves.toBe(true);
 
       expect(mockGetScreenCaptureStatus).toHaveBeenCalledTimes(1);
-      expect(mockBrowserWindow.show).toHaveBeenCalled();
     });
 
-    it('re-queries status on each session while permission is not granted', async () => {
+    it('re-queries status on each capture while permission is not granted', async () => {
       mockGetScreenCaptureStatus.mockReturnValue('denied');
       mockDialogShowMessageBox.mockResolvedValue({ response: 1 });
       const manager = new ScreenCaptureManager(createApp());
 
       await manager.startSession();
+      await manager.beginCapture();
       await manager.startSession();
+      await manager.beginCapture();
 
       expect(mockGetScreenCaptureStatus).toHaveBeenCalledTimes(2);
     });
   });
 
-  it('blocks quick composer and prompts for permission when screen recording is unavailable', async () => {
+  it('closes the overlay and prompts for permission when screen recording is unavailable', async () => {
     mockGetScreenCaptureStatus.mockReturnValue('denied');
     mockDialogShowMessageBox.mockResolvedValue({ response: 0 });
     const app = createApp();
     const manager = new ScreenCaptureManager(app);
-
     await manager.startSession();
 
+    await expect(manager.beginCapture()).resolves.toBe(false);
+
+    expect(mockBrowserWindow.destroy).toHaveBeenCalled();
+    expect(manager.isActive).toBe(false);
     expect(mockDialogShowMessageBox).toHaveBeenCalledWith(
       app.browserManager.getMainWindow().browserWindow,
       expect.objectContaining({
@@ -197,19 +258,18 @@ describe('ScreenCaptureManager', () => {
     );
     expect(mockRequestScreenCaptureAccess).toHaveBeenCalled();
     expect(mockEnumerateWindows).not.toHaveBeenCalled();
-    expect(MockBrowserWindow).not.toHaveBeenCalled();
   });
 
   it('does not open settings when permission prompt is dismissed', async () => {
     mockGetScreenCaptureStatus.mockReturnValue('denied');
     mockDialogShowMessageBox.mockResolvedValue({ response: 1 });
     const manager = new ScreenCaptureManager(createApp());
-
     await manager.startSession();
+
+    await manager.beginCapture();
 
     expect(mockRequestScreenCaptureAccess).not.toHaveBeenCalled();
     expect(mockEnumerateWindows).not.toHaveBeenCalled();
-    expect(MockBrowserWindow).not.toHaveBeenCalled();
   });
 
   it('shows an app-modal prompt when the main window is hidden', async () => {
@@ -217,6 +277,7 @@ describe('ScreenCaptureManager', () => {
     const manager = new ScreenCaptureManager(createApp({ mainWindowVisible: false }));
 
     await manager.startSession();
+    await manager.beginCapture();
 
     expect(mockDialogShowMessageBox).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -286,6 +347,7 @@ describe('ScreenCaptureManager', () => {
       const app = createApp();
       const manager = new ScreenCaptureManager(app);
       await manager.startSession();
+      await manager.beginCapture();
 
       const pngBuffer = Buffer.from([9, 9, 9]);
       mockCaptureWindow.mockResolvedValue(pngBuffer);

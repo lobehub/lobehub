@@ -1,4 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import { agentShareFileAccessScope } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -257,6 +258,29 @@ describe('DocumentService', () => {
         }),
       );
       expect(result).toEqual(mockDoc);
+    });
+
+    it('should strip caller-provided agent-share provenance from document metadata', async () => {
+      mockFileModel.create.mockResolvedValue({ id: 'file-1' });
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Test',
+        editorData: {},
+        knowledgeBaseId: 'kb-1',
+        metadata: {
+          agentShare: { shareId: 'forged-share', visitorUserId: 'forged-visitor' },
+          existingKey: 'value',
+        },
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { existingKey: 'value' } }),
+        false,
+      );
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: { existingKey: 'value' } }),
+      );
     });
 
     it('should NOT create a file record when fileType is custom/folder', async () => {
@@ -1864,6 +1888,26 @@ describe('DocumentService', () => {
       expect(result).toEqual({ id: 'doc-1', title: 'Readme' });
     });
 
+    it('should preserve agent-share provenance when downloading a visitor file', async () => {
+      const accessScope = agentShareFileAccessScope({
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      });
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Visitor content',
+        fileType: 'markdown',
+        metadata: {},
+        totalCharCount: 15,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-visitor' });
+
+      await service.parseFile('file-visitor', accessScope);
+
+      expect(mockDocumentModel.findByFileId).toHaveBeenCalledWith('file-visitor', accessScope);
+      expect(mockFileService.downloadFileToLocal).toHaveBeenCalledWith('file-visitor', accessScope);
+    });
+
     it('should use file name as title (stripping extension) when metadata has no title', async () => {
       vi.mocked(loadFile).mockResolvedValue({
         content: 'Content',
@@ -1966,7 +2010,9 @@ describe('DocumentService', () => {
         'workspace-1',
         'public',
       );
-      expect(transactionModel.findByFileId).toHaveBeenCalledWith('file-1');
+      expect(transactionModel.findByFileId).toHaveBeenCalledWith('file-1', {
+        type: 'ordinary',
+      });
       expect(transactionModel.create).toHaveBeenCalledTimes(1);
       expect(mockDocumentModel.create).not.toHaveBeenCalled();
       // Both have to happen after the lock is held — re-checking before it would

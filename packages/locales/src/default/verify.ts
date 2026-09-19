@@ -72,9 +72,6 @@ export default {
   'flow.diff.fields.condition': 'Condition',
   'flow.diff.fields.required': 'Required',
 
-  'flow.viewResults': 'View results',
-  'flow.viewPlan': 'View steps',
-  'flow.results': 'Verification results',
   'flow.closeResults': 'Close results',
   'flow.resultHistory': '{{count}} verification records',
   'flow.latestResult': 'Latest result',
@@ -179,9 +176,14 @@ export default {
   'acceptance.detail.suggestion': 'Suggestion',
   'acceptance.error.description': 'Check your connection and try loading this acceptance again.',
   'acceptance.error.title': 'Unable to load acceptance',
+  'acceptance.notFound.description': 'It may have been deleted, or it was never shared with you.',
+  'acceptance.notFound.title': 'No such acceptance',
   'acceptance.comments.title': 'Discussion',
   'acceptance.comments.moreActions': 'More actions',
   'acceptance.comments.placeholder': 'Say something about this delivery…',
+  'acceptance.comments.removeOthers': 'Remove',
+  'acceptance.comments.removeOthersConfirm':
+    "Remove someone else's comment? It disappears from the discussion.",
   'acceptance.comments.replyPlaceholder': 'Reply…',
   'acceptance.comments.send': 'Send',
   'acceptance.comments.reply': 'Reply',
@@ -200,13 +202,18 @@ export default {
     'Evidence from round {{round}} — replaced in a later round',
   'acceptance.comments.evidenceThisRound': 'The evidence this check shows now',
   'acceptance.comments.roundLanded': 'Round {{round}} landed',
+  'acceptance.comments.signIn': 'Sign in',
+  'acceptance.comments.signInDescription':
+    'Sign in to comment, reply, and circle what you see on a screenshot.',
+  'acceptance.comments.signInTitle': 'Join the discussion',
+  'acceptance.comments.signUp': 'Sign up',
   'acceptance.comments.roundCompletedBy': '{{name}} completed round {{round}}',
   'acceptance.comments.approvedBy': '{{name}} approved this delivery',
   'acceptance.comments.approvedByAtRound': '{{name}} approved round {{round}}',
   'acceptance.comments.historicalRegions':
     '{{count}} region note(s) on evidence a later round replaced',
   'acceptance.comments.empty': 'No discussion yet.',
-  'acceptance.comments.readOnly': 'You can read the discussion; join the workspace to take part.',
+  'acceptance.comments.readOnly': 'You can read the discussion; sign in to take part.',
   'acceptance.comments.region': 'Region',
   'acceptance.comments.roundContext': 'Round {{round}}',
   'acceptance.comments.commentEvidence': 'Comment on a region',
@@ -232,6 +239,7 @@ export default {
   'acceptance.comments.author.former': 'Former member',
   'acceptance.comments.author.deactivated': 'Deactivated',
   'acceptance.comments.loadFailed': 'Failed to load the discussion. Please refresh.',
+  'acceptance.comments.copyLinkHint': '{{time}} · click to copy this comment’s link',
   'acceptance.comments.createFailed': 'Failed to post the comment. Please try again.',
   'acceptance.comments.deleteFailed': 'Failed to delete the comment. Please try again.',
   'acceptance.comments.updateFailed': 'Failed to update the comment. Please try again.',
@@ -400,12 +408,6 @@ export default {
   'acceptance.roundStatus.repairing': 'Repairing',
   'acceptance.roundStatus.uncertain': 'Verify uncertain',
   'acceptance.roundStatus.verifying': 'In progress',
-  'acceptance.sharedNotice.readOnlyDescription':
-    'You can browse every check and its evidence, but only the author can act on this acceptance.',
-  'acceptance.sharedNotice.reviewableDescription':
-    'You can browse every check and its evidence, and review them on behalf of your workspace.',
-  'acceptance.sharedNotice.title': 'Shared with you',
-  'acceptance.sharedNotice.titleWithName': 'Shared by {{name}}',
   'acceptance.stats.failed': '{{count}} failed',
   'acceptance.stats.notExecuted': '{{count}} not executed',
   'acceptance.stats.passed': '{{count}} passed',
@@ -460,7 +462,6 @@ export default {
   'acceptance.surface.other': 'Other',
   'acceptance.titleFallback': 'Acceptance',
   'acceptance.verdict.inProgress': 'Acceptance in progress',
-  'acceptance.verdict.latestAt': 'last verified {{time}}',
   'acceptance.viewFullReport': 'View full report',
   'acceptance.workspace.actions.delete': 'Delete',
   'acceptance.workspace.actions.markAccepted': 'Mark as accepted',
@@ -475,7 +476,7 @@ export default {
   'acceptance.workspace.batch.close': 'Close',
   'acceptance.workspace.batch.deleteConfirmDescription':
     'Delete the {{count}} selected acceptance(s)? Their verification rounds are kept — they detach into standalone reports.',
-  'acceptance.workspace.batch.deleteConfirmTitle': 'Delete {{count}} acceptance(s)',
+  'acceptance.workspace.batch.deleteConfirmTitle': 'Delete {{count}} acceptance(s)?',
   'acceptance.workspace.batch.deleteSuccess': '{{count}} acceptance(s) deleted',
   'acceptance.workspace.batch.enter': 'Select multiple',
   'acceptance.workspace.batch.error': 'The batch action failed. Try again.',
@@ -489,9 +490,24 @@ export default {
   'acceptance.workspace.batch.selected': '{{count}} selected',
   'acceptance.workspace.batch.statusSuccess': '{{count}} acceptance(s) updated',
   'acceptance.workspace.checkCount': '{{count}} checks',
+  'acceptance.workspace.deleteConfirm.files': 'Evidence files',
+  'acceptance.workspace.deleteConfirm.filesValue':
+    '{{count}} (screenshots {{images}} · recordings {{videos}} · other {{other}})',
+  'acceptance.workspace.deleteConfirm.ok': 'Delete and free {{size}}',
+  'acceptance.workspace.deleteConfirm.okBatch': 'Delete {{count}} and free {{size}}',
+  'acceptance.workspace.deleteConfirm.okBatchPlain': 'Delete {{count}}',
+  'acceptance.workspace.deleteConfirm.purgeOption':
+    'Also permanently delete every round, report and evidence file ({{size}})',
+  'acceptance.workspace.deleteConfirm.purgeOptionPlain':
+    'Also permanently delete every round, report and evidence file',
+  'acceptance.workspace.deleteConfirm.purgeWarning':
+    'This permanently deletes every round, report and evidence file of this acceptance. It cannot be undone.',
+  'acceptance.workspace.deleteConfirm.rounds': 'Rounds',
+  'acceptance.workspace.deleteConfirm.roundsValue': '{{count}} rounds',
+  'acceptance.workspace.deleteConfirm.space': 'Space freed',
   'acceptance.workspace.deleteConfirmDescription':
     'Delete the acceptance “{{title}}”? Its verification rounds are kept — they detach into standalone reports.',
-  'acceptance.workspace.deleteConfirmTitle': 'Delete acceptance',
+  'acceptance.workspace.deleteConfirmTitle': 'Delete “{{title}}”?',
   'acceptance.workspace.deleteError': 'Failed to delete acceptance',
   'acceptance.workspace.deleteSuccess': 'Acceptance deleted',
   'acceptance.workspace.emptyDetail.description':
@@ -844,6 +860,7 @@ export default {
     'Pick a verification report from the list to see its verdict, checks, and evidence.',
   'workspace.emptyDetail.title': 'No report selected',
   'workspace.expand': 'Show report list',
+  'workspace.pin': 'Pin report list',
   'workspace.listEmpty':
     'Reports appear here after a checker run finishes or a report is ingested.',
   'workspace.listEmptyTitle': 'No reports yet',

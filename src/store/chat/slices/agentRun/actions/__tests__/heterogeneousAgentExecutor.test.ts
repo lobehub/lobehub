@@ -676,6 +676,51 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     return { get, store };
   }
 
+  it.each([
+    { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
+    { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
+      expectedOperations: ['user-override', 'user-override'],
+    },
+  ] satisfies {
+    provider: HeterogeneousProviderConfig;
+    expectedOperations: (string | undefined)[];
+  }[])(
+    'preserves each turn identity and user env overrides: $provider',
+    async ({ provider, expectedOperations }) => {
+      for (const operationId of ['op-1', 'op-2']) {
+        await runWithEvents(
+          [
+            () =>
+              ipc.emitStreamEvent('ipc-sess-1', {
+                data: { reason: 'complete' },
+                operationId,
+                type: 'agent_runtime_end',
+              }),
+          ],
+          {
+            params: { heterogeneousProvider: provider, operationId },
+            store: createMockStore({ topicDataMap: {} }),
+          },
+        );
+      }
+
+      const environments = mockStartSession.mock.calls.map(([params]) => params.env);
+      expect(environments).toEqual(
+        expectedOperations.map((operationId) => ({
+          LOBEHUB_AGENT_ID: 'agent-1',
+          ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+          LOBEHUB_TOPIC_ID: 'topic-1',
+        })),
+      );
+      expect(mockSendPrompt.mock.calls.map(([params]) => params.operationId)).toEqual([
+        'op-1',
+        'op-2',
+      ]);
+    },
+  );
+
   it('releases all IPC subscriptions after a run settles', async () => {
     await runWithEvents([ccInit(), ccResult()]);
 

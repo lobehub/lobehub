@@ -25,6 +25,36 @@ marks it `uncertain` and holds the delivery.
 author (or discover) the plan  →  pick the surface  →  capture evidence  →  publish the round  →  self-check coverage
 ```
 
+## Decide whether to execute before starting a round
+
+Creating or updating a PR, marking it ready, or being asked to upload a report
+must not by itself start another verification run. First inspect the requested
+scope and the task's existing reports, evidence, and published acceptance links
+(from the conversation, PR, or local `.acceptances/` directory).
+
+| Delivery state                                                                                                                       | Action                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Documentation/instruction-only change, or pure refactor/tooling change with no product behavior change                               | Skip product acceptance and briefly state why. Keep any applicable quality checks.                                                                                                                                                                                                                          |
+| Gitlink-only sync                                                                                                                    | Do not launch a fresh acceptance. Link the upstream change and its existing acceptance when available; disclose missing upstream evidence without claiming it passed. Cloud changes accompanying the sync are assessed separately.                                                                          |
+| Completed acceptance already published and still covers the delivery                                                                 | Reuse its URL and coverage. Do not create a round or rerun cases just for the PR.                                                                                                                                                                                                                           |
+| Completed acceptance report and evidence exist locally and still cover the delivery                                                  | Inspect coverage and artifacts, then upload that report using [report.md](references/report.md). Preserve the original execution provenance; no product rerun, new plan, or repeated completed checker review is needed merely for upload.                                                                  |
+| The delivery was already exercised on the real product earlier in this session (observations and raw artifacts exist, no report yet) | Do not rerun, re-plan, or open a checker stage. Write `plan[]` and `cases[]` from the observations already made, attach the original artifacts (logs, command output, captures) with their original provenance, disclose any required medium that was never captured instead of recapturing it, and ingest. |
+| Product behavior lacks valid evidence, or relevant behavior changed after verification                                               | Execute only the missing or affected outcomes, retain unaffected evidence with its original provenance, and publish according to the round rules below.                                                                                                                                                     |
+
+Evidence is reusable when its criteria cover the requested behavior, its artifacts
+are available and support the observations, and subsequent code, dependency,
+configuration, or environment changes do not invalidate those observations.
+Compare the relevant changes; a different commit SHA, rebase, PR event, or report
+publication status alone is not a reason to rerun. Failed/blocked checks and missing
+required evidence are not passes: repair or supplement those specific gaps.
+An explicit user request for fresh verification still takes precedence.
+
+The execution, environment setup, plan/checker, and capture sections below apply
+when executing acceptance. For reuse or upload only, inspect the existing report
+and evidence and complete the necessary publication/coverage steps; do not boot
+services or replay completed cases. Uploading does not change when or against
+which implementation the evidence was captured.
+
 ## Independent acceptance review (first round only)
 
 The primary checks the environment, writes the plan, executes cases, inspects

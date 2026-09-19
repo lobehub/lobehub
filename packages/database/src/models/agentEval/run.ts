@@ -67,7 +67,7 @@ export class AgentEvalRunModel {
       .select()
       .from(agentEvalRuns)
       .where(and(...conditions))
-      .orderBy(desc(agentEvalRuns.createdAt))
+      .orderBy(desc(agentEvalRuns.createdAt), desc(agentEvalRuns.id))
       .$dynamic();
 
     if (filter?.limit !== undefined) {

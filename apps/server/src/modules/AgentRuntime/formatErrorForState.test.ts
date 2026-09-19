@@ -437,7 +437,7 @@ describe('formatErrorForState', () => {
 
 // The cost-admission gate attaches `budget` to the thrown payload, and
 // `formatErrorForState` copies it onto `body` verbatim — `body` is `any`, so
-// reading it back has to narrow rather than cast (LOBE-13726).
+// reading it back has to narrow rather than cast.
 describe('readErrorBudgetContext', () => {
   it('reads the budget context an admission gate attached', () => {
     const formatted = formatErrorForState({

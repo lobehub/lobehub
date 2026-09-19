@@ -70,6 +70,8 @@ export interface RunCommandOptions {
 }
 
 export interface CommandResult {
+  /** Upstream execution errors are distinct from a command's ordinary stderr. */
+  error?: unknown;
   /**
    * Where the command actually ran. Flows into the tool call's plugin state so
    * execution-target degradation is observable in the product UI.

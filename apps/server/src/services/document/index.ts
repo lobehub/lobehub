@@ -5,6 +5,8 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
+import type { FileAccessScope } from '@lobechat/types';
+import { ordinaryFileAccessScope, stripAgentShareFileProvenance } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
@@ -144,6 +146,7 @@ export class DocumentService {
       slug,
       visibility,
     } = params;
+    const sanitizedMetadata = stripAgentShareFileProvenance(metadata);
 
     // Calculate character and line counts
     const totalCharCount = content?.length || 0;
@@ -176,7 +179,7 @@ export class DocumentService {
         {
           fileType,
           knowledgeBaseId,
-          metadata,
+          metadata: sanitizedMetadata,
           name: title,
           parentId,
           size: totalCharCount,
@@ -191,8 +194,8 @@ export class DocumentService {
     // Store knowledgeBaseId in metadata for folders (which don't have fileId)
     const finalMetadata =
       knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
-        ? { ...metadata, knowledgeBaseId }
-        : metadata;
+        ? { ...sanitizedMetadata, knowledgeBaseId }
+        : sanitizedMetadata;
 
     const document = await this.documentModel.create({
       content,
@@ -847,12 +850,18 @@ export class DocumentService {
    * transaction scoped, so a nested call would hold it until the outer
    * transaction commits instead of releasing it after the insert.
    */
-  async parseFile(fileId: string): Promise<LobeDocument> {
+  async parseFile(
+    fileId: string,
+    accessScope: FileAccessScope = ordinaryFileAccessScope,
+  ): Promise<LobeDocument> {
     // Idempotent: return existing document if already parsed
-    const existingDoc = await this.documentModel.findByFileId(fileId);
+    const existingDoc = await this.documentModel.findByFileId(fileId, accessScope);
     if (existingDoc) return existingDoc as LobeDocument;
 
-    const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(fileId);
+    const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(
+      fileId,
+      accessScope,
+    );
 
     const logPrefix = `[${file.name}]`;
     log(`${logPrefix} Starting to parse file, path: ${filePath}`);
@@ -897,7 +906,7 @@ export class DocumentService {
 
         // Whoever inserted first wins; discard this parse rather than adding a
         // second document for the same file.
-        const raced = await transactionDocumentModel.findByFileId(fileId);
+        const raced = await transactionDocumentModel.findByFileId(fileId, accessScope);
         if (raced) return raced;
 
         return transactionDocumentModel.create({

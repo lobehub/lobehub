@@ -41,7 +41,12 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
     const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
     const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
-    const discoverService = new DiscoverService();
+    // Same identity requirement as the Agent Builder runtime: built without an
+    // identity, DiscoverService sends no credentials and every market read fails
+    // as `unauthorized`.
+    const discoverService = new DiscoverService({
+      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+    });
 
     return {
       callAgent: async (
