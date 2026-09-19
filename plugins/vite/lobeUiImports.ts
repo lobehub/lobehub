@@ -1,6 +1,6 @@
 import { readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import transformImports from '@rolldown/plugin-transform-imports';
 import type { Plugin, PluginOption } from 'vite';
@@ -54,10 +54,10 @@ export const parseBarrel = (code: string, barrelDir: string): BarrelMap => {
 };
 
 const loadBarrelMaps = () => {
+  // Resolve through the package rather than a path into node_modules: overlay
+  // builds mount this repo as a submodule and hoist the install above it.
   // realpath so bare specifiers resolve from pnpm's isolated store, not the root symlink
-  const esRoot = realpathSync(
-    path.resolve(fileURLToPath(import.meta.url), '../../../node_modules/@lobehub/ui/es'),
-  );
+  const esRoot = realpathSync(path.dirname(createRequire(import.meta.url).resolve('@lobehub/ui')));
   const maps: Record<string, Barrel> = {};
   for (const barrel of BARRELS) {
     const barrelDir = barrel ? `${barrel}/` : '';

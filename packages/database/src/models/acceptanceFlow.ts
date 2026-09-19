@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { isDraftVerifyRun } from '@lobechat/const/verify';
 import type {
   AcceptanceFlowDefinition,
   AcceptanceFlowReview,
@@ -63,6 +64,36 @@ function fingerprint(value: unknown) {
       ),
     )
     .digest('hex');
+}
+
+/** The newest round of a chain ordered by ascending `roundIndex`. */
+function latestRound<T extends { roundIndex: number | null }>(rounds: T[]) {
+  return rounds.findLast((round) => round.roundIndex != null);
+}
+
+/** Link each occurrence to the plan items earlier rounds recorded at the same graph position. */
+function withSupersedes(
+  plan: VerifyCheckItem[],
+  priorPlans: (VerifyCheckItem[] | null | undefined)[],
+  flowId: string,
+) {
+  return plan.map((item) => {
+    const supersedes = [
+      ...new Set(
+        priorPlans
+          .flatMap((p) => p ?? [])
+          .filter(
+            (p) =>
+              p.id !== item.id &&
+              p.sourceFlowNode?.flowId === flowId &&
+              p.sourceFlowNode.nodeId === item.sourceFlowNode?.nodeId &&
+              p.sourceFlowNode.incomingEdgeId === item.sourceFlowNode?.incomingEdgeId,
+          )
+          .map((p) => p.id),
+      ),
+    ];
+    return supersedes.length ? { ...item, supersedes } : item;
+  });
 }
 
 export class AcceptanceFlowModel {
@@ -187,7 +218,141 @@ export class AcceptanceFlowModel {
           updatedAt: new Date(),
         })
         .where(eq(flows.id, flow.id));
+      await this.syncOpenRounds(acceptanceId, tx);
       return { flowId: flow.id, hash: (await this.graph(flow.id, tx)).hash };
+    });
+  }
+
+  /**
+   * Editing a graph before any round executes must not fork a new version:
+   * refresh the snapshot and plan of the open draft, so the ledger keeps
+   * describing the graph the editor shows. Only the newest round qualifies —
+   * an older draft the ledger has moved past, and a replay pinned to a frozen
+   * definition, both keep what they already hold.
+   */
+  private async syncOpenRounds(acceptanceId: string, tx: Transaction) {
+    const rounds = await tx
+      .select()
+      .from(verifyRuns)
+      .where(eq(verifyRuns.acceptanceId, acceptanceId))
+      .orderBy(asc(verifyRuns.roundIndex))
+      .for('update');
+    const open = latestRound(rounds);
+    for (const round of open && isDraftVerifyRun(open) ? [open] : []) {
+      if (!round.flowSnapshots?.length) continue;
+      let plan = round.plan ?? [];
+      const snapshots: VerifyFlowSnapshot[] = [];
+      let changed = false;
+      for (const snapshot of round.flowSnapshots) {
+        const current = await this.graph(snapshot.flowId, tx);
+        const existing = plan.filter((p) => p.sourceFlowNode?.flowId === snapshot.flowId);
+        if (
+          fingerprint(current.snapshot) === fingerprint(snapshot) &&
+          fingerprint(existing.map((p) => p.id)) === fingerprint(current.plan.map((p) => p.id))
+        ) {
+          snapshots.push(snapshot);
+          continue;
+        }
+        changed = true;
+        snapshots.push(current.snapshot);
+        const priorPlans = rounds.filter((r) => r.id !== round.id).map((r) => r.plan);
+        const items = withSupersedes(current.plan, priorPlans, snapshot.flowId);
+        const at = plan.findIndex((p) => p.sourceFlowNode?.flowId === snapshot.flowId);
+        const rest = plan.filter((p) => p.sourceFlowNode?.flowId !== snapshot.flowId);
+        plan =
+          at === -1 ? [...rest, ...items] : [...rest.slice(0, at), ...items, ...rest.slice(at)];
+      }
+      if (!changed) continue;
+      await tx
+        .update(verifyRuns)
+        .set({
+          plan: plan.map((item, index) => ({ ...item, index })),
+          flowSnapshots: snapshots,
+        })
+        .where(eq(verifyRuns.id, round.id));
+    }
+  }
+
+  /**
+   * Drop a graph the acceptance no longer describes.
+   *
+   * Authoring a journey takes several tries, and until now every try stayed on
+   * the page forever: an abandoned first draft still renders as its own root
+   * with its own unexecuted checks, so the reader cannot tell which graph the
+   * delivery is actually being verified against.
+   *
+   * Only a graph without verified history can go. A settled round renders from
+   * the snapshot it froze, so its results would outlive the map that explains
+   * them. A draft has nothing to preserve: the flow's snapshot and plan items
+   * are stripped from it, leaving the ledger as if the flow had never been
+   * planned. Check assets the nodes pointed at are reusable on their own and
+   * stay put.
+   */
+  async delete(acceptanceId: string, flowId: string) {
+    await this.owned(acceptanceId);
+    return this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select()
+        .from(acceptances)
+        .where(eq(acceptances.id, acceptanceId))
+        .for('update');
+      if (['accepted', 'closed'].includes(locked.status))
+        throw new Error('Reopen acceptance before deleting a flow');
+      const [flow] = await tx
+        .select()
+        .from(flows)
+        .where(and(eq(flows.id, flowId), eq(flows.acceptanceId, acceptanceId)))
+        .for('update');
+      if (!flow) throw new Error('Flow not found');
+
+      const [invoked] = await tx
+        .select({ title: flows.title })
+        .from(nodes)
+        .innerJoin(flows, eq(nodes.flowId, flows.id))
+        .where(eq(nodes.subFlowId, flowId));
+      if (invoked)
+        throw new Error(`"${invoked.title}" invokes this flow — remove that subflow node first`);
+
+      const rounds = await tx
+        .select()
+        .from(verifyRuns)
+        .where(eq(verifyRuns.acceptanceId, acceptanceId))
+        .orderBy(asc(verifyRuns.roundIndex))
+        .for('update');
+      const carrying = rounds.filter((round) =>
+        round.flowSnapshots?.some((snapshot) => snapshot.flowId === flowId),
+      );
+      const settled = carrying.find((round) => !isDraftVerifyRun(round));
+      if (settled)
+        throw new Error(
+          `Round ${settled.roundIndex} verified this flow — delete that round first, or leave the graph in place`,
+        );
+      const planned = carrying.flatMap((round) =>
+        (round.plan ?? [])
+          .filter((item) => item.sourceFlowNode?.flowId === flowId)
+          .map((item) => item.id),
+      );
+      const [recorded] = planned.length
+        ? await tx
+            .select({ id: verifyCheckResults.id })
+            .from(verifyCheckResults)
+            .where(inArray(verifyCheckResults.checkItemId, planned))
+            .limit(1)
+        : [];
+      if (recorded) throw new Error('This flow already has recorded results');
+
+      for (const round of carrying)
+        await tx
+          .update(verifyRuns)
+          .set({
+            plan: (round.plan ?? [])
+              .filter((item) => item.sourceFlowNode?.flowId !== flowId)
+              .map((item, index) => ({ ...item, index })),
+            flowSnapshots: round.flowSnapshots!.filter((snapshot) => snapshot.flowId !== flowId),
+          })
+          .where(eq(verifyRuns.id, round.id));
+      await tx.delete(flows).where(eq(flows.id, flowId));
+      return { flowId, title: flow.title, unplannedRounds: carrying.map((round) => round.id) };
     });
   }
 
@@ -212,7 +377,37 @@ export class AcceptanceFlowModel {
       .where(eq(edges.flowId, flowId))
       .orderBy(asc(edges.id));
     const entry = nodeRows.find(({ node }) => node.isEntry)?.node.id;
-    const plan: VerifyCheckItem[] = [];
+    // Read each journey from its entry, keeping a branch together. UUID order
+    // only breaks ties between sibling edges; it must not order the whole plan.
+    const rowsById = new Map(nodeRows.map((row) => [row.node.id, row]));
+    const outgoing = new Map<string, typeof edgeRows>();
+    for (const edge of edgeRows) {
+      const targets = outgoing.get(edge.sourceNodeId) ?? [];
+      targets.push(edge);
+      outgoing.set(edge.sourceNodeId, targets);
+    }
+    const orderedRows: typeof nodeRows = [];
+    const visited = new Set<string>();
+    const occurrenceOrder: string[] = [];
+    const pending = entry ? [{ nodeId: entry, occurrenceId: 'entry' }] : [];
+    while (pending.length) {
+      const { nodeId: id, occurrenceId } = pending.pop()!;
+      // Every incoming edge creates a check occurrence, including revisits.
+      // Expand a node's outgoing edges only once to terminate cycles.
+      occurrenceOrder.push(occurrenceId);
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const row = rowsById.get(id);
+      if (!row) throw new Error('Unknown edge endpoint');
+      orderedRows.push(row);
+      pending.push(
+        ...(outgoing.get(id) ?? [])
+          .toReversed()
+          .map((edge) => ({ nodeId: edge.targetNodeId, occurrenceId: edge.id })),
+      );
+    }
+    if (orderedRows.length !== nodeRows.length) throw new Error('Unreachable nodes');
+    const occurrencePlans = new Map<string, VerifyCheckItem[]>();
     const snapshot: VerifyFlowSnapshot = {
       flowId,
       title: flow.title,
@@ -223,7 +418,7 @@ export class AcceptanceFlowModel {
       })),
       nodes: [],
     };
-    for (const { node, asset } of nodeRows) {
+    for (const { node, asset } of orderedRows) {
       const branches: ((typeof edgeRows)[number] | undefined)[] = edgeRows.filter(
         (e) => e.targetNodeId === node.id,
       );
@@ -266,11 +461,11 @@ export class AcceptanceFlowModel {
               targetNodeId: prefix + edge.targetNodeId,
             })),
           );
-          plan.push(
-            ...child.plan.map((item) => ({
+          occurrencePlans.set(
+            branch?.id ?? 'entry',
+            child.plan.map((item) => ({
               ...item,
               id: prefix + item.id,
-              index: plan.length,
               required: (node.overrides?.required ?? branch?.required ?? true) && item.required,
               onFail: node.overrides?.onFail ?? item.onFail,
               sourceFlowNode: {
@@ -317,27 +512,31 @@ export class AcceptanceFlowModel {
       for (const branch of branches) {
         const id = `${node.id}:${branch?.id ?? 'entry'}`;
         itemIds.push(id);
-        plan.push({
-          id,
-          index: plan.length,
-          title: asset.title,
-          description: asset.description ?? undefined,
-          category: flow.title,
-          sourceCriterionId: asset.id,
-          sourceFlowNode: { flowId, nodeId: node.id, incomingEdgeId: branch?.id },
-          definition: {
-            ...definition,
-            preconditions: [
-              ...(definition.preconditions ?? []),
-              ...(branch ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])] : []),
-            ],
+        occurrencePlans.set(branch?.id ?? 'entry', [
+          {
+            id,
+            index: 0,
+            title: asset.title,
+            description: asset.description ?? undefined,
+            category: flow.title,
+            sourceCriterionId: asset.id,
+            sourceFlowNode: { flowId, nodeId: node.id, incomingEdgeId: branch?.id },
+            definition: {
+              ...definition,
+              preconditions: [
+                ...(definition.preconditions ?? []),
+                ...(branch
+                  ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])]
+                  : []),
+              ],
+            },
+            documentId: asset.documentId,
+            verifierType: asset.verifierType,
+            verifierConfig: asset.verifierConfig ?? {},
+            onFail: node.overrides?.onFail ?? asset.onFail,
+            required: node.overrides?.required ?? branch?.required ?? true,
           },
-          documentId: asset.documentId,
-          verifierType: asset.verifierType,
-          verifierConfig: asset.verifierConfig ?? {},
-          onFail: node.overrides?.onFail ?? asset.onFail,
-          required: node.overrides?.required ?? branch?.required ?? true,
-        });
+        ]);
       }
       snapshot.nodes.push({
         id: node.id,
@@ -346,6 +545,9 @@ export class AcceptanceFlowModel {
         checkItemIds: itemIds,
       });
     }
+    const plan = occurrenceOrder
+      .flatMap((id) => occurrencePlans.get(id)!)
+      .map((item, index) => ({ ...item, index }));
     const acceptance = await this.owned(flow.acceptanceId, database);
     const frozen = await new VerifyCriterionModel(
       database,
@@ -400,23 +602,30 @@ export class AcceptanceFlowModel {
           .select({ plan: verifyRuns.plan })
           .from(verifyRuns)
           .where(eq(verifyRuns.acceptanceId, acceptanceId));
-        graph.plan = graph.plan.map((item) => {
-          const supersedes = [
-            ...new Set(
-              priorRounds
-                .flatMap((r) => r.plan ?? [])
-                .filter(
-                  (p) =>
-                    p.id !== item.id &&
-                    p.sourceFlowNode?.flowId === flowId &&
-                    p.sourceFlowNode.nodeId === item.sourceFlowNode?.nodeId &&
-                    p.sourceFlowNode.incomingEdgeId === item.sourceFlowNode?.incomingEdgeId,
-                )
-                .map((p) => p.id),
-            ),
-          ];
-          return supersedes.length ? { ...item, supersedes } : item;
-        });
+        graph.plan = withSupersedes(
+          graph.plan,
+          priorRounds.map((r) => r.plan),
+          flowId,
+        );
+      }
+      if (!verifyRunId && !sourceRunId) {
+        // Planning again is a refresh of the open draft, never another round.
+        const latest = latestRound(
+          await tx
+            .select()
+            .from(verifyRuns)
+            .where(eq(verifyRuns.acceptanceId, acceptanceId))
+            .orderBy(asc(verifyRuns.roundIndex))
+            .for('update'),
+        );
+        const draft = latest && isDraftVerifyRun(latest) ? latest : undefined;
+        if (draft) {
+          verifyRunId = draft.id;
+          if (draft.flowSnapshots?.some((s) => s.flowId === flowId)) {
+            await this.syncOpenRounds(acceptanceId, tx);
+            return { id: draft.id, verifyRunId: draft.id, flowId };
+          }
+        }
       }
       if (!verifyRunId) {
         const [last] = await tx
@@ -435,6 +644,9 @@ export class AcceptanceFlowModel {
             roundIndex: (last?.roundIndex ?? 0) + 1,
             title: flow.title,
             status: 'planned',
+            // A replay is pinned to the definition it replays, so it stays out
+            // of the draft reuse and refresh paths.
+            ...(sourceRunId ? { metadata: { replayOfRunId: sourceRunId } } : {}),
           })
           .returning();
         verifyRunId = created.id;

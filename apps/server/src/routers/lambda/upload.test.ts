@@ -59,7 +59,9 @@ const createUpload = (overrides: Record<string, unknown> = {}) => ({
 });
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => routerMocks.serverDB),
+  getServerDB: vi.fn(function () {
+    return routerMocks.serverDB;
+  }),
 }));
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
@@ -68,18 +70,22 @@ vi.mock('@/business/server/lambda-routers/file', () => ({
 
 vi.mock('@/server/services/fileUpload', () => ({
   FILE_UPLOAD_SESSION_TTL: 2 * 60 * 60 * 1000,
-  FileUploadService: vi.fn(() => routerMocks.fileUploadService),
+  FileUploadService: vi.fn(function () {
+    return routerMocks.fileUploadService;
+  }),
 }));
 
 vi.mock('@/server/modules/S3', () => ({
-  FileS3: vi.fn(() => ({
-    abortMultipartUpload: routerMocks.abortMultipartUpload,
-    completeMultipartUpload: routerMocks.completeMultipartUpload,
-    createMultipartUpload: routerMocks.createMultipartUpload,
-    createPreSignedUploadPartUrl: routerMocks.createPreSignedUploadPartUrl,
-    createPreSignedUrl: routerMocks.createPreSignedUrl,
-    getFileMetadata: routerMocks.getFileMetadata,
-  })),
+  FileS3: vi.fn(function () {
+    return {
+      abortMultipartUpload: routerMocks.abortMultipartUpload,
+      completeMultipartUpload: routerMocks.completeMultipartUpload,
+      createMultipartUpload: routerMocks.createMultipartUpload,
+      createPreSignedUploadPartUrl: routerMocks.createPreSignedUploadPartUrl,
+      createPreSignedUrl: routerMocks.createPreSignedUrl,
+      getFileMetadata: routerMocks.getFileMetadata,
+    };
+  }),
 }));
 
 describe('uploadRouter', () => {

@@ -8,6 +8,7 @@ export * from './followUpAction';
 export * from './generateBrief';
 export * from './generateSkillMeta';
 export * from './goal';
+export * from './goalManager';
 export * from './inputCompletion';
 export * from './judgeBriefEmit';
 export * from './langDetect';

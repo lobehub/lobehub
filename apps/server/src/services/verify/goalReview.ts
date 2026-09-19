@@ -65,16 +65,25 @@ export const reviewGoalDelivery = async (
 
     const predictor = new VerifyReviewPredictorService(db, userId, workspaceId);
     const feedback: string[] = [];
+    // Checks are judged concurrently, so the aggregate has to be order
+    // independent: take the most blocking outcome seen rather than letting the
+    // last writer win. `rejected` outranks `unjudgeable` because one genuinely
+    // short check makes another attempt worth paying for, while an undecidable
+    // check on its own makes every further attempt a repeat.
+    const escalate = (next: NonNullable<VerifyRunMetadata['goalReview']>['status']) => {
+      const rank = { errored: 3, passed: 0, rejected: 2, unjudgeable: 1 } as const;
+      if (rank[next] > rank[review.status]) review.status = next;
+    };
     await mapWithConcurrency(checks, REVIEW_PREDICT_CONCURRENCY, async (check) => {
       if (!check.result || check.carriedFromRound !== undefined) {
-        if (review.status !== 'errored') review.status = 'rejected';
+        escalate('rejected');
         feedback.push(`${check.title}: Submit current evidence for this required check.`);
         return;
       }
       if (check.result.userDecision === 'accepted' || check.result.userDecision === 'overridden')
         return;
       if (check.result.userDecision === 'rejected') {
-        if (review.status !== 'errored') review.status = 'rejected';
+        escalate('rejected');
         feedback.push(
           `${check.title}: ${check.result.userDecisionDetail?.comment ?? 'Rejected by the user.'}`,
         );
@@ -82,30 +91,42 @@ export const reviewGoalDelivery = async (
       }
       const modelConfig = await getModelConfig();
       if (!modelConfig) {
-        review.status = 'errored';
+        escalate('errored');
         feedback.push(
           'Configure an available model on the Acceptance verifier agent and retry the review.',
         );
         return;
       }
-      const prediction = await predictor
-        .predict({
-          checkResultId: check.result.id,
-          includeTextEvidence: true,
-          instructionDocumentId: check.planItem?.documentId,
-          modelConfig,
-          requirement: acceptance.requirement,
-          surface: check.surface,
-        })
-        .catch((error) => {
-          console.error('[goal-review] Check review failed:', error);
-          return null;
-        });
+      const checkResultId = check.result.id;
+      const judge = () =>
+        predictor
+          .predict({
+            checkResultId,
+            includeTextEvidence: true,
+            instructionDocumentId: check.planItem?.documentId,
+            modelConfig,
+            requirement: acceptance.requirement,
+            surface: check.surface,
+          })
+          .catch((error) => {
+            console.error('[goal-review] Check review failed:', error);
+            return null;
+          });
+      let prediction = await judge();
+      // A check whose review could not run is retried once, on its own, which
+      // absorbs a dropped connection. Retrying the whole review instead re-asks
+      // every other check, and a nondeterministic second opinion can overwrite a
+      // first-pass rejection and let the delivery through.
+      if (!prediction || prediction.status === 'errored') prediction = await judge();
       if (prediction) review.predictionIds.push(prediction.id);
       if (prediction?.status === 'judged' && prediction.action === 'accept') return;
       if (prediction?.status === 'errored' || !prediction) {
-        review.status = 'errored';
-      } else if (review.status !== 'errored') review.status = 'rejected';
+        escalate('errored');
+      } else if (prediction.status === 'judged' && prediction.action === 'unjudgeable') {
+        // The criterion asks for something no reader can confirm. Re-delivering
+        // cannot change that, so this must not read as a rejected delivery.
+        escalate('unjudgeable');
+      } else escalate('rejected');
       feedback.push(
         `${check.title}: ${prediction?.comment ?? prediction?.statusReason ?? 'Review could not reach a decision.'}`,
       );

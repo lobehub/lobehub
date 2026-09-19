@@ -1,7 +1,7 @@
 'use client';
 
 import type { AgentGraph, LobeAgentChatConfig } from '@lobechat/types';
-import { AgentGraphSchema } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types/agent/graph';
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { Alert, Button, Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';

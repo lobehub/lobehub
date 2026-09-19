@@ -25,6 +25,7 @@ import { useAgentStore } from '@/store/agent';
 import type { BotProviderItem } from '@/store/agent/slices/bot/action';
 
 import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '../../../../types/botRuntimeStatus';
+import { isImportableChannel, planChannelImport } from './importPlan';
 
 interface HeaderProps {
   agentId: string;
@@ -55,12 +56,14 @@ const Header = memo<HeaderProps>(
       connectBot,
       createBotProvider,
       deleteAllBotProviders,
+      exportBotProviders,
       refreshBotRuntimeStatus,
       updateBotProvider,
     ] = useAgentStore((s) => [
       s.connectBot,
       s.createBotProvider,
       s.deleteAllBotProviders,
+      s.exportBotProviders,
       s.refreshBotRuntimeStatus,
       s.updateBotProvider,
     ]);
@@ -77,11 +80,19 @@ const Header = memo<HeaderProps>(
       if (!currentConfig || pendingEnabled === currentConfig.enabled) setPendingEnabled(undefined);
     }, [currentConfig, pendingEnabled]);
 
-    const handleExport = useCallback(() => {
+    const handleExport = useCallback(async () => {
       if (!providers?.length) return;
-      const exportData = providers.map(({ id: _, ...rest }) => rest);
-      exportJSONFile(exportData, `lobehub-channels-${agentId}.json`);
-    }, [agentId, providers]);
+      try {
+        // The cached providers carry masked credentials, so the file has to be
+        // built from a fresh authorized read or it would export placeholders.
+        const exportData = await exportBotProviders(agentId);
+        exportJSONFile(exportData, `lobehub-channels-${agentId}.json`);
+        // The file holds real tokens — say so rather than let it look inert.
+        toast.warning(t('channel.exportContainsCredentials'));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    }, [agentId, exportBotProviders, providers, t]);
 
     const handleImport = useCallback(() => {
       if (disabled) return;
@@ -98,27 +109,25 @@ const Header = memo<HeaderProps>(
 
         try {
           const data = JSON.parse(await file.text());
-          if (
-            !Array.isArray(data) ||
-            data.some((item) => !item.platform || !item.applicationId || !item.credentials)
-          ) {
+          if (!Array.isArray(data) || !data.every(isImportableChannel)) {
             toast.error(t('channel.importInvalidFormat'));
             return;
           }
 
-          for (const item of data) {
+          for (const step of planChannelImport(data)) {
             await createBotProvider({
               agentId,
-              applicationId: item.applicationId,
-              credentials: item.credentials,
-              platform: item.platform,
-              settings: item.settings ?? undefined,
+              applicationId: step.applicationId,
+              credentials: step.credentials,
+              enabled: step.enabled,
+              platform: step.platform,
+              settings: step.settings,
             });
-            if (item.enabled) {
+            if (step.connect) {
               await connectBot({
                 agentId,
-                applicationId: item.applicationId,
-                platform: item.platform,
+                applicationId: step.applicationId,
+                platform: step.platform,
               });
             }
           }

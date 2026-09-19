@@ -27,6 +27,47 @@ const POST_TIMEOUT = 5000; // 5s per request
 const MAX_INFLIGHT = 20; // bounded concurrency
 
 /**
+ * Op-routing fields the Gateway persists from `init` (protocol v2 §3.2) so the
+ * per-user hub can describe an operation in `op_lifecycle` without the client
+ * knowing the op up front. Order is the wire order; nothing else is sent.
+ */
+const GATEWAY_INIT_META_KEYS = [
+  'topicId',
+  'threadId',
+  'agentId',
+  'groupId',
+  'taskId',
+  'scope',
+  'parentOperationId',
+  'mirrorToOperationId',
+  'rootOperationId',
+] as const;
+
+export type GatewayInitMeta = Partial<Record<(typeof GATEWAY_INIT_META_KEYS)[number], string>>;
+
+/**
+ * Pick the `init` metadata from whatever the caller already passed as the
+ * initial state — no lookups. Callers differ in what they know
+ * (`AgentRuntimeCoordinator` passes the Redis op metadata, hetero dispatch
+ * passes `{ agentId, topicId, mirrorToOperationId, ... }`), so only string
+ * fields that are actually present make it onto the wire. Returns `undefined`
+ * when nothing applies so legacy inits carry no `meta` key at all.
+ */
+export const pickGatewayInitMeta = (initialState: unknown): GatewayInitMeta | undefined => {
+  if (!initialState || typeof initialState !== 'object') return undefined;
+
+  const source = initialState as Record<string, unknown>;
+  const meta: GatewayInitMeta = {};
+
+  for (const key of GATEWAY_INIT_META_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string' && value) meta[key] = value;
+  }
+
+  return Object.keys(meta).length > 0 ? meta : undefined;
+};
+
+/**
  * Decorator that wraps an IStreamEventManager and additionally pushes events
  * to the Agent Gateway via HTTP. Runtime init is an awaited ordering barrier;
  * subsequent event delivery remains best-effort and mostly fire-and-forget.
@@ -181,9 +222,13 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       // registered here. `streamOwnerUserId` (shared-agent visitor runs) takes
       // precedence: the op executes as the creator, but only the visitor may
       // subscribe to its stream.
+      // `meta` (protocol v2) lets the per-user hub describe the op in its
+      // lifecycle feed; v1 gateways ignore the extra key.
+      const meta = pickGatewayInitMeta(initialState);
       await this.httpPostAwait('/api/operations/init', {
         operationId,
         userId: initialState?.streamOwnerUserId || initialState?.userId || 'unknown',
+        ...(meta ? { meta } : {}),
       });
     } catch (error) {
       log('Gateway /api/operations/init failed: %O', error);
@@ -252,7 +297,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
 
     void this.pushEvent(operationId, {
       // Share-visitor runs must not receive the creator's raw AgentState
-      // (metadata.userMemory / metadata.agentConfig, systemRole,
+      // (world.userMemory / world.agent, systemRole,
       // userInterventionConfig, ...) over their WS channel — see
       // `buildPublicEndEventData`.
       data: endRedaction ? buildPublicEndEventData(endEventData) : endEventData,

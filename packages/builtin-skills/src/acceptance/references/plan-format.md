@@ -47,10 +47,11 @@ Only items with a non-empty `requiredEvidence` need an artifact; the rest are
 judged on the deliverable text — don't fabricate evidence for them. The `hint`
 usually implies the surface (SKILL.md, Pick the surface).
 
-Apply [tester-review.md](tester-review.md) before execution and at final handoff.
-Preserve frozen check IDs; report coverage gaps instead of silently changing the
-supplied plan. The tester's review does not replace the configured verifier or
-authorize overriding its verdict. Keep existing submission and round semantics.
+Apply [acceptance-checker.md](acceptance-checker.md) before execution and at final handoff
+of the first round; follow-up rounds have no acceptance-checker. Preserve frozen check IDs;
+report coverage gaps instead of silently changing the supplied plan. The
+acceptance-checker's review does not replace the configured verifier or authorize
+overriding its verdict. Keep existing submission and round semantics.
 
 ## Your worklist → submit by checkItemId
 

@@ -10,7 +10,6 @@ import {
   CircleHelp,
   CirclePause,
   CircleX,
-  FileCheck2,
   Paperclip,
   Repeat2,
 } from 'lucide-react';
@@ -25,6 +24,15 @@ export interface FlowNodeData extends Record<string, unknown> {
   title: string;
 }
 
+export const flowStateBackground = (state?: string) =>
+  state === 'passed'
+    ? cssVar.colorSuccessBg
+    : state === 'failed'
+      ? cssVar.colorErrorBg
+      : state
+        ? cssVar.colorWarningBg
+        : cssVar.colorFillTertiary;
+
 export const flowStateColor = (state?: string) =>
   state === 'passed'
     ? cssVar.colorSuccess
@@ -36,6 +44,7 @@ export const flowStateColor = (state?: string) =>
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
+    overflow: hidden;
     display: flex;
     flex-direction: column;
 
@@ -77,6 +86,11 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorFillTertiary};
   `,
   title: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+
     font-size: 13px;
     font-weight: 500;
     line-height: 1.4;
@@ -136,15 +150,8 @@ export function FlowNode({ data }: { data: FlowNodeData }) {
             className={styles.glyph}
             role="img"
             style={{
+              background: flowStateBackground(data.state),
               color: flowStateColor(data.state),
-              background:
-                data.state === 'passed'
-                  ? cssVar.colorSuccessBg
-                  : data.state === 'failed'
-                    ? cssVar.colorErrorBg
-                    : data.state
-                      ? cssVar.colorWarningBg
-                      : cssVar.colorFillTertiary,
             }}
           >
             <Icon icon={statusIcon} size={24} />
@@ -162,10 +169,6 @@ export function FlowNode({ data }: { data: FlowNodeData }) {
           <Flexbox horizontal align="center" gap={4}>
             <Icon icon={Paperclip} size={12} />
             {data.evidence}
-          </Flexbox>
-          <Flexbox horizontal align="center" gap={4} style={{ marginInlineStart: 'auto' }}>
-            <Icon icon={FileCheck2} size={12} />
-            {t(data.attempts ? 'flow.viewResults' : 'flow.viewPlan')}
           </Flexbox>
         </Flexbox>
       </div>

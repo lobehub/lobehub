@@ -21,6 +21,22 @@ export interface RecentChannelHistory {
   topics: RecentChannelTopic[];
 }
 
+/**
+ * Identity of the conversation the bot is currently replying in, expressed in
+ * the exact terms the `lobe-message` tool takes.
+ *
+ * Without this the model holds a `readMessages` tool whose `channelId` is a
+ * required parameter it has no way to fill: most platforms have no
+ * `listChannels` to discover it with, so it ends up asking the user to paste a
+ * chat ID (the Feishu "你方便拿一下群 ID 吗" case).
+ */
+export interface CurrentBotChannel {
+  /** Channel / chat / conversation id, as `readMessages.channelId` expects it. */
+  id: string;
+  /** Platform id for the tool's `platform` enum (e.g. `lark`, not `Lark`). */
+  platformId: string;
+}
+
 export interface BotPlatformInfo {
   /**
    * Whether the platform can read chat history at runtime via `readMessages`.
@@ -29,6 +45,8 @@ export interface BotPlatformInfo {
    * to true.
    */
   canReadHistory?: boolean;
+  /** Identifiers of the conversation this run is replying in. */
+  currentChannel?: CurrentBotChannel;
   platformName: string;
   /** Pre-injected recent same-channel history (cross-session). */
   recentChannelHistory?: RecentChannelHistory;
@@ -38,6 +56,17 @@ export interface BotPlatformInfo {
 }
 
 /**
+ * Sanitize user-controlled text before embedding it in the XML-ish prompt, so
+ * titles / message bodies / channel ids containing tags or quotes can't break
+ * out or inject.
+ */
+const sanitize = (text: string) =>
+  text.replaceAll(
+    /[<>&"']/g,
+    (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[ch]!,
+  );
+
+/**
  * Format bot platform context into a system-level instruction.
  *
  * Always tells the AI which platform it's running on so it can adapt its behavior.
@@ -45,6 +74,7 @@ export interface BotPlatformInfo {
  */
 export const formatBotPlatformContext = ({
   canReadHistory = true,
+  currentChannel,
   platformName,
   recentChannelHistory,
   supportsMarkdown,
@@ -79,6 +109,30 @@ export const formatBotPlatformContext = ({
     '</message_delivery>',
   ];
 
+  // The identifiers of the conversation we're standing in. `readMessages` takes
+  // `channelId` as a REQUIRED parameter, and most platforms have no
+  // `listChannels` for the model to discover it with — without this block it
+  // can only ask the user to paste a chat ID, which is exactly the failure this
+  // exists to prevent. Rendered whenever we know the channel, including on
+  // platforms without history-read (the id still serves reactions / channel info).
+  if (currentChannel?.id) {
+    lines.push(
+      '',
+      `<current_conversation platform="${sanitize(currentChannel.platformId)}" channelId="${sanitize(currentChannel.id)}">`,
+      'These are the EXACT argument values for any `lobe-message` call that targets the conversation you are currently in:',
+      `- \`platform\`: "${sanitize(currentChannel.platformId)}"`,
+      `- \`channelId\`: "${sanitize(currentChannel.id)}"`,
+      '',
+      ...(canReadHistory
+        ? [
+            'You already have everything `readMessages` needs. Call it with these two values the moment you need prior context.',
+          ]
+        : []),
+      'NEVER ask the user for a chat / channel / group ID, and never call `listChannels` to look up the current one — it is right here.',
+      '</current_conversation>',
+    );
+  }
+
   if (!supportsMarkdown) {
     lines.push(
       '',
@@ -95,14 +149,6 @@ export const formatBotPlatformContext = ({
       '</formatting>',
     );
   }
-
-  // Sanitize user-controlled text before embedding it in the XML-ish prompt, so
-  // titles / message bodies containing tags or quotes can't break out or inject.
-  const sanitize = (text: string) =>
-    text.replaceAll(
-      /[<>&"']/g,
-      (ch) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[ch]!,
-    );
 
   const recentTopics = recentChannelHistory?.topics?.filter((t) => t?.id) ?? [];
   if (recentTopics.length > 0) {

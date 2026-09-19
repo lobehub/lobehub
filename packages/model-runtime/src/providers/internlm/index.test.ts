@@ -5,6 +5,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testProvider } from '../../providerTestUtils';
 import { LobeInternLMAI, params } from './index';
 
+// Mock a model with abilities in model-bank
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    LOBE_DEFAULT_MODEL_LIST: [
+      {
+        id: 'test-model-with-abilities',
+        abilities: {
+          functionCall: true,
+          vision: true,
+          reasoning: true,
+        },
+        enabled: true,
+      },
+    ],
+  };
+});
+
 // Basic provider tests
 testProvider({
   Runtime: LobeInternLMAI,
@@ -203,25 +222,6 @@ describe('LobeInternLMAI - custom features', () => {
           }),
         },
       };
-
-      // Mock a model with abilities in model-bank
-      vi.mock('model-bank', async (importOriginal) => {
-        const actual = await importOriginal<Record<string, unknown>>();
-        return {
-          ...actual,
-          LOBE_DEFAULT_MODEL_LIST: [
-            {
-              id: 'test-model-with-abilities',
-              abilities: {
-                functionCall: true,
-                vision: true,
-                reasoning: true,
-              },
-              enabled: true,
-            },
-          ],
-        };
-      });
 
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];

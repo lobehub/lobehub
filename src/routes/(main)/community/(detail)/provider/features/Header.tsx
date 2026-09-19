@@ -9,7 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import { ProviderCombine } from '@/libs/providerIcon';
+import { ProviderCombine } from '@/components/LobeIcons';
 
 import { useDetailContext } from './DetailProvider';
 

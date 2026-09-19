@@ -1,3 +1,5 @@
+import type { ChatErrorBudgetContext } from '@lobechat/types';
+
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
 // Import from the leaf modules (`const` / `utils`) instead of the
@@ -236,6 +238,8 @@ type SystemStrings = {
   cmdStopNotActive: string;
   cmdStopRequested: string;
   cmdStopUnable: string;
+  cmdWhoami: (params: WhoamiReplyParams) => string;
+  cmdWhoamiUnavailable: string;
   dmPairingApplicantApproved: string;
   dmPairingCapacityExceeded: string;
   dmPairingCode: (code: string) => string;
@@ -250,7 +254,11 @@ type SystemStrings = {
   errorEmptyCompletion: string;
   errorModelRefusal: string;
   errorHarnessInternal: string;
+  errorFreePlanLimit: string;
   errorInsufficientCredits: string;
+  errorInsufficientMemberBudget: string;
+  errorInsufficientWorkspaceCredits: string;
+  errorSubscriptionPlanLimit: string;
   errorLocationNotSupported: string;
   errorModelNotFound: string;
   errorNoAvailableProvider: string;
@@ -324,6 +332,18 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdStopNotActive: 'No active execution to stop.',
     cmdStopRequested: 'Stop requested.',
     cmdStopUnable: 'Unable to stop the current execution.',
+    cmdWhoami: ({ isOperator, userId, userName }) => {
+      const lines = [`Your platform user ID: \`${userId}\``];
+      if (userName) lines.push(`Display name: ${userName}`);
+      lines.push(
+        isOperator
+          ? 'This ID is already set as the bot operator in Advanced Settings.'
+          : 'Paste it into Advanced Settings → "Your Platform User ID" on the bot channel page so AI tools can reach you and pairing approvals work.',
+      );
+      return lines.join('\n');
+    },
+    cmdWhoamiUnavailable:
+      "Couldn't read your user ID from this message — the platform didn't include a sender ID.",
     dmPairingApplicantApproved: "You've been approved. Send your message again.",
     dmPairingCapacityExceeded:
       'This bot is handling too many pairing requests right now. Please try again in a few minutes.',
@@ -347,8 +367,16 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**The model declined to answer this request.**\nTry rephrasing it, or switch models in the agent settings and try again.',
     errorHarnessInternal:
       '**Something went wrong on our side.**\nThe agent run hit an internal error, which has been logged. Please try again — if it keeps happening, share the Operation ID below with support.',
+    errorFreePlanLimit:
+      '**Free plan limit reached.**\nThe free-plan allowance this bot runs on is used up. Ask the bot owner to upgrade to a paid plan on the LobeHub website to keep going.',
     errorInsufficientCredits:
-      "**Not enough credits.**\nYour remaining credits can't cover this model's estimated cost. Please top up credits or upgrade your plan on the LobeHub website, or switch to a less expensive model in the agent's settings.",
+      "**Not enough credits.**\nThe credits this bot runs on can't cover this model's estimated cost. Ask the bot owner to top up credits or upgrade their plan on the LobeHub website, or switch to a less expensive model in the agent's settings.",
+    errorInsufficientMemberBudget:
+      "**Member budget in this workspace is used up.**\nThe bot owner's spending allowance in this workspace can't cover this run's estimated cost — topping up credits won't change it. Ask a workspace admin to raise the bot owner's member budget, or switch to a less expensive model in the agent's settings.",
+    errorInsufficientWorkspaceCredits:
+      "**Workspace credits exhausted.**\nThis workspace's shared credits can't cover this run's estimated cost. Ask a workspace admin to top up or upgrade the workspace, or switch to a less expensive model in the agent's settings.",
+    errorSubscriptionPlanLimit:
+      "**Plan limit reached.**\nThe subscription plan this bot runs on can't cover this request — either its credits are used up for this billing period, or the plan doesn't include this model. Ask the bot owner to upgrade or top up their plan on the LobeHub website, or configure a custom model API in the agent's provider settings.",
     errorInvalidProviderAPIKey:
       "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
     errorLocationNotSupported:
@@ -432,6 +460,17 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdStopNotActive: '当前没有正在执行的任务可以停止。',
     cmdStopRequested: '已发出停止请求。',
     cmdStopUnable: '无法停止当前执行。',
+    cmdWhoami: ({ isOperator, userId, userName }) => {
+      const lines = [`你的平台用户 ID：\`${userId}\``];
+      if (userName) lines.push(`显示名称：${userName}`);
+      lines.push(
+        isOperator
+          ? '该 ID 已经是这个机器人「高级设置」中配置的管理员 ID。'
+          : '把它填到机器人渠道页「高级设置 → 你的平台用户 ID」，AI 工具就能主动联系你，配对审批也会生效。',
+      );
+      return lines.join('\n');
+    },
+    cmdWhoamiUnavailable: '无法从这条消息中读取你的用户 ID —— 平台没有提供发送者 ID。',
     dmPairingApplicantApproved: '已通过审批，请重新发送你的消息。',
     dmPairingCapacityExceeded: '该机器人当前待审批请求过多，请稍后再试。',
     dmPairingCode: (code) =>
@@ -452,8 +491,16 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**模型拒绝回答该请求**\n请尝试调整表述，或在 Agent 设置中切换其他模型后重试。',
     errorHarnessInternal:
       '**我们这边出了点问题**\nAgent 执行遇到内部错误，已记录。请重试；如果持续出现，请把下方 Operation ID 提供给支持人员。',
+    errorFreePlanLimit:
+      '**免费计划额度已用尽**\n该机器人所使用的免费计划额度已经用完。请联系机器人所有者前往 LobeHub 网页端升级到付费计划后继续。',
     errorInsufficientCredits:
-      '**积分余额不足**\n剩余积分不足以覆盖本次模型调用的预估费用。请前往 LobeHub 网页端充值积分或升级订阅计划，或在 Agent 设置中切换到费用更低的模型。',
+      '**积分余额不足**\n该机器人所使用的积分不足以覆盖本次模型调用的预估费用。请联系机器人所有者前往 LobeHub 网页端充值积分或升级订阅计划，或在 Agent 设置中切换到费用更低的模型。',
+    errorInsufficientMemberBudget:
+      '**该工作区的成员预算已用尽**\n机器人所有者在当前工作区的成员预算不足以覆盖本次运行的预估费用，充值积分不会改变该预算。请联系工作区管理员提高机器人所有者的成员预算，或在 Agent 设置中切换到费用更低的模型。',
+    errorInsufficientWorkspaceCredits:
+      '**工作区额度已用尽**\n当前工作区的共享额度不足以覆盖本次运行的预估费用。请联系工作区管理员充值或升级工作区，或在 Agent 设置中切换到费用更低的模型。',
+    errorSubscriptionPlanLimit:
+      '**已达到订阅计划限制**\n该机器人所使用的订阅计划无法覆盖本次请求：可能是本周期的订阅积分已用完，也可能是当前计划不包含该模型。请联系机器人所有者前往 LobeHub 网页端升级计划或充值，或在 Agent 的 Provider 设置中配置自定义模型 API。',
     errorInvalidProviderAPIKey:
       '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
     errorLocationNotSupported:
@@ -533,9 +580,18 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   // ── user-fixable config / input (attribution: user) ──
   ContentModeration: 'errorContentModeration',
   ExceededContextWindow: 'errorExceededContextWindow',
-  // Cloud-managed credits: balance is positive but below the model's estimated
-  // cost, so the fix is topping up / upgrading — not editing the input.
+  // Managed credits: all three codes come out of the same cost-admission gate,
+  // so the fix is topping up / upgrading — not editing the input (without them
+  // here the plan-limit pair fell to the `user` tier's "check your input").
+  // `InsufficientBudgetForModel` is "balance below this run's estimate";
+  // `FreePlanLimit` / `SubscriptionPlanLimit` mean the plan itself is the
+  // limit — its allowance is exhausted, or (per the error taxonomy) the tier
+  // doesn't cover the requested model — so their copy points at the plan
+  // rather than at a cheaper model, and doesn't claim the credits are spent. `budget` then refines any of them by the allowance that
+  // actually ran out (see {@link BUDGET_SCOPE_ERROR}).
+  FreePlanLimit: 'errorFreePlanLimit',
   InsufficientBudgetForModel: 'errorInsufficientCredits',
+  SubscriptionPlanLimit: 'errorSubscriptionPlanLimit',
   InsufficientQuota: 'errorQuotaLimitReached',
   InvalidProviderAPIKey: 'errorInvalidProviderAPIKey',
   LocationNotSupportError: 'errorLocationNotSupported',
@@ -579,6 +635,36 @@ const FALLBACK_ERROR_BY_ATTRIBUTION: Record<string, keyof SystemStrings> = {
 };
 
 /**
+ * Refine the insufficient-credits copy by the allowance that actually ran out,
+ * as named by `ChatErrorBudgetContext['budgetTypeAtError']`.
+ *
+ * The default copy tells the user to top up or upgrade, which is wrong — and
+ * actively misleading — for an allowance that isn't theirs to pay for: a
+ * member whose own workspace allowance is spent can top up all day without
+ * unblocking the run, and a shared workspace pool is the admin's to refill.
+ * Tags this map doesn't recognize keep the per-code copy.
+ *
+ * Two things are deliberately NOT said. Runs triggered from a shared channel
+ * (or by any non-owner) are billed to the *bot owner's* allowance — see
+ * `BotMessageRouter.registerHandlers` — so the copy never addresses the reader
+ * as the payer ("your budget"): the person reading it usually can't act on it,
+ * the bot owner or a workspace admin can. And the figures are never quoted:
+ * a reply carrying `availableCredits` would publish the owner's balance to
+ * whoever mentioned the bot.
+ */
+const BUDGET_SCOPE_ERROR = new Map<string, keyof SystemStrings>([
+  ['workspace', 'errorInsufficientWorkspaceCredits'],
+  ['workspace_member', 'errorInsufficientMemberBudget'],
+]);
+
+/** Copy keys produced by the cost-admission gate, i.e. the ones `budget` may refine. */
+const BUDGET_ADMISSION_KEYS = new Set<keyof SystemStrings>([
+  'errorFreePlanLimit',
+  'errorInsufficientCredits',
+  'errorSubscriptionPlanLimit',
+]);
+
+/**
  * Append the Operation ID as a traceable footer so operators can still grep
  * logs for the failure even when the user-facing copy is a friendly, actionable
  * message rather than the raw "Operation ID" line.
@@ -613,6 +699,8 @@ const isCommandConnectionClosedError = (
  *
  * 1. **Precise** — switch on the stable `errorType` code (from
  *    `AgentRuntimeError.chat`) for copy tailored to that exact failure mode.
+ *    An insufficient-credits code is refined once more by `budget`, which
+ *    names *which* allowance ran out (see {@link BUDGET_SCOPE_ERROR}).
  * 2. **Attribution** — when the code is unknown, fall back to a message keyed
  *    on `attribution` (network / provider / harness / user) so the user still
  *    learns who owns the failure and whether to retry.
@@ -628,6 +716,7 @@ export function renderAgentError(
   operationId: string | undefined,
   lng?: BotReplyLocale,
   attribution?: string,
+  budget?: ChatErrorBudgetContext,
 ): string {
   const strings = getSystemStrings(lng);
 
@@ -635,8 +724,12 @@ export function renderAgentError(
     return appendOperationId(strings.errorCommandConnectionClosed, operationId);
   }
 
+  const friendlyKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
   const stringKey =
-    (errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined) ??
+    (friendlyKey && BUDGET_ADMISSION_KEYS.has(friendlyKey) && budget?.budgetTypeAtError
+      ? BUDGET_SCOPE_ERROR.get(budget.budgetTypeAtError)
+      : undefined) ??
+    friendlyKey ??
     (attribution ? FALLBACK_ERROR_BY_ATTRIBUTION[attribution] : undefined);
   if (stringKey) {
     const value = strings[stringKey];
@@ -694,6 +787,7 @@ export type CommandReplyKey =
   | 'cmdStopNotActive'
   | 'cmdStopRequested'
   | 'cmdStopUnable'
+  | 'cmdWhoamiUnavailable'
   | 'dmPairingApplicantApproved';
 
 /**
@@ -727,6 +821,23 @@ export function renderGuestCopy(key: GuestCopyKey, lng?: BotReplyLocale): string
 /** Truncation notice for the Guest Mode single-reply budget (text 4096 / caption 1024). */
 export function renderGuestTruncated(limit: number, lng?: BotReplyLocale): string {
   return getSystemStrings(lng).guestTextTruncated(limit);
+}
+
+export interface WhoamiReplyParams {
+  /** True when the caller's ID already matches the bot's configured `settings.userId`. */
+  isOperator: boolean;
+  userId: string;
+  userName?: string;
+}
+
+/**
+ * Render the `/whoami` reply: echoes the caller's platform user ID (Feishu /
+ * Lark `open_id`, Telegram numeric ID, …) with a pointer to the settings
+ * field it belongs in. This is how operators discover the value for
+ * "Your Platform User ID" on platforms that expose no self-service lookup.
+ */
+export function renderWhoami(params: WhoamiReplyParams, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdWhoami(params);
 }
 
 /**

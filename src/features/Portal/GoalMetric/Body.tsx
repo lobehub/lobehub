@@ -520,6 +520,9 @@ Liveness.displayName = 'GoalMetricLiveness';
 
 const Body = memo(() => {
   const view = useChatStore(chatPortalSelectors.goalMetricView);
+  // Fetched here so the metric drill-down also works outside the goal page.
+  const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
+  useFetchGoalGraph(view?.goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(view?.goalId ?? ''));
   const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
 

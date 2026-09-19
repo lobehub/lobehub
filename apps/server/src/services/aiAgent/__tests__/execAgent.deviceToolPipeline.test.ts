@@ -17,6 +17,8 @@ const {
   mockPluginQuery,
   mockQueryDeviceList,
   mockQueryDeviceSystemInfo,
+  mockFindWorkspaceDeviceById,
+  mockQueryWorkspaceDevices,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
   mockCreateServerAgentToolsEngine: vi.fn(),
@@ -28,6 +30,8 @@ const {
   mockPluginQuery: vi.fn(),
   mockQueryDeviceList: vi.fn(),
   mockQueryDeviceSystemInfo: vi.fn(),
+  mockFindWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
+  mockQueryWorkspaceDevices: vi.fn(),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -37,102 +41,127 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn(),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn(),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
-// Empty DB-side device rows so getScopedOnlineDevices falls through to the
-// gateway list as transient devices. Returning [] (not rejecting) for
-// queryWorkspaceHiddenDeviceIds is required — a failed/null hidden lookup
-// suppresses all workspace-scope transients.
+// This mock previously kept every DB-side device query empty so gateway devices
+// became transient rows. Workspace transients are now intentionally rejected;
+// expose the workspace query so tests can register authorized workspace devices.
 vi.mock('@/database/models/device', () => ({
-  DeviceModel: vi.fn().mockImplementation(() => ({
-    findByDeviceId: vi.fn().mockResolvedValue(undefined),
-    findWorkspaceDeviceById: vi.fn().mockResolvedValue(undefined),
-    queryPersonal: vi.fn().mockResolvedValue([]),
-    queryWorkspaceDevices: vi.fn().mockResolvedValue([]),
-    queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue([]),
-  })),
+  DeviceModel: vi.fn().mockImplementation(function () {
+    return {
+      findByDeviceId: vi.fn().mockResolvedValue(undefined),
+      findWorkspaceDeviceById: mockFindWorkspaceDeviceById,
+      queryPersonal: vi.fn().mockResolvedValue([]),
+      queryWorkspaceDevices: mockQueryWorkspaceDevices,
+      queryWorkspaceHiddenDeviceIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: mockGetAgentConfig,
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: mockGetAgentConfig,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: mockPluginQuery,
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: mockPluginQuery,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    queryByIdentifiers: vi.fn().mockResolvedValue([]),
-    resolveByIdentifiers: vi.fn().mockResolvedValue([]),
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      queryByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({
-    queryByConnector: vi.fn().mockResolvedValue([]),
-    queryByConnectorIds: vi.fn().mockResolvedValue([]),
-    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
-  })),
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      queryByConnector: vi.fn().mockResolvedValue([]),
+      queryByConnectorIds: vi.fn().mockResolvedValue([]),
+      queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(null),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: mockGetLobehubSkillManifests,
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: mockGetLobehubSkillManifests,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => {
@@ -203,6 +232,7 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
     });
     mockQueryDeviceList.mockResolvedValue([]);
     mockQueryDeviceSystemInfo.mockResolvedValue(null);
+    mockQueryWorkspaceDevices.mockResolvedValue([]);
     mockPluginQuery.mockResolvedValue([]);
     mockGenerateToolsDetailed.mockReturnValue({ enabledToolIds: [], tools: [] });
     mockGetEnabledPluginManifests.mockReturnValue(new Map());
@@ -631,14 +661,27 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       workingDirectory: '/',
     };
 
+    /** @example A registered live workspace device supplies scoped system information. */
     it('should query system info with workspace id and inject into createOperation for workspace devices', async () => {
       const workspaceId = 'ws-1';
       service = new AiAgentService(mockDb, userId, { workspaceId });
 
       const { deviceGateway } = await import('@/server/services/deviceGateway');
       vi.spyOn(deviceGateway, 'isConfigured', 'get').mockReturnValue(true);
-      // Single online device under the workspace principal → auto-activates.
-      // getScopedOnlineDevices tags scope from the workspaceId argument.
+      // ROOT CAUSE:
+      //
+      // This test previously supplied only Gateway presence. Workspace authorization now requires
+      // a matching database enrollment, so the transient device was correctly filtered before
+      // system-info lookup. Register the device in the DB mock and keep Gateway as liveness truth.
+      mockQueryWorkspaceDevices.mockResolvedValue([
+        {
+          deviceId: 'ws-dev-1',
+          friendlyName: null,
+          hostname: 'workspace-mac',
+          lastSeenAt: new Date('2026-09-09T00:00:00.000Z'),
+          platform: 'darwin',
+        },
+      ]);
       mockQueryDeviceList.mockResolvedValue([
         { deviceId: 'ws-dev-1', hostname: 'workspace-mac', online: true, platform: 'darwin' },
       ]);
@@ -728,6 +771,69 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.deviceSystemInfo).toBeUndefined();
+    });
+  });
+
+  /**
+   * Pins the stage order the assembled system message depends on. Carrying a
+   * real payload end to end through here needs the whole device workspace-scan
+   * chain stood up — an active device, a device row, a fresh cached scan, and
+   * the skill lookup that shares its `try` — which is why the payload itself is
+   * covered link by link instead (`AgentRuntimeService`,
+   * `serverCallLlmContextBuilder`, `serverMessagesEngine`).
+   */
+  describe('system-message run context', () => {
+    const withScannedProject = () => {
+      mockQueryWorkspaceDevices.mockResolvedValue([
+        {
+          deviceId: 'ws-dev-1',
+          friendlyName: null,
+          hostname: 'workspace-mac',
+          lastSeenAt: new Date('2026-09-09T00:00:00.000Z'),
+          platform: 'darwin',
+        },
+      ]);
+      mockQueryDeviceList.mockResolvedValue([
+        { deviceId: 'ws-dev-1', hostname: 'workspace-mac', online: true, platform: 'darwin' },
+      ]);
+      mockQueryDeviceSystemInfo.mockResolvedValue({
+        arch: 'arm64',
+        homePath: '/Users/me',
+        platform: 'darwin',
+      });
+      // A device whose bound project root already carries a FRESH scan, so the
+      // run reads the cache instead of going out to the gateway.
+      mockFindWorkspaceDeviceById.mockResolvedValue({
+        defaultCwd: '/repo',
+        deviceId: 'ws-dev-1',
+        workingDirs: [
+          {
+            path: '/repo',
+            workspace: {
+              instructions: [{ content: 'Use bun, not npm.', source: 'AGENTS.md' }],
+              skills: [],
+            },
+            workspaceScannedAt: Date.now(),
+          },
+        ],
+      });
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
+      );
+    };
+
+    it('discovers tools before preparing the operation', async () => {
+      withScannedProject();
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+      // Tool discovery resolves the device the workspace scan then reads, which
+      // is also why connector attribution precedes the project instructions in
+      // the assembled system message. Pinning it here keeps that ordering
+      // argument from resting on a comment.
+      const discoveryCall = mockQueryDeviceList.mock.invocationCallOrder[0];
+      const prepCall = mockFindWorkspaceDeviceById.mock.invocationCallOrder[0];
+      expect(discoveryCall).toBeLessThan(prepCall);
     });
   });
 });

@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-restricted-imports -- the lazy wrapper in @/components/LobeIcons is the only importer
 import { ProviderCombine, ProviderIcon, providerMappings, Unsloth } from '@lobehub/icons';
 
 /**

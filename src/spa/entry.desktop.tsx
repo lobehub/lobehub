@@ -13,6 +13,7 @@ import BootShell from './BootShell';
 import { isMainLayoutLocation } from './BootShell/routeScope';
 import { startAppInitialization } from './initialize/bootstrap';
 import { applyDesktopBootstrapIdentity } from './initialize/desktopIdentity';
+import { reserveTitleBarForFloatingLayers } from './initialize/floatingLayers';
 import { desktopRoutes } from './router/desktopRouter.config';
 import { createSPARoot } from './runtime';
 
@@ -26,6 +27,7 @@ registerLocalDatabaseAdapter(createElectronLocalDatabaseAdapter());
 // `isIdentityResolved` to pick the cache partition, and on desktop preload is
 // the only source that knows it without waiting for `getUserState()`.
 applyDesktopBootstrapIdentity();
+reserveTitleBarForFloatingLayers();
 bootTiming.mark('bundle-eval');
 startAppInitialization();
 

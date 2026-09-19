@@ -32,7 +32,6 @@ import {
   BusinessResourceRoutes,
 } from '@/business/client/BusinessDesktopRoutes';
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
-import AgentShareVisitorSkeleton from '@/components/Skeleton/AgentShareVisitor';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import CommunityHomeSkeleton from '@/components/Skeleton/CommunityHome';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
@@ -47,8 +46,6 @@ import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
 import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
-import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
-import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
@@ -347,7 +344,10 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Task Detail',
             ),
             handle: { meta: taskRouteMeta },
-            path: 'task/:taskId',
+            // `:slug?` is the readable title tail (Linear-style). It is never
+            // resolved against — `:taskId` alone identifies the task — so the
+            // optional segment keeps every pre-slug link working.
+            path: 'task/:taskId/:slug?',
           },
         ],
         element: dynamicLayout(
@@ -1064,7 +1064,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Task Detail',
             ),
             handle: { meta: taskRouteMeta },
-            path: ':taskId',
+            // Optional readable title tail — see the agent-scoped route above.
+            path: ':taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,
@@ -1450,6 +1451,75 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                 handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
                 path: 'devices',
               },
+              // Account-level tabs mirrored inside the workspace so members can
+              // adjust user settings without leaving the workspace. Same pages
+              // as personal `/settings/*`; only the chrome is workspace-owned.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/profile'),
+                  'Desktop > Workspace > Settings > Profile',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
+                path: 'profile',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/appearance'),
+                  'Desktop > Workspace > Settings > Appearance',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
+                path: 'appearance',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/hotkey'),
+                  'Desktop > Workspace > Settings > Hotkey',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
+                path: 'hotkey',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
+                  'Desktop > Workspace > Settings > Messenger',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'messenger',
+              },
+              // Platform detail level — the page reads the platform from `sub`.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
+                  'Desktop > Workspace > Settings > Messenger > Platform',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'messenger/:sub',
+              },
+              // Developer tools mirrored inside the workspace (user preferences).
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/advanced'),
+                  'Desktop > Workspace > Settings > Advanced',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
+                path: 'advanced',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labs'),
+                  'Desktop > Workspace > Settings > Labs',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
+                path: 'labs',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/about'),
+                  'Desktop > Workspace > Settings > About',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
+                path: 'about',
+              },
             ],
             element: dynamicLayout(
               () => import('@/routes/(main)/[workspaceSlug]/settings/_content-layout'),
@@ -1584,21 +1654,6 @@ export const createSharedDesktopRoutes = ({
     }),
     errorElement: <ErrorBoundary />,
     path: '/',
-  },
-  {
-    // The agent-share visitor page. A sibling of the main layout, not a child:
-    // a visitor has no business with the creator's nav rail, workspace scope,
-    // or command palette, and the page draws its own product bar. Outside
-    // `withSegmentFallback`, so the skeleton is passed explicitly — the same
-    // one the page shows while the share itself loads.
-    element: dynamicElement(
-      () => import('@/features/AgentShareVisitor/Page'),
-      'Desktop > Share > Agent',
-      { fallback: delayed(<AgentShareVisitorSkeleton />) },
-    ),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: agentShareVisitorRouteMeta },
-    path: `${AGENT_SHARE_VISITOR_PATH}/:slugOrId/:topicId?`,
   },
   ...BusinessDesktopRoutesWithoutMainLayout,
   ...platformRoutes,

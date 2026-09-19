@@ -80,10 +80,6 @@ vi.mock('@/services/git', () => ({
   },
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
-}));
-
 vi.mock('@/components/RingLoading', () => ({
   default: () => <span data-testid="ring-loading" />,
 }));

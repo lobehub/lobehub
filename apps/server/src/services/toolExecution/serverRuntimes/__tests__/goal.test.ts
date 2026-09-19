@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/goal', () => ({
-  GoalService: vi.fn(() => ({ create: mocks.create })),
+  GoalService: vi.fn(function () {
+    return { create: mocks.create };
+  }),
 }));
 vi.mock('@/server/services/goal/advanceGoal', () => ({ advanceGoal: mocks.advanceGoal }));
 vi.mock('@/server/services/goal/scheduler', () => ({

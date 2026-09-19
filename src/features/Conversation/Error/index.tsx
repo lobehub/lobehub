@@ -290,6 +290,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const canCreate = canCreateContent && canUseResource;
     const conversationAgentId = useConversationStore(contextSelectors.agentId);
     const conversationTopicId = useConversationStore(contextSelectors.topicId);
+    const isSharedTopic = useConversationStore((s) => !!s.context?.topicShareId);
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
     const errorDetails = getErrorDetails(error);
@@ -523,8 +524,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // Show a report action for unknown or fallback-bucket traceable errors.
     // Specific known error types keep their dedicated localized message below.
     if (
-      enableBusinessFeatures &&
-      (error?.type === ChatErrorType.InternalServerError || shouldShowTraceIdError(error))
+      (enableBusinessFeatures &&
+        (error?.type === ChatErrorType.InternalServerError || shouldShowTraceIdError(error))) ||
+      (isSharedTopic && error?.type === ChatErrorType.InternalServerError)
     ) {
       const traceId =
         typeof error?.body?.traceId === 'string' ? (error.body.traceId as string) : undefined;
@@ -532,8 +534,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       return (
         <TraceIdError
           id={data.id}
+          showRetry={!isSharedTopic}
           traceId={traceId}
-          onRetry={canRetry ? handleManualRetry : undefined}
+          onRetry={!isSharedTopic && canRetry ? handleManualRetry : undefined}
         />
       );
     }
@@ -544,16 +547,17 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         error={{
           ...alertError,
           message: displayMessage,
-          extra: errorDetails ? (
-            <Highlighter
-              actionIconSize={'small'}
-              language={'json'}
-              padding={8}
-              variant={'borderless'}
-            >
-              {JSON.stringify(errorDetails, null, 2)}
-            </Highlighter>
-          ) : undefined,
+          extra:
+            !isSharedTopic && errorDetails ? (
+              <Highlighter
+                actionIconSize={'small'}
+                language={'json'}
+                padding={8}
+                variant={'borderless'}
+              >
+                {JSON.stringify(errorDetails, null, 2)}
+              </Highlighter>
+            ) : undefined,
         }}
         onRegenerate={canRetry ? handleManualRetry : undefined}
       />

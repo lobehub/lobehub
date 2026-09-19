@@ -23,7 +23,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { FTS_SEARCH_DOCUMENT_FIXTURES } from './__tests__/fixtures';
 import { FtsSearchDocumentBuilder } from './builder';
-import { FTS_SEARCH_DOCUMENT_ENTITIES } from './schema';
+import { FTS_SEARCH_DOCUMENT_ENTITIES } from './zodSchema';
 
 const userId = 'search-document-user';
 const createdAt = new Date('2026-01-01T00:00:00.000Z');
@@ -302,10 +302,68 @@ describe('FtsSearchDocumentBuilder', () => {
     ).resolves.toEqual([]);
   });
 
+  it('skips tool and blank messages before applying the source batch limit', async () => {
+    await db.insert(messages).values([
+      { content: 'tool output', id: 'message-2-tool', role: 'tool', userId },
+      { content: '  ', id: 'message-3-blank', role: 'assistant', summary: null, userId },
+      { content: '\u00A0', id: 'message-3-nbsp', role: 'assistant', userId },
+      { content: '\t\n　', id: 'message-3-whitespace', role: 'assistant', userId },
+      { content: null, id: 'message-4-summary', role: 'task', summary: 'Task summary', userId },
+      { content: 'Visible answer', id: 'message-5-assistant', role: 'assistant', userId },
+    ]);
+
+    await expect(
+      builder.buildByIds('messages', [
+        'message-2-tool',
+        'message-3-blank',
+        'message-3-nbsp',
+        'message-3-whitespace',
+      ]),
+    ).resolves.toEqual([]);
+    await expect(
+      builder.buildBatch('messages', { afterId: 'message-1', limit: 1 }),
+    ).resolves.toMatchObject([{ id: 'message-4-summary' }]);
+    await expect(
+      builder.buildRangeBatch('messages', {
+        afterId: 'message-1',
+        beforeId: 'message-5-assistant',
+        limit: 1,
+      }),
+    ).resolves.toMatchObject([{ id: 'message-4-summary' }]);
+  });
+
   it('normalizes duplicate IDs and omits missing source records', async () => {
     const result = await builder.buildByIds('agents', ['missing', 'agent-1', 'agent-1']);
 
     expect(result.map(({ id }) => id)).toEqual(['agent-1']);
+  });
+
+  it('omits files carrying agent-share provenance from the search projection', async () => {
+    await db.insert(files).values({
+      fileType: 'text/plain',
+      id: 'file-agent-share',
+      metadata: { agentShare: { shareId: 'share-1', visitorUserId: 'visitor-1' } },
+      name: 'private visitor attachment.txt',
+      size: 10,
+      url: 'files/user/agent-share/share-1/private.txt',
+      userId,
+    });
+
+    await expect(builder.buildByIds('files', ['file-agent-share'])).resolves.toEqual([]);
+
+    await db.insert(documents).values({
+      content: 'Private visitor attachment content',
+      fileId: 'file-agent-share',
+      fileType: 'text/plain',
+      id: 'document-agent-share',
+      source: 'files/user/agent-share/share-1/private.txt',
+      sourceType: 'file',
+      title: 'Private visitor attachment',
+      totalCharCount: 34,
+      totalLineCount: 1,
+      userId,
+    });
+    await expect(builder.buildByIds('documents', ['document-agent-share'])).resolves.toEqual([]);
   });
 
   it('rejects invalid batch limits before querying PostgreSQL', async () => {

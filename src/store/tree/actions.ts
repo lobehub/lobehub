@@ -87,6 +87,32 @@ export const toTreeItem = (item: {
   visibility: item.visibility,
 });
 
+/**
+ * Explorer row → tree row.
+ *
+ * Kept next to {@link toTreeItem} and named, rather than inlined at the
+ * subscription that reconciles the explorer list into the sidebar, because it
+ * is the one place tree rows are rebuilt from a *different* source: anything it
+ * forgets to carry is silently dropped from every row the next time the list
+ * refreshes. `visibility` and `userId` were lost that way — the sidebar stopped
+ * marking private rows and the row menu mis-gated publish / make-private.
+ */
+export const toTreeItemFromResource = (item: {
+  createdAt?: Date | string | null;
+  fileId?: string | null;
+  fileType: string;
+  id: string;
+  metadata?: Record<string, any> | null;
+  name: string;
+  parentId?: string | null;
+  size?: number | null;
+  slug?: string | null;
+  sourceType?: string;
+  url?: string;
+  userId?: string | null;
+  visibility?: 'private' | 'public' | null;
+}): TreeItem => toTreeItem(item);
+
 type Setter = StoreSetter<TreeState>;
 
 export class TreeActionImpl {

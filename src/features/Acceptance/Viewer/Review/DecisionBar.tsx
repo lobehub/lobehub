@@ -2,7 +2,7 @@
 
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   BadgeCheck,
   CircleAlert,
@@ -26,7 +26,8 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-end: 16px;
 
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 12px;
     align-items: center;
 
     width: 100%;
@@ -35,29 +36,34 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 12px;
     padding-inline: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 14px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowTertiary};
 
     @media (width <= 767px) {
       inset-block-end: max(8px, env(safe-area-inset-bottom));
-      flex-wrap: wrap;
-      gap: 8px;
       padding: 12px;
+    }
+  `,
+  summary: css`
+    flex: 1;
+    min-width: 160px;
+  `,
+  actions: css`
+    flex: none;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+
+    > button {
+      flex: none;
+    }
+
+    @media (width <= 480px) {
+      width: 100%;
 
       > button {
-        min-height: 44px;
-      }
-
-      > .acceptance-decision-actions {
-        flex-wrap: wrap;
-        width: 100%;
-      }
-
-      .acceptance-decision-actions > button {
         flex: 1;
-        min-height: 44px;
       }
     }
   `,
@@ -225,7 +231,6 @@ const DecisionBar = memo<DecisionBarProps>(
     totalCount,
   }) => {
     const { t } = useTranslation('verify');
-    const { md = true } = useResponsive();
 
     const stateMeta = {
       accepted: { color: cssVar.colorSuccess, icon: BadgeCheck },
@@ -263,79 +268,68 @@ const DecisionBar = memo<DecisionBarProps>(
 
     return (
       <div className={styles.bar}>
-        {stateMeta ? (
-          // accepted / live / rejected — a plain coloured status mark.
-          <Icon
-            color={stateMeta.color}
-            icon={stateMeta.icon}
-            size={22}
-            spin={state === 'live'}
-            style={{ flex: 'none' }}
-          />
-        ) : allConfirmed ? (
-          // Every check signed off — the same clean badge the accepted state carries.
-          <Icon
-            className={justCompleted ? styles.completePop : undefined}
-            color={cssVar.colorSuccess}
-            icon={BadgeCheck}
-            size={22}
-            style={{ flex: 'none' }}
-          />
-        ) : settledNeedsFix ? (
-          <Icon
-            className={justCompleted ? styles.completePop : undefined}
-            color={cssVar.colorWarning}
-            icon={CircleAlert}
-            size={22}
-            style={{ flex: 'none' }}
-          />
-        ) : (
-          <ProgressRing done={decidedCount} total={totalCount} />
-        )}
-        <Flexbox gap={2} style={{ flex: '0 1 auto', minWidth: 0 }}>
-          <Text ellipsis strong style={{ fontSize: 14 }}>
-            {!md && state === 'settled'
-              ? t('acceptance.bar.mobileProgress', { done: decidedCount, total: totalCount })
-              : statusText}
-          </Text>
-          {subText && (
-            <Text ellipsis fontSize={12} type={'secondary'}>
-              {subText}
-            </Text>
+        <Flexbox horizontal align={'center'} className={styles.summary} gap={8}>
+          {stateMeta ? (
+            // accepted / live / rejected — a plain coloured status mark.
+            <Icon
+              color={stateMeta.color}
+              icon={stateMeta.icon}
+              size={22}
+              spin={state === 'live'}
+              style={{ flex: 'none' }}
+            />
+          ) : allConfirmed ? (
+            // Every check signed off — the same clean badge the accepted state carries.
+            <Icon
+              className={justCompleted ? styles.completePop : undefined}
+              color={cssVar.colorSuccess}
+              icon={BadgeCheck}
+              size={22}
+              style={{ flex: 'none' }}
+            />
+          ) : settledNeedsFix ? (
+            <Icon
+              className={justCompleted ? styles.completePop : undefined}
+              color={cssVar.colorWarning}
+              icon={CircleAlert}
+              size={22}
+              style={{ flex: 'none' }}
+            />
+          ) : (
+            <ProgressRing done={decidedCount} total={totalCount} />
           )}
-        </Flexbox>
+          <Flexbox gap={2} style={{ flex: '0 1 auto', minWidth: 0 }}>
+            <Text ellipsis type={'secondary'}>
+              {statusText}
+            </Text>
+            {subText && (
+              <Text ellipsis fontSize={12} type={'secondary'}>
+                {subText}
+              </Text>
+            )}
+          </Flexbox>
 
-        {/* The clearing list — every note this round queues for the next one.
+          {/* The clearing list — every note this round queues for the next one.
             Sits with the status reading on the left: it explains that reading,
             while the right side stays pure actions. */}
-        {feedbackCount > 0 && (
-          <Button
-            icon={<Icon icon={ListTodo} />}
-            size={'small'}
-            style={{ flex: 'none' }}
-            type={'text'}
-            onClick={onOpenFeedback}
-          >
-            {t('acceptance.bar.feedback', { count: feedbackCount })}
-          </Button>
-        )}
-
-        <Flexbox
-          horizontal
-          className={'acceptance-decision-actions'}
-          gap={8}
-          style={{ marginInlineStart: 'auto' }}
-        >
+          {feedbackCount > 0 && (
+            <Button
+              icon={<Icon icon={ListTodo} />}
+              size={'small'}
+              style={{ flex: 'none' }}
+              type={'text'}
+              onClick={onOpenFeedback}
+            >
+              {t('acceptance.bar.feedback', { count: feedbackCount })}
+            </Button>
+          )}
+        </Flexbox>
+        <Flexbox horizontal className={styles.actions} gap={8}>
           {/* A dispatched send-back (repairing) keeps the copy entry alive —
             the reviewer may still hand the prompt to another agent. Embedded,
             the composer beside it already receives the draft. */}
           {state === 'live' && hasFeedback && !embedded && (
-            <Button
-              disabled={pending}
-              style={{ flex: 'none' }}
-              type={'fill'}
-              onClick={onCopyReview}
-            >
+            <Button disabled={pending} type={'fill'} onClick={onCopyReview}>
               {t('acceptance.bar.copyReview')}
             </Button>
           )}
@@ -345,32 +339,25 @@ const DecisionBar = memo<DecisionBarProps>(
               // Feedback is queued — the delivery isn't being accepted now; the
               // bar's job is getting the repair round started.
               <>
-                {!embedded && (
-                  <Button
-                    disabled={pending}
-                    style={{ flex: 'none' }}
-                    type={'primary'}
-                    onClick={onCopyReview}
-                  >
-                    {t('acceptance.bar.copyReview')}
-                  </Button>
-                )}
                 {/* Last words before the repair leaves — a global note the next
                   round reads, for what the queued per-check feedback missed. */}
                 <Button
                   disabled={pending}
                   icon={<Icon icon={MessageSquarePlus} />}
-                  style={{ flex: 'none' }}
                   type={'fill'}
                   onClick={onAddComment}
                 >
                   {t('acceptance.bar.addComment')}
                 </Button>
+                {!embedded && (
+                  <Button disabled={pending} type={'primary'} onClick={onCopyReview}>
+                    {t('acceptance.bar.copyReview')}
+                  </Button>
+                )}
                 {embedded && rerunAvailable && (
                   <Button
                     disabled={pending}
                     loading={rerunPending}
-                    style={{ flex: 'none' }}
                     type={'primary'}
                     onClick={onRerun}
                   >
@@ -382,17 +369,11 @@ const DecisionBar = memo<DecisionBarProps>(
               // Clean review — accept carries primary weight only once every
               // check is signed off; before that it stays a quiet option.
               <>
-                <Button
-                  disabled={pending}
-                  style={{ flex: 'none' }}
-                  type={'text'}
-                  onClick={onRejectComment}
-                >
+                <Button disabled={pending} type={'text'} onClick={onRejectComment}>
                   {t('acceptance.bar.rejectComment')}
                 </Button>
                 <Button
                   disabled={pending}
-                  style={{ flex: 'none' }}
                   type={allConfirmed ? 'primary' : 'fill'}
                   onClick={onAccept}
                 >

@@ -4,7 +4,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ProviderIcon } from '@/libs/providerIcon';
+import { ProviderIcon } from '@/components/LobeIcons';
 import { type DiscoverProviderItem } from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {

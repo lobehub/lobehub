@@ -50,6 +50,20 @@ describe('matchErrorPattern', () => {
     );
   });
 
+  it('classifies an HTTP 413 body as RequestBodyTooLarge', () => {
+    expect(matchErrorPattern({ message: '413 Request Entity Too Large' })?.code).toBe(
+      AgentRuntimeErrorType.RequestBodyTooLarge,
+    );
+  });
+
+  it('classifies the observed DeepSeek buffer rejection as RequestBodyTooLarge', () => {
+    expect(
+      matchErrorPattern({
+        message: 'Failed to buffer the request body: length limit exceeded',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.RequestBodyTooLarge);
+  });
+
   it('classifies content moderation', () => {
     expect(matchErrorPattern({ message: 'Content Exists Risk' })?.code).toBe(
       AgentRuntimeErrorType.ContentModeration,
@@ -436,10 +450,7 @@ describe('matchErrorPattern — gateway user/upstream residues by category', () 
     },
     {
       cases: [
-        [
-          'Request body too large for deepseek-r1 model',
-          AgentRuntimeErrorType.InvalidRequestFormat,
-        ],
+        ['Request body too large for deepseek-r1 model', AgentRuntimeErrorType.RequestBodyTooLarge],
         [
           'error getting file type: failed to download file from https://example.com/a.png',
           AgentRuntimeErrorType.InvalidRequestFormat,

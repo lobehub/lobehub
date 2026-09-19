@@ -11,7 +11,6 @@ import { useChatStore } from '../../store';
 // Mock messageService and chatService
 vi.mock('@/services/message', () => ({
   messageService: {
-    updateMessageTTS: vi.fn(),
     updateMessageTranslate: vi.fn(),
     updateMessage: vi.fn(),
   },

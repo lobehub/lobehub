@@ -9,10 +9,10 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import InlineTable from '@/components/InlineTable';
+import { ProviderIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import { BASE_PROVIDER_DOC_URL } from '@/const/url';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { ProviderIcon } from '@/libs/providerIcon';
 import { formatPriceByCurrency, formatTokenNumber } from '@/utils/format';
 import { getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/pricing';
 

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { AgentGraphSchema } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types/agent/graph';
 import { type Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 

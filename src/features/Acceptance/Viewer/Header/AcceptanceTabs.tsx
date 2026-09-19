@@ -1,76 +1,58 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ListChecks, Paperclip, Route } from 'lucide-react';
+import { Tabs, Tag } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
+import { ListChecks, MessagesSquare, Paperclip, Route } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-export type AcceptanceTabKey = 'checks' | 'resources' | 'flow';
+export type AcceptanceTabKey = 'checks' | 'discussion' | 'resources' | 'flow';
+
+const styles = createStaticStyles(({ css }) => ({
+  // The square variant underlines its whole list; the band below already draws
+  // the full-width rule, so the list's own line would sit on top of it.
+  list: css`
+    && {
+      box-shadow: none;
+    }
+  `,
+}));
 
 interface AcceptanceTabsProps {
   active: AcceptanceTabKey;
   checkCount: number;
+  /** Open discussion threads on this delivery. */
+  discussionCount: number;
   flowCount?: number;
   onChange: (key: AcceptanceTabKey) => void;
   resourceCount: number;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  count: css`
-    padding-block: 0;
-    padding-inline: 6px;
-    border-radius: 99px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  tab: css`
-    cursor: pointer;
-
-    position: relative;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-
-    white-space: nowrap;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  tabActive: css`
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block-end: -1px;
-      inset-inline: 6px;
-
-      block-size: 2px;
-      border-radius: 2px;
-
-      background: ${cssVar.colorPrimary};
-    }
-  `,
-}));
-
 /**
- * The delivery's two faces: the checks a person judges, and the artefacts the
- * rounds produced. They sit above the full-width rule so the rule reads as the
- * boundary between "what this delivery is" and "what you are looking at".
+ * The delivery's faces: the conversation about it, the checks a person judges,
+ * and the artefacts the rounds produced. They close the identity band; the
+ * active tab's underline is the boundary between "what this delivery is" and
+ * "what you are looking at".
+ *
+ * Discussion leads, as GitHub's Conversation does — it is the delivery's
+ * shared thread, and it was unfindable while it sat below the checklist.
  */
 const AcceptanceTabs = ({
   active,
   checkCount,
+  discussionCount,
   flowCount = 0,
   onChange,
   resourceCount,
 }: AcceptanceTabsProps) => {
   const { t } = useTranslation('verify');
   const tabs = [
+    {
+      count: discussionCount,
+      icon: MessagesSquare,
+      key: 'discussion' as const,
+      label: t('acceptance.comments.title'),
+    },
     {
       count: checkCount,
       icon: ListChecks,
@@ -87,26 +69,25 @@ const AcceptanceTabs = ({
   ];
 
   return (
-    <Flexbox horizontal align={'center'} gap={2}>
-      {tabs
+    <Tabs
+      activeKey={active}
+      classNames={{ list: styles.list }}
+      style={{ minWidth: 0, overflowX: 'auto' }}
+      variant={'square'}
+      items={tabs
         .filter((tab) => tab.key !== 'flow' || flowCount > 0)
-        .map((tab) => (
-          <Button
-            aria-pressed={tab.key === active}
-            className={cx(styles.tab, tab.key === active && styles.tabActive)}
-            key={tab.key}
-            style={{ minHeight: 44 }}
-            type={'text'}
-            onClick={() => onChange(tab.key)}
-          >
-            <Icon icon={tab.icon} size={14} style={{ color: cssVar.colorTextTertiary }} />
-            <Text fontSize={13} weight={tab.key === active ? 600 : 400}>
+        .map((tab) => ({
+          icon: <Icon icon={tab.icon} size={16} />,
+          key: tab.key,
+          label: (
+            <Flexbox horizontal align={'center'} gap={6}>
               {tab.label}
-            </Text>
-            <Text className={styles.count}>{tab.count}</Text>
-          </Button>
-        ))}
-    </Flexbox>
+              <Tag shape={'round'}>{tab.count}</Tag>
+            </Flexbox>
+          ),
+        }))}
+      onChange={(key) => onChange(key as AcceptanceTabKey)}
+    />
   );
 };
 

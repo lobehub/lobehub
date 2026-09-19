@@ -2,9 +2,17 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
+import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import { loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { log, setVerbose } from '../utils/logger';
+
+/**
+ * `status` answers one question — does the gateway accept this machine. When it
+ * says no, the cause is usually a layer below it (wrong gateway URL, expired
+ * login, a clock that drifted), which is what `doctor` walks through.
+ */
+const DIAGNOSE_HINT = `Run '${CLI_PRIMARY_BIN} doctor --profile connect' for a full diagnosis.`;
 
 interface StatusOptions {
   gateway?: string;
@@ -58,6 +66,7 @@ export function registerStatusCommand(program: Command) {
 
       const timer = setTimeout(() => {
         log.error('FAILED - Connection timed out');
+        log.error(DIAGNOSE_HINT);
         client.disconnect();
         process.exit(1);
       }, timeout);
@@ -72,18 +81,21 @@ export function registerStatusCommand(program: Command) {
       client.on('disconnected', () => {
         clearTimeout(timer);
         log.error('FAILED - Connection closed by server');
+        log.error(DIAGNOSE_HINT);
         process.exit(1);
       });
 
       client.on('auth_failed', (reason) => {
         clearTimeout(timer);
         log.error(`FAILED - Authentication failed: ${reason}`);
+        log.error(DIAGNOSE_HINT);
         process.exit(1);
       });
 
       client.on('auth_expired', () => {
         clearTimeout(timer);
         log.error('FAILED - Authentication expired');
+        log.error(DIAGNOSE_HINT);
         client.disconnect();
         process.exit(1);
       });

@@ -105,7 +105,12 @@ export class GoalGraphModel {
   };
 
   getGraph = async (goalId: string): Promise<GoalGraphSnapshot | undefined> => {
-    const goal = await this.ownedGoal(goalId);
+    // Ordinary graph refreshes must not queue behind a coordinator's write lock.
+    const [goal] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, goalId), this.ownership()))
+      .limit(1);
     if (!goal) return undefined;
 
     const [nodes, edges, decisions, events, linkedWorkVersions] = await Promise.all([

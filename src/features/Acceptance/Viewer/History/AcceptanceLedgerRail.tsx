@@ -1,7 +1,7 @@
 'use client';
 
-import { DraggablePanel, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { DraggablePanel, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { PanelRightOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -158,7 +158,7 @@ const AcceptanceLedgerRail = () => {
         </AcceptanceDrawer>
       ) : (
         <DraggablePanel
-          stableLayout
+          backgroundColor={cssVar.colorBgLayout}
           defaultSize={{ width: 340 }}
           expand={expand}
           minWidth={300}

@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import type { FormGroupItemType } from '@lobehub/ui';
 import { Flexbox, Form } from '@lobehub/ui';
 import { Select, Skeleton } from '@lobehub/ui/base-ui';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
@@ -15,7 +15,9 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { APPLICATION_DEFAULT_FONT, useSystemFontOptions } from '../useSystemFontOptions';
+import FallbackFontList from './FallbackFontList';
 import { FontSizeControl } from './FontSize';
+import { joinFontStack, parseFontStack } from './fontStack';
 
 const wrapperCol = {
   style: {
@@ -38,19 +40,27 @@ const FontSettings = memo(() => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
 
+  const interfaceStack = useMemo(() => parseFontStack(fontFamily), [fontFamily]);
+  const monospaceStack = useMemo(() => parseFontStack(monospaceFontFamily), [monospaceFontFamily]);
+
   const interfaceFonts = useSystemFontOptions({
     defaultLabel: t('settingAppearance.font.fontFamily.default'),
     enabled: isDesktop,
     unavailableLabel: (font) => t('settingAppearance.font.fontFamily.unavailable', { font }),
-    value: fontFamily,
+    values: interfaceStack,
   });
   const monospaceFonts = useSystemFontOptions({
     defaultLabel: t('settingAppearance.font.monospace.default'),
     enabled: isDesktop,
     monospaceOnly: true,
     unavailableLabel: (font) => t('settingAppearance.font.monospace.unavailable', { font }),
-    value: monospaceFontFamily,
+    values: monospaceStack,
   });
+
+  const saveInterfaceStack = (stack: string[]) =>
+    save(() => updatePreference({ fontFamily: joinFontStack(stack) }));
+  const saveMonospaceStack = (stack: string[]) =>
+    save(() => updatePreference({ terminalFontFamily: joinFontStack(stack) }));
 
   if (!isUserStateInit) {
     const loadingFont: FormGroupItemType = {
@@ -122,12 +132,10 @@ const FontSettings = memo(() => {
                   loading={interfaceFonts.isLoading}
                   options={interfaceFonts.options}
                   style={{ width: 320 }}
-                  value={fontFamily || APPLICATION_DEFAULT_FONT}
+                  value={interfaceStack[0] || APPLICATION_DEFAULT_FONT}
                   onChange={(value: string) =>
-                    save(() =>
-                      updatePreference({
-                        fontFamily: value === APPLICATION_DEFAULT_FONT ? '' : value,
-                      }),
+                    saveInterfaceStack(
+                      value === APPLICATION_DEFAULT_FONT ? [] : [value, ...interfaceStack.slice(1)],
                     )
                   }
                 />
@@ -144,18 +152,35 @@ const FontSettings = memo(() => {
             },
             {
               children: (
+                <FallbackFontList
+                  ariaLabel={t('settingAppearance.font.fallback.title')}
+                  loading={interfaceFonts.isLoading}
+                  needPrimaryHint={t('settingAppearance.font.fallback.needPrimary')}
+                  options={interfaceFonts.options}
+                  stack={interfaceStack}
+                  onChange={saveInterfaceStack}
+                />
+              ),
+              desc: t('settingAppearance.font.fallback.desc'),
+              label: (
+                <SettingsSearchAnchor id={'appearance-font-fallback'}>
+                  {t('settingAppearance.font.fallback.title')}
+                </SettingsSearchAnchor>
+              ),
+              minWidth: undefined,
+            },
+            {
+              children: (
                 <Select
                   showSearch
                   aria-label={t('settingAppearance.font.monospace.title')}
                   loading={monospaceFonts.isLoading}
                   options={monospaceFonts.options}
                   style={{ width: 320 }}
-                  value={monospaceFontFamily || APPLICATION_DEFAULT_FONT}
+                  value={monospaceStack[0] || APPLICATION_DEFAULT_FONT}
                   onChange={(value: string) =>
-                    save(() =>
-                      updatePreference({
-                        terminalFontFamily: value === APPLICATION_DEFAULT_FONT ? '' : value,
-                      }),
+                    saveMonospaceStack(
+                      value === APPLICATION_DEFAULT_FONT ? [] : [value, ...monospaceStack.slice(1)],
                     )
                   }
                 />
@@ -166,6 +191,25 @@ const FontSettings = memo(() => {
               label: (
                 <SettingsSearchAnchor id={'appearance-monospace-font'}>
                   {t('settingAppearance.font.monospace.title')}
+                </SettingsSearchAnchor>
+              ),
+              minWidth: undefined,
+            },
+            {
+              children: (
+                <FallbackFontList
+                  ariaLabel={t('settingAppearance.font.monospaceFallback.title')}
+                  loading={monospaceFonts.isLoading}
+                  needPrimaryHint={t('settingAppearance.font.monospaceFallback.needPrimary')}
+                  options={monospaceFonts.options}
+                  stack={monospaceStack}
+                  onChange={saveMonospaceStack}
+                />
+              ),
+              desc: t('settingAppearance.font.monospaceFallback.desc'),
+              label: (
+                <SettingsSearchAnchor id={'appearance-monospace-font-fallback'}>
+                  {t('settingAppearance.font.monospaceFallback.title')}
                 </SettingsSearchAnchor>
               ),
               minWidth: undefined,

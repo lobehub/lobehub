@@ -19,14 +19,10 @@ export const FeatureFlagsSchema = z.object({
   edit_agent: FeatureFlagValue.optional(),
 
   /**
-   * Cloud-only grayscale gate for Agent Share, covering BOTH capabilities the
-   * feature has: PUBLISHING a share (creator side) and OPENING/chatting on a
-   * shared agent (visitor side). A user matched by this flag can do both;
-   * everyone else can do neither. Array values are user IDs. The share OWNER previewing their own share is
-   * never subject to the visitor check — only other visitors are. Self-hosted
-   * builds are additionally hard-blocked server-side by
-   * `ENABLE_BUSINESS_FEATURES` (see `_helpers/agentShareFeatureGate.ts`), so
-   * this flag alone can never enable the feature outside Cloud.
+   * Rollout gate for publishing or re-enabling Agent Share. Array values are
+   * creator user IDs. Visiting, chatting on, and managing existing shares do
+   * not require this flag. Deployment support is independently enforced by
+   * `ENABLE_BUSINESS_FEATURES` (see `_helpers/agentShareFeatureGate.ts`).
    */
   agent_share: FeatureFlagValue.optional(),
 

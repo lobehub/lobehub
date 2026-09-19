@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the WorkModel mock
 // below ignores the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 // RBAC gate → instead of enforcing a real permission, throw a sentinel that
@@ -13,8 +15,10 @@ vi.mock('@/database/core/db-adaptor', () => ({
 // through surfaces as `GATE:<code>`, so the test asserts procedure → permission
 // mapping rather than just the set of codes requested at module load.
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn((code: string) => () => {
-    throw new Error(`GATE:${code}`);
+  withScopedPermission: vi.fn(function (code: string) {
+    return () => {
+      throw new Error(`GATE:${code}`);
+    };
   }),
 }));
 
@@ -26,14 +30,16 @@ const mockHandleSkillToolResult = vi.fn();
 const mockListByConversation = vi.fn();
 
 vi.mock('@/database/models/work', () => ({
-  WorkModel: vi.fn(() => ({
-    deleteTaskWork: mockDeleteTaskWork,
-    deleteWork: mockDeleteWork,
-    handleSkillToolResult: mockHandleSkillToolResult,
-    listByConversation: mockListByConversation,
-    registerDocument: mockRegisterDocument,
-    registerTask: mockRegisterTask,
-  })),
+  WorkModel: vi.fn(function () {
+    return {
+      deleteTaskWork: mockDeleteTaskWork,
+      deleteWork: mockDeleteWork,
+      handleSkillToolResult: mockHandleSkillToolResult,
+      listByConversation: mockListByConversation,
+      registerDocument: mockRegisterDocument,
+      registerTask: mockRegisterTask,
+    };
+  }),
 }));
 
 // Imported after the mocks above are registered.

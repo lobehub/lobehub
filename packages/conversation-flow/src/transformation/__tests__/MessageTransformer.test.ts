@@ -201,7 +201,7 @@ describe('MessageTransformer', () => {
       expect(result.performance).toEqual({
         duration: 3000,
         latency: 3200,
-        tps: 25, // average of 20 and 30
+        tps: 15, // 45 output tokens over 3 seconds
         ttft: 100, // first value
       });
     });
@@ -267,28 +267,82 @@ describe('MessageTransformer', () => {
       });
     });
 
-    it('should average tps correctly', () => {
+    it('should divide total output tokens by total generation time', () => {
       const children: AssistantContentBlock[] = [
         {
           content: 'First',
           id: 'msg-1',
-          performance: { tps: 10 },
+          performance: { duration: 1000, tps: 500 },
+          usage: { totalOutputTokens: 500 },
         },
         {
           content: 'Second',
           id: 'msg-2',
-          performance: { tps: 20 },
-        },
-        {
-          content: 'Third',
-          id: 'msg-3',
-          performance: { tps: 30 },
+          performance: { duration: 20_000, tps: 50 },
+          usage: { totalOutputTokens: 1000 },
         },
       ];
 
       const result = transformer.aggregateMetadata(children);
 
-      expect(result.performance?.tps).toBe(20); // average of 10, 20, 30
+      expect(result.performance?.tps).toBeCloseTo(1500 / 21);
+    });
+
+    it.each([
+      [undefined, 1000],
+      [100, undefined],
+      [100, 0],
+      [100, -1],
+      [100, Number.NaN],
+      [100, Number.POSITIVE_INFINITY],
+      [-1, 1000],
+      [Number.NaN, 1000],
+      [Number.POSITIVE_INFINITY, 1000],
+    ])('should exclude invalid token/time pairs (%s, %s) from TPS', (tokens, duration) => {
+      const children: AssistantContentBlock[] = [
+        {
+          content: 'Valid',
+          id: 'valid',
+          performance: { duration: 2000, tps: 50 },
+          usage: { totalOutputTokens: 100 },
+        },
+        {
+          content: 'Incomplete',
+          id: 'incomplete',
+          performance: { duration, tps: 1000 },
+          usage: { totalOutputTokens: tokens },
+        },
+      ];
+
+      expect(transformer.aggregateMetadata(children).performance?.tps).toBe(50);
+      expect(transformer.aggregateMetadata(children.slice(1)).performance?.tps).toBeUndefined();
+    });
+
+    it('should include reasoning tokens once and preserve single-call generation speed', () => {
+      const result = transformer.aggregateMetadata([
+        {
+          content: 'Answer',
+          id: 'msg-1',
+          performance: { duration: 2000, latency: 5000, tps: 50, ttft: 3000 },
+          usage: { outputReasoningTokens: 80, outputTextTokens: 20, totalOutputTokens: 100 },
+        },
+      ]);
+
+      expect(result.performance?.tps).toBe(50);
+    });
+
+    it('should include measured zero-output calls without requiring a stored TPS', () => {
+      const result = transformer.aggregateMetadata([
+        { content: '', id: 'a', performance: { duration: 1000 }, usage: { totalOutputTokens: 0 } },
+        {
+          content: 'Answer',
+          id: 'b',
+          performance: { duration: 1000 },
+          usage: { totalOutputTokens: 100 },
+        },
+      ]);
+
+      expect(result.performance?.tps).toBe(50);
     });
 
     it('should take first ttft value only', () => {

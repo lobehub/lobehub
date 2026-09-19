@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { notifyDocumentMention } from '@/business/server/document-mention/notifyActivity';
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -9,11 +10,13 @@ import { ChunkModel } from '@/database/models/chunk';
 import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
+import { RbacModel } from '@/database/models/rbac';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
+import { canViewDocumentContent } from '@/server/services/documentAccess';
 import { FileService } from '@/server/services/file';
 import {
   assertCanPerformResourceAction,
@@ -21,6 +24,7 @@ import {
   getResourceMeta,
 } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
@@ -66,6 +70,64 @@ const getFreeDocumentHistorySince = () => {
   const now = Date.now();
 
   return new Date(now - FREE_DOCUMENT_HISTORY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+};
+
+/**
+ * Ping members newly @-mentioned in the document body. Runs after the response
+ * and re-checks each recipient against the document's General access, so a
+ * chip for someone outside a private page never leaks its existence. The
+ * business slot is a no-op outside Cloud.
+ */
+const notifyDocumentMentionsBestEffort = (
+  ctx: { serverDB: Parameters<typeof getResourceMeta>[0]; userId: string; workspaceId: string },
+  params: { documentId: string; mentionedUserIds: string[]; savedAt: Date },
+) => {
+  const recipientUserIds = [...new Set(params.mentionedUserIds)].filter(
+    (userId) => userId !== ctx.userId,
+  );
+  if (recipientUserIds.length === 0) return;
+
+  after(async () => {
+    try {
+      const [meta, permissionsByUserId] = await Promise.all([
+        getResourceMeta(ctx.serverDB, 'document', params.documentId),
+        RbacModel.getWorkspaceUsersPermissions({
+          db: ctx.serverDB,
+          requireMembership: true,
+          userIds: recipientUserIds,
+          workspaceId: ctx.workspaceId,
+        }),
+      ]);
+      if (!meta) return;
+
+      await Promise.all(
+        recipientUserIds.map(async (recipientUserId) => {
+          const grantedPermissions = permissionsByUserId.get(recipientUserId);
+          if (!grantedPermissions) return;
+
+          const canView = await canViewDocumentContent({
+            db: ctx.serverDB,
+            grantedPermissions,
+            meta,
+            resourceId: params.documentId,
+            userId: recipientUserId,
+            workspaceId: ctx.workspaceId,
+          });
+          if (!canView) return;
+
+          await notifyDocumentMention({
+            actorUserId: ctx.userId,
+            documentId: params.documentId,
+            recipientUserId,
+            savedAt: params.savedAt,
+            workspaceId: ctx.workspaceId,
+          });
+        }),
+      );
+    } catch (error) {
+      console.error('[document] Failed to send mention notification', error);
+    }
+  });
 };
 
 const documentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -447,6 +509,17 @@ export const documentRouter = router({
         ...params,
         editorData,
       });
+
+      if (ctx.workspaceId && result?.addedMentionUserIds && result.savedAt) {
+        notifyDocumentMentionsBestEffort(
+          { serverDB: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+          {
+            documentId: id,
+            mentionedUserIds: result.addedMentionUserIds,
+            savedAt: result.savedAt,
+          },
+        );
+      }
 
       return result;
     }),

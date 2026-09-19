@@ -1,5 +1,11 @@
-import { AccordionItem, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+  Text,
+} from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,32 +30,32 @@ const GroupItem = memo<GroupItemProps>(({ group, activeTopicId, activeThreadId }
   const timeTitle = useMemo(() => preformat(id) ?? t(`groupTitle.byTime.${id}` as any), [id, t]);
 
   return (
-    <AccordionItem
-      itemKey={id}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      title={
-        <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
-          <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
-            {title || timeTitle}
-          </Text>
+    <AccordionItem value={id}>
+      <AccordionHeader>
+        <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+          <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
+            <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
+              {title || timeTitle}
+            </Text>
+          </Flexbox>
+        </AccordionTrigger>
+      </AccordionHeader>
+      <AccordionPanel contentStyle={{ padding: 0 }}>
+        <Flexbox gap={1} paddingBlock={1}>
+          {children.map((topic) => (
+            <TopicItem
+              active={activeTopicId === topic.id}
+              fav={topic.favorite}
+              id={topic.id}
+              key={topic.id}
+              status={topic.status}
+              threadId={activeThreadId}
+              title={topic.title}
+              userId={topic.userId}
+            />
+          ))}
         </Flexbox>
-      }
-    >
-      <Flexbox gap={1} paddingBlock={1}>
-        {children.map((topic) => (
-          <TopicItem
-            active={activeTopicId === topic.id}
-            fav={topic.favorite}
-            id={topic.id}
-            key={topic.id}
-            status={topic.status}
-            threadId={activeThreadId}
-            title={topic.title}
-            userId={topic.userId}
-          />
-        ))}
-      </Flexbox>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

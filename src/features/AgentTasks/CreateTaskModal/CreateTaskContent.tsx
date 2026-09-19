@@ -39,7 +39,7 @@ export interface CreateTaskContentProps {
    * agent-scoped task list where every task belongs to that agent.
    */
   lockAssignee?: boolean;
-  onCreated?: (task: { agentId?: string; identifier: string }) => void;
+  onCreated?: (task: { agentId?: string; identifier: string; name?: string }) => void;
   projectId?: string;
   /**
    * Whether to show the "minimize to inline entry" button. Only the list view has an
@@ -143,6 +143,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
           onCreated?.({
             agentId: result.assigneeAgentId ?? undefined,
             identifier: result.identifier,
+            name: result.name ?? undefined,
           });
         }
       } catch {

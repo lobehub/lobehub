@@ -6,17 +6,39 @@ const mockFormatPrompt = vi.hoisted(() => vi.fn());
 const mockGetPlatform = vi.hoisted(() => vi.fn());
 const mockIsQueueAgentRuntimeEnabled = vi.hoisted(() => vi.fn());
 const mockTopicFindById = vi.hoisted(() => vi.fn());
+const mockIsRunningOperationAlive = vi.hoisted(() => vi.fn());
+const mockDeferBotMessages = vi.hoisted(() => vi.fn());
+const mockIsDeferredMessagesAvailable = vi.hoisted(() => vi.fn());
+
+const mockReplayBot = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockReplayMessenger = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('../BotMessageRouter', () => ({
+  getBotMessageRouter: () => ({ replayDeferredMessages: mockReplayBot }),
+}));
+vi.mock('@/server/services/messenger/MessengerRouter', () => ({
+  getMessengerRouter: () => ({ replayDeferredMessages: mockReplayMessenger }),
+}));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    findById: mockTopicFindById,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: mockTopicFindById,
+      isRunningOperationAlive: mockIsRunningOperationAlive,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/bot/deferredMessages', () => ({
+  deferBotMessages: mockDeferBotMessages,
+  isDeferredMessagesAvailable: mockIsDeferredMessagesAvailable,
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn().mockImplementation(() => ({
-    getUserSettings: mockGetUserSettings,
-  })),
+  UserModel: vi.fn().mockImplementation(function () {
+    return {
+      getUserSettings: mockGetUserSettings,
+    };
+  }),
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -27,9 +49,11 @@ vi.mock('@/envs/app', () => ({
 }));
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
@@ -45,6 +69,11 @@ vi.mock('@/server/services/systemAgent', () => ({
 }));
 
 vi.mock('@/server/services/bot/formatPrompt', () => ({
+  buildBotSender: vi.fn((message: any, platform: string) => ({
+    fullName: message?.author?.fullName,
+    id: message?.author?.userId,
+    platform,
+  })),
   formatPrompt: mockFormatPrompt,
 }));
 
@@ -129,6 +158,9 @@ describe('AgentBridgeService', () => {
       id: 'topic-1',
       updatedAt: new Date(),
     });
+    mockIsRunningOperationAlive.mockResolvedValue(false);
+    mockIsDeferredMessagesAvailable.mockReturnValue(true);
+    mockDeferBotMessages.mockResolvedValue(true);
   });
 
   it('calls execAgent with hooks in queue mode for mention', async () => {
@@ -202,6 +234,74 @@ describe('AgentBridgeService', () => {
     });
 
     expect(mockExecAgent.mock.calls[0][0].toolModeOverride).toBeUndefined();
+  });
+
+  describe('current-conversation injection', () => {
+    it('injects the platform + channelId the message tool needs into botPlatformContext', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      const message = createMessage();
+      const client = createClient();
+      // Feishu/Lark threadIds are `lark:group:oc_xxx`; the client's own decoder
+      // is what turns that into the `oc_xxx` the message service accepts.
+      client.extractChatId.mockReturnValue('oc_chat_1');
+      mockGetPlatform.mockReturnValue({ id: 'lark', name: 'Lark', supportsMessageEdit: true });
+
+      await service.handleMention(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platform: 'lark', platformThreadId: 'lark:group:oc_chat_1' } as any,
+        client,
+      });
+
+      expect(client.extractChatId).toHaveBeenCalledWith('lark:group:oc_chat_1');
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          botPlatformContext: expect.objectContaining({
+            currentChannel: { id: 'oc_chat_1', platformId: 'lark' },
+          }),
+        }),
+      );
+    });
+
+    it('prefers extractConversationId, so a platform can decline for an unscopable thread', async () => {
+      // Slack: `slack:C1:1700.1` is a reply thread, but readMessages can only
+      // read the channel — advertising `C1` as "this conversation" would be a lie.
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const client = createClient() as any;
+      client.extractChatId.mockReturnValue('C1');
+      client.extractConversationId = vi.fn().mockReturnValue(undefined);
+      mockGetPlatform.mockReturnValue({ id: 'slack', name: 'Slack', supportsMessageEdit: true });
+
+      await service.handleMention(createThread(), createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platform: 'slack', platformThreadId: 'slack:C1:1700.1' } as any,
+        client,
+      });
+
+      expect(client.extractConversationId).toHaveBeenCalledWith('slack:C1:1700.1');
+      expect(mockExecAgent.mock.calls[0][0].botPlatformContext.currentChannel).toBeUndefined();
+    });
+
+    it('omits currentChannel when the platform client cannot decode the threadId', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+      const message = createMessage();
+      const client = createClient();
+      client.extractChatId.mockImplementation(function () {
+        throw new Error('malformed threadId');
+      });
+      mockGetPlatform.mockReturnValue({ id: 'lark', name: 'Lark', supportsMessageEdit: true });
+
+      await service.handleMention(thread, message, {
+        agentId: 'agent-1',
+        botContext: { platform: 'lark', platformThreadId: 'garbage' } as any,
+        client,
+      });
+
+      // The run still completes — losing the shortcut must never break the reply.
+      expect(mockExecAgent).toHaveBeenCalled();
+      expect(mockExecAgent.mock.calls[0][0].botPlatformContext.currentChannel).toBeUndefined();
+    });
   });
 
   it('constructs AiAgentService with workspaceId for workspace bot runs', async () => {
@@ -567,6 +667,165 @@ describe('AgentBridgeService', () => {
     });
   });
 
+  describe('follow-up while the topic is still running', () => {
+    // Regression for WeChat "one image + one sentence": the two arrive as
+    // separate messages, and in queue mode the second one landed while the
+    // first run was still executing on the job queue. It lost the topic-start
+    // reservation race and the user saw "Agent Execution Failed".
+    const busyTopic = {
+      agentId: 'agent-1',
+      id: 'topic-1',
+      metadata: { runningOperation: { assistantMessageId: 'a-1', operationId: 'op-running' } },
+      updatedAt: new Date(),
+    };
+    const opts = () => ({
+      agentId: 'agent-1',
+      botContext: {
+        applicationId: 'app-1',
+        platform: 'wechat',
+        platformThreadId: THREAD_ID,
+      } as any,
+      client: createClient(),
+    });
+
+    it('defers the message instead of starting a second run when the topic is busy', async () => {
+      mockTopicFindById.mockResolvedValue(busyTopic);
+      mockIsRunningOperationAlive.mockResolvedValue(true);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      const message = createMessage();
+
+      await service.handleSubscribedMessage(thread, message, opts());
+
+      expect(mockIsRunningOperationAlive).toHaveBeenCalledWith(
+        FAKE_DB,
+        busyTopic.metadata.runningOperation,
+      );
+      expect(mockDeferBotMessages).toHaveBeenCalledWith('app-1', THREAD_ID, [message]);
+      expect(mockExecAgent).not.toHaveBeenCalled();
+      expect(thread.post).not.toHaveBeenCalled();
+    });
+
+    it('defers each source of a merged message so every raw survives the round-trip', async () => {
+      mockTopicFindById.mockResolvedValue(busyTopic);
+      mockIsRunningOperationAlive.mockResolvedValue(true);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const image = { id: 'img', raw: { item: 'image' }, text: '' } as any;
+      const text = { id: 'txt', raw: { item: 'text' }, text: 'hi' } as any;
+      const merged = { ...text, sourceMessages: [image, text] } as any;
+
+      await service.handleSubscribedMessage(createThread({ topicId: 'topic-1' }), merged, opts());
+
+      expect(mockDeferBotMessages).toHaveBeenCalledWith('app-1', THREAD_ID, [image, text]);
+    });
+
+    it.each([false, true])(
+      'replays when completion wins the enqueue race (messenger=%s)',
+      async (messenger) => {
+        mockTopicFindById
+          .mockResolvedValueOnce(busyTopic)
+          .mockResolvedValueOnce({ ...busyTopic, metadata: {} });
+        mockIsRunningOperationAlive.mockResolvedValue(true);
+        const service = new AgentBridgeService(FAKE_DB, USER_ID);
+        const options = opts();
+        if (messenger) options.botContext.messengerInstallationKey = 'wechat:example';
+        await service.handleSubscribedMessage(
+          createThread({ topicId: 'topic-1' }),
+          createMessage(),
+          options,
+        );
+        expect(mockDeferBotMessages).toHaveBeenCalledTimes(1);
+        expect(messenger ? mockReplayMessenger : mockReplayBot).toHaveBeenCalledWith(
+          messenger ? 'wechat:example' : 'wechat',
+          'app-1',
+          THREAD_ID,
+        );
+        expect(mockExecAgent).not.toHaveBeenCalled();
+      },
+    );
+
+    it('runs normally when the marker is stale (operation no longer alive)', async () => {
+      mockTopicFindById.mockResolvedValue(busyTopic);
+      mockIsRunningOperationAlive.mockResolvedValue(false);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleSubscribedMessage(
+        createThread({ topicId: 'topic-1' }),
+        createMessage(),
+        opts(),
+      );
+
+      expect(mockDeferBotMessages).not.toHaveBeenCalled();
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the previous behavior outside queue mode (SDK lock serializes runs)', async () => {
+      mockIsQueueAgentRuntimeEnabled.mockReturnValue(false);
+      mockTopicFindById.mockResolvedValue(busyTopic);
+      mockIsRunningOperationAlive.mockResolvedValue(true);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleSubscribedMessage(
+        createThread({ topicId: 'topic-1' }),
+        createMessage(),
+        opts(),
+      );
+
+      expect(mockDeferBotMessages).not.toHaveBeenCalled();
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to running when deferral is unavailable (no Redis)', async () => {
+      mockTopicFindById.mockResolvedValue(busyTopic);
+      mockIsRunningOperationAlive.mockResolvedValue(true);
+      mockIsDeferredMessagesAvailable.mockReturnValue(false);
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleSubscribedMessage(
+        createThread({ topicId: 'topic-1' }),
+        createMessage(),
+        opts(),
+      );
+
+      expect(mockDeferBotMessages).not.toHaveBeenCalled();
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+    });
+
+    it('defers when the reservation still reports the topic busy (check/reserve race)', async () => {
+      mockExecAgent.mockRejectedValueOnce(
+        new Error('Topic topic-1 remained busy while starting operation agent-start-x'),
+      );
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      const message = createMessage();
+
+      await service.handleSubscribedMessage(thread, message, opts());
+
+      expect(mockDeferBotMessages).toHaveBeenCalledWith('app-1', THREAD_ID, [message]);
+      // No "Agent Execution Failed" for the user (only the start ack was posted).
+      expect(thread.post).not.toHaveBeenCalledWith(
+        expect.objectContaining({ markdown: expect.stringContaining('执行失败') }),
+      );
+      expect((AgentBridgeService as any).activeThreads.has(THREAD_ID)).toBe(false);
+    });
+
+    it('still surfaces the busy error when it cannot defer', async () => {
+      mockIsDeferredMessagesAvailable.mockReturnValue(false);
+      mockExecAgent.mockRejectedValueOnce(
+        new Error('Topic topic-1 remained busy while starting operation agent-start-x'),
+      );
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), opts());
+
+      expect(mockDeferBotMessages).not.toHaveBeenCalled();
+      expect(thread.post).toHaveBeenCalledWith(
+        expect.objectContaining({ markdown: expect.stringContaining('执行失败') }),
+      );
+    });
+  });
+
   describe('resolveFiles dispatcher', () => {
     // The bridge no longer has its own attachment extraction logic — every
     // platform owns its own `client.extractFiles`. resolveFiles is just a
@@ -620,6 +879,34 @@ describe('AgentBridgeService', () => {
 
       expect(clientExtractFiles).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ files: [] });
+    });
+
+    it('extracts files from every source of a merged message', async () => {
+      // A merged message keeps only the LAST raw; the image that arrived one
+      // message earlier must still be downloaded from its own raw.
+      const image = { id: 'img', raw: { item: 'image' }, text: '' } as any;
+      const text = { id: 'txt', raw: { item: 'text' }, text: 'hi' } as any;
+      const merged = { ...text, sourceMessages: [image, text] } as any;
+      const clientExtractFiles = vi
+        .fn()
+        .mockImplementation(async (m: any) =>
+          m.id === 'img'
+            ? { files: [{ buffer: Buffer.from('jpg'), name: 'image.jpg' }], warnings: ['w1'] }
+            : undefined,
+        );
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      const result = await (service as any).resolveFiles(merged, {
+        extractFiles: clientExtractFiles,
+      });
+
+      expect(clientExtractFiles).toHaveBeenCalledTimes(2);
+      expect(clientExtractFiles).toHaveBeenNthCalledWith(1, image);
+      expect(clientExtractFiles).toHaveBeenNthCalledWith(2, text);
+      expect(result).toEqual({
+        files: [{ buffer: Buffer.from('jpg'), name: 'image.jpg' }],
+        warnings: ['w1'],
+      });
     });
   });
 });

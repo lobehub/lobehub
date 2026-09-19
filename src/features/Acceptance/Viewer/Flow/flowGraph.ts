@@ -21,13 +21,22 @@ export interface FlowGraphView {
   version: FlowVersion;
 }
 
+/**
+ * The gutter between two columns. A branch caption sits in the middle of it, so
+ * it has to fit prose AND leave the caption clear of the cards on either side.
+ */
+const COLUMN_GAP = 248;
+const ROW_GAP = 64;
+/** A business flow with a single state is its own header — a group box around it says nothing. */
+const isSoloState = (view: FlowGraphView) =>
+  view.version.nodes.length === 1 && !view.version.nodes[0].subFlowId;
+
 export function buildFlowGraph(
   views: FlowGraphView[],
   collapsed: Set<string>,
   selected: string | undefined,
   onToggle: (id: string) => void,
   onEnter: (id: string) => void,
-  onSelect: (id: string) => void,
   focus?: string,
 ) {
   const nodes: Node<FlowGraphData>[] = [];
@@ -128,7 +137,8 @@ export function buildFlowGraph(
     if (stacked) for (const node of siblings) depths.set(node.id, 0);
     const parts = orderedSiblings.map((node) => {
       const id = graphId(view, node.id);
-      if (!node.subFlowId) return { node, id, width: 260, height: 116 };
+      // Two title lines, two expected lines and the footer; the card clamps to this box.
+      if (!node.subFlowId) return { node, id, width: 260, height: 132 };
       const child = collapsed.has(id) ? undefined : layout(view, node.id, id);
       return { node, id, child, width: child?.width ?? 320, height: child?.height ?? 96 };
     });
@@ -141,7 +151,7 @@ export function buildFlowGraph(
     let x = 24;
     for (const depth of [...columnWidths.keys()].sort((a, b) => a - b)) {
       columnX.set(depth, x);
-      x += columnWidths.get(depth)! + 112;
+      x += columnWidths.get(depth)! + COLUMN_GAP;
     }
     const columnY = new Map<number, number>();
     const resultNodes: Node<FlowGraphData>[] = [];
@@ -150,7 +160,7 @@ export function buildFlowGraph(
       const { node, id } = part;
       const depth = depths.get(node.id) ?? 0;
       const y = columnY.get(depth) ?? 64;
-      columnY.set(depth, y + part.height + 64);
+      columnY.set(depth, y + part.height + ROW_GAP);
       bottom = Math.max(bottom, y + part.height);
       const visits = (view.run?.attempts ?? []).filter((v) => v.nodeId === node.id);
       const data: FlowGraphData = node.subFlowId
@@ -205,14 +215,14 @@ export function buildFlowGraph(
         label: edge.trigger,
         sourceHandle: stacked ? 'stack-out' : returning ? 'return-out' : 'out',
         targetHandle: stacked ? 'stack-in' : returning ? 'return-in' : 'in',
-        data: { onSelect, laneOffset: (peers.indexOf(edge) - (peers.length - 1) / 2) * 64 },
+        data: { laneOffset: (peers.indexOf(edge) - (peers.length - 1) / 2) * 64 },
       };
     });
     for (const part of parts) if (part.child) resultEdges.push(...part.child.edges);
     return {
       nodes: resultNodes,
       edges: resultEdges,
-      width: Math.max(360, x - 112 + 24),
+      width: Math.max(360, x - COLUMN_GAP + 24),
       height: bottom + 56,
     };
   }
@@ -224,12 +234,27 @@ export function buildFlowGraph(
     );
     if (focus && focus !== view.id && !focusedNode) continue;
     const id = focus ?? view.id;
-    const child = collapsed.has(id) && !focus ? undefined : layout(view, focusedNode?.id, id);
+    // Inside a focused group the breadcrumb already names it, so render its members
+    // directly on the canvas instead of wrapping them in the group container.
+    if (focus) {
+      const focused = layout(view, focusedNode?.id, id);
+      for (const node of focused.nodes)
+        nodes.push(node.parentId === id ? { ...node, parentId: undefined } : node);
+      edges.push(...focused.edges);
+      continue;
+    }
+    if (isSoloState(view)) {
+      const [solo] = layout(view, undefined, id).nodes;
+      nodes.push({ ...solo, parentId: undefined, position: { x: 0, y: top } });
+      top += solo.height! + 48;
+      continue;
+    }
+    const child = collapsed.has(id) ? undefined : layout(view, undefined, id);
     const leafNodes = view.version.nodes.filter((node) => !node.subFlowId);
     const summary = aggregate(
       view,
-      focusedNode?.checkItemIds ?? leafNodes.flatMap((n) => n.checkItemIds),
-      focusedNode?.requiredCheckItemIds ?? leafNodes.flatMap((n) => n.requiredCheckItemIds),
+      leafNodes.flatMap((n) => n.checkItemIds),
+      leafNodes.flatMap((n) => n.requiredCheckItemIds),
     );
     const height = child?.height ?? 96;
     nodes.push({
@@ -240,11 +265,11 @@ export function buildFlowGraph(
       height,
       style: { width: child?.width ?? 360, height },
       data: {
-        title: focusedNode?.title ?? view.version.title,
+        title: view.version.title,
         ...summary,
         collapsed: !child,
-        onToggle: focus ? undefined : () => onToggle(id),
-        onEnter: focus ? undefined : () => onEnter(id),
+        onToggle: () => onToggle(id),
+        onEnter: () => onEnter(id),
       },
     });
     if (child) {

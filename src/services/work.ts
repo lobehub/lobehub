@@ -57,6 +57,8 @@ export const didToolMutateWorkView = ({
 };
 
 class WorkService {
+  private readonly workspaceListRefreshers = new Set<() => Promise<unknown>>();
+
   // This client ships the descriptor fallback for every registered Work type, so
   // it always opts into the `file` type (and any future gated type). The flag is
   // set here at the service boundary rather than per call site — an
@@ -148,6 +150,26 @@ class WorkService {
 
   refreshAll = async () => {
     await mutate(matchDomain('work:'));
+  };
+
+  /**
+   * Register a mounted workspace gallery's bound SWR Infinite revalidator.
+   *
+   * SWR intentionally skips `$inf$` keys for filter-form global mutations, so
+   * mutations outside the gallery cannot otherwise refresh its aggregate page
+   * cache. The returned cleanup keeps this registry scoped to mounted lists.
+   */
+  registerWorkspaceListRefresh = (refresh: () => Promise<unknown>) => {
+    this.workspaceListRefreshers.add(refresh);
+
+    return () => {
+      this.workspaceListRefreshers.delete(refresh);
+    };
+  };
+
+  /** Refresh every mounted workspace Work list through its bound SWR mutation. */
+  refreshWorkspaceLists = async () => {
+    await Promise.all([...this.workspaceListRefreshers].map((refresh) => refresh()));
   };
 
   /**

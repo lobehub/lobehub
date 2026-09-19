@@ -36,6 +36,25 @@ describe('renderThrownAgentError', () => {
     expect(out).toContain('op-2');
   });
 
+  it('keeps the budget context of a thrown admission failure', () => {
+    const out = renderThrownAgentError(
+      {
+        budget: {
+          availableCredits: 7_242_747,
+          budgetTypeAtError: 'workspace_member',
+          requiredCredits: 197_391,
+        },
+        error: { message: 'Workspace budget exceeded' },
+        errorType: 'InsufficientBudgetForModel',
+      },
+      'op-budget',
+    );
+
+    expect(out).toContain('Member budget in this workspace is used up');
+    expect(out).not.toContain('7.24M');
+    expect(out).not.toContain('7242747');
+  });
+
   it('never leaks the raw error message into the reply', () => {
     const secret = 'connect ECONNREFUSED 10.0.0.7:5432';
 

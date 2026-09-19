@@ -16,6 +16,7 @@ import { useFetchResources, useResourceStore } from '@/store/file/slices/resourc
 
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import EmptyPlaceholder from './EmptyPlaceholder';
+import FileDetailPanel from './FileDetailPanel';
 import Header from './Header';
 import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
 import ListView from './ListView';
@@ -125,43 +126,50 @@ const ResourceExplorer = memo(() => {
     searchQuery,
   });
 
+  // Inline split-screen dock: rendered next to the list so a file click can
+  // show its detail without leaving the surface.
+  const detailPanelMount = useMemo(() => <FileDetailPanel />, []);
+
   const showEmptyStatus = !isLoading && !isValidating && data?.length === 0;
 
   return (
     <KnowledgeBaseListProvider>
       <Flexbox height={'100%'}>
         <Header />
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          {/*
-            AsyncBoundary gates error → empty → data. `isLoading` stays false here
-            because the list/masonry views own their own skeletons (loading is a
-            content swap inside them, not a full relayout), so the boundary only
-            arbitrates the failed-vs-empty-vs-data precedence the call site got wrong.
-          */}
-          <AsyncBoundary
-            data={data}
-            empty={<EmptyPlaceholder />}
-            error={error}
-            errorVariant={'block'}
-            isEmpty={showEmptyStatus}
-            onRetry={() => mutate()}
-          >
-            {viewMode === 'list' ? (
-              <ListView
-                isLoading={isLoading}
-                isValidating={isValidating}
-                queryParams={queryParams}
-              />
-            ) : (
-              <MasonryView
-                isLoading={isLoading}
-                isValidating={isValidating}
-                queryParams={queryParams}
-              />
-            )}
-          </AsyncBoundary>
-          <SearchResultsOverlay />
-        </div>
+        <Flexbox horizontal flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minWidth: 0 }}>
+            {/*
+              AsyncBoundary gates error → empty → data. `isLoading` stays false here
+              because the list/masonry views own their own skeletons (loading is a
+              content swap inside them, not a full relayout), so the boundary only
+              arbitrates the failed-vs-empty-vs-data precedence the call site got wrong.
+            */}
+            <AsyncBoundary
+              data={data}
+              empty={<EmptyPlaceholder />}
+              error={error}
+              errorVariant={'block'}
+              isEmpty={showEmptyStatus}
+              onRetry={() => mutate()}
+            >
+              {viewMode === 'list' ? (
+                <ListView
+                  isLoading={isLoading}
+                  isValidating={isValidating}
+                  queryParams={queryParams}
+                />
+              ) : (
+                <MasonryView
+                  isLoading={isLoading}
+                  isValidating={isValidating}
+                  queryParams={queryParams}
+                />
+              )}
+            </AsyncBoundary>
+            <SearchResultsOverlay />
+          </div>
+          {detailPanelMount}
+        </Flexbox>
       </Flexbox>
     </KnowledgeBaseListProvider>
   );

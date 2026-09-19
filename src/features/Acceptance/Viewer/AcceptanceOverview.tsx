@@ -3,10 +3,16 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { useState } from 'react';
+import { useLocation } from 'react-router';
 
 import { useAcceptanceScope } from './AcceptanceScope';
 import AcceptanceCheckInventory from './Checks/AcceptanceCheckInventory';
 import AcceptanceCheckOwnerToolbar from './Checks/AcceptanceCheckOwnerToolbar';
+import AcceptanceDiscussion from './Comments/AcceptanceDiscussion';
+import { commentIdFromHash } from './Comments/anchor';
+import { messageThreads } from './Comments/discussionTimeline';
+import { useAcceptanceComments } from './Comments/hooks';
+import ReviewerApprovalBar from './Comments/ReviewerApprovalBar';
 import AcceptanceOriginTopic from './Conversation/AcceptanceOriginTopic';
 import AcceptanceResources from './Evidence/AcceptanceResources';
 import { AcceptanceFlow } from './Flow/AcceptanceFlow';
@@ -15,7 +21,6 @@ import AcceptanceEnterFocus from './Focus/AcceptanceEnterFocus';
 import AcceptanceGoal from './Header/AcceptanceGoal';
 import AcceptanceGoalEdit from './Header/AcceptanceGoalEdit';
 import AcceptanceIdentity from './Header/AcceptanceIdentity';
-import AcceptanceSharedNotice from './Header/AcceptanceSharedNotice';
 import AcceptanceStatusControl from './Header/AcceptanceStatusControl';
 import type { AcceptanceTabKey } from './Header/AcceptanceTabs';
 import AcceptanceTabs from './Header/AcceptanceTabs';
@@ -49,7 +54,8 @@ interface AcceptancePageProps {
 
 /**
  * The record's own body: an identity band that ends in the full-width rule,
- * then whichever face of the delivery the tabs select.
+ * then whichever face of the delivery the tabs select. The rule is the band's;
+ * the tabs draw no line of their own, so the two never double up.
  */
 export const AcceptanceOverview = ({
   onDraftToComposer,
@@ -58,10 +64,14 @@ export const AcceptanceOverview = ({
   const { acceptanceId, embedded } = useAcceptanceScope();
   const { turn } = useAcceptanceTurn(embedded);
   const { data } = useAcceptanceBundle(acceptanceId);
+  const { threads } = useAcceptanceComments(acceptanceId);
   const [requestedTab, setTab] = useState<AcceptanceTabKey>();
+  // A link to one comment has to land on the tab that shows it. The reader can
+  // still leave: their own tab choice, once made, outranks the fragment.
+  const { hash } = useLocation();
   const flowCount = getFlowNodeCount(data?.flows);
   const tab = resolveAcceptanceTab(
-    requestedTab,
+    requestedTab ?? (!embedded && commentIdFromHash(hash) ? 'discussion' : undefined),
     flowCount,
     Boolean(flowPlanPhase(data?.rounds.at(-1))),
     md,
@@ -79,7 +89,6 @@ export const AcceptanceOverview = ({
     <>
       <Flexbox className={styles.headerBand}>
         <Flexbox className={styles.column} gap={12}>
-          <AcceptanceSharedNotice />
           <AcceptanceIdentity
             focusSlot={<AcceptanceEnterFocus />}
             statusSlot={<AcceptanceStatusControl />}
@@ -93,6 +102,7 @@ export const AcceptanceOverview = ({
             <AcceptanceTabs
               active={tab}
               checkCount={checks.length}
+              discussionCount={messageThreads(threads).length}
               flowCount={md ? flowCount : 0}
               resourceCount={resourceCount}
               onChange={setTab}
@@ -107,7 +117,15 @@ export const AcceptanceOverview = ({
         paddingBlock={20}
         style={tab === 'flow' ? { maxWidth: 1500 } : undefined}
       >
-        {tab === 'flow' ? (
+        {/* Deciding belongs where the evidence is. The discussion is a
+            conversation; ending one there put the closing act under a thread
+            that says nothing about whether the checks passed. Both faces of
+            the act move together — the owner's decision bar and the
+            reviewer's "fine by me" — or a reviewer would lose the affordance
+            entirely. */}
+        {tab === 'discussion' ? (
+          <AcceptanceDiscussion />
+        ) : tab === 'flow' ? (
           <>
             <AcceptanceFlow />
             <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
@@ -115,6 +133,7 @@ export const AcceptanceOverview = ({
         ) : tab === 'checks' ? (
           <>
             <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
+            <ReviewerApprovalBar />
             <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
           </>
         ) : (

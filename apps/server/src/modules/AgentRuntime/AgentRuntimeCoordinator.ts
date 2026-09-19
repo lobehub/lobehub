@@ -263,6 +263,20 @@ export class AgentRuntimeCoordinator {
   }
 
   /**
+   * Record whether the client holds user messages queued behind the operation.
+   */
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<void> {
+    return this.stateManager.setQueuedMessages(operationId, pending);
+  }
+
+  /**
+   * Check the client's queued-messages flag.
+   */
+  async hasQueuedMessages(operationId: string): Promise<boolean> {
+    return this.stateManager.hasQueuedMessages(operationId);
+  }
+
+  /**
    * Get operation metadata
    */
   async getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null> {
@@ -316,6 +330,45 @@ export class AgentRuntimeCoordinator {
    */
   async cleanupExpiredOperations(): Promise<number> {
     return this.stateManager.cleanupExpiredOperations();
+  }
+
+  /**
+   * Park the envelope for the step an inline loop is about to run. This stands in
+   * for the queue message that the loop chose not to publish, so a redelivery
+   * that arrives after the loop died resumes from the step it actually reached
+   * instead of being dismissed as a stale duplicate.
+   */
+  async saveInlineResume<T>(operationId: string, envelope: T): Promise<boolean> {
+    return this.stateManager.saveInlineResume(operationId, JSON.stringify(envelope));
+  }
+
+  /**
+   * Read a parked inline envelope. Returns null when there is none.
+   *
+   * A read failure propagates, so the delivery is retried rather than treated as
+   * "no envelope" — see `loadInlineResume` on the state manager. A value that no
+   * longer parses is different: retrying cannot fix it, so it is reported and
+   * treated as absent instead of looping the delivery into the DLQ.
+   */
+  async loadInlineResume<T>(operationId: string): Promise<null | T> {
+    const serialized = await this.stateManager.loadInlineResume(operationId);
+    if (!serialized) return null;
+
+    try {
+      return JSON.parse(serialized) as T;
+    } catch (error) {
+      console.error(`Unparseable inline resume envelope for ${operationId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Drop a parked inline envelope once the queue owns the next step again.
+   * Scoped to the lock owner, so a worker that lost the race cannot delete the
+   * envelope of the worker that is still running.
+   */
+  async clearInlineResume(operationId: string, ownerId: string): Promise<void> {
+    return this.stateManager.clearInlineResume(operationId, ownerId);
   }
 
   /**

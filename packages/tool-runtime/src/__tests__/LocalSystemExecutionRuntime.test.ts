@@ -76,7 +76,7 @@ describe('LocalSystemExecutionRuntime.editFile', () => {
     });
 
     expect(output.success).toBe(false);
-    expect((output.error as { kind?: string }).kind).toBeUndefined();
+    expect((output.error as { kind?: string }).kind).toBe('stop');
   });
 
   it('returns a formatted success result on a successful edit', async () => {

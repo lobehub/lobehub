@@ -6,6 +6,18 @@ const BASE_URLS: Record<string, string> = {
 const MAX_TEXT_LENGTH = 4000;
 
 /**
+ * `LARK_API_BASE_URL` redirects every call (auth included) to a stand-in Open
+ * API — the seam a local acceptance run uses to drive the real client without
+ * a Feishu tenant. Unset in production, where the platform picks the host.
+ */
+const resolveBaseUrl = (platform: string): string => {
+  const override =
+    typeof process === 'undefined' ? undefined : process.env?.LARK_API_BASE_URL?.trim();
+  if (override) return override.replace(/\/$/, '');
+  return BASE_URLS[platform] || BASE_URLS.lark;
+};
+
+/**
  * Lightweight wrapper around the Lark/Feishu Open API.
  *
  * Auth: app_id + app_secret -> tenant_access_token (cached, auto-refreshed).
@@ -21,7 +33,7 @@ export class LarkApiClient {
   constructor(appId: string, appSecret: string, platform: string = 'lark') {
     this.appId = appId;
     this.appSecret = appSecret;
-    this.baseUrl = BASE_URLS[platform] || BASE_URLS.lark;
+    this.baseUrl = resolveBaseUrl(platform);
   }
 
   // ------------------------------------------------------------------
@@ -54,13 +66,28 @@ export class LarkApiClient {
     return data.data;
   }
 
+  /**
+   * List messages in a chat.
+   *
+   * `sortType` defaults to `ByCreateTimeAsc` on Feishu's side, i.e. the FIRST
+   * page is the OLDEST messages in the chat. A caller that wants "what was
+   * just discussed" must ask for `ByCreateTimeDesc` — and keep passing the
+   * same value on every `pageToken` follow-up, which Feishu requires.
+   */
   async listMessages(
     chatId: string,
-    options?: { pageSize?: number; pageToken?: string; startTime?: string; endTime?: string },
+    options?: {
+      pageSize?: number;
+      pageToken?: string;
+      sortType?: 'ByCreateTimeAsc' | 'ByCreateTimeDesc';
+      startTime?: string;
+      endTime?: string;
+    },
   ): Promise<{ items: any[]; hasMore: boolean; pageToken?: string }> {
     const params = new URLSearchParams({ container_id_type: 'chat', container_id: chatId });
     if (options?.pageSize) params.set('page_size', String(options.pageSize));
     if (options?.pageToken) params.set('page_token', options.pageToken);
+    if (options?.sortType) params.set('sort_type', options.sortType);
     if (options?.startTime) params.set('start_time', options.startTime);
     if (options?.endTime) params.set('end_time', options.endTime);
 
@@ -80,10 +107,16 @@ export class LarkApiClient {
     return { messageId: data.data.message_id, raw: data.data };
   }
 
-  async addReaction(messageId: string, emojiType: string): Promise<void> {
-    await this.call('POST', `/im/v1/messages/${messageId}/reactions`, {
+  /**
+   * Add a reaction. Returns the `reaction_id` the delete endpoint needs —
+   * it is only ever handed out here, so a caller that intends to remove its
+   * own reaction later has to keep it.
+   */
+  async addReaction(messageId: string, emojiType: string): Promise<{ reactionId: string }> {
+    const data = await this.call('POST', `/im/v1/messages/${messageId}/reactions`, {
       reaction_type: { emoji_type: emojiType },
     });
+    return { reactionId: data.data?.reaction_id };
   }
 
   async removeReaction(messageId: string, reactionId: string): Promise<void> {
@@ -102,6 +135,51 @@ export class LarkApiClient {
   async getBotInfo(): Promise<any> {
     const data = await this.call('GET', '/bot/v3/info', {});
     return data.bot;
+  }
+
+  /**
+   * Resolve the `open_id` of the human who owns this Feishu / Lark app.
+   *
+   * Why this exists: an `open_id` is scoped to a single application, so no
+   * console page can ever show a person their own id for THIS bot — the only
+   * other way to learn it is to message the bot and read the sender id back.
+   * For a self-built app the platform does know one relevant human, the app's
+   * owner (and, separately, its creator), which is normally the same person
+   * configuring the channel.
+   *
+   * The call authenticates with the app's own tenant token, so the id that
+   * comes back is already scoped to this app — the exact value inbound
+   * webhooks carry as `sender_id.open_id`.
+   *
+   * Needs `application:application:self_manage` (already part of the
+   * documented Batch Import scope list) or `admin:app.info:readonly`. `lang`
+   * is a required query parameter; the value only selects the language of the
+   * human-readable fields, which we ignore.
+   *
+   * @see https://open.feishu.cn/document/server-docs/application-v6/application/get
+   */
+  async getAppOwnerId(): Promise<{ openId: string; source: 'creator' | 'owner' } | null> {
+    const data = await this.call(
+      'GET',
+      `/application/v6/applications/${this.appId}?lang=zh_cn&user_id_type=open_id`,
+      {},
+    );
+    const app = data.data?.app;
+    if (!app) return null;
+
+    // `owner.owner_id` is the current owner, which the console lets an admin
+    // transfer; `creator_id` is whoever first created the app. Prefer the
+    // owner and fall back to the creator, but only accept `ou_`-prefixed
+    // values: the owner slot can also hold a tenant-level or partner entry,
+    // which is not a person and would never match an inbound sender id.
+    const candidates: Array<{ source: 'creator' | 'owner'; value: unknown }> = [
+      { source: 'owner', value: app.owner?.owner_id },
+      { source: 'creator', value: app.creator_id },
+    ];
+    for (const { source, value } of candidates) {
+      if (typeof value === 'string' && value.startsWith('ou_')) return { openId: value, source };
+    }
+    return null;
   }
 
   async getUserInfo(openId: string): Promise<{ name?: string } | null> {
@@ -226,6 +304,64 @@ export class LarkApiClient {
   }
 
   // ------------------------------------------------------------------
+  // Cloud documents (docx / wiki)
+  // ------------------------------------------------------------------
+
+  /**
+   * Metadata of a docx document: title + revision. Needs
+   * `docx:document:readonly` (or `docx:document`) on the app, AND the
+   * document must be visible to the app — via a group the bot is in, or by
+   * adding the app as a collaborator.
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/get
+   */
+  async getDocxDocument(
+    documentId: string,
+  ): Promise<{ documentId: string; revisionId?: number; title?: string }> {
+    const data = await this.call('GET', `/docx/v1/documents/${documentId}`, {});
+    const doc = data.data?.document ?? {};
+    return {
+      documentId: doc.document_id ?? documentId,
+      revisionId: doc.revision_id,
+      title: doc.title,
+    };
+  }
+
+  /**
+   * Plain-text body of a docx document (headings, paragraphs, table cells
+   * flattened into text — no block structure). Same scope as
+   * {@link getDocxDocument}. Rate-limited to 5 req/s per app.
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/raw_content
+   */
+  async getDocxRawContent(documentId: string): Promise<string> {
+    const data = await this.call('GET', `/docx/v1/documents/${documentId}/raw_content`, {});
+    return typeof data.data?.content === 'string' ? data.data.content : '';
+  }
+
+  /**
+   * Resolve a wiki node token to the underlying object it wraps. A wiki
+   * link (`/wiki/<token>`) is a tree node, not a document; the document
+   * token to feed the docx endpoints is `obj_token` (when `obj_type` is
+   * `docx`). Needs `wiki:wiki:readonly` (or `wiki:wiki`) on the app.
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/wiki-v2/space-node/get_node
+   */
+  async getWikiNode(
+    token: string,
+  ): Promise<{ nodeToken: string; objToken?: string; objType?: string; title?: string }> {
+    const params = new URLSearchParams({ token });
+    const data = await this.call('GET', `/wiki/v2/spaces/get_node?${params.toString()}`, {});
+    const node = data.data?.node ?? {};
+    return {
+      nodeToken: node.node_token ?? token,
+      objToken: node.obj_token,
+      objType: node.obj_type,
+      title: node.title,
+    };
+  }
+
+  // ------------------------------------------------------------------
   // Auth
   // ------------------------------------------------------------------
 
@@ -266,6 +402,37 @@ export class LarkApiClient {
     return text;
   }
 
+  /**
+   * Flatten the `error` object Lark attaches to a failed response.
+   *
+   * `code` + `msg` alone are close to useless for the two failures operators
+   * actually hit: a permission error says `230027 Permission denied` and
+   * nothing about WHICH scope is missing — even though Lark puts exactly that
+   * in `error.permission_violations`. Dropping it sent a real debugging session
+   * hunting for a scope name in our own docs instead of reading it off the
+   * response. `troubleshooter` is Lark's own log-id-scoped diagnosis link.
+   */
+  private static describeError(error: any): string {
+    if (!error || typeof error !== 'object') return '';
+    const parts: string[] = [];
+
+    const violations = Array.isArray(error.permission_violations)
+      ? error.permission_violations
+      : [];
+    for (const violation of violations) {
+      const subject = violation?.subject ?? violation?.type;
+      const description = violation?.description;
+      const detail = [subject, description].filter(Boolean).join(': ');
+      if (detail) parts.push(`missing permission — ${detail}`);
+    }
+
+    if (typeof error.troubleshooter === 'string' && error.troubleshooter) {
+      parts.push(error.troubleshooter);
+    }
+
+    return parts.length > 0 ? ` (${parts.join('; ')})` : '';
+  }
+
   private async call(method: string, path: string, body: Record<string, unknown>): Promise<any> {
     const token = await this.getTenantAccessToken();
     const url = `${this.baseUrl}${path}`;
@@ -292,7 +459,9 @@ export class LarkApiClient {
     const data: any = await response.json();
 
     if (data.code !== 0) {
-      throw new Error(`Lark API ${method} ${path} failed: ${data.code} ${data.msg}`);
+      throw new Error(
+        `Lark API ${method} ${path} failed: ${data.code} ${data.msg}${LarkApiClient.describeError(data.error)}`,
+      );
     }
 
     return data;

@@ -1,8 +1,10 @@
+import { agentShareFileAccessScope } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FileModel } from '@/database/models/file';
 import { TempFileManager } from '@/server/utils/tempFileManager';
+import { FileSource } from '@/types/files';
 
 import { FileService } from '../index';
 
@@ -60,19 +62,23 @@ describe('FileService', () => {
 
   beforeEach(() => {
     mockFileModel = {
-      findById: vi.fn(),
       delete: vi.fn(),
+      findById: vi.fn(),
       updateGlobalFile: vi.fn(),
     };
     mockTempManager = {
       writeTempFile: vi.fn(),
       cleanup: vi.fn(),
     };
-    vi.mocked(FileModel).mockImplementation(() => mockFileModel);
-    vi.mocked(TempFileManager).mockImplementation(() => mockTempManager);
+    vi.mocked(FileModel).mockImplementation(function () {
+      return mockFileModel;
+    });
+    vi.mocked(TempFileManager).mockImplementation(function () {
+      return mockTempManager;
+    });
 
     // Mock console.error to test error logging
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
     service = new FileService(mockDb, mockUserId);
   });
@@ -122,7 +128,10 @@ describe('FileService', () => {
         new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' }),
       );
 
-      expect(mockFileModel.delete).toHaveBeenCalledWith('test-file-id', false);
+      expect(mockFileModel.delete).toHaveBeenCalledWith('test-file-id', {
+        accessScope: { type: 'ordinary' },
+        removeGlobalFile: false,
+      });
     });
 
     it('should log error and rethrow for non-NoSuchKey errors', async () => {
@@ -166,6 +175,39 @@ describe('FileService', () => {
       });
 
       expect(mockTempManager.writeTempFile).toHaveBeenCalledWith(mockContent, mockFile.name);
+    });
+
+    it('should resolve an agent-share file only through its provenance scope', async () => {
+      const accessScope = agentShareFileAccessScope({
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      });
+      const mockContent = new Uint8Array([1, 2, 3]);
+      mockFileModel.findById.mockResolvedValue(mockFile);
+      vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(mockContent);
+      mockTempManager.writeTempFile.mockResolvedValue('/tmp/test.txt');
+
+      await service.downloadFileToLocal('test-file-id', accessScope);
+
+      expect(mockFileModel.findById).toHaveBeenCalledWith('test-file-id', { accessScope });
+    });
+
+    it('should use the scoped cleanup path when an agent-share object is missing', async () => {
+      const accessScope = agentShareFileAccessScope({
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      });
+      mockFileModel.findById.mockResolvedValue(mockFile);
+      vi.mocked(service['impl'].getFileByteArray).mockRejectedValue({ Code: 'NoSuchKey' });
+
+      await expect(service.downloadFileToLocal('test-file-id', accessScope)).rejects.toThrow(
+        new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' }),
+      );
+
+      expect(mockFileModel.delete).toHaveBeenCalledWith('test-file-id', {
+        accessScope,
+        removeGlobalFile: false,
+      });
     });
   });
 
@@ -412,6 +454,26 @@ describe('FileService', () => {
       );
     });
 
+    it('preserves private visibility and page-editor source for rehosted images', async () => {
+      const beforeRecord = vi.fn();
+      await service.uploadFromBuffer(
+        Buffer.from('image'),
+        'image/png',
+        'images/test.png',
+        beforeRecord,
+        {
+          source: FileSource.PageEditor,
+          visibility: 'private',
+        },
+      );
+      expect(beforeRecord).toHaveBeenCalled();
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'page-editor', visibility: 'private' }),
+        expect.any(Boolean),
+        expect.anything(),
+      );
+    });
+
     it('should compute hash for deduplication', async () => {
       const content = Buffer.from('test content');
 
@@ -513,7 +575,7 @@ describe('FileService', () => {
       mockFileModel.checkHash.mockResolvedValue({ isExist: true, url: 'old/path.txt' });
       mockFileModel.create.mockResolvedValue({ id: 'file-id' });
       vi.mocked(service['impl'].getFileMetadata).mockRejectedValue(new Error('NoSuchKey'));
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       await service.createFileRecord({
         fileHash: 'existing-hash',

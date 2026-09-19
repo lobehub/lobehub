@@ -54,10 +54,45 @@ export class AgentBotProviderModel {
     return result;
   };
 
+  /**
+   * Returns the rows it actually removed, so the caller can tell a real delete
+   * from a no-op. The ownership filter and the `(platform, applicationId)`
+   * unique index disagree about scope — the index is global, the filter is not
+   * — so a binding that lives outside the caller's active scope matches
+   * nothing here while still occupying the key that `create` collides with.
+   * Silently returning "ok" in that case reads as "removed" and leaves the
+   * application id permanently unbindable.
+   */
   delete = async (id: string) => {
     return this.db
       .delete(agentBotProviders)
-      .where(and(eq(agentBotProviders.id, id), this.ownership()));
+      .where(and(eq(agentBotProviders.id, id), this.ownership()))
+      .returning({ id: agentBotProviders.id });
+  };
+
+  /**
+   * Look a binding up by id with no scope filter, for the two cases where the
+   * caller's active scope is the problem rather than a permission: explaining
+   * which agent already holds an application id, and letting a creator delete
+   * their own binding from the other scope. Authorization is the caller's job
+   * — this returns rows belonging to anyone.
+   */
+  findByIdAcrossScopes = async (id: string) => {
+    const [result] = await this.db
+      .select()
+      .from(agentBotProviders)
+      .where(eq(agentBotProviders.id, id))
+      .limit(1);
+
+    return result;
+  };
+
+  /** Delete by id with no scope filter. Call only after authorizing the row. */
+  deleteAcrossScopes = async (id: string) => {
+    return this.db
+      .delete(agentBotProviders)
+      .where(eq(agentBotProviders.id, id))
+      .returning({ id: agentBotProviders.id });
   };
 
   query = async (params?: { agentId?: string; platform?: string }) => {

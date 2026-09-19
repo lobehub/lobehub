@@ -32,6 +32,73 @@ describe('serverMessagesEngine', () => {
     } as UIChatMessage,
   ];
 
+  /**
+   * These cover the wrapper→engine seam rather than the injectors themselves.
+   * The injectors had unit tests and still shipped dead: `serverMessagesEngine`
+   * destructures a fixed parameter list, so a field it does not name is
+   * dropped, and the call site passes an intermediate object, which disables
+   * excess-property checking. Nothing but a test at this boundary catches it.
+   */
+  describe('system-message context forwarded to the engine', () => {
+    it('forwards project instructions', async () => {
+      const result = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        projectInstructions: [{ content: 'Use bun, not npm.', source: 'AGENTS.md' }],
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      const system = result.find((message) => message.role === 'system')?.content;
+      expect(system).toContain('<project_instructions source="AGENTS.md">');
+      expect(system).toContain('Use bun, not npm.');
+    });
+
+    it('forwards the connector ownership note', async () => {
+      const result = await serverMessagesEngine({
+        connectorOwnershipNote: 'Gmail runs on Alice’s account.',
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      expect(result.find((message) => message.role === 'system')?.content).toContain(
+        'Gmail runs on Alice’s account.',
+      );
+    });
+
+    it('keeps the connector note ahead of the project instructions', async () => {
+      const result = await serverMessagesEngine({
+        connectorOwnershipNote: 'CONNECTOR-NOTE',
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        projectInstructions: [{ content: 'PROJECT-RULE', source: 'AGENTS.md' }],
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      // `discoverTools` runs before `prepareOperation`, so this is the order the
+      // old string appends produced; reversing it changes which block the model
+      // reads last.
+      const system = String(result.find((message) => message.role === 'system')?.content ?? '');
+      expect(system.indexOf('CONNECTOR-NOTE')).toBeGreaterThan(-1);
+      expect(system.indexOf('CONNECTOR-NOTE')).toBeLessThan(system.indexOf('PROJECT-RULE'));
+    });
+
+    it('leaves the system message alone when a run has neither', async () => {
+      const result = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      const system = String(result.find((message) => message.role === 'system')?.content ?? '');
+      expect(system).not.toContain('<project_instructions');
+    });
+  });
+
   describe('TODO context', () => {
     const items = [{ status: 'processing' as const, text: 'Keep server context in sync' }];
 

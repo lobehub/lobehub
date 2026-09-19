@@ -12,7 +12,7 @@ import { stripFinalStateInEventData } from './StreamEventManager';
 /**
  * Per-operation redaction policy for a shared-agent visitor run, derived from
  * the share's `AgentShareConfig` (`showModelInfo` / `showErrorDetails`) and
- * carried on `state.metadata.agentShareVisitor`.
+ * carried on `state.principal.actor.shareVisitor`.
  *
  * `null` is the explicit "not a share run — push verbatim" marker, so a
  * missing/undefined value can stay reserved for "not resolved yet".
@@ -56,7 +56,7 @@ export const isShareVisitorInit = (initialState: any): boolean =>
  * its policy is unreadable.
  */
 export const resolveRedactionFromState = (state: any): GatewayVisitorRedaction => {
-  const share = state?.metadata?.agentShareVisitor as
+  const share = state?.principal?.actor?.shareVisitor as
     { showErrorDetails?: boolean; showModelInfo?: boolean; visitorUserId?: string } | undefined;
 
   if (share?.visitorUserId) {

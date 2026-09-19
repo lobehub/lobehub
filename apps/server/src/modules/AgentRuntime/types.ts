@@ -29,6 +29,9 @@ export interface IAgentStateManager {
    */
   cleanupExpiredOperations: () => Promise<number>;
 
+  /** Drop the inline step loop's parked envelope, if this owner still holds the lock. */
+  clearInlineResume: (operationId: string, ownerId: string) => Promise<void>;
+
   /**
    * Create new operation metadata
    */
@@ -87,6 +90,12 @@ export interface IAgentStateManager {
   }>;
 
   /**
+   * Whether the client flagged user messages queued behind this operation
+   * (see `setQueuedMessages`). Cheap to read at every step boundary.
+   */
+  hasQueuedMessages: (operationId: string) => Promise<boolean>;
+
+  /**
    * Check the interrupt sentinel written by `markInterrupted`. Cheap enough
    * to poll, unlike `loadAgentState` which pulls the whole state blob.
    */
@@ -96,6 +105,9 @@ export interface IAgentStateManager {
    * Load Agent state
    */
   loadAgentState: (operationId: string) => Promise<AgentState | null>;
+
+  /** Read the inline step loop's parked envelope, if any. */
+  loadInlineResume: (operationId: string) => Promise<null | string>;
 
   /**
    * Set the interrupt sentinel for the operation, alongside the
@@ -124,9 +136,23 @@ export interface IAgentStateManager {
   saveAgentState: (operationId: string, state: AgentState) => Promise<void>;
 
   /**
+   * Park the envelope for the step an inline loop is about to run, so a
+   * redelivery can resume from it if the loop dies mid-run.
+   */
+  saveInlineResume: (operationId: string, serialized: string) => Promise<boolean>;
+
+  /**
    * Save step execution result
    */
   saveStepResult: (operationId: string, stepResult: StepResult) => Promise<void>;
+
+  /**
+   * Record whether the client still holds user messages queued behind this
+   * operation. The agent reads it at the next step boundary and hands the turn
+   * back early, so the follow-up runs as the next turn instead of waiting for
+   * the whole run to finish.
+   */
+  setQueuedMessages: (operationId: string, pending: boolean) => Promise<void>;
 
   /**
    * Atomically try to claim a step for execution (distributed lock).

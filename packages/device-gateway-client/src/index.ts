@@ -1,6 +1,10 @@
 export type { GatewayClientLogger, GatewayClientOptions } from './client';
 export { GatewayClient } from './client';
-export type { DeviceTransportFailure, DeviceTransportOperation } from './deviceTransportError';
+export type {
+  DeviceTransportFailure,
+  DeviceTransportOperation,
+  DeviceUnavailableErrorData,
+} from './deviceTransportError';
 export {
   describeGatewayRequestFailure,
   describeGatewayResponseFailure,

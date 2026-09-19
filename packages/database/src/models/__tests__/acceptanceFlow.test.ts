@@ -25,10 +25,15 @@ beforeEach(async () => {
     .values({ userId: owner, subjectType: 'standalone', subjectId: randomUUID() })
     .returning();
   acceptanceId = acceptance.id;
+  definition = journeyDefinition('Send and retry');
+});
+
+/** The same two-state journey with fresh ids, so one acceptance can hold several. */
+function journeyDefinition(title: string): AcceptanceFlowDefinition {
   const first = randomUUID();
   const second = randomUUID();
-  definition = {
-    title: 'Send and retry',
+  return {
+    title,
     entryNodeId: first,
     nodes: [
       {
@@ -71,7 +76,7 @@ beforeEach(async () => {
       },
     ],
   };
-});
+}
 afterEach(async () => {
   await db.delete(users).where(eq(users.id, owner));
   await db.delete(users).where(eq(users.id, other));
@@ -83,6 +88,92 @@ async function roundPlan(id: string) {
 }
 
 describe('check assets and round snapshots', () => {
+  it('reads from the entry through each branch instead of sorting checks by UUID', async () => {
+    const ids = [9, 5, 1, 3].map((n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`);
+    const titles = ['Choose how to continue', 'Reassign', 'Handoff complete', 'Wait for recovery'];
+    const journey: AcceptanceFlowDefinition = {
+      title: 'Continue work',
+      entryNodeId: ids[0],
+      nodes: ids.map((id, i) => ({
+        id,
+        check: { id: randomUUID(), title: titles[i], definition: { expected: titles[i] } },
+      })),
+      edges: [
+        [0, 1],
+        [1, 2],
+        [0, 3],
+        [2, 0],
+        [3, 2],
+      ].map(([source, target], i) => ({
+        id: `00000000-0000-4000-9000-${String(i).padStart(12, '0')}`,
+        sourceNodeId: ids[source],
+        targetNodeId: ids[target],
+        trigger: `${titles[source]} to ${titles[target]}`,
+        required: true,
+      })),
+    };
+    const { flowId } = await model.publish(acceptanceId, journey);
+    const run = await model.start(acceptanceId, flowId);
+    const round = await roundPlan(run.id);
+    expect(round.flowSnapshots?.[0].nodes.map((node) => node.id)).toEqual(ids);
+    expect(round.plan?.map((item) => item.title)).toEqual([
+      titles[0],
+      titles[1],
+      titles[2],
+      titles[0],
+      titles[3],
+      titles[2],
+    ]);
+    expect(round.plan?.map((item) => item.sourceFlowNode?.incomingEdgeId)).toEqual([
+      undefined,
+      journey.edges[0].id,
+      journey.edges[1].id,
+      journey.edges[3].id,
+      journey.edges[2].id,
+      journey.edges[4].id,
+    ]);
+    expect(round.plan?.map((item) => item.index)).toEqual([0, 1, 2, 3, 4, 5]);
+    const replay = await model.start(acceptanceId, flowId, undefined, run.id);
+    expect((await roundPlan(replay.id)).plan).toEqual(round.plan);
+  });
+
+  it('keeps expanded subflow checks together at each traversed occurrence', async () => {
+    const child = await model.publish(acceptanceId, definition);
+    const a = randomUUID();
+    const b = randomUUID();
+    const forward = randomUUID();
+    const back = randomUUID();
+    const parent = await model.publish(acceptanceId, {
+      title: 'Retry journey',
+      entryNodeId: a,
+      nodes: [
+        { id: a, subFlowId: child.flowId },
+        { id: b, subFlowId: child.flowId },
+      ],
+      edges: [
+        { id: forward, sourceNodeId: a, targetNodeId: b, trigger: 'Continue', required: true },
+        { id: back, sourceNodeId: b, targetNodeId: a, trigger: 'Retry', required: true },
+      ],
+    });
+    const run = await model.start(acceptanceId, parent.flowId);
+    const round = await roundPlan(run.id);
+    // The child joins the same draft round; read its own occurrences back.
+    const childRun = await model.start(acceptanceId, child.flowId);
+    const childPlan = (await roundPlan(childRun.id)).plan!.filter(
+      (item) => item.sourceFlowNode?.flowId === child.flowId,
+    );
+    const expectedIds = [`${a}/entry/`, `${b}/${forward}/`, `${a}/${back}/`].flatMap((prefix) =>
+      childPlan.map((item) => prefix + item.id),
+    );
+    expect(round.plan).toHaveLength(expectedIds.length);
+    expect(round.plan!.map((item) => item.id.slice(0, item.id.lastIndexOf(':')))).toEqual(
+      expectedIds,
+    );
+    expect(round.plan!.map((item) => item.index)).toEqual(expectedIds.map((_, index) => index));
+    const replay = await model.start(acceptanceId, parent.flowId, undefined, run.id);
+    expect((await roundPlan(replay.id)).plan).toEqual(round.plan);
+  });
+
   it.each(['accepted', 'closed'] as const)(
     'requires reopening a %s acceptance before starting or replaying',
     async (status) => {
@@ -121,6 +212,127 @@ describe('check assets and round snapshots', () => {
     expect((await roundPlan(run.id)).planConfirmedAt).not.toBeNull();
     const replay = await model.start(acceptanceId, flowId, undefined, run.id);
     expect((await roundPlan(replay.id)).planConfirmedAt).toBeNull();
+  });
+
+  it('keeps a planned round on the live graph while the flow is edited before execution', async () => {
+    const { flowId, hash } = await model.publish(acceptanceId, definition);
+    const run = await model.start(acceptanceId, flowId);
+    const third = randomUUID();
+    const revised: AcceptanceFlowDefinition = {
+      ...definition,
+      title: 'Send, retry and recover',
+      nodes: [
+        ...definition.nodes,
+        {
+          id: third,
+          check: {
+            id: randomUUID(),
+            title: 'Recovered',
+            definition: {
+              steps: [{ id: 'reconnect', instruction: 'Reconnect' }],
+              expected: 'Message delivered',
+            },
+          },
+        },
+      ],
+      edges: [
+        ...definition.edges,
+        {
+          id: randomUUID(),
+          sourceNodeId: definition.nodes[1].id,
+          targetNodeId: third,
+          trigger: 'Reconnect',
+          required: true,
+        },
+      ],
+    };
+    await model.publish(acceptanceId, revised, flowId, hash);
+    const round = await roundPlan(run.id);
+    expect(round.status).toBe('planned');
+    expect(round.flowSnapshots?.[0].title).toBe('Send, retry and recover');
+    expect(round.flowSnapshots?.[0].nodes.map((n) => n.id)).toContain(third);
+    expect(round.plan?.map((p) => p.sourceFlowNode?.nodeId)).toContain(third);
+    expect(round.plan?.map((p) => p.index)).toEqual(round.plan?.map((_, i) => i));
+    const [flow] = await model.list(acceptanceId);
+    expect(flow.versions).toHaveLength(1);
+    expect(flow.versions[0].runs[0]?.id).toBe(run.id);
+    expect(flow.versions[0].title).toBe('Send, retry and recover');
+  });
+
+  it('plans again into the same draft round instead of opening another', async () => {
+    const { flowId, hash } = await model.publish(acceptanceId, definition);
+    const draft = await model.start(acceptanceId, flowId);
+    expect((await model.start(acceptanceId, flowId)).id).toBe(draft.id);
+    await model.publish(acceptanceId, { ...definition, title: 'Renamed draft' }, flowId, hash);
+    const again = await model.start(acceptanceId, flowId);
+    expect(again.id).toBe(draft.id);
+    const round = await roundPlan(draft.id);
+    expect(round.roundIndex).toBe(1);
+    expect(round.flowSnapshots?.[0].title).toBe('Renamed draft');
+    expect(
+      await db.select().from(verifyRuns).where(eq(verifyRuns.acceptanceId, acceptanceId)),
+    ).toHaveLength(1);
+  });
+
+  it('leaves an abandoned older draft alone once a newer round has taken over', async () => {
+    const { flowId, hash } = await model.publish(acceptanceId, definition);
+    const stale = await model.start(acceptanceId, flowId);
+    const staleSnapshot = (await roundPlan(stale.id)).flowSnapshots;
+    // A replay opens its own round and pins the definition it replays.
+    const replay = await model.start(acceptanceId, flowId, undefined, stale.id);
+    expect(replay.id).not.toBe(stale.id);
+    await model.record(acceptanceId, {
+      verifyRunId: replay.id,
+      checkItemId: (await roundPlan(replay.id)).plan![0].id,
+      verdict: 'passed',
+      observation: 'Composer visible',
+    });
+
+    // The newest round is frozen now, so the stale draft must not be reused…
+    await model.publish(acceptanceId, { ...definition, title: 'Edited later' }, flowId, hash);
+    expect((await roundPlan(stale.id)).flowSnapshots).toEqual(staleSnapshot);
+    const fresh = await model.start(acceptanceId, flowId);
+    expect(fresh.id).not.toBe(stale.id);
+    expect((await roundPlan(fresh.id)).roundIndex).toBe(3);
+  });
+
+  it('keeps a replay pinned to the definition it replays while it is still unexecuted', async () => {
+    const { flowId, hash } = await model.publish(acceptanceId, definition);
+    const first = await model.start(acceptanceId, flowId);
+    await model.record(acceptanceId, {
+      verifyRunId: first.id,
+      checkItemId: (await roundPlan(first.id)).plan![0].id,
+      verdict: 'passed',
+      observation: 'Composer visible',
+    });
+    const replay = await model.start(acceptanceId, flowId, undefined, first.id);
+    const pinned = await roundPlan(replay.id);
+
+    await model.publish(acceptanceId, { ...definition, title: 'Edited later' }, flowId, hash);
+
+    const after = await roundPlan(replay.id);
+    expect(after.flowSnapshots).toEqual(pinned.flowSnapshots);
+    expect(after.plan).toEqual(pinned.plan);
+    // The replay is a numbered round, so planning again opens the next one.
+    expect((await model.start(acceptanceId, flowId)).id).not.toBe(replay.id);
+  });
+
+  it('leaves an executed round frozen when the flow is edited afterwards', async () => {
+    const { flowId, hash } = await model.publish(acceptanceId, definition);
+    const run = await model.start(acceptanceId, flowId);
+    const before = await roundPlan(run.id);
+    await model.record(acceptanceId, {
+      verifyRunId: run.id,
+      checkItemId: before.plan![0].id,
+      verdict: 'passed',
+      observation: 'Composer visible',
+    });
+    await model.publish(acceptanceId, { ...definition, title: 'Renamed after run' }, flowId, hash);
+    const after = await roundPlan(run.id);
+    expect(after.flowSnapshots).toEqual(before.flowSnapshots);
+    expect(after.plan).toEqual(before.plan);
+    const [flow] = await model.list(acceptanceId);
+    expect(flow.versions.map((v) => v.title)).toEqual(['Renamed after run', 'Send and retry']);
   });
 
   it('creates assets before execution and instantiates each incoming branch in the canonical plan', async () => {
@@ -178,6 +390,13 @@ describe('check assets and round snapshots', () => {
     const { flowId } = await model.publish(acceptanceId, definition);
     const first = await model.start(acceptanceId, flowId);
     const initial = await roundPlan(first.id);
+    // Executing freezes the round; only a frozen round keeps the old definition.
+    await model.record(acceptanceId, {
+      verifyRunId: first.id,
+      checkItemId: initial.plan![0].id,
+      verdict: 'passed',
+      observation: 'Composer visible',
+    });
     const assetId = definition.nodes[0].check!.id;
     await db
       .update(verifyCriteria)
@@ -187,6 +406,7 @@ describe('check assets and round snapshots', () => {
     const replay = await model.start(acceptanceId, flowId, undefined, first.id);
     expect((await roundPlan(first.id)).plan).toEqual(initial.plan);
     expect((await roundPlan(replay.id)).plan).toEqual(initial.plan);
+    expect(current.id).not.toBe(first.id);
     expect(
       (await roundPlan(current.id)).plan?.find((p) => p.sourceCriterionId === assetId)?.definition
         ?.expected,
@@ -295,6 +515,7 @@ describe('check assets and round snapshots', () => {
     const run = await model.start(acceptanceId, parent.flowId);
     const initial = await roundPlan(run.id);
     expect(initial.plan).toHaveLength(6);
+    expect(initial.plan!.map((item) => item.index)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(new Set(initial.plan!.map((item) => item.id)).size).toBe(6);
     const firstItems = initial.plan!.filter((item) =>
       item.sourceFlowNode?.nodeId.startsWith(a + '/'),
@@ -346,6 +567,50 @@ describe('check assets and round snapshots', () => {
     await expect(model.publish(otherAcceptance.id, parentDefinition)).rejects.toThrow(
       'same acceptance',
     );
+  });
+
+  it('deletes an abandoned graph and unplans it from the open draft', async () => {
+    const abandoned = await model.publish(acceptanceId, definition);
+    const kept = await model.publish(acceptanceId, journeyDefinition('Second attempt'));
+    const draft = await model.start(acceptanceId, abandoned.flowId);
+    await model.start(acceptanceId, kept.flowId, draft.id);
+    expect((await roundPlan(draft.id)).flowSnapshots).toHaveLength(2);
+
+    const removed = await model.delete(acceptanceId, abandoned.flowId);
+    expect(removed.title).toBe('Send and retry');
+    expect((await model.list(acceptanceId)).map((flow) => flow.id)).toEqual([kept.flowId]);
+    const round = await roundPlan(draft.id);
+    expect(round.flowSnapshots?.map((snapshot) => snapshot.flowId)).toEqual([kept.flowId]);
+    expect(round.plan?.every((item) => item.sourceFlowNode?.flowId === kept.flowId)).toBe(true);
+    expect(round.plan?.map((item) => item.index)).toEqual(round.plan?.map((_, index) => index));
+  });
+
+  it('refuses to delete a graph a round has already verified', async () => {
+    const { flowId } = await model.publish(acceptanceId, definition);
+    const run = await model.start(acceptanceId, flowId);
+    await model.record(acceptanceId, {
+      verifyRunId: run.id,
+      checkItemId: (await roundPlan(run.id)).plan![0].id,
+      verdict: 'passed',
+      observation: 'Composer visible',
+    });
+    await expect(model.delete(acceptanceId, flowId)).rejects.toThrow('verified this flow');
+    expect(await model.list(acceptanceId)).toHaveLength(1);
+  });
+
+  it('refuses to delete a graph another flow invokes as a subflow', async () => {
+    const child = await model.publish(acceptanceId, definition);
+    const occurrence = randomUUID();
+    const parent = await model.publish(acceptanceId, {
+      title: 'End to end',
+      entryNodeId: occurrence,
+      nodes: [{ id: occurrence, subFlowId: child.flowId }],
+      edges: [],
+    });
+    await expect(model.delete(acceptanceId, child.flowId)).rejects.toThrow('invokes this flow');
+    await model.delete(acceptanceId, parent.flowId);
+    await model.delete(acceptanceId, child.flowId);
+    expect(await model.list(acceptanceId)).toHaveLength(0);
   });
 
   it('rejects unreachable nodes and missing entry points', () => {

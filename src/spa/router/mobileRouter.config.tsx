@@ -6,14 +6,11 @@ import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
-import AgentShareVisitorSkeleton from '@/components/Skeleton/AgentShareVisitor';
 import AppsSkeleton from '@/components/Skeleton/Apps';
 import CommunityListSkeleton from '@/components/Skeleton/CommunityList';
 import { delayed } from '@/components/Skeleton/Delayed';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
-import { agentShareVisitorRouteMeta } from '@/features/AgentShareVisitor/routeMeta';
-import { AGENT_SHARE_VISITOR_PATH } from '@/features/AgentShareVisitor/visitorPath';
 import { mobileAgentSettingsRouteMeta } from '@/features/RouteMeta/mobileRouteMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
@@ -264,7 +261,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/task/[taskId]'),
               'Mobile > Task Detail',
             ),
-            path: ':taskId',
+            // Optional readable title tail; `:taskId` alone resolves the task.
+            path: ':taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,
@@ -277,7 +275,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               () => import('@/routes/(main)/agent/task/[taskId]'),
               'Mobile > Agent Task Detail',
             ),
-            path: ':aid/task/:taskId',
+            path: ':aid/task/:taskId/:slug?',
           },
         ],
         errorElement: <ErrorBoundary resetPath="../tasks" />,
@@ -466,6 +464,64 @@ export const mobileRoutes: RouteObject[] = [
                 ),
                 path: 'general',
               },
+              // Account-level tabs mirrored inside the workspace (see the
+              // desktop router); the pages are the personal settings pages.
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/profile'),
+                  'Mobile > Workspace > Settings > Profile',
+                ),
+                path: 'profile',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/appearance'),
+                  'Mobile > Workspace > Settings > Appearance',
+                ),
+                path: 'appearance',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/hotkey'),
+                  'Mobile > Workspace > Settings > Hotkey',
+                ),
+                path: 'hotkey',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
+                  'Mobile > Workspace > Settings > Messenger',
+                ),
+                path: 'messenger',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/messenger'),
+                  'Mobile > Workspace > Settings > Messenger > Platform',
+                ),
+                path: 'messenger/:sub',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/advanced'),
+                  'Mobile > Workspace > Settings > Advanced',
+                ),
+                path: 'advanced',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/labs'),
+                  'Mobile > Workspace > Settings > Labs',
+                ),
+                path: 'labs',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/about'),
+                  'Mobile > Workspace > Settings > About',
+                ),
+                path: 'about',
+              },
               {
                 element: dynamicElement(
                   () => import('@/routes/(main)/[workspaceSlug]/settings/members'),
@@ -615,20 +671,6 @@ export const mobileRoutes: RouteObject[] = [
     path: '/onboarding',
   },
   ...BusinessMobileRoutesWithoutMainLayout,
-
-  // The agent-share visitor page needs the full chat runtime, so it stays in
-  // the main SPA on every platform (`/share/*` proper is the standalone Share
-  // app). Outside the `/` layout: a visitor gets no nav, no workspace scope.
-  {
-    element: dynamicElement(
-      () => import('@/features/AgentShareVisitor/Page'),
-      'Mobile > Share > Agent',
-      { fallback: delayed(<AgentShareVisitorSkeleton />) },
-    ),
-    errorElement: <ErrorBoundary />,
-    handle: { meta: agentShareVisitorRouteMeta },
-    path: `${AGENT_SHARE_VISITOR_PATH}/:slugOrId/:topicId?`,
-  },
 
   // Messenger verify route (outside main layout)
   {

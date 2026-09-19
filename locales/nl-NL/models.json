@@ -804,6 +804,7 @@
   "lobehub.claude-sonnet-4-6.description": "Claude Sonnet 4.6 biedt de beste combinatie van snelheid en intelligentie van Anthropic.",
   "lobehub.claude-sonnet-5.description": "Claude Sonnet 5 is het meest agentische Sonnet-model van Anthropic, ontworpen voor langdurig coderen, gebruik van tools en workflows met lange contexten, met Sonnet-niveau snelheid en efficiëntie.",
   "lobehub.dall-e-3.description": "Het nieuwste DALL·E-model, uitgebracht in november 2023, ondersteunt realistischere en nauwkeurigere beeldgeneratie met sterkere details.",
+  "lobehub.deepseek-flash.description": "Ingebouwde visie en sterkere agentprestaties dan V4 Pro, met lagere invoer- en cachekosten voor langdurige workflows.",
   "lobehub.deepseek-v4-flash-vision-exp.description": "DeepSeek V4 Flash Vision Exp is een experimenteel multimodaal model dat overeenkomt met V4 Flash op tekstmogelijkheden en beeldbegrip toevoegt voor visuele agent-workflows.",
   "lobehub.deepseek-v4-flash.description": "DeepSeek V4 Flash combineert snelle reacties met sterk redeneren voor workflows die gevoelig zijn voor latentie.",
   "lobehub.deepseek-v4-pro.description": "DeepSeek V4 Pro is momenteel het meest betaalbare model dat nog steeds goed presteert bij dagelijkse agenttaken.",

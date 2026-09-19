@@ -17,6 +17,7 @@ const updateMessageErrorMock = vi.fn();
 const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
+const shareContextMock = vi.hoisted(() => ({ topicShareId: '' }));
 const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
 const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
 const cancelHeteroContinuationMock = vi.hoisted(() => vi.fn());
@@ -182,7 +183,7 @@ vi.mock('@/features/Conversation/store', () => ({
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
-      context: conversationContextMock,
+      context: { ...conversationContextMock, ...shareContextMock },
       cancelHeteroContinuation: cancelHeteroContinuationMock,
       delAndRegenerateMessage: delAndRegenerateMessageMock,
       deleteMessage: vi.fn(),
@@ -211,6 +212,7 @@ describe('ErrorMessageExtra', () => {
     missingTranslationKeys.clear();
     businessSlot.render = false;
     serverConfigMock.enableBusinessFeatures = false;
+    shareContextMock.topicShareId = '';
     businessErrorContentMock.mockReturnValue({
       errorType: undefined,
       hideMessage: false,
@@ -347,6 +349,28 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('dynamic')).toBeInTheDocument();
     expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
+  });
+
+  it('shows the copyable trace ID card without a retry on a shared topic', () => {
+    shareContextMock.topicShareId = 'share-1';
+
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            body: { traceId: 'trace-fixture-1' },
+            type: ChatErrorType.InternalServerError,
+          },
+          id: 'msg-shared-internal-error',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ showRetry: false, traceId: 'trace-fixture-1' }),
+    );
+    expect(screen.queryByText('dynamic-retry')).not.toBeInTheDocument();
   });
 
   it('keeps the group retry callback on the internal server error UI', () => {

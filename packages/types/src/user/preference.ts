@@ -212,6 +212,11 @@ export const UserLabSchema = z.object({
   /** Capture a conversation turn as an eval test case (developer-facing). */
   enableEvalCapture: z.boolean().optional(),
   /**
+   * route every agent run in this tab over one shared gateway WebSocket
+   * (protocol v2 mux) instead of one socket per run
+   */
+  enableGatewayMux: z.boolean().optional(),
+  /**
    * enable the per-topic acceptance tray above the composer (author a topic's
    * delivery checklist inline)
    */

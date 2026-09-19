@@ -2,7 +2,13 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import type { GoalExplorationDecision, GoalGraphSnapshot } from '@lobechat/types';
-import { experimentMembers, experimentOwner } from '@lobechat/utils/goalGraph';
+import {
+  experimentOwner,
+  experimentScope,
+  isProtocolRevision,
+  MAX_PROTOCOL_REVISIONS,
+  protocolRevisionCount,
+} from '@lobechat/utils/goalGraph';
 import { and, eq } from 'drizzle-orm';
 
 import { goals } from '../schemas/goal';
@@ -125,9 +131,13 @@ export class GoalExplorationModel {
       const experiments = graph.nodes.filter(
         (node) =>
           node.kind === 'experiment' ||
+          // A standalone correction re-runs an existing question, so it must not
+          // read back as a new experiment: that would spend a slot and let the
+          // planner revise it as a fresh target with an empty correction budget.
           (node.kind === 'task' &&
             node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
-            !experimentOwner(graph, node.id)),
+            !experimentOwner(graph, node.id) &&
+            !isProtocolRevision(graph, node.id)),
       );
       if (decision.action === 'verify') {
         await tx
@@ -154,6 +164,66 @@ export class GoalExplorationModel {
           `Exploration requests final acceptance: ${decision.reason}`,
         );
         return { outcome: 'verify' as const };
+      }
+      if (decision.action === 'revise') {
+        const target = experiments.find(
+          (node) => node.id === decision.parentNodeId && node.status === 'resolved',
+        );
+        if (!target) throw new Error('A revision must correct a resolved experiment in this goal');
+        // A spent allowance is a predictable policy answer, not a planner crash. Throwing
+        // here would pause the whole goal through the generic failure path, and resuming
+        // could produce the same choice again.
+        const spent = protocolRevisionCount(graph, target.id);
+        if (spent >= MAX_PROTOCOL_REVISIONS) {
+          // The planner asked for a correction after being told the allowance was
+          // gone, and nothing about the graph will change on its own. Leaving the
+          // goal running would let every sweep buy another identical planning call
+          // forever, so park it the way an exhausted experiment budget does.
+          const reason = `Experiment ${target.id} already ran ${spent} corrected protocols; the planner asked for another. Resume to replan.`;
+          await tx
+            .update(goals)
+            .set({
+              config: {
+                ...goal.config,
+                exploration: { ...policy, checkpoint: undefined },
+                pausedBy: 'exploration_revision_limit',
+              },
+              status: 'paused',
+            })
+            .where(eq(goals.id, goalId));
+          await graphModel.recordGoalStatus(goalId, 'running', 'paused', reason);
+          return { outcome: 'revision-limit' as const, reason };
+        }
+        // Correcting an instrument reuses the parent's container, so the graph keeps one
+        // question with successive protocols instead of a row of flawed siblings. An
+        // uncontained legacy seed has no such container: a correction there would be
+        // another root task, which the planner cannot see, which drops the previous
+        // correction's Work, and which an older release would read back as an
+        // experiment consuming a slot. Those goals expand first.
+        const container =
+          target.kind === 'experiment' ? target.id : experimentOwner(graph, target.id);
+        if (!container)
+          throw new Error('A revision needs an experiment container; expand this seed first');
+        const node = await graphModel.createNode(goalId, {
+          description: decision.instruction,
+          kind: 'task',
+          scopeId: container,
+          title: decision.title.trim() || target.title,
+        });
+        if (!node) throw new Error('Could not persist the revised protocol');
+        await graphModel.createEdge(goalId, node.id, target.id, 'revises');
+        const members = experimentScope(graph, container);
+        for (const version of graph.workVersions.filter(
+          (item) => members.has(item.nodeId) && item.relation === 'produced',
+        ))
+          // Preserve the existing version visibility checks; never turn a graph link into read permission.
+          await graphModel.attachWorkVersion(goalId, node.id, version.workVersionId, 'input');
+        await tx
+          .update(goals)
+          .set({ config: { ...goal.config, exploration: { ...policy, checkpoint: undefined } } })
+          .where(eq(goals.id, goalId));
+        await this.recordDecision(tx, goalId, `Revised ${target.id}: ${decision.reason}`);
+        return { outcome: 'revised' as const, nodeId: node.id, parentNodeId: target.id };
       }
       if (experiments.length >= policy.maxExperiments) {
         await tx
@@ -201,8 +271,7 @@ export class GoalExplorationModel {
       });
       if (!node) throw new Error('Could not persist exploration node');
       await graphModel.createEdge(goalId, experiment.id, parent.id, 'derived_from');
-      const parentMembers = experimentMembers(graph, parent.id);
-      parentMembers.add(parent.id);
+      const parentMembers = experimentScope(graph, parent.id);
       for (const version of graph.workVersions.filter(
         (item) => parentMembers.has(item.nodeId) && item.relation === 'produced',
       )) {

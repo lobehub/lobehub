@@ -21,7 +21,6 @@ describe('SkillDetail localization helpers', () => {
     (translations, title) => {
       const result = getLocalizedBuiltinSkillDetail(
         {
-          content: AuvManifest.meta.readme ?? '',
           description: AuvManifest.meta.description ?? '',
           identifier: AuvManifest.identifier,
           name: AuvManifest.meta.title,
@@ -42,7 +41,6 @@ describe('SkillDetail localization helpers', () => {
 
     const result = getLocalizedBuiltinSkillDetail(
       {
-        content: '# Agent Browser',
         description: 'Browser automation CLI for AI agents.',
         identifier: 'lobe-agent-browser',
         name: 'Agent Browser',
@@ -77,7 +75,6 @@ describe('SkillDetail localization helpers', () => {
     expect(
       getLocalizedBuiltinSkillDetail(
         {
-          content: '# Task',
           description: '',
           identifier: 'task',
           name: 'Task',

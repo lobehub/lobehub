@@ -14,6 +14,7 @@ import {
   MarkerType,
   MiniMap,
   type Node as FlowNode,
+  type NodeChange,
   Panel,
   ReactFlow,
   ReactFlowProvider,
@@ -31,7 +32,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import { type GoalGraphNodeKind, graphNodeKind, graphNodeLabel } from '../../Experiments/model';
-import type { GoalGraphView, GoalNodeView } from '../goalGraphViewModel';
+import { type GoalGraphView, type GoalNodeView, isRunningNode } from '../goalGraphViewModel';
 import { KindDot } from '../shared';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
@@ -39,6 +40,8 @@ import ExplorationEdge from './ExplorationEdge';
 import { explorationMap } from './explorationMap';
 import GraphNodeView, { GhostNodeView, type GraphNodeData } from './GraphNode';
 import { hideKinds, layoutGraph, NODE_WIDTH } from './layout';
+import { type MeasuredSizes, mergeMeasuredSizes } from './measuredSizes';
+import { revealCenter } from './revealNode';
 import { useExplorationNavigation } from './useExplorationNavigation';
 import { useFitViewOnResize } from './useFitViewOnResize';
 
@@ -180,14 +183,17 @@ const styles = createStaticStyles(({ css }) => ({
 type GraphViewMode = 'stage' | 'all';
 
 interface GraphProps {
+  /** Header actions after the legend — e.g. a host without fullscreen links out to the goal page. */
+  extra?: ReactNode;
   /**
    * Fullscreen is owned by the page: the overlay replaces the page's Portal
    * panel with its own, and only the owner can keep exactly one of the two
-   * mounted at a time.
+   * mounted at a time. A host that cannot give up its panel (the Portal itself)
+   * omits `onFullscreenChange`, and the map stays inline.
    */
-  fullscreen: boolean;
+  fullscreen?: boolean;
   graph: GoalGraphView;
-  onFullscreenChange: (fullscreen: boolean) => void;
+  onFullscreenChange?: (fullscreen: boolean) => void;
   onSelect: (nodeId: string) => void;
   /** The coordinator is still decomposing: show ghost task cards under the problem. */
   planning?: boolean;
@@ -299,7 +305,7 @@ const Canvas = memo<
     className: string;
     fullscreen: boolean;
     hiddenKinds: ReadonlySet<GoalGraphNodeKind>;
-    /** Bump to refit after the frame around the canvas changes size. */
+    /** Bump after the frame around the canvas changes size to keep the selection in view. */
     refitKey?: boolean;
     view: GraphViewMode;
     collapsed: ReadonlySet<string>;
@@ -323,7 +329,7 @@ const Canvas = memo<
     navigation,
     view,
   }) => {
-    const { fitView } = useReactFlow();
+    const { fitView, getInternalNode, getViewport, setCenter } = useReactFlow();
     const hasNavigation = !!navigation;
     const fitOptions = useMemo(
       () => ({
@@ -365,11 +371,20 @@ const Canvas = memo<
       () => hideKinds(baseNodes, graph.edges, hiddenKinds),
       [baseNodes, graph.edges, hiddenKinds],
     );
+    // A card's height follows its content — a long title wraps to four lines —
+    // so the per-kind estimate stacked the next rank into the cards above it.
+    // The first pass lays out on the estimate; once React Flow has measured the
+    // cards, the map lays out again on what is actually on screen.
+    const [measuredSizes, setMeasuredSizes] = useState<MeasuredSizes>({});
+    const handleNodesChange = useCallback((changes: NodeChange[]) => {
+      setMeasuredSizes((previous) => mergeMeasuredSizes(previous, changes));
+    }, []);
     const positions = hasExperiments
       ? map.boxes
       : layoutGraph(
           baseNodes.filter((node) => visibleIds.has(node.id)),
           [...graph.edges, ...bridges.map((bridge) => ({ ...bridge, kind: 'leads_to' as const }))],
+          measuredSizes,
         );
 
     const ghosts = useMemo(() => {
@@ -435,13 +450,19 @@ const Canvas = memo<
                 false,
               ).size,
               kind: graphNodeKind(graph, item),
-              running: item.node.status === 'active' && !item.isStale,
+              running: isRunningNode(item),
               selected: selectedId === item.node.id,
               stale: item.isStale,
               subtitle: subtitleOf(item),
               view: item,
             };
             const expanded = item.node.kind === 'experiment' && !collapsed.has(item.node.id);
+            const type = expanded
+              ? 'goalExperimentGroup'
+              : graphNodeKind(graph, item) === 'experiment'
+                ? 'goalExperiment'
+                : 'goalNode';
+            const measured = measuredSizes[item.node.id];
             return {
               data: expanded
                 ? ({
@@ -454,11 +475,7 @@ const Canvas = memo<
               draggable: false,
               id: item.node.id,
               position: { x: box?.x ?? 0, y: box?.y ?? 0 },
-              type: expanded
-                ? 'goalExperimentGroup'
-                : graphNodeKind(graph, item) === 'experiment'
-                  ? 'goalExperiment'
-                  : 'goalNode',
+              type,
               parentId: hasExperiments ? map.parents.get(item.node.id) : undefined,
               ...(expanded ? { style: { width: box.width, height: box.height } } : {}),
               ariaLabel: graphNodeLabel(
@@ -467,7 +484,12 @@ const Canvas = memo<
                 item.seq,
               ),
               width: box?.width ?? NODE_WIDTH[item.node.kind],
-              initialHeight: box?.height,
+              // A relayout hands React Flow a new node object, which it treats as
+              // unmeasured: it pins the card to `initialHeight` (clipping a tall
+              // title back to the estimate) and drops the handle positions edges
+              // are drawn from. Handing the last measurement back keeps both, so
+              // only a card that has never rendered gets the estimate.
+              ...(type === 'goalNode' && measured ? { measured } : { initialHeight: box?.height }),
             } satisfies FlowNode;
           }),
       [
@@ -484,6 +506,7 @@ const Canvas = memo<
         onSelect,
         hasExperiments,
         map.parents,
+        measuredSizes,
       ],
     );
 
@@ -568,13 +591,31 @@ const Canvas = memo<
       return () => clearTimeout(timer);
     }, [view, collapsed, allNodes.length, hiddenKinds, fitView, fitOptions]);
 
-    // The portal panel borrows width from the canvas; wait out its slide
-    // animation before refitting, or the fit is computed mid-transition.
+    // The portal panel borrows width from the canvas. Refitting the whole map
+    // when it slid open rescaled the graph on every first click; keep the zoom
+    // and only pan when the selected card ended up under the panel. Wait out
+    // the slide animation, or the canvas is measured mid-transition.
     useEffect(() => {
-      if (refitKey === undefined) return;
-      const timer = setTimeout(() => fitView(fitOptions), 280);
+      if (refitKey === undefined || !selectedId) return;
+      const timer = setTimeout(() => {
+        const node = getInternalNode(selectedId);
+        const container = containerRef.current;
+        if (!node || !container) return;
+        const viewport = getViewport();
+        const { height, width } = container.getBoundingClientRect();
+        const center = revealCenter(
+          {
+            ...node.internals.positionAbsolute,
+            height: node.measured.height ?? 0,
+            width: node.measured.width ?? 0,
+          },
+          viewport,
+          { height, width },
+        );
+        if (center) void setCenter(center.x, center.y, { duration: 200, zoom: viewport.zoom });
+      }, 280);
       return () => clearTimeout(timer);
-    }, [refitKey, fitView, fitOptions]);
+    }, [refitKey, selectedId, getInternalNode, getViewport, setCenter]);
 
     return (
       <div
@@ -613,6 +654,7 @@ const Canvas = memo<
           preventScrolling={fullscreen}
           proOptions={{ hideAttribution: true }}
           zoomOnScroll={false}
+          onNodesChange={handleNodesChange}
           onNodeClick={(_, node) => {
             if (node.type !== 'goalGhost' && node.type !== 'goalExperimentGroup') onSelect(node.id);
           }}
@@ -652,7 +694,7 @@ const Canvas = memo<
 
 Canvas.displayName = 'GoalGraphCanvas';
 
-const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) => {
+const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange, ...props }) => {
   const { t } = useTranslation('chat');
   const navigation = useExplorationNavigation(props.graph.goal.id, {
     nodes: props.graph.nodes.map((item) => item.node),
@@ -796,7 +838,7 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
       })}
     </Flexbox>
   );
-  const toggle = (
+  const toggle = onFullscreenChange && (
     <ActionIcon
       icon={fullscreen ? X : Maximize2}
       size={'small'}
@@ -826,7 +868,10 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
               view={scopeId ? 'all' : view}
               navigation={
                 <Flexbox gap={8}>
-                  {titleAndViews}
+                  {/* Title and view switch share one row, as in the inline header. */}
+                  <Flexbox horizontal align={'center'} gap={12}>
+                    {titleAndViews}
+                  </Flexbox>
                   {overview}
                   {breadcrumbs}
                 </Flexbox>
@@ -870,6 +915,7 @@ const Graph = memo<GraphProps>(({ fullscreen, onFullscreenChange, ...props }) =>
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={12}>
           {legend}
+          {extra}
           {toggle}
         </Flexbox>
       </Flexbox>

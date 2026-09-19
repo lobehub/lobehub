@@ -10,7 +10,6 @@ import {
   ListChevronsDownUp,
   ListChevronsUpDown,
   ListRestart,
-  Play,
   RotateCcw,
   Share2,
   Split,
@@ -44,7 +43,6 @@ interface ChatListActionsBar {
   regenerate: ActionBarItem;
   share: ActionBarItem;
   translate: ActionBarItem;
-  tts: ActionBarItem;
 }
 
 export const useChatListActionsBar = ({
@@ -143,12 +141,7 @@ export const useChatListActionsBar = ({
         label: t('translate.action', { ns: 'chat' }),
         popupClassName: cx(translateStyle),
       },
-      tts: {
-        icon: Play,
-        key: 'tts',
-        label: t('tts.action', { ns: 'chat' }),
-      },
     }),
-    [hasThread, isContinuing, isRegenerating],
+    [hasThread, isContinuing, isRegenerating, t],
   );
 };

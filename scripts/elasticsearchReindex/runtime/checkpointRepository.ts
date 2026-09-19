@@ -11,7 +11,10 @@ import { FTS_SEARCH_DOCUMENT_ENTITIES } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { z } from 'zod';
 
-import { getFtsSearchPhysicalIndexName } from '../../../packages/database/src/repositories/ftsSearchDocument';
+import {
+  getFtsSearchIndexAlias,
+  getFtsSearchPhysicalIndexName,
+} from '../../../packages/database/src/repositories/ftsSearchDocument';
 
 export interface FtsSearchReindexBatchFailure {
   documentId: string;
@@ -128,28 +131,38 @@ const checkpointSchema = z
   .object({
     failures: z.array(failureSchema),
     formatVersion: z.literal(CHECKPOINT_FORMAT_VERSION),
-    progress: z.array(progressSchema).length(FTS_SEARCH_DOCUMENT_ENTITIES.length),
+    /**
+     * One checkpoint tracks one schema generation. The first generation covers every entity; an
+     * upgrade generation only covers the entities whose declared version was bumped, so the list
+     * is a non-empty subset rather than a fixed length.
+     */
+    progress: z.array(progressSchema).min(1),
     run: runSchema,
   })
   .superRefine((checkpoint, context) => {
     const entities = new Set(checkpoint.progress.map(({ entity }) => entity));
-    if (entities.size !== FTS_SEARCH_DOCUMENT_ENTITIES.length) {
+    if (entities.size !== checkpoint.progress.length) {
       context.addIssue({
         code: 'custom',
-        message: 'FTS reindex checkpoint must contain each entity exactly once',
+        message: 'FTS reindex checkpoint must contain each entity at most once',
         path: ['progress'],
       });
     }
     for (const progress of checkpoint.progress) {
-      const expectedIndex = getFtsSearchPhysicalIndexName(
-        checkpoint.run.namespace,
-        progress.entity,
-        checkpoint.run.schemaVersion,
-      );
-      if (progress.physicalIndex !== expectedIndex) {
+      /**
+       * A rebuilt generation lives in `<alias>-v<schemaVersion>`. An in-place upgrade keeps the
+       * older physical index and only advances its `_meta`, so any older generation name of the
+       * same alias is also a valid target; a newer one or a foreign index never is.
+       */
+      const alias = getFtsSearchIndexAlias(checkpoint.run.namespace, progress.entity);
+      const suffix = progress.physicalIndex.startsWith(`${alias}-v`)
+        ? progress.physicalIndex.slice(alias.length + 2)
+        : '';
+      const version = /^\d+$/.test(suffix) ? Number(suffix) : Number.NaN;
+      if (!(version >= 1 && version <= checkpoint.run.schemaVersion)) {
         context.addIssue({
           code: 'custom',
-          message: `Expected physical index ${expectedIndex}`,
+          message: `Expected physical index ${alias}-v<n> with n <= ${checkpoint.run.schemaVersion}`,
           path: ['progress', progress.entity, 'physicalIndex'],
         });
       }
@@ -179,6 +192,22 @@ const unresolvedFailureCount = (
   entity: FtsSearchDocumentEntity,
 ) =>
   checkpoint.failures.filter((failure) => failure.entity === entity && !failure.resolvedAt).length;
+
+const pendingProgress = (
+  namespace: string,
+  schemaVersion: number,
+  entity: FtsSearchDocumentEntity,
+  physicalIndex = getFtsSearchPhysicalIndexName(namespace, entity, schemaVersion),
+): FtsSearchReindexEntityProgress => ({
+  completedAt: null,
+  cursor: null,
+  entity,
+  failedCount: 0,
+  indexedCount: 0,
+  physicalIndex,
+  processedCount: 0,
+  status: 'pending',
+});
 
 const isMissingFileError = (error: unknown) => isRecord(error) && error.code === 'ENOENT';
 const isExistingFileError = (error: unknown) => isRecord(error) && error.code === 'EEXIST';
@@ -419,15 +448,77 @@ export class FtsSearchReindexFileRepository {
     });
   }
 
+  /**
+   * Creates the checkpoint for one schema generation or resumes it. `entities` is the set the
+   * generation covers; when a later code change moves more entities onto an existing generation,
+   * they are appended as pending so the same checkpoint keeps tracking that generation.
+   * `physicalIndexes` pins an entity to an existing older index for an in-place upgrade instead of
+   * the generation's own `<alias>-v<schemaVersion>`; a resumed entity must keep the same target.
+   */
   async createOrResume(
     namespace: string,
     schemaVersion: number,
+    entities: readonly FtsSearchDocumentEntity[] = FTS_SEARCH_DOCUMENT_ENTITIES,
+    physicalIndexes: Partial<Record<FtsSearchDocumentEntity, string>> = {},
   ): Promise<FtsSearchReindexRunState> {
+    if (entities.length === 0)
+      throw new Error('A reindex generation must cover at least one entity');
+    const progressFor = (entity: FtsSearchDocumentEntity) =>
+      pendingProgress(namespace, schemaVersion, entity, physicalIndexes[entity]);
+    const assertTargets = (checkpoint: FtsSearchReindexCheckpointFile) => {
+      for (const progress of checkpoint.progress) {
+        const pinned = physicalIndexes[progress.entity];
+        if (pinned !== undefined && pinned !== progress.physicalIndex) {
+          throw new Error(
+            `Checkpoint ${checkpoint.run.id} already backfills ${progress.entity} into ${progress.physicalIndex}; it cannot switch to ${pinned}`,
+          );
+        }
+      }
+    };
+    const needsBackfill = (checkpoint: FtsSearchReindexCheckpointFile) => {
+      const generationEntitySet = new Set(entities);
+      return (
+        checkpoint.progress.some(
+          (progress) => generationEntitySet.has(progress.entity) && progress.status !== 'completed',
+        ) ||
+        checkpoint.failures.some(
+          (failure) => generationEntitySet.has(failure.entity) && !failure.resolvedAt,
+        )
+      );
+    };
+    const reconcileGeneration = (checkpoint: FtsSearchReindexCheckpointFile) => {
+      let changed = false;
+      for (const entity of entities) {
+        if (checkpoint.progress.some((progress) => progress.entity === entity)) continue;
+        checkpoint.progress.push(progressFor(entity));
+        changed = true;
+      }
+      if (checkpoint.run.status === 'ready_for_incremental_sync' && needsBackfill(checkpoint)) {
+        checkpoint.run.status = 'backfilling';
+        changed = true;
+      }
+      return changed;
+    };
     const checkpointPath = this.checkpointPath(namespace, schemaVersion);
     const existing = await this.readCheckpointIfExists(checkpointPath);
     if (existing) {
       this.assertCaptureFingerprint(existing, await this.readCaptureFingerprint());
-      return this.stateOf(checkpointPath, existing);
+      assertTargets(existing);
+      const missing = entities.filter(
+        (entity) => !existing.progress.some((progress) => progress.entity === entity),
+      );
+      const needsReopen =
+        existing.run.status === 'ready_for_incremental_sync' && needsBackfill(existing);
+      if (missing.length === 0 && !needsReopen) return this.stateOf(checkpointPath, existing);
+      return this.withCheckpointLock(checkpointPath, async () => {
+        const checkpoint = await this.readCheckpoint(checkpointPath);
+        assertTargets(checkpoint);
+        // Recheck under the lock in case another process completed or appended work meanwhile.
+        if (!reconcileGeneration(checkpoint)) return this.stateOf(checkpointPath, checkpoint);
+        checkpoint.run.updatedAt = now();
+        await this.writeCheckpoint(checkpointPath, checkpoint);
+        return this.stateOf(checkpointPath, checkpoint);
+      });
     }
 
     /** Reserve outside the file lock so a slow database connection cannot stale the local lock. */
@@ -440,6 +531,11 @@ export class FtsSearchReindexFileRepository {
       const captureFingerprint = await this.readCaptureFingerprint();
       if (concurrentlyCreated) {
         this.assertCaptureFingerprint(concurrentlyCreated, captureFingerprint);
+        assertTargets(concurrentlyCreated);
+        if (reconcileGeneration(concurrentlyCreated)) {
+          concurrentlyCreated.run.updatedAt = now();
+          await this.writeCheckpoint(checkpointPath, concurrentlyCreated);
+        }
         return this.stateOf(checkpointPath, concurrentlyCreated);
       }
 
@@ -447,16 +543,7 @@ export class FtsSearchReindexFileRepository {
       const checkpoint: FtsSearchReindexCheckpointFile = {
         failures: [],
         formatVersion: CHECKPOINT_FORMAT_VERSION,
-        progress: FTS_SEARCH_DOCUMENT_ENTITIES.map((entity) => ({
-          completedAt: null,
-          cursor: null,
-          entity,
-          failedCount: 0,
-          indexedCount: 0,
-          physicalIndex: getFtsSearchPhysicalIndexName(namespace, entity, schemaVersion),
-          processedCount: 0,
-          status: 'pending',
-        })),
+        progress: entities.map(progressFor),
         run: {
           aliasesCreatedAt: null,
           backfillHighWaterRevision: null,
@@ -499,15 +586,34 @@ export class FtsSearchReindexFileRepository {
     );
   }
 
-  async markReadyForIncrementalSync(runId: string): Promise<void> {
+  /**
+   * Marks the current generation ready without discarding progress or failures retained for an
+   * entity that has since moved to another declared schema version.
+   */
+  async markReadyForIncrementalSync(
+    runId: string,
+    generationEntities: readonly FtsSearchDocumentEntity[],
+  ): Promise<void> {
+    if (generationEntities.length === 0) {
+      throw new Error('A reindex generation must cover at least one entity');
+    }
     /** Read outside the file lock so a slow database connection cannot stale the local lock. */
     const highWaterRevision = await this.options.readHighWaterRevision();
     if (!Number.isSafeInteger(highWaterRevision) || highWaterRevision < 0) {
       throw new Error('Failed to read a valid search reindex high-water revision');
     }
     await this.updateCheckpoint(runId, (checkpoint) => {
-      const incomplete = checkpoint.progress.find((progress) => progress.status !== 'completed');
-      const unresolved = checkpoint.failures.find((failure) => !failure.resolvedAt);
+      const generationEntitySet = new Set(generationEntities);
+      const missing = generationEntities.find(
+        (entity) => !checkpoint.progress.some((progress) => progress.entity === entity),
+      );
+      if (missing) throw new Error(`Missing reindex progress for ${missing}`);
+      const incomplete = checkpoint.progress.find(
+        (progress) => generationEntitySet.has(progress.entity) && progress.status !== 'completed',
+      );
+      const unresolved = checkpoint.failures.find(
+        (failure) => generationEntitySet.has(failure.entity) && !failure.resolvedAt,
+      );
       if (incomplete || unresolved) {
         throw new Error(
           'Cannot create aliases before every reindex entity and failure is complete',

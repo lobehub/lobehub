@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DeviceTransportErrorCode,
   describeGatewayRequestFailure,
   describeGatewayResponseFailure,
+  DeviceTransportErrorCode,
 } from './deviceTransportError';
 
 describe('describeGatewayResponseFailure', () => {
@@ -66,6 +66,22 @@ describe('describeGatewayResponseFailure', () => {
     );
   });
 
+  /** @example A workspace dispatch miss carries enough context for an outer agent to retry. */
+  it('describes a missing device with structured retryable scope data', () => {
+    const failure = describeGatewayResponseFailure(404, 'DEVICE_NOT_FOUND', 'tool call', {
+      deviceId: 'workspace-device-1',
+      workspaceId: 'workspace-1',
+    });
+
+    expect(failure.data).toEqual({
+      code: 'DEVICE_NOT_FOUND',
+      deviceId: 'workspace-device-1',
+      retryable: true,
+      scope: 'workspace',
+      workspaceId: 'workspace-1',
+    });
+  });
+
   it('names the operation that failed', () => {
     expect(describeGatewayResponseFailure(503, '', 'message API call').content).toContain(
       'message API call',
@@ -116,8 +132,10 @@ describe('describeGatewayRequestFailure', () => {
 
   it('recognises the DOM AbortError name as well', () => {
     expect(
-      describeGatewayRequestFailure(Object.assign(new Error('aborted'), { name: 'AbortError' }), 'tool call')
-        .code,
+      describeGatewayRequestFailure(
+        Object.assign(new Error('aborted'), { name: 'AbortError' }),
+        'tool call',
+      ).code,
     ).toBe(DeviceTransportErrorCode.DeviceResponseTimeout);
   });
 
@@ -151,7 +169,10 @@ describe('describeGatewayRequestFailure', () => {
     // The old copy claimed the gateway was unreachable for every rejection,
     // including ones (a malformed response body, say) that prove nothing about
     // whether the device ran the call.
-    const failure = describeGatewayRequestFailure(new Error('Unexpected token < in JSON'), 'tool call');
+    const failure = describeGatewayRequestFailure(
+      new Error('Unexpected token < in JSON'),
+      'tool call',
+    );
 
     expect(failure.code).toBe(DeviceTransportErrorCode.GatewayError);
     expect(failure.content).toContain('unclear whether the device ran it');

@@ -16,9 +16,9 @@ import { Trans, useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
+import { ProviderCombine, ProviderIcon } from '@/components/LobeIcons';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
-import { ProviderCombine, ProviderIcon } from '@/libs/providerIcon';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';

@@ -21,6 +21,33 @@ describe('sharedRendererPlugins', () => {
   });
 });
 
+describe('lobe-dev-editor-provider', () => {
+  it('sends the provider entry back to the one prebundled editor bundle', async () => {
+    const plugin = sharedRendererPlugins({ platform: 'web' })
+      .flat(Number.POSITIVE_INFINITY)
+      .find(
+        (
+          item,
+        ): item is { name: string; resolveId: (source: string, importer: string) => unknown } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          (item as { name?: string }).name === 'lobe-dev-editor-provider',
+      );
+
+    const resolve = async (source: string) =>
+      plugin!.resolveId.call(
+        { resolve: async (id: string) => ({ id }) },
+        source,
+        '/repo/src/layout/GlobalProvider/Editor.tsx',
+      );
+
+    await expect(resolve('@lobehub/editor/react/EditorProvider')).resolves.toEqual({
+      id: '@lobehub/editor/react',
+    });
+    await expect(resolve('@lobehub/editor/react')).resolves.toBeNull();
+  });
+});
+
 describe('sharedOptimizeDeps', () => {
   it('pre-bundles the root and base-ui entrypoints together', () => {
     expect(sharedOptimizeDeps.include).toEqual(

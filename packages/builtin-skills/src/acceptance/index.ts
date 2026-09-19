@@ -1,6 +1,7 @@
 import type { BuiltinSkill } from '@lobechat/types';
 
 import { readSkillVersion, toResourceMeta } from '../lobehub/helpers';
+import acceptanceChecker from './references/acceptance-checker.md';
 import agentBrowser from './references/agent-browser.md';
 import authWeb from './references/auth-web.md';
 import commonMistakes from './references/common-mistakes.md';
@@ -14,7 +15,6 @@ import recordingCdp from './references/recording-cdp.md';
 import recordingIosSimulator from './references/recording-ios-simulator.md';
 import recordingNativeMacos from './references/recording-native-macos.md';
 import report from './references/report.md';
-import testerReview from './references/tester-review.md';
 import content from './SKILL.md';
 import cli from './surfaces/cli.md';
 import electron from './surfaces/electron.md';
@@ -34,7 +34,7 @@ export const AcceptanceIdentifier = 'acceptance';
  * Xcode/simctl for iOS.
  *
  * Everything a specific repository needs on top — its start/stop commands, its
- * approval gate and teardown, its own living logs and probe scripts — lives in
+ * plan gate and teardown, its own living logs and probe scripts — lives in
  * that repository's `.agents/acceptance/` project layer, which SKILL.md reads
  * first. This split replaced the former repo-local `agent-testing` skill: the
  * contract is here, the repository's process is there, and neither restates the
@@ -62,6 +62,7 @@ export const AcceptanceSkill: BuiltinSkill = {
   identifier: AcceptanceIdentifier,
   name: 'acceptance',
   resources: toResourceMeta({
+    'references/acceptance-checker.md': acceptanceChecker,
     'references/agent-browser.md': agentBrowser,
     'references/common-mistakes.md': commonMistakes,
     'references/auth-web.md': authWeb,
@@ -75,7 +76,6 @@ export const AcceptanceSkill: BuiltinSkill = {
     'references/recording-ios-simulator.md': recordingIosSimulator,
     'references/recording-native-macos.md': recordingNativeMacos,
     'references/report.md': report,
-    'references/tester-review.md': testerReview,
     'surfaces/cli.md': cli,
     'surfaces/electron.md': electron,
     'surfaces/ios-simulator.md': iosSimulator,

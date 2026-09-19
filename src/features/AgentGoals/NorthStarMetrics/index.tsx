@@ -153,7 +153,7 @@ const NorthStarMetrics = memo<NorthStarMetricsProps>(({ canEdit, goalId }) => {
           {t('goalProcess.northStar.emptyHint')}
         </Text>
         {canEdit && (
-          <Button size={'small'} onClick={() => openDeclareMetricModal(goalId)}>
+          <Button size={'small'} type={'text'} onClick={() => openDeclareMetricModal(goalId)}>
             {t('goalProcess.northStar.declare.title')}
           </Button>
         )}

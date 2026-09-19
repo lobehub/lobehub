@@ -4,7 +4,7 @@ import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { taskKeys } from '@/libs/swr/keys';
+import { goalKeys, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
 import type { StoreSetter } from '@/store/types';
@@ -532,7 +532,17 @@ export class TaskDetailSliceActionImpl {
       data.parentTaskId !== undefined ||
       data.priority !== undefined
     ) {
-      await Promise.all([this.#get().refreshTaskList(), refreshPatchedTargets()]).catch(() => {});
+      await Promise.all([
+        this.#get().refreshTaskList(),
+        refreshPatchedTargets(),
+        // A goal page names each task's executor from its own graph snapshot,
+        // and only polls while the goal is advancing — a paused or finished
+        // goal would keep showing the old assignee. The task does not know its
+        // goal, so revalidate every goal graph; only mounted ones refetch.
+        assigneeAgentId !== undefined
+          ? mutate((key) => Array.isArray(key) && key[0] === goalKeys.graph.root)
+          : undefined,
+      ]).catch(() => {});
     }
   };
 

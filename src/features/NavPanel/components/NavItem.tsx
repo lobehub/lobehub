@@ -13,6 +13,7 @@ import { isModifierClick } from '@/utils/navigation';
 import { type LazyActions, useLazyActions } from './useLazyActions';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
+const CONTENT_CLASS_NAME = 'nav-item-content';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -20,24 +21,38 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     min-width: 32px;
 
-    .${ACTION_CLASS_NAME} {
-      width: 0;
-      margin-inline-end: 2px;
-      opacity: 0;
-      transition: opacity 0.2s ${cssVar.motionEaseOut};
-
-      &:has([data-popup-open]),
-      &:focus-within {
-        width: unset;
+    /* focus-visible, not focus-within: closing a dropdown hands focus back to its
+       trigger, which would pin the actions open after the pointer has left. */
+    &:hover,
+    &:has(.${ACTION_CLASS_NAME} :focus-visible),
+    &:has([data-popup-open]) {
+      .${ACTION_CLASS_NAME} {
+        pointer-events: auto;
         opacity: 1;
+      }
+
+      /* Fade the covered text itself instead of painting a row-colored plate over it,
+         so the overlay matches any row background (hover / active / none). */
+      .${CONTENT_CLASS_NAME} {
+        mask-image: linear-gradient(
+          to right,
+          #000 calc(100% - 56px),
+          transparent calc(100% - 28px)
+        );
       }
     }
 
-    &:hover {
-      .${ACTION_CLASS_NAME} {
-        width: unset;
-        opacity: 1;
-      }
+    /* Overlay instead of in-flow so revealing the actions never re-truncates the title. */
+    .${ACTION_CLASS_NAME} {
+      pointer-events: none;
+
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: 0;
+
+      padding-inline-end: 6px;
+
+      opacity: 0;
     }
   `,
 }));
@@ -190,7 +205,14 @@ const NavItem = memo<NavItemProps>(
         )}
 
         {iconPostfix}
-        <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={CONTENT_CLASS_NAME}
+          flex={1}
+          gap={8}
+          style={{ overflow: 'hidden' }}
+        >
           {titlePrefix}
           {description ? (
             <Flexbox flex={1} gap={3} style={{ overflow: 'hidden' }}>
@@ -210,9 +232,26 @@ const NavItem = memo<NavItemProps>(
               {title}
             </Text>
           )}
+          {extra && (
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={2}
+              justify={'flex-end'}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
+              {extra}
+            </Flexbox>
+          )}
+        </Flexbox>
+        {actions && (
           <Flexbox
             horizontal
             align={'center'}
+            className={ACTION_CLASS_NAME}
             gap={2}
             justify={'flex-end'}
             onClick={(e) => {
@@ -220,24 +259,9 @@ const NavItem = memo<NavItemProps>(
               e.stopPropagation();
             }}
           >
-            {extra}
-            {actions && (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={ACTION_CLASS_NAME}
-                gap={2}
-                justify={'flex-end'}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-              >
-                {renderedActions}
-              </Flexbox>
-            )}
+            {renderedActions}
           </Flexbox>
-        </Flexbox>
+        )}
       </Block>
     );
     if (!contextMenuItems) return Content;

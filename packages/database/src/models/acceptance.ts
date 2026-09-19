@@ -1,4 +1,8 @@
-import type { AcceptanceStatus, AcceptanceSubjectType } from '@lobechat/types';
+import type {
+  AcceptanceCheckGroup,
+  AcceptanceStatus,
+  AcceptanceSubjectType,
+} from '@lobechat/types';
 import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
@@ -51,6 +55,27 @@ export class AcceptanceModel {
 
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
+
+  /** Presentation-only write: never starts a round or rewrites evidence-bearing snapshots. */
+  setCheckGroups = async (id: string, groups: AcceptanceCheckGroup[], expectedVersion: number) => {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), this.ownership()))
+        .for('update');
+      if (!row) throw new Error('Acceptance not found');
+      const version = row.metadata?.checkGrouping?.version ?? 0;
+      if (version !== expectedVersion)
+        throw new Error('Check grouping changed; reload before editing');
+      const checkGrouping = { groups, version: version + 1 };
+      await tx
+        .update(acceptances)
+        .set({ metadata: { ...row.metadata, checkGrouping } })
+        .where(eq(acceptances.id, id));
+      return checkGrouping;
+    });
+  };
 
   /**
    * Scope-dependent visibility default: personal aggregates are link-shareable

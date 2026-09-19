@@ -18,6 +18,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import RepoIcon from '@/components/LibIcon';
 import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
@@ -99,6 +100,7 @@ export const useFileItemDropdown = ({
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   const {
     deleteResource,
@@ -272,23 +274,23 @@ export const useFileItemDropdown = ({
 
     const hasKnowledgeBaseActions = libraryRelatedActions.some(Boolean);
 
+    // Visibility is a workspace concept: `files.visibility` defaults to
+    // `'public'` even for personal-mode rows (`workspace_id IS NULL`), where it
+    // is meaningless. Without this gate every personal file would offer
+    // "Make private" (and, once flipped, "Publish to workspace").
+    const isOwnWorkspaceFile =
+      !!activeWorkspaceId &&
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      !!currentUserId &&
+      userId === currentUserId;
     // Only the creator of a still-private file (not a folder, since folders
     // live in the `documents` table and have their own publish flow) sees the
     // "Publish to workspace" entry. Mirrors the agent / task one-way publish.
-    const isOwnPrivateFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'private' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPrivateFile = isOwnWorkspaceFile && visibility === 'private';
     // Bidirectional counterpart: workspace-public files owned by the caller
     // can be pulled back to private via the same guarded server path.
-    const isOwnPublicFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'public' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPublicFile = isOwnWorkspaceFile && visibility === 'public';
 
     return (
       [
@@ -326,7 +328,7 @@ export const useFileItemDropdown = ({
               domEvent.stopPropagation();
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
-                content: <VisibilityConfirmContent variant="makePrivate" />,
+                content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
                 okButtonProps: { danger: true },
                 okText: t('continue', { ns: 'common' }),
                 title: t('makePrivate.confirm.title', { ns: 'common' }),
@@ -490,6 +492,7 @@ export const useFileItemDropdown = ({
   }, [
     addFilesToKnowledgeBase,
     appOrigin,
+    activeWorkspaceId,
     canEditResources,
     currentUserId,
     deleteResource,

@@ -2,11 +2,12 @@
 
 import '@xyflow/react/dist/style.css';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Button, Select, Text } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, useAppElement } from '@lobehub/ui';
+import { ActionIcon, Button, Select, Text } from '@lobehub/ui/base-ui';
 import { MarkerType, ReactFlowProvider } from '@xyflow/react';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
-import { use, useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
+import { use, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -24,8 +25,57 @@ import { FlowPanelHostContext } from './FlowPanelHost';
 import { FlowResults } from './FlowResults';
 
 const styles = createStaticStyles(({ css }) => ({
+  // Fullscreen is a two-column shell, the same shape the page uses: the details
+  // rail owns the full height of the right edge and the toolbar belongs to the
+  // canvas beside it, not to a band stretched across both.
+  fullscreen: css`
+    position: fixed;
+    z-index: ${cssVar.zIndexPopupBase};
+    inset: 0;
+    background: ${cssVar.colorBgContainer};
+
+    @media (width <= 640px) {
+      flex-direction: column;
+    }
+  `,
+  stage: css`
+    min-width: 0;
+    min-height: 0;
+    padding: 16px;
+  `,
+  details: css`
+    overflow: hidden;
+    flex: none;
+
+    width: min(440px, 42%);
+    height: 100%;
+    min-height: 0;
+
+    @media (width <= 640px) {
+      width: 100%;
+      height: 40%;
+    }
+  `,
+  workspace: css`
+    min-width: 0;
+    min-height: 0;
+
+    @media (width <= 640px) {
+      flex-direction: column;
+    }
+  `,
   toolbar: css`
     width: 100%;
+    max-width: ${acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline}px;
+    margin-inline: auto;
+  `,
+  // The outline is reading material, so it keeps the page's text measure while
+  // the canvas next to it is allowed the full width.
+  outline: css`
+    overflow: auto;
+
+    width: 100%;
+    min-width: 0;
     max-width: ${acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline}px;
     margin-inline: auto;
   `,
@@ -34,12 +84,28 @@ const nodeTypes = { state: FlowNode, flowGroup: FlowGroup };
 
 export function AcceptanceFlow() {
   const { t } = useTranslation('verify');
+  const appElement = useAppElement();
   const panelHost = use(FlowPanelHostContext);
   const { md = true } = useResponsive();
   const [display, setDisplay] = useState<'graph' | 'outline'>();
   const showOutline = (display ?? (md ? 'graph' : 'outline')) === 'outline';
   const { acceptanceId } = useAcceptanceScope();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
+  const [fullscreen, setFullscreen] = useState(false);
+  const fullscreenButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const focusToggle = () => fullscreenButton.current?.focus();
+    focusToggle();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !event.defaultPrevented) setFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      requestAnimationFrame(focusToggle);
+    };
+  }, [fullscreen]);
   const [roundKey, setRoundKey] = useState<string>();
   const [selected, setSelected] = useState<string>();
   const [focus, setFocus] = useState<string>();
@@ -74,7 +140,6 @@ export function AcceptanceFlow() {
       });
     },
     setFocus,
-    setSelected,
     focus,
   );
   if (!views.length) return <Empty description={t('flow.empty')} />;
@@ -104,8 +169,30 @@ export function AcceptanceFlow() {
       strokeWidth: edge.id === selected ? 2 : 1.5,
     },
   }));
-  return (
-    <Flexbox gap={16}>
+  const results = checkSelection ? (
+    <FlowResults
+      acceptanceId={acceptanceId!}
+      attempts={attempts}
+      edges={checkSelection.view.version.edges}
+      key={`${checkSelection.view.id}:${selected}`}
+      node={checkSelection.node}
+      selectedEdge={edgeSelection?.edge}
+      canReview={Boolean(
+        data?.canReview &&
+        checkSelection.view.roundIndex != null &&
+        checkSelection.view.roundIndex ===
+          Math.max(...(data?.rounds.map((r) => r.run.roundIndex ?? 0) ?? [0])),
+      )}
+      onClose={() => setSelected(undefined)}
+      onSaved={mutate}
+    />
+  ) : null;
+  const stage = (
+    <Flexbox
+      className={fullscreen ? styles.stage : undefined}
+      flex={fullscreen ? 1 : undefined}
+      gap={16}
+    >
       <Flexbox
         horizontal
         align="center"
@@ -127,7 +214,7 @@ export function AcceptanceFlow() {
             </Flexbox>
           ))}
         </Flexbox>
-        <Flexbox horizontal align="center" gap={8}>
+        <Flexbox horizontal align="center" gap={8} wrap="wrap">
           <AcceptancePlanReview runId={candidates[0]?.run?.verifyRunId} />
           <Button
             size="small"
@@ -153,42 +240,42 @@ export function AcceptanceFlow() {
               setSelected(undefined);
             }}
           />
+          <ActionIcon
+            aria-label={t(fullscreen ? 'flow.exitFullscreen' : 'flow.fullscreen')}
+            icon={fullscreen ? Minimize2 : Maximize2}
+            ref={fullscreenButton}
+            title={t(fullscreen ? 'flow.exitFullscreen' : 'flow.fullscreen')}
+            onClick={() => setFullscreen((value) => !value)}
+          />
         </Flexbox>
       </Flexbox>
-      {showOutline ? (
-        <FlowOutline edges={graphEdges} nodes={graph.nodes} onSelect={setSelected} />
-      ) : (
-        <ReactFlowProvider key={activeKey}>
-          <FlowCanvas
-            edges={graphEdges}
-            nodeTypes={nodeTypes}
-            nodes={graph.nodes}
-            viewKey={focus ?? activeKey}
-            onSelect={setSelected}
-          />
-        </ReactFlowProvider>
-      )}
-      {checkSelection &&
-        panelHost &&
-        createPortal(
-          <FlowResults
-            acceptanceId={acceptanceId!}
-            attempts={attempts}
-            edges={checkSelection.view.version.edges}
-            key={`${checkSelection.view.id}:${selected}`}
-            node={checkSelection.node}
-            selectedEdge={edgeSelection?.edge}
-            canReview={Boolean(
-              data?.canReview &&
-              checkSelection.view.roundIndex != null &&
-              checkSelection.view.roundIndex ===
-                Math.max(...(data?.rounds.map((r) => r.run.roundIndex ?? 0) ?? [0])),
-            )}
-            onClose={() => setSelected(undefined)}
-            onSaved={mutate}
-          />,
-          panelHost,
+      <Flexbox horizontal className={styles.workspace} flex={fullscreen ? 1 : undefined}>
+        {showOutline ? (
+          <Flexbox className={styles.outline} flex={1}>
+            <FlowOutline edges={graphEdges} nodes={graph.nodes} onSelect={setSelected} />
+          </Flexbox>
+        ) : (
+          <ReactFlowProvider key={activeKey}>
+            <FlowCanvas
+              edges={graphEdges}
+              fullscreen={fullscreen}
+              nodeTypes={nodeTypes}
+              nodes={graph.nodes}
+              viewKey={focus ?? activeKey}
+              onSelect={setSelected}
+            />
+          </ReactFlowProvider>
         )}
+        {!fullscreen && results && panelHost && createPortal(results, panelHost)}
+      </Flexbox>
     </Flexbox>
+  );
+  if (!fullscreen) return stage;
+  return createPortal(
+    <Flexbox horizontal className={styles.fullscreen}>
+      {stage}
+      {results && <Flexbox className={styles.details}>{results}</Flexbox>}
+    </Flexbox>,
+    appElement ?? document.body,
   );
 }

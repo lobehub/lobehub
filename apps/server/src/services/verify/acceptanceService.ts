@@ -1,6 +1,7 @@
-import { normalizeVerifySurface } from '@lobechat/const/verify';
+import { isDraftVerifyRun, normalizeVerifySurface } from '@lobechat/const/verify';
 import type {
   AcceptanceAttachment,
+  AcceptanceCheckGroup,
   AcceptanceCheckReviewAction,
   AcceptanceConfig,
   AcceptanceRejectIntent,
@@ -35,6 +36,7 @@ import type {
 } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
+import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejection';
 
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
 import { computeFalseFlags } from './feedbackService';
@@ -143,7 +145,10 @@ const itemSurface = (item: VerifyCheckItem | undefined): VerifySurface | null =>
  *   item's iteration timeline, so a semantically-dead older wording stops
  *   showing up as its own row.
  */
-export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheckRow[] => {
+export const buildAcceptanceCheckUnion = (
+  rounds: RoundInput[],
+  groups: AcceptanceCheckGroup[] = [],
+): AcceptanceCheckRow[] => {
   const ordered = [...rounds].sort((a, b) => (a.run.roundIndex ?? 0) - (b.run.roundIndex ?? 0));
 
   const rows = new Map<string, AcceptanceCheckRow>();
@@ -263,7 +268,16 @@ export const buildAcceptanceCheckUnion = (rounds: RoundInput[]): AcceptanceCheck
     }
   }
 
-  return [...rows.values()];
+  // Organization belongs to the current acceptance, not its immutable execution
+  // snapshots. Preserve IDs, numbering and result references when a check moves.
+  const grouped = new Map<string, AcceptanceCheckRow>();
+  for (const group of groups) {
+    for (const id of group.checkItemIds) {
+      const row = rows.get(id);
+      if (row) grouped.set(id, { ...row, category: group.title });
+    }
+  }
+  return [...grouped.values(), ...[...rows.values()].filter((row) => !grouped.has(row.id))];
 };
 
 // ============================================
@@ -675,11 +689,35 @@ export class AcceptanceService {
 
     await this.assertPlanLeavesAcceptedChecksAlone(existing, acceptanceId);
 
+    // A round that is still only planned has nothing to preserve: the incoming
+    // run folds into it instead of pushing the ledger to yet another number.
+    // Only the newest round counts — `listByAcceptance` is ascending, and an
+    // older draft the chain has moved past is an abandoned ledger position.
+    const latest = (await this.runModel.listByAcceptance(acceptanceId)).at(-1);
+    const draft = latest && isDraftVerifyRun(latest) ? latest : undefined;
+    if (draft) {
+      const folded = await this.runModel.foldIntoRound(runId, draft.id);
+      await this.recomputeStatus(acceptanceId);
+      log(
+        'run %s folded into draft round %d of acceptance %s',
+        runId,
+        folded.roundIndex,
+        acceptanceId,
+      );
+      return folded;
+    }
+
     // Rounds inherit the aggregate's visibility so a private acceptance's new
     // round never leaks through its own report URL.
     const run = await this.runModel.attachToAcceptance(runId, acceptanceId, acceptance.visibility);
     await this.recomputeStatus(acceptanceId);
     log('run %s attached to acceptance %s as round %d', runId, acceptanceId, run.roundIndex);
+
+    // A new round landing is the first server-side proof that the reviewer is done with the
+    // previous one: rejecting a check ends at a clipboard copy, so nothing else marks "I finished
+    // reviewing".
+    if (latest) this.distilSettledRound(acceptanceId, latest.id);
+
     return run;
   };
 
@@ -765,6 +803,58 @@ export class AcceptanceService {
     return runs.at(-1) ?? null;
   };
 
+  regroupChecks = async (
+    acceptanceId: string,
+    groups: AcceptanceCheckGroup[],
+    expectedVersion: number,
+  ) => {
+    const acceptance = await this.acceptanceModel.findById(acceptanceId);
+    if (!acceptance) throw new Error('Acceptance not found');
+    const { results, runs } = await this.loadRounds(acceptanceId);
+    const resultsByRun = new Map<string, VerifyCheckResultItem[]>();
+    for (const result of results) {
+      const bucket = resultsByRun.get(result.verifyRunId!) ?? [];
+      bucket.push(result);
+      resultsByRun.set(result.verifyRunId!, bucket);
+    }
+    const checks = buildAcceptanceCheckUnion(
+      runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+    );
+    const known = new Set(checks.map((check) => check.id));
+    const assigned = new Set<string>();
+    const titles = new Set<string>();
+    const normalized = groups.map((group) => {
+      const title = group.title.trim();
+      if (!title || titles.has(title) || group.checkItemIds.length === 0)
+        throw new Error('Check groups need unique, non-empty titles and members');
+      titles.add(title);
+      for (const id of group.checkItemIds) {
+        if (!known.has(id)) throw new Error(`Unknown check item: ${id}`);
+        if (assigned.has(id)) throw new Error(`Check assigned to multiple groups: ${id}`);
+        assigned.add(id);
+      }
+      return { ...group, title };
+    });
+    return this.acceptanceModel.setCheckGroups(acceptanceId, normalized, expectedVersion);
+  };
+
+  /**
+   * Hands one settled round to distillation, fire-and-forget.
+   *
+   * Never awaited and never allowed to throw: this rides on the reviewer's own paths, and losing a
+   * distillation is a missed lesson, while failing the caller loses their decision. Triggering the
+   * same round twice is harmless — a round is distilled under a reflection key, and the second pass
+   * finds the run already recorded and returns.
+   */
+  private distilSettledRound = (acceptanceId: string, verifyRunId: string) => {
+    void ExpertiseRejectionWorkflow.trigger({
+      acceptanceId,
+      userId: this.userId,
+      verifyRunId,
+      workspaceId: this.workspaceId,
+    });
+  };
+
   /**
    * The user accepts the delivery — the terminal business event (P-12). Stamps
    * the decision on the current round, closes the aggregate, and best-effort
@@ -773,8 +863,15 @@ export class AcceptanceService {
   accept = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
     const acceptance = await this.requireDecidableAcceptance(acceptanceId);
 
-    await this.stampDecision(acceptanceId, 'accept', comment);
+    const settled = await this.stampDecision(acceptanceId, 'accept', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
+
+    // A terminal decision settles the current round as surely as a new round landing does — and it
+    // is the ONLY thing that settles the last one, which no later round will ever follow. Without
+    // this, every acceptance silently loses whatever its final round taught. Accepting the delivery
+    // still settles it: a reviewer can accept overall while individual checks were rejected along
+    // the way, and those rejections are exactly the material.
+    this.distilSettledRound(acceptanceId, settled);
 
     if (acceptance.subjectType === 'task') await this.completeTaskSubject(acceptance.subjectId);
 
@@ -795,8 +892,10 @@ export class AcceptanceService {
   reject = async (acceptanceId: string, comment: string): Promise<AcceptanceItem> => {
     await this.requireDecidableAcceptance(acceptanceId);
 
-    await this.stampDecision(acceptanceId, 'reject', comment);
+    const settled = await this.stampDecision(acceptanceId, 'reject', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
+
+    this.distilSettledRound(acceptanceId, settled);
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
   };
@@ -954,11 +1053,12 @@ export class AcceptanceService {
     return acceptance;
   };
 
+  /** Stamps the decision on the current round and returns it — the round that decision settles. */
   private stampDecision = async (
     acceptanceId: string,
     decision: 'accept' | 'reject',
     comment?: string,
-  ): Promise<void> => {
+  ): Promise<string> => {
     const runs = await this.runModel.listByAcceptance(acceptanceId);
     const current = runs.at(-1);
     if (!current) throw new Error('This acceptance has no verification round to decide on');
@@ -969,6 +1069,8 @@ export class AcceptanceService {
       ...(comment ? { comment } : {}),
     };
     await this.runModel.setDecision(current.id, decision, detail);
+
+    return current.id;
   };
 
   /**

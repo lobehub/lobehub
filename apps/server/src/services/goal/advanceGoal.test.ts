@@ -2,7 +2,9 @@ import type { GoalTickOutcome, GoalTickResult } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createStore: vi.fn(() => null as unknown),
+  createStore: vi.fn(function () {
+    return null as unknown;
+  }),
   execute: vi.fn(),
   status: vi.fn(),
   tick: vi.fn(),
@@ -18,11 +20,15 @@ vi.mock('@/database/server', () => ({
   }),
 }));
 vi.mock('./index', () => ({
-  GoalService: vi.fn(() => ({ status: mocks.status, tick: mocks.tick })),
+  GoalService: vi.fn(function () {
+    return { status: mocks.status, tick: mocks.tick };
+  }),
 }));
 vi.mock('./traceStore', () => ({ createDefaultGoalTraceStore: mocks.createStore }));
 vi.mock('@/database/models/goalTrace', () => ({
-  GoalTraceModel: vi.fn(() => ({ upsert: mocks.upsert })),
+  GoalTraceModel: vi.fn(function () {
+    return { upsert: mocks.upsert };
+  }),
 }));
 
 const { advanceGoal, MAX_TICKS_PER_ADVANCE } = await import('./advanceGoal');

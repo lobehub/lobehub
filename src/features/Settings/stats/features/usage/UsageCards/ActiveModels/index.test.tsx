@@ -10,11 +10,8 @@ import type { UsageLog } from '@/types/usage/usageRecord';
 import { GroupBy } from '../../../../types';
 import ActiveModels from './index';
 
-vi.mock('@lobehub/icons', () => ({
+vi.mock('@/components/LobeIcons', () => ({
   ModelIcon: ({ model }: { model: string }) => <span>{model}</span>,
-}));
-
-vi.mock('@/libs/providerIcon', () => ({
   ProviderIcon: ({ provider }: { provider: string }) => <span>{provider}</span>,
 }));
 

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -174,6 +174,7 @@ describe('AgentShareModel', () => {
       expect(ownerShare?.shareConfig).toEqual({
         allowCreatorViewSessions: false,
         allowReadMemory: false,
+        maxFileStorage: 512 * 1024 * 1024,
         maxTopicsPerVisitor: 5,
         maxTurnsPerTopic: 20,
         monthlySpendLimit: 10,
@@ -190,6 +191,7 @@ describe('AgentShareModel', () => {
       const config: AgentShareConfig = {
         allowCreatorViewSessions: true,
         allowReadMemory: true,
+        maxFileStorage: 256 * 1024 * 1024,
         maxTopicsPerVisitor: 10,
         maxTurnsPerTopic: 40,
         monthlySpendLimit: 25,
@@ -581,6 +583,26 @@ describe('AgentShareModel', () => {
         monthlySpendLimit: 10,
         shareId: null,
       });
+    });
+  });
+
+  describe('lockUploadAdmission', () => {
+    const heldAdvisoryLocks = async (db: LobeChatDatabase) => {
+      const { rows } = await db.execute(
+        sql`SELECT count(*)::int AS held FROM pg_locks WHERE locktype = 'advisory'`,
+      );
+      return (rows[0] as { held: number }).held;
+    };
+
+    it('holds a transaction-scoped advisory lock that is released at commit', async () => {
+      await serverDB.transaction(async (tx) => {
+        await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
+        await expect(heldAdvisoryLocks(tx)).resolves.toBe(1);
+        // Re-entrant within the same transaction: a retry does not deadlock.
+        await AgentShareModel.lockUploadAdmission(tx, 'share-lock-test');
+      });
+
+      await expect(heldAdvisoryLocks(serverDB)).resolves.toBe(0);
     });
   });
 

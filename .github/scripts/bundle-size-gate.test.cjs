@@ -4,7 +4,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const { measureEntryGraph, stripHash } = require('./bundle-size-gate.cjs');
+const {
+  countJsFiles,
+  diffResolvedDeps,
+  measureEntryGraph,
+  readResolvedDeps,
+  stripHash,
+} = require('./bundle-size-gate.cjs');
 
 const writeDist = (files) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'entry-graph-'));
@@ -50,9 +56,20 @@ test('stripHash removes the trailing rolldown hash including hashes starting wit
   assert.equal(stripHash('assets/index-CDFWou5k.js'), 'assets/index.js');
 });
 
+test('counts Vite-emitted JS files recursively', () => {
+  const root = writeDist({
+    'assets/index-AAAAAAAA.js': 'export const index = 1;',
+    'assets/index-AAAAAAAA.js.map': '{}',
+    'assets/lazy-BBBBBBBB.js': 'export const lazy = 1;',
+    'vendor/vendor-react-CCCCCCCC.js': 'export const react = 1;',
+  });
+
+  assert.equal(countJsFiles(root), 3);
+});
+
 const { spawnSync } = require('node:child_process');
 
-const runCheck = ({ baselineCount, currentCount, maxChunks }) => {
+const runCheck = ({ baselineGraphCount, baselineJsTotal, currentGraphCount, currentJsTotal }) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'size-gate-'));
   const graph = (count) => ({
     chunks: Object.fromEntries(
@@ -67,35 +84,87 @@ const runCheck = ({ baselineCount, currentCount, maxChunks }) => {
       path.join(root, name),
       JSON.stringify({
         graphs: { 'dist/desktop': graph(count) },
+        jsChunks: {
+          targets: { 'dist/desktop': name === 'baseline.json' ? baselineJsTotal : currentJsTotal },
+          total: name === 'baseline.json' ? baselineJsTotal : currentJsTotal,
+        },
         sizes: { 'dist/desktop': count },
       }),
     );
-  write('baseline.json', baselineCount);
-  write('current.json', currentCount);
+  write('baseline.json', baselineGraphCount);
+  write('current.json', currentGraphCount);
 
-  return spawnSync(
-    process.execPath,
-    [
-      path.join(__dirname, 'bundle-size-gate.cjs'),
-      'check',
-      '--current',
-      path.join(root, 'current.json'),
-      '--baseline',
-      path.join(root, 'baseline.json'),
-      '--max-chunks',
-      String(maxChunks),
-    ],
-    { encoding: 'utf8' },
-  );
+  const args = [
+    path.join(__dirname, 'bundle-size-gate.cjs'),
+    'check',
+    '--current',
+    path.join(root, 'current.json'),
+    '--baseline',
+    path.join(root, 'baseline.json'),
+    '--js-chunk-percent',
+    '5',
+  ];
+
+  return spawnSync(process.execPath, args, { encoding: 'utf8' });
 };
 
-test('chunk count over the fixed ceiling fails the gate', () => {
-  const result = runCheck({ baselineCount: 3, currentCount: 5, maxChunks: 4 });
+test('Vite JS output file count over the baseline percentage limit fails the gate', () => {
+  const result = runCheck({
+    baselineGraphCount: 10,
+    baselineJsTotal: 100,
+    currentGraphCount: 10,
+    currentJsTotal: 106,
+  });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /more than 4 chunks/);
+  assert.match(result.stderr, /Vite JS output file count increases by more than 5%/);
 });
 
-test('new chunk names alone do not fail the gate while under the ceiling', () => {
-  const result = runCheck({ baselineCount: 1, currentCount: 4, maxChunks: 4 });
+test('Vite JS output file count at the baseline percentage limit passes the gate', () => {
+  const result = runCheck({
+    baselineGraphCount: 10,
+    baselineJsTotal: 100,
+    currentGraphCount: 10,
+    currentJsTotal: 105,
+  });
   assert.equal(result.status, 0);
+});
+
+test('reachable graph count increase alone does not fail the gate', () => {
+  const result = runCheck({
+    baselineGraphCount: 10,
+    baselineJsTotal: 100,
+    currentGraphCount: 20,
+    currentJsTotal: 100,
+  });
+  assert.equal(result.status, 0);
+});
+
+test('readResolvedDeps turns pnpm virtual store entries into name@version and drops peer suffixes', () => {
+  const store = writeDist({
+    '@scope+pkg@1.2.3_react@19.0.0/x': '',
+    'string_decoder@1.3.0/x': '',
+    'string_decoder@1.1.1_abc/x': '',
+    'lock.yaml': '',
+    'node_modules/x': '',
+  });
+
+  assert.deepEqual(readResolvedDeps(store), [
+    '@scope/pkg@1.2.3',
+    'string_decoder@1.1.1',
+    'string_decoder@1.3.0',
+  ]);
+});
+
+test('diffResolvedDeps reports changed, added and removed package versions only', () => {
+  const drift = diffResolvedDeps(
+    ['a@1.0.0', 'b@1.0.0', 'b@2.0.0', 'gone@1.0.0', 'same@1.0.0'],
+    ['a@1.1.0', 'b@1.0.0', 'new@0.1.0', 'same@1.0.0'],
+  );
+
+  assert.deepEqual(drift, [
+    { after: '1.1.0', before: '1.0.0', name: 'a' },
+    { after: '1.0.0', before: '1.0.0, 2.0.0', name: 'b' },
+    { after: '', before: '1.0.0', name: 'gone' },
+    { after: '0.1.0', before: '', name: 'new' },
+  ]);
 });

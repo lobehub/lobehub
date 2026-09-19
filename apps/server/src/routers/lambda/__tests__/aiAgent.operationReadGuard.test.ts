@@ -10,24 +10,32 @@ import { cleanupTestUser, createTestUser } from './integration/setup';
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 const mockGetOperationStatus = vi.fn();
 const mockGetPendingInterventions = vi.fn();
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    getOperationStatus: mockGetOperationStatus,
-    getPendingInterventions: mockGetPendingInterventions,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      getOperationStatus: mockGetOperationStatus,
+      getPendingInterventions: mockGetPendingInterventions,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({})),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 /**

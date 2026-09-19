@@ -258,6 +258,29 @@ export class TaskRunnerService {
         ...(continueTopicId && { appContext: { topicId: continueTopicId } }),
       });
 
+      if (!result.success) {
+        // execAgent reports a dispatch or startup failure as a result rather
+        // than a throw (`startOperation`, `heteroDispatch`): the assistant
+        // bubble already carries the error and the run's lifecycle hooks have
+        // fired. Booking that dead operation as a running topic would leave
+        // the Task looking in flight — a goal coordinator would even record a
+        // `started_run` for it — with nothing left to ever settle it. Keep the
+        // attempt visible as a failed run, then fail the kickoff like any other.
+        if (result.topicId && !continueTopicId) {
+          await this.taskModel.incrementTopicCount(task.id);
+          await this.taskModel.updateCurrentTopic(task.id, result.topicId);
+          await this.taskTopicModel.add(task.id, result.topicId, {
+            operationId: result.operationId,
+            seq: (task.totalTopics || 0) + 1,
+            trigger,
+          });
+        }
+        if (result.topicId) {
+          await this.taskTopicModel.updateStatus(task.id, result.topicId, 'failed');
+        }
+        throw new Error(result.error || result.message || 'Agent run failed to start');
+      }
+
       if (result.topicId) {
         if (continueTopicId) {
           await this.taskTopicModel.updateStatus(task.id, continueTopicId, 'running');

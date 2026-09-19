@@ -7,8 +7,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
+import { ProviderCombine, ProviderIcon } from '@/components/LobeIcons';
 import { useIsDark } from '@/hooks/useIsDark';
-import { ProviderCombine, ProviderIcon } from '@/libs/providerIcon';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';

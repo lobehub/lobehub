@@ -2,7 +2,6 @@
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
-import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Popover } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
@@ -11,6 +10,7 @@ import numeral from 'numeral';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useServerConfigStore } from '@/store/serverConfig';

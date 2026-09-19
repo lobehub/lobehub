@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises';
+
+import type { AcceptanceCheckGroup } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -68,6 +71,19 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
     );
 
   attachAcceptanceFlowCommands(acceptance);
+
+  acceptance
+    .command('regroup <idOrSubject>')
+    .description('Change checklist business groups while preserving checks, evidence and history')
+    .requiredOption('--file <path>', 'JSON: expectedVersion and groups [{ title, checkItemIds }]')
+    .action(async (ref: string, options: { file: string }) => {
+      const id = await resolveAcceptanceId(ref);
+      const input: { expectedVersion: number; groups: AcceptanceCheckGroup[] } = JSON.parse(
+        await readFile(options.file, 'utf8'),
+      );
+      const client = await getTrpcClient();
+      outputJson(await client.acceptance.regroupChecks.mutate({ ...input, id }));
+    });
 
   acceptance
     .command('list')

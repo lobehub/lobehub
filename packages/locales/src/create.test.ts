@@ -1,7 +1,8 @@
 import type { InitOptions } from 'i18next';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { emit, init, on, reloadResources, storeOn, use } = vi.hoisted(() => ({
+const { addResourceBundle, emit, init, on, reloadResources, storeOn, use } = vi.hoisted(() => ({
+  addResourceBundle: vi.fn(),
   emit: vi.fn(),
   init: vi.fn((_options: InitOptions) => Promise.resolve()),
   on: vi.fn(),
@@ -12,6 +13,7 @@ const { emit, init, on, reloadResources, storeOn, use } = vi.hoisted(() => ({
 
 vi.mock('i18next', () => {
   const instance: any = {
+    addResourceBundle,
     emit,
     init,
     language: 'zh-CN',
@@ -33,9 +35,14 @@ const { createI18nNext } = await import('./create');
 
 describe('createI18nNext', () => {
   beforeEach(() => {
+    addResourceBundle.mockClear();
     init.mockClear();
     emit.mockClear();
     reloadResources.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('does not bind every consumer to the resource store', () => {
@@ -51,6 +58,15 @@ describe('createI18nNext', () => {
     await vi.waitFor(() => expect(reloadResources).toHaveBeenCalled());
 
     expect(emit).toHaveBeenCalledWith('languageChanged', 'zh-CN');
+    expect(emit.mock.calls.filter(([event]) => event === 'languageChanged')).toHaveLength(1);
+  });
+
+  it('refreshes consumers once after the dev English overlay landed', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+
+    await createI18nNext('en-US').init();
+    await vi.waitFor(() => expect(addResourceBundle).toHaveBeenCalledTimes(4));
+
     expect(emit.mock.calls.filter(([event]) => event === 'languageChanged')).toHaveLength(1);
   });
 

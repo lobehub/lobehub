@@ -65,6 +65,26 @@ export interface AgentInterventionPreparationMarker {
   stepIndex: number;
 }
 
+/** Why `heteroIngest` refused a batch — see {@link HeteroIngestRejectionMarker}. */
+export type HeteroIngestRejectionReason = 'operation-not-running' | 'stale-operation';
+
+/**
+ * Stamped the first time `heteroIngest` refuses a batch for this operation.
+ *
+ * Both refusal paths (the op row is no longer `running`, or the topic's
+ * `runningOperation` marker no longer names this op) mean the producer's
+ * remaining output is being discarded while its CLI keeps running happily. The
+ * marker is what carries that fact across to `heteroFinish`, which would
+ * otherwise settle the producer's `success` receipt as a clean turn and leave
+ * the user staring at an assistant placeholder that never fills in.
+ */
+export interface HeteroIngestRejectionMarker {
+  at: string;
+  /** Events discarded with the refusal that stamped this marker. */
+  droppedEvents: number;
+  reason: HeteroIngestRejectionReason;
+}
+
 const sameServerDefaultRelayInvocation = (
   left: ServerDefaultHeterogeneousRelayInvocation,
   right: ServerDefaultHeterogeneousRelayInvocation,
@@ -349,6 +369,33 @@ export class AgentOperationModel {
     return Boolean(row);
   }
 
+  /**
+   * Record that ingest discarded a batch for this operation, first refusal wins.
+   *
+   * Deliberately NOT gated on `status = 'running'`: a terminal row is itself one
+   * of the refusal reasons. The `?` guard keeps the first (and most informative)
+   * refusal instead of letting the run's remaining batches overwrite it.
+   */
+  async recordHeteroIngestRejection(
+    operationId: string,
+    marker: HeteroIngestRejectionMarker,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ heteroIngestRejection: marker })}::jsonb`,
+      })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          this.ownership(),
+          sql`NOT (coalesce(${agentOperations.metadata}, '{}'::jsonb) ? 'heteroIngestRejection')`,
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return Boolean(row);
+  }
+
   /** Refresh the durable liveness lease while an operation owns an execution step. */
   async touchRunning(operationId: string): Promise<boolean> {
     const [row] = await this.db
@@ -497,6 +544,22 @@ export class AgentOperationModel {
     return row ?? null;
   }
 
+  /** Match a server-minted turn identity when a diagnostic dispatch receipt was lost. */
+  async findByTopicSourceMessage(topicId: string, sourceMessageId: string) {
+    const [operation] = await this.db
+      .select()
+      .from(agentOperations)
+      .where(
+        and(
+          this.ownership(),
+          eq(agentOperations.topicId, topicId),
+          sql`${agentOperations.appContext}->>'sourceMessageId' = ${sourceMessageId}`,
+        ),
+      )
+      .limit(1);
+    return operation;
+  }
+
   /**
    * Operations recorded for one topic, newest first — the lookup that turns a
    * topic id (what a user actually has on hand) into the operation ids their
@@ -512,6 +575,7 @@ export class AgentOperationModel {
     return this.db
       .select({
         agentId: agentOperations.agentId,
+        appContext: agentOperations.appContext,
         createdAt: agentOperations.createdAt,
         id: agentOperations.id,
         model: agentOperations.model,

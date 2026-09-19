@@ -2,8 +2,11 @@
   "name": "model-bank",
   "version": "1.0.0",
   "private": true,
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./knowledgeCutoff": "./src/const/knowledgeCutoff.ts",
+    "./utils": "./src/utils.ts",
     "./aiModel": "./src/types/aiModel.ts",
     "./aiProvider": "./src/types/aiProvider.ts",
     "./modelProvider": "./src/const/modelProvider.ts",

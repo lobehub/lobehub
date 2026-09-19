@@ -1,10 +1,22 @@
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES } from '@lobechat/html-artifact/limits';
 import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
 
-import type { LocalFilePreview, LocalFilePreviewResult, LocalFilePreviewUrlParams } from './types';
+import type {
+  CopyAssetForPublishParams,
+  CopyAssetForPublishResult,
+  ExternalAssetForPublishParams,
+  ExternalAssetForPublishResult,
+  LocalFilePreview,
+  LocalFilePreviewResult,
+  LocalFilePreviewUrlParams,
+} from './types';
+
+/** Device-side ceiling for a single publish asset, shared with the Electron main process. */
+export const EXTERNAL_PUBLISH_ASSET_MAX_BYTES = WORKSPACE_HTML_ARTIFACT_MAX_FILE_BYTES;
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/graphql',
@@ -145,6 +157,89 @@ export const defaultGetLocalFilePreview = async (
     }
 
     return { preview: serializePreviewFile(buffer, contentType), success: true };
+  } catch (error) {
+    return { error: (error as Error).message, success: false };
+  }
+};
+
+export const defaultReadExternalAssetForPublish = async ({
+  path: filePath,
+  workingDirectory,
+}: ExternalAssetForPublishParams): Promise<ExternalAssetForPublishResult> => {
+  try {
+    if (!workingDirectory) return { error: 'Missing working directory', success: false };
+    const expandedPath = expandHomePath(filePath);
+    const resolvedPath = path.isAbsolute(expandedPath)
+      ? expandedPath
+      : path.resolve(expandHomePath(workingDirectory), expandedPath);
+    const realFile = await realpath(resolvedPath);
+    const stats = await stat(realFile);
+    if (!stats.isFile()) return { error: 'Path is not a file', success: false };
+    // Reject by size before reading: the renderer's limit check only runs after
+    // the whole file has been read and base64-encoded into a gateway response.
+    if (stats.size > EXTERNAL_PUBLISH_ASSET_MAX_BYTES) {
+      return { error: 'File is too large to publish', success: false };
+    }
+
+    const buffer = await readFile(realFile);
+    return {
+      base64: buffer.toString('base64'),
+      contentType: await resolveMimeType(realFile, buffer),
+      success: true,
+    };
+  } catch (error) {
+    return { error: (error as Error).message, success: false };
+  }
+};
+
+const resolvePublishPath = (target: string, workingDirectory: string): string => {
+  const expanded = expandHomePath(target);
+  return path.isAbsolute(expanded)
+    ? expanded
+    : path.resolve(expandHomePath(workingDirectory), expanded);
+};
+
+// The destination usually does not exist yet, so realpath the nearest existing
+// ancestor and re-append the missing tail; otherwise a symlinked tmp root
+// (`/var` → `/private/var`) never matches the realpath'd workspace root.
+const realpathForCreate = async (target: string): Promise<string> => {
+  const missing: string[] = [];
+  let current = path.resolve(target);
+  for (;;) {
+    try {
+      return path.join(await realpath(current), ...missing);
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return path.join(current, ...missing);
+      missing.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+};
+
+export const defaultCopyAssetForPublish = async ({
+  from,
+  to,
+  workingDirectory,
+}: CopyAssetForPublishParams): Promise<CopyAssetForPublishResult> => {
+  try {
+    if (!workingDirectory) return { error: 'Missing working directory', success: false };
+    const realRoot = await safeRealpath(expandHomePath(workingDirectory));
+    const target = await realpathForCreate(resolvePublishPath(to, workingDirectory));
+    if (!target.startsWith(`${realRoot}${path.sep}`)) {
+      return { error: 'Destination is outside the approved workspace', success: false };
+    }
+
+    const realSource = await realpath(resolvePublishPath(from, workingDirectory));
+    const stats = await stat(realSource);
+    if (!stats.isFile()) return { error: 'Path is not a file', success: false };
+    if (stats.size > EXTERNAL_PUBLISH_ASSET_MAX_BYTES) {
+      return { error: 'File is too large to publish', success: false };
+    }
+
+    await mkdir(path.dirname(target), { recursive: true });
+    await copyFile(realSource, target);
+    return { success: true };
   } catch (error) {
     return { error: (error as Error).message, success: false };
   }

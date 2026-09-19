@@ -4,11 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the model mocks
 // ignore the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 const mockFindByDeviceId = vi.fn();
@@ -16,20 +20,30 @@ const mockFindWorkspaceDeviceById = vi.fn();
 const mockIngestSnapshot = vi.fn(async () => ({ ok: true }));
 
 vi.mock('@/database/models/device', () => ({
-  DeviceModel: vi.fn(() => ({
-    findByDeviceId: mockFindByDeviceId,
-    findWorkspaceDeviceById: mockFindWorkspaceDeviceById,
-  })),
+  DeviceModel: vi.fn(function () {
+    return {
+      findByDeviceId: mockFindByDeviceId,
+      findWorkspaceDeviceById: mockFindWorkspaceDeviceById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agentQuota', () => ({
-  AgentAccountBindingModel: vi.fn(() => ({})),
-  AgentProviderAccountModel: vi.fn(() => ({})),
-  AgentQuotaWindowModel: vi.fn(() => ({})),
+  AgentAccountBindingModel: vi.fn(function () {
+    return {};
+  }),
+  AgentProviderAccountModel: vi.fn(function () {
+    return {};
+  }),
+  AgentQuotaWindowModel: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/server/services/agentQuota', () => ({
-  AgentQuotaService: vi.fn(() => ({ ingestSnapshot: mockIngestSnapshot })),
+  AgentQuotaService: vi.fn(function () {
+    return { ingestSnapshot: mockIngestSnapshot };
+  }),
 }));
 
 const { agentQuotaRouter } = await import('../agentQuota');

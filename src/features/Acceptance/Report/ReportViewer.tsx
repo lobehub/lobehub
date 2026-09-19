@@ -68,6 +68,7 @@ import {
   DocumentViewer,
   filenameFromUrl,
   markdownTextEvidenceTypes,
+  rendersAsMarkdown,
 } from './MarkdownEvidence';
 import { readVisualizationManifest } from './visualization';
 import { VisualizationRenderer } from './VisualizationRenderer';
@@ -830,11 +831,7 @@ const EvidenceItem = memo<{
         />
       ) : e.fileUrl ? (
         <div className={styles.evidenceDoc}>
-          <DocumentViewer
-            fileName={e.fileName}
-            markdown={markdownTextEvidenceTypes.has(e.type)}
-            url={e.fileUrl}
-          />
+          <DocumentViewer fileName={e.fileName} markdown={rendersAsMarkdown(e)} url={e.fileUrl} />
         </div>
       ) : e.content && markdownTextEvidenceTypes.has(e.type) ? (
         // Same dialect as the acceptance viewer: an authored alt/description
@@ -842,6 +839,8 @@ const EvidenceItem = memo<{
         // raw description, not the caption filter — with no fileName the label
         // IS the description, and the filter would null it out.
         <CollapsibleMarkdownEvidence
+          fileName={e.fileName}
+          markdown={rendersAsMarkdown(e)}
           title={e.description?.trim() || e.fileName?.trim() || undefined}
         >
           {e.content}

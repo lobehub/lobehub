@@ -2,6 +2,7 @@
 
 import { Icon } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -11,6 +12,14 @@ import { acceptanceCheckPath } from '../routes';
 import { checksForTurn } from '../turnChecks';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { readAcceptanceTurn } from '../useAcceptanceTurn';
+
+const styles = createStaticStyles(({ css }) => ({
+  button: css`
+    @media (width <= 767px) {
+      display: none;
+    }
+  `,
+}));
 
 const AcceptanceEnterFocus = () => {
   const { t } = useTranslation('verify');
@@ -23,9 +32,10 @@ const AcceptanceEnterFocus = () => {
 
   return (
     <Button
-      icon={<Icon icon={ChevronRight} />}
+      className={styles.button}
+      icon={<Icon icon={ChevronRight} size={14} />}
       size={'small'}
-      style={{ alignSelf: 'flex-start', minHeight: 44 }}
+      style={{ alignSelf: 'center' }}
       type={'text'}
       onClick={() =>
         navigate(

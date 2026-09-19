@@ -1,10 +1,18 @@
 // @vitest-environment node
 import type { VerifyCheckItem } from '@lobechat/types';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { VerifyCheckResultItem, VerifyRunItem } from '@/database/schemas/verify';
 
-import { buildAcceptanceCheckUnion, buildCheckReviewOverlay } from '../acceptanceService';
+import {
+  AcceptanceService,
+  buildAcceptanceCheckUnion,
+  buildCheckReviewOverlay,
+} from '../acceptanceService';
+
+// Union/grouping checks never execute tasks; keep that external runtime out of this suite.
+vi.mock('@/server/services/task', () => ({ TaskService: class {} }));
+afterEach(() => vi.restoreAllMocks());
 
 const planItem = (id: string, overrides: Partial<VerifyCheckItem> = {}): VerifyCheckItem => ({
   id,
@@ -35,6 +43,106 @@ const result = (
   }) as VerifyCheckResultItem;
 
 describe('buildAcceptanceCheckUnion', () => {
+  it('rejects unknown checks and ambiguous group membership before storing organization', async () => {
+    const service = new AcceptanceService({} as never, 'owner');
+    vi.spyOn(service.acceptanceModel, 'findById').mockResolvedValue({ id: 'acceptance' } as never);
+    vi.spyOn(service, 'loadRounds').mockResolvedValue({
+      runs: [run('r1', 1, [planItem('known')])],
+      results: [],
+      evidence: [],
+      reports: [],
+    });
+    const save = vi
+      .spyOn(service.acceptanceModel, 'setCheckGroups')
+      .mockResolvedValue({ groups: [], version: 1 });
+    await expect(
+      service.regroupChecks('acceptance', [{ title: 'A', checkItemIds: ['foreign'] }], 0),
+    ).rejects.toThrow('Unknown check item');
+    await expect(
+      service.regroupChecks(
+        'acceptance',
+        [
+          { title: 'A', checkItemIds: ['known'] },
+          { title: 'B', checkItemIds: ['known'] },
+        ],
+        0,
+      ),
+    ).rejects.toThrow('multiple groups');
+    await expect(
+      service.regroupChecks('acceptance', [{ title: ' ', checkItemIds: ['known'] }], 0),
+    ).rejects.toThrow('unique, non-empty');
+    expect(save).not.toHaveBeenCalled();
+    await service.regroupChecks(
+      'acceptance',
+      [{ title: ' Reassignment ', checkItemIds: ['known'] }],
+      0,
+    );
+    expect(save).toHaveBeenCalledWith(
+      'acceptance',
+      [{ title: 'Reassignment', checkItemIds: ['known'] }],
+      0,
+    );
+  });
+
+  it('regroups existing flow checks without changing identity, verdict, review or history', () => {
+    const items = ['handoff', 'resume'].map((id) =>
+      planItem(id, {
+        category: 'Whole PR',
+        sourceCriterionId: 'shared-asset',
+        sourceFlowNode: { flowId: 'flow', nodeId: id },
+      }),
+    );
+    const passed = result('handoff', 'passed', {
+      userDecision: 'accepted',
+      userDecisionDetail: { decidedAt: '2026-09-08T00:00:00Z' },
+    });
+    const rounds = [{ run: run('r1', 1, items), results: [passed] }];
+    const before = buildAcceptanceCheckUnion(rounds);
+    const grouped = buildAcceptanceCheckUnion(rounds, [
+      { title: 'Continuation', checkItemIds: ['resume'] },
+      { title: 'Reassignment', checkItemIds: ['handoff'] },
+    ]);
+    expect(grouped.map((row) => [row.id, row.category, row.seq])).toEqual([
+      ['resume', 'Continuation', 2],
+      ['handoff', 'Reassignment', 1],
+    ]);
+    for (const row of grouped) {
+      const original = before.find((item) => item.id === row.id)!;
+      expect({ ...row, category: original.category }).toEqual(original);
+      expect(buildCheckReviewOverlay(row, new Map([[passed.id, passed]]), 1)).toEqual(
+        buildCheckReviewOverlay(original, new Map([[passed.id, passed]]), 1),
+      );
+    }
+    expect(items.every((item) => item.category === 'Whole PR')).toBe(true);
+    expect(buildAcceptanceCheckUnion(rounds, [])).toEqual(before);
+  });
+
+  it('leaves newly introduced checks and repeated asset occurrences ungrouped until assigned', () => {
+    const rows = buildAcceptanceCheckUnion(
+      [
+        {
+          run: run(
+            'r1',
+            1,
+            ['a', 'b'].map((id) =>
+              planItem(id, {
+                category: 'Original',
+                sourceCriterionId: 'shared',
+                sourceFlowNode: { flowId: 'f', nodeId: id },
+              }),
+            ),
+          ),
+          results: [],
+        },
+      ],
+      [{ title: 'Moved', checkItemIds: ['a'] }],
+    );
+    expect(rows.map((row) => [row.id, row.category])).toEqual([
+      ['a', 'Moved'],
+      ['b', 'Original'],
+    ]);
+  });
+
   it('resets a flow check for a new run while keeping earlier evidence and review in history', () => {
     const item = planItem('node', {
       sourceFlowNode: { flowId: 'flow', nodeId: 'n1' },

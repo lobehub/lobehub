@@ -6,7 +6,7 @@ skill reads it — it never guesses LobeHub's commands.
 
 Its two siblings:
 
-- [`PROCESS.md`](./PROCESS.md) — the run process (approval gate, execution rules,
+- [`PROCESS.md`](./PROCESS.md) — the run process (plan gate, execution rules,
   publishing, teardown).
 - `.agents/skills/acceptance/` — the portable skill: what a check, evidence,
   report, and round are. In this repository that path is a symlink onto the

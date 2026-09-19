@@ -93,11 +93,15 @@ requires abstracting the feedback first.
 ### Step 1 — Prepare the plan
 
 Skip to Step 2 if this is a re-run after a fix, the plan is already agreed, or
-the user gave exact commands.
+the user gave exact commands. Skip straight to Step 5 when the delivery was
+already verified on the real product earlier in this session: the run's own
+observations, logs, command output, and captures are the evidence, and the
+round is written from them and ingested without re-execution or a checker stage
+(SKILL.md → Decide whether to execute).
 
 Draft the surface, cases, expected evidence, assumptions, and deliverable — but
-do not ask for approval yet: Step 2 must establish real environment state first,
-so the user approves one complete, evidence-backed plan.
+do not send it for review yet: Step 2 must establish real environment state
+first, so the acceptance-checker reviews one complete, evidence-backed plan.
 
 Every case must be a delivery outcome a person can judge. Never plan the repo's
 own programmatic gates (tests, coverage, type-check, lint, build) — ingest drops
@@ -132,20 +136,29 @@ regardless.
    (`agent-browser screenshot`, `cdp-screenshot.sh`, `record-app-screen.sh`) is
    unaffected.
 
-### The approval gate
+### The plan gate
 
-At the end of Step 2, for the **first run against a subject Acceptance**, send one
-plan feedback and one structured confirmation question. Format, status markers,
-and confirmation behavior: [`references/plan-feedback.md`](./references/plan-feedback.md).
+At the end of Step 2, for the **first round of every Acceptance** — including a
+standalone authored round whose Acceptance only comes into being at ingest — write
+the plan feedback (format and status markers:
+[`references/plan-feedback.md`](./references/plan-feedback.md)) into the round's
+review notes and hand it to the **acceptance-checker** for plan review, per the skill's
+`references/acceptance-checker.md`. The acceptance-checker's "ready" decision — or its material
+findings resolved — is the gate; execution starts without asking the user. Do
+not present the plan to the user for confirmation.
 
-That approval covers later iterations on the same Acceptance. On follow-up
-feedback: read the Acceptance, silently re-check environment and auth, repair,
-re-run the affected checks, and publish a new round — no second approval. Ask
-again only on a **material boundary change**: a new surface, external system,
-account, secret, permission, or destructive action; a materially changed business
-goal; a user-owned blocker; or an environment change that invalidates the approved
-evidence strategy. Code revisions, restarts, recaptures, retries, and new rounds
-are not material changes.
+The user is asked only for a **user-owned prerequisite** (a secret, a device/2FA
+approval, a permission only they can grant, a destructive action) or a product
+decision that materially changes the plan: a new surface, external system, or
+account; a materially changed business goal; or an environment change that
+invalidates the evidence strategy. Ask with one structured question and stop.
+
+On follow-up feedback: read the Acceptance, silently re-check environment and
+auth, repair, re-run the affected checks, and publish a new round. The acceptance-checker is
+not involved in follow-up rounds — it reviews the plan and the first round's
+evidence only; afterwards the primary inspects its own evidence. Code
+revisions, restarts, recaptures, retries, and new rounds never involve the
+user.
 
 ## Phase 2 — Execute
 

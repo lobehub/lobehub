@@ -52,16 +52,20 @@ vi.mock('@/envs/tools', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    query: (...args: any[]) => mockMessageModelQuery(...args),
-    queryByIds: (...args: any[]) => mockMessageModelQueryByIds(...args),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      query: (...args: any[]) => mockMessageModelQuery(...args),
+      queryByIds: (...args: any[]) => mockMessageModelQueryByIds(...args),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: (path: string | null) => Promise.resolve(path || ''),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({

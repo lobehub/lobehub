@@ -32,7 +32,7 @@ const sizeGateComment = async ({
 ${report}
 
 ---
-*Baseline: latest \`canary\` build (workflow artifact). Thresholds configurable via \`SIZE_GATE_PERCENT\` / \`SIZE_GATE_FLOOR_BYTES\`.*`;
+*Baseline: latest \`canary\` build (workflow artifact). Thresholds configurable via \`SIZE_GATE_PERCENT\` / \`SIZE_GATE_FLOOR_BYTES\` / \`SIZE_GATE_JS_CHUNK_PERCENT\`.*`;
 
   const { data: comments } = await github.rest.issues.listComments({
     issue_number: number,

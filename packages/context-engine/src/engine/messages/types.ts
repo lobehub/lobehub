@@ -27,10 +27,12 @@ import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilder
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
 import type { OnboardingContext } from '../../providers/OnboardingContextInjector';
 import type { Plan } from '../../providers/PlanInjector';
+import type { ProjectInstructionFile } from '../../providers/ProjectInstructionsInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
 import type { TodoList } from '../../providers/TodoInjector';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
+import type { WorkspaceContext } from '../../providers/WorkspaceContextInjector';
 import type { PipelineContextMetadata } from '../../types';
 import type { LobeToolManifest } from '../tools/types';
 
@@ -307,10 +309,19 @@ export interface MessagesEngineParams {
   agentBuilderContext?: AgentBuilderContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /**
+   * Where the conversation lives (app origin + workspace slug), so the model
+   * writes in-app links that resolve to the right scope.
+   */
+  workspaceContext?: WorkspaceContext;
   /** Discord context for injecting channel/guild info into system injection message */
   discordContext?: DiscordContext;
   /** Eval context for injecting environment prompts into system message */
+  /** Borrowed-connector attribution note, already rendered by the caller. */
+  connectorOwnershipNote?: string;
   evalContext?: EvalContext;
+  /** A project's root instruction files (`AGENTS.md` / `CLAUDE.md`). */
+  projectInstructions?: ProjectInstructionFile[];
   /** Onboarding context for injecting phase guidance and documents */
   onboardingContext?: OnboardingContext;
   /** Agent Management context */
@@ -383,5 +394,6 @@ export { type SkillMeta } from '../../providers/SkillContextProvider';
 export { type TodoItem, type TodoList } from '../../providers/TodoInjector';
 export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 export { type TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
+export { type WorkspaceContext } from '../../providers/WorkspaceContextInjector';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
 export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';

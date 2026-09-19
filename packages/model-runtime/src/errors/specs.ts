@@ -318,6 +318,17 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Upstream rejected the request as malformed (bad JSON / schema / parameters).',
   },
+  [AgentRuntimeErrorType.RequestBodyTooLarge]: {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    numericId: 4006,
+    category: 'request',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Upstream rejected the serialized request body as too large.',
+  },
   // —— Cloud-only (tier 9) ——
   [ChatErrorType.LobeHubModelDeprecated]: {
     code: ChatErrorType.LobeHubModelDeprecated,

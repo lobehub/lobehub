@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalEdges, goalNodeDecisions, goalNodes, users } from '../../schemas';
+import { agents, goalEdges, goalNodeDecisions, goalNodes, goals, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -26,6 +26,45 @@ afterEach(async () => {
 });
 
 describe('GoalModel', () => {
+  describe('supervisor state', () => {
+    it('claims an incident once and preserves other configuration under concurrent writes', async () => {
+      const goal = await goalModel.create({
+        config: { supervision: { enabled: true }, recovery: { maxAttemptsPerTask: 4 } },
+        title: 'Supervised',
+      });
+      const state = { agentId: 'agent', incidents: [], topicId: 'topic' };
+      const claims = await Promise.all([
+        goalModel.updateSupervisorState(goal.id, 0, state),
+        goalModel.updateSupervisorState(goal.id, 0, state),
+      ]);
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      await goalModel.updatePauseReason(goal.id, 'user');
+      await goalModel.updateSupervisorState(goal.id, 1, state);
+      expect((await goalModel.findById(goal.id))?.config).toMatchObject({
+        pausedBy: 'user',
+        recovery: { maxAttemptsPerTask: 4 },
+        supervisorState: { revision: 2 },
+      });
+      expect(await goalModel.updateSupervisorState(goal.id, 1, state)).toBeUndefined();
+      await goalModel.update(goal.id, { config: { supervision: { enabled: false } } });
+      expect((await goalModel.findById(goal.id))?.config?.supervisorState?.revision).toBe(2);
+    });
+
+    it('cannot read-lock or mutate another user supervisor state', async () => {
+      const goal = await goalModel.create({ title: 'Private supervision' });
+      const other = new GoalModel(serverDB, otherUserId);
+      expect(await other.lockById(goal.id)).toBeUndefined();
+      expect(
+        await other.updateSupervisorState(goal.id, 0, {
+          agentId: 'agent',
+          incidents: [],
+          topicId: 'topic',
+        }),
+      ).toBeUndefined();
+      expect((await goalModel.findById(goal.id))?.config?.supervisorState).toBeUndefined();
+    });
+  });
+
   describe('create', () => {
     it('creates a goal with defaults', async () => {
       const result = await goalModel.create({
@@ -352,6 +391,72 @@ describe('GoalModel', () => {
       expect(
         await serverDB.query.goalEdges.findMany({ where: eq(goalEdges.goalId, goal.id) }),
       ).toHaveLength(0);
+    });
+  });
+});
+
+describe('planning leases', () => {
+  it('does not take over a running goal claimed by a legacy worker', async () => {
+    const goal = await goalModel.create({ title: 'Legacy planner', status: 'running' });
+    expect(await goalModel.claimPlanning(goal.id)).toBeUndefined();
+    expect((await goalModel.findById(goal.id))?.config?.planningCheckpoint).toBeUndefined();
+  });
+
+  it.each([
+    null,
+    { acceptance: { criteriaIds: ['updated-criterion'] } },
+    { acceptance: { metrics: [{ key: 'followers', target: 1000 }] } },
+    { schedule: { deadline: null } },
+  ])(
+    'preserves the lease across a stale config replacement (%j) without resurrecting a released token',
+    async (config) => {
+      const goal = await goalModel.create({ title: 'Config race', config: { pausedBy: 'user' } });
+      const claim = await goalModel.claimPlanning(goal.id);
+      const claimed = await goalModel.findById(goal.id);
+      await goalModel.update(goal.id, { config });
+      expect((await goalModel.findById(goal.id))?.config?.planningCheckpoint?.token).toBe(
+        claim!.token,
+      );
+      expect(await goalModel.claimPlanning(goal.id)).toBeUndefined();
+
+      await goalModel.releasePlanning(goal.id, claim!.token);
+      await goalModel.update(goal.id, { config: claimed!.config });
+      expect((await goalModel.findById(goal.id))?.config?.planningCheckpoint).toBeUndefined();
+      // A lease-aware goal can retry; a legacy running goal cannot.
+      expect(await goalModel.claimPlanning(goal.id)).toBeDefined();
+    },
+  );
+
+  it('allows one owner, fences expired owners, and preserves unrelated config on release', async () => {
+    const goal = await goalModel.create({ title: 'Planning lease', config: { pausedBy: 'user' } });
+    const first = await goalModel.claimPlanning(goal.id);
+    expect(first).toBeDefined();
+    expect(await goalModel.claimPlanning(goal.id)).toBeUndefined();
+    expect(await new GoalModel(serverDB, otherUserId).claimPlanning(goal.id)).toBeUndefined();
+    await new GoalModel(serverDB, otherUserId).releasePlanning(goal.id, first!.token);
+    expect((await goalModel.findById(goal.id))?.config?.planningCheckpoint?.token).toBe(
+      first!.token,
+    );
+    await serverDB
+      .update(goals)
+      .set({
+        config: {
+          pausedBy: 'user',
+          planningProtocol: 'lease-v1',
+          planningCheckpoint: { token: first!.token, expiresAt: '2000-01-01T00:00:00.000Z' },
+        },
+      })
+      .where(eq(goals.id, goal.id));
+    const second = await goalModel.claimPlanning(goal.id);
+    expect(second?.token).not.toBe(first!.token);
+    await goalModel.releasePlanning(goal.id, first!.token);
+    expect((await goalModel.findById(goal.id))?.config?.planningCheckpoint?.token).toBe(
+      second!.token,
+    );
+    await goalModel.releasePlanning(goal.id, second!.token);
+    expect((await goalModel.findById(goal.id))?.config).toEqual({
+      pausedBy: 'user',
+      planningProtocol: 'lease-v1',
     });
   });
 });

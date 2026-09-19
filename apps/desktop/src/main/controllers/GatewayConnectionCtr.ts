@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { DeviceControlDeps } from '@lobechat/device-control';
 import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import type { HeterogeneousAgentCancellationSignal } from '@lobechat/heterogeneous-agents/protocol';
 import type { RemotePlatformCommandRuntime } from '@lobechat/heterogeneous-agents/scanHost';
 import {
   resolveRemotePlatformCommand,
@@ -16,6 +17,7 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
+import { findHeteroExecProcesses } from '@/utils/heteroExecProcess';
 import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
@@ -26,6 +28,13 @@ import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
+
+/**
+ * How long an orphaned `hetero exec` group may take to exit after cancellation.
+ * Covers the 2s graceful window plus SIGKILL, and stays under the server's 10s
+ * `cancelHeteroTask` timeout.
+ */
+const ORPHAN_EXIT_TIMEOUT_MS = 5000;
 
 const logger = createLogger('controllers:GatewayConnectionCtr');
 const deviceProtocolHandler = createProtocolHandler('device');
@@ -127,7 +136,7 @@ const safeJsonParse = (input: string): unknown => {
 export default class GatewayConnectionCtr extends ControllerModule {
   static override readonly groupName = 'gatewayConnection';
 
-  /** In-memory registry for running platform agent tasks (openclaw / hermes). */
+  /** In-memory registry for running hetero agent tasks (openclaw / hermes / local-cli dispatch). */
   private readonly platformTasks = new Map<string, PlatformTaskEntry>();
   private readonly platformTaskKillTimers = new Map<number, NodeJS.Timeout>();
 
@@ -327,6 +336,30 @@ export default class GatewayConnectionCtr extends ControllerModule {
         systemContext: request.systemContext,
         topicId: request.topicId,
         workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
+        // Register the spawned CLI process so `cancelHeteroTask` (sent by the
+        // server's `interruptTask` when the user clicks Stop) can find and kill
+        // it by operationId. The entry is cleaned up on child exit below.
+        onChildSpawned: (child: ChildProcess) => {
+          const pid = child.pid;
+          if (pid === undefined) return;
+          const taskId = request.operationId;
+          this.platformTasks.set(taskId, {
+            agentType: request.agentType,
+            operationId: request.operationId,
+            pid,
+            topicId: request.topicId,
+            workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
+          });
+          child.once('exit', () => {
+            // Only clear if this exit belongs to the current entry — a
+            // superseding run for the same operationId may have already
+            // replaced it.
+            const current = this.platformTasks.get(taskId);
+            if (current?.pid === pid) {
+              this.platformTasks.delete(taskId);
+            }
+          });
+        },
       });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
@@ -388,6 +421,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
       // the gateway connections, so both handlers route straight to it.
       enrollWorkspace: (params) => this.service.enrollWorkspace(params),
       getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
+      readExternalAssetForPublish: (params) =>
+        this.localFileCtr.readExternalAssetForPublish(params),
+      copyAssetForPublish: (params) => this.localFileCtr.copyAssetForPublish(params),
       getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
       listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
       searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
@@ -1107,7 +1143,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const { signal = 'SIGINT', taskId } = args;
     const localExec = await this.heterogeneousAgentCtr.cancelLhHeteroExec({
       operationId: taskId,
-      signal: signal as NodeJS.Signals,
+      signal: signal as HeterogeneousAgentCancellationSignal,
     });
     if (localExec) {
       return JSON.stringify({ ...localExec, taskId });
@@ -1116,13 +1152,75 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const entry = this.platformTasks.get(taskId);
 
     if (!entry) {
-      return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
+      return JSON.stringify(await this.cancelUntrackedHeteroExec(taskId, signal as NodeJS.Signals));
     }
 
     // The close handler sends the terminal notify after the whole tree exits.
     this.killPlatformProcessTree(entry.pid, signal as NodeJS.Signals);
 
     return JSON.stringify({ pid: entry.pid, signal, taskId });
+  }
+
+  /**
+   * Cancels an operation that neither in-memory registry knows about.
+   *
+   * Use when:
+   * - The desktop app restarted after dispatching `lh hetero exec`: the
+   *   registries are empty, but the server keeps the task running until the
+   *   device confirms `exited: true`.
+   *
+   * Expects:
+   * - `taskId` is the operation id passed as `--operation-id` to the wrapper.
+   *
+   * Returns:
+   * - `exited: true` only when the OS shows no wrapper for the operation, or
+   *   after every orphaned wrapper group has exited.
+   * - `exited: false` when an orphan survives SIGKILL or the process table
+   *   cannot be read, so a retry never races a live writer.
+   * - Windows keeps the previous unconfirmed answer; orphan lookup is Unix-only.
+   */
+  private async cancelUntrackedHeteroExec(
+    taskId: string,
+    signal: NodeJS.Signals,
+  ): Promise<Record<string, unknown>> {
+    if (process.platform === 'win32') {
+      return { message: `No task found with taskId: ${taskId}`, success: false };
+    }
+
+    let orphans: Awaited<ReturnType<typeof findHeteroExecProcesses>>;
+    try {
+      orphans = await findHeteroExecProcesses(taskId);
+    } catch (error) {
+      logger.warn('cancelHeteroTask: process lookup failed for %s: %O', taskId, error);
+      return {
+        exited: false,
+        message: `Could not inspect running processes for taskId: ${taskId}`,
+        reason: 'lookup_failed',
+        success: false,
+        taskId,
+      };
+    }
+
+    if (orphans.length === 0) {
+      return { exited: true, reason: 'not_found', success: true, taskId };
+    }
+
+    const pids = orphans.map((orphan) => orphan.pid);
+    logger.warn('cancelHeteroTask: terminating orphaned hetero exec for %s: %o', taskId, pids);
+
+    // The wrapper leads a detached group shared by its native agent child, so
+    // this reaches the whole writer tree and escalates to SIGKILL after 2s.
+    for (const pid of pids) this.killPlatformProcessTree(pid, signal);
+
+    const deadline = Date.now() + ORPHAN_EXIT_TIMEOUT_MS;
+    while (pids.some((pid) => this.isPlatformProcessGroupAlive(pid))) {
+      if (Date.now() >= deadline) {
+        return { exited: false, pids, reason: 'orphan_alive', signal, success: false, taskId };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    return { exited: true, pids, reason: 'orphan_terminated', signal, success: true, taskId };
   }
 
   /**

@@ -6,7 +6,7 @@ import { readableColor } from 'polished';
 import React, { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { ProviderCombine } from '@/libs/providerIcon';
+import { ProviderCombine } from '@/components/LobeIcons';
 
 const prefixCls = 'ant';
 

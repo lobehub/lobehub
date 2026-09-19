@@ -20,87 +20,90 @@ rg -n '^#{2,4} ' "$P"     # every heading, to find the next bound
 gateway / hetero / any (the agent runtime the recipe depends on); **phase** = env / auth / fixture /
 drive / probe / capture / publish. Skip a row only when its surface AND runtime both miss yours.
 
-| id  | surface       | runtime         | phase          | situation                                                                                                                     |
-| --- | ------------- | --------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| P01 | any           | any             | probe          | `window.__LOBE_STORES.<name>()` returns state only; add a dev action instead of HMR `setState` patches                        |
-| P02 | web, electron | any             | probe          | `goto` / `location.assign` full-reload wipes fetch wrappers; change route via `history.pushState` + `popstate`                |
-| P03 | any           | client, gateway | probe          | Prove which runtime ran with a server-only artifact (operation row, queue step, server log)                                   |
-| P04 | web, electron | any             | probe          | A top-level `const` in a second `agent-browser eval` collides; wrap payloads in an IIFE                                       |
-| P05 | web           | any             | drive          | `lobehub-dev` is shared across runs; use a run-specific session and check `location.origin` / script src first                |
-| P06 | electron      | any             | probe          | After adding or moving a module the renderer may keep the old graph; `goto`, then confirm a structural signal                 |
-| P07 | web           | any             | env            | `_dangerous_local_dev_proxy` in a signed-out automation context sits on the loading shell; use the isolated local stack       |
-| P08 | web           | any             | env            | Workspace `packages/*` dynamic imports fail cross-origin through the proxy; A/B at HEAD, use Electron for settled state       |
-| P09 | any           | client, gateway | fixture        | The stub must answer `stream:false` chat/completions with a plain JSON completion, never SSE                                  |
-| P10 | web           | gateway         | fixture        | `review_predict` is pinned to Gemini; pin the constants, allow private IPs, return schema JSON from the stub                  |
-| P11 | any           | gateway         | fixture        | `generateObject` via the deepseek stub crashes; route through the openai `/v1/responses` stub                                 |
-| P12 | web           | gateway         | fixture        | Backdate node and op rows past the client's 15-minute lease, not the server's 5                                               |
-| P13 | web, cli      | any             | fixture        | `lh topic create` rows have NULL trigger/status and drop out of the paged view; set both, then `goto`                         |
-| P14 | web, electron | hetero          | fixture        | Seed `agency_config.heterogeneousProvider` with SQL, then cold-load; the store write drops it                                 |
-| P15 | web           | any             | fixture        | Derive day boundaries from the browser's `resolvedOptions().timeZone`, never an assumed zone                                  |
-| P16 | web, electron | any             | fixture        | Clear cache tiers in the NEW document via `addScriptToEvaluateOnNewDocument`; the outgoing page re-flushes on reload          |
-| P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableTopicAcceptance`                                              |
-| P18 | electron      | hetero          | fixture        | Local-execution CC agent plus a four-table ledger fixture keyed to the live CLI identity                                      |
-| P19 | web           | any             | auth           | Seed a second user and sign in from inside a run-specific session; a signed-out context hits `/signin`                        |
-| P20 | cli           | any             | fixture        | Strip ambient topic/agent/operation ids for a LOCAL ingest; keep them for the production publish                              |
-| P21 | web           | any             | drive          | Upload through the Add-menu input, poll `dockUploadFileList`, A/B the hashing worker with `window.Worker = undefined`         |
-| P22 | web, electron | any             | drive          | `keyboard type` emits no keydown; fire `/` (and any menu trigger) with `press`                                                |
-| P23 | web, electron | any             | drive          | Tag `svg.lucide-<rendered-name>` and click through agent-browser; `el.click()` on the wrapper does nothing                    |
-| P24 | web, electron | any             | drive          | Re-query elements after every re-render; one assertion per eval                                                               |
-| P25 | web, electron | any             | capture        | Anchor on `#nav-panel-drawer`'s aside sibling; tell skeleton states apart by testid, not row count                            |
-| P26 | web           | any             | capture        | Park the route's own tRPC call with `park-request.cjs`; a broad `*trpc*` pattern stalls the shell                             |
-| P27 | web           | any             | drive          | `SWRConfig` only affects hooks below it; move the hooks into a child component                                                |
-| P28 | electron      | any             | capture        | Raw CDP `Fetch.enable` on the layout chunk holds the sidebar fallback; name the layout module only                            |
-| P29 | web, electron | any             | fixture, drive | Seed via `mkdirDocumentByPath` / `writeDocumentByPath`; rows live in pierre's shadow DOM; hetero agents have no Documents tab |
-| P30 | web, electron | any             | drive          | pierre's focus-visible and truncation-mask contracts when restyling the tree                                                  |
-| P31 | web           | any             | drive          | Row-shape bugs need the real account: foreground the MCP tab, zero-write clicks, in-page event ring buffer                    |
-| P32 | web, electron | hetero          | fixture        | Dispatch a temp assistant message and attach an `AgentRuntimeError` guide code                                                |
-| P33 | web, electron | any             | fixture        | Backfill `pluginState` from each tool message's result after Agent Mock playback                                              |
-| P34 | web, electron | any             | fixture        | Dispatch an assistant+tool pair into an empty conversation; truncate args to reach the Streaming render                       |
-| P35 | web           | gateway         | probe          | Step-boundary `uiMessages` snapshots overwrite the bucket; record `replaceMessages` stacks, A/B with `disableGatewayMode`     |
-| P36 | web           | gateway         | env            | Run the JWT handshake probe after every gateway restart; `/health` 200 proves nothing                                         |
-| P37 | any           | gateway         | env            | QStash / s3rver on fixed ports may belong to a sibling session; read the start log before stopping anything                   |
-| P38 | web           | any             | fixture        | Call the real load-more store action when the fixture is too short for the observer                                           |
-| P39 | web, electron | any             | fixture        | Replace the react-query `mutationFn` with a rejection via HMR so no network call ever fires                                   |
-| P40 | web, electron | any             | drive          | Remount the DevDock panel after a reload; pre-seed `LOBE_DEV_DOCK_UI` to land on it                                           |
-| P41 | web           | client          | fixture, drive | openai speaks `/v1/responses`; the model must be in `enabledAiModels`; set approval `auto-run`                                |
-| P42 | web           | hetero          | fixture, drive | In-page IPC mock feeding stream-json through the real `ClaudeCodeAdapter`, no Electron needed                                 |
-| P43 | web, electron | any             | capture        | Focus and read in one eval, wait past the transition, assert an untransitioned property too                                   |
-| P44 | web, electron | any             | capture        | Inject `html > canvas { display: none }` at capture time and disclose it                                                      |
-| P45 | web           | any             | capture        | Gate on `checkVisibility`, match own text nodes, assert both columns in one pass                                              |
-| P46 | web, electron | any             | capture        | Sample in-page (`addScriptToEvaluateOnNewDocument` or an entry injection), record the max tick gap, mirror the timer          |
-| P47 | web, electron | any             | capture        | Sample opacity in-page at 8 ms and use `Page.startScreencast`; `data-ending-style` is never set                               |
-| P48 | web           | any             | capture        | `localStorage.theme` + reload; assert `dataset.theme`; restore before stopping the server                                     |
-| P49 | electron      | any             | capture        | Prove the hosted URL (curl + open it), not the in-app preview                                                                 |
-| P50 | any           | any             | publish        | Re-running `ingest` mints a duplicate round; re-read with `run list` / `run get` / `view`                                     |
-| P51 | electron      | any             | probe          | Read the loaded entry script per run; never assume `entry.desktop.tsx`                                                        |
-| P52 | electron      | any             | capture        | `DESKTOP_RENDERER_STATIC=1` pool instance; prove the build via modulepreload hashes                                           |
-| P53 | electron      | any             | drive          | Open via `openTopicInNewWindow` and attach raw CDP to the popup target                                                        |
-| P54 | electron      | any             | drive          | `activateTab` alone is a no-op on the single-router shell; click the TabItem element and assert the pathname                  |
-| P55 | electron      | any             | drive          | `addTab` activates; enter the route with `goto` and assert tab / pathname / activeTopicId agree                               |
-| P56 | electron      | any             | capture        | Classify hidden slots on both sides of the switch and use the intersection                                                    |
-| P57 | electron      | any             | capture        | The renderer tracks OS appearance; `themeMode` never applies; mark the dark case untested                                     |
-| P58 | electron      | any             | probe          | i18next stays English until `switchLocale`; decide language from the DOM, not `status.language`                               |
-| P59 | electron      | any             | drive          | `addTab('/')` first; `goto /` alone keeps the restored tab                                                                    |
-| P60 | electron      | any             | auth, env      | Read `dataSyncConfig` first; `storageMode: cloud` means the run must stay read-only                                           |
-| P61 | web, electron | any             | capture        | Stall `indexedDB.open` only on web; it kills the Electron renderer                                                            |
-| P62 | electron      | any             | env            | Keep locale tests out of `packages/locales/src/default/` or the renderer imports vitest                                       |
-| P63 | cli           | gateway         | auth           | `lh task run --follow` needs OIDC; poll with `task view`; use internal ids for `--subject task:`                              |
-| P64 | web           | any             | auth           | No seeded session for the debug proxy; drive the user's Chrome and add DOM measurements                                       |
-| P65 | electron      | any             | auth, env      | Start the server on the snapshot's port with `SERVER_PORT=`; inject a better-auth cookie over CDP                             |
-| P66 | electron      | any             | auth           | `safeStorage` cannot decrypt the copied token; fall back to the legacy single instance                                        |
-| P67 | electron      | any             | auth, env      | Read the port from `/tmp/electron-dev.log`, mint a session, `Network.setCookie`                                               |
-| P68 | electron      | any             | auth, env      | Pool logs are `instance-<id>.log`; fix the port and start the server before Electron                                          |
-| P69 | electron      | any             | fixture        | Snapshot `dist/renderer` before building so the manifest differs from the local tree                                          |
-| P70 | any           | any             | env            | `.records/runtime/` holds the owned server's PID and ports; poll that port                                                    |
-| P71 | web           | any             | env            | `lsof` the listener, kill only the run-owned tree, restart, reseed auth                                                       |
-| P72 | web, electron | any             | env            | Two copies of a dep produce context errors; `pnpm dedupe`; local-only, never a branch defect                                  |
-| P73 | web           | any             | env            | Install without `--ignore-scripts` and `rm -rf .next`; turbo-tasks panics are disposable cache                                |
-| P74 | electron      | any             | env            | The desktop install duplicates `@types/react`; intersect errors with changed files, A/B after evidence                        |
-| P75 | electron      | any             | env            | Run the Model B desktop command in a long-lived PTY                                                                           |
-| P76 | any           | any             | env            | Prefix git and check commands with `cd <worktree>`; read the diffstat before pushing                                          |
-| P77 | web, cli      | gateway         | probe          | Read `llm_generation_tracing.prompt_version` after one call; restart the server if stale                                      |
-| P78 | web, cli      | gateway         | env            | `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1` so the server can read local s3rver URLs                                                    |
-| P79 | web, cli      | client, gateway | env            | Local SearXNG with `SEARCH_PROVIDERS=searxng`; the on-disk search1api keys are dead                                           |
+| id  | surface       | runtime         | phase          | situation                                                                                                                                      |
+| --- | ------------- | --------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| P01 | any           | any             | probe          | `window.__LOBE_STORES.<name>()` returns state only; add a dev action instead of HMR `setState` patches                                         |
+| P02 | web, electron | any             | probe          | `goto` / `location.assign` full-reload wipes fetch wrappers; change route via `history.pushState` + `popstate`                                 |
+| P03 | any           | client, gateway | probe          | Prove which runtime ran with a server-only artifact (operation row, queue step, server log)                                                    |
+| P04 | web, electron | any             | probe          | A top-level `const` in a second `agent-browser eval` collides; wrap payloads in an IIFE                                                        |
+| P05 | web           | any             | drive          | `lobehub-dev` is shared across runs; use a run-specific session and check `location.origin` / script src first                                 |
+| P06 | electron      | any             | probe          | After adding or moving a module the renderer may keep the old graph; `goto`, then confirm a structural signal                                  |
+| P07 | web           | any             | env            | `_dangerous_local_dev_proxy` in a signed-out automation context sits on the loading shell; use the isolated local stack                        |
+| P08 | web           | any             | env            | Workspace `packages/*` dynamic imports fail cross-origin through the proxy; A/B at HEAD, use Electron for settled state                        |
+| P09 | any           | client, gateway | fixture        | The stub must answer `stream:false` chat/completions with a plain JSON completion, never SSE                                                   |
+| P10 | web           | gateway         | fixture        | `review_predict` is pinned to Gemini; pin the constants, allow private IPs, return schema JSON from the stub                                   |
+| P11 | any           | gateway         | fixture        | `generateObject` via the deepseek stub crashes; route through the openai `/v1/responses` stub                                                  |
+| P12 | web           | gateway         | fixture        | Backdate node and op rows past the client's 15-minute lease, not the server's 5                                                                |
+| P13 | web, cli      | any             | fixture        | `lh topic create` rows have NULL trigger/status and drop out of the paged view; set both, then `goto`                                          |
+| P14 | web, electron | hetero          | fixture        | Seed `agency_config.heterogeneousProvider` with SQL, then cold-load; the store write drops it                                                  |
+| P15 | web           | any             | fixture        | Derive day boundaries from the browser's `resolvedOptions().timeZone`, never an assumed zone                                                   |
+| P16 | web, electron | any             | fixture        | Clear cache tiers in the NEW document via `addScriptToEvaluateOnNewDocument`; the outgoing page re-flushes on reload                           |
+| P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableTopicAcceptance`                                                               |
+| P18 | electron      | hetero          | fixture        | Local-execution CC agent plus a four-table ledger fixture keyed to the live CLI identity                                                       |
+| P19 | web           | any             | auth           | Seed a second user and sign in from inside a run-specific session; a signed-out context hits `/signin`                                         |
+| P20 | cli           | any             | fixture        | Strip ambient topic/agent/operation ids for a LOCAL ingest; keep them for the production publish                                               |
+| P21 | web           | any             | drive          | Upload through the Add-menu input, poll `dockUploadFileList`, A/B the hashing worker with `window.Worker = undefined`                          |
+| P22 | web, electron | any             | drive          | `keyboard type` emits no keydown; fire `/` (and any menu trigger) with `press`                                                                 |
+| P23 | web, electron | any             | drive          | Tag `svg.lucide-<rendered-name>` and click through agent-browser; `el.click()` on the wrapper does nothing                                     |
+| P24 | web, electron | any             | drive          | Re-query elements after every re-render; one assertion per eval                                                                                |
+| P25 | web, electron | any             | capture        | Anchor on `#nav-panel-drawer`'s aside sibling; tell skeleton states apart by testid, not row count                                             |
+| P26 | web           | any             | capture        | Park the route's own tRPC call with `park-request.cjs`; a broad `*trpc*` pattern stalls the shell                                              |
+| P27 | web           | any             | drive          | `SWRConfig` only affects hooks below it; move the hooks into a child component                                                                 |
+| P28 | electron      | any             | capture        | Raw CDP `Fetch.enable` on the layout chunk holds the sidebar fallback; name the layout module only                                             |
+| P29 | web, electron | any             | fixture, drive | Seed via `mkdirDocumentByPath` / `writeDocumentByPath`; rows live in pierre's shadow DOM; hetero agents have no Documents tab                  |
+| P30 | web, electron | any             | drive          | pierre's focus-visible and truncation-mask contracts when restyling the tree                                                                   |
+| P31 | web           | any             | drive          | Row-shape bugs need the real account: foreground the MCP tab, zero-write clicks, in-page event ring buffer                                     |
+| P32 | web, electron | hetero          | fixture        | Dispatch a temp assistant message and attach an `AgentRuntimeError` guide code                                                                 |
+| P33 | web, electron | any             | fixture        | Backfill `pluginState` from each tool message's result after Agent Mock playback                                                               |
+| P34 | web, electron | any             | fixture        | Dispatch an assistant+tool pair into an empty conversation; truncate args to reach the Streaming render                                        |
+| P35 | web           | gateway         | probe          | Step-boundary `uiMessages` snapshots overwrite the bucket; record `replaceMessages` stacks, A/B with `disableGatewayMode`                      |
+| P36 | web           | gateway         | env            | Run the JWT handshake probe after every gateway restart; `/health` 200 proves nothing                                                          |
+| P37 | any           | gateway         | env            | QStash / s3rver on fixed ports may belong to a sibling session; read the start log before stopping anything                                    |
+| P38 | web           | any             | fixture        | Call the real load-more store action when the fixture is too short for the observer                                                            |
+| P39 | web, electron | any             | fixture        | Replace the react-query `mutationFn` with a rejection via HMR so no network call ever fires                                                    |
+| P40 | web, electron | any             | drive          | Remount the DevDock panel after a reload; pre-seed `LOBE_DEV_DOCK_UI` to land on it                                                            |
+| P41 | web           | client          | fixture, drive | openai speaks `/v1/responses`; the model must be in `enabledAiModels`; set approval `auto-run`                                                 |
+| P42 | web           | hetero          | fixture, drive | In-page IPC mock feeding stream-json through the real `ClaudeCodeAdapter`, no Electron needed                                                  |
+| P43 | web, electron | any             | capture        | Focus and read in one eval, wait past the transition, assert an untransitioned property too                                                    |
+| P44 | web, electron | any             | capture        | Inject `html > canvas { display: none }` at capture time and disclose it                                                                       |
+| P45 | web           | any             | capture        | Gate on `checkVisibility`, match own text nodes, assert both columns in one pass                                                               |
+| P46 | web, electron | any             | capture        | Sample in-page (`addScriptToEvaluateOnNewDocument` or an entry injection), record the max tick gap, mirror the timer                           |
+| P47 | web, electron | any             | capture        | Sample opacity in-page at 8 ms and use `Page.startScreencast`; `data-ending-style` is never set                                                |
+| P48 | web           | any             | capture        | `localStorage.theme` + reload; assert `dataset.theme`; restore before stopping the server                                                      |
+| P49 | electron      | any             | capture        | Prove the hosted URL (curl + open it), not the in-app preview                                                                                  |
+| P50 | any           | any             | publish        | Re-running `ingest` mints a duplicate round; re-read with `run list` / `run get` / `view`                                                      |
+| P51 | electron      | any             | probe          | Read the loaded entry script per run; never assume `entry.desktop.tsx`                                                                         |
+| P52 | electron      | any             | capture        | `DESKTOP_RENDERER_STATIC=1` pool instance; prove the build via modulepreload hashes                                                            |
+| P53 | electron      | any             | drive          | Open via `openTopicInNewWindow` and attach raw CDP to the popup target                                                                         |
+| P54 | electron      | any             | drive          | `activateTab` alone is a no-op on the single-router shell; click the TabItem element and assert the pathname                                   |
+| P55 | electron      | any             | drive          | `addTab` activates; enter the route with `goto` and assert tab / pathname / activeTopicId agree                                                |
+| P56 | electron      | any             | capture        | Classify hidden slots on both sides of the switch and use the intersection                                                                     |
+| P57 | electron      | any             | capture        | The renderer tracks OS appearance; `themeMode` never applies; mark the dark case untested                                                      |
+| P58 | electron      | any             | probe          | i18next stays English until `switchLocale`; decide language from the DOM, not `status.language`                                                |
+| P59 | electron      | any             | drive          | `addTab('/')` first; `goto /` alone keeps the restored tab                                                                                     |
+| P60 | electron      | any             | auth, env      | Read `dataSyncConfig` first; `storageMode: cloud` means the run must stay read-only                                                            |
+| P61 | web, electron | any             | capture        | Stall `indexedDB.open` only on web; it kills the Electron renderer                                                                             |
+| P62 | electron      | any             | env            | Keep locale tests out of `packages/locales/src/default/` or the renderer imports vitest                                                        |
+| P63 | cli           | gateway         | auth           | `lh task run --follow` needs OIDC; poll with `task view`; use internal ids for `--subject task:`                                               |
+| P64 | web           | any             | auth           | No seeded session for the debug proxy; drive the user's Chrome and add DOM measurements                                                        |
+| P65 | electron      | any             | auth, env      | Start the server on the snapshot's port with `SERVER_PORT=`; inject a better-auth cookie over CDP                                              |
+| P66 | electron      | any             | auth           | `safeStorage` cannot decrypt the copied token; fall back to the legacy single instance                                                         |
+| P67 | electron      | any             | auth, env      | Read the port from `/tmp/electron-dev.log`, mint a session, `Network.setCookie`                                                                |
+| P68 | electron      | any             | auth, env      | Pool logs are `instance-<id>.log`; fix the port and start the server before Electron                                                           |
+| P69 | electron      | any             | fixture        | Snapshot `dist/renderer` before building so the manifest differs from the local tree                                                           |
+| P70 | any           | any             | env            | `.records/runtime/` holds the owned server's PID and ports; poll that port                                                                     |
+| P71 | web           | any             | env            | `lsof` the listener, kill only the run-owned tree, restart, reseed auth                                                                        |
+| P72 | web, electron | any             | env            | Two copies of a dep produce context errors; `pnpm dedupe`; local-only, never a branch defect                                                   |
+| P73 | web           | any             | env            | Install without `--ignore-scripts` and `rm -rf .next`; turbo-tasks panics are disposable cache                                                 |
+| P74 | electron      | any             | env            | The desktop install duplicates `@types/react`; intersect errors with changed files, A/B after evidence                                         |
+| P75 | electron      | any             | env            | Run the Model B desktop command in a long-lived PTY                                                                                            |
+| P76 | any           | any             | env            | Prefix git and check commands with `cd <worktree>`; read the diffstat before pushing                                                           |
+| P77 | web, cli      | gateway         | probe          | Read `llm_generation_tracing.prompt_version` after one call; restart the server if stale                                                       |
+| P78 | web, cli      | gateway         | env            | `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1` so the server can read local s3rver URLs                                                                     |
+| P79 | web, cli      | client, gateway | env            | Local SearXNG with `SEARCH_PROVIDERS=searxng`; the on-disk search1api keys are dead                                                            |
+| P84 | cli           | any             | auth           | Drive `lh` against the local lobehub-cloud runtime by seeding an API key row into its main database                                            |
+| P85 | cli           | any             | fixture        | Simulate a publish whose response was lost by restoring `pendingCreateKey` in `.lobehub/artifacts.json`                                        |
+| P82 | web           | any             | drive          | Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups |
 
 ## Choose the least invasive mechanism
 
@@ -1375,6 +1378,38 @@ tool → assistant(text) rows. Capture mid-turn by polling the top-level `[data-
 not `body.innerText`, and key turn-2 captures on the store/DOM state you assert rather than a
 fixed sleep.
 
+#### P82 · Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups
+
+**applies-to:** surface=web · runtime=any · phase=drive
+
+**Situation:** verifying the acceptance flow graph (`src/features/Acceptance/Viewer/Flow`)
+with local worktree code against production data through
+`/_dangerous_local_dev_proxy/acceptance/<id>?debug-host=http://localhost:<port>`, using a
+publicly shared acceptance so no production login is injected.
+
+**Doesn't work:**
+
+- Idle gaps between `agent-browser` commands. The anonymous context is redirected to
+  `/signin?reason=sessionExpired` within roughly a minute, so a later screenshot silently
+  becomes the login page and reads as "the group frame is gone".
+- `focus @ref` + `press Enter` on a group button after the flow's fullscreen toggle was
+  used. `AcceptanceFlow.tsx` refocuses the fullscreen `ActionIcon` when fullscreen exits, so
+  the Enter re-enters fullscreen while the group action also fires.
+- Trusting the default `fitView`. `FlowCanvas` fits with `minZoom: 0.65`, so on a
+  1440×1800 viewport a 26-node group does not fit and the wrapper's title row is clipped
+  out of the canvas; collapsing a group does not refit, so the collapsed card can sit
+  outside the viewport. Both are pre-existing and identical on production.
+
+**Works:** one bash script that opens the URL, waits for the `验收流程` tab, and performs
+every click and screenshot back to back; log `get url` before each screenshot and skip any
+that is not on the acceptance route. Click `.react-flow__controls-zoomout` twice before the
+root/focused screenshots and `.react-flow__controls-fitview` after collapsing; drive group
+buttons with `click @ref` (focus+Enter only as fallback) and take the fullscreen shot last.
+Assert structure with `get count '.react-flow__node-flowGroup'` /
+`'.react-flow__node-state'`, capture `before` from the same route on production and `after`
+from the proxy in the same session and viewport, and rely on a top-bar string that exists
+only in the worktree as the visible identity marker of every `after` screenshot.
+
 ### Capturing and publishing evidence
 
 #### P43 · Reading a transitioned CSS property immediately after focus/hover
@@ -2454,3 +2489,66 @@ ScreenshotTiles, and Highlighter's `styles.content` styles a container whose
 `pre` has separate padding. An outer wrapper or `img` override alone does not
 prove the visible edge or total inset changed. Measure the settled DOM, then
 inspect a screenshot before declaring the styling verified.
+
+#### P84 · Driving `lh` against the local lobehub-cloud runtime
+
+**applies-to:** surface=cli · runtime=any · phase=auth
+
+**Situation:** a CLI command that only exists on cloud (`market.deployments.*`,
+which the OSS lambda router stubs out as an empty object) has to be exercised
+against `lobehub-cloud`'s own dev runtime, not this repo's `:3010` server. The
+adapter's seeded CLI profile (§4 CLI) points at the wrong backend, and cloud's
+`bun run dev:runtime:auth` only writes **browser** cookies.
+
+**Doesn't work:** `dev:runtime:auth` for the CLI (cookies, not a token); an
+interactive device-code login (hijacks the user's browser and is forbidden).
+
+**Works:** insert an api\_keys row into the runtime's main database and use it as
+`LOBEHUB_CLI_API_KEY`. `key_hash` is `HMAC-SHA256(key, KEY_VAULTS_SECRET)`;
+`key` is the same plaintext AES-GCM encrypted with that secret as
+`iv:authTag:ciphertext` hex — the shapes `init-dev-env.sh seed-user` uses. Read
+`keyVaultsSecret` and `seedEmail` from
+`~/.lobehub/runtime-dev/secrets/<checkout>.json`, resolve the user id by that
+email, then:
+
+```bash
+LOBEHUB_CLI_API_KEY=sk-lh-<16 lowercase alnum> \
+LOBEHUB_SERVER=http://localhost:<runtime app port> \
+LOBEHUB_CLI_HOME=<scratch dir> \
+  node apps/cli/dist/index.js <command>
+```
+
+The key must match `^sk-lh-[\da-z]{16}$` or the server rejects it before any
+lookup. Give the run its own `LOBEHUB_CLI_HOME` so it cannot disturb the user's
+real login, and remember the publishing identity is now that seeded user — see
+`common-mistakes.md` L-S22 before blaming a quota error on the code.
+
+Cloud's runtime commands each re-read the container ports, so pass the same
+`LOBEHUB_RUNTIME_POSTGRES_PORT` / `LOBEHUB_RUNTIME_REDIS_PORT` overrides to
+_every_ `bun run dev …` invocation. Omitting them on a later call silently
+targets the default 5433, which on a developer machine is usually a different
+project's Postgres and fails as `password authentication failed for user
+"postgres"`.
+
+#### P85 · Simulating a publish whose response never arrived
+
+**applies-to:** surface=cli · runtime=any · phase=fixture
+
+**Situation:** proving that retrying an interrupted `lh artifact publish` does not
+create a second site. The real failure — a dropped reply — cannot be produced by
+killing the process, because the manifest is what carries the recovery state.
+
+**Works:** the CLI writes `pendingCreateKey` into `.lobehub/artifacts.json`
+_before_ sending a create, and replaces it with `deploymentId` on success. So
+write the manifest by hand with only a known `pendingCreateKey`, publish (the
+CLI adopts that key), then restore the same one-key manifest and publish again.
+A correct implementation returns the first deployment id and does not advance
+the revision; a broken one mints a second site with its own URL.
+
+```bash
+printf '{"artifacts":{"dist/index.html":{"pendingCreateKey":"%s"}},"version":1}' "$KEY" \
+  > .lobehub/artifacts.json
+```
+
+Capture both publishes' `--json` output in one artifact with the restored
+manifest shown between them, so a reviewer can see the key was genuinely reused.

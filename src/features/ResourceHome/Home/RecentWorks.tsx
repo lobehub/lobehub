@@ -46,7 +46,10 @@ const RecentWorks = memo(() => {
       ) : (
         <div className={styles.grid}>
           {recent.map((item) => (
-            <WorkPreviewCard item={item} key={item.id} onOpen={openWork} />
+            // `onRemoved` is required here: this list is `useSWRInfinite`-backed,
+            // and `useRemoveWork`'s global refresh skips `$inf$` keys, so without
+            // it a removed orphan card lingers until a page reload.
+            <WorkPreviewCard item={item} key={item.id} onOpen={openWork} onRemoved={reload} />
           ))}
         </div>
       )}

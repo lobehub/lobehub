@@ -19,100 +19,27 @@
  *      because the manifest was still resolvable in the engine even when
  *      the rule-layer gate denied it).
  */
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { BrowserManifest } from '@lobechat/builtin-tool-browser';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
-import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { builtinTools } from '@lobechat/builtin-tools';
+import {
+  DEVICE_TOOL_IDENTIFIERS,
+  DEVICE_TOOL_MANIFESTS,
+  type DeviceToolWallParams,
+  filterAllowedBuiltinTools,
+  isDeviceToolIdentifier,
+  REMOTE_DEVICE_TOOL_IDENTIFIERS,
+} from '@lobechat/mecha';
 
-export const DEVICE_TOOL_MANIFESTS = [
-  LocalSystemManifest,
-  RemoteDeviceManifest,
-  BrowserManifest,
-  AuvManifest,
-] as const;
-
-export const DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set(
-  DEVICE_TOOL_MANIFESTS.map((m) => m.identifier),
-);
-
-/**
- * The remote-device picker alone — the exclusion set for device-LOCKED runs,
- * which keep local-system for the routed device but must not see the picker.
- */
-export const REMOTE_DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set([
-  RemoteDeviceManifest.identifier,
-]);
-
-export const isDeviceToolIdentifier = (identifier: string): boolean =>
-  DEVICE_TOOL_IDENTIFIERS.has(identifier);
-
-export interface AllowedBuiltinToolsParams {
-  /**
-   * Output of `resolveDeviceAccessPolicy`. When `false`, BOTH device tools
-   * (local-system and remote-device) are stripped from the returned list —
-   * this is the hard wall that keeps external bot senders from reaching the
-   * owner's machine even via `lobe-activator`'s `isExplicitActivation`
-   * bypass at the engine's enableChecker layer.
-   */
-  canUseDevice: boolean;
-  /**
-   * The run is locked to a specific device — routed, or explicitly bound but
-   * offline (see `isDeviceLockedPlan`). Strips `lobe-remote-device` ONLY:
-   * with no device decision left, the picker must not exist (offering
-   * `activateDevice` invites redundant activation or hopping to a machine
-   * the user never chose), while local-system stays for the routed device.
-   * Physical counterpart of the `!deviceLocked` rule gate in
-   * `AgentToolsEngine` — without it, the activator's `isExplicitActivation`
-   * bypass can re-surface the device list mid-run.
-   */
-  deviceLocked?: boolean;
-  /**
-   * User-level kill switch for local-system specifically. Independent of
-   * `canUseDevice` — an owner may want first-party local-system disabled
-   * (privacy, sandbox tests) while remote-device stays available.
-   * `undefined` is treated as `false` so callers that thread the
-   * `disableLocalSystem?: boolean` param through don't need to coerce.
-   */
-  disableLocalSystem?: boolean;
-  /** Gateway callers pass reported capabilities or [] for older clients; omitted for standalone client execution. */
-  supportedDeviceTools?: readonly string[];
-}
-
-/**
- * Physically filter the `builtinTools` array based on per-turn device
- * access. Callers MUST use this in place of iterating `builtinTools`
- * directly when the resulting manifests will reach a place the activator
- * (or the rendered `<available_tools>` block) can see.
- *
- * Defense-in-depth note: the rule-layer gates in `AgentToolsEngine` are
- * kept as a secondary line of defense, but they are bypassed by
- * `allowExplicitActivation` (B2), so the **physical** filter
- * here is the only reliable enforcement point.
- */
-export const buildAllowedBuiltinTools = (params: AllowedBuiltinToolsParams) => {
-  const { canUseDevice, deviceLocked, disableLocalSystem, supportedDeviceTools } = params;
-
-  return builtinTools.filter((tool) => {
-    if (
-      tool.identifier === AuvManifest.identifier &&
-      supportedDeviceTools !== undefined &&
-      !supportedDeviceTools.includes(tool.identifier)
-    )
-      return false;
-    if (
-      disableLocalSystem &&
-      (tool.identifier === LocalSystemManifest.identifier ||
-        tool.identifier === AuvManifest.identifier)
-    ) {
-      return false;
-    }
-    if (!canUseDevice && DEVICE_TOOL_IDENTIFIERS.has(tool.identifier)) {
-      return false;
-    }
-    if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(tool.identifier)) {
-      return false;
-    }
-    return true;
-  });
+// The registry and the walls live in `@lobechat/mecha` so both hosts agree
+// on which builtin tools are device tools; re-exported for the server callers.
+export {
+  DEVICE_TOOL_IDENTIFIERS,
+  DEVICE_TOOL_MANIFESTS,
+  isDeviceToolIdentifier,
+  REMOTE_DEVICE_TOOL_IDENTIFIERS,
 };
+
+export type AllowedBuiltinToolsParams = DeviceToolWallParams;
+
+/** The bundled builtin tools that may exist for this run, after the device walls. */
+export const buildAllowedBuiltinTools = (params: AllowedBuiltinToolsParams) =>
+  filterAllowedBuiltinTools(builtinTools, params);

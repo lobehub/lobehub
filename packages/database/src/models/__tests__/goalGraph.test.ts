@@ -333,3 +333,42 @@ describe('GoalGraphModel', () => {
     });
   });
 });
+
+// PGlite has a single connection and cannot model PostgreSQL reader/writer concurrency.
+it.skipIf(process.env.TEST_SERVER_DB !== '1')(
+  'reads a graph while another transaction locks its goal',
+  async () => {
+    const goal = await goalModel.create({ title: 'Readable while planning' });
+    let unlock!: () => void;
+    let acquired!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
+    const writer = serverDB.transaction(async (tx) => {
+      await new GoalModel(tx, userId).findByIdForUpdate(goal.id);
+      acquired();
+      await gate;
+    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([ready, writer]);
+      const graph = await Promise.race([
+        graphModel.getGraph(goal.id),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('Graph refresh waited for a write lock')),
+            2000,
+          );
+        }),
+      ]);
+      expect(graph?.goal.id).toBe(goal.id);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      unlock();
+      await writer;
+    }
+  },
+);

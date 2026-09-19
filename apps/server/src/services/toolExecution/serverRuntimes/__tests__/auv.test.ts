@@ -8,8 +8,11 @@ const queryDeviceSystemInfoMock = vi.fn();
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     queryDeviceSystemInfo: (...args: unknown[]) => queryDeviceSystemInfoMock(...args),
-    executeToolCall: (...args: unknown[]) => executeToolCallMock(...args),
   },
+}));
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    executeToolCallMock(...args),
 }));
 
 const { auvRuntime } = await import('../auv');

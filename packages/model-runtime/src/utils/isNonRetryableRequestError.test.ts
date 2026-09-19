@@ -16,6 +16,15 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('does not retry an oversized upstream request body on another channel', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: { message: '<html>413 Request Entity Too Large</html>', status: 413 },
+        errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
+      }),
+    ).toBe(true);
+  });
+
   it('returns true for terminal image generation errors', () => {
     expect(
       isNonRetryableRequestError({

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import { coverageConfigDefaults, defineConfig } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -12,7 +12,13 @@ export default defineConfig({
     },
     coverage: {
       exclude: [
-        ...coverageConfigDefaults.exclude,
+        // Vitest 4+ ships an empty `coverageConfigDefaults.exclude`; keep the previous
+        // default exclusions explicitly so the coverage set does not silently grow.
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/cypress/**',
+        '**/.{idea,git,cache,output,temp}/**',
+        '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*',
         '**/types/**',
         '**/type.ts',
         '**/utils/index.ts',

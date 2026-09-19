@@ -42,6 +42,7 @@ const runtime = new SkillsExecutionRuntime({
             executionEnv: 'sandbox' as const,
             exitCode: 1,
             output: '',
+            ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
             stderr: result.error?.message || 'Command execution failed',
             success: false,
           };
@@ -57,6 +58,7 @@ const runtime = new SkillsExecutionRuntime({
           executionEnv: 'sandbox' as const,
           exitCode: sandboxResult.exitCode ?? (result.success ? 0 : 1),
           output: sandboxResult.stdout || sandboxResult.output || '',
+          ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
           stderr: sandboxResult.stderr || '',
           success:
             result.success &&
@@ -124,6 +126,7 @@ const runtime = new SkillsExecutionRuntime({
             executionEnv: 'sandbox' as const,
             exitCode: 1,
             output: '',
+            ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
             stderr: result.error?.message || 'Command execution failed',
             success: false,
           };
@@ -136,6 +139,7 @@ const runtime = new SkillsExecutionRuntime({
           executionEnv: 'sandbox' as const,
           exitCode: sandboxResult.exitCode ?? (result.success ? 0 : 1),
           output: sandboxResult.stdout || sandboxResult.output || '',
+          ...(result.sessionExpiredAndRecreated && { sessionExpiredAndRecreated: true }),
           stderr: sandboxResult.stderr || '',
           success:
             result.success &&

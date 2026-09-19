@@ -4,7 +4,7 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ProviderIcon } from '@/libs/providerIcon';
+import { ProviderIcon } from '@/components/LobeIcons';
 
 export const useCategory = () => {
   const { t } = useTranslation('discover');

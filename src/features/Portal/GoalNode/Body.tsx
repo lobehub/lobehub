@@ -24,7 +24,7 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 /**
  * Drill-down for one Goal Graph node. Everything rendered here is derived from
- * the same `goal.graph` snapshot the page already holds — no extra fetch. A
+ * the `goal.graph` snapshot — shared by SWR key with whichever host opened it. A
  * Work node links onward to its Task detail (the deep half of the chain:
  * node → task → topic conversation).
  */
@@ -138,6 +138,10 @@ const Body = memo(() => {
   const view = useChatStore(chatPortalSelectors.goalNodeView);
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const openGoalNode = useChatStore((s) => s.openGoalNode);
+  // Fetched here, not assumed from the goal page: the drill-down also opens
+  // from the conversation portal, where nothing else holds the snapshot.
+  const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
+  useFetchGoalGraph(view?.goalId);
   const snapshot = useGoalStore(goalSelectors.goalGraph(view?.goalId ?? ''));
 
   const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);

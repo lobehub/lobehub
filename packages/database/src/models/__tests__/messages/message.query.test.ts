@@ -2113,6 +2113,31 @@ describe('MessageModel Query Tests', () => {
   });
 
   describe('queryByKeyword with external candidates', () => {
+    it('drops tool and blank candidate messages while retaining summary-only tasks', async () => {
+      await serverDB.insert(messages).values([
+        { content: 'Internal tool output', id: 'candidate-tool', role: 'tool', userId },
+        { content: '\u00A0\t\n　', id: 'candidate-blank', role: 'assistant', userId },
+        { content: 'Visible response', id: 'candidate-visible', role: 'assistant', userId },
+        { content: '', id: 'candidate-summary', role: 'task', summary: 'Visible task', userId },
+      ]);
+      const model = new MessageModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockResolvedValue({
+          candidates: [
+            { id: 'candidate-tool', score: 4 },
+            { id: 'candidate-blank', score: 3 },
+            { id: 'candidate-visible', score: 2 },
+            { id: 'candidate-summary', score: 1 },
+          ],
+          total: 4,
+        }),
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id).sort()).toEqual(['candidate-summary', 'candidate-visible']);
+    });
+
     it('hydrates current-scope messages in the legacy recency order', async () => {
       await serverDB.insert(messages).values([
         {

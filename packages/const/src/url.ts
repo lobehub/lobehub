@@ -4,6 +4,8 @@ export const OFFICIAL_URL = 'https://app.lobehub.com';
 export const OFFICIAL_SITE = 'https://lobehub.com';
 export const OFFICIAL_DOMAIN = 'lobehub.com';
 
+export const OFFICIAL_CLOUD_URL = OFFICIAL_SITE;
+
 export const isOfficialCloudServer = (url?: string): boolean => {
   if (!url) return false;
   try {

@@ -79,4 +79,24 @@ describe('listSkillToolsWithLiveFallback', () => {
 
     expect(skills.listTools).toHaveBeenCalledWith('posthog');
   });
+
+  it('should give the live probe and the static fallback separate timeout signals', async () => {
+    const staticResponse = {
+      tools: [{ inputSchema: { type: 'object' }, name: 'query' }],
+    };
+    const skills = {
+      listLiveTools: vi.fn().mockRejectedValue(new Error('timeout')),
+      listTools: vi.fn().mockResolvedValue(staticResponse),
+    };
+
+    await expect(listSkillToolsWithLiveFallback(skills, 'posthog', undefined, 3000)).resolves.toBe(
+      staticResponse,
+    );
+
+    const liveSignal = skills.listLiveTools.mock.calls[0][1]?.signal;
+    const staticSignal = skills.listTools.mock.calls[0][1]?.signal;
+    expect(liveSignal).toBeInstanceOf(AbortSignal);
+    expect(staticSignal).toBeInstanceOf(AbortSignal);
+    expect(staticSignal).not.toBe(liveSignal);
+  });
 });

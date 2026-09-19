@@ -4,6 +4,7 @@ packages:
   - '../../packages/agent-tracing'
   - '../../packages/chat-adapter-imessage'
   - '../../packages/heterogeneous-agents'
+  - '../../packages/html-artifact'
   - '../../packages/const'
   - '../../packages/eval-rubric'
   - '../../packages/electron-server-ipc'
@@ -11,6 +12,7 @@ packages:
   - '../../packages/electron-mac-notifications'
   - '../../packages/napi-loader'
   - '../../packages/file-loaders'
+  - '../../packages/html-artifact'
   - '../../packages/desktop-bridge'
   - '../../packages/device-control'
   - '../../packages/device-sandbox'
@@ -20,14 +22,52 @@ packages:
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
   - '../../packages/ssrf-safe-fetch'
-  - './stubs/business-const'
+  - 'stubs/business-const'
   - '../../packages/types'
   - '../../packages/model-bank'
   - '../../packages/utils'
   - '.'
+
+lockfile: true
+shamefullyHoist: true
+ignoreWorkspaceRootCheck: true
+
+publicHoistPattern:
+  - '*@umijs/lint*'
+  - '*unicorn*'
+  - '*changelog*'
+  - '*commitlint*'
+  - '*eslint*'
+  - '*postcss*'
+  - '*prettier*'
+  - '*remark*'
+  - '*semantic-release*'
+  - '*stylelint*'
+  - '@auth/core'
+  - 'pdfjs-dist'
+
 allowBuilds:
-  electron: set this to true or false
-  electron-winstaller: set this to true or false
-  esbuild: set this to true or false
-  get-windows: set this to true or false
-  node-mac-permissions: set this to true or false
+  '@sentry/cli': true
+  electron: true
+  electron-builder: true
+  electron-winstaller: false
+  esbuild: false
+  get-windows: false
+  node-mac-permissions: true
+  protobufjs: false
+
+overrides:
+  node-gyp: ^12.4.0
+  react: 19.2.7
+  react-dom: 19.2.7
+  vitest: 5.0.0
+  'zod@^4': 4.5.4
+minimumReleaseAgeExclude:
+  - '@auv-js/api-client@0.0.16'
+  - '@auv-js/cli-darwin-arm64@0.0.16'
+  - '@auv-js/cli-darwin-x64@0.0.16'
+  - '@auv-js/cli-linux-arm64-gnu@0.0.16'
+  - '@auv-js/cli-linux-x64-gnu@0.0.16'
+  - '@auv-js/cli-win32-x64-msvc@0.0.16'
+  - '@auv-js/cli@0.0.16'
+  - '@auv-js/sdk@0.0.16'

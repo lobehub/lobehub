@@ -1,3 +1,5 @@
+export { getFileExtension } from '@lobechat/html-artifact';
+
 const EXT_TO_LANG: Record<string, string> = {
   bash: 'bash',
   c: 'c',
@@ -42,14 +44,6 @@ const EXT_TO_LANG: Record<string, string> = {
 export const extensionToLanguage = (ext: string): string => {
   if (!ext) return 'txt';
   return EXT_TO_LANG[ext.toLowerCase()] ?? 'txt';
-};
-
-export const getFileExtension = (filename: string): string => {
-  const base = filename.split('/').at(-1) ?? filename;
-  if (base.startsWith('.') && !base.slice(1).includes('.')) return '';
-  const dotIdx = base.lastIndexOf('.');
-  if (dotIdx < 0) return '';
-  return base.slice(dotIdx + 1);
 };
 
 const URL_LIKE_PREFIX = /^(?:[a-z][a-z\d+.-]*:|\/\/|#|\/)/i;

@@ -32,6 +32,8 @@ export interface StartOperationInput {
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   clientIp?: string;
+  /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
+  disabledPluginIds?: string[];
   discordContext?: any;
   discovery: ToolDiscoveryResult;
   enableExpertise: boolean;
@@ -95,6 +97,7 @@ export const startOperation = async (
     botContext,
     botPlatformContext,
     clientIp,
+    disabledPluginIds,
     discordContext,
     discovery,
     enableExpertise,
@@ -119,6 +122,7 @@ export const startOperation = async (
     userInterventionConfig,
     userTimezone,
   } = input;
+  const { audio, video, vision } = discovery.modelMediaCapabilities;
 
   log(
     'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
@@ -173,6 +177,7 @@ export const startOperation = async (
         : undefined,
       deviceSystemInfo:
         Object.keys(prep.deviceSystemInfo).length > 0 ? prep.deviceSystemInfo : undefined,
+      disabledPluginIds,
       executionPlan: discovery.executionPlan,
       searchDecision: discovery.searchDecision,
       userTimezone,
@@ -181,7 +186,7 @@ export const startOperation = async (
         // inherit the builtin agent's tools / systemRole / model), but their
         // resource tools and receipts must attribute to the *reviewed* user
         // agent, which rides on the marker. Prefer it so the tool-execution
-        // context (state.metadata.agentId) targets the reviewed agent; ordinary
+        // context (state.origin.agentId) targets the reviewed agent; ordinary
         // runs (no marker) fall back to the resolved executing agent.
         agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
         // Propagate the originating request's client IP / user agent into
@@ -205,7 +210,7 @@ export const startOperation = async (
           ? { editingGroupId: appContext.editingGroupId }
           : {}),
         // Run-scoped Agent Signal marker for background self-iteration / memory
-        // runs — lands in state.metadata.agentSignal so the completion path can
+        // runs — lands in state.origin.signal so the completion path can
         // project receipts/briefs. Undefined for ordinary chat runs.
         ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
         defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
@@ -233,10 +238,14 @@ export const startOperation = async (
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
       discordContext,
+      // Run context the context engine injects into the system message —
+      // carried on the operation like `expertise`, not on the agent config.
+      connectorOwnershipNote: discovery.connectorOwnershipNote,
       evalContext,
       evalRuntime,
       enableExpertise,
       expertise: prep.expertise,
+      projectInstructions: prep.projectInstructions,
       initialContext,
       initialMessages: prep.allMessages,
       initialStepCount,
@@ -257,7 +266,15 @@ export const startOperation = async (
           }
         : {}),
       maxSteps,
-      modelRuntimeConfig: { model, provider },
+      modelRuntimeConfig: {
+        mediaCapabilities: {
+          ...(typeof audio === 'boolean' && { audio }),
+          ...(typeof video === 'boolean' && { video }),
+          ...(typeof vision === 'boolean' && { vision }),
+        },
+        model,
+        provider,
+      },
       hooks,
       operationId,
       parentOperationId,

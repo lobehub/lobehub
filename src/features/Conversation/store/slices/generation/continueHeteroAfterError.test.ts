@@ -114,10 +114,6 @@ vi.mock('@/store/user', () => ({
   }),
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { info: vi.fn() },
-}));
-
 const mockChatDeleteMessage = vi.fn(async () => {});
 const mockExecuteGatewayAgent = vi.fn(async () => {});
 const noop = vi.fn();

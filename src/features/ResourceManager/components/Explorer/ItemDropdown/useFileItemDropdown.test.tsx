@@ -8,6 +8,7 @@ interface SendToMessengerParams {
 }
 
 const mocks = vi.hoisted(() => ({
+  activeWorkspaceId: null as string | null,
   confirmModal: vi.fn(),
   deleteResource: vi.fn<() => Promise<void>>(async () => {}),
   dropTreeNodes: vi.fn(async () => undefined),
@@ -49,6 +50,10 @@ vi.mock('@/store/file', () => ({
   ),
 }));
 vi.mock('@/store/library', () => ({ useKnowledgeBaseStore: () => [vi.fn(), vi.fn()] }));
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
+}));
+
 vi.mock('@/store/tree', () => ({
   useTreeStore: Object.assign(() => vi.fn(), {
     getState: () => ({ dropNodes: mocks.dropTreeNodes, revalidate: mocks.revalidateTree }),
@@ -69,6 +74,35 @@ const pushedFile = () => mocks.useSendToMessengerMenuItem.mock.calls.at(-1)![0].
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.activeWorkspaceId = null;
+});
+
+describe('useFileItemDropdown — visibility toggles', () => {
+  const ownFile = (visibility: 'private' | 'public') =>
+    renderHook(() => useFileItemDropdown({ ...baseParams, userId: 'user-1', visibility } as any));
+  const keys = (result: { current: { menuItems: () => any[] } }) =>
+    result.current.menuItems().map((item) => item?.key);
+
+  it('hides "Make private" and "Publish to workspace" in personal mode', () => {
+    // Regression: `files.visibility` defaults to 'public' even when
+    // `workspace_id IS NULL`, so every personal file offered "Make private".
+    expect(keys(ownFile('public').result)).not.toContain('makePrivate');
+    expect(keys(ownFile('private').result)).not.toContain('publishToWorkspace');
+  });
+
+  it('offers the matching toggle for the creator inside a workspace', () => {
+    mocks.activeWorkspaceId = 'ws-1';
+    expect(keys(ownFile('public').result)).toContain('makePrivate');
+    expect(keys(ownFile('private').result)).toContain('publishToWorkspace');
+  });
+
+  it("never offers the toggles on another member's workspace file", () => {
+    mocks.activeWorkspaceId = 'ws-1';
+    const { result } = renderHook(() =>
+      useFileItemDropdown({ ...baseParams, userId: 'another-member', visibility: 'public' } as any),
+    );
+    expect(keys(result)).not.toContain('makePrivate');
+  });
 });
 
 describe('useFileItemDropdown — messenger push id', () => {

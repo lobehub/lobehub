@@ -81,6 +81,8 @@ interface RouterOptionItem extends ProviderIniOptions {
   apiType?: ApiType;
   id?: string;
   remark?: string;
+  /** Relative share of new user bindings; zero keeps the channel as fallback only. */
+  weight?: number;
 }
 
 type RouterOptions = RouterOptionItem | RouterOptionItem[];
@@ -137,6 +139,7 @@ interface RouteAttemptMetadata {
 interface RouteAttemptContext {
   allowedApiTypes?: ReadonlySet<ApiType>;
   metadata?: Record<string, unknown>;
+  method: RouterRuntimeMethod;
   pricingContext?: ModelPricingContext;
   toolsCount?: number;
   user?: string;
@@ -158,10 +161,33 @@ interface RouteAttemptContextValidationParams extends RouteAttemptContext {
 }
 
 export interface SortRouterOptionsParams {
+  metadata?: Record<string, unknown>;
+  method: RouterRuntimeMethod;
   model: string;
   options: RouterOptionItem[];
   routerId?: string;
+  userId?: string;
 }
+
+export interface RouteSuccessParams {
+  channelId?: string;
+  channelWeight?: number;
+  firstChannelId?: string;
+  method: RouterRuntimeMethod;
+  model: string;
+  routerId?: string;
+  userId?: string;
+  weighted: boolean;
+}
+
+export type RouterRuntimeMethod =
+  | 'chat'
+  | 'createImage'
+  | 'createVideo'
+  | 'embeddings'
+  | 'generateObject'
+  | 'textToSpeech'
+  | 'transcribe';
 
 export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any> {
   apiKey?: string;
@@ -218,6 +244,8 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
   onRouteAttempt?: (result: RouteAttemptResult) => Promise<void>;
+  /** Awaited before returning so a successful fallback can update routing affinity. */
+  onRouteSuccess?: (result: RouteSuccessParams) => void | Promise<void>;
   responses?: {
     handlePayload?: (
       payload: ChatStreamPayload,
@@ -454,6 +482,7 @@ export const createRouterRuntime = ({
       router: RouterInstance,
       model: string,
       routerOptions: RouterOptionItem[],
+      routeContext: RouteAttemptContext,
     ): Promise<RouterOptionItem[]> {
       if (!params.sortRouterOptions || routerOptions.length <= 1) return routerOptions;
 
@@ -465,9 +494,14 @@ export const createRouterRuntime = ({
         // baseline — validating a same-reference return would always pass, even
         // after mutations like `options.pop()`.
         const sorted = await params.sortRouterOptions({
+          metadata: routeContext.metadata,
+          method: routeContext.method,
           model,
           options: [...routerOptions],
           routerId: router.id,
+          userId:
+            (typeof this._options.userId === 'string' ? this._options.userId : undefined) ||
+            routeContext.user,
         });
         const isPermutation =
           Array.isArray(sorted) &&
@@ -519,6 +553,7 @@ export const createRouterRuntime = ({
     }> {
       const startedAt = Date.now();
       const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
+      delete optionOverrides.weight;
       const resolvedApiType = optionApiType ?? router.apiType;
       const finalOptions = {
         ...this._params,
@@ -603,26 +638,27 @@ export const createRouterRuntime = ({
     private async runWithFallback<T>(
       model: string,
       requestHandler: (runtime: LobeRuntimeAI) => Promise<T>,
-      routeContext: RouteAttemptContext = {},
+      routeContext: RouteAttemptContext,
     ): Promise<T> {
       const totalStartedAt = Date.now();
       const { allowedApiTypes, metadata, pricingContext, toolsCount, user } = routeContext;
       const matchedRouter = await this.resolveMatchedRouter(model, pricingContext);
-      const sortedRouterOptions = await this.applySortRouterOptions(
-        matchedRouter,
-        model,
-        this.normalizeRouterOptions(matchedRouter),
+      const eligibleRouterOptions = this.normalizeRouterOptions(matchedRouter).filter(
+        (option) =>
+          !allowedApiTypes || allowedApiTypes.has(option.apiType ?? matchedRouter.apiType),
       );
-      const routerOptions = allowedApiTypes
-        ? sortedRouterOptions.filter((option) =>
-            allowedApiTypes.has(option.apiType ?? matchedRouter.apiType),
-          )
-        : sortedRouterOptions;
-      const totalOptions = routerOptions.length;
-
-      if (totalOptions === 0) {
+      if (eligibleRouterOptions.length === 0) {
         throw new TypeError(`No provider route supports raw audio input for model ${model}`);
       }
+      const routerOptions = await this.applySortRouterOptions(
+        matchedRouter,
+        model,
+        eligibleRouterOptions,
+        routeContext,
+      );
+      const totalOptions = routerOptions.length;
+      const firstChannelId = routerOptions[0]?.id;
+      const weighted = routerOptions.some((option) => option.weight !== undefined);
 
       if (this._id === 'lobehub') {
         timing(
@@ -657,6 +693,7 @@ export const createRouterRuntime = ({
           apiType: resolvedApiType,
           channelId,
           metadata,
+          method: routeContext.method,
           model,
           routerId: matchedRouter.id,
           toolsCount,
@@ -710,6 +747,24 @@ export const createRouterRuntime = ({
               channelId ?? '',
               remark ?? '',
             );
+          }
+
+          if (params.onRouteSuccess) {
+            try {
+              await params.onRouteSuccess({
+                channelId,
+                channelWeight: optionItem.weight,
+                firstChannelId,
+                method: routeContext.method,
+                model,
+                routerId: matchedRouter.id,
+                userId: routeAttemptUserId,
+                weighted,
+              });
+            } catch (error) {
+              // Affinity storage must not turn a successful upstream response into a fallback.
+              console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
+            }
           }
 
           params
@@ -899,6 +954,7 @@ export const createRouterRuntime = ({
           {
             allowedApiTypes: containsRawAudio ? RAW_AUDIO_API_TYPES : undefined,
             metadata: options?.metadata,
+            method: 'chat',
             pricingContext: options?.pricingContext,
             toolsCount: payload.tools?.length ?? 0,
             user: options?.user,
@@ -921,7 +977,11 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.createImage!(payload, options),
-        { metadata: options?.metadata, pricingContext: options?.pricingContext },
+        {
+          metadata: options?.metadata,
+          method: 'createImage',
+          pricingContext: options?.pricingContext,
+        },
       );
     }
 
@@ -929,7 +989,11 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.createVideo!(payload, options),
-        { metadata: options?.metadata, pricingContext: options?.pricingContext },
+        {
+          metadata: options?.metadata,
+          method: 'createVideo',
+          pricingContext: options?.pricingContext,
+        },
       );
     }
 
@@ -963,6 +1027,7 @@ export const createRouterRuntime = ({
         (runtime) => runtime.generateObject!(payload, options),
         {
           metadata: options?.metadata,
+          method: 'generateObject',
           pricingContext: options?.pricingContext,
           toolsCount: payload.tools?.length ?? 0,
           user: options?.user,
@@ -976,6 +1041,7 @@ export const createRouterRuntime = ({
         (runtime) => runtime.embeddings!(payload, options),
         {
           metadata: options?.metadata,
+          method: 'embeddings',
           pricingContext: options?.pricingContext,
           user: options?.user,
         },
@@ -988,6 +1054,7 @@ export const createRouterRuntime = ({
         (runtime) => runtime.textToSpeech!(payload, options),
         {
           metadata: options?.metadata,
+          method: 'textToSpeech',
           pricingContext: options?.pricingContext,
           user: options?.user,
         },
@@ -998,7 +1065,7 @@ export const createRouterRuntime = ({
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.transcribe!(payload, options),
-        { user: options?.user },
+        { method: 'transcribe', user: options?.user },
       );
     }
   };

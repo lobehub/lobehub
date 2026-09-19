@@ -2,30 +2,28 @@
  * Tools Engineering - Unified tools processing using ToolsEngine
  */
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { BrowserManifest } from '@lobechat/builtin-tool-browser';
-import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
-import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
-import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
-import { MemoryManifest } from '@lobechat/builtin-tool-memory';
-import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { alwaysOnToolIds, chatModeAllowedToolIds, defaultToolIds } from '@lobechat/builtin-tools';
-import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
 import {
-  type BuiltinToolManifest,
+  createEnableChecker,
+  type LobeToolManifest,
+  type PluginEnableChecker,
+} from '@lobechat/context-engine';
+import { ToolsEngine } from '@lobechat/context-engine';
+import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
+import {
   type BuiltinToolResolveContext,
   type ChatCompletionTool,
   type ToolManifest,
   type WorkingModel,
 } from '@lobechat/types';
 
-import type { ConnectorToolPermission } from '@/database/schemas';
 import { applyToolNameMaxLength } from '@/helpers/applyToolNameMaxLength';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
-import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
 import { getAgentStoreState } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentChatConfigSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import {
@@ -69,43 +67,6 @@ export interface ToolsEngineConfig {
 }
 
 /**
- * A manifest is usable by ToolsEngine only if it has a non-empty `api` array.
- * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)` unconditionally,
- * so any entry with `api` missing / non-array will crash the whole tools build.
- * Sources that populate manifests (installed plugins, Composio, LobeHub skills, MCP)
- * have no shared schema validation, so we guard defensively at the merge point.
- */
-const isValidToolManifest = (m: ToolManifest | undefined): m is ToolManifest =>
-  !!m && typeof m === 'object' && Array.isArray((m as ToolManifest).api);
-
-const dropInvalidManifests = (manifests: (ToolManifest | undefined)[], source: string) => {
-  const valid: ToolManifest[] = [];
-  const dropped: Array<{ identifier?: string; reason: string }> = [];
-
-  for (const m of manifests) {
-    if (isValidToolManifest(m)) {
-      valid.push(m);
-    } else if (m) {
-      dropped.push({
-        identifier: (m as { identifier?: string }).identifier,
-        reason: Array.isArray((m as { api?: unknown }).api)
-          ? 'unknown'
-          : 'missing `api` field (expected array)',
-      });
-    }
-  }
-
-  if (dropped.length > 0) {
-    console.warn(
-      `[toolEngineering] Dropped ${dropped.length} invalid manifest(s) from ${source}:`,
-      dropped,
-    );
-  }
-
-  return valid;
-};
-
-/**
  * Initialize ToolsEngine with current manifest schemas and configurable options
  */
 export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine => {
@@ -124,91 +85,55 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   const toolStoreState = getToolStoreState();
 
-  // Get custom connector manifests (user-added MCP servers). Connectors take
-  // priority over plugins: any plugin sharing a connector identifier is dropped
-  // so the connector (server-side execution with its stored token) wins.
-  const connectorManifests = buildClientConnectorManifests(
-    connectorSelectors.customConnectors(toolStoreState),
-  );
-  const connectorIdentifiers = new Set(connectorManifests.map((m) => m.identifier));
-
-  // Per-connector tool permissions, keyed by connector identifier. Used to patch
-  // community-MCP plugin manifests below so the user's needs_approval / disabled
-  // settings surface as humanIntervention (custom connectors are handled by their
-  // own manifests above; disabled is also hard-blocked at the mcp router).
-  const connectorPermsByIdentifier = new Map(
+  // Per-connector tool permissions, keyed by connector identifier: community-
+  // MCP plugins execute outside the connector path, so the user's
+  // needs_approval / disabled settings are patched onto their manifests.
+  const connectorPermissions = new Map(
     connectorSelectors
       .connectorList(toolStoreState)
       .map((c) => [c.identifier, new Map(c.tools.map((t) => [t.toolName, t.permission]))] as const),
   );
 
-  // Get all available plugin manifests (excluding ones now covered by a connector),
-  // patched with their connector tool permissions when a connector row exists.
-  const pluginManifests = pluginSelectors
-    .installedPluginManifestList(toolStoreState)
-    .filter((m) => !connectorIdentifiers.has(m.identifier))
-    .map((m) => {
-      const perms = connectorPermsByIdentifier.get(m.identifier);
-      return perms && perms.size > 0
-        ? (patchManifestWithPermissions(
-            m as any,
-            perms as Map<string, ConnectorToolPermission>,
-          ) as ToolManifest)
-        : m;
-    });
+  // The pool rules (connector precedence, permission patching, context-aware
+  // builtins, invalid manifest guard, disabled-id exclusion) are shared with
+  // the server; the browser only reads its stores.
+  const { manifests } = assembleManifestPool(
+    {
+      additional: additionalManifests as LobeToolManifest[],
+      builtinTools: toolStoreState.builtinTools,
+      composio: composioStoreSelectors
+        .composioAsLobeTools(toolStoreState)
+        .map((tool) => tool.manifest as LobeToolManifest),
+      connectors: buildClientConnectorManifests(
+        connectorSelectors.customConnectors(toolStoreState),
+      ) as LobeToolManifest[],
+      installedPlugins: pluginSelectors.installedPluginManifestList(
+        toolStoreState,
+      ) as LobeToolManifest[],
+      lobehubSkills: lobehubSkillStoreSelectors
+        .lobehubSkillAsLobeTools(toolStoreState)
+        .map((tool) => tool.manifest as LobeToolManifest),
+    },
+    {
+      connectorPermissions,
+      // Disabled identifiers leave the pool outright: explicit activation
+      // bypasses the enable rules, so a rule-only gate would not hold.
+      excludedIdentifiers: disabledPluginIds,
+      manifestContext,
+    },
+  );
 
-  // Get all builtin tool manifests. When a manifest context is supplied (agent
-  // runtime path), context-aware tools resolve their manifest for it — trimming
-  // APIs (e.g. lobe-agent hides callSubAgent in groups) or opting out via `null`.
-  // Context-free callers fall back to the full static manifest.
-  const builtinManifests = toolStoreState.builtinTools
-    .map((tool) =>
-      manifestContext && tool.resolveManifest
-        ? tool.resolveManifest(manifestContext)
-        : tool.manifest,
-    )
-    .filter((m): m is BuiltinToolManifest => !!m) as ToolManifest[];
-
-  // Get Composio tool manifests
-  const composioTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
-  const composioManifests = composioTools
-    .map((tool) => tool.manifest as ToolManifest)
-    .filter(Boolean);
-
-  // Get LobeHub Skill tool manifests
-  const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
-  const lobehubSkillManifests = lobehubSkillTools
-    .map((tool) => tool.manifest as ToolManifest)
-    .filter(Boolean);
-
-  // Combine all manifests, dropping entries that would crash ToolsEngine.
-  // Each source is filtered separately so the warning pinpoints the origin.
-  const combinedManifests = [
-    ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
-    ...dropInvalidManifests(builtinManifests, 'builtinTools'),
-    ...dropInvalidManifests(composioManifests, 'composio'),
-    ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
-    ...dropInvalidManifests(connectorManifests, 'connectors'),
-    ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
-  ];
-
-  // Disabled identifiers are dropped from the pool outright (not left for the
-  // enableChecker rules) — a plugin, skill, connector, or user-toggleable
-  // builtin tool the agent has explicitly disabled must not be discoverable/
-  // activatable at all, matching the server-side (aiAgent gateway) treatment.
-  // Explicit activation bypasses enable rules; a plain Web client must not
-  // acquire the Electron IPC executor. Gateway execution uses the server engine.
-  const allManifests = combinedManifests.filter(
-    (m) =>
-      !disabledPluginIds.includes(m.identifier) &&
-      (m.identifier !== AuvManifest.identifier || isToolAvailableInCurrentEnv(m.identifier)),
+  // A plain Web client must not acquire the Electron IPC executor: Computer
+  // Use only exists where the platform can run it.
+  const allManifests = manifests.filter(
+    (m) => m.identifier !== AuvManifest.identifier || isToolAvailableInCurrentEnv(m.identifier),
   );
 
   return new ToolsEngine({
     defaultToolIds,
     enableChecker,
     functionCallChecker: isCanUseFC,
-    manifestSchemas: allManifests,
+    manifestSchemas: allManifests as ToolManifest[],
   });
 };
 
@@ -221,67 +146,44 @@ export const createAgentToolsEngine = (
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
-  // `currentAgentPlugins` already resolves to pinned-only identifiers — disabled
-  // entries never reach the tools-engine whitelist.
-  const userPlugins = agentSelectors.currentAgentPlugins(agentState);
-  const disabledPluginIds = agentSelectors.currentAgentDisabledPlugins(agentState);
-  const isChatMode =
-    agentChatConfigSelectors.currentChatConfig(agentState).enableAgentMode === false ||
-    !isCanUseFC(workingModel.model, workingModel.provider);
+  const activeAgentId = agentState.activeAgentId || '';
+  const chatConfig = agentChatConfigSelectors.currentChatConfig(agentState);
 
-  // Each entry below still respects its own runtime gate; in chat mode this
-  // is the entire whitelist. `allowExplicitActivation` and user plugins /
-  // `alwaysOnToolIds` are deliberately omitted in chat mode so the activator
-  // can't smuggle additional tools in.
-  const kbEnabled = agentSelectors.hasEnabledKnowledgeBases(agentState);
-  const memoryEnabled =
-    agentChatConfigSelectors.currentChatConfig(agentState).memory?.enabled ??
-    settingsSelectors.memoryEnabled(useUserStore.getState());
-  const webBrowsingEnabled = searchConfig.useApplicationBuiltinSearchTool;
-  // Chat mode no longer auto-injects image generation (token cost + unwanted
-  // tool calls). Users opt in by pinning `lobe-image-generation`. Models with
-  // native imageOutput still skip the fallback tool entirely.
-  const imageGenerationCapable =
-    isCanUseFC(workingModel.model, workingModel.provider) &&
-    !aiModelSelectors.isModelSupportImageOutput(
-      workingModel.model,
-      workingModel.provider,
-    )(getAiInfraStoreState());
-  const imageGenerationEnabled =
-    imageGenerationCapable && userPlugins.includes(ImageGenerationManifest.identifier);
-
-  const chatModeRules = {
-    [ImageGenerationManifest.identifier]: imageGenerationEnabled,
-    [KnowledgeBaseManifest.identifier]: kbEnabled,
-    [MemoryManifest.identifier]: memoryEnabled,
-    [WebBrowsingManifest.identifier]: webBrowsingEnabled,
-  };
-
-  const agentModeRules = {
-    // Runtime-resolved plugins (from agentConfigResolver for the effective agent,
-    // may include sub-agent/group/page scope plugins not on the active agent)
-    ...(pluginIds && Object.fromEntries(pluginIds.map((id) => [id, true]))),
-    // User-selected plugins (from the active agent)
-    ...Object.fromEntries(userPlugins.map((id) => [id, true])),
-    // Always-on builtin tools
-    ...Object.fromEntries(alwaysOnToolIds.map((id) => [id, true])),
-    // System-level rules (may override user selection for specific tools)
-    // Browser rides the same local-runtime gate as local-system because the
-    // control IPC only exists in the desktop main process.
-    [BrowserManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
-    [CloudSandboxManifest.identifier]: agentChatConfigSelectors.isCloudSandboxEnabled(agentState),
-    [KnowledgeBaseManifest.identifier]: kbEnabled,
-    [LocalSystemManifest.identifier]: agentChatConfigSelectors.isLocalSystemEnabled(agentState),
-    [MemoryManifest.identifier]: memoryEnabled,
-    [WebBrowsingManifest.identifier]: webBrowsingEnabled,
-  };
+  // The rules — mode, per-tool enablement and defaults — are shared with the
+  // server runtime through `@lobechat/mecha`; the browser only assembles its
+  // facts. It has no device gateway, so no device walls apply here and the
+  // remaining platform gate stays in `platformFilter` below.
+  const resolved = resolveToolRules({
+    agent: {
+      chatConfig,
+      // `currentAgentPlugins` already resolves to pinned-only identifiers.
+      plugins: agentSelectors.currentAgentPlugins(agentState),
+    },
+    disabledPluginIds: agentSelectors.currentAgentDisabledPlugins(agentState),
+    executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
+    hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),
+    // A `local` target only resolves on the desktop, where the host itself is
+    // the machine: local tools are always reachable there.
+    localExecutionReady: true,
+    memoryEnabled:
+      chatConfig.memory?.enabled ?? settingsSelectors.memoryEnabled(useUserStore.getState()),
+    model: {
+      canUseFC: isCanUseFC(workingModel.model, workingModel.provider),
+      hasImageOutput: aiModelSelectors.isModelSupportImageOutput(
+        workingModel.model,
+        workingModel.provider,
+      )(getAiInfraStoreState()),
+    },
+    runtimePluginIds: pluginIds,
+    useApplicationBuiltinSearchTool: searchConfig.useApplicationBuiltinSearchTool,
+  });
 
   return createToolsEngine({
-    defaultToolIds: isChatMode ? chatModeAllowedToolIds : defaultToolIds,
-    disabledPluginIds,
+    defaultToolIds: resolved.defaultToolIds,
+    disabledPluginIds: [...resolved.excludedIdentifiers],
     manifestContext,
     enableChecker: createEnableChecker({
-      allowExplicitActivation: !isChatMode,
+      allowExplicitActivation: resolved.allowExplicitActivation,
       platformFilter: ({ pluginId }) => {
         const toolStoreState = getToolStoreState();
         const installedPlugin = pluginSelectors.getInstalledPluginById(pluginId)(toolStoreState);
@@ -296,7 +198,7 @@ export const createAgentToolsEngine = (
 
         return undefined; // fall through to rules
       },
-      rules: isChatMode ? chatModeRules : agentModeRules,
+      rules: resolved.rules,
     }),
   });
 };

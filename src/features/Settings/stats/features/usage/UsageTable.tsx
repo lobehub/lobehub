@@ -6,11 +6,11 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { ProviderIcon } from '@/components/LobeIcons';
 import SpendType, { type SpendTypeValue } from '@/components/SpendType';
 import TablePagination from '@/components/TablePagination';
 import TotalToken from '@/components/TotalToken';
 import { parseAsInteger, useQueryStates } from '@/hooks/useQueryParam';
-import { ProviderIcon } from '@/libs/providerIcon';
 import { useClientDataSWR } from '@/libs/swr';
 import { statsKeys } from '@/libs/swr/keys';
 import { usageService } from '@/services/usage';

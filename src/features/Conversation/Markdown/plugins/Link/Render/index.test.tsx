@@ -6,6 +6,7 @@ import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Render from './index';
+import { InternalEntityPreview } from './InternalEntityPreview';
 
 const mockConst = vi.hoisted(() => ({
   isDesktop: false,
@@ -22,6 +23,17 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
     <button {...rest} aria-label={title} type="button" onClick={onClick} />
+  ),
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  // Keep content mounted after dismissal to model the popover's exit animation.
+  Popover: ({ children, content, onOpenChange }: any) => (
+    <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
+      {children}
+      {content}
+    </div>
   ),
 }));
 
@@ -46,10 +58,16 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 }));
 
 // What the shared preview/title read answers for this case (null = unresolved).
-let mockEntityPreview: { title?: string } | null = null;
+let mockEntityPreview: {
+  description?: string;
+  meta?: string;
+  secondaryMeta?: string;
+  title?: string;
+} | null = null;
 
 vi.mock('@/libs/swr', () => ({
   useClientDataSWR: (key: unknown) => {
+    if (key === null) return { data: undefined, mutate: vi.fn() };
     if (Array.isArray(key) && key[0] === 'internal-entity-preview')
       return { data: mockEntityPreview, mutate: vi.fn() };
     return {
@@ -184,6 +202,39 @@ describe('Link Render — message link icon toggle', () => {
 });
 
 describe('Link Render — internal entities', () => {
+  it('preserves preview details during dismissal and refreshes them when reopened', () => {
+    mockEntityPreview = {
+      description: 'Publish external workspace resources',
+      meta: '4/4 passed · 0 exceptions',
+      secondaryMeta: '3 verification rounds',
+      title: 'Workspace publishing',
+    };
+    const { container, getByText } = render(
+      <InternalEntityPreview
+        fallbackTitle="Acceptance"
+        reference={{
+          acceptanceId: 'acceptance-1',
+          pathname: '/acceptance/acceptance-1',
+          type: 'acceptance',
+        }}
+      >
+        <span>Preview trigger</span>
+      </InternalEntityPreview>,
+    );
+    fireEvent.mouseEnter(container.firstElementChild!);
+    expect(getByText('Publish external workspace resources')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(container.firstElementChild!);
+    expect(getByText('Publish external workspace resources')).toBeInTheDocument();
+    expect(getByText('4/4 passed · 0 exceptions')).toBeInTheDocument();
+    expect(getByText('3 verification rounds')).toBeInTheDocument();
+
+    mockEntityPreview = { description: 'Updated requirement', title: 'Updated acceptance' };
+    fireEvent.mouseEnter(container.firstElementChild!);
+    expect(getByText('Updated requirement')).toBeInTheDocument();
+    expect(getByText('Updated acceptance')).toBeInTheDocument();
+  });
+
   it('replaces a pasted URL label with the resolved entity title', () => {
     // A raw acceptance URL says nothing about what it points to; once the
     // entity resolves, the link reads as its title.

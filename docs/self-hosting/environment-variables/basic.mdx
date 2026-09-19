@@ -125,9 +125,16 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 ### `AGENT_GATEWAY_URL`
 
 - Type: Optional
-- Description: Agent Gateway endpoint used by Gateway Mode to run supported agent tasks through the backend.
+- Description: Agent Gateway endpoint used by Gateway Mode to run supported agent tasks through the backend. Browsers open their WebSocket connection to this address, so it must be reachable from the browser.
 - Default: -
 - Example: `https://agent-gateway.example.com`
+
+### `AGENT_GATEWAY_INTERNAL_URL`
+
+- Type: Optional
+- Description: Agent Gateway endpoint for server-to-gateway requests. Set it when the LobeHub server cannot reach `AGENT_GATEWAY_URL` directly, for example to use the Docker Compose service name. Falls back to `AGENT_GATEWAY_URL`.
+- Default: -
+- Example: `http://gateway:8787`
 
 ### `AGENT_GATEWAY_SERVICE_TOKEN`
 

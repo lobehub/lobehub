@@ -6,7 +6,7 @@ import { useFileStore } from '@/store/file';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import { toTreeItem, TreeActionImpl } from './actions';
+import { toTreeItemFromResource, TreeActionImpl } from './actions';
 import { initialTreeState } from './initialState';
 import type { TreeState } from './types';
 
@@ -36,20 +36,6 @@ useFileStore.subscribe((state) => {
   const parentKey = queryParams.parentId ?? '';
   useTreeStore.getState().reconcile(
     parentKey,
-    resourceList.map((item) =>
-      toTreeItem({
-        createdAt: item.createdAt,
-        fileId: item.fileId,
-        fileType: item.fileType,
-        id: item.id,
-        metadata: item.metadata,
-        name: item.name,
-        parentId: item.parentId,
-        size: item.size,
-        slug: item.slug,
-        sourceType: item.sourceType,
-        url: item.url,
-      }),
-    ),
+    resourceList.map((item) => toTreeItemFromResource(item)),
   );
 });

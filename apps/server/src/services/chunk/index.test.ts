@@ -31,23 +31,29 @@ const {
 }));
 
 vi.mock('@/database/models/asyncTask', () => ({
-  AsyncTaskModel: vi.fn(() => ({
-    create: mockAsyncTaskModelCreate,
-    update: mockAsyncTaskModelUpdate,
-  })),
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      create: mockAsyncTaskModelCreate,
+      update: mockAsyncTaskModelUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({
-    findById: mockFileModelFindById,
-    update: mockFileModelUpdate,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      findById: mockFileModelFindById,
+      update: mockFileModelUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/ContentChunk', () => ({
-  ContentChunk: vi.fn(() => ({
-    chunkContent: mockChunkContent,
-  })),
+  ContentChunk: vi.fn(function () {
+    return {
+      chunkContent: mockChunkContent,
+    };
+  }),
 }));
 
 vi.mock('@/server/routers/async', () => ({
@@ -77,7 +83,7 @@ describe('ChunkService', () => {
     mockFileModelUpdate.mockResolvedValue(undefined);
     mockParseFileToChunks.mockResolvedValue(undefined);
 
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
     service = new ChunkService(mockDb, userId);
   });
 

@@ -79,6 +79,50 @@ describe('layoutGraph', () => {
     expect(boxes.w1.x).not.toBe(boxes.w2.x);
   });
 
+  it('puts each finding under the task that produced it, not in the middle of the row', () => {
+    const boxes = layoutGraph(
+      [
+        node('p1', 'problem'),
+        node('w1'),
+        node('w2'),
+        node('w3'),
+        node('w4'),
+        node('f1', 'finding'),
+      ],
+      [
+        edge('p1', 'w1', 'decomposes'),
+        edge('p1', 'w2', 'decomposes'),
+        edge('p1', 'w3', 'decomposes'),
+        edge('p1', 'w4', 'decomposes'),
+        edge('w1', 'f1', 'produces'),
+      ],
+    );
+    const center = (id: string) => boxes[id].x + boxes[id].width / 2;
+
+    expect(center('f1')).toBe(center('w1'));
+    // Siblings under one parent still centre on it.
+    expect((center('w1') + center('w4')) / 2).toBe(center('p1'));
+  });
+
+  it('keeps neighbours in a row apart when their parents are close together', () => {
+    const boxes = layoutGraph(
+      [node('w1'), node('w2'), node('f1', 'finding'), node('f2', 'finding'), node('f3', 'finding')],
+      [edge('w1', 'f1', 'produces'), edge('w1', 'f2', 'produces'), edge('w2', 'f3', 'produces')],
+    );
+    const ordered = ['f1', 'f2', 'f3'].map((id) => boxes[id]).sort((a, b) => a.x - b.x);
+
+    for (let i = 1; i < ordered.length; i++)
+      expect(ordered[i].x).toBeGreaterThanOrEqual(ordered[i - 1].x + ordered[i - 1].width);
+  });
+
+  it('stacks the next rank below the tallest measured card, not the per-kind estimate', () => {
+    const boxes = layoutGraph([node('w1'), node('f1', 'finding')], [edge('w1', 'f1', 'produces')], {
+      w1: { height: 190 },
+    });
+
+    expect(boxes.f1.y).toBeGreaterThanOrEqual(boxes.w1.y + 190);
+  });
+
   it('terminates on a cycle instead of relaxing forever', () => {
     const boxes = layoutGraph(
       [node('w1'), node('w2')],

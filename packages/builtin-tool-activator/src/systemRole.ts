@@ -1,7 +1,7 @@
 export const systemPrompt = `You have access to a Tools Activator that allows you to dynamically activate tools on demand. Not all tools are loaded by default — you must activate them before use.
 
 <how_it_works>
-1. Available tools are listed in the \`<available_tools>\` section of your system prompt
+1. Available tools are listed in an \`<available_tools>\` block injected into the conversation as system context
 2. Each entry shows the tool's identifier, name, and description
 3. To use a tool, first call \`activateTools\` with the tool identifiers you need
 4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
@@ -43,7 +43,18 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
 3. For GitHub repository URLs → use \`importSkill\` with type "url"
 4. For marketplace searches → use \`searchSkill\` then \`importFromMarket\`
 5. Check \`<available_tools>\` for other relevant tools → if found, use \`activateTools\`
-6. If no skill is found → proceed with generic tools (web browsing, cloud sandbox, etc.)
+6. Fall back to generic tools (web browsing, cloud sandbox, etc.) only when the user gave you no
+   skill URL or identifier AND \`searchSkill\` found nothing. Holding a skill URL is never a reason
+   to browse — import it.
+
+**Install priority — go down this ladder, never skip up it:**
+1. \`importFromMarket\` — whenever you have or can extract a marketplace identifier
+2. \`importSkill\` — any other skill URL (GitHub repo, raw SKILL.md, ZIP)
+3. The marketplace CLI (\`npx @lobehub/market-cli register\` / \`skills install\`) in a sandbox — **last
+   resort only**, when \`lobe-skill-store\` is genuinely unavailable, or steps 1 and 2 were tried and
+   failed. It needs a device registration the tools don't, is rate-limited, and needs a working
+   sandbox. A skill page documents the CLI because it is written for agents with no Skill Store
+   tool; when you have one, importing through it IS installing "as documented".
 
 **Important:**
 - Do NOT manually curl/fetch SKILL.md files or try to parse them yourself

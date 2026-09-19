@@ -2,11 +2,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -29,21 +33,31 @@ const mockModel = {
 };
 
 vi.mock('@/database/models/metric', () => ({
-  MetricModel: vi.fn(() => mockModel),
+  MetricModel: vi.fn(function () {
+    return mockModel;
+  }),
 }));
 
 const mockGoalFindById = vi.fn();
 vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ findById: mockGoalFindById })),
+  GoalModel: vi.fn(function () {
+    return { findById: mockGoalFindById };
+  }),
 }));
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({ existsById: vi.fn().mockResolvedValue(false) })),
+  AgentModel: vi.fn(function () {
+    return { existsById: vi.fn().mockResolvedValue(false) };
+  }),
 }));
 vi.mock('@/database/models/project', () => ({
-  ProjectModel: vi.fn(() => ({ findById: vi.fn().mockResolvedValue(null) })),
+  ProjectModel: vi.fn(function () {
+    return { findById: vi.fn().mockResolvedValue(null) };
+  }),
 }));
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn(() => ({ findById: vi.fn().mockResolvedValue(null) })),
+  TaskModel: vi.fn(function () {
+    return { findById: vi.fn().mockResolvedValue(null) };
+  }),
 }));
 
 const { metricRouter } = await import('../metric');

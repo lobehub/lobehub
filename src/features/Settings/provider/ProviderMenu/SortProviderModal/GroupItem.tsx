@@ -2,7 +2,7 @@ import { Flexbox, SortableList } from '@lobehub/ui';
 import { Avatar } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
-import { ProviderIcon } from '@/libs/providerIcon';
+import { ProviderIcon } from '@/components/LobeIcons';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 interface GroupItemProps extends AiProviderListItem {

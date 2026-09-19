@@ -112,19 +112,27 @@ describe('OnboardingService', () => {
     transactionUpdateCalls = [];
 
     mockDb = {
-      delete: vi.fn(() => ({ where: vi.fn(async () => undefined) })),
+      delete: vi.fn(function () {
+        return { where: vi.fn(async () => undefined) };
+      }),
       execute: vi.fn(async () => undefined),
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(async () => [{ count: 0 }]),
-        })),
-      })),
+      select: vi.fn(function () {
+        return {
+          from: vi.fn(function () {
+            return {
+              where: vi.fn(async () => [{ count: 0 }]),
+            };
+          }),
+        };
+      }),
       transaction: vi.fn(async (callback) =>
         callback({
           execute: vi.fn(async () => undefined),
-          update: vi.fn((table) => {
+          update: vi.fn(function (table) {
             const where = vi.fn(async () => undefined);
-            const set = vi.fn(() => ({ where }));
+            const set = vi.fn(function () {
+              return { where };
+            });
 
             transactionUpdateCalls.push({ set, table, where });
 
@@ -215,16 +223,30 @@ describe('OnboardingService', () => {
       removeForReset: vi.fn(async () => undefined),
     };
 
-    vi.mocked(AgentModel).mockImplementation(() => mockAgentModel as any);
-    vi.mocked(AgentDocumentsService).mockImplementation(() => mockAgentDocumentsService as any);
-    vi.mocked(MessageModel).mockImplementation(() => mockMessageModel as any);
-    vi.mocked(UserModel).mockImplementation(() => mockUserModel as any);
-    vi.mocked(TopicModel).mockImplementation(() => mockTopicModel as any);
-    vi.mocked(AgentService).mockImplementation(() => mockAgentService as any);
-    vi.mocked(UnderstandingSourceStore).mockImplementation(() => mockSourceStore as any);
-    vi.mocked(OnboardingUnderstandingRepository).mockImplementation(
-      () => mockUnderstandingRepository as any,
-    );
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return mockAgentModel as any;
+    });
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return mockAgentDocumentsService as any;
+    });
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return mockMessageModel as any;
+    });
+    vi.mocked(UserModel).mockImplementation(function () {
+      return mockUserModel as any;
+    });
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return mockTopicModel as any;
+    });
+    vi.mocked(AgentService).mockImplementation(function () {
+      return mockAgentService as any;
+    });
+    vi.mocked(UnderstandingSourceStore).mockImplementation(function () {
+      return mockSourceStore as any;
+    });
+    vi.mocked(OnboardingUnderstandingRepository).mockImplementation(function () {
+      return mockUnderstandingRepository as any;
+    });
   });
 
   afterEach(() => {
@@ -458,7 +480,9 @@ describe('OnboardingService', () => {
       sources: {},
     });
     mockSourceStore.deleteSession.mockRejectedValue(new Error('redis unavailable'));
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(function () {
+      return undefined;
+    });
 
     const service = new OnboardingService(mockDb, userId);
     await expect(service.reset()).resolves.toEqual({ version: AGENT_ONBOARDING_VERSION });
@@ -720,9 +744,11 @@ describe('OnboardingService', () => {
     persistedUserState.interests = ['AI tooling'];
     persistedUserState.agentOnboarding.discoveryStartUserMessageCount = 0;
     mockDb.select.mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 5 }]),
-      })),
+      from: vi.fn(function () {
+        return {
+          where: vi.fn(async () => [{ count: 5 }]),
+        };
+      }),
     });
 
     vi.setSystemTime(new Date('2026-04-17T13:00:00.000Z'));
@@ -754,9 +780,11 @@ describe('OnboardingService', () => {
 
     // 3 user messages total, baseline was 3 → 0 discovery exchanges (< MIN_DISCOVERY_USER_MESSAGES=1)
     mockDb.select.mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 3 }]),
-      })),
+      from: vi.fn(function () {
+        return {
+          where: vi.fn(async () => [{ count: 3 }]),
+        };
+      }),
     });
 
     const service = new OnboardingService(mockDb, userId);
@@ -784,9 +812,11 @@ describe('OnboardingService', () => {
 
     // 8 user messages total, baseline was 3 → 5 discovery exchanges (>= MIN_DISCOVERY_USER_MESSAGES=1)
     mockDb.select.mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 8 }]),
-      })),
+      from: vi.fn(function () {
+        return {
+          where: vi.fn(async () => [{ count: 8 }]),
+        };
+      }),
     });
 
     const service = new OnboardingService(mockDb, userId);
@@ -810,9 +840,11 @@ describe('OnboardingService', () => {
 
     // 3 user messages at discovery entry
     mockDb.select.mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 3 }]),
-      })),
+      from: vi.fn(function () {
+        return {
+          where: vi.fn(async () => [{ count: 3 }]),
+        };
+      }),
     });
 
     const service = new OnboardingService(mockDb, userId);
@@ -837,9 +869,11 @@ describe('OnboardingService', () => {
 
     // Now 6 user messages
     mockDb.select.mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(async () => [{ count: 6 }]),
-      })),
+      from: vi.fn(function () {
+        return {
+          where: vi.fn(async () => [{ count: 6 }]),
+        };
+      }),
     });
 
     const service = new OnboardingService(mockDb, userId);
@@ -908,9 +942,11 @@ describe('OnboardingService', () => {
         title: 'Inbox',
       });
       mockDb.select.mockReturnValue({
-        from: vi.fn(() => ({
-          where: vi.fn(async () => [{ count: 4 }]),
-        })),
+        from: vi.fn(function () {
+          return {
+            where: vi.fn(async () => [{ count: 4 }]),
+          };
+        }),
       });
 
       const service = new OnboardingService(mockDb, userId);
@@ -964,7 +1000,13 @@ describe('OnboardingService', () => {
       mockDb.transaction = vi.fn(async (callback: any) =>
         callback({
           execute: executeSpy,
-          update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(async () => undefined) })) })),
+          update: vi.fn(function () {
+            return {
+              set: vi.fn(function () {
+                return { where: vi.fn(async () => undefined) };
+              }),
+            };
+          }),
         }),
       );
       mockMessageModel.query.mockResolvedValueOnce([]);

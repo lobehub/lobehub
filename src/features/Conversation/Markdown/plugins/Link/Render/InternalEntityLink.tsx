@@ -30,10 +30,14 @@ import {
 } from './InternalEntityPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  icon: css`
+    margin-inline-end: 4px;
+    color: ${cssVar.colorTextSecondary};
+    vertical-align: -0.15em;
+  `,
   link: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
+    /* Keep the label on the surrounding text baseline instead of the icon's flex baseline. */
+    display: inline;
 
     color: ${cssVar.colorText} !important;
 
@@ -58,11 +62,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-radius: 2px;
       outline: 2px solid ${cssVar.colorPrimaryBorder};
       outline-offset: 2px;
-    }
-
-    > svg {
-      flex: none;
-      color: ${cssVar.colorTextSecondary};
     }
   `,
 }));
@@ -223,7 +222,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       target="_blank"
       onClick={handleClick}
     >
-      {icon && <Icon icon={icon} size={14} />}
+      {icon && <Icon className={styles.icon} icon={icon} size={14} />}
       {displayLabel}
     </a>
   );

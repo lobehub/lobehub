@@ -1,6 +1,6 @@
 ---
 name: full-text-search
-description: 'Use for product search: FtsSearchRepo, pg_search/Elasticsearch, projections, Outbox sync, reindexing and performance. Excludes agent web search.'
+description: 'Use for product search: FtsSearchRepo, pg_search/pg_like/Elasticsearch, mapping migrations, projections, Outbox sync, reindexing and performance. Excludes agent web search.'
 ---
 
 # Product Full-Text Search
@@ -36,11 +36,17 @@ router/service -> createFtsSearchRepo -> FtsSearchRepo -> selected backend -> ex
 
 ## Provider and Permission Invariants
 
-- `FTS_SEARCH_PROVIDER` is a deployment-level provider selector with current values `pg_search` and
-  `elasticsearch`. It is not a feature flag or a user rollout. Add another enum value only when its
-  provider is implemented end to end.
-- Elasticsearch errors, missing configuration, and unsupported candidate behavior must remain
-  visible. Never silently retry through PostgreSQL or add an `ilike` fallback.
+- `FTS_SEARCH_PROVIDER` is a deployment-level provider selector with current values `pg_search`,
+  `elasticsearch`, and `pg_like`. It is not a feature flag or a user rollout. Add another enum value
+  only when its provider covers all entities in `FTS_SEARCH_BACKEND_ENTITIES` end to end, including
+  `mode: 'candidates'` when the provider enables `ftsSearchCandidateEnabled`.
+- Provider errors, missing configuration, and unsupported candidate behavior must remain visible.
+  Never silently retry through another provider. `pg_like` is an explicitly selected lightweight
+  provider, not an implicit fallback: a missing extension or unreachable service must still fail.
+- `packages/database/src/repositories/ftsSearch/postgres/` owns the query, permission, pagination,
+  and hydration layer shared by PostgreSQL providers. `pgSearch/` and `pgLike/` own only their
+  provider adapter, dialect, and provider-specific candidate behavior. Neither provider directory
+  may import the other, so either provider can be retired without owning shared functionality.
 - Before selecting Elasticsearch, require coverage tests proving that it supports every entity in
   the provider-neutral backend contract. Do not add per-entity routing between providers.
 - Preserve `userId`, `workspaceId`, and caller-agent visibility throughout every provider. Candidate
@@ -53,6 +59,18 @@ router/service -> createFtsSearchRepo -> FtsSearchRepo -> selected backend -> ex
 
 ## Changing a Searchable Entity
 
+### Scope for pg\_like
+
+`pg_like` primarily serves individual users with small datasets. Review it for correct matching,
+permissions, and usable result ordering at that scale. For richer search quality or larger datasets,
+recommend self-hosted Elasticsearch or Elastic Cloud. Do not add indexes or change the database
+schema as part of pg\_like optimization. Keep repairs bounded; distinguish new implementation bugs
+from shared provider limitations and deliberate lightweight-search trade-offs. Do not infer a
+personal-user performance problem from large shared development datasets without representative
+measurements.
+
+### Entity changes
+
 Treat an entity addition or projection change as one cross-layer change. Inspect and update every
 applicable item:
 
@@ -63,8 +81,11 @@ applicable item:
 5. Capture functions/triggers or fanout queries in `captureInfrastructure.ts`.
 6. Reindex checkpoints, Outbox draining, metrics, and self-host documentation.
 
-Schema fields, mappings, builders, and fixed fixtures must agree exactly. A field that is not in the
-document schema must not appear in the mapping or query field list.
+Schema fields, mappings, builders, and fixed fixtures must agree. Current mapping fields plus
+explicit `FTS_SEARCH_RETAINED_SOURCE_PROPERTIES` must equal the current Zod fields, without overlap.
+Retained source properties keep older open indexes writable during field removals; keep the builder
+producing them until those indexes are closed. They must not appear in current query metadata.
+A field outside the document schema must not appear in a mapping or query field list.
 
 Elasticsearch `multi_match` query length is bounded by a shared leaf-clause budget divided by the
 selected query-field count. Adding a field reduces that entity's safe query length, and changing a
@@ -89,11 +110,14 @@ field-count regression tests.
   fail, or release work reclaimed by another worker.
 - Permanent failures and exhausted retries become durable dead letters. A drain that creates or
   observes dead work must fail instead of continuing to publish a successful cutover signal.
-- Full backfill does not replace continuous sync and does not switch product traffic. Keep the
-  application on PostgreSQL until aliases are ready and the Outbox is empty and stable, then switch
-  explicitly.
+- Full backfill does not replace continuous sync. For the initial PostgreSQL-to-Elasticsearch
+  cutover, keep the application on PostgreSQL until aliases are ready and the Outbox is empty and
+  stable, then switch explicitly. Later mapping upgrades keep searches on the existing Elasticsearch
+  alias until promotion.
 
-The supported operator entrypoints are:
+The supported operator entrypoints below run from the OSS repository root. A wrapping repository
+may expose different package scripts; check its `package.json` before invoking these or the mapping
+migration commands linked below.
 
 ```bash
 bun run db:install-fts-search-capture
@@ -104,7 +128,64 @@ bun run scripts/pgSearchCleanup/index.ts --status
 bun run scripts/pgSearchCleanup/index.ts --apply --yes
 ```
 
-Read `docs/self-hosting/advanced/elasticsearch-migration.mdx` or its Chinese counterpart before
+## Mapping Generations
+
+Docker startup runs `fts-search-elasticsearch-reindex.cjs --startup --yes` after PostgreSQL
+migrations when the selected provider is Elasticsearch. It blocks serving until index migration
+and catch-up succeed. Persist the same checkpoint volume across application and migration
+containers; failed namespace locks still require explicit recovery. Continuous sync remains a
+separate worker. Hosted and manual workflows keep their explicit migration commands.
+
+For mapping changes, generation operations, repeat/resume behavior, or deployment integration, read
+[Mapping migration workflow](references/mapping-migrations.md). It routes to the public command guide
+and adds recovery, automation, and local Docker rehearsal rules.
+
+Elasticsearch cannot change an existing field's type or index-time analyzer in place. The code
+declares the target and Elasticsearch records the live state, per entity:
+
+- `FTS_SEARCH_INDEX_DEFINITIONS[entity].schemaVersion` is the declared generation; the fingerprint is
+  `sha256` of the mapping plus the shared analysis. Add complete changed-entity definitions in a new
+  `ftsSearchDocument/migration/NNNN-meaningful-name/` batch, register it and update current pointers
+  in `migration/index.ts`. Append expected fingerprints in `__tests__/schemaSnapshots.json`; preserve
+  published batches and baselines. `mappings.test.ts` and `migration/index.test.ts` check current
+  parity, history, version bumps and fingerprint changes. See `migration/README.md` for ownership.
+  Shared analysis changes alter
+  every entity fingerprint and classify as breaking for every entity; bump all affected versions
+  and rebuild rather than using in-place upgrades.
+- Every physical index `<alias>-v<n>` carries `_meta.{reindex_run_id, schema_version,
+schema_fingerprint}`; the alias marks the live generation. Indexes created before fingerprints
+  existed may omit the fingerprint, but still need a valid run ID and schema version for sync
+  readiness. `_meta.schema_version` wins over the `-v<n>` suffix because an in-place upgrade advances
+  `_meta` without renaming the index.
+- The sync runtime accepts an alias that still serves an older generation (upgrade in progress) and
+  refuses one that serves a newer generation or a different fingerprint of the declared version. It
+  writes every change to all open `<alias>-v*` indexes plus the alias write index, pruning each
+  document to the fields that index maps (every generation is `dynamic: strict`), so a new
+  generation can be backfilled beside the live one; a bulk work item is acknowledged only when
+  every existing generation accepted it (2xx or 409 conflict).
+- One reindex checkpoint per `(namespace, schemaVersion)` covers the entities on that generation.
+  `--apply` groups the requested entities by declared version, treats existing aliases as an
+  upgrade (no `--fresh-run`), leaves existing aliases in place, and emits `promotion_pending`. A
+  completed first install creates aliases. Promoting a newer generation requires a completed
+  checkpoint, a fingerprint match when targeting the declared version, and an idle target-entity Outbox. Rollback
+  to an older stamped generation can use its metadata without a retained checkpoint;
+  `--retire` requires `in_sync` and only closes old generations; explicit `--purge` installs
+  exact-index templates forbidding auto-creation before deleting eligible closed generations.
+  `--in-place` requires
+  `mappingChange: additive`, widens the live index with `PUT _mapping`, pins the checkpoint to that
+  index, and backfills with `external_gte` so concurrent sync writes win.
+- Checkpoints are local files, not Drizzle migration history. Preserve `ES_REINDEX_STATE_DIR` across
+  invocations. Completed runs skip backfill; incomplete runs resume from saved cursors. Mutating CLI
+  commands share a non-expiring Elasticsearch namespace lock, independent of checkpoint location.
+  A failed command retains its lock when its outcome may be uncertain. Before `--release-lock=<owner> --yes`, stop the previous process and resolve pending requests; never assume age proves it stopped.
+  The lock does not serialize old binaries or external operator actions.
+- Reconciliation is exact only on a first install; once an alias serves an entity, concurrent sync
+  writes make a higher Elasticsearch count legitimate and only a shortfall fails.
+- `scripts/elasticsearchReindex/runtime/generationService.ts` owns classification (`missing`,
+  `unmanaged`, `in_sync`, `drift`, `upgrade_available`, `rollback_required`), promotion, and
+  retirement; keep them free of Cloud-specific policy.
+
+Read `docs/self-hosting/advanced/neon-pg-search-migration.mdx` or its Chinese counterpart before
 changing the operational sequence. When database rollout or index cost affects the design, also
 use the `db-migrations` skill and measure the relevant operation on the actual Dev database before
 adding manual or deferred release steps.

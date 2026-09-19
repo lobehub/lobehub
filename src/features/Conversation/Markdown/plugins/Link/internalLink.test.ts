@@ -36,6 +36,22 @@ describe('parseInternalLink', () => {
     });
   });
 
+  it('ignores the readable title slug tail when resolving a task link', () => {
+    expect(parseInternalLink('https://app.lobehub.com/task/T-198/ship-the-thing')).toEqual({
+      pathname: '/task/T-198/ship-the-thing',
+      taskId: 'T-198',
+      type: 'task',
+    });
+    // A CJK slug round-trips through `new URL`, so the pathname comes back
+    // percent-encoded — still a valid link to the same task.
+    expect(parseInternalLink('/agent/agent-1/task/T-199/飞书适配器')).toEqual({
+      agentId: 'agent-1',
+      pathname: '/agent/agent-1/task/T-199/%E9%A3%9E%E4%B9%A6%E9%80%82%E9%85%8D%E5%99%A8',
+      taskId: 'T-199',
+      type: 'task',
+    });
+  });
+
   it('parses verification report links', () => {
     expect(parseInternalLink('https://app.lobehub.com/verify/run-1')).toEqual({
       pathname: '/verify/run-1',

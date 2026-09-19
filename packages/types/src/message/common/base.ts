@@ -18,6 +18,31 @@ export type ChatMessageErrorAttribution = 'user' | 'provider' | 'harness' | 'sys
 export type ChatMessageErrorSeverity = 'info' | 'warning' | 'error' | 'critical';
 
 /**
+ * Structured allowance context attached by a cost-admission gate when a run is
+ * rejected for want of spendable credits. It rides along inside
+ * `ChatMessageError['body'].budget`, so consumers can tell the user *which*
+ * allowance ran out and by how much instead of a single generic "not enough
+ * credits" line.
+ *
+ * `budgetTypeAtError` is an opaque tag naming the allowance that was checked —
+ * whoever mounts the gate defines its vocabulary, and renderers that don't
+ * recognize a tag must fall back to generic copy rather than guessing.
+ *
+ * Every field is optional: an admission gate that can't price the request
+ * upfront still reports the failure, just without the numbers.
+ */
+export interface ChatErrorBudgetContext {
+  /** Credits still spendable on the exhausted allowance. */
+  availableCredits?: number;
+  /** Opaque tag naming which allowance was checked. */
+  budgetTypeAtError?: string;
+  /** Credits the rejected request was estimated to need. */
+  requiredCredits?: number;
+  /** `requiredCredits - availableCredits`, floored at 0. */
+  shortfallCredits?: number;
+}
+
+/**
  * Chat message error object
  */
 export interface ChatMessageError {

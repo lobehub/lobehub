@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "بارگذاری شاخه‌ها ناموفق بود",
   "workingDirectory.branchesLoading": "در حال بارگذاری شاخه‌ها…",
   "workingDirectory.branchesNoMatch": "هیچ شاخه‌ای مطابقت ندارد",
+  "workingDirectory.branchesTruncated": "{{count}} بیشتر — برای فیلتر کردن تایپ کنید",
   "workingDirectory.browseDescription": "یک پوشه در دستگاه متصل انتخاب کنید.",
   "workingDirectory.browseFolders": "مرور پوشه‌ها",
   "workingDirectory.cancel": "لغو",

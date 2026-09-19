@@ -47,7 +47,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     activeTopicId: 't1',
     completeOperation: vi.fn(),
     dbMessagesMap: {},
-    drainQueuedMessages: vi.fn(() => []),
+    drainQueuedMessages: vi.fn<ChatStore['drainQueuedMessages']>(() => []),
     failOperation: vi.fn(),
     internal_updateTopic: vi.fn(),
     markTopicUnread: vi.fn(),
@@ -322,6 +322,39 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     );
 
     expect(store.drainQueuedMessages).toHaveBeenCalled();
+  });
+
+  it('a drained queued follow-up is sent as a steer turn', async () => {
+    vi.useFakeTimers();
+    try {
+      const { get, store } = makeStore();
+      const sendMessage = vi.fn(async () => {});
+      (store as any).sendMessage = sendMessage;
+      store.drainQueuedMessages = vi.fn(() => [
+        {
+          content: 'queued',
+          createdAt: 1,
+          id: 'q1',
+          interruptMode: 'soft',
+          metadata: { scope: 'x' },
+        } as any,
+      ]);
+
+      const { requeued } = await lifecycle('gateway', get, 'top_level').completeRun(
+        completeEvent('gateway', { status: 'completed' }),
+      );
+      await vi.runAllTimersAsync();
+
+      expect(requeued).toBe(true);
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'queued',
+          metadata: expect.objectContaining({ scope: 'x', steer: true }),
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('afterRunComplete is a no-op for a sub_agent run (no notification)', async () => {

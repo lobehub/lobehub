@@ -20,6 +20,10 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
+<Callout type="warning">
+  **Upgrading an existing Docker Compose deployment?** The latest `docker-compose.yml` adds a gateway service for Gateway Mode. Update `.env` as described in [Upgrading an Existing Deployment](#upgrading-an-existing-deployment) before starting it. Otherwise the gateway container keeps restarting, agent runs fall back to the browser, and `docker logs lobehub` prints an `ACTION REQUIRED` warning.
+</Callout>
+
 ## Quick Start
 
 <Callout type="info">
@@ -31,7 +35,7 @@ tags:
 
   - The one-click startup script is only for initial deployment; for subsequent deployments, please refer to the [Custom Deployment](#custom-deployment) section.
 
-  - Port occupation check: Ensure that ports `3210`, `9000`, and `9001` are available.
+  - Port occupation check: Ensure that ports `3210`, `9000`, `9001`, `8787`, and `8788` are available.
 </Callout>
 
 Execute the following commands to set up the deployment environment; the directory `lobehub` will be used to store your configuration files and subsequent database files.
@@ -77,6 +81,8 @@ The script supports the following deployment modes; please choose the appropriat
     - URL: http://localhost:9000
     - Username: admin
     - Password: 8c82ea41
+  Agent Gateway:
+    - URL: http://localhost:8787
   ```
 
   ### Start Docker
@@ -132,6 +138,8 @@ The script supports the following deployment modes; please choose the appropriat
     - URL: http://your_server_ip:9000
     - Username: admin
     - Password: dbac8440
+  Agent Gateway:
+    - URL: http://your_server_ip:8787
   ```
 
   ### Start Docker
@@ -171,11 +179,12 @@ The script supports the following deployment modes; please choose the appropriat
 
   In domain mode, you need to complete the reverse proxy configuration and ensure that the LAN/public can access the following services. Please use a reverse proxy to map the following service ports to the domain names:
 
-  | Domain              | Proxy Port | Required |
-  | ------------------- | ---------- | -------- |
-  | `lobe.example.com`  | `3210`     | Yes      |
-  | `s3.example.com`    | `9000`     | Yes      |
-  | `s3-ui.example.com` | `9001`     |          |
+  | Domain                | Proxy Port | Required |
+  | --------------------- | ---------- | -------- |
+  | `lobe.example.com`    | `3210`     | Yes      |
+  | `s3.example.com`      | `9000`     | Yes      |
+  | `gateway.example.com` | `8787`     | Yes      |
+  | `s3-ui.example.com`   | `9001`     |          |
 
   ### Complete Remaining Configuration in Interactive Script
 
@@ -183,6 +192,7 @@ The script supports the following deployment modes; please choose the appropriat
 
   - Domain setup for the LobeHub service: `lobe.example.com`
   - Domain setup for the S3 service: `s3.example.com`
+  - Domain setup for the Agent Gateway: `gateway.example.com` (the reverse proxy must allow WebSocket upgrades)
   - Choose the access protocol: `http` or `https`
   - Regenerate secure keys: We highly recommend regenerating the secure keys; if you lack the key generation library required by the script, we suggest referring to the [Custom Deployment](#custom-deployment) section for key modifications.
 
@@ -196,7 +206,7 @@ The script supports the following deployment modes; please choose the appropriat
 
     **Port Mode vs Domain Mode:**
 
-    - Port Mode: The script automatically uses default ports (3210/9000/9001)
+    - Port Mode: The script automatically uses default ports (3210/9000/9001/8787/8788)
     - Domain Mode: You can customize ports (via reverse proxy configuration)
   </Callout>
 
@@ -222,6 +232,8 @@ The script supports the following deployment modes; please choose the appropriat
     - URL: https://s3.example.com
     - Username: admin
     - Password: dbac8440
+  Agent Gateway:
+    - URL: https://gateway.example.com
   ```
 
   ### Start Docker
@@ -297,6 +309,8 @@ LobeHub needs to provide a public access URL for object files for the LLM servic
 S3_ENDPOINT=https://s3.example.com
 ```
 
+`S3_ENDPOINT` only needs to be reachable from browsers: `docker-compose.yml` sets `S3_INTERNAL_ENDPOINT=http://rustfs:9000`, so the LobeHub server itself reaches RustFS inside the Compose network.
+
 2. PostgreSQL
 
 This configuration is found in the `docker-compose.yml` file, and you will need to configure the database name and password:
@@ -324,6 +338,75 @@ INTERNAL_APP_URL=http://localhost:3210
 <Callout type="tip">
   For Docker Compose deployments, we recommend using `http://localhost:3210` (container calling itself) or `http://lobe:3210` (using service name for container-to-container communication).
 </Callout>
+
+4. Agent Gateway (Gateway Mode)
+
+The `gateway` service lets agent runs execute on the LobeHub server instead of in the browser. It needs the following values in `.env`, which `setup.sh` fills in automatically:
+
+- `AGENT_GATEWAY_URL`: the gateway address as reached by the browser, such as `https://gateway.example.com` or `http://your_server_ip:8787`. The browser opens a WebSocket connection to it, so a reverse proxy in front of it must allow WebSocket upgrades and long read timeouts. The LobeHub server reaches the gateway at `http://gateway:8787` inside the Compose network.
+- `GATEWAY_SERVICE_TOKEN`: a random token shared by LobeHub and the gateway.
+- `JWKS_KEY`: the RS256 key set LobeHub signs internal JWTs with. Every deployment must use its own key, and it stays in the `lobe` container.
+- `JWKS_PUBLIC_KEY`: the same key without its private fields. Only this value is passed to the gateway, which verifies browser sessions with it.
+
+```sh
+# GATEWAY_SERVICE_TOKEN
+openssl rand -hex 32
+# JWKS_KEY and JWKS_PUBLIC_KEY (paste both lines into .env)
+docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("crypto");const {privateKey,publicKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});const meta={alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"};console.log("JWKS_KEY="+JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),...meta}]}));console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[{...publicKey.export({format:"jwk"}),...meta}]}))'
+```
+
+<Callout type="warning">
+  Upgrading an existing deployment? Follow [Upgrading an Existing Deployment](#upgrading-an-existing-deployment) first. The gateway keeps its state in memory, so runs in progress are interrupted when it restarts.
+</Callout>
+
+<Callout type="tip">
+  Devices joined with `lh connect --gateway http://your_server_ip:8788` can run local tools for this deployment through the device gateway on port `8788`.
+</Callout>
+
+## Upgrading an Existing Deployment
+
+<Callout type="warning">
+  Finish these steps before starting the new `docker-compose.yml`. Until they are done, the `lobe-gateway` container keeps restarting, agent runs fall back to the browser, and `docker logs lobehub` prints an `ACTION REQUIRED` warning at startup.
+</Callout>
+
+<Steps>
+  ### Back up `.env` and download the new Compose file
+
+  ```sh
+  cp .env .env.bak
+  curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml
+  ```
+
+  ### Add the gateway variables to `.env`
+
+  ```env
+  AGENT_GATEWAY_PORT=8787
+  DEVICE_GATEWAY_PORT=8788
+  # Gateway address as reached by the browser, e.g. https://gateway.example.com
+  AGENT_GATEWAY_URL=http://your_server_ip:8787
+  DEVICE_GATEWAY_URL=http://gateway:8788
+  # Output of: openssl rand -hex 32
+  GATEWAY_SERVICE_TOKEN=
+  ```
+
+  Then add `JWKS_PUBLIC_KEY`, the public half of your existing `JWKS_KEY`, by running this in the directory that holds `.env` and pasting its output:
+
+  ```sh
+  docker run --rm -e JWKS_KEY="$(grep '^JWKS_KEY=' .env | cut -d= -f2-)" --entrypoint /bin/node lobehub/lobehub -e 'const {d,p,q,dp,dq,qi,...pub}=JSON.parse(process.env.JWKS_KEY).keys[0];console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[pub]}))'
+  ```
+
+  In domain mode, also reverse proxy the gateway domain to port `8787` with WebSocket upgrades enabled.
+
+  ### Replace the example `JWKS_KEY`
+
+  If `JWKS_KEY` in `.env` is still the value shipped in the old `.env.example` (its `kid` is `6823046760c5d460`), anyone can forge tokens your deployment accepts. Generate a new key pair with the command in [Necessary Configuration](#necessary-configuration) and replace both `JWKS_KEY` and `JWKS_PUBLIC_KEY`. Desktop and CLI clients may need to sign in again afterwards.
+
+  ### Recreate the stack
+
+  ```sh
+  docker compose up -d --force-recreate
+  ```
+</Steps>
 
 ## FAQ
 
@@ -489,6 +572,8 @@ Check RustFS service:
 docker compose logs rustfs
 docker compose logs rustfs-init
 ```
+
+`rustfs-init` also applies the bucket CORS rule that browser uploads need. If uploads fail in the browser with a network error, re-run it with `docker compose up -d --force-recreate rustfs-init`.
 
 Verify the bucket was created: `docker compose exec rustfs ls /data/lobe`
 

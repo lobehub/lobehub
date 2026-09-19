@@ -269,12 +269,28 @@ describe('bot command', () => {
 
   describe('remove', () => {
     it('should remove with --yes', async () => {
-      mockTrpcClient.agentBotProvider.delete.mutate.mockResolvedValue({});
+      mockTrpcClient.agentBotProvider.delete.mutate.mockResolvedValue([{ id: 'b1' }]);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'bot', 'remove', 'b1', '--yes']);
 
       expect(mockTrpcClient.agentBotProvider.delete.mutate).toHaveBeenCalledWith({ id: 'b1' });
+    });
+
+    it('fails loudly when the server removed nothing', async () => {
+      // A delete that matched no row used to print the same checkmark as a real
+      // one, which is what made an unreachable binding look deleted.
+      mockTrpcClient.agentBotProvider.delete.mutate.mockResolvedValue([]);
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'bot', 'remove', 'b1', '--yes']);
+
+      expect(errorSpy.mock.calls.flat().join(' ')).toContain('Nothing removed');
+      expect(process.exitCode).toBe(1);
+
+      process.exitCode = 0;
+      errorSpy.mockRestore();
     });
   });
 

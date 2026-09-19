@@ -1,4 +1,8 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import {
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
+} from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -14,10 +18,12 @@ const { getAgentModelConfigMock, getBuiltinAgentMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentModelConfig: getAgentModelConfigMock,
-    getBuiltinAgent: getBuiltinAgentMock,
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentModelConfig: getAgentModelConfigMock,
+      getBuiltinAgent: getBuiltinAgentMock,
+    };
+  }),
 }));
 
 const db = {} as any;
@@ -29,10 +35,14 @@ describe('resolveVerifyModelConfig', () => {
   });
 
   it('recognizes heterogeneous providers that cannot run Verify LLM calls', () => {
-    expect(isHeterogeneousVerifyProvider('claude-code')).toBe(true);
-    expect(isHeterogeneousVerifyProvider('codex')).toBe(true);
-    expect(isHeterogeneousVerifyProvider('cursor')).toBe(true);
-    expect(isHeterogeneousVerifyProvider('droid')).toBe(true);
+    const heterogeneousProviders = [
+      ...LOCAL_HETEROGENEOUS_AGENT_TYPES,
+      ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+    ];
+
+    for (const provider of heterogeneousProviders) {
+      expect(isHeterogeneousVerifyProvider(provider)).toBe(true);
+    }
     expect(isHeterogeneousVerifyProvider('openai')).toBe(false);
     expect(isHeterogeneousVerifyProvider(null)).toBe(false);
   });
@@ -60,25 +70,28 @@ describe('resolveVerifyModelConfig', () => {
     expect(getBuiltinAgentMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to the builtin verify agent model for a heterogeneous parent', async () => {
-    getAgentModelConfigMock
-      // 1st call: no pinned verifier (undefined → not called), so the mock
-      // queue starts at the builtin slug lookup.
-      .mockResolvedValueOnce({
-        model: 'deepseek-v4-pro',
-        provider: 'lobehub',
-      });
+  it.each(['claude-code', 'devin'])(
+    'filters a %s parent and falls back to the builtin verifier model',
+    async (parentProvider) => {
+      getAgentModelConfigMock
+        // 1st call: no pinned verifier (undefined → not called), so the mock
+        // queue starts at the builtin slug lookup.
+        .mockResolvedValueOnce({
+          model: 'deepseek-v4-pro',
+          provider: 'lobehub',
+        });
 
-    await expect(
-      resolveVerifyModelConfig(db, 'u', {
-        parentModel: 'claude-opus-4-8',
-        parentProvider: 'claude-code',
-      }),
-    ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
+      await expect(
+        resolveVerifyModelConfig(db, 'u', {
+          parentModel: 'claude-opus-4-8',
+          parentProvider,
+        }),
+      ).resolves.toEqual({ model: 'deepseek-v4-pro', provider: 'lobehub' });
 
-    expect(getBuiltinAgentMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
-    expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
-  });
+      expect(getBuiltinAgentMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
+      expect(getAgentModelConfigMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
+    },
+  );
 
   /**
    * Regression: the resolver used to inherit the parent run's model, so the

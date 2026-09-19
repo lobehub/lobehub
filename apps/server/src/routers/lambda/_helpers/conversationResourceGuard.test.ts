@@ -39,11 +39,13 @@ const getParentGroupIdsMock = vi.mocked(getWorkspaceAgentParentGroupIds);
 const createDb = (rowsPerCall: any[][]) => {
   let call = 0;
   return {
-    select: vi.fn(() => ({
-      from: () => ({
-        where: async () => rowsPerCall[call++] ?? [],
-      }),
-    })),
+    select: vi.fn(function () {
+      return {
+        from: () => ({
+          where: async () => rowsPerCall[call++] ?? [],
+        }),
+      };
+    }),
   } as any;
 };
 

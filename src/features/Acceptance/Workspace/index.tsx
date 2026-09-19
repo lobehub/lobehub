@@ -3,7 +3,7 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Drawer } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Menu, PanelLeftOpen } from 'lucide-react';
+import { Menu, PanelLeftOpen, Pin } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Outlet, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -89,19 +89,22 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
 
   /**
    * Inside a project the workspace is already wearing the `(main)` shell's
-   * chrome, so it keeps its inline rail. Only the standalone `/acceptance`
-   * route — registered outside `(main)`, with nothing above it — grows a top
-   * bar of its own, and there the list becomes a drawer so a record can own
-   * the full width without the collection having to disappear to give it.
+   * chrome, so it keeps its inline rail. The standalone `/acceptance` route —
+   * registered outside `(main)`, with nothing above it — grows a top bar of
+   * its own and keeps the list in a drawer, so a record can own the full width
+   * without the collection disappearing. On a wide viewport the drawer can be
+   * pinned into that same rail (its header then carries back + title);
+   * collapsing the rail hands the list back to the drawer.
    */
   const standalone = !projectId;
   const showList = !hasFocusedCheck;
+  const listInDrawer = standalone && (panel.isNarrow || !panel.pinned);
   const [listOpen, setListOpen] = useState(false);
-  // Picking a row is what the drawer was opened to cause; once the route has
-  // changed the drawer has nothing left to do.
+  // Picking a row is what the drawer was opened for; once the route has moved
+  // on (or the rail has taken over) the drawer has nothing left to do.
   useEffect(() => {
     setListOpen(false);
-  }, [acceptanceId]);
+  }, [acceptanceId, listInDrawer]);
 
   const {
     data: allAcceptances,
@@ -123,12 +126,22 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
     <ShellTopBar
       title={t('acceptance.workspace.title')}
       titleExtra={
-        <ActionIcon
-          icon={Menu}
-          size={'small'}
-          title={t('acceptance.shell.menu')}
-          onClick={() => setListOpen(true)}
-        />
+        <>
+          <ActionIcon
+            icon={Menu}
+            size={'small'}
+            title={t('acceptance.shell.menu')}
+            onClick={() => setListOpen(true)}
+          />
+          {!panel.isNarrow && (
+            <ActionIcon
+              icon={Pin}
+              size={'small'}
+              title={t('workspace.pin')}
+              onClick={() => panel.setExpand(true)}
+            />
+          )}
+        </>
       }
       onBack={() => navigate(acceptanceHomePath())}
     />
@@ -149,7 +162,7 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
     );
   }
 
-  if (!standalone)
+  if (!listInDrawer)
     return (
       <Flexbox horizontal height={'100dvh'} style={{ overflow: 'hidden' }} width={'100%'}>
         <RouteMetaBridge />
