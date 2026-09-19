@@ -297,7 +297,7 @@ const buildVideoProviderModelLists = async (
   enabledAiModels: EnabledAiModel[],
 ) => buildProviderModelLists(providers, enabledAiModels, getVideoModelList);
 
-enum AiProviderSwrKey {
+export enum AiProviderSwrKey {
   fetchAiProviderItem = 'FETCH_AI_PROVIDER_ITEM',
   fetchAiProviderList = 'FETCH_AI_PROVIDER',
   fetchAiProviderRuntimeState = 'FETCH_AI_PROVIDER_RUNTIME_STATE',
