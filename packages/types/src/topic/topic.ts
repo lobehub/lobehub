@@ -304,6 +304,18 @@ export interface ChatTopicMetadata {
     threadId?: string | null;
   } | null;
   /**
+   * When the current run claimed this topic, as an ISO string. Stamped by the
+   * server whenever a status write moves the topic into `running` (see
+   * `TopicModel.update`), and read back only while the topic still is — a
+   * leftover stamp under a finished topic means nothing.
+   *
+   * Exists for runs the server doesn't execute: a desktop heterogeneous CLI or
+   * in-browser runtime writes no `agent_operations` row, so without this the
+   * topic list has no start time to run an elapsed clock from. Server-executed
+   * runs keep using their operation row, which is the more faithful record.
+   */
+  runStartedAt?: string;
+  /**
    * A deferred agent run on this topic. Present iff the topic status is
    * `scheduled`. Set to `null` to clear it (same clear-convention as
    * `runningOperation`); every reader treats a nullish value as "not scheduled".

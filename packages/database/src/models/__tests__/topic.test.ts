@@ -755,8 +755,43 @@ describe('TopicModel', () => {
       const byId = Object.fromEntries(result.map((t) => [t.id, t]));
 
       expect(byId['t-run'].runStartedAt).toEqual(new Date('2026-01-02T00:00:00Z'));
-      // A run that never wrote an operation row (e.g. client-mode) stays null.
+      // A run with neither an operation row nor a topic stamp stays null.
       expect(byId['t-no-op'].runStartedAt).toBeNull();
+    });
+
+    // Regression: client-executed runs (desktop CC / in-browser runtime) create
+    // no operation row, so the topic's own stamp is the only start time there is.
+    it('falls back to the topic stamp when the run left no operation row', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 't-local',
+          metadata: { runStartedAt: '2026-01-05T00:00:00Z' },
+          status: 'running',
+          title: 'local',
+          userId,
+        },
+        {
+          id: 't-both',
+          metadata: { runStartedAt: '2026-01-06T00:00:00Z' },
+          status: 'running',
+          title: 'both',
+          userId,
+        },
+      ]);
+      await serverDB.insert(agentOperations).values({
+        id: 'op-both',
+        startedAt: new Date('2026-01-07T00:00:00Z'),
+        status: 'running',
+        topicId: 't-both',
+        userId,
+      });
+
+      const result = await topicModel.queryTopics({ statuses: ['running'] });
+      const byId = Object.fromEntries(result.map((t) => [t.id, t]));
+
+      expect(byId['t-local'].runStartedAt).toEqual(new Date('2026-01-05T00:00:00Z'));
+      // Server's own record of the run beats the client-reported stamp.
+      expect(byId['t-both'].runStartedAt).toEqual(new Date('2026-01-07T00:00:00Z'));
     });
 
     it('never resurrects a timer for a non-running topic with a stale running op', async () => {
@@ -949,6 +984,41 @@ describe('TopicModel', () => {
 
       const [cleared] = await topicModel.update(topic.id, { status: 'active' });
       expect(cleared.status).toBe('active');
+    });
+
+    // Regression: a desktop CC / in-browser run persists nothing but this status
+    // write, so without the stamp the home inbox had no start time for it and
+    // rendered no elapsed clock at all.
+    it('stamps when a client-executed run claimed the topic', async () => {
+      const topic = await topicModel.create({ metadata: { workingDirectory: '/w' }, title: 'run' });
+
+      const [running] = await topicModel.update(topic.id, { status: 'running' });
+
+      expect(running.metadata?.workingDirectory).toBe('/w');
+      expect(new Date(running.metadata!.runStartedAt!).getTime()).toBeGreaterThan(
+        Date.now() - 60_000,
+      );
+    });
+
+    it('keeps the original start when a run resumes from an approval', async () => {
+      const topic = await topicModel.create({ title: 'approval' });
+      const [started] = await topicModel.update(topic.id, { status: 'running' });
+      await topicModel.update(topic.id, { status: 'waitingForHuman' });
+
+      const [resumed] = await topicModel.update(topic.id, { status: 'running' });
+
+      expect(started.metadata?.runStartedAt).toBeDefined();
+      expect(resumed.metadata?.runStartedAt).toBe(started.metadata?.runStartedAt);
+    });
+
+    it('restamps when a new run starts on a settled topic', async () => {
+      const topic = await topicModel.create({ title: 'second turn' });
+      const [first] = await topicModel.update(topic.id, { status: 'running' });
+      await topicModel.update(topic.id, { status: 'unread' });
+
+      const [second] = await topicModel.update(topic.id, { status: 'running' });
+
+      expect(second.metadata?.runStartedAt).not.toBe(first.metadata?.runStartedAt);
     });
 
     it('does not update a topic owned by another user', async () => {

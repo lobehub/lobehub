@@ -968,10 +968,19 @@ export class TopicModel {
       .orderBy(desc(agentOperations.startedAt))
       .limit(1);
 
+    // Client-executed runs (desktop heterogeneous CLI, in-browser runtime) never
+    // reach `agent_operations` — nothing server-side creates the operation — so
+    // their start is stamped onto the topic by the status write that claims it
+    // (see {@link TopicModel.update}). The operation row still wins when both
+    // exist: it is the server's own record of the run, while the stamp is a
+    // client-reported time.
+    const localRunStartedAt = sql`(${topics.metadata} ->> 'runStartedAt')::timestamptz`;
+
     // CASE-gated so only rows that are actually running pay for the lookup —
-    // and a stale running op under a finished topic can't resurrect a timer.
+    // and a stale running op (or stamp) under a finished topic can't resurrect
+    // a timer.
     const runStartedAtColumn =
-      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
+      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN COALESCE((${runStartedAtSubquery}), ${localRunStartedAt}) ELSE NULL END`
         .mapWith(agentOperations.startedAt)
         .as('run_started_at');
 
@@ -1728,10 +1737,32 @@ export class TopicModel {
         ? sql`${topics.provider} is distinct from ${data.provider}`
         : undefined,
     );
+    const persistedMetadata = modelChanged
+      ? sql`case when ${modelChanged} then coalesce(${topics.metadata}, '{}'::jsonb) - 'reasoningConfig' else coalesce(${topics.metadata}, '{}'::jsonb) end`
+      : sql`coalesce(${topics.metadata}, '{}'::jsonb)`;
+
+    /**
+     * A locally executed run — desktop heterogeneous CLI, in-browser runtime —
+     * has no `agent_operations` row: its runtime lives in the client, and the
+     * only thing it tells the server is this status write. Stamp when the run
+     * claimed the topic in the same statement, so a list can show a live
+     * elapsed clock for those runs the same way it does for server-side ones
+     * (see `runStartedAtColumn` in {@link TopicModel.queryTopics}).
+     *
+     * Compared against the PERSISTED status so a resume out of
+     * `waitingForHuman` — the same run, continuing after an approval — keeps
+     * its original start instead of restarting the clock. The stamp is left
+     * behind on terminal statuses: every reader gates on `status = 'running'`,
+     * and the next run overwrites it.
+     */
     const metadata =
-      data.metadata === undefined && modelChanged
-        ? sql`case when ${modelChanged} then coalesce(${topics.metadata}, '{}'::jsonb) - 'reasoningConfig' else ${topics.metadata} end`
-        : data.metadata;
+      data.metadata !== undefined
+        ? data.metadata
+        : data.status === 'running'
+          ? sql`case when ${topics.status} in ('running', 'waitingForHuman') then ${persistedMetadata} else jsonb_set(${persistedMetadata}, '{runStartedAt}', to_jsonb(now())) end`
+          : modelChanged
+            ? persistedMetadata
+            : undefined;
 
     return this.db
       .update(topics)
