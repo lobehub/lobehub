@@ -79,6 +79,8 @@ export default {
     'Connection to the provider timed out or was dropped. Please check your network and try again.',
   'ProviderNoImageGenerated':
     'The provider returned no image for this request. Try rephrasing the request, or choose a model that supports image generation.',
+  'RemoteMediaDownloadTimeout':
+    'The provider timed out while downloading an attached image or file. Please try again.',
   'ProviderServiceUnavailable':
     'The provider is temporarily overloaded or unavailable. Please try again shortly.',
   'QuotaLimitReached':

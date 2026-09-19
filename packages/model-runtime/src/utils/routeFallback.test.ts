@@ -1,49 +1,46 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../types/error';
-import {
-  isImageDecodingRequestError,
-  isNonRetryableRequestError,
-} from './isNonRetryableRequestError';
+import { isImageDecodingRequestError, shouldStopFallbackForError } from './routeFallback';
 
-describe('isNonRetryableRequestError', () => {
-  it('returns true for ExceededContextWindow errors', () => {
+describe('shouldStopFallbackForError', () => {
+  it('stops fallback for ExceededContextWindow errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { message: 'Too many input tokens' },
         errorType: AgentRuntimeErrorType.ExceededContextWindow,
       }),
     ).toBe(true);
   });
 
-  it('does not retry an oversized upstream request body on another channel', () => {
+  it('stops fallback for an oversized upstream request body', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { message: '<html>413 Request Entity Too Large</html>', status: 413 },
         errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
       }),
     ).toBe(true);
   });
 
-  it('returns true for terminal image generation errors', () => {
+  it('stops fallback for terminal image generation errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { message: 'Google image generation was blocked by content policy.' },
         errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
       }),
     ).toBe(true);
 
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { message: 'The provider did not return an image.' },
         errorType: AgentRuntimeErrorType.ProviderNoImageGenerated,
       }),
     ).toBe(true);
   });
 
-  it('returns true for provider image decoding request errors', () => {
+  it('stops fallback for provider image decoding request errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           message:
             '400 INVALID_ARGUMENT: Failed to decode image data. Please make sure the image is valid.',
@@ -54,7 +51,7 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
 
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { message: 'Unable to process input image' },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         status: 400,
@@ -70,9 +67,9 @@ describe('isNonRetryableRequestError', () => {
     expect(isImageDecodingRequestError({ message: 'Invalid request payload' })).toBe(false);
   });
 
-  it('returns true for invalid request payload errors', () => {
+  it('stops fallback for invalid request payload errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           body: { httpStatusCode: 400 },
           message: 'This model maximum input length is 128000 tokens. Please reduce your input.',
@@ -83,9 +80,45 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
-  it('returns true for provider request-body-too-large context errors', () => {
+  it('allows fallback for a structured remote media download timeout', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
+        error: {
+          code: 'invalid_value',
+          error: {
+            code: 'invalid_value',
+            message:
+              'Unable to download content from the provided URL before the timeout. Check that the URL is publicly accessible and responds promptly, or upload the file and provide a file_id instead.',
+            param: 'url',
+            type: 'invalid_request_error',
+          },
+          param: 'url',
+          status: 400,
+          type: 'invalid_request_error',
+        },
+        errorType: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+        provider: 'azure',
+      }),
+    ).toBe(false);
+  });
+
+  it('does not infer remote media timeout semantics from raw provider text', () => {
+    expect(
+      shouldStopFallbackForError({
+        error: {
+          code: 'invalid_value',
+          message: 'Unable to download content from the provided URL before the timeout.',
+          type: 'invalid_request_error',
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        status: 400,
+      }),
+    ).toBe(true);
+  });
+
+  it('stops fallback for provider request-body-too-large context errors', () => {
+    expect(
+      shouldStopFallbackForError({
         error: {
           message: 'Request body too large for gpt-4o model',
           type: 'invalid_request_error',
@@ -102,16 +135,16 @@ describe('isNonRetryableRequestError', () => {
     // OpenAI-compatible providers can return content filter rejections as 400
     // responses with `code`, `type`, or `finish_reason` set to
     // "content_filter" instead of a structured runtime error type. If the
-    // router treats that raw provider payload as retryable, one blocked prompt
+    // router treats that raw provider payload as fallback-eligible, one blocked prompt
     // can fan out across fallback channels.
     //
     // Before the fix, this returned false because `content_filter` was not in
-    // the non-retryable code set.
+    // the terminal error code set.
     //
     // We fixed this by treating provider moderation signals as terminal request
-    // errors at the model-runtime retry gate.
+    // errors at the Router fallback gate.
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           code: 'content_filter',
           message: 'The provider blocked this prompt.',
@@ -123,7 +156,7 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
 
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           choices: [{ finish_reason: 'content_policy_violation' }],
           message: 'The provider blocked this prompt.',
@@ -134,9 +167,9 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
-  it('returns true for invalid response_format schema errors', () => {
+  it('stops fallback for invalid response_format schema errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           message:
             "Invalid schema for response_format 'json_schema': schema must be a JSON Schema.",
@@ -146,9 +179,9 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
-  it('returns true for unsupported model parameter errors', () => {
+  it('stops fallback for unsupported model parameter errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           error: {
             code: 'bad_response_status_code',
@@ -163,9 +196,9 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
-  it('returns true for assistant prefill request-shape errors', () => {
+  it('stops fallback for assistant prefill request-shape errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           body: { httpStatusCode: 400 },
           message:
@@ -177,15 +210,15 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
-  it('returns false for bare 400/413/422 request errors', () => {
-    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 400 })).toBe(false);
-    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 413 })).toBe(false);
-    expect(isNonRetryableRequestError({ errorType: 'ProviderBizError', status: 422 })).toBe(false);
+  it('allows fallback for bare 400/413/422 request errors', () => {
+    expect(shouldStopFallbackForError({ errorType: 'ProviderBizError', status: 400 })).toBe(false);
+    expect(shouldStopFallbackForError({ errorType: 'ProviderBizError', status: 413 })).toBe(false);
+    expect(shouldStopFallbackForError({ errorType: 'ProviderBizError', status: 422 })).toBe(false);
   });
 
-  it('returns false for retryable rate limit and quota errors', () => {
+  it('allows fallback for rate limit and quota errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { message: 'Unable to process input image' },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         status: 429,
@@ -193,7 +226,7 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(false);
 
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { code: 'rate_limit_exceeded', message: 'Rate limit reached for requests' },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         status: 429,
@@ -201,7 +234,7 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(false);
 
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { code: 'insufficient_quota', message: 'You exceeded your current quota' },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         status: 429,
@@ -209,9 +242,9 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(false);
   });
 
-  it('returns false for standardized provider account balance errors', () => {
+  it('allows fallback for standardized provider account balance errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: {
           code: 'invalid_request_error',
           message: 'Insufficient Balance',
@@ -223,9 +256,9 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(false);
   });
 
-  it('returns false for channel-specific auth and model errors', () => {
+  it('allows fallback for channel-specific auth and model errors', () => {
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { message: 'Unauthorized: invalid API key' },
         errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
         status: 400,
@@ -233,7 +266,7 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(false);
 
     expect(
-      isNonRetryableRequestError({
+      shouldStopFallbackForError({
         error: { code: 'DeploymentNotFound', message: 'The deployment does not exist.' },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         status: 404,

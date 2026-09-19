@@ -39,12 +39,9 @@ import type {
   TextToSpeechPayload,
 } from '../../types';
 import { AgentRuntimeError } from '../../utils/createError';
-import {
-  isImageDecodingRequestError,
-  isNonRetryableRequestError,
-} from '../../utils/isNonRetryableRequestError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { postProcessModelList } from '../../utils/postProcessModelList';
+import { isImageDecodingRequestError, shouldStopFallbackForError } from '../../utils/routeFallback';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -814,9 +811,9 @@ export const createRouterRuntime = ({
             );
           }
 
-          const nonRetryable = isNonRetryableRequestError(error);
+          const shouldStopFallback = shouldStopFallbackForError(error);
           const nonRetryableReason =
-            nonRetryable && isImageDecodingRequestError(error)
+            shouldStopFallback && isImageDecodingRequestError(error)
               ? ('imageDecode' as const)
               : undefined;
 
@@ -828,7 +825,7 @@ export const createRouterRuntime = ({
               error,
               metadata,
               model,
-              nonRetryable,
+              nonRetryable: shouldStopFallback,
               nonRetryableReason,
               optionIndex: index,
               providerId: id,
@@ -841,7 +838,7 @@ export const createRouterRuntime = ({
               log('onRouteAttempt callback error: %O', e);
             });
 
-          if (nonRetryable) {
+          if (shouldStopFallback) {
             throw error;
           }
 

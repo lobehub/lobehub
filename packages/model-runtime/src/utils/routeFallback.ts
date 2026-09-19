@@ -1,18 +1,11 @@
 import { toRecord } from '@lobechat/utils';
 
+import { getErrorCodeSpec } from '../errors/specs';
 import { AgentRuntimeErrorType } from '../types/error';
 import { isErrorCausedByContentFilter } from './isErrorCausedByContentFilter';
 
-const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
-  AgentRuntimeErrorType.ExceededContextWindow,
-  AgentRuntimeErrorType.InvalidRequestFormat,
-  AgentRuntimeErrorType.ProviderContentPolicyViolation,
-  AgentRuntimeErrorType.ProviderNoImageGenerated,
-  // Avoid amplifying an oversized payload across channels, accepting that proxy limits can differ.
-  AgentRuntimeErrorType.RequestBodyTooLarge,
-]);
-const RETRYABLE_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
-const RETRYABLE_ERROR_CODES = new Set([
+const FALLBACK_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
+const FALLBACK_ERROR_CODES = new Set([
   'accountdeactivated',
   'deploymentnotfound',
   'invalid_api_key',
@@ -24,7 +17,7 @@ const RETRYABLE_ERROR_CODES = new Set([
   'quota_exceeded',
   'rate_limit_exceeded',
 ]);
-const NON_RETRYABLE_ERROR_CODES = new Set([
+const TERMINAL_ERROR_CODES = new Set([
   'context_length_exceeded',
   'invalid_request_error',
   'invalid_schema',
@@ -34,7 +27,7 @@ const NON_RETRYABLE_ERROR_CODES = new Set([
   'string_above_max_length',
 ]);
 
-const RETRYABLE_MESSAGE_PATTERNS = [
+const FALLBACK_MESSAGE_PATTERNS = [
   'api key',
   'billing',
   'capacity',
@@ -61,7 +54,7 @@ const IMAGE_DECODING_MESSAGE_PATTERNS = [
   'unable to process input image',
 ];
 
-const NON_RETRYABLE_MESSAGE_PATTERNS = [
+const TERMINAL_MESSAGE_PATTERNS = [
   'assistant message prefill',
   'conversation must end with a user message',
   'context length exceeded',
@@ -177,29 +170,33 @@ export const isImageDecodingRequestError = (error: unknown): boolean => {
   return IMAGE_DECODING_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern));
 };
 
-export const isNonRetryableRequestError = (error: unknown): boolean => {
+export const shouldStopFallbackForError = (error: unknown): boolean => {
   const errorStrings = collectErrorStrings(error);
   const normalizedStrings = errorStrings.map((value) => value.toLowerCase());
 
   if (error && typeof error === 'object') {
     const errorType = (error as { errorType?: unknown }).errorType;
-    if (typeof errorType === 'string' && NON_RETRYABLE_ERROR_TYPES.has(errorType)) return true;
+    if (typeof errorType === 'string') {
+      const routeFallback = getErrorCodeSpec(errorType)?.routeFallback;
+      if (routeFallback !== undefined) return !routeFallback;
+    }
   }
 
   if (isErrorCausedByContentFilter(error)) return true;
 
-  // Explicitly retryable HTTP statuses represent route or channel conditions.
+  // Explicitly fallback-eligible HTTP statuses represent route or channel conditions.
   // They take precedence over provider body text, which can reuse terminal
   // request phrases such as "unable to process input image" for a 429 response.
   const statusCodes = collectStatusCodes(error);
-  if (statusCodes.some((statusCode) => RETRYABLE_STATUS_CODES.has(statusCode))) return false;
+  if (statusCodes.some((statusCode) => FALLBACK_STATUS_CODES.has(statusCode))) return false;
 
-  if (normalizedStrings.some((value) => RETRYABLE_ERROR_CODES.has(value))) return false;
-  if (normalizedStrings.some((value) => NON_RETRYABLE_ERROR_CODES.has(value))) return true;
+  if (normalizedStrings.some((value) => FALLBACK_ERROR_CODES.has(value))) return false;
+
+  if (normalizedStrings.some((value) => TERMINAL_ERROR_CODES.has(value))) return true;
 
   const combined = normalizedStrings.join('\n');
-  if (RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
-  if (NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return true;
+  if (FALLBACK_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return false;
+  if (TERMINAL_MESSAGE_PATTERNS.some((pattern) => combined.includes(pattern))) return true;
 
   return false;
 };
