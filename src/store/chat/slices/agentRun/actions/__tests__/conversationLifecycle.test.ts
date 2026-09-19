@@ -5746,10 +5746,13 @@ describe('ConversationLifecycle actions', () => {
         });
 
         // switchTopic should be called with the new topicId and clearNewKey option
-        expect(switchTopicSpy).toHaveBeenCalledWith(newTopicId, {
-          clearNewKey: true,
-          skipRefreshMessage: true,
-        });
+        expect(switchTopicSpy).toHaveBeenCalledWith(
+          newTopicId,
+          expect.objectContaining({
+            clearNewKey: true,
+            skipRefreshMessage: true,
+          }),
+        );
 
         // After new topic creation, the _new key should be cleared
         const messagesInNewKey = useChatStore.getState().messagesMap[newKey];

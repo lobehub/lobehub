@@ -109,6 +109,16 @@ export interface SwitchTopicOptions {
    */
   clearNewKey?: boolean;
   /**
+   * Only apply the switch while the user is still on one of these conversation
+   * buckets. Send flows pass every bucket their conversation can currently live
+   * under — the client-minted topic id before the server confirms it, the
+   * persisted id after the re-key — so a continuation whose await the user
+   * navigated away from skips the switch instead of yanking the UI (and the
+   * URL) back to the sent topic. Include `null` to allow the blank
+   * new-conversation view. Omit the option to always apply the switch.
+   */
+  onlyIfActiveTopicIn?: ReadonlyArray<string | null>;
+  /**
    * Explicit scope for clearing new key data
    * If not provided, will be inferred from store state (activeGroupId)
    */
@@ -1598,6 +1608,24 @@ export class ChatTopicActionImpl {
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
+
+    // Send-flow continuation guard: if the caller requires the user to still
+    // be on a specific topic and they've navigated elsewhere while the send's
+    // awaits were in flight, drop the switch instead of yanking the UI (and
+    // the URL, via ChatHydration's route sync) back to the sent topic. The
+    // epoch token below cannot catch this — the user's switch happened in
+    // between, but this call is still the newest one. Runs before the epoch
+    // bump: a skipped switch must not invalidate a concurrent switch's
+    // pending revalidation.
+    if (opts.onlyIfActiveTopicIn) {
+      // `activeTopicId` uses `null` for "no topic" but is typed `string` and can
+      // hold `undefined`/`''` from callers that never went through switchTopic,
+      // so normalize before comparing — an unset field must still match an
+      // explicit `null` expectation (the blank new-conversation view).
+      const activeTopicId = this.#get().activeTopicId || null;
+      if (!opts.onlyIfActiveTopicIn.includes(activeTopicId)) return;
+    }
+
     const epoch = ++this.#switchTopicEpoch;
 
     const { activeAgentId, activeGroupId } = this.#get();
