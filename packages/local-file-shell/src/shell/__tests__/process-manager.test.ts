@@ -7,7 +7,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ShellProcess } from '../process-manager';
-import { ShellProcessManager } from '../process-manager';
+import { MAX_OBSERVATION_TIMEOUT_MS, ShellProcessManager } from '../process-manager';
 
 function createMockProcess(exitCode: number | null = null, pid?: number): ChildProcess {
   const process = new EventEmitter() as ChildProcess;
@@ -128,7 +128,10 @@ describe('ShellProcessManager', () => {
       }
     });
 
-    it('should wait up to the default observation timeout when timeout is omitted', async () => {
+    // `timeout` is the budget for the whole call, not for the wait alone: the
+    // dispatcher derives its deadline from the same number, so the wait has to
+    // end early enough to read the output files and answer inside it.
+    it('should reserve headroom out of the default observation budget', async () => {
       vi.useFakeTimers();
       try {
         const process = createMockProcess();
@@ -141,13 +144,91 @@ describe('ShellProcessManager', () => {
           return result;
         });
 
-        await vi.advanceTimersByTimeAsync(59_999);
+        await vi.advanceTimersByTimeAsync(54_999);
         expect(resolved).toBe(false);
 
         await vi.advanceTimersByTimeAsync(1);
         const result = await pending;
         expect(result.success).toBe(true);
         expect(result.exit_code).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should reserve the same headroom out of an explicit budget', async () => {
+      vi.useFakeTimers();
+      try {
+        const process = createMockProcess();
+        const shellProcess = createShellProcess(manager, 'test-1', process);
+        manager.register('test-1', shellProcess);
+        let resolved = false;
+
+        const pending = manager
+          .getOutput({ shell_id: 'test-1', timeout: 300_000 })
+          .then((result) => {
+            resolved = true;
+            return result;
+          });
+
+        await vi.advanceTimersByTimeAsync(294_999);
+        expect(resolved).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await pending;
+        expect(resolved).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // A budget smaller than the headroom is a deliberate peek — honor it rather
+    // than collapsing the wait to nothing.
+    it('should honor a budget shorter than the headroom as-is', async () => {
+      vi.useFakeTimers();
+      try {
+        const process = createMockProcess();
+        const shellProcess = createShellProcess(manager, 'test-1', process);
+        manager.register('test-1', shellProcess);
+        let resolved = false;
+
+        const pending = manager.getOutput({ shell_id: 'test-1', timeout: 2000 }).then((result) => {
+          resolved = true;
+          return result;
+        });
+
+        await vi.advanceTimersByTimeAsync(1999);
+        expect(resolved).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await pending;
+        expect(resolved).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should clamp a request above the ceiling to the ceiling', async () => {
+      vi.useFakeTimers();
+      try {
+        const process = createMockProcess();
+        const shellProcess = createShellProcess(manager, 'test-1', process);
+        manager.register('test-1', shellProcess);
+        let resolved = false;
+
+        const pending = manager
+          .getOutput({ shell_id: 'test-1', timeout: MAX_OBSERVATION_TIMEOUT_MS * 10 })
+          .then((result) => {
+            resolved = true;
+            return result;
+          });
+
+        await vi.advanceTimersByTimeAsync(MAX_OBSERVATION_TIMEOUT_MS - 5001);
+        expect(resolved).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await pending;
+        expect(resolved).toBe(true);
       } finally {
         vi.useRealTimers();
       }

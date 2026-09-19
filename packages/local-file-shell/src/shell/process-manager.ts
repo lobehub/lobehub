@@ -10,7 +10,23 @@ import { decodeClixml } from './clixml';
 import { buildOutputPreview } from './utils';
 
 export const DEFAULT_OBSERVATION_TIMEOUT_MS = 60_000;
-const MAX_OBSERVATION_TIMEOUT_MS = 120_000;
+/**
+ * Ceiling on a single observation window. Sized for the real unit of work an
+ * agent waits on — a test suite, a build, an install — because the alternative
+ * to waiting once is polling, and every poll costs a full LLM turn with the
+ * whole conversation replayed into it. Stays well inside the dispatcher's own
+ * ceiling (`MAX_TIMEOUT_MS`, 800s) so the wait can never outlive the call
+ * carrying it.
+ */
+export const MAX_OBSERVATION_TIMEOUT_MS = 600_000;
+/**
+ * Slice held back from the caller's budget. The same `timeout` value sets the
+ * dispatcher's deadline *and* this wait, and after the wait we still have to
+ * drain the pipes, read the output files and make the trip home — so a wait
+ * that spent the entire budget would be aborted right as it produced an answer,
+ * charging the agent the full wait for nothing.
+ */
+const OBSERVATION_TIMEOUT_HEADROOM_MS = 5_000;
 const RUN_COMMAND_HEAD_RATIO = 0.2;
 const GET_COMMAND_OUTPUT_HEAD_RATIO = 0;
 const OUTPUT_PREVIEW_TOTAL_MAX_BYTES = 22 * 1024;
@@ -158,10 +174,17 @@ export class ShellProcessManager {
     // and its 'exit' event has already fired — waiting would just burn the
     // full observation timeout before returning the killed command's output.
     if (exitCode === null && childProcess.signalCode == null) {
-      const waitTimeout =
+      const budget =
         typeof timeout === 'number' && Number.isFinite(timeout)
           ? Math.min(Math.max(Math.trunc(timeout), 0), MAX_OBSERVATION_TIMEOUT_MS)
           : DEFAULT_OBSERVATION_TIMEOUT_MS;
+      // Never spend the caller's whole budget on the wait alone. A budget too
+      // small to hold the headroom is honored as-is rather than collapsed to
+      // zero — a short deliberate peek must still peek.
+      const waitTimeout =
+        budget > OBSERVATION_TIMEOUT_HEADROOM_MS
+          ? budget - OBSERVATION_TIMEOUT_HEADROOM_MS
+          : budget;
 
       if (waitTimeout > 0) {
         let timer: ReturnType<typeof setTimeout> | undefined;
