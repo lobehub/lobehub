@@ -353,6 +353,7 @@ export interface DeviceEnroller {
 }
 
 export interface DeviceListItem {
+  architecture?: string | null;
   channels: DeviceChannel[];
   defaultCwd: string | null;
   deviceId: string;

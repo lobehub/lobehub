@@ -57,6 +57,29 @@ describe('DeviceModel', () => {
       expect(result.metadata).toBeNull();
     });
 
+    it('backfills architecture without replacing existing machine metadata', async () => {
+      await deviceModel.register({
+        deviceId: 'dev-backfill',
+        hostname: 'My-Mac',
+        identitySource: 'machine-id',
+        metadata: { appVersion: '2.0.0' },
+        platform: 'darwin',
+      });
+
+      const device = await deviceModel.register({
+        architecture: 'arm64',
+        deviceId: 'dev-backfill',
+        identitySource: 'machine-id',
+      });
+
+      expect(device).toMatchObject({
+        architecture: 'arm64',
+        hostname: 'My-Mac',
+        metadata: { appVersion: '2.0.0' },
+        platform: 'darwin',
+      });
+    });
+
     it('should upsert on (userId, deviceId) and refresh machine fields', async () => {
       await deviceModel.register({
         architecture: 'x64',

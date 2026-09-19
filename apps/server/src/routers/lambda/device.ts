@@ -1014,6 +1014,7 @@ export const deviceRouter = router({
         const channels = channelsByDevice.get(d.deviceId) ?? [];
         const live = channels[0];
         return {
+          architecture: d.architecture,
           channels,
           defaultCwd: d.defaultCwd,
           deviceId: d.deviceId,
