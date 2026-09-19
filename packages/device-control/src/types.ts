@@ -61,6 +61,7 @@ export interface ListProjectSkillsResult {
 export interface StatPathResult {
   exists: boolean;
   isDirectory: boolean;
+  repositoryUrl?: string;
   repoType?: 'git' | 'github';
 }
 

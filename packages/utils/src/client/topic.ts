@@ -168,7 +168,12 @@ export const groupTopicsByProject = (
 
   for (const topic of topics) {
     const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
-    const id = normalized ? `${PROJECT_GROUP_PREFIX}${normalized}` : NO_PROJECT_GROUP_ID;
+    const deviceId = topic.metadata?.projectExecution?.deviceId ?? topic.metadata?.boundDeviceId;
+    const id = topic.projectWorkingDirectoryId
+      ? `project-directory:${topic.projectWorkingDirectoryId}`
+      : normalized
+        ? `${PROJECT_GROUP_PREFIX}${deviceId ? `${deviceId}:` : ''}${normalized}`
+        : NO_PROJECT_GROUP_ID;
     const existing = groupsMap.get(id);
     if (existing) {
       existing.children.push(topic);

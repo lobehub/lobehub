@@ -121,6 +121,7 @@ export interface ChatTopicMetadata {
     summarizedAt: string;
     version: number;
   };
+
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -226,6 +227,8 @@ export interface ChatTopicMetadata {
    */
   onboardingFeedback?: OnboardingFeedbackEntry;
   onboardingSession?: OnboardingSessionSnapshot;
+  /** Server-resolved device for a project directory; authoritative access is rechecked on execution. */
+  projectExecution?: { deviceId: string };
   /** Measured dominant provider by token volume — see {@link ChatTopicMetadata.model}. */
   provider?: string;
   /**
@@ -645,6 +648,8 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
    * `metadata.model` (measured dominant model from the usage roll-up).
    */
   model?: string | null;
+  projectId?: string | null;
+  projectWorkingDirectoryId?: string | null;
   provider?: string | null;
   sessionId?: string;
   /**

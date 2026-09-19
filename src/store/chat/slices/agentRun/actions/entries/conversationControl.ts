@@ -883,7 +883,33 @@ export class ConversationControlActionImpl {
           topicId,
         });
       }
+      for (const target of targets) {
+        if (!target) continue;
+        const intervention = { ...target.pluginIntervention, status: 'aborted' as const };
+        const updateContext = { context: effectiveContext };
+        this.#get().internal_dispatchMessage(
+          {
+            id: target.id,
+            type: 'updateMessage',
+            value: { pluginIntervention: intervention },
+          },
+          updateContext,
+        );
+        if (target.parentId && target.tool_call_id) {
+          this.#get().internal_dispatchMessage(
+            {
+              id: target.parentId,
+              tool_call_id: target.tool_call_id,
+              type: 'updateMessageTools',
+              value: { intervention },
+            },
+            updateContext,
+          );
+        }
+      }
+      if (!sourceResolution.handled) this.#writeTopicStatus(effectiveContext, 'active');
       this.#completeOpsById(pausedOpIds);
+      await this.#get().refreshMessages(effectiveContext);
     } catch (error) {
       console.error('[stopPendingApproval] failed:', error);
       throw error;
