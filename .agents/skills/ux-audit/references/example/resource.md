@@ -1,6 +1,6 @@
 # Worked example — Resource (资源) module audit
 
-A real run of this skill against the **Resource module**, 2026-07 (LOBE-11149) — a
+A real run of this skill against the **Resource module**, 2026-07 — a
 knowledge-base / file-library manager: resource home (all resources) → library (a single
 knowledge base) → library-slug (a folder inside a library). Three surfaces under
 `src/routes/(main)/resource/**`, all delegating to one shared feature,

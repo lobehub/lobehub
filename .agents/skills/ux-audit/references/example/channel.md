@@ -1,8 +1,8 @@
 # Worked example — Channel (bot/messenger 接入) audit
 
 A real run of this skill against the per-agent channel-connect surface
-(`/agent/:aid/channel` → `src/routes/(main)/agent/channel`), 2026-07-02 (LOBE-11216, under the
-Chat / 会话 UX-Audit parent LOBE-11145). Use it as a **template for the output shape**, not as
+(`/agent/:aid/channel` → `src/routes/(main)/agent/channel`), 2026-07-02, under the
+Chat / 会话 UX-Audit parent. Use it as a **template for the output shape**, not as
 current-state truth (the code moves; re-verify before citing).
 
 Surface = a **master-detail settings console** for connecting one agent to messaging

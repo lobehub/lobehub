@@ -188,15 +188,15 @@ its ✅ one. Both landed from this run:
 
 ## 6 — Land the findings (queue)
 
-Landed as **LOBE-11138** ("Onboarding UX Audit", container under the UX-audit parent
-**LOBE-11078**), split into the sub-issues below. Class-norm gaps (③⑤) also 回灌 'd into `ux`
-Grow §5.2; the awaited-write rule (①) into Feedback §4.2 — see §4.
+Landed as an "Onboarding UX Audit" container under the UX-audit parent, split into the
+sub-issues below. Class-norm gaps (③⑤) also 回灌 'd into `ux` Grow §5.2; the awaited-write
+rule (①) into Feedback §4.2 — see §4.
 
-| Sub-issue      | Finding(s)                                                                   | Kind       |
-| -------------- | ---------------------------------------------------------------------------- | ---------- |
-| **LOBE-11154** | ① language-gate stuck step (add `finally` + retry)                           | bug 🔴     |
-| **LOBE-11155** | ②④ AgentPicker: install-fail silent finish + load-fail no retry              | bug 🔴     |
-| **LOBE-11156** | ③ progress / Sequence Map absent                                             | bug + 回灌 |
-| **LOBE-11157** | ⑤ mandatory FullName / no escape hatch                                       | bug + 回灌 |
-| **LOBE-11158** | ⑥⑦⑧⑨ fire-and-forget writes / draft-loss / silent step-sync / composio state | bug 🟡     |
-| _unfiled_      | ⑩ Agent conversation `ErrorBoundary` → blank (fold into LOBE-11155 or new)   | bug 🟡     |
+| Finding(s)                                                                   | Kind       |
+| ---------------------------------------------------------------------------- | ---------- |
+| ① language-gate stuck step (add `finally` + retry)                           | bug 🔴     |
+| ②④ AgentPicker: install-fail silent finish + load-fail no retry              | bug 🔴     |
+| ③ progress / Sequence Map absent                                             | bug + 回灌 |
+| ⑤ mandatory FullName / no escape hatch                                       | bug + 回灌 |
+| ⑥⑦⑧⑨ fire-and-forget writes / draft-loss / silent step-sync / composio state | bug 🟡     |
+| ⑩ Agent conversation `ErrorBoundary` → blank (unfiled; fold into ②④)         | bug 🟡     |

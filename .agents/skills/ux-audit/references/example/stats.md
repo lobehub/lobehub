@@ -1,8 +1,8 @@
 # Worked example — Agent stats / Usage & Cost (统计) audit
 
 A real run of this skill against the per-agent usage & cost dashboard
-(`/agent/:aid/stats` → `src/features/AgentUsage`), 2026-07-02 (LOBE-11218, under the
-Chat / 会话 UX-Audit parent LOBE-11145). Use it as a **template for the output shape**, not as
+(`/agent/:aid/stats` → `src/features/AgentUsage`), 2026-07-02, under the Chat / 会话 UX-Audit
+parent. Use it as a **template for the output shape**, not as
 current-state truth (the code moves; re-verify before citing).
 
 Surface = a single scrolling column of three `Block` cards: **① summary stat cards**

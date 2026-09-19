@@ -1,7 +1,6 @@
 # Worked example — Chat（会话主界面，默认无选中 topic 态）surface audit
 
-对 agent chat 默认态（无选中 topic 的新会话）做 **L1 静态审计**。
-Linear: LOBE-11221（隶属 LOBE-11145）。2026-07-02。
+对 agent chat 默认态（无选中 topic 的新会话）做 **L1 静态审计**，2026-07-02。
 
 **Layers run:** L1 (static /code) ✅ — 以下全部。L2 (visual) / L3 (dynamic) ⏳ 未跑。
 关于渲染的结论（send error 后 editor 是否可恢复、skeleton 是否永久化）是 L1 推理，待 L2/L3 确认。
