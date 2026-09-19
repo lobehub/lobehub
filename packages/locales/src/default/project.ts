@@ -1,7 +1,10 @@
 export default {
+  'directories.currentFolder': 'Current folder',
+  'settings.reuseEnvironmentDescription':
+    'Already created an environment? Select it to link its repository configuration to this project, then add a working directory for this project.',
   'settings.startDirectoryConversation': 'New conversation here',
   'settings.configureDirectory': 'Add a working directory',
-  'settings.reuseEnvironment': 'Use existing environment',
+  'settings.reuseEnvironment': 'Add an existing environment to this project',
   'settings.addDirectoryFailed': 'Could not add working directory',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
@@ -86,7 +89,7 @@ export default {
   'directories.add': 'Add working directory',
   'directories.bind': 'Link to project',
   'directories.bindDescription':
-    'Link an existing directory on a device to a project. Files stay on the device.',
+    'Link the folder below to a project so you can continue working from that project. Files stay on the current device.',
   'directories.project': 'Select project',
   'directories.device': 'Select device',
   'directories.path': 'Absolute directory path',

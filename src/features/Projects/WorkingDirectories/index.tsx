@@ -72,6 +72,11 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
           </Flexbox>
         </Flexbox>
         <Text type="secondary">{t('settings.environmentDescription')}</Text>
+        {!!unlinked.length && (
+          <Text fontSize={13} type="secondary">
+            {t('settings.reuseEnvironmentDescription')}
+          </Text>
+        )}
       </Flexbox>
       {requestError ? (
         <AsyncError

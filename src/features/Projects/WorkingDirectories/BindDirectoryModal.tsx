@@ -55,7 +55,9 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
         padding={16}
         style={{ maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' }}
       >
+        <Text type="secondary">{t('directories.bindDescription')}</Text>
         <Flexbox gap={6}>
+          <Text weight={500}>{t('directories.currentFolder')}</Text>
           <Flexbox horizontal align="center" gap={8}>
             {getDeviceIcon(device?.platform, 16)}
             <Text fontSize={13}>{deviceName}</Text>

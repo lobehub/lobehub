@@ -55,7 +55,9 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
       <Form
         {...FORM_STYLE}
         collapsible={false}
+        itemMinWidth="100%"
         itemsType="group"
+        layout="vertical"
         variant="filled"
         footer={
           <Flexbox gap={16}>
