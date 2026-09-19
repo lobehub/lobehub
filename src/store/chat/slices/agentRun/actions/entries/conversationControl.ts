@@ -475,13 +475,16 @@ export class ConversationControlActionImpl {
     const targetEditor =
       editor ?? (contextKey === messageMapKey(activeContext) ? this.#get().mainInputEditor : null);
     if (targetEditor) {
-      // Find the latest sendMessage operation with editor state
-      for (const opId of [...operationIds].reverse()) {
-        const op = this.#get().operations[opId];
-        if (op && op.type === 'sendMessage' && op.metadata.inputEditorTempState) {
-          targetEditor.setJSONState(op.metadata.inputEditorTempState);
-          break;
-        }
+      // Only the latest send can own the draft. Never fall back to a stale
+      // snapshot from an earlier turn when stopping an accepted message.
+      const operationId = [...operationIds]
+        .reverse()
+        .find((id) => this.#get().operations[id]?.type === 'sendMessage');
+      const operation = operationId ? this.#get().operations[operationId] : undefined;
+      if (operation?.status === 'cancelled' && operation.metadata.inputEditorTempState) {
+        const snapshot = operation.metadata.inputEditorTempState;
+        this.#get().updateOperationMetadata(operation.id, { inputEditorTempState: null });
+        targetEditor.setJSONState(snapshot);
       }
     }
   };
