@@ -4,6 +4,7 @@ import type { AgentSignalRuntimeService } from '@lobechat/builtin-tool-agent-sig
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { pickTrimmedString, toRecord } from '@lobechat/utils';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentSignalNightlyReviewModel } from '@/database/models/agentSignal/nightlyReview';
@@ -32,7 +33,7 @@ import type {
 } from '../tools/shared';
 import { createMemoryService } from '../tools/shared';
 import type { EvidenceRef } from '../types';
-import { Risk, Scope } from '../types';
+import { buildNightlyReviewSourceId, Risk, Scope } from '../types';
 import type { createServerSelfReviewBriefWriter } from './brief';
 import { createBriefSelfReviewService } from './brief';
 import type { SelfReviewBriefTextTranslator } from './briefText';
@@ -54,6 +55,11 @@ import {
 } from './proposal';
 import { createSelfReviewProposalPreflightService } from './proposalPreflight';
 import { createSelfReviewProposalSnapshotService } from './proposalSnapshot';
+import {
+  groupRecurringReviewIdeas,
+  listNightlyReceiptLocalDates,
+  resolveReviewedLocalDate,
+} from './receiptActivity';
 
 interface ProposalBriefReader {
   listUnresolvedByAgentAndTrigger: (options: {
@@ -879,7 +885,11 @@ export const createServerSelfReviewPolicyOptions = ({
         updatedAt: row.updatedAt.toISOString(),
       }));
     },
-    listReceiptActivity: async ({ agentId: targetAgentId, reviewWindowEnd }) =>
+    listReceiptActivity: async ({
+      agentId: targetAgentId,
+      localDate: reviewedLocalDate,
+      reviewWindowEnd,
+    }) =>
       tracer.startActiveSpan(
         'agent_signal.nightly_review.collector.list_receipt_activity',
         {
@@ -890,38 +900,37 @@ export const createServerSelfReviewPolicyOptions = ({
         },
         async (span): Promise<ReceiptActivityDigest> => {
           try {
-            const end = new Date(reviewWindowEnd);
-            const pages = await Promise.all(
-              Array.from({ length: 7 }, (_, offset) => {
-                const day = new Date(end);
-                day.setUTCDate(day.getUTCDate() - offset);
-                const localDate = day.toISOString().slice(0, 10);
-                const topicId = `nightly-review:${userId}:${targetAgentId}:${localDate}`;
-                return listAgentSignalReceipts({
-                  agentId: targetAgentId,
-                  limit: 50,
-                  topicId,
-                  userId,
-                });
+            const localDates = listNightlyReceiptLocalDates({
+              localDate: resolveReviewedLocalDate({
+                localDate: reviewedLocalDate,
+                reviewWindowEnd,
               }),
+            });
+            const pages = await pMap(
+              localDates,
+              async (localDate) => ({
+                localDate,
+                receipts: (
+                  await listAgentSignalReceipts({
+                    agentId: targetAgentId,
+                    limit: 50,
+                    topicId: buildNightlyReviewSourceId({
+                      agentId: targetAgentId,
+                      localDate,
+                      userId,
+                    }),
+                    userId,
+                  })
+                ).receipts,
+              }),
+              { concurrency: 4 },
             );
             const receipts = pages.flatMap((page) => page.receipts);
-            const ideaGroups = new Map<string, string[]>();
-            for (const receipt of receipts) {
-              for (const idea of receipt.metadata?.selfIteration?.ideas ?? []) {
-                const key = idea.idempotencyKey
-                  .replace(/nightly-review:\d{4}-\d{2}-\d{2}:/, 'nightly-review:')
-                  .replace(/nightly-review:[^:]+:[^:]+:\d{4}-\d{2}-\d{2}:/, 'nightly-review:');
-                ideaGroups.set(key, [...(ideaGroups.get(key) ?? []), receipt.id]);
-              }
-            }
             const digest: ReceiptActivityDigest = {
               appliedCount: receipts.filter(
                 (item) => item.status === 'applied' || item.status === 'updated',
               ).length,
-              duplicateGroups: [...ideaGroups.entries()]
-                .filter(([, ids]) => ids.length >= 2)
-                .map(([key, ids]) => ({ count: ids.length, key, receiptIds: ids })),
+              duplicateGroups: groupRecurringReviewIdeas(pages),
               failedCount: receipts.filter((item) => item.status === 'failed').length,
               pendingProposalCount: receipts.filter((item) => item.status === 'proposed').length,
               recentReceipts: receipts.slice(0, 50).map((item) => ({
