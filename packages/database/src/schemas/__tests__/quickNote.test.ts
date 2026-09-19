@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
 import { sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +13,7 @@ describe('Quick Note migration', () => {
   /** @example A second deployment can replay the additive migration without errors. */
   it('can be reapplied and creates the complete note schema', async () => {
     // Read the generated artifact so SQL and snapshot drift cannot hide behind the ORM schema.
-    const migration = readFileSync(
+    const migration = await readFile(
       new URL('../../../migrations/0162_configurable_quick_note_analyzer.sql', import.meta.url),
       'utf8',
     );
