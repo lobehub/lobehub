@@ -114,10 +114,14 @@ describe('projectToolViewModels', () => {
 describe('registry', () => {
   it('projects exactly the tools that were measured and audited', () => {
     expect(listProjectedTools().sort()).toEqual([
+      'claude-code/Bash',
+      'codex/command_execution',
       'lobe-agent-documents/readDocument',
       'lobe-local-system/runCommand',
       'lobe-web-browsing/crawlMultiPages',
       'lobe-web-browsing/crawlSinglePage',
+      'opencode/bash',
+      'pi/bash',
     ]);
   });
 });

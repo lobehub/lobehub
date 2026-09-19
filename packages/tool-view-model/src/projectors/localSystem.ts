@@ -7,7 +7,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const OUTPUT_KEYS = new Set(['output', 'stdout']);
 
 /**
- * `runCommand`.
+ * The command-output family: every tool whose result renders through the shared
+ * `RunCommand` card — `lobe-local-system/runCommand`,
+ * `codex/command_execution`, `claude-code/Bash`, `opencode/bash`, `pi/bash`.
  *
  * The command's output is stored THREE times: the tool message body,
  * `state.stdout`, and the legacy `state.output`. All three go. What stays is the

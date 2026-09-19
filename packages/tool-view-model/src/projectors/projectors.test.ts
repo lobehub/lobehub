@@ -126,6 +126,40 @@ describe('runCommandProjector', () => {
     expect(result?.pluginState).toEqual({ exitCode: 0 });
   });
 
+  it('handles the codex shape, whose extra metadata keys must survive', () => {
+    // Observed on production: `stdout` and `output` are byte-identical copies,
+    // and the collapsed row reads `success` / `exitCode` — which is why the
+    // whole command-output family shares this projector.
+    const result = runCommandProjector(
+      input({
+        pluginState: {
+          exitCode: 0,
+          isBackground: false,
+          omittedOutputCharacters: 120,
+          originalOutputLength: 4181,
+          output: 'OUT',
+          stdout: 'OUT',
+          success: true,
+        },
+      }),
+    );
+
+    expect(result?.content).toBeNull();
+    expect(result?.pluginState).toEqual({
+      exitCode: 0,
+      isBackground: false,
+      omittedOutputCharacters: 120,
+      originalOutputLength: 4181,
+      success: true,
+    });
+  });
+
+  it('strips a body carried without any state, as claude-code/Bash does', () => {
+    const result = runCommandProjector(input({ content: 'the output', pluginState: undefined }));
+
+    expect(result).toEqual({ content: null, storedPayloadNeededBy: 'render' });
+  });
+
   it('declines a call that produced nothing to drop', () => {
     expect(
       runCommandProjector(input({ content: '', pluginState: { exitCode: 0 } })),
