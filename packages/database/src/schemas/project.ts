@@ -22,6 +22,7 @@ import { softDeleteColumns, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { devices } from './device';
+import { environmentInstances } from './environmentInstance';
 import { knowledgeBases } from './file';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -109,6 +110,11 @@ export const projectWorkingDirectories = pgTable(
     projectId: text('project_id')
       .references(() => projects.id, { onDelete: 'cascade' })
       .notNull(),
+    /** Canonical execution location. Legacy device/path columns remain for migration only. */
+    environmentInstanceId: uuid('environment_instance_id').references(
+      () => environmentInstances.id,
+      { onDelete: 'restrict' },
+    ),
     /** Nullable so a removed device leaves a repairable binding with its last-known path. */
     deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
@@ -139,6 +145,10 @@ export const projectWorkingDirectories = pgTable(
       .on(t.projectId)
       .where(sql`${t.isPrimary} = true`),
     index('project_working_directories_project_sort_order_idx').on(t.projectId, t.sortOrder),
+    uniqueIndex('project_working_directories_project_instance_unique').on(
+      t.projectId,
+      t.environmentInstanceId,
+    ),
     index('project_working_directories_device_id_idx').on(t.deviceId),
     index('project_working_directories_workspace_id_idx').on(t.workspaceId),
     check('project_working_directories_path_not_empty', sql`length(btrim(${t.path})) > 0`),
