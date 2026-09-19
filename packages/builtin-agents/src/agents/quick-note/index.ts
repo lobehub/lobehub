@@ -35,7 +35,7 @@ export const QUICK_NOTE_ANALYZE: BuiltinAgentDefinition = {
 export { quickNoteAnalyzeProtocol } from './analyzeSystemRole';
 
 /**
- * Orchestrates an explicit Dive and delegates specialist work to Domain Agents.
+ * Investigates an explicit Dive directly using the Quick Note tool surface.
  */
 export const QUICK_NOTE_DIVE: BuiltinAgentDefinition = {
   avatar: '/avatars/lobe-ai.png',

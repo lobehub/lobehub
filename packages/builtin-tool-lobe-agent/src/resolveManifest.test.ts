@@ -8,6 +8,18 @@ import { LobeAgentApiName } from './types';
 const apiNames = (manifest: { api: { name: string }[] }) => manifest.api.map((a) => a.name);
 
 describe('resolveLobeAgentManifest', () => {
+  /** @example Quick Note cannot bypass callAgent restrictions with callSubAgent. */
+  it('hides sub-agent delegation in Quick Note', () => {
+    const result = resolveLobeAgentManifest({ scope: 'quick_note' })!;
+
+    /** @example The alternate delegation API is unavailable. */
+    expect(apiNames(result)).not.toContain(LobeAgentApiName.callSubAgent);
+    /** @example Other tools remain available. */
+    expect(apiNames(result)).toContain(LobeAgentApiName.analyzeMedia);
+    /** @example The prompt matches the available capabilities. */
+    expect(result.systemRole).toBe(systemPromptWithoutSubAgent);
+  });
+
   it('returns the full static manifest in a normal (main, non-sub-agent) turn', () => {
     const result = resolveLobeAgentManifest({ scope: 'main' });
 

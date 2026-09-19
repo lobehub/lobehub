@@ -23,14 +23,16 @@ describe('Quick Note built-in agents', () => {
     expect(quickNoteAnalyzeProtocol).toContain('"speech", "audio", "ASR", or "TTS"');
   });
 
-  /** @example A user-triggered Dive can delegate to an appropriate Domain Agent. */
-  it('allows Dive to use the existing agent orchestration tool', () => {
+  /** @example A user-triggered Dive retains non-delegating agent tools. */
+  it('instructs Dive to investigate directly with the scoped tool surface', () => {
     const runtime =
       typeof QUICK_NOTE_DIVE.runtime === 'function'
         ? QUICK_NOTE_DIVE.runtime({ plugins: [] })
         : QUICK_NOTE_DIVE.runtime;
 
-    /** @example Dive receives the standard callAgent-capable tool surface. */
+    /** @example The runtime scope filters delegation from this tool surface. */
     expect(runtime.plugins).toContain('lobe-agent');
+    /** @example Dive completes the investigation itself. */
+    expect(runtime.systemRole).toContain('Do not delegate to other agents.');
   });
 });

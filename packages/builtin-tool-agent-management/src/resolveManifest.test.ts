@@ -8,6 +8,21 @@ import { AgentManagementApiName } from './types';
 const apiNames = (manifest: { api: { name: string }[] }) => manifest.api.map((a) => a.name);
 
 describe('resolveAgentManagementManifest', () => {
+  /** @example Quick Note cannot activate delegation while other management APIs remain available. */
+  it('hides callAgent in Quick Note', () => {
+    // ROOT CAUSE:
+    // Quick Note Dive could activate Agent Management and delegate a lightweight note.
+    // Filtering the resolved manifest removes delegation even after tool activation.
+    const result = resolveAgentManagementManifest({ scope: 'quick_note' })!;
+
+    /** @example The model cannot select the delegation API. */
+    expect(apiNames(result)).not.toContain(AgentManagementApiName.callAgent);
+    /** @example Existing agent lookup remains available. */
+    expect(apiNames(result)).toContain(AgentManagementApiName.searchAgent);
+    /** @example Tool guidance does not encourage delegation. */
+    expect(result.systemRole).toBe(systemPromptWithoutCallAgent);
+  });
+
   it('returns the full static manifest in a normal (non-sub-agent) turn', () => {
     const result = resolveAgentManagementManifest({ scope: 'main' });
 
