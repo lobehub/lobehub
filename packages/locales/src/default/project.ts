@@ -1,4 +1,7 @@
 export default {
+  'settings.startDirectoryConversation': 'New conversation here',
+  'settings.configureDirectory': 'Add a working directory',
+  'settings.reuseEnvironment': 'Use existing environment',
   'settings.addDirectoryFailed': 'Could not add working directory',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
@@ -9,11 +12,11 @@ export default {
   'settings.generalDescription': 'Manage the project name, address, and description.',
   'settings.workLocations': 'Working directories',
   'settings.directoryDescription':
-    'Choose where agents work with files. Each directory is a real path on a specific device.',
+    'Choose a folder and start a conversation. The Agent will work with files in that folder on the connected device.',
   'settings.environmentDescription':
-    'Define the source for your work. Connect a working directory when you are ready to use files on a device.',
+    'Keep repository sources together in an environment, then add a folder on your device to start working.',
   'settings.allEnvironments': 'All environments',
-  'settings.viewDirectories': 'Working directories ({{count}})',
+  'settings.viewDirectories': 'View folders ({{count}})',
   'directories.noEnvironment': 'No environment linked',
   'directories.sourceSummary': 'Existing directory',
   'directories.keepFiles':
@@ -51,9 +54,9 @@ export default {
   'topics.status.completed': 'Completed',
   'topics.status.archived': 'Archived',
   'topics.status.unread': 'New results',
-  'settings.addDirectory': 'Add work location',
+  'settings.addDirectory': 'Add folder',
   'settings.addDirectoryDescription':
-    'Choose an existing directory on a device. We check connectivity and the directory before saving.',
+    'Select an environment and a connected device, then enter the full path of an existing folder. Files stay on that device.',
   'settings.directoryUnavailable':
     'The device is disconnected or the directory is unavailable. Connect the device and check the path, then retry.',
 
@@ -61,7 +64,7 @@ export default {
   'settings.general': 'General',
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
-    'Add an existing device directory to start working in this environment.',
+    'No folders in this environment yet. Add an existing folder on a connected device to start working.',
   'settings.title': 'Project settings',
   'settings.environments': 'Environments',
   'settings.addEnvironment': 'Add environment',

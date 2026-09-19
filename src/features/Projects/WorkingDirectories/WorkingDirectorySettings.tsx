@@ -1,11 +1,12 @@
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { Button, Select, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { MonitorIcon } from 'lucide-react';
+import { FolderIcon, MessageSquarePlusIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDeviceStore } from '@/store/device';
 import { useProjectStore } from '@/store/project';
@@ -32,7 +33,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   return (
     <Flexbox gap={20}>
       <Flexbox gap={6}>
-        <Text fontSize={18} weight={600}>
+        <Text fontSize={16} weight={600}>
           {t('settings.workLocations')}
         </Text>
         <Text type="secondary">{t('settings.directoryDescription')}</Text>
@@ -48,6 +49,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
           onChange={(id) => setParams(id && id !== '__all__' ? { environment: id } : {})}
         />
         <Button
+          icon={PlusIcon}
           type="primary"
           onClick={() =>
             environments.data?.data.length
@@ -78,59 +80,74 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
           )}
         </Flexbox>
       ) : (
-        items.map((directory) => (
-          <Flexbox
-            gap={10}
-            key={directory.id}
-            paddingBlock={16}
-            style={{ borderBottom: `1px solid ${cssVar.colorBorderSecondary}` }}
-          >
-            <Flexbox horizontal align="center" gap={16} justify="space-between">
-              <Flexbox gap={6} style={{ minWidth: 0 }}>
-                <Text style={{ overflowWrap: 'anywhere' }} weight={600}>
-                  {directory.path}
-                </Text>
-                <Flexbox horizontal align="center" gap={8}>
-                  <Icon icon={MonitorIcon} size={16} />
-                  <Text type="secondary">{directory.deviceName || directory.deviceId}</Text>
-                  <Text type="secondary">
-                    {t(
-                      devices.find((d) => d.deviceId === directory.deviceId)?.online
-                        ? 'settings.deviceOnline'
-                        : 'settings.deviceOffline',
-                    )}
+        <Block padding={0} variant="outlined">
+          {items.map((directory, index) => (
+            <Flexbox
+              key={directory.id}
+              padding={16}
+              style={index ? { borderTop: `1px solid ${cssVar.colorBorderSecondary}` } : undefined}
+            >
+              <Flexbox horizontal align="center" gap={16} justify="space-between">
+                <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
+                  <Flexbox horizontal align="center" gap={8}>
+                    <Icon icon={FolderIcon} size={18} />
+                    <Text weight={500}>
+                      {directory.path.split(/[\\/]/).findLast(Boolean) || directory.name}
+                    </Text>
+                  </Flexbox>
+                  <Text fontSize={12} style={{ overflowWrap: 'anywhere' }} type="secondary">
+                    {directory.path}
                   </Text>
+                  <Flexbox horizontal align="center" gap={8} wrap="wrap">
+                    {getDeviceIcon(
+                      devices.find((d) => d.deviceId === directory.deviceId)?.platform,
+                      14,
+                    )}
+                    <Text fontSize={12}>{directory.deviceName || directory.deviceId}</Text>
+                    <Text fontSize={12} type="secondary">
+                      {t(
+                        devices.find((d) => d.deviceId === directory.deviceId)?.online
+                          ? 'settings.deviceOnline'
+                          : 'settings.deviceOffline',
+                      )}
+                    </Text>
+                    <Text fontSize={12} type="secondary">
+                      · {directory.environmentName || t('directories.noEnvironment')}
+                    </Text>
+                  </Flexbox>
                 </Flexbox>
-                <Text type="secondary">
-                  {environments.data?.data.find((env) => env.id === directory.environmentId)
-                    ?.name ?? t('directories.noEnvironment')}
-                </Text>
+                <Button
+                  icon={MessageSquarePlusIcon}
+                  size="small"
+                  disabled={
+                    Boolean(directory.instanceId) && !project.data?.data.project.coordinatorAgentId
+                  }
+                  onClick={() =>
+                    !directory.instanceId
+                      ? openBindDirectoryModal({
+                          projectId,
+                          deviceId: directory.deviceId,
+                          path: directory.path,
+                        })
+                      : openProjectTopicModal({
+                          projectId,
+                          coordinatorAgentId: project.data!.data.project.coordinatorAgentId,
+                          directories: directories.data?.data ?? [],
+                          initialDirectoryId: directory.id,
+                          title: t('directories.start'),
+                        })
+                  }
+                >
+                  {t(
+                    directory.instanceId
+                      ? 'settings.startDirectoryConversation'
+                      : 'directories.bind',
+                  )}
+                </Button>
               </Flexbox>
-              <Button
-                disabled={
-                  Boolean(directory.instanceId) && !project.data?.data.project.coordinatorAgentId
-                }
-                onClick={() =>
-                  !directory.instanceId
-                    ? openBindDirectoryModal({
-                        projectId,
-                        deviceId: directory.deviceId,
-                        path: directory.path,
-                      })
-                    : openProjectTopicModal({
-                        projectId,
-                        coordinatorAgentId: project.data!.data.project.coordinatorAgentId,
-                        directories: directories.data?.data ?? [],
-                        initialDirectoryId: directory.id,
-                        title: t('directories.start'),
-                      })
-                }
-              >
-                {t(directory.instanceId ? 'directories.start' : 'directories.bind')}
-              </Button>
             </Flexbox>
-          </Flexbox>
-        ))
+          ))}
+        </Block>
       )}
     </Flexbox>
   );
