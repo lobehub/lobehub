@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "0fa8ef24-9e7b-474a-9ae1-8916f8947375",
+  "id": "b12c631f-d6ae-4a63-b5e5-640b35115bdd",
   "policies": {},
   "prevId": "7fbbc04c-3010-4db5-9fc3-812de66483e5",
   "roles": {},
@@ -23906,6 +23906,21 @@
           "columns": [
             {
               "expression": "current_history_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "quick_note_proposals_accepted_history_id_idx": {
+          "name": "quick_note_proposals_accepted_history_id_idx",
+          "columns": [
+            {
+              "expression": "accepted_history_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

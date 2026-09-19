@@ -198,6 +198,7 @@ CREATE INDEX IF NOT EXISTS "quick_note_proposals_quick_note_id_idx" ON "quick_no
 CREATE INDEX IF NOT EXISTS "quick_note_proposals_run_id_idx" ON "quick_note_proposals" USING btree ("run_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "quick_note_proposals_source_history_id_idx" ON "quick_note_proposals" USING btree ("source_history_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "quick_note_proposals_current_history_id_idx" ON "quick_note_proposals" USING btree ("current_history_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "quick_note_proposals_accepted_history_id_idx" ON "quick_note_proposals" USING btree ("accepted_history_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "quick_note_proposals_decision_validity_idx" ON "quick_note_proposals" USING btree ("quick_note_id","decision_status","validity");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "quick_note_proposals_user_id_idx" ON "quick_note_proposals" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "quick_note_proposals_workspace_id_idx" ON "quick_note_proposals" USING btree ("workspace_id");--> statement-breakpoint

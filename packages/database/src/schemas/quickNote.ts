@@ -167,6 +167,7 @@ export const quickNoteProposals = pgTable(
     index('quick_note_proposals_run_id_idx').on(table.runId),
     index('quick_note_proposals_source_history_id_idx').on(table.sourceHistoryId),
     index('quick_note_proposals_current_history_id_idx').on(table.currentHistoryId),
+    index('quick_note_proposals_accepted_history_id_idx').on(table.acceptedHistoryId),
     index('quick_note_proposals_decision_validity_idx').on(
       table.quickNoteId,
       table.decisionStatus,
