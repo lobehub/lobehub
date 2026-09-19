@@ -48,6 +48,125 @@ export interface FtsSearchProductBehaviorOptions {
   db: LobeChatDatabase;
 }
 
+export const describeFtsSearchMultiLibraryBehavior = ({
+  createRepo,
+  db,
+}: FtsSearchProductBehaviorOptions) => {
+  describe('multi-library file search', () => {
+    const kbA = 'multi-library-a';
+    const kbB = 'multi-library-b';
+    const fileA = 'multi-library-file-a';
+    const fileB = 'multi-library-file-b';
+    const docA = 'multi-library-doc-a';
+    const docB = 'multi-library-doc-b';
+    const query = 'quasar';
+
+    beforeEach(async () => {
+      await db.insert(knowledgeBases).values([
+        { id: kbA, name: 'Library A', userId },
+        { id: kbB, name: 'Library B', userId },
+      ]);
+      await db.insert(files).values([
+        {
+          fileType: 'text/plain',
+          id: fileA,
+          name: query,
+          size: 100,
+          url: 's3://bucket/quasar-a.txt',
+          userId,
+        },
+        {
+          fileType: 'text/plain',
+          id: fileB,
+          name: 'A longer guide about quasar observations',
+          size: 200,
+          url: 's3://bucket/quasar-b.txt',
+          userId,
+        },
+      ]);
+      await db.insert(knowledgeBaseFiles).values([
+        { fileId: fileA, knowledgeBaseId: kbA, userId },
+        { fileId: fileA, knowledgeBaseId: kbB, userId },
+        { fileId: fileB, knowledgeBaseId: kbA, userId },
+      ]);
+      await db.insert(documents).values(
+        [
+          { fileId: fileA, id: docA, title: query },
+          { fileId: fileB, id: docB, title: 'A longer guide about quasar observations' },
+        ].map((document) => ({
+          ...document,
+          content: 'quasar observations',
+          fileType: 'text/plain',
+          filename: `${document.id}.txt`,
+          source: `s3://bucket/${document.id}.txt`,
+          sourceType: 'file' as const,
+          totalCharCount: 19,
+          totalLineCount: 1,
+          userId,
+        })),
+      );
+    });
+
+    it.each([1, 2])(
+      'fills the file limit with %i document(s) on a multi-library file',
+      async (count) => {
+        if (count === 2) {
+          await db.insert(documents).values({
+            content: 'Another parsed version',
+            fileId: fileA,
+            fileType: 'text/plain',
+            filename: 'quasar-reparsed.txt',
+            source: 's3://bucket/quasar-reparsed.txt',
+            sourceType: 'file',
+            totalCharCount: 22,
+            totalLineCount: 1,
+            userId,
+          });
+        }
+
+        const results = await createRepo(db, userId).search({
+          limitPerType: 2,
+          query,
+          type: 'file',
+        });
+        const fileResults = results.filter((result) => result.type === 'file');
+
+        expect(fileResults.map((result) => result.id)).toEqual([fileA, fileB]);
+        expect(fileResults[0].description).toBeTruthy();
+        expect([kbA, kbB]).toContain(fileResults[0].knowledgeBaseId);
+        expect(fileResults[1]).toMatchObject({
+          description: 'quasar observations',
+          knowledgeBaseId: kbA,
+          size: 200,
+          url: 's3://bucket/quasar-b.txt',
+        });
+      },
+    );
+
+    it.each([{ knowledgeBaseIds: [kbA] }, { knowledgeBaseIds: [kbA, kbB] }])(
+      'fills the document limit within $knowledgeBaseIds',
+      async ({ knowledgeBaseIds }) => {
+        const results = await createRepo(db, userId).searchKnowledgeBaseDocuments(
+          query,
+          knowledgeBaseIds,
+          2,
+        );
+
+        expect(results.map((result) => result.documentId)).toEqual([docA, docB]);
+        expect(knowledgeBaseIds).toContain(results[0].knowledgeBaseId);
+        expect(results[1]).toMatchObject({ fileId: fileB, knowledgeBaseId: kbA });
+      },
+    );
+
+    it('keeps the selected library membership when only the shared file belongs to it', async () => {
+      const results = await createRepo(db, userId).searchKnowledgeBaseDocuments(query, [kbB], 2);
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ documentId: docA, fileId: fileA, knowledgeBaseId: kbB });
+    });
+  });
+};
+
 /**
  * Provider-neutral product-search behaviour, registered as a nested suite so any
  * FTS backend (pg_search, Elasticsearch, …) can be held to the same
@@ -70,6 +189,8 @@ export const describeFtsSearchProductBehavior = (options: FtsSearchProductBehavi
     // Initialize repo
     ftsSearchRepo = createRepo(serverDB, userId);
   });
+
+  describeFtsSearchMultiLibraryBehavior(options);
 
   describe('search - empty query', () => {
     it('should return empty array for empty query', async () => {

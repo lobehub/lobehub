@@ -21,6 +21,7 @@ import type { NewTopic } from '../../schemas/topic';
 import { topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
 import type { LobeChatDatabase } from '../../type';
+import { describeFtsSearchMultiLibraryBehavior } from './__tests__/productSearchBehavior';
 import type { FtsSearchResult } from './index';
 import { FtsSearchCandidateError, FtsSearchRepo } from './index';
 
@@ -141,6 +142,11 @@ const SCAN_ALIASES = [
 ];
 
 describe.skipIf(!isServerDB)('FtsSearchRepo', () => {
+  describeFtsSearchMultiLibraryBehavior({
+    createRepo: (db, scopedUserId) => new FtsSearchRepo(db, scopedUserId),
+    db: serverDB,
+  });
+
   describe('search - empty query', () => {
     it('should return empty array for empty query', async () => {
       const results = await ftsSearchRepo.search({ query: '' });
