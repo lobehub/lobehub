@@ -69,6 +69,53 @@ describe('MessageService', () => {
     messageService = new MessageService(mockDB, userId);
   });
 
+  describe('prepareUiMessages', () => {
+    it.each([false, true])(
+      'derives nested UI views without changing raw model data (visitor=%s)',
+      async (visitor) => {
+        mockFileService.getFileAccessUrl = vi.fn(async (file) => `/proxy/${file.id}`);
+        const tool = {
+          content: 'FULL TOOL RESULT',
+          id: 'tool',
+          role: 'tool',
+          plugin: { apiName: 'crawlSinglePage', arguments: '{}', identifier: 'lobe-web-browsing' },
+          pluginState: { results: [] },
+          imageList: [{ id: 'image', url: 'raw/image', width: 42 }],
+          audioList: [{ id: 'audio', url: 'raw/audio', durationMs: 123 }],
+          videoList: [{ id: 'video', url: 'raw/video' }],
+          fileList: [{ id: 'hidden', inaccessible: true, url: '' }],
+        };
+        const raw = [
+          {
+            id: 'group',
+            role: 'assistant',
+            columns: [[tool]],
+            members: [tool],
+            compressedMessages: [tool],
+          },
+        ] as any;
+        const before = structuredClone(raw);
+        const [ui] = await messageService.prepareUiMessages(raw, visitor);
+        for (const nested of [ui.columns![0][0], ui.members![0], ui.compressedMessages![0]]) {
+          expect(nested.content).toBe(visitor ? 'FULL TOOL RESULT' : '');
+          expect(nested.imageList![0]).toEqual({ id: 'image', url: '/proxy/image', width: 42 });
+          expect(nested.audioList![0]).toEqual({
+            id: 'audio',
+            url: '/proxy/audio',
+            durationMs: 123,
+          });
+          expect(nested.videoList![0].url).toBe('/proxy/video');
+          expect(nested.fileList![0].url).toBe('');
+        }
+        expect(raw).toEqual(before);
+        expect(mockFileService.getFileAccessUrl).not.toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'hidden' }),
+        );
+        expect(mockMessageModel.query).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('queryMessages', () => {
     const toolRow = {
       content: 'RAW BODY',

@@ -42,6 +42,15 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 // Mock database and models
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn(async (path: string) => `model:${path}`),
+      getFileAccessUrl: vi.fn(async (file: { id: string }) => `ui:${file.id}`),
+    };
+  }),
+}));
+
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
@@ -815,7 +824,11 @@ describe('AgentRuntimeService', () => {
           origin: { agentId: 'agent-1', topicId: 'topic-1' },
         };
         mockCoordinator.loadAgentState.mockResolvedValue(state);
-        const dbMessages = buildPersistedToolChain('full model answer');
+        const dbMessages = buildPersistedToolChain('full model answer').map((message) => ({
+          ...message,
+          imageList: [] as { id: string; url: string; alt: string }[],
+        }));
+        dbMessages[0].imageList = [{ id: 'file-1', url: 'raw/image', alt: 'image' }];
         if (withDevice) {
           dbMessages[0] = {
             ...dbMessages[0],
@@ -824,7 +837,7 @@ describe('AgentRuntimeService', () => {
           } as (typeof dbMessages)[number];
         }
         const query = (service as any).messageModel.query.mockResolvedValue(dbMessages);
-        vi.spyOn(service, 'queryUiMessages').mockResolvedValue([]);
+        vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
         const step = vi.fn().mockImplementation(async (input) => ({
           events: [],
           newState: { ...input, stepCount: 2 },
@@ -837,11 +850,13 @@ describe('AgentRuntimeService', () => {
         expect(result.success).toBe(true);
         expect(query).toHaveBeenCalledTimes(1);
         expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('full model answer');
+        expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('model:raw/image');
+        expect(dbMessages[0].imageList[0].url).toBe('raw/image');
         expect(step.mock.calls[0][0].binding?.device?.id).toBe(withDevice ? 'device-1' : undefined);
       },
     );
 
-    it('starts the model read while the UI snapshot is still pending', async () => {
+    it('shares one DB read while UI preparation is still pending', async () => {
       const state = {
         ...mockState,
         messages: [],
@@ -850,7 +865,7 @@ describe('AgentRuntimeService', () => {
       mockCoordinator.loadAgentState.mockResolvedValue(state);
       const query = (service as any).messageModel.query.mockResolvedValue([]);
       let resolveUi!: (messages: []) => void;
-      const uiRead = vi.spyOn(service, 'queryUiMessages').mockReturnValue(
+      const uiRead = vi.spyOn((service as any).messageService, 'prepareUiMessages').mockReturnValue(
         new Promise((resolve) => {
           resolveUi = resolve;
         }),
@@ -873,6 +888,39 @@ describe('AgentRuntimeService', () => {
       }
       expect(startedBeforeUiResolved).toBe(true);
       expect(query).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps ephemeral input while preparing the persisted UI snapshot', async () => {
+      const messages = [{ role: 'user', content: 'transient prompt' }];
+      const state = { ...mockState, messages, origin: { agentId: 'agent', topicId: 'topic' } };
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('stored answer'),
+      );
+      const ui = [{ id: 'ui', role: 'assistant', content: 'UI answer' }];
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue(ui);
+
+      const result = await (service as any).queryStepEntryMessages(state);
+
+      expect(state.messages).toBe(messages);
+      expect(result.uiMessages).toEqual(ui);
+      expect(result.messages).toHaveLength(4);
+    });
+
+    it('hydrates the model even when UI preparation fails', async () => {
+      const state = { ...mockState, messages: [], origin: { agentId: 'agent', topicId: 'topic' } };
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('stored answer'),
+      );
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockRejectedValue(
+        new Error('UI failed'),
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await (service as any).queryStepEntryMessages(state);
+
+      expect(JSON.stringify(state.messages)).toContain('stored answer');
+      expect(result.uiMessages).toBeUndefined();
+      expect(result.messages).toHaveLength(4);
     });
 
     it('should execute step successfully', async () => {

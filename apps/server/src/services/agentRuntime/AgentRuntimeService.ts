@@ -75,6 +75,7 @@ import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
 import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
+import { resolveMessageFileUrls } from '../message/resolveMessageFileUrls';
 import { isAbortError, throwIfAborted } from './abort';
 import {
   CompletionLifecycle,
@@ -1683,13 +1684,8 @@ export class AgentRuntimeService {
         }
 
         const gatewayMessagePatchEnabled = await this.usesGatewayMessagePatch(agentState);
-        // UI projection and model hydration have different payload/URL contracts,
-        // but neither read depends on the other. Keep the unprojected DB rows
-        // from hydration for device discovery later in this same step.
-        const [stepStartUiMessages, stepEntryMessages] = await Promise.all([
-          this.queryUiMessages(agentState, { skipWorks: true }),
-          this.rehydrateStateMessagesFromDB(agentState),
-        ]);
+        const { uiMessages: stepStartUiMessages, messages: stepEntryMessages } =
+          await this.queryStepEntryMessages(agentState);
         await this.streamManager.publishStreamEvent(operationId, {
           data: gatewayMessagePatchEnabled
             ? { messageRevision: stepIndex }
@@ -3839,29 +3835,71 @@ export class AgentRuntimeService {
    *   consumers (e.g. `shouldCompress(state.messages)`).
    * - A populated working set is never replaced with an empty one or on a DB
    *   error, so a transient read miss can't blank the conversation mid-op.
-   * Returns the unprojected rows for same-step device discovery. Undefined means
-   * hydration was skipped or failed; an empty array is a successful empty read.
+   * Reads once for UI, model hydration and same-step device discovery.
+   * Undefined rows mean the read was skipped or failed; [] is a successful read.
    */
-  private async rehydrateStateMessagesFromDB(
-    state: AgentState,
-  ): Promise<UIChatMessage[] | undefined> {
-    if (hasNonPersistedMessage(state.messages)) return;
-
+  private async queryStepEntryMessages(state: AgentState): Promise<{
+    messages?: UIChatMessage[];
+    uiMessages?: UIChatMessage[];
+  }> {
     if (!Array.isArray(state.messages)) state.messages = [];
+    if (!state.origin?.agentId || !state.origin?.topicId) return {};
 
-    if (!state.origin?.agentId || !state.origin?.topicId) return;
-
+    let messages: UIChatMessage[];
     try {
-      const dbMessages = await this.queryMessagesFromDB(state);
-      const { flatList } = parse(dbMessages);
-      if (flatList.length > 0) state.messages = flatList as AgentState['messages'];
-      return dbMessages;
-    } catch (error) {
-      console.error(
-        '[rehydrateStateMessagesFromDB] failed, keeping Redis state snapshot: %O',
-        error,
+      // Keep full tool payloads and raw attachment paths. Each consumer derives
+      // its own view; mid-stream Work summaries are not used by the runtime.
+      messages = await this.messageModel.query(
+        {
+          agentId: state.origin.agentId,
+          groupId: state.origin.groupId,
+          skipWorks: true,
+          threadId: state.origin.threadId,
+          topicId: state.origin.topicId,
+        },
+        { allowShareVisitor: true },
       );
+    } catch (error) {
+      console.error('[queryStepEntryMessages] Failed to load messages: %O', error);
+      return {};
     }
+
+    const [uiResult] = await Promise.all([
+      (async () => {
+        try {
+          return await this.messageService.prepareUiMessages(
+            messages,
+            !!state.principal?.actor?.shareVisitor?.visitorUserId,
+          );
+        } catch (error) {
+          console.error('[queryStepEntryMessages] Failed to prepare UI messages: %O', error);
+          return undefined;
+        }
+      })(),
+      (async () => {
+        // Transient/id-less input must not be replaced by persisted history.
+        if (hasNonPersistedMessage(state.messages)) return;
+        try {
+          let fileService: FileService | undefined;
+          try {
+            fileService = new FileService(this.serverDB, this.userId);
+          } catch (error) {
+            // Match the model read's fallback when file storage is unavailable.
+            console.error('[queryStepEntryMessages] File service unavailable: %O', error);
+          }
+          const resolved = fileService
+            ? await resolveMessageFileUrls(messages, (file) =>
+                fileService!.getFullFileUrl(file.url),
+              )
+            : messages;
+          const { flatList } = parse(resolved);
+          if (flatList.length > 0) state.messages = flatList as AgentState['messages'];
+        } catch (error) {
+          console.error('[queryStepEntryMessages] Failed to hydrate runtime messages: %O', error);
+        }
+      })(),
+    ]);
+    return { messages, uiMessages: uiResult };
   }
 
   private resolveAsyncToolResumeParentMessageId(

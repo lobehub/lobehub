@@ -14,6 +14,7 @@ import { MessageModel } from '@/database/models/message';
 import { UserModel } from '@/database/models/user';
 
 import { FileService } from '../file';
+import { resolveMessageFileUrls } from './resolveMessageFileUrls';
 
 interface QueryOptions {
   agentId?: string | null;
@@ -222,6 +223,14 @@ export class MessageService {
     });
 
     return options?.skipToolProjection ? messages : this.projectToolPayloads(messages);
+  }
+
+  /** Build the UI view from an already authorized, unprocessed DB snapshot. */
+  async prepareUiMessages(messages: UIChatMessage[], skipToolProjection = false) {
+    const resolved = await resolveMessageFileUrls(messages, (file) =>
+      this.fileService.getFileAccessUrl(file),
+    );
+    return skipToolProjection ? resolved : this.projectToolPayloads(resolved);
   }
 
   /**
