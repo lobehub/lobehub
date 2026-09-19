@@ -646,6 +646,15 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
    */
   model?: string | null;
   provider?: string | null;
+  /**
+   * Start time of the topic's current run — the latest top-level running
+   * `agent_operations.startedAt`, only set while `status === 'running'` and
+   * null otherwise. Present on list queries that select the column (per-agent
+   * / group sidebar lists, the queryTopics feed); absent on slim projections.
+   * Lets lists show live elapsed time for runs that have no local operation
+   * (e.g. after a page refresh, where only the active topic is reconnected).
+   */
+  runStartedAt?: Date | string | number | null;
   sessionId?: string;
   /**
    * Sort key for the sidebar list: the topic's latest message-activity time

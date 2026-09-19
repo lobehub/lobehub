@@ -133,6 +133,8 @@ export interface VisitorRunningOperation {
   heteroType?: string | null;
   operationId: string;
   scope?: string;
+  /** Liveness/elapsed-time stamp — see `useGatewayReconnect`'s `startedAt`. */
+  startedAt?: string;
   threadId?: string | null;
 }
 
@@ -179,8 +181,9 @@ const pickVisitorRunningOperation = (
   const runningOperation = metadata?.runningOperation;
   if (!runningOperation) return null;
 
-  const { assistantMessageId, operationId, scope, threadId, heteroType } = runningOperation;
-  return { assistantMessageId, heteroType, operationId, scope, threadId };
+  const { assistantMessageId, heteroType, operationId, scope, startedAt, threadId } =
+    runningOperation;
+  return { assistantMessageId, heteroType, operationId, scope, startedAt, threadId };
 };
 
 export interface CreateTopicParams {
@@ -527,6 +530,36 @@ export class TopicModel {
       sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
         topics.updatedAt,
       );
+
+    // When the topic's current run started, so a sidebar can show live elapsed
+    // time instead of `updatedAt` (which moves on every message write). The
+    // latest *top-level* running operation is the current run: sub-operations
+    // (callAgent) would restart the clock at their own spawn time, and an
+    // abandoned `running` row from a crashed earlier run sorts below the live
+    // one. Not scoped by `ownership()` — in a workspace the run may have been
+    // started by another member, and the topic join is already ownership-gated.
+    // Same shape as the `queryTopics` feed's column of the same name.
+    const runStartedAtSubquery = this.db
+      .select({ value: agentOperations.startedAt })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topics.id),
+          eq(agentOperations.status, 'running'),
+          isNull(agentOperations.parentOperationId),
+          isNotNull(agentOperations.startedAt),
+        ),
+      )
+      .orderBy(desc(agentOperations.startedAt))
+      .limit(1);
+
+    // CASE-gated so only rows that are actually running pay for the lookup —
+    // and a stale running op under a finished topic can't resurrect a timer.
+    const runStartedAtColumn =
+      sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
+        .mapWith(agentOperations.startedAt)
+        .as('run_started_at');
+
     const orderBy = buildTopicOrderBy(topicActivityAt, sortBy);
 
     const detailColumns = withDetails
@@ -598,6 +631,7 @@ export class TopicModel {
                 metadata: topics.metadata,
                 model: topics.model,
                 provider: topics.provider,
+                runStartedAt: runStartedAtColumn,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -676,6 +710,7 @@ export class TopicModel {
                 metadata: topics.metadata,
                 model: topics.model,
                 provider: topics.provider,
+                runStartedAt: runStartedAtColumn,
                 status: topics.status,
                 title: topics.title,
                 updatedAt: topics.updatedAt,
@@ -748,6 +783,7 @@ export class TopicModel {
               metadata: topics.metadata,
               model: topics.model,
               provider: topics.provider,
+              runStartedAt: runStartedAtColumn,
               sessionId: topics.sessionId,
               status: topics.status,
               title: topics.title,

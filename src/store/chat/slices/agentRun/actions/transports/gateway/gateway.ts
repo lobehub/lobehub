@@ -1110,6 +1110,11 @@ export class GatewayActionImpl {
                 assistantMessageId: result.assistantMessageId,
                 heteroType: result.heteroType,
                 operationId: result.operationId,
+                // Mirror the server marker's liveness stamp so the optimistic
+                // row carries the same elapsed-time anchor a refresh-created
+                // reconnect will read. `createdAt` is when the server created
+                // the operation — the same instant its own marker stamps.
+                startedAt: result.createdAt,
               },
             },
           },
@@ -1275,6 +1280,12 @@ export class GatewayActionImpl {
     heteroType?: string | null;
     operationId: string;
     scope?: string;
+    /**
+     * Server-written ISO timestamp of when the run claimed the topic — carried
+     * on the topic's `runningOperation` marker so elapsed-time anchors survive
+     * a page refresh even when the messages list hasn't loaded yet.
+     */
+    startedAt?: string;
     threadId?: string | null;
     topicId: string;
   }): Promise<void> => {
@@ -1346,9 +1357,16 @@ export class GatewayActionImpl {
       topicId,
     };
 
-    // Anchor the operation to the run's real start: the assistant message was
-    // created when the run began. Defaulting to Date.now() here would reset
-    // elapsed-time displays (OpStatusTray) to zero on every page refresh.
+    // Anchor the operation to the run's real start so elapsed-time displays
+    // (OpStatusTray, topic-list timers) don't reset on page refresh. Priority:
+    // the marker's server-written `startedAt` stamp → the assistant message's
+    // `createdAt` (the message is created when the run begins) → fall through
+    // to startOperation's Date.now() default.
+    //
+    // The message lookup races this reconnect's SWR against the messages-list
+    // fetch, so on a cold boot `messagesMap` can still be empty — the marker
+    // stamp is what keeps the anchor correct in exactly that case.
+    const markerStartedAt = params.startedAt ? Date.parse(params.startedAt) : Number.NaN;
     const assistantMessage = Object.values(this.#get().messagesMap)
       .flat()
       .find((m) => m.id === assistantMessageId);
@@ -1358,9 +1376,11 @@ export class GatewayActionImpl {
     // converting). Normalize to epoch ms here so the elapsed-time math stays a
     // number — passing a string/Invalid Date straight through makes
     // `Date.now() - startTime` resolve to NaN and renders as "NaN:NaN".
-    const startTime = assistantMessage?.createdAt
+    const assistantMessageStart = assistantMessage?.createdAt
       ? new Date(assistantMessage.createdAt).getTime()
-      : undefined;
+      : Number.NaN;
+
+    const startTime = [markerStartedAt, assistantMessageStart].find(Number.isFinite);
 
     // Create a local operation for UI loading state, stashing the server op id
     // so intervention flows can find it after reconnect as well.
@@ -1368,7 +1388,7 @@ export class GatewayActionImpl {
       context,
       metadata: {
         serverOperationId: operationId,
-        ...(Number.isFinite(startTime) ? { startTime } : {}),
+        ...(startTime !== undefined ? { startTime } : {}),
       },
       type: 'execServerAgentRuntime',
     });
