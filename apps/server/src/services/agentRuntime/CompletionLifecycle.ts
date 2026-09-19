@@ -1048,7 +1048,6 @@ export class CompletionLifecycle {
       }
 
       if (reason === 'error' || reason === 'interrupted') {
-        await this.verifyPlanInstantiations.get(operationId);
         after(async () => {
           await settleFailedRepair(
             this.serverDB,

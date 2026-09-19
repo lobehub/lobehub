@@ -10,6 +10,7 @@ import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AcceptanceService } from './acceptanceService';
@@ -107,51 +108,83 @@ export const createRepairRunner = (params: {
       return null;
     }
 
+    let preparationFailed = false;
+    const prepareRepairRound = async (repairOperationId: string) => {
+      try {
+        await db.transaction(async (tx) => {
+          const repairDB = tx as unknown as LobeChatDatabase;
+          // Re-snapshot the same plan onto the repair op's session + confirm, so the
+          // repair run re-verifies (round N+1) against its corrected deliverable.
+          const runModel = new VerifyRunModel(repairDB, userId, workspaceId);
+          const sourceRun = await runModel.findByOperation(operationId);
+          const plan = (sourceRun?.plan ?? []) as VerifyCheckItem[];
+          if (plan.length > 0) {
+            const repairRun = await runModel.ensureForOperation(repairOperationId);
+            await runModel.setPlan(repairRun.id, plan);
+            // Carry the source run's policy bag (e.g. the task's maxRepairRounds
+            // override) onto this round so its own auto-repair derives the same cap
+            // instead of falling back to the rubric/default.
+            if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
+            await runModel.confirmPlan(repairRun.id);
+
+            // A repair is the next immutable round of the same business acceptance,
+            // not an unrelated verification session. Attach it before it settles so
+            // the aggregate immediately advances from "repairing" to the live round.
+            if (sourceRun?.acceptanceId) {
+              await new AcceptanceService(repairDB, userId, workspaceId).attachPolicyRun(
+                repairRun.id,
+                sourceRun.acceptanceId,
+              );
+            }
+          }
+        });
+      } catch (error) {
+        preparationFailed = true;
+        console.error('Failed to prepare repair round for %s: %O', operationId, error);
+        await new CompletionLifecycle(db, userId, workspaceId).completeOperation(
+          {
+            operationId: repairOperationId,
+            userId,
+            error: {
+              type: 'ServerAgentRuntimeError',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          },
+          'error',
+        );
+        throw error;
+      }
+    };
+
     // Re-run the original agent in the same topic. The feedback lives on the
     // verify message (surfaced into context by VerifyMessageProcessor), so we run
     // off history instead of injecting a user turn; `instruction` is passed only
     // for the operation title / logs. `verifyMessageId` parents the new turn under
     // the verify card it responds to.
-    const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
-      additionalPluginIds: [AcceptanceEvidenceIdentifier],
-      agentId,
-      appContext: { topicId },
-      autoStart: true,
-      ...(model ? { model } : {}),
-      ...(verifyMessageId ? { parentMessageId: verifyMessageId } : {}),
-      parentOperationId: operationId,
-      prompt: instruction,
-      ...(provider ? { provider } : {}),
-      suppressUserMessage: true,
-      ...(taskId ? { taskId } : {}),
-      userInterventionConfig: { approvalMode: 'headless' },
-    });
+    const result = await new AiAgentService(db, userId, { workspaceId })
+      .execAgent({
+        additionalPluginIds: [AcceptanceEvidenceIdentifier],
+        agentId,
+        appContext: { topicId },
+        autoStart: true,
+        onOperationCreated: prepareRepairRound,
+        ...(model ? { model } : {}),
+        ...(verifyMessageId ? { parentMessageId: verifyMessageId } : {}),
+        parentOperationId: operationId,
+        prompt: instruction,
+        ...(provider ? { provider } : {}),
+        suppressUserMessage: true,
+        ...(taskId ? { taskId } : {}),
+        userInterventionConfig: { approvalMode: 'headless' },
+      })
+      .catch((error) => {
+        // Heterogeneous dispatch propagates preparation errors; the normal
+        // runtime returns success:false. Neither has spawned a repair.
+        if (preparationFailed) return null;
+        throw error;
+      });
+    if (!result?.success) return null;
     const repairOperationId = result.operationId;
-
-    // Re-snapshot the same plan onto the repair op's session + confirm, so the
-    // repair run re-verifies (round N+1) against its corrected deliverable.
-    const runModel = new VerifyRunModel(db, userId, workspaceId);
-    const sourceRun = await runModel.findByOperation(operationId);
-    const plan = (sourceRun?.plan ?? []) as VerifyCheckItem[];
-    if (plan.length > 0) {
-      const repairRun = await runModel.ensureForOperation(repairOperationId);
-      await runModel.setPlan(repairRun.id, plan);
-      // Carry the source run's policy bag (e.g. the task's maxRepairRounds
-      // override) onto this round so its own auto-repair derives the same cap
-      // instead of falling back to the rubric/default.
-      if (sourceRun?.metadata) await runModel.setMetadata(repairRun.id, sourceRun.metadata);
-      await runModel.confirmPlan(repairRun.id);
-
-      // A repair is the next immutable round of the same business acceptance,
-      // not an unrelated verification session. Attach it before it settles so
-      // the aggregate immediately advances from "repairing" to the live round.
-      if (sourceRun?.acceptanceId) {
-        await new AcceptanceService(db, userId, workspaceId).attachPolicyRun(
-          repairRun.id,
-          sourceRun.acceptanceId,
-        );
-      }
-    }
 
     log('repair op %s → %s (round %d)', operationId, repairOperationId, round + 1);
     return { repairOperationId };
