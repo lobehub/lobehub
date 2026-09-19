@@ -1,19 +1,22 @@
-import type { FitViewOptions, Rect, Viewport } from '@xyflow/react';
+import type { Rect, Viewport } from '@xyflow/react';
+
+/** Breathing room between a revealed node and the canvas edge. */
+const INSET = 24;
 
 export interface CanvasSize {
   height: number;
   width: number;
 }
 
-/** Whether a flow-space rect sits fully inside the visible canvas. */
-export const isRectInView = (rect: Rect, viewport: Viewport, size: CanvasSize) => {
+/** Whether any part of a flow-space rect is on screen. */
+export const isRectVisible = (rect: Rect, viewport: Viewport, size: CanvasSize) => {
   const left = rect.x * viewport.zoom + viewport.x;
   const top = rect.y * viewport.zoom + viewport.y;
   return (
-    left >= 0 &&
-    top >= 0 &&
-    left + rect.width * viewport.zoom <= size.width &&
-    top + rect.height * viewport.zoom <= size.height
+    left < size.width &&
+    top < size.height &&
+    left + rect.width * viewport.zoom > 0 &&
+    top + rect.height * viewport.zoom > 0
   );
 };
 
@@ -25,30 +28,46 @@ export const getSelectedFlowNodeId = (nodes: { data: Record<string, unknown>; id
   nodes.find((node) => Boolean(node.data.selected))?.id;
 
 export interface FlowViewportApi {
-  fitView: (options?: FitViewOptions) => Promise<boolean>;
   getNodesBounds: (nodes: string[]) => Rect;
   getViewport: () => Viewport;
+  setViewport: (viewport: Viewport) => unknown;
 }
 
 /**
- * A side panel opening or closing changes the canvas width around the graph.
- * Keep the user's zoom and position untouched; only pan, at the same zoom,
- * when the selected node would otherwise be pushed out of view.
+ * The least shift that brings a span inside the visible extent. A span longer
+ * than the extent cannot fit, so its leading edge wins: reading starts there.
  */
-export const revealSelectionAfterResize = (
+const axisShift = (start: number, length: number, extent: number) => {
+  if (length >= extent - INSET * 2 || start < INSET) return INSET - start;
+  const overflow = start + length - (extent - INSET);
+  return overflow > 0 ? -overflow : 0;
+};
+
+/**
+ * Rescue a node that the narrower canvas pushed off screen entirely, by panning
+ * the least possible distance and never by zooming.
+ *
+ * A node the user can still see, even partly, is left exactly where it is. The
+ * canvas moving under a click is far more disorienting than a clipped card:
+ * whatever was clicked ends up somewhere else, which reads as it vanishing. The
+ * details panel spells the node out anyway, so a clipped edge costs nothing.
+ */
+export const panNodeIntoView = (
   flow: FlowViewportApi,
   size: CanvasSize,
-  selectedId: string | undefined,
+  id: string | undefined,
 ) => {
-  if (!selectedId) return;
-  const viewport = flow.getViewport();
-  const bounds = flow.getNodesBounds([selectedId]);
+  if (!id) return;
+  const bounds = flow.getNodesBounds([id]);
   if (!bounds.width || !bounds.height) return;
-  if (isRectInView(bounds, viewport, size)) return;
-  void flow.fitView({
-    duration: 200,
-    maxZoom: viewport.zoom,
-    minZoom: viewport.zoom,
-    nodes: [{ id: selectedId }],
-  });
+  const viewport = flow.getViewport();
+  if (isRectVisible(bounds, viewport, size)) return;
+  const x =
+    viewport.x +
+    axisShift(bounds.x * viewport.zoom + viewport.x, bounds.width * viewport.zoom, size.width);
+  const y =
+    viewport.y +
+    axisShift(bounds.y * viewport.zoom + viewport.y, bounds.height * viewport.zoom, size.height);
+  if (x === viewport.x && y === viewport.y) return;
+  flow.setViewport({ ...viewport, x, y });
 };

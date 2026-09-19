@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Klicken, um zu kopieren",
   "unknownError.desc": "Ein unerwarteter Fehler ist aufgetreten. Sie können es erneut versuchen oder melden unter",
   "unknownError.retry": "Erneut versuchen",
+  "unknownError.sharedDesc": "Bitte melden Sie dieses Problem unter",
+  "unknownError.sharedTitle": "Diese Antwort konnte nicht generiert werden",
   "unknownError.title": "Hoppla, die Anfrage hat ein Nickerchen gemacht",
   "unknownError.traceIdLabel": "Trace-ID:",
   "unlock.addProxyUrl": "OpenAI-Proxy-URL hinzufügen (optional)",

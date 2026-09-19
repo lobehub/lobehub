@@ -7,9 +7,15 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import ChatPanel, { type ChatPanelSelection, type ChatPanelSubmitPayload } from './ChatPanel';
+import { cn } from './cn';
 import { OVERLAY_COPY, OVERLAY_LAYOUT, OVERLAY_SHORTCUTS } from './constants';
 import * as styles from './overlay.css.ts';
-import { resolveCommittedSelectionRect, shouldHideChatPanel } from './overlaySelectionState';
+import {
+  type OverlayMode,
+  resolveCommittedSelectionRect,
+  resolveEscapeAction,
+  shouldHideChatPanel,
+} from './overlaySelectionState';
 import { useDragSelection } from './useDragSelection';
 import { getTopmostWindowAtPoint, useWindowHighlight } from './useWindowHighlight';
 import WindowTag from './WindowTag';
@@ -18,6 +24,7 @@ const clipLabel = (text: string, max = OVERLAY_LAYOUT.labelClipLength): string =
   text.length > max ? `${text.slice(0, max)}…` : text;
 
 const ScreenCaptureOverlay = memo(() => {
+  const [mode, setMode] = useState<OverlayMode>('compose');
   const [isPanelHidden, setIsPanelHidden] = useState(false);
   const [pendingSelectionRect, setPendingSelectionRect] = useState<
     ChatPanelSelection['rect'] | null
@@ -26,6 +33,7 @@ const ScreenCaptureOverlay = memo(() => {
   const [session, setSession] = useState<ScreenCaptureSession | null>(null);
   const [selections, setSelections] = useState<ChatPanelSelection[]>([]);
   const capturingRef = useRef(false);
+  const startingCaptureRef = useRef(false);
   const pendingWindowRef = useRef<ScreenCaptureSession['windows'][number] | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -50,6 +58,7 @@ const ScreenCaptureOverlay = memo(() => {
     [selections],
   );
   const hasSelections = selections.length > 0;
+  const isCapturing = mode === 'capture';
   const { hoveredWindow, handleMouseMove: hitTest } = useWindowHighlight(windows);
   const {
     dragRect,
@@ -111,15 +120,49 @@ const ScreenCaptureOverlay = memo(() => {
     });
   }, []);
 
+  /**
+   * The overlay opens as a plain composer; screenshots start only when the
+   * user asks. Main checks Screen Recording access and enumerates windows
+   * before we switch into capture mode.
+   */
+  const startCapture = useCallback(() => {
+    if (isCapturing || startingCaptureRef.current) return;
+    startingCaptureRef.current = true;
+    traceOverlayEvent('capture.start');
+
+    void Promise.resolve(window.electronAPI?.invoke?.('screenCapture.beginCapture'))
+      .then((started) => {
+        traceOverlayEvent('capture.start.result', { started: !!started });
+        if (started) setMode('capture');
+      })
+      .finally(() => {
+        startingCaptureRef.current = false;
+      });
+  }, [isCapturing, traceOverlayEvent]);
+
+  const exitCapture = useCallback(() => {
+    if (capturingRef.current) return;
+    traceOverlayEvent('capture.exit');
+    pendingWindowRef.current = null;
+    pointerStartRef.current = null;
+    reset();
+    setPendingSelectionRect(null);
+    setIsPanelHidden(false);
+    setMode('compose');
+  }, [reset, traceOverlayEvent]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key !== 'Escape') return;
+      if (resolveEscapeAction({ mode, selectionCount: selections.length }) === 'exitCapture') {
+        exitCapture();
+      } else {
         handleClose();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleClose]);
+  }, [exitCapture, handleClose, mode, selections.length]);
 
   /**
    * Upload status comes from the main process via
@@ -227,7 +270,9 @@ const ScreenCaptureOverlay = memo(() => {
 
   const handleMouseDown = useCallback(
     (e: ReactMouseEvent) => {
-      if (e.button === 2) {
+      // In composer mode the transparent overlay only exists to host the panel,
+      // so a press anywhere outside it dismisses, like Spotlight.
+      if (!isCapturing || e.button === 2) {
         handleClose();
         return;
       }
@@ -265,6 +310,7 @@ const ScreenCaptureOverlay = memo(() => {
       }
     },
     [
+      isCapturing,
       hasSelections,
       hoveredWindow,
       windows,
@@ -279,6 +325,8 @@ const ScreenCaptureOverlay = memo(() => {
 
   const handleMouseMoveEvent = useCallback(
     (e: ReactMouseEvent) => {
+      if (!isCapturing) return;
+
       const pointerStart = pointerStartRef.current;
       const dragging = isDraggingRef.current;
 
@@ -310,7 +358,15 @@ const ScreenCaptureOverlay = memo(() => {
         hitTest(e.clientX, e.clientY);
       }
     },
-    [hasSelections, isDraggingRef, onMouseDown, onMouseMove, hitTest, traceOverlayEvent],
+    [
+      isCapturing,
+      hasSelections,
+      isDraggingRef,
+      onMouseDown,
+      onMouseMove,
+      hitTest,
+      traceOverlayEvent,
+    ],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -370,21 +426,23 @@ const ScreenCaptureOverlay = memo(() => {
     isPreviewingSelection: !!pendingSelectionRect,
     isSelecting: isPanelHidden,
   });
-  const showHover = hoveredWindow && !hasSelections && !isDragging && !committedSelectionRect;
+  const showHover =
+    isCapturing && hoveredWindow && !hasSelections && !isDragging && !committedSelectionRect;
   const showDrag = isDragging && dragRect;
-  const showHint = !hasSelections && !isDragging && !pendingSelectionRect;
+  const showHint = isCapturing && !hasSelections && !isDragging && !pendingSelectionRect;
 
   return (
     <div
-      className={styles.overlay}
+      className={cn(styles.overlay, !isCapturing && styles.overlayCompose)}
       style={{
-        cursor: committedSelectionRect
-          ? 'default'
-          : isDragging
-            ? 'crosshair'
-            : hoveredWindow
-              ? 'pointer'
-              : 'crosshair',
+        cursor:
+          !isCapturing || committedSelectionRect
+            ? 'default'
+            : isDragging
+              ? 'crosshair'
+              : hoveredWindow
+                ? 'pointer'
+                : 'crosshair',
       }}
       onContextMenu={(e) => e.preventDefault()}
       onMouseDown={handleMouseDown}
@@ -433,6 +491,7 @@ const ScreenCaptureOverlay = memo(() => {
       <ChatPanel
         agentId={session?.defaultAgentId}
         agents={session?.agents}
+        capturing={isCapturing}
         hidden={panelHidden}
         modelId={session?.defaultModelId}
         models={session?.models}
@@ -442,6 +501,7 @@ const ScreenCaptureOverlay = memo(() => {
         viewportHeight={viewportHeight}
         viewportWidth={viewportWidth}
         onRemoveSelection={removeSelection}
+        onStartCapture={startCapture}
         onSubmit={handleSubmit}
       />
 

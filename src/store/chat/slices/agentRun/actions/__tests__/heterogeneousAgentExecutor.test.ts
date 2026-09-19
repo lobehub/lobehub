@@ -676,6 +676,51 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     return { get, store };
   }
 
+  it.each([
+    { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
+    { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
+      expectedOperations: ['user-override', 'user-override'],
+    },
+  ] satisfies {
+    provider: HeterogeneousProviderConfig;
+    expectedOperations: (string | undefined)[];
+  }[])(
+    'preserves each turn identity and user env overrides: $provider',
+    async ({ provider, expectedOperations }) => {
+      for (const operationId of ['op-1', 'op-2']) {
+        await runWithEvents(
+          [
+            () =>
+              ipc.emitStreamEvent('ipc-sess-1', {
+                data: { reason: 'complete' },
+                operationId,
+                type: 'agent_runtime_end',
+              }),
+          ],
+          {
+            params: { heterogeneousProvider: provider, operationId },
+            store: createMockStore({ topicDataMap: {} }),
+          },
+        );
+      }
+
+      const environments = mockStartSession.mock.calls.map(([params]) => params.env);
+      expect(environments).toEqual(
+        expectedOperations.map((operationId) => ({
+          LOBEHUB_AGENT_ID: 'agent-1',
+          ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+          LOBEHUB_TOPIC_ID: 'topic-1',
+        })),
+      );
+      expect(mockSendPrompt.mock.calls.map(([params]) => params.operationId)).toEqual([
+        'op-1',
+        'op-2',
+      ]);
+    },
+  );
+
   it('releases all IPC subscriptions after a run settles', async () => {
     await runWithEvents([ccInit(), ccResult()]);
 
@@ -1667,6 +1712,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('error handling', () => {
+    const authMetadata = {
+      attribution: 'user',
+      category: 'auth',
+      countAsFailure: false,
+      errorRef: 'H1001',
+      isFallback: false,
+      numericId: 1001,
+      retryable: false,
+      severity: 'warning',
+    };
+
+    it('preserves structured quota fields for a flattened local CLI error', async () => {
+      const store = createMockStore();
+      mockSendPrompt.mockRejectedValueOnce({
+        message: "You've hit your weekly limit · resets 10pm (Asia/Shanghai)",
+      });
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        defaultParams,
+      );
+      await flush();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({
+          errorRef: 'H2001',
+          attribution: 'user',
+          retryable: false,
+          body: expect.objectContaining({
+            agentType: 'claude-code',
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          }),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should persist accumulated content on error', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1732,6 +1814,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1750,6 +1833,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1783,6 +1867,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1801,6 +1886,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1851,6 +1937,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1869,6 +1956,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1970,7 +2058,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
-          body: cliError,
+          attribution: 'user',
+          category: 'environment',
+          countAsFailure: false,
+          errorRef: 'H8001',
+          isFallback: false,
+          numericId: 8001,
+          retryable: false,
+          severity: 'warning',
+          body: { ...cliError, details: { kind: 'cli_not_found' } },
           message: 'Claude Code CLI was not found',
           type: 'AgentRuntimeError',
         },
@@ -1988,7 +2084,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           type: 'updateMessage',
           value: {
             error: {
-              body: cliError,
+              attribution: 'user',
+              category: 'environment',
+              countAsFailure: false,
+              errorRef: 'H8001',
+              isFallback: false,
+              numericId: 8001,
+              retryable: false,
+              severity: 'warning',
+              body: { ...cliError, details: { kind: 'cli_not_found' } },
               message: 'Claude Code CLI was not found',
               type: 'AgentRuntimeError',
             },
@@ -2188,6 +2292,29 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
             kind: 'provider',
             resumeBindingKey: undefined,
           },
+        }),
+      );
+    });
+
+    it('should pass the selected Devin model through ACP and native args', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--agent-type', 'coding'],
+          command: 'devin',
+          model: 'claude-sonnet-4-6-thinking',
+          type: 'devin' as const,
+        },
+      });
+
+      expect(mockStartSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'devin',
+          args: ['--agent-type', 'coding', '--model', 'claude-sonnet-4-6-thinking'],
+          initialModel: 'claude-sonnet-4-6-thinking',
         }),
       );
     });

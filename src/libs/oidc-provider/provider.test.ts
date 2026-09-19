@@ -66,10 +66,8 @@ describe('OIDC Provider - Market Client Integration', () => {
         },
       }));
 
-      const [{ default: Provider }, { defaultClients }] = await Promise.all([
-        import('oidc-provider'),
-        import('./config'),
-      ]);
+      const { default: Provider } = await import('oidc-provider');
+      const { defaultClients } = await import('./config');
       const provider = new Provider('https://app.lobehub.com/oidc', { clients: defaultClients });
       const desktopClient = await provider.Client.find('lobehub-desktop');
 

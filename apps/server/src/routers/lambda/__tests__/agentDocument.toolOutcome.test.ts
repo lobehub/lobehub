@@ -31,9 +31,11 @@ vi.mock('@/database/models/agentDocuments', async (importOriginal) => {
 });
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    findOwnTopicById: agentDocumentMocks.findTopicById,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      findOwnTopicById: agentDocumentMocks.findTopicById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topicDocument', () => ({
@@ -41,10 +43,12 @@ vi.mock('@/database/models/topicDocument', () => ({
 }));
 
 vi.mock('@/database/models/work', () => ({
-  WorkModel: vi.fn().mockImplementation(() => ({
-    deleteDocumentWork: agentDocumentMocks.deleteDocumentWork,
-    registerDocument: agentDocumentMocks.registerDocument,
-  })),
+  WorkModel: vi.fn().mockImplementation(function () {
+    return {
+      deleteDocumentWork: agentDocumentMocks.deleteDocumentWork,
+      registerDocument: agentDocumentMocks.registerDocument,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentDocuments', () => ({
@@ -93,9 +97,9 @@ describe('agentDocumentRouter tool outcomes', () => {
       removeDocumentById: vi.fn().mockResolvedValue(true),
       renameDocumentById: vi.fn().mockResolvedValue({ ...createdDocument, title: 'Renamed' }),
     };
-    vi.mocked(AgentDocumentsService).mockImplementation(
-      () => serviceImpl as unknown as AgentDocumentsService,
-    );
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return serviceImpl as unknown as AgentDocumentsService;
+    });
   });
 
   it('emits success outcome for attributed createDocument', async () => {

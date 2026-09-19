@@ -1,4 +1,5 @@
 import { PROJECT_STATUSES, PROJECT_VISIBILITIES } from '@lobechat/types';
+import { taskTitleSlug } from '@lobechat/utils/taskSlug';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -197,7 +198,10 @@ export function registerProjectCommand(program: Command) {
           parentTaskId: options.parent,
           projectId,
         });
-        const url = buildUrl(`/task/${encodeURIComponent(result.data.identifier)}`);
+        const slug = taskTitleSlug(result.data.name);
+        const url = buildUrl(
+          `/task/${encodeURIComponent(result.data.identifier)}${slug ? `/${slug}` : ''}`,
+        );
         console.log(`${pc.green('✓')} Created task ${pc.bold(result.data.identifier)}`);
         console.log(`${pc.bold('task')}: ${url}`);
       },

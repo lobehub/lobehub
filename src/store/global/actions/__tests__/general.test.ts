@@ -1,13 +1,30 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as activeWorkspaceSlugModule from '@/business/client/hooks/useActiveWorkspaceSlug';
+import type * as VersionConstants from '@/const/version';
 import { CURRENT_VERSION } from '@/const/version';
 import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global';
 import { initialState } from '@/store/global/initialState';
 import { switchLang } from '@/utils/client/switchLang';
 import { withSWR } from '~test-utils';
+
+const versionContext = vi.hoisted(() => ({ desktop: false, webVersion: '2.2.14' }));
+
+vi.mock('@/const/version', async (importOriginal) => ({
+  ...(await importOriginal<typeof VersionConstants>()),
+  CURRENT_VERSION: '2.2.14',
+  get isDesktop() {
+    return versionContext.desktop;
+  },
+}));
+
+vi.mock('@/const/appVersion', () => ({
+  get WEB_APP_VERSION() {
+    return versionContext.webVersion;
+  },
+}));
 
 vi.mock('@/utils/client/switchLang', () => ({
   switchLang: vi.fn(),
@@ -22,6 +39,8 @@ vi.mock('@/services/global', () => ({
 describe('generalActionSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    versionContext.desktop = false;
+    versionContext.webVersion = '2.2.14';
     useGlobalStore.setState(initialState);
   });
 
@@ -193,6 +212,28 @@ describe('generalActionSlice', () => {
   });
 
   describe('useCheckLatestVersion', () => {
+    it.each([
+      { desktop: false, expected: undefined, latest: '2.3.0' },
+      { desktop: false, expected: true, latest: '2.4.0' },
+      { desktop: true, expected: true, latest: '2.3.0' },
+    ])(
+      'compares $latest against the platform version (desktop: $desktop)',
+      async ({ desktop, expected, latest }) => {
+        versionContext.desktop = desktop;
+        versionContext.webVersion = '2.3.0';
+        vi.mocked(globalService.getLatestVersion).mockResolvedValueOnce(latest);
+
+        const { result } = renderHook(() => useGlobalStore().useCheckLatestVersion(), {
+          wrapper: withSWR,
+        });
+
+        await waitFor(() => expect(result.current.data).toBe(latest));
+
+        expect(useGlobalStore.getState().hasNewVersion).toBe(expected);
+        expect(useGlobalStore.getState().latestVersion).toBe(expected ? latest : undefined);
+      },
+    );
+
     it('should not fetch version when check is disabled', () => {
       const getLatestVersionSpy = vi.spyOn(globalService, 'getLatestVersion');
 

@@ -94,7 +94,7 @@ describe('TaskParentBar', () => {
 
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task');
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
   });
 
@@ -118,7 +118,7 @@ describe('TaskParentBar', () => {
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent/parent-task');
   });
 
   it("opens parent subtasks inside the clicked subtask's owning agent route", async () => {

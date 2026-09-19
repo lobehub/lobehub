@@ -4,6 +4,7 @@ import {
   type AgentShareVisitorContext,
   type ChatToolPayload,
   type ClientSecretPayload,
+  type DeviceUnavailableErrorData,
   type ExecSubAgentParams,
   type StepActivatedSkill,
   type StepContextTodoItem,
@@ -206,7 +207,7 @@ export interface ToolExecutionContext {
   currentTodos?: StepContextTodoItem[];
   /**
    * Whether the run's execution plan is device-capable (`device` or
-   * `device-unrouted`) — derived from `state.metadata.executionPlan` by the
+   * `device-unrouted`) — derived from `state.plan.execution` by the
    * runtime executors. Device-only skills gate listing/activation/loading on
    * this consistently, so a `device-unrouted` run can activate them before the
    * model routes a device; actual command execution stays gated at the device
@@ -331,7 +332,7 @@ export interface ToolExecutionContext {
    * Workspace ID that scopes ownership for any model/service the runtime
    * instantiates. When unset the runtime falls back to personal mode
    * (`workspace_id IS NULL`). Threaded from the chat/task router through
-   * `state.metadata.workspaceId` so tool side-effects (createBrief, pinTask,
+   * `state.origin.workspaceId` so tool side-effects (createBrief, pinTask,
    * etc.) land in the same workspace the request originated from.
    */
   workspaceId?: string;
@@ -346,6 +347,8 @@ export interface ToolExecutionResult {
    */
   deferred?: boolean;
   error?: any;
+  /** Structured unavailable-device context preserved through the runtime error envelope. */
+  errorData?: DeviceUnavailableErrorData;
   state?: Record<string, any>;
   success: boolean;
   /**

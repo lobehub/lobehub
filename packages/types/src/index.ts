@@ -20,6 +20,7 @@ export * from './document';
 export * from './documentComment';
 export * from './documentLike';
 export * from './entityId';
+export * from './environment';
 export * from './eval';
 export * from './expertise';
 export * from './export';
@@ -63,8 +64,10 @@ export * from './verify';
 export * from './work';
 // FIXME: I think we need a refactor for the "openai" types
 // it more likes the UI message payload
+export * from './acceptanceComment';
 export * from './acceptanceFlow';
 export * from './agentRuntime';
+export * from './oauthApp';
 export * from './openai/chat';
 export * from './openai/plugin';
 export * from './subscription';

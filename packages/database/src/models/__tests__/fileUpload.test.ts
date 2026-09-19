@@ -31,6 +31,31 @@ afterEach(async () => {
 });
 
 describe('FileUploadModel', () => {
+  it('counts live bytes under a key prefix for this user only, matching `_` literally', async () => {
+    const personal = new FileUploadModel(serverDB, userId);
+    const other = new FileUploadModel(serverDB, otherUserId);
+    const prefix = 'files/u_1/agent-share/share_a/';
+
+    await personal.create({ expiresAt, pathname: `${prefix}x/a.png`, size: 10 });
+    await personal.create({ expiresAt, pathname: `${prefix}y/b.png`, size: 20 });
+    await personal.create({
+      expiresAt,
+      pathname: 'files/u_1/agent-share/share_b/z/c.png',
+      size: 40,
+    });
+    // Differs exactly where the prefix has `_` — a LIKE wildcard would match it.
+    await personal.create({
+      expiresAt,
+      pathname: 'files/u-1/agent-share/share_a/w/d.png',
+      size: 80,
+    });
+    await other.create({ expiresAt, pathname: `${prefix}o/e.png`, size: 160 });
+
+    expect(await personal.countLiveUsageUnderPrefix(prefix)).toBe(30);
+    expect(await other.countLiveUsageUnderPrefix(prefix)).toBe(160);
+    expect(await personal.countLiveUsageUnderPrefix('files/u_1/agent-share/none/')).toBe(0);
+  });
+
   it('scopes sessions and counts only live bytes in the matching quota scope', async () => {
     const personal = new FileUploadModel(serverDB, userId);
     const other = new FileUploadModel(serverDB, otherUserId);

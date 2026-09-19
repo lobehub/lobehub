@@ -13,6 +13,7 @@
   "workingDirectory.branchesLoadFailed": "Falha ao carregar os branches",
   "workingDirectory.branchesLoading": "Carregando branches…",
   "workingDirectory.branchesNoMatch": "Nenhum branch correspondente",
+  "workingDirectory.branchesTruncated": "{{count}} mais — digite para filtrar",
   "workingDirectory.browseDescription": "Escolha uma pasta no dispositivo conectado.",
   "workingDirectory.browseFolders": "Navegar pelas pastas",
   "workingDirectory.cancel": "Cancelar",

@@ -105,7 +105,11 @@ export interface FieldSchema {
    * - 'array' → list
    */
   type: 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'password' | 'string';
-  /** Conditional visibility: show only when another field matches a value */
+  /**
+   * Conditional visibility: show only when another field matches a value. Pass
+   * an array to match any of several values, e.g. a window size that applies to
+   * both the `burst` and `debounce` concurrency strategies.
+   */
   visibleWhen?: { field: string; value: unknown };
 }
 
@@ -555,6 +559,15 @@ export interface PlatformDefinition {
 
   /** The name of the platform. */
   name: string;
+
+  /**
+   * Credential keys that are identifiers rather than secrets, for platforms
+   * whose credentials never come from the form schema and so have no
+   * `type: 'password'` marking to read. WeChat's QR handshake writes `botId`
+   * and `userId` alongside the token; those two are safe to show, the token is
+   * not. Everything unlisted is treated as secret.
+   */
+  publicCredentialKeys?: string[];
 
   /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
   schema: FieldSchema[];

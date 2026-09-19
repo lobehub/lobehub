@@ -10,6 +10,11 @@ describe('acceptance flow navigation', () => {
     expect(resolveAcceptanceTab('flow', 2)).toBe('flow');
     expect(resolveAcceptanceTab('resources', 0)).toBe('resources');
   });
+  it('opens the discussion only when asked, never as the landing tab', () => {
+    expect(resolveAcceptanceTab('discussion', 0)).toBe('discussion');
+    expect(resolveAcceptanceTab('discussion', 3, true, false)).toBe('discussion');
+    expect(resolveAcceptanceTab(undefined, 0)).toBe('checks');
+  });
 });
 
 const makeFlows = () =>

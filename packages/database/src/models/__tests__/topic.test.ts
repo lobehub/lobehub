@@ -687,6 +687,106 @@ describe('TopicModel', () => {
 
       expect(topic.runStartedAt).toBeNull();
     });
+
+    // This feed is not scoped by agent, so in a workspace `ownership()` matches
+    // every member's rows. Without a parent check a teammate's PRIVATE agent
+    // conversation — title and last assistant reply included — lands in the
+    // home inbox of everyone in the workspace.
+    describe('workspace parent scope', () => {
+      const workspaceId = 'topic-model-test-workspace';
+      const workspaceModel = new TopicModel(serverDB, userId, workspaceId);
+
+      beforeEach(async () => {
+        await serverDB
+          .insert(workspaces)
+          .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+        await serverDB.insert(agents).values([
+          { id: 'agent-shared', userId, visibility: 'public', workspaceId },
+          { id: 'agent-private-mine', userId, visibility: 'private', workspaceId },
+          { id: 'agent-private-other', userId: otherUserId, visibility: 'private', workspaceId },
+          { id: 'agent-personal-other', userId: otherUserId, workspaceId: null },
+        ]);
+        await serverDB.insert(topics).values([
+          {
+            agentId: 'agent-shared',
+            id: 'ws-shared',
+            status: 'unread',
+            title: 'shared',
+            userId: otherUserId,
+            workspaceId,
+          },
+          {
+            agentId: 'agent-private-mine',
+            id: 'ws-private-mine',
+            status: 'unread',
+            title: 'my private',
+            userId,
+            workspaceId,
+          },
+          {
+            agentId: 'agent-private-other',
+            id: 'ws-private-other',
+            status: 'unread',
+            title: 'teammate private',
+            userId: otherUserId,
+            workspaceId,
+          },
+          {
+            agentId: 'agent-personal-other',
+            id: 'ws-personal-parent',
+            status: 'unread',
+            title: 'personal parent',
+            userId: otherUserId,
+            workspaceId,
+          },
+          // Legacy row with no resolvable parent — nothing to check.
+          {
+            id: 'ws-parentless',
+            status: 'unread',
+            title: 'parentless',
+            userId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      it('excludes topics whose owning agent is a teammate private or out-of-scope agent', async () => {
+        const result = await workspaceModel.queryTopics({ statuses: ['unread'] });
+
+        expect(result.map((t) => t.id).sort()).toEqual([
+          'ws-parentless',
+          'ws-private-mine',
+          'ws-shared',
+        ]);
+      });
+
+      it('reports the parent visibility so a team view can drop private conversations', async () => {
+        const result = await workspaceModel.queryTopics({ statuses: ['unread'] });
+        const byId = new Map(result.map((t) => [t.id, t.parentVisibility]));
+
+        expect(byId.get('ws-shared')).toBe('public');
+        expect(byId.get('ws-private-mine')).toBe('private');
+        expect(byId.get('ws-parentless')).toBeNull();
+      });
+
+      it('keeps the preview of a teammate private conversation out of the feed', async () => {
+        await serverDB.insert(messages).values({
+          content: 'Confidential reply',
+          id: 'ws-private-other-msg',
+          role: 'assistant',
+          topicId: 'ws-private-other',
+          userId: otherUserId,
+          workspaceId,
+        });
+
+        const result = await workspaceModel.queryTopics({
+          statuses: ['unread'],
+          withLastMessage: true,
+        });
+
+        expect(result.map((t) => t.lastAssistantMessage)).not.toContain('Confidential reply');
+      });
+    });
   });
 
   describe('count', () => {

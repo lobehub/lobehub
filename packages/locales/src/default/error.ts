@@ -106,6 +106,8 @@ export default {
   'unknownError.copyTraceIdTooltip': 'Click to copy',
   'unknownError.desc': 'An unexpected error occurred. You can retry or report on',
   'unknownError.retry': 'Retry',
+  'unknownError.sharedDesc': 'Please report this issue on',
+  'unknownError.sharedTitle': 'Unable to generate this answer',
   'unknownError.traceIdLabel': 'Trace ID:',
   'unknownError.title': 'Oops, the request took a nap',
 
@@ -240,7 +242,6 @@ export default {
   'supervisor.decisionFailed':
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',
   'testConnectionFailed': 'Test connection failed: {{error}}',
-  'tts.responseError': 'Service request failed, please check the configuration or try again',
   'transfer.agentOwnedByGroup':
     'This agent belongs to a chat group and cannot be moved on its own. Move the group instead, or remove the agent from it first.',
   'transfer.groupHasInaccessibleMember':

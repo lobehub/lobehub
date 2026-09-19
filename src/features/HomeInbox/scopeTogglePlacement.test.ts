@@ -30,4 +30,24 @@ describe('resolveScopeToggleSection', () => {
     expect(filterTopicsForInboxScope(topics, 'me', false)).toEqual([topics[0]]);
     expect(filterTopicsForInboxScope(topics, 'me', true)).toEqual(topics);
   });
+
+  it('keeps private-agent conversations out of the team scope, including the viewer own', () => {
+    const topics = [
+      { id: 'shared', parentVisibility: 'public', userId: 'teammate' },
+      { id: 'mine-private', parentVisibility: 'private', userId: 'me' },
+      { id: 'their-private', parentVisibility: 'private', userId: 'teammate' },
+      { id: 'legacy-parentless', parentVisibility: null, userId: 'me' },
+    ];
+
+    expect(filterTopicsForInboxScope(topics, 'me', true)).toEqual([topics[0], topics[3]]);
+  });
+
+  it('keeps the viewer own private conversations in the mine scope', () => {
+    const topics = [
+      { id: 'mine-private', parentVisibility: 'private', userId: 'me' },
+      { id: 'their-private', parentVisibility: 'private', userId: 'teammate' },
+    ];
+
+    expect(filterTopicsForInboxScope(topics, 'me', false)).toEqual([topics[0]]);
+  });
 });

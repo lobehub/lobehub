@@ -11,10 +11,17 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { getForwardedMessageText } from '@/store/chat/slices/forward/helpers';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
-import { contextSelectors, type ConversationStore, Provider, useConversationStore } from '../store';
+import {
+  contextSelectors,
+  type ConversationStore,
+  messageStateSelectors,
+  Provider,
+  useConversationStore,
+} from '../store';
 import SelectCircle from './SelectCircle';
 import { type ForwardTarget, useForwardMessages } from './useForwardMessages';
 
@@ -98,13 +105,12 @@ const ForwardModalContent = memo(() => {
 
   // What's being forwarded — count + a few role-labelled snippets for the panel.
   const preview = useConversationStore((s) => {
-    const selected = new Set(s.selectedMessageIds);
-    const msgs = s.displayMessages.filter((m) => selected.has(m.id));
+    const msgs = messageStateSelectors.forwardableSelectedMessages(s);
     return {
       count: msgs.length,
       lines: msgs.slice(0, 6).map((m) => ({
         role: m.role === 'user' ? t('messageForward.role.user') : t('messageForward.role.agent'),
-        text: (m.content ?? '').replaceAll(/\s+/g, ' ').slice(0, 60),
+        text: getForwardedMessageText(m).replaceAll(/\s+/g, ' ').slice(0, 60),
       })),
     };
   }, isEqual);

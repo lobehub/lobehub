@@ -25,19 +25,30 @@ import { FlowPanelHostContext } from './FlowPanelHost';
 import { FlowResults } from './FlowResults';
 
 const styles = createStaticStyles(({ css }) => ({
+  // Fullscreen is a two-column shell, the same shape the page uses: the details
+  // rail owns the full height of the right edge and the toolbar belongs to the
+  // canvas beside it, not to a band stretched across both.
   fullscreen: css`
     position: fixed;
     z-index: ${cssVar.zIndexPopupBase};
     inset: 0;
-
-    padding: 16px;
-
     background: ${cssVar.colorBgContainer};
+
+    @media (width <= 640px) {
+      flex-direction: column;
+    }
+  `,
+  stage: css`
+    min-width: 0;
+    min-height: 0;
+    padding: 16px;
   `,
   details: css`
-    overflow: auto;
+    overflow: hidden;
     flex: none;
-    width: min(400px, 45vw);
+
+    width: min(440px, 42%);
+    height: 100%;
     min-height: 0;
 
     @media (width <= 640px) {
@@ -129,7 +140,6 @@ export function AcceptanceFlow() {
       });
     },
     setFocus,
-    setSelected,
     focus,
   );
   if (!views.length) return <Empty description={t('flow.empty')} />;
@@ -177,8 +187,12 @@ export function AcceptanceFlow() {
       onSaved={mutate}
     />
   ) : null;
-  const content = (
-    <Flexbox className={fullscreen ? styles.fullscreen : undefined} gap={16}>
+  const stage = (
+    <Flexbox
+      className={fullscreen ? styles.stage : undefined}
+      flex={fullscreen ? 1 : undefined}
+      gap={16}
+    >
       <Flexbox
         horizontal
         align="center"
@@ -252,14 +266,16 @@ export function AcceptanceFlow() {
             />
           </ReactFlowProvider>
         )}
-        {results &&
-          (fullscreen ? (
-            <Flexbox className={styles.details}>{results}</Flexbox>
-          ) : (
-            panelHost && createPortal(results, panelHost)
-          ))}
+        {!fullscreen && results && panelHost && createPortal(results, panelHost)}
       </Flexbox>
     </Flexbox>
   );
-  return fullscreen ? createPortal(content, appElement ?? document.body) : content;
+  if (!fullscreen) return stage;
+  return createPortal(
+    <Flexbox horizontal className={styles.fullscreen}>
+      {stage}
+      {results && <Flexbox className={styles.details}>{results}</Flexbox>}
+    </Flexbox>,
+    appElement ?? document.body,
+  );
 }

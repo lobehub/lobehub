@@ -7,6 +7,8 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { resolveTaskAttemptBudget, resolveTaskMaxSteps } from './recoveryPolicy';
+import { statusAuthoredByActor } from './supervisor/policy';
+import { claimGoalTask } from './taskClaim';
 
 const log = debug('lobe-server:goal-task-recovery');
 
@@ -15,6 +17,8 @@ export type TaskRecoveryOutcome =
   | 'started'
   /** Another overlapping advance owns the retry; this one started nothing. */
   | 'already-running'
+  /** Someone settled the Task while this recovery was being decided. */
+  | 'settled'
   | 'exhausted-cost'
   | 'exhausted-rounds'
   | 'spawn-failed';
@@ -73,7 +77,26 @@ export class TaskRecoveryCoordinator {
       log('task %s recovery was already claimed by another advance', task.identifier);
       return { outcome: 'already-running' };
     }
-    const claimed = await taskModel.updateStatusIfCurrent(task.id, current.status, 'running', {
+    // Both branches that route here require `paused`, so that is the only status this
+    // claim may take. The tick read the Task before it decided; claiming whatever it
+    // holds now would swap somebody's completion, cancellation or explicit failure to
+    // `running` and start a paid run over their decision.
+    if (current.status !== 'paused') {
+      log(
+        'task %s moved to %s before the claim; leaving it alone',
+        task.identifier,
+        current.status,
+      );
+      return { outcome: 'settled' };
+    }
+    // A pause somebody made is theirs. The routing error survives a manual round trip
+    // through another status, because the status update keeps the old error when none
+    // is supplied, so the status alone cannot say whose pause this is.
+    if (statusAuthoredByActor(await taskModel.getActivities(task.id, 20), current.status)) {
+      log('task %s was paused by an actor; leaving it alone', task.identifier);
+      return { outcome: 'settled' };
+    }
+    const claimed = await claimGoalTask(taskModel, { id: task.id, status: 'paused' }, 'running', {
       error: null,
       startedAt: new Date(),
     });
@@ -94,7 +117,7 @@ export class TaskRecoveryCoordinator {
       log('task %s recovery spawn failed (non-fatal): %O', task.identifier, error);
       // We own the claim, so nothing else will put the task back.
       await taskModel
-        .updateStatusIfCurrent(task.id, 'running', current.status, { error: current.error })
+        .updateStatusIfCurrent(task.id, 'running', 'paused', { error: current.error })
         .catch((releaseError) => {
           log('task %s failed to release the recovery claim: %O', task.identifier, releaseError);
         });

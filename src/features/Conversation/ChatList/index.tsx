@@ -28,6 +28,7 @@ import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
+import { buildChatRows } from './utils/chatRows';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
 
@@ -146,9 +147,20 @@ const ChatList = memo<ChatListProps>(
       [allDisplayMessages, filterItem],
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
+    // Steered follow-up turns fold into the turn they interrupted. Custom item
+    // renderers address messages by id, so they keep the flat list.
+    const rows = useMemo(
+      () => (itemContent ? undefined : buildChatRows(displayMessages)),
+      [displayMessages, itemContent],
+    );
+    const rowIds = useMemo(
+      () => rows?.map((row) => row.id) ?? displayMessageIds,
+      [displayMessageIds, rows],
+    );
+    const rowById = useMemo(() => new Map(rows?.map((row) => [row.id, row])), [rows]);
     const resolvedMessageDeepLink = useMemo(
-      () => resolveMessageDeepLink(displayMessages, messageDeepLink),
-      [displayMessages, messageDeepLink],
+      () => resolveMessageDeepLink(displayMessages, rowIds, messageDeepLink),
+      [displayMessages, messageDeepLink, rowIds],
     );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
@@ -202,7 +214,8 @@ const ChatList = memo<ChatListProps>(
 
     const defaultItemContent = useCallback(
       (index: number, id: string) => {
-        const isLatestItem = displayMessageIds.length === index + 1;
+        const isLatestItem = rowIds.length === index + 1;
+        const row = rowById.get(id);
         const anchoredReceipts = receiptsByAnchor.get(id) ?? [];
         const receiptRender =
           anchoredReceipts.length > 0 ? (
@@ -211,6 +224,7 @@ const ChatList = memo<ChatListProps>(
 
         return (
           <MessageItem
+            continuations={row?.continuations}
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
             footerRender={receiptRender}
             id={id}
@@ -219,7 +233,7 @@ const ChatList = memo<ChatListProps>(
           />
         );
       },
-      [displayMessageIds.length, defaultWorkflowExpandLevel, receiptsByAnchor],
+      [rowIds.length, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
 
@@ -276,7 +290,7 @@ const ChatList = memo<ChatListProps>(
       ) : (
         <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
           <VirtualizedList
-            dataSource={displayMessageIds}
+            dataSource={rowIds}
             footerSlot={footerSlot}
             headerSlot={headerSlot}
             itemContent={itemContent ?? defaultItemContent}

@@ -31,44 +31,56 @@ const buildCoordinator = (
 
 const messageUpdateMock = vi.fn().mockResolvedValue({ success: true });
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({ update: messageUpdateMock })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return { update: messageUpdateMock };
+  }),
 }));
 
 const findOperationMock = vi.fn().mockResolvedValue(null);
 const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn().mockImplementation(() => ({
-    findById: findOperationMock,
-    recordCompletion: recordCompletionMock,
-  })),
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: findOperationMock,
+      recordCompletion: recordCompletionMock,
+    };
+  }),
 }));
 
 const dispatchHooksMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('../CompletionLifecycle', () => ({
-  CompletionLifecycle: vi.fn().mockImplementation(() => ({
-    dispatchHooks: dispatchHooksMock,
-  })),
+  CompletionLifecycle: vi.fn().mockImplementation(function () {
+    return {
+      dispatchHooks: dispatchHooksMock,
+    };
+  }),
 }));
 
 const findThreadMock = vi.fn().mockResolvedValue(null);
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({ findById: findThreadMock })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return { findById: findThreadMock };
+  }),
 }));
 
 const topicSettleRunningOperationMock = vi
   .fn()
   .mockResolvedValue({ assistantMessageId: undefined, status: 'missing' });
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    settleRunningOperation: topicSettleRunningOperationMock,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      settleRunningOperation: topicSettleRunningOperationMock,
+    };
+  }),
 }));
 
 const stateWith = (overrides: Record<string, any> = {}) => ({
   cost: { total: 0.1 },
   metadata: {
-    agentId: 'agt_x',
     assistantMessageId: 'msg_assist_1',
+  },
+  origin: {
+    agentId: 'agt_x',
     topicId: 'tpc_x',
     userId: 'user_x',
   },
@@ -410,7 +422,9 @@ describe('AbandonOperationService', () => {
 
   it('does not crash when state has no metadata.assistantMessageId', async () => {
     const coord = buildCoordinator({
-      loadAgentState: vi.fn().mockResolvedValue(stateWith({ metadata: { userId: 'user_x' } })),
+      loadAgentState: vi
+        .fn()
+        .mockResolvedValue(stateWith({ metadata: {}, origin: { userId: 'user_x' } })),
     });
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }], startedAt: 1 });
@@ -462,10 +476,12 @@ describe('AbandonOperationService', () => {
         stateWith({
           metadata: {
             assistantMessageId: 'msg_assist_1',
-            isSubAgent: true,
+          },
+          origin: {
             threadId: 'thread_1',
             userId: 'user_x',
             workspaceId: 'ws_1',
+            lineage: { isSubAgent: true },
           },
         }),
       ),
@@ -505,12 +521,13 @@ describe('AbandonOperationService', () => {
         stateWith({
           metadata: {
             assistantMessageId: 'msg_assist_1',
-            isSubAgent: true,
-            orchestrationRole: 'member',
+          },
+          origin: {
             threadId: 'thread_g',
             topicId: 'tpc_x',
             userId: 'user_x',
             workspaceId: 'ws_1',
+            lineage: { isSubAgent: true, orchestrationRole: 'member' },
           },
         }),
       ),
@@ -548,9 +565,11 @@ describe('AbandonOperationService', () => {
       loadAgentState: vi.fn().mockResolvedValue(
         stateWith({
           metadata: {
-            agentId: 'agt_x',
             assistantMessageId: 'msg_assist_1',
             streamOwnerUserId: 'visitor_1',
+          },
+          origin: {
+            agentId: 'agt_x',
             topicId: 'tpc_x',
             userId: 'user_owner',
             workspaceId: 'ws_1',

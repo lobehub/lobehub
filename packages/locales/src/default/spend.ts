@@ -7,6 +7,8 @@ export default {
   'duration.stage.firstToken': 'First Token',
   'duration.stage.start': 'Start',
   'table.columns.TTFT.tooltip': 'Time To First Token, unit: seconds',
+  'table.billableSeconds': '{{count}} s',
+  'table.columns.billableDuration': 'Billable Duration',
   'table.columns.duration': 'Duration',
   'table.columns.model': 'Model',
   'table.columns.spend': 'Credits',
@@ -36,6 +38,7 @@ export default {
   'table.columns.type.enums.chat': 'Text Generation',
   'table.columns.type.enums.embedding': 'Embedding',
   'table.columns.type.enums.imageGeneration': 'Image Generation',
+  'table.columns.type.enums.speechRecognition': 'Voice Transcription',
   'table.columns.type.enums.videoGeneration': 'Video Generation',
   'table.columns.type.title': 'Type',
   'table.agentShareDesc':

@@ -5,7 +5,9 @@ import type { AgentHook, AgentHookEvent } from '../types';
 
 // Mock isQueueAgentRuntimeEnabled to control local vs production mode
 vi.mock('@/server/services/queue/impls', () => ({
-  isQueueAgentRuntimeEnabled: vi.fn(() => false), // Default: local mode
+  isQueueAgentRuntimeEnabled: vi.fn(function () {
+    return false;
+  }), // Default: local mode
 }));
 
 const mockPublishJSON = vi.hoisted(() => vi.fn());
@@ -317,7 +319,7 @@ describe('HookDispatcher', () => {
 
     it('dispatch rejects a no-fallback delivery failure after delivering other hooks', async () => {
       vi.mocked(isQueueAgentRuntimeEnabled).mockReturnValue(true);
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(function () {});
 
       dispatcher.register(operationId, [
         {

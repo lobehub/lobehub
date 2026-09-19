@@ -48,7 +48,7 @@ describe('RecentWorks', () => {
     expect(screen.queryByTestId('card-wk_4')).toBeNull();
 
     // The global Work refresh in `useRemoveWork` skips `useSWRInfinite` keys,
-    // so the card has to be handed this list's own `reload` (LOBE-13961).
+    // so the card has to be handed this list's own `reload`.
     fireEvent.click(screen.getByTestId('card-wk_1'));
     expect(mocks.reload).toHaveBeenCalledTimes(1);
   });

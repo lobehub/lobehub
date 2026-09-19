@@ -19,16 +19,20 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn().mockImplementation(() => ({
-    findOwnOperationById: mocks.findOwnOperationById,
-    listByTopic: mocks.listByTopic,
-  })),
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return {
+      findOwnOperationById: mocks.findOwnOperationById,
+      listByTopic: mocks.listByTopic,
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/S3', () => ({
-  FileS3: vi.fn().mockImplementation(() => ({
-    createPreSignedUrlForPreview: mocks.createPreSignedUrlForPreview,
-  })),
+  FileS3: vi.fn().mockImplementation(function () {
+    return {
+      createPreSignedUrlForPreview: mocks.createPreSignedUrlForPreview,
+    };
+  }),
 }));
 
 const createCaller = createCallerFactory(agentTraceRouter);

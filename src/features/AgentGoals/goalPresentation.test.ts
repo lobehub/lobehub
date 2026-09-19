@@ -74,24 +74,37 @@ describe('summarizeGoalBudget', () => {
 });
 
 describe('goalManagerConversation', () => {
+  const consumedTurn = {
+    consumed: true,
+    snapshot: 'snapshot',
+    startedAt: '2026-09-09T00:00:00Z',
+    token: 'token',
+    topicId: 'persistent-topic',
+    turns: 6,
+  };
+
   it('does not offer a empty conversation before the first planning run', () => {
-    expect(goalManagerConversation(undefined)).toBeUndefined();
-    expect(goalManagerConversation({ manager: { agentId: 'creator' } })).toBeUndefined();
+    expect(goalManagerConversation({ agentId: 'supervisor', config: null })).toBeUndefined();
+    expect(
+      goalManagerConversation({ agentId: 'supervisor', config: { manager: {} } }),
+    ).toBeUndefined();
   });
 
-  it('keeps the creator conversation available after a planning turn is consumed', () => {
+  it('keeps the goal agent conversation available after a planning turn is consumed', () => {
     expect(
       goalManagerConversation({
-        manager: { agentId: 'creator' },
-        managerState: {
-          consumed: true,
-          snapshot: 'snapshot',
-          startedAt: '2026-09-09T00:00:00Z',
-          token: 'token',
-          topicId: 'persistent-topic',
-          turns: 6,
-        },
+        agentId: 'supervisor',
+        config: { manager: {}, managerState: consumedTurn, taskAgentId: 'executor' },
       }),
-    ).toEqual({ agentId: 'creator', topicId: 'persistent-topic' });
+    ).toEqual({ agentId: 'supervisor', topicId: 'persistent-topic' });
+  });
+
+  it('offers nothing for a goal without an agent to own the conversation', () => {
+    expect(
+      goalManagerConversation({
+        agentId: null,
+        config: { manager: {}, managerState: consumedTurn },
+      }),
+    ).toBeUndefined();
   });
 });

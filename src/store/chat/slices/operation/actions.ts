@@ -817,6 +817,10 @@ export class OperationActionsImpl {
       n(`enqueueMessage/${contextKey}`),
     );
 
+    // Soft: a running Gateway run hands its turn back at the next step boundary
+    // instead of finishing every remaining step before the follow-up starts.
+    if (message.interruptMode === 'soft') this.#get().internal_syncQueuedMessagesFlag(contextKey);
+
     // Hard interrupt: cancel the running operation
     if (message.interruptMode === 'hard' && runningOperationId) {
       const op = this.#get().operations[runningOperationId];
@@ -886,6 +890,10 @@ export class OperationActionsImpl {
       false,
       n(`removeQueuedMessage/${contextKey}/${messageId}`),
     );
+
+    // The last queued message is gone: let the run finish its turn normally.
+    if (!this.#get().queuedMessages[contextKey]?.length)
+      this.#get().internal_syncQueuedMessagesFlag(contextKey);
   };
 
   clearMessageQueue = (contextKey: string): void => {
@@ -896,6 +904,8 @@ export class OperationActionsImpl {
       false,
       n(`clearMessageQueue/${contextKey}`),
     );
+
+    this.#get().internal_syncQueuedMessagesFlag(contextKey);
   };
 }
 

@@ -101,6 +101,8 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P77 | web, cli      | gateway         | probe          | Read `llm_generation_tracing.prompt_version` after one call; restart the server if stale                                                       |
 | P78 | web, cli      | gateway         | env            | `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1` so the server can read local s3rver URLs                                                                     |
 | P79 | web, cli      | client, gateway | env            | Local SearXNG with `SEARCH_PROVIDERS=searxng`; the on-disk search1api keys are dead                                                            |
+| P84 | cli           | any             | auth           | Drive `lh` against the local lobehub-cloud runtime by seeding an API key row into its main database                                            |
+| P85 | cli           | any             | fixture        | Simulate a publish whose response was lost by restoring `pendingCreateKey` in `.lobehub/artifacts.json`                                        |
 | P82 | web           | any             | drive          | Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups |
 
 ## Choose the least invasive mechanism
@@ -2487,3 +2489,66 @@ ScreenshotTiles, and Highlighter's `styles.content` styles a container whose
 `pre` has separate padding. An outer wrapper or `img` override alone does not
 prove the visible edge or total inset changed. Measure the settled DOM, then
 inspect a screenshot before declaring the styling verified.
+
+#### P84 · Driving `lh` against the local lobehub-cloud runtime
+
+**applies-to:** surface=cli · runtime=any · phase=auth
+
+**Situation:** a CLI command that only exists on cloud (`market.deployments.*`,
+which the OSS lambda router stubs out as an empty object) has to be exercised
+against `lobehub-cloud`'s own dev runtime, not this repo's `:3010` server. The
+adapter's seeded CLI profile (§4 CLI) points at the wrong backend, and cloud's
+`bun run dev:runtime:auth` only writes **browser** cookies.
+
+**Doesn't work:** `dev:runtime:auth` for the CLI (cookies, not a token); an
+interactive device-code login (hijacks the user's browser and is forbidden).
+
+**Works:** insert an api\_keys row into the runtime's main database and use it as
+`LOBEHUB_CLI_API_KEY`. `key_hash` is `HMAC-SHA256(key, KEY_VAULTS_SECRET)`;
+`key` is the same plaintext AES-GCM encrypted with that secret as
+`iv:authTag:ciphertext` hex — the shapes `init-dev-env.sh seed-user` uses. Read
+`keyVaultsSecret` and `seedEmail` from
+`~/.lobehub/runtime-dev/secrets/<checkout>.json`, resolve the user id by that
+email, then:
+
+```bash
+LOBEHUB_CLI_API_KEY=sk-lh-<16 lowercase alnum> \
+LOBEHUB_SERVER=http://localhost:<runtime app port> \
+LOBEHUB_CLI_HOME=<scratch dir> \
+  node apps/cli/dist/index.js <command>
+```
+
+The key must match `^sk-lh-[\da-z]{16}$` or the server rejects it before any
+lookup. Give the run its own `LOBEHUB_CLI_HOME` so it cannot disturb the user's
+real login, and remember the publishing identity is now that seeded user — see
+`common-mistakes.md` L-S22 before blaming a quota error on the code.
+
+Cloud's runtime commands each re-read the container ports, so pass the same
+`LOBEHUB_RUNTIME_POSTGRES_PORT` / `LOBEHUB_RUNTIME_REDIS_PORT` overrides to
+_every_ `bun run dev …` invocation. Omitting them on a later call silently
+targets the default 5433, which on a developer machine is usually a different
+project's Postgres and fails as `password authentication failed for user
+"postgres"`.
+
+#### P85 · Simulating a publish whose response never arrived
+
+**applies-to:** surface=cli · runtime=any · phase=fixture
+
+**Situation:** proving that retrying an interrupted `lh artifact publish` does not
+create a second site. The real failure — a dropped reply — cannot be produced by
+killing the process, because the manifest is what carries the recovery state.
+
+**Works:** the CLI writes `pendingCreateKey` into `.lobehub/artifacts.json`
+_before_ sending a create, and replaces it with `deploymentId` on success. So
+write the manifest by hand with only a known `pendingCreateKey`, publish (the
+CLI adopts that key), then restore the same one-key manifest and publish again.
+A correct implementation returns the first deployment id and does not advance
+the revision; a broken one mints a second site with its own URL.
+
+```bash
+printf '{"artifacts":{"dist/index.html":{"pendingCreateKey":"%s"}},"version":1}' "$KEY" \
+  > .lobehub/artifacts.json
+```
+
+Capture both publishes' `--json` output in one artifact with the restored
+manifest shown between them, so a reviewer can see the key was genuinely reused.

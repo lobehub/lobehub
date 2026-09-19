@@ -128,7 +128,7 @@ export const hideKinds = (
 export const layoutGraph = (
   nodes: LayoutNode[],
   edges: LayoutEdge[],
-  sizes: Readonly<Record<string, Pick<LayoutBox, 'width' | 'height'>>> = {},
+  sizes: Readonly<Record<string, Partial<Pick<LayoutBox, 'width' | 'height'>>>> = {},
   gaps = { column: COLUMN_GAP, rank: RANK_GAP },
 ): Record<string, LayoutBox> => {
   const index = new Map(nodes.map((node, i) => [node.id, i]));
@@ -172,19 +172,42 @@ export const layoutGraph = (
         index.get(a.id)! - index.get(b.id)!,
     );
     const widths = row.map((node) => sizes[node.id]?.width ?? NODE_WIDTH[node.kind]);
-    const total = widths.reduce((sum, w) => sum + w, 0) + gaps.column * (row.length - 1);
-    let x = -total / 2;
+    const xs = placeRow(
+      row.map((node, i) => barycenter(node, parents, order) - widths[i] / 2),
+      widths,
+      gaps.column,
+    );
     let height = 0;
     row.forEach((node, i) => {
       const nodeHeight = sizes[node.id]?.height ?? NODE_HEIGHT[node.kind];
-      boxes[node.id] = { height: nodeHeight, width: widths[i], x, y };
-      order.set(node.id, x + widths[i] / 2);
-      x += widths[i] + gaps.column;
+      boxes[node.id] = { height: nodeHeight, width: widths[i], x: xs[i], y };
+      order.set(node.id, xs[i] + widths[i] / 2);
       height = Math.max(height, nodeHeight);
     });
     y += height + gaps.rank;
   }
   return boxes;
+};
+
+/**
+ * Settle one ordered row: every node wants its `desired` left edge (centred
+ * under its parents), and none may overlap its neighbour.
+ *
+ * Centring the whole row on the canvas instead put a finding between two tasks
+ * rather than under the one that produced it. A left-to-right sweep pushes each
+ * node clear of the one before it; a right-to-left sweep pulls each clear of
+ * the one after. Each sweep alone drifts the row to one side. Both keep order
+ * with at least `gap` between neighbours, so their mean does too, and a crowd
+ * that all wants the same spot ends up centred on it.
+ */
+const placeRow = (desired: number[], widths: number[], gap: number): number[] => {
+  const forward = [...desired];
+  for (let i = 1; i < forward.length; i++)
+    forward[i] = Math.max(forward[i], forward[i - 1] + widths[i - 1] + gap);
+  const backward = [...desired];
+  for (let i = backward.length - 2; i >= 0; i--)
+    backward[i] = Math.min(backward[i], backward[i + 1] - widths[i] - gap);
+  return forward.map((x, i) => (x + backward[i]) / 2);
 };
 
 const barycenter = (

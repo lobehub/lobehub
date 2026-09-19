@@ -24,7 +24,9 @@ const {
 
   return {
     mockApiKeyModel: apiKeyModel,
-    mockApiKeyModelConstructor: vi.fn(() => apiKeyModel),
+    mockApiKeyModelConstructor: vi.fn(function () {
+      return apiKeyModel;
+    }),
     mockAuditCreate: vi.fn(),
     mockCanUseWorkspaceApiKeys: vi.fn(),
     mockGetApiKeyMemberCreation: vi.fn(),
@@ -32,7 +34,9 @@ const {
 });
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -49,15 +53,21 @@ vi.mock('@/database/models/apiKey', () => ({
 }));
 
 vi.mock('@/database/models/workspace', () => ({
-  WorkspaceModel: vi.fn(() => ({ getApiKeyMemberCreation: mockGetApiKeyMemberCreation })),
+  WorkspaceModel: vi.fn(function () {
+    return { getApiKeyMemberCreation: mockGetApiKeyMemberCreation };
+  }),
 }));
 
 vi.mock('@/database/models/workspaceAuditLog', () => ({
-  WorkspaceAuditLogModel: vi.fn(() => ({ create: mockAuditCreate })),
+  WorkspaceAuditLogModel: vi.fn(function () {
+    return { create: mockAuditCreate };
+  }),
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
-  serverDatabase: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
+  serverDatabase: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 const createCaller = (workspaceRole: 'admin' | 'member' | 'owner' = 'member') =>

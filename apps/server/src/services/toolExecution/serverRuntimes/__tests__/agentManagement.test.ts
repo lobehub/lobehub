@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
 import { PluginModel } from '@/database/models/plugin';
+import { DiscoverService } from '@/server/services/discover';
 
 import { agentManagementRuntime } from '../agentManagement';
 
@@ -24,25 +25,31 @@ const {
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({
-    countAgents: mockCountAgents,
-    getAgentConfigById: mockGetAgentConfigById,
-    queryAgents: mockQueryAgents,
-    updateConfig: mockUpdateConfig,
-  })),
+  AgentModel: vi.fn(function () {
+    return {
+      countAgents: mockCountAgents,
+      getAgentConfigById: mockGetAgentConfigById,
+      queryAgents: mockQueryAgents,
+      updateConfig: mockUpdateConfig,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn(() => ({
-    create: mockCreatePlugin,
-    findById: mockFindById,
-  })),
+  PluginModel: vi.fn(function () {
+    return {
+      create: mockCreatePlugin,
+      findById: mockFindById,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/discover', () => ({
-  DiscoverService: vi.fn(() => ({
-    getAssistantList: mockGetAssistantList,
-  })),
+  DiscoverService: vi.fn(function () {
+    return {
+      getAssistantList: mockGetAssistantList,
+    };
+  }),
 }));
 
 const createRuntime = () =>
@@ -415,6 +422,28 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression guard: built without an identity, DiscoverService sends no
+  // credentials at all, so every market read from this runtime failed as
+  // `unauthorized` while the client-side path — which signs a trusted-client
+  // token — kept working.
+  describe('market identity', () => {
+    it('passes the run identity to DiscoverService', () => {
+      createRuntime();
+
+      expect(DiscoverService).toHaveBeenCalledWith({
+        userInfo: { userId: 'user-1', workspaceId: undefined },
+      });
+    });
+
+    it('scopes the market identity to the run workspace', () => {
+      createWorkspaceRuntime();
+
+      expect(DiscoverService).toHaveBeenCalledWith({
+        userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
+      });
     });
   });
 });

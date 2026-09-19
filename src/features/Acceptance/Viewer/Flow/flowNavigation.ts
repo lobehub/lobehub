@@ -13,6 +13,11 @@ export const getFlowNodeCount = (flows: Bundle['flows'] = []) =>
     0,
   );
 
+/**
+ * Which face to show. Discussion leads the tab strip but is never the landing
+ * tab: an acceptance opens on what has to be judged, not on a thread that is
+ * usually still empty.
+ */
 export const resolveAcceptanceTab = (
   tab: AcceptanceTabKey | undefined,
   nodeCount: number,

@@ -28,21 +28,29 @@ let testDB: LobeChatDatabase;
 
 // Setup mocks at module level (vi.mock is hoisted)
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock FileService to avoid S3 environment variable requirements
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
+        return path ? `/files${path}` : null;
+      }),
+    };
+  }),
 }));
 
 // Mock MarketService to prevent real HTTP requests to market API
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 let serverDB: LobeChatDatabase;

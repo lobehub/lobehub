@@ -8,6 +8,8 @@ const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
   AgentRuntimeErrorType.InvalidRequestFormat,
   AgentRuntimeErrorType.ProviderContentPolicyViolation,
   AgentRuntimeErrorType.ProviderNoImageGenerated,
+  // Avoid amplifying an oversized payload across channels, accepting that proxy limits can differ.
+  AgentRuntimeErrorType.RequestBodyTooLarge,
 ]);
 const RETRYABLE_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
 const RETRYABLE_ERROR_CODES = new Set([

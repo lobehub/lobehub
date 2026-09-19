@@ -1000,6 +1000,23 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // RequestBodyTooLarge — serialized request exceeded an upstream body limit
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: { kind: 'regex', value: /failed to buffer (?:the )?request body/i },
+    note: 'Observed from DeepSeek Anthropic-compatible HTTP 413 responses.',
+  },
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: sub('Request body too large for', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: sub('413 Request Entity Too Large', { caseInsensitive: true }),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // InvalidRequestFormat — provider rejected as malformed
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -1148,7 +1165,6 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('function_declarations'),
     note: 'custom gemini proxies mangle tool schema; lobehub-native schema bug fixed in #14740',
   },
-  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Request body too large for') },
   {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
     match: sub('error getting file type: failed to download file'),
@@ -1273,7 +1289,6 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('400 status code') },
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('403 status code') },
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('404 status code') },
-  { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('413 Request Entity Too Large') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderBizError — generic upstream wrappers that don't fit elsewhere. The

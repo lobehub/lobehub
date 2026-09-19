@@ -5,6 +5,7 @@ import type { SWRResponse } from 'swr';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { WEB_APP_VERSION } from '@/const/appVersion';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
@@ -250,9 +251,10 @@ export class GlobalGeneralActionImpl {
       {
         focusThrottleInterval: 1000 * 60 * 30,
         onSuccess: (data: string) => {
-          if (!valid(CURRENT_VERSION) || !valid(data)) return;
+          const version = isDesktop ? CURRENT_VERSION : WEB_APP_VERSION;
+          if (!valid(version) || !valid(data)) return;
 
-          const currentVersion = parse(CURRENT_VERSION);
+          const currentVersion = parse(version);
           const latestVersion = parse(data);
 
           if (!currentVersion || !latestVersion) return;

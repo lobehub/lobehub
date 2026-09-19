@@ -150,6 +150,31 @@ describe('GatewayStreamNotifier', () => {
       expect(inner.calls.publishAgentRuntimeInit[0]).toEqual(['op-1', initialState]);
     });
 
+    it('pushes only the status, never the whole AgentState', async () => {
+      // Nothing on the other end reads this event's data, while the raw state
+      // carries the LLM context and every enabled tool's manifest.
+      await notifier.publishAgentRuntimeInit('op-1', {
+        agentConfig: { systemRole: 'secret prompt' },
+        messages: [{ content: 'x'.repeat(50_000), role: 'user' }],
+        status: 'running',
+        toolManifestMap: { big: 'manifest' },
+        userId: 'user-1',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const push = mockFetch.mock.calls.find((c: any[]) =>
+        String(c[0]).endsWith('/api/operations/push-event'),
+      );
+      const pushed = JSON.parse(push![1].body);
+      const initEvent = (pushed.events ?? [pushed.event ?? pushed]).find(
+        (e: any) => e?.type === 'agent_runtime_init' || e?.event?.type === 'agent_runtime_init',
+      );
+      const data = (initEvent?.data ?? initEvent?.event?.data) as Record<string, unknown>;
+
+      expect(data).toEqual({ status: 'running' });
+    });
+
     it('calls gateway init and push-event endpoints', async () => {
       await notifier.publishAgentRuntimeInit('op-1', { userId: 'user-1' });
 
@@ -158,6 +183,91 @@ describe('GatewayStreamNotifier', () => {
       const urls = mockFetch.mock.calls.map((c: any[]) => c[0]);
       expect(urls).toContain(`${gatewayUrl}/api/operations/init`);
       expect(urls).toContain(`${gatewayUrl}/api/operations/push-event`);
+    });
+
+    // Protocol v2 §3.2: the per-user hub describes an op in its lifecycle feed
+    // from the `meta` persisted at init, so the routing fields the caller
+    // already knows must ride along — and nothing else (no lookups, no
+    // agentConfig / modelRuntimeConfig leakage into the gateway).
+    it('sends only the known op-routing fields as `meta` in the init body', async () => {
+      await notifier.publishAgentRuntimeInit('op-1', {
+        agentConfig: { systemRole: 'secret' },
+        agentId: 'agt_1',
+        groupId: 'grp_1',
+        mirrorToOperationId: 'op-supervisor',
+        modelRuntimeConfig: { model: 'gpt' },
+        parentOperationId: 'op-parent',
+        rootOperationId: 'op-root',
+        scope: 'group',
+        taskId: 'task_1',
+        threadId: 'thr_1',
+        topicId: 'tpc_1',
+        userId: 'user-1',
+        workspaceId: 'ws_1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          mirrorToOperationId: 'op-supervisor',
+          parentOperationId: 'op-parent',
+          rootOperationId: 'op-root',
+          scope: 'group',
+          taskId: 'task_1',
+          threadId: 'thr_1',
+          topicId: 'tpc_1',
+        },
+        operationId: 'op-1',
+        userId: 'user-1',
+      });
+    });
+
+    it('omits absent meta keys, and the whole `meta` when nothing applies', async () => {
+      // Hetero dispatch shape: only agentId / topicId / (optional) mirror known.
+      await notifier.publishAgentRuntimeInit('op-hetero', {
+        agentId: 'agt_1',
+        mirrorToOperationId: undefined,
+        topicId: 'tpc_1',
+        userId: 'user-1',
+      });
+      // Legacy / minimal init (what the coordinator's Redis metadata yields
+      // for a plain single-agent run).
+      await notifier.publishAgentRuntimeInit('op-legacy', { userId: 'user-1' });
+
+      const bodies = mockFetch.mock.calls
+        .filter((call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`)
+        .map((call: any[]) => JSON.parse(call[1].body));
+
+      expect(bodies).toEqual([
+        {
+          meta: { agentId: 'agt_1', topicId: 'tpc_1' },
+          operationId: 'op-hetero',
+          userId: 'user-1',
+        },
+        { operationId: 'op-legacy', userId: 'user-1' },
+      ]);
+      expect(bodies[1]).not.toHaveProperty('meta');
+    });
+
+    it('registers the visitor as gateway owner while still sending meta', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        streamOwnerUserId: 'visitor-1',
+        topicId: 'tpc_1',
+        userId: 'creator-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: { topicId: 'tpc_1' },
+        operationId: 'op-share',
+        userId: 'visitor-1',
+      });
     });
 
     it('waits for gateway init before exposing the operation to subscribers', async () => {
@@ -402,6 +512,28 @@ describe('GatewayStreamNotifier', () => {
 
       const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
       const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data).not.toHaveProperty('uiMessages');
+    });
+
+    it('sends only terminal metadata after a protocol-v2 message patch', async () => {
+      await notifier.publishAgentRuntimeEnd({
+        finalState: { messages: ['large'], status: 'done', world: { private: true } },
+        messagePatchMode: true,
+        messageRevision: 5,
+        operationId: 'op-1',
+        reason: 'completed',
+        stepIndex: 4,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data).toMatchObject({
+        messagePatchMode: true,
+        messageRevision: 5,
+        reason: 'completed',
+      });
+      expect(body.event.data).not.toHaveProperty('finalState');
       expect(body.event.data).not.toHaveProperty('uiMessages');
     });
   });

@@ -1,3 +1,5 @@
+import type { UIChatMessage } from '@lobechat/types';
+
 // ─── Agent Stream Event (mirrors server StreamEvent) ───
 
 export type AgentStreamEventType =
@@ -39,6 +41,12 @@ export type AgentStreamEventType =
    * cancellation marker.
    */
   | 'agent_intervention_response'
+  /**
+   * Protocol-v2-only canonical conversation delta. Native server agent runs
+   * emit one after each durable step instead of repeating the whole topic on
+   * every `step_start` / `agent_runtime_end` boundary.
+   */
+  | 'message_patch'
   | 'step_start'
   | 'step_complete'
   /**
@@ -57,6 +65,22 @@ export interface AgentStreamEvent {
   stepIndex: number;
   timestamp: number;
   type: AgentStreamEventType;
+}
+
+export interface MessagePatchUpsert {
+  /** Immediate predecessor in the canonical top-level message list. */
+  afterId: string | null;
+  message: UIChatMessage;
+}
+
+/**
+ * Operation-local, monotonic patch carried only by Gateway mux / protocol v2.
+ * A missing revision is recovered with one normal message-list fetch.
+ */
+export interface MessagePatchData {
+  deletes: string[];
+  revision: number;
+  upserts: MessagePatchUpsert[];
 }
 
 export type StreamChunkType =
@@ -197,7 +221,7 @@ export interface OperationHeartbeatData extends StepCompleteData {
 export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
 
 /** Producer that owns the blocked interaction. */
-export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'droid' | 'qoder';
+export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'devin' | 'droid' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {
@@ -402,14 +426,28 @@ export interface SessionCompleteMessage {
 export type SessionStatus =
   'running' | 'waiting_input' | 'waiting_confirmation' | 'completed' | 'error' | 'interrupted';
 
-/** Provenance for a terminal session signal emitted by AgentStreamClient. */
+export type TerminalSessionStatus = Extract<SessionStatus, 'completed' | 'error' | 'interrupted'>;
+
+/**
+ * Provenance for a terminal session signal emitted by AgentStreamClient (v1)
+ * or a mux `OperationSubscription` (v2). v1 only ever emits the first two.
+ */
 export type AgentStreamSessionCompletion =
   | {
       source: 'raw_session_complete';
     }
   | {
       source: 'resume_status';
-      status: Extract<SessionStatus, 'completed' | 'error' | 'interrupted'>;
+      status: TerminalSessionStatus;
+    }
+  /** v2: this op's own `agent_runtime_end` / `error` agent event. */
+  | {
+      source: 'agent_event';
+    }
+  /** v2: hub `status_change` carrying a terminal status (e.g. watchdog). */
+  | {
+      source: 'status_change';
+      status: TerminalSessionStatus;
     };
 
 /**

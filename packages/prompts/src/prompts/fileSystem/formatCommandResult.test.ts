@@ -5,7 +5,34 @@ import { formatCommandResult } from './formatCommandResult';
 describe('formatCommandResult', () => {
   it('should format successful command without output', () => {
     const result = formatCommandResult({ exitCode: 0, success: true });
-    expect(result).toMatchInlineSnapshot(`"Command completed successfully."`);
+    expect(result).toMatchInlineSnapshot(`
+      "Command completed successfully.
+
+      (no output)"
+    `);
+  });
+
+  it('should mark empty output when the command crashed with stderr discarded', () => {
+    const result = formatCommandResult({ exitCode: 0, stderr: '', stdout: '', success: true });
+    expect(result).toMatchInlineSnapshot(`
+      "Command completed successfully.
+
+      (no output)"
+    `);
+  });
+
+  it('should mark empty output on a failed command too', () => {
+    const result = formatCommandResult({ exitCode: 1, success: true });
+    expect(result).toMatchInlineSnapshot(`
+      "Command failed with exit code 1
+
+      (no output)"
+    `);
+  });
+
+  it('should not mark empty output while the command is still running', () => {
+    const result = formatCommandResult({ shellId: 'shell-123', success: true });
+    expect(result).not.toContain('(no output)');
   });
 
   it('should format still-running command', () => {
@@ -112,7 +139,11 @@ describe('formatCommandResult', () => {
       exitCode: 0,
       success: true,
     });
-    expect(result).toMatchInlineSnapshot(`"Command completed successfully."`);
+    expect(result).toMatchInlineSnapshot(`
+      "Command completed successfully.
+
+      (no output)"
+    `);
   });
 
   it('should treat shell id with exitCode 0 as completed', () => {
@@ -121,7 +152,11 @@ describe('formatCommandResult', () => {
       shellId: 'shell-123',
       success: true,
     });
-    expect(result).toMatchInlineSnapshot(`"Command completed successfully."`);
+    expect(result).toMatchInlineSnapshot(`
+      "Command completed successfully.
+
+      (no output)"
+    `);
   });
 
   it('should treat a non-zero exit code as failure even when envelope success is true', () => {

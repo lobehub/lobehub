@@ -5,6 +5,7 @@ import { TaskModel } from '@/database/models/task';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 
+import type { ToolExecutionContext } from '../../types';
 import { agentDocumentsRuntime } from '../agentDocuments';
 
 const agentDocumentToolOutcomeMocks = vi.hoisted(() => ({
@@ -67,9 +68,15 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     pinDocument = vi.fn().mockResolvedValue(undefined);
     findWorkspaceById = vi.fn().mockResolvedValue({ slug: 'lobe-team' });
 
-    vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
-    vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument }) as any);
-    vi.mocked(WorkspaceModel).mockImplementation(() => ({ findById: findWorkspaceById }) as any);
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return serviceImpl as any;
+    });
+    vi.mocked(TaskModel).mockImplementation(function () {
+      return { pinDocument } as any;
+    });
+    vi.mocked(WorkspaceModel).mockImplementation(function () {
+      return { findById: findWorkspaceById } as any;
+    });
   });
 
   const buildContext = (taskId?: string, workspaceId?: string) => {
@@ -249,14 +256,18 @@ describe('agentDocumentsRuntime Work registration state', () => {
       getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
       removeDocumentById: vi.fn().mockResolvedValue(true),
     };
-    vi.mocked(AgentDocumentsService).mockImplementation(() => serviceImpl as any);
-    vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument: vi.fn() }) as any);
-    vi.mocked(WorkspaceModel).mockImplementation(
-      () => ({ findById: vi.fn().mockResolvedValue({ slug: 'lobe-team' }) }) as any,
-    );
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return serviceImpl as any;
+    });
+    vi.mocked(TaskModel).mockImplementation(function () {
+      return { pinDocument: vi.fn() } as any;
+    });
+    vi.mocked(WorkspaceModel).mockImplementation(function () {
+      return { findById: vi.fn().mockResolvedValue({ slug: 'lobe-team' }) } as any;
+    });
   });
 
-  const buildContext = (onWorkRegistration?: ReturnType<typeof vi.fn>) => ({
+  const buildContext = (onWorkRegistration?: ToolExecutionContext['onWorkRegistration']) => ({
     onWorkRegistration,
     serverDB: {} as never,
     toolManifestMap: {},

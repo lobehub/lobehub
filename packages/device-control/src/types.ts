@@ -97,6 +97,29 @@ export interface LocalFilePreviewUrlParams {
   workingDirectory: string;
 }
 
+export interface CopyAssetForPublishParams {
+  from: string;
+  to: string;
+  workingDirectory: string;
+}
+
+export interface CopyAssetForPublishResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface ExternalAssetForPublishParams {
+  path: string;
+  workingDirectory: string;
+}
+
+export interface ExternalAssetForPublishResult {
+  base64?: string;
+  contentType?: string;
+  error?: string;
+  success: boolean;
+}
+
 export interface LocalFilePreviewText {
   content: string;
   contentType: string;
@@ -140,6 +163,13 @@ export interface LocalFilePreviewResult {
 // ─── Project file index ───
 
 export interface ProjectFileIndexEntry {
+  /**
+   * Directory whose children were deliberately left out of the index because
+   * Git collapsed it (`git ls-files --directory` reports a fully ignored
+   * directory as a single entry). The row is expandable, but its children must
+   * be fetched on demand via `listProjectDirectory`.
+   */
+  collapsed?: boolean;
   /** Whether Git ignore rules match this file or directory. */
   gitIgnored?: boolean;
   isDirectory: boolean;
@@ -158,6 +188,21 @@ export interface ProjectFileIndexResult {
   indexedAt: string;
   root: string;
   source: 'git' | 'glob';
+}
+
+export interface ProjectDirectoryListParams {
+  /** Cap on returned children; the caller is told when more exist. */
+  limit?: number;
+  /** Directory to list, relative to `root`. A trailing slash is tolerated. */
+  relativePath: string;
+  /** Project root the returned `relativePath`s are resolved against. */
+  root: string;
+}
+
+export interface ProjectDirectoryListResult {
+  entries: ProjectFileIndexEntry[];
+  /** True when the directory holds more children than `limit` returned. */
+  truncated: boolean;
 }
 
 export interface ProjectFileSearchParams extends ProjectFileIndexParams {
@@ -228,6 +273,8 @@ export interface WorkspaceScanDeps {
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
+  /** Copy a publish asset (possibly outside the workspace) to a path inside the workspace. */
+  copyAssetForPublish?: (params: CopyAssetForPublishParams) => Promise<CopyAssetForPublishResult>;
   /**
    * Enroll this machine into a workspace pool: derive the workspace-scoped
    * deviceId and open a second gateway connection authenticated with `token`
@@ -246,6 +293,10 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   listHeterogeneousAgentModels?: (
     params: ListHeterogeneousAgentModelsParams,
   ) => Promise<HeterogeneousAgentModelCatalog>;
+  /** Read raw bytes after the user explicitly approved an external publish closure. */
+  readExternalAssetForPublish?: (
+    params: ExternalAssetForPublishParams,
+  ) => Promise<ExternalAssetForPublishResult>;
   /** Search project files without shipping the whole index to the caller. */
   searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
   /**
@@ -267,7 +318,16 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type: 'codebuddy' | 'cursor' | 'droid' | 'grok-build' | 'opencode' | 'pi' | 'qoder' | 'trae';
+  type:
+    | 'codebuddy'
+    | 'cursor'
+    | 'devin'
+    | 'droid'
+    | 'grok-build'
+    | 'opencode'
+    | 'pi'
+    | 'qoder'
+    | 'trae';
 }
 
 export interface HeterogeneousAgentModelCatalogItem {

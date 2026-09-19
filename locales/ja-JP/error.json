@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "クリックしてコピー",
   "unknownError.desc": "予期しないエラーが発生しました。再試行するか、報告してください。",
   "unknownError.retry": "再試行",
+  "unknownError.sharedDesc": "この問題を報告してください:",
+  "unknownError.sharedTitle": "この回答を生成できませんでした",
   "unknownError.title": "おっと、リクエストが休憩しました",
   "unknownError.traceIdLabel": "トレースID:",
   "unlock.addProxyUrl": "OpenAI プロキシアドレスを追加（オプション）",

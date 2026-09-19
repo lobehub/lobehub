@@ -165,12 +165,7 @@ describe('google contextBuilders', () => {
         isValid: true,
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockBase64Data',
-          mimeType: 'image/png',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         image_url: { url: imageUrl },
@@ -286,12 +281,7 @@ describe('google contextBuilders', () => {
         reason: 'File too large: 120MB',
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockBase64Data',
-          mimeType: 'image/png',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         image_url: { url: imageUrl },
@@ -362,12 +352,7 @@ describe('google contextBuilders', () => {
         isValid: true,
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockVideoBase64Data',
-          mimeType: 'video/mp4',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         type: 'video_url',
@@ -474,12 +459,7 @@ describe('google contextBuilders', () => {
         isValid: true,
       });
 
-      const imageToBase64Spy = vi
-        .spyOn(imageToBase64Module, 'imageUrlToBase64')
-        .mockResolvedValueOnce({
-          base64: 'mockAudioBase64Data',
-          mimeType: 'audio/mpeg',
-        });
+      const imageToBase64Spy = vi.spyOn(imageToBase64Module, 'imageUrlToBase64');
 
       const content: UserMessageContentPart = {
         audio_url: { url: audioUrl },

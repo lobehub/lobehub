@@ -104,10 +104,20 @@ export interface GoalAcceptancePolicy {
  * stored explicitly rather than as the absence of a marker, because pausing an
  * already-paused goal is a no-op that leaves no other trace of who asked.
  */
-export type GoalPauseReason = 'measured_acceptance' | 'exploration_limit' | 'user';
+export type GoalPauseReason =
+  | 'measured_acceptance'
+  | 'exploration_limit'
+  /** The planner asked for a correction after its allowance was already spent. */
+  | 'exploration_revision_limit'
+  | 'user';
 
 export interface GoalExplorationDecision {
-  action: 'expand' | 'verify';
+  /**
+   * `expand` opens a sibling experiment for a new question; `revise` corrects the
+   * protocol of an experiment that already ran, so a flawed instrument is fixed in
+   * place instead of being inherited by another sibling.
+   */
+  action: 'expand' | 'revise' | 'verify';
   instruction: string;
   parentNodeId: string;
   reason: string;
@@ -155,6 +165,12 @@ export interface GoalSupervisionIncident {
   status: 'diagnosing' | 'retrying' | 'recovered' | 'escalated' | 'unsuccessful' | 'human_resumed';
   supervisorOperationId?: string;
   taskId: string;
+  /**
+   * Status the Task held when this incident opened. A diagnosis runs for minutes, so
+   * the recovery claims against this rather than a later read: anything a person did
+   * in between must win, not be swapped back into work.
+   */
+  taskStatus?: string;
 }
 
 /** Server-owned state; never accepted as client configuration. */
@@ -194,18 +210,44 @@ export const summarizeGoalSupervision = (state?: GoalSupervisionState): GoalSupe
   };
 };
 
-/** A CLI-capable agent owns planning; the coordinator owns execution and acceptance. */
+/**
+ * A CLI-capable agent owns planning; the coordinator owns execution and acceptance.
+ * The planning agent is the goal's own `agentId` — the policy carries no identity.
+ */
 export interface GoalManagerPolicy {
-  /** Server-resolved creator identity; not a separately selectable manager. */
-  agentId: string;
   instruction?: string;
   maxTurns?: number;
 }
 
 /** Server-owned dispatch receipt, retained across backend restarts. */
 export interface GoalManagerState {
+  /**
+   * The turn was not dispatched by the manager: it is the conversation run that
+   * created the goal (`/goal` → `lh goal create --conversation`), adopted as the
+   * first planning turn. The turn is keyed by `operationId` instead of the
+   * server-minted `msg_goal_manager_<token>` source message.
+   */
+  adopted?: boolean;
+  /**
+   * The conversation run adopted as the first planning turn, kept on every later
+   * receipt. `adopted` / `operationId` describe the current turn and are replaced
+   * when the next one starts; without this the first run's spend would drop out
+   * of the goal's management usage and budget.
+   */
+  adoptedOperationId?: string;
   consumed?: boolean;
   operationId?: string;
+  /**
+   * The problem this turn was invited to take over, when the coordinator handed
+   * one over instead of opening a human gate. Its presence is what separates a
+   * takeover turn from ordinary planning: an `escalate` from a takeover turn puts
+   * the gate back rather than pausing the Goal, and the same problem is not handed
+   * over twice.
+   */
+  problem?: string;
+  /** The blocked task that problem belongs to, so accepting a plan that replaces
+   *  it can retire exactly that node without parsing the key. */
+  problemTaskId?: string;
   readyForAcceptance?: boolean;
   reviewSnapshot?: string;
   snapshot: string;
@@ -244,12 +286,16 @@ export interface GoalConfig {
   supervision?: GoalSupervisionPolicy;
   /** Durable supervisor topic and bounded incident ledger. */
   supervisorState?: GoalSupervisionState;
+  /**
+   * Who executes the Tasks the coordinator creates, when that is not the goal's
+   * own agent. The goal's `agentId` supervises and plans; this only routes work.
+   * Unset means the goal's agent does its own Tasks.
+   */
+  taskAgentId?: string;
 }
 
-/** Creation accepts planning options, never a separate manager identity or runtime receipt. */
-export type GoalCreateConfig = Omit<GoalConfig, 'manager' | 'managerState' | 'supervisorState'> & {
-  manager?: Omit<GoalManagerPolicy, 'agentId'>;
-};
+/** Creation accepts planning options, never a runtime receipt. */
+export type GoalCreateConfig = Omit<GoalConfig, 'managerState' | 'supervisorState'>;
 
 /**
  * The goal entity as exposed to clients — a mirror of the `goals` table row.
@@ -297,6 +343,13 @@ export type GoalEdgeKind =
   | 'decomposes'
   | 'depends_on'
   | 'derived_from'
+  /**
+   * A corrected protocol replacing an earlier one inside the same experiment.
+   * Distinct from `derived_from`, which records generic provenance and is writable
+   * through the public graph mutation: reusing it would silently reinterpret any
+   * hand-authored task provenance as a correction.
+   */
+  | 'revises'
   | 'investigates'
   | 'produces'
   | 'supports'
@@ -446,6 +499,12 @@ export interface GoalGraphSnapshot {
    * finished without saying whether it held up.
    */
   acceptances?: Record<string, GoalNodeAcceptance>;
+  /**
+   * The agent each dispatched task node is assigned to, keyed by node id. A
+   * goal can route its tasks to an executor other than the supervising agent,
+   * and a task title alone never says who is doing the work.
+   */
+  assignees?: Record<string, string>;
   decisions: GoalGraphDecision[];
   /**
    * When an active task node's newest run delivered, present only while that

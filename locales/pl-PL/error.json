@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Kliknij, aby skopiować",
   "unknownError.desc": "Wystąpił nieoczekiwany błąd. Możesz spróbować ponownie lub zgłosić problem na",
   "unknownError.retry": "Spróbuj Ponownie",
+  "unknownError.sharedDesc": "Proszę zgłosić ten problem na",
+  "unknownError.sharedTitle": "Nie można wygenerować tej odpowiedzi",
   "unknownError.title": "Ups, żądanie zrobiło sobie drzemkę",
   "unknownError.traceIdLabel": "Identyfikator śladu:",
   "unlock.addProxyUrl": "Dodaj adres proxy OpenAI (opcjonalnie)",

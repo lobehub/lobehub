@@ -38,6 +38,7 @@ interface TabItemProps {
    * neighbours are still shrinking into place, so the two would overlap by a full tab
    * width and take the whole settle to pull apart.
    */
+  enterWidth: number;
   enterX: number;
   index: number;
   isActive: boolean;
@@ -71,6 +72,7 @@ const TabItem = memo<TabItemProps>(
     totalCount,
     width,
     x,
+    enterWidth,
     enterX,
     onActivate,
     onClose,
@@ -102,7 +104,7 @@ const TabItem = memo<TabItemProps>(
 
     // A newly opened tab springs out from zero rather than popping in at full width; the
     // motion value starts collapsed and is set to the real width on mount.
-    const targetWidth = useMotionValue(0);
+    const targetWidth = useMotionValue(enterWidth);
     const springWidth = useSpring(targetWidth, TAB_SPRING);
     const targetX = useMotionValue(enterX);
     const springX = useSpring(targetX, TAB_SPRING);

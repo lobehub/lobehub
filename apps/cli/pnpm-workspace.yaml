@@ -6,6 +6,7 @@ packages:
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/heterogeneous-agents'
+  - '../../packages/html-artifact'
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
@@ -16,6 +17,7 @@ packages:
   - '../../packages/ssrf-safe-fetch'
   - '../../packages/business/const'
   - '../../packages/file-loaders'
+  - '../../packages/html-artifact'
   - '../../packages/utils'
   - '.'
 

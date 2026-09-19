@@ -1,5 +1,13 @@
-import type { ChatErrorBudgetContext } from '@lobechat/types';
+import {
+  formatErrorRef,
+  getErrorCodeSpec,
+  normalizeChatMessageError,
+} from '@lobechat/model-runtime/errors';
+import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 
+import modelRuntimeEnglish from '@/locales/default/modelRuntime';
+
+import modelRuntimeChinese from '../../../../../locales/zh-CN/modelRuntime.json';
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
 // Import from the leaf modules (`const` / `utils`) instead of the
@@ -8,6 +16,7 @@ import { getExtremeAck } from './ackPhrases';
 // Telegram Guest outbound path import this template for localized copy.
 import { type BotReplyLocale } from './platforms/const';
 import { formatDuration } from './platforms/utils';
+import { renderHeterogeneousError } from './renderHeterogeneousError';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
 // because bot-callback webhooks send via DiscordPlatformClient directly
@@ -238,6 +247,8 @@ type SystemStrings = {
   cmdStopNotActive: string;
   cmdStopRequested: string;
   cmdStopUnable: string;
+  cmdWhoami: (params: WhoamiReplyParams) => string;
+  cmdWhoamiUnavailable: string;
   dmPairingApplicantApproved: string;
   dmPairingCapacityExceeded: string;
   dmPairingCode: (code: string) => string;
@@ -330,6 +341,18 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdStopNotActive: 'No active execution to stop.',
     cmdStopRequested: 'Stop requested.',
     cmdStopUnable: 'Unable to stop the current execution.',
+    cmdWhoami: ({ isOperator, userId, userName }) => {
+      const lines = [`Your platform user ID: \`${userId}\``];
+      if (userName) lines.push(`Display name: ${userName}`);
+      lines.push(
+        isOperator
+          ? 'This ID is already set as the bot operator in Advanced Settings.'
+          : 'Paste it into Advanced Settings → "Your Platform User ID" on the bot channel page so AI tools can reach you and pairing approvals work.',
+      );
+      return lines.join('\n');
+    },
+    cmdWhoamiUnavailable:
+      "Couldn't read your user ID from this message — the platform didn't include a sender ID.",
     dmPairingApplicantApproved: "You've been approved. Send your message again.",
     dmPairingCapacityExceeded:
       'This bot is handling too many pairing requests right now. Please try again in a few minutes.',
@@ -446,6 +469,17 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
     cmdStopNotActive: '当前没有正在执行的任务可以停止。',
     cmdStopRequested: '已发出停止请求。',
     cmdStopUnable: '无法停止当前执行。',
+    cmdWhoami: ({ isOperator, userId, userName }) => {
+      const lines = [`你的平台用户 ID：\`${userId}\``];
+      if (userName) lines.push(`显示名称：${userName}`);
+      lines.push(
+        isOperator
+          ? '该 ID 已经是这个机器人「高级设置」中配置的管理员 ID。'
+          : '把它填到机器人渠道页「高级设置 → 你的平台用户 ID」，AI 工具就能主动联系你，配对审批也会生效。',
+      );
+      return lines.join('\n');
+    },
+    cmdWhoamiUnavailable: '无法从这条消息中读取你的用户 ID —— 平台没有提供发送者 ID。',
     dmPairingApplicantApproved: '已通过审批，请重新发送你的消息。',
     dmPairingCapacityExceeded: '该机器人当前待审批请求过多，请稍后再试。',
     dmPairingCode: (code) =>
@@ -692,14 +726,44 @@ export function renderAgentError(
   lng?: BotReplyLocale,
   attribution?: string,
   budget?: ChatErrorBudgetContext,
+  heterogeneous?: ChatErrorHeterogeneousContext,
 ): string {
   const strings = getSystemStrings(lng);
+  const heteroReply = renderHeterogeneousError(heterogeneous, lng);
+  if (heteroReply) return appendOperationId(heteroReply, operationId);
+
+  const normalized = normalizeChatMessageError({
+    message: errorMessage,
+    type: errorType ?? 'AgentRuntimeError',
+  });
+  // Classify legacy generic envelopes before selecting channel-specific copy.
+  // Unknown inputs retain the caller's fallback behavior.
+  const spec = getErrorCodeSpec(String(normalized.type));
+  if (spec && !spec.isFallback) {
+    errorType = spec.code;
+    attribution = spec.attribution;
+  }
+  const withReference = (value: string) => {
+    const reference = formatErrorRef(errorType);
+    const footer = reference
+      ? `\n${lng === 'zh-CN' ? '错误码' : 'Error code'}: \`${reference}\``
+      : '';
+    return appendOperationId(`${value}${footer}`, operationId);
+  };
 
   if (isCommandConnectionClosedError(errorType, errorMessage)) {
-    return appendOperationId(strings.errorCommandConnectionClosed, operationId);
+    return withReference(strings.errorCommandConnectionClosed);
   }
 
   const friendlyKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
+  if (!friendlyKey && spec && !spec.isFallback) {
+    // Reuse the same maintained translations as message error cards. Never
+    // interpolate raw provider error text into a shared IM channel.
+    const catalog: Record<string, string> =
+      lng === 'zh-CN' ? modelRuntimeChinese : modelRuntimeEnglish;
+    const copy = catalog[spec.code];
+    if (copy && !copy.includes('{{')) return withReference(`${strings.error}\n${copy}`);
+  }
   const stringKey =
     (friendlyKey && BUDGET_ADMISSION_KEYS.has(friendlyKey) && budget?.budgetTypeAtError
       ? BUDGET_SCOPE_ERROR.get(budget.budgetTypeAtError)
@@ -709,7 +773,7 @@ export function renderAgentError(
   if (stringKey) {
     const value = strings[stringKey];
     if (typeof value === 'string') {
-      return appendOperationId(value, operationId);
+      return withReference(value);
     }
   }
 
@@ -762,6 +826,7 @@ export type CommandReplyKey =
   | 'cmdStopNotActive'
   | 'cmdStopRequested'
   | 'cmdStopUnable'
+  | 'cmdWhoamiUnavailable'
   | 'dmPairingApplicantApproved';
 
 /**
@@ -795,6 +860,23 @@ export function renderGuestCopy(key: GuestCopyKey, lng?: BotReplyLocale): string
 /** Truncation notice for the Guest Mode single-reply budget (text 4096 / caption 1024). */
 export function renderGuestTruncated(limit: number, lng?: BotReplyLocale): string {
   return getSystemStrings(lng).guestTextTruncated(limit);
+}
+
+export interface WhoamiReplyParams {
+  /** True when the caller's ID already matches the bot's configured `settings.userId`. */
+  isOperator: boolean;
+  userId: string;
+  userName?: string;
+}
+
+/**
+ * Render the `/whoami` reply: echoes the caller's platform user ID (Feishu /
+ * Lark `open_id`, Telegram numeric ID, …) with a pointer to the settings
+ * field it belongs in. This is how operators discover the value for
+ * "Your Platform User ID" on platforms that expose no self-service lookup.
+ */
+export function renderWhoami(params: WhoamiReplyParams, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdWhoami(params);
 }
 
 /**

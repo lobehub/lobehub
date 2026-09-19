@@ -25,10 +25,15 @@ beforeEach(async () => {
     .values({ userId: owner, subjectType: 'standalone', subjectId: randomUUID() })
     .returning();
   acceptanceId = acceptance.id;
+  definition = journeyDefinition('Send and retry');
+});
+
+/** The same two-state journey with fresh ids, so one acceptance can hold several. */
+function journeyDefinition(title: string): AcceptanceFlowDefinition {
   const first = randomUUID();
   const second = randomUUID();
-  definition = {
-    title: 'Send and retry',
+  return {
+    title,
     entryNodeId: first,
     nodes: [
       {
@@ -71,7 +76,7 @@ beforeEach(async () => {
       },
     ],
   };
-});
+}
 afterEach(async () => {
   await db.delete(users).where(eq(users.id, owner));
   await db.delete(users).where(eq(users.id, other));
@@ -562,6 +567,50 @@ describe('check assets and round snapshots', () => {
     await expect(model.publish(otherAcceptance.id, parentDefinition)).rejects.toThrow(
       'same acceptance',
     );
+  });
+
+  it('deletes an abandoned graph and unplans it from the open draft', async () => {
+    const abandoned = await model.publish(acceptanceId, definition);
+    const kept = await model.publish(acceptanceId, journeyDefinition('Second attempt'));
+    const draft = await model.start(acceptanceId, abandoned.flowId);
+    await model.start(acceptanceId, kept.flowId, draft.id);
+    expect((await roundPlan(draft.id)).flowSnapshots).toHaveLength(2);
+
+    const removed = await model.delete(acceptanceId, abandoned.flowId);
+    expect(removed.title).toBe('Send and retry');
+    expect((await model.list(acceptanceId)).map((flow) => flow.id)).toEqual([kept.flowId]);
+    const round = await roundPlan(draft.id);
+    expect(round.flowSnapshots?.map((snapshot) => snapshot.flowId)).toEqual([kept.flowId]);
+    expect(round.plan?.every((item) => item.sourceFlowNode?.flowId === kept.flowId)).toBe(true);
+    expect(round.plan?.map((item) => item.index)).toEqual(round.plan?.map((_, index) => index));
+  });
+
+  it('refuses to delete a graph a round has already verified', async () => {
+    const { flowId } = await model.publish(acceptanceId, definition);
+    const run = await model.start(acceptanceId, flowId);
+    await model.record(acceptanceId, {
+      verifyRunId: run.id,
+      checkItemId: (await roundPlan(run.id)).plan![0].id,
+      verdict: 'passed',
+      observation: 'Composer visible',
+    });
+    await expect(model.delete(acceptanceId, flowId)).rejects.toThrow('verified this flow');
+    expect(await model.list(acceptanceId)).toHaveLength(1);
+  });
+
+  it('refuses to delete a graph another flow invokes as a subflow', async () => {
+    const child = await model.publish(acceptanceId, definition);
+    const occurrence = randomUUID();
+    const parent = await model.publish(acceptanceId, {
+      title: 'End to end',
+      entryNodeId: occurrence,
+      nodes: [{ id: occurrence, subFlowId: child.flowId }],
+      edges: [],
+    });
+    await expect(model.delete(acceptanceId, child.flowId)).rejects.toThrow('invokes this flow');
+    await model.delete(acceptanceId, parent.flowId);
+    await model.delete(acceptanceId, child.flowId);
+    expect(await model.list(acceptanceId)).toHaveLength(0);
   });
 
   it('rejects unreachable nodes and missing entry points', () => {

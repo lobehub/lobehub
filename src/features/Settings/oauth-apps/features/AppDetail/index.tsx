@@ -14,7 +14,9 @@ import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
 import ClientIdDisplay from '../ClientIdDisplay';
-import EditForm from './EditForm';
+import { showClientSecretModal } from '../SecretModal';
+import BasicInfoCard from './BasicInfoCard';
+import RedirectUrisCard from './RedirectUrisCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   backButton: css`
@@ -89,12 +91,33 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
     },
   });
   const enabledMutation = lambdaQuery.oauthApp.setEnabled.useMutation({ onSuccess: revalidate });
+  const rotateSecretMutation = lambdaQuery.oauthApp.rotateSecret.useMutation({
+    onSuccess: ({ clientSecret }) => {
+      revalidate();
+      showClientSecretModal({ clientSecret });
+    },
+  });
   const deleteMutation = lambdaQuery.oauthApp.delete.useMutation({
     onSuccess: () => {
       onChanged();
       onBack();
     },
   });
+
+  const handleUpdate = async (value: Parameters<typeof updateMutation.mutateAsync>[0]['value']) => {
+    await updateMutation.mutateAsync({ id, value });
+  };
+
+  const handleRotateSecret = () =>
+    confirmModal({
+      content: t('oauthApp.secret.rotateConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('oauthApp.secret.rotateConfirm.ok'),
+      onOk: async () => {
+        await rotateSecretMutation.mutateAsync({ id });
+      },
+      title: t('oauthApp.secret.rotateConfirm.title'),
+    });
 
   const handleDelete = () =>
     confirmModal({
@@ -106,6 +129,8 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
       },
       title: t('oauthApp.deleteConfirm.title'),
     });
+
+  const isWebApp = detail?.applicationType === 'web';
 
   if (!detail)
     return (
@@ -141,16 +166,21 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
         {!detail.enabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
       </Flexbox>
 
-      <div className={styles.card}>
-        <EditForm
+      <BasicInfoCard
+        canEdit={canEdit}
+        detail={detail}
+        key={`basic-${detail.id}`}
+        onSubmit={handleUpdate}
+      />
+
+      {isWebApp && (
+        <RedirectUrisCard
           canEdit={canEdit}
           detail={detail}
-          key={detail.id}
-          onSubmit={async (value) => {
-            await updateMutation.mutateAsync({ id, value });
-          }}
+          key={`redirect-${detail.id}`}
+          onSubmit={handleUpdate}
         />
-      </div>
+      )}
 
       <Flexbox className={styles.card} gap={16}>
         <div className={styles.row}>
@@ -160,8 +190,25 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
 
         <div className={styles.row}>
           <span className={styles.label}>{t('oauthApp.detail.type')}</span>
-          <Tag>{t('oauthApp.type.badge')}</Tag>
+          <Tag>{t(isWebApp ? 'oauthApp.type.webBadge' : 'oauthApp.type.badge')}</Tag>
         </div>
+
+        {detail.hasSecret && (
+          <div className={styles.row}>
+            <span className={styles.label}>{t('oauthApp.detail.clientSecret')}</span>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Text type={'secondary'}>{t('oauthApp.secret.hidden')}</Text>
+              <Button
+                disabled={!canEdit}
+                loading={rotateSecretMutation.isPending}
+                size={'small'}
+                onClick={handleRotateSecret}
+              >
+                {t('oauthApp.secret.rotate')}
+              </Button>
+            </Flexbox>
+          </div>
+        )}
 
         <div className={styles.row}>
           <span className={styles.label}>{t('oauthApp.detail.createdAt')}</span>

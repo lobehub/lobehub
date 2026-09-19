@@ -103,6 +103,10 @@ export const authRoutes: RouteObject[] = [
         path: 'oauth/consent/:uid',
       },
       {
+        element: lazyElement(() => import('@/routes/auth/oauth/error')),
+        path: 'oauth/error',
+      },
+      {
         element: lazyElement(() => import('@/routes/auth/oauth/device')),
         path: 'oauth/device',
       },

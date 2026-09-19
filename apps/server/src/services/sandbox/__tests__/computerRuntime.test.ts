@@ -13,6 +13,38 @@ class TestComputerRuntime extends ComputerRuntime {
   }
 }
 
+describe('CloudSandbox access refusals', () => {
+  it.each(['writeFile', 'runCommand', 'executeCode', 'exportFile'] as const)(
+    'preserves refusal details and failure status for %s',
+    async (api) => {
+      const error = {
+        code: 'FORBIDDEN',
+        hint: 'Ask the administrator to review request filtering.',
+        message: 'Forbidden',
+        status: 403,
+      };
+      const runtime = new CloudSandboxExecutionRuntime({
+        callTool: vi.fn().mockResolvedValue({ error, result: null, success: false }),
+        exportAndUploadFile: vi
+          .fn()
+          .mockResolvedValue({ error, filename: 'page.html', success: false }),
+      });
+
+      const result =
+        api === 'writeFile'
+          ? await runtime.writeFile({ content: '<html></html>', path: '/page.html' })
+          : api === 'runCommand'
+            ? await runtime.runCommand({ command: 'echo ok' })
+            : api === 'executeCode'
+              ? await runtime.executeCode({ code: 'print(1)' })
+              : await runtime.exportFile({ path: '/page.html' });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject(error);
+    },
+  );
+});
+
 describe.each(['runCommand', 'executeCode', 'getCommandOutput'] as const)(
   'CloudSandbox %s recreation',
   (api) => {

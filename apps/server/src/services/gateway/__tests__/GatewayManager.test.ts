@@ -29,7 +29,9 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 }));
 
 vi.mock('@/business/server/bot/featureAccess', () => ({
-  getBotFeatureBlockedMessage: vi.fn(() => 'blocked'),
+  getBotFeatureBlockedMessage: vi.fn(function () {
+    return 'blocked';
+  }),
   isBotFeatureAccessAllowed: mockIsBotFeatureAccessAllowed,
 }));
 

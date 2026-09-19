@@ -8,6 +8,7 @@ import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import * as serverConfigStore from '@/store/serverConfig';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
@@ -65,6 +66,8 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  // Lab flag off: this suite pins the v1 per-operation socket path.
+  labPreferSelectors: { enableGatewayMux: () => false },
   settingsSelectors: {
     defaultAgentConfig: () => ({
       chatConfig: { disableGatewayMode: mockUserDefaultConfig.disableGatewayMode },
@@ -241,6 +244,21 @@ describe('GatewayActionImpl', () => {
       });
 
       expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+    });
+
+    it('reads serverConfig from the module store when window.global_serverConfigStore is missing', () => {
+      // Android / React Native hydrates createServerConfigStore but does not
+      // always attach it to `window`. Dispatch must still see ENABLE_AGENT_GATEWAY.
+      const { action } = createTestAction();
+      (globalThis as any).window = {};
+      vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+        serverConfig: {
+          agentGatewayUrl: 'wss://gateway.test.com',
+          enableGatewayMode: true,
+        },
+      } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+
+      expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
     });
   });
 
@@ -619,6 +637,184 @@ describe('GatewayActionImpl', () => {
       delete (globalThis as any).window;
     });
 
+    it.each([
+      {
+        expectedEnabled: true,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: true,
+        name: 'module config without a window store',
+      },
+      {
+        expectedEnabled: true,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: false,
+        moduleEnabled: true,
+        name: 'module config without window',
+      },
+      {
+        expectedEnabled: true,
+        expectedUrl: 'https://window-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: false,
+        name: 'enabled window config over disabled module config',
+        windowConfig: {
+          agentGatewayUrl: 'https://window-gateway.test.com',
+          enableGatewayMode: true,
+        },
+      },
+      {
+        expectedEnabled: false,
+        expectedUrl: 'https://window-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: true,
+        name: 'explicit execution with disabled window config',
+        windowConfig: {
+          agentGatewayUrl: 'https://window-gateway.test.com',
+          enableGatewayMode: false,
+        },
+      },
+      {
+        expectedEnabled: false,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: false,
+        name: 'explicit execution with disabled module config',
+      },
+      {
+        disableGatewayMode: true,
+        expectedEnabled: false,
+        expectedUrl: 'https://module-gateway.test.com',
+        hasWindow: true,
+        moduleEnabled: true,
+        name: 'explicit execution with the user default disabled',
+      },
+    ])(
+      'executes and reconnects using $name',
+      async ({
+        disableGatewayMode,
+        expectedEnabled,
+        expectedUrl,
+        hasWindow,
+        moduleEnabled,
+        windowConfig,
+      }) => {
+        const { action, connectToGateway, mockClient, state } = createExecuteTestAction();
+        state.messagesMap = {};
+        connectToGateway.mockImplementation(action.connectToGateway);
+        if (hasWindow) {
+          Reflect.set(globalThis, 'window', {
+            global_serverConfigStore: windowConfig
+              ? { getState: () => ({ serverConfig: windowConfig }) }
+              : undefined,
+          });
+        } else Reflect.deleteProperty(globalThis, 'window');
+        mockUserDefaultConfig.disableGatewayMode = disableGatewayMode;
+        vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
+          serverConfig: {
+            agentGatewayUrl: 'https://module-gateway.test.com',
+            enableGatewayMode: moduleEnabled,
+          },
+        } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'ok',
+          operationId: 'server-op-1',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'execute-token',
+          topicId: 'topic-1',
+          userMessageId: 'usr-1',
+        });
+        vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValue({ token: 'resume-token' });
+
+        expect(action.isGatewayModeEnabled('agent-1')).toBe(expectedEnabled);
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'Run Codex on the bound device',
+        });
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce();
+        expect(action.createClient).toHaveBeenLastCalledWith({
+          gatewayUrl: expectedUrl,
+          operationId: 'server-op-1',
+          resumeOnConnect: undefined,
+          token: 'execute-token',
+        });
+        expect(mockClient.connect).toHaveBeenCalledOnce();
+
+        action.disconnectFromGateway('server-op-1');
+        await action.reconnectToGatewayOperation({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        expect(aiAgentService.refreshGatewayToken).toHaveBeenCalledWith('topic-1');
+        expect(action.createClient).toHaveBeenLastCalledWith({
+          gatewayUrl: expectedUrl,
+          operationId: 'server-op-1',
+          resumeOnConnect: true,
+          token: 'resume-token',
+        });
+        expect(mockClient.connect).toHaveBeenCalledTimes(2);
+      },
+    );
+
+    it.each(['no config', 'window config without URL'])(
+      'fails before execution and skips reconnect with %s',
+      async (source) => {
+        const { action, connectToGateway, startOperation } = createExecuteTestAction();
+        connectToGateway.mockImplementation(action.connectToGateway);
+        const getModuleState = vi.spyOn(serverConfigStore, 'getServerConfigStoreState');
+        if (source === 'no config') {
+          Reflect.deleteProperty(globalThis, 'window');
+          getModuleState.mockReturnValue(undefined);
+        } else {
+          Reflect.set(globalThis, 'window', {
+            global_serverConfigStore: {
+              getState: () => ({ serverConfig: { enableGatewayMode: true } }),
+            },
+          });
+          getModuleState.mockReturnValue({
+            serverConfig: {
+              agentGatewayUrl: 'https://module-gateway.test.com',
+              enableGatewayMode: true,
+            },
+          } as ReturnType<typeof serverConfigStore.getServerConfigStoreState>);
+        }
+
+        expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+        await expect(
+          action.executeGatewayAgent({
+            context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+            message: 'Run Codex on the bound device',
+          }),
+        ).rejects.toThrow(
+          '[Gateway] Cannot execute agent: serverConfig.agentGatewayUrl is missing',
+        );
+        await expect(
+          action.reconnectToGatewayOperation({
+            agentId: 'agent-1',
+            assistantMessageId: 'ast-1',
+            operationId: 'server-op-1',
+            topicId: 'topic-1',
+          }),
+        ).resolves.toBeUndefined();
+
+        expect(aiAgentService.execAgentTask).not.toHaveBeenCalled();
+        expect(aiAgentService.refreshGatewayToken).not.toHaveBeenCalled();
+        expect(startOperation).not.toHaveBeenCalled();
+        expect(action.createClient).not.toHaveBeenCalled();
+        expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+      },
+    );
+
     it('should forward parentMessageId to execAgentTask for regeneration', async () => {
       const { action } = createExecuteTestAction();
 
@@ -902,6 +1098,39 @@ describe('GatewayActionImpl', () => {
           prompt: 'Hello',
           trigger: 'onboarding',
         }),
+        expect.anything(),
+      );
+    });
+
+    // Regression: a queued follow-up lost its steer mark on the gateway path, so
+    // the row the server persisted rendered as a new turn instead of a
+    // continuation of the interrupted one.
+    it('should forward the steer mark of a queued follow-up to execAgentTask', async () => {
+      const { action } = createExecuteTestAction();
+
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      });
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1', threadId: null, scope: 'main' },
+        message: 'Follow up',
+        metadata: { steer: true },
+      });
+
+      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'Follow up', steer: true }),
         expect.anything(),
       );
     });

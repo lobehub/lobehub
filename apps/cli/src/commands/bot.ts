@@ -57,11 +57,6 @@ function normalizeAllowList(raw: unknown): AllowEntry[] {
   return out;
 }
 
-function maskValue(val: string): string {
-  if (val.length > 8) return val.slice(0, 4) + '****' + val.slice(-4);
-  return '****';
-}
-
 function camelToFlag(name: string): string {
   return '--' + name.replaceAll(/([A-Z])/g, '-$1').toLowerCase();
 }
@@ -93,7 +88,13 @@ function extractCredentials(
   return { credentials, missing };
 }
 
-/** Find a bot by ID from the user's bot list. */
+/**
+ * Find a bot by ID.
+ *
+ * The list is the only way to turn an id into a channel, but it deliberately
+ * carries no credentials, so re-read the one we found through the per-agent
+ * detail call to get the (masked) credential shape `view` renders.
+ */
 async function findBot(client: TrpcClient, botId: string) {
   const bots = await client.agentBotProvider.list.query();
   const bot = (bots as any[]).find((b: any) => b.id === botId);
@@ -101,7 +102,12 @@ async function findBot(client: TrpcClient, botId: string) {
     log.error(`Bot integration not found: ${botId}`);
     process.exit(1);
   }
-  return bot;
+
+  const detailed = (await client.agentBotProvider.getByAgentId.query({
+    agentId: bot.agentId,
+  })) as any[];
+
+  return detailed.find((b: any) => b.id === botId) ?? bot;
 }
 
 const STATUS_COLORS: Record<string, (s: string) => string> = {
@@ -569,61 +575,55 @@ export function registerBotCommand(program: Command) {
     .command('view <botId>')
     .description('View bot integration details')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .option('--show-credentials', 'Show full credential values (unmasked)')
-    .action(
-      async (botId: string, options: { json?: string | boolean; showCredentials?: boolean }) => {
-        const client = await getTrpcClient();
-        const b = await findBot(client, botId);
+    .action(async (botId: string, options: { json?: string | boolean }) => {
+      const client = await getTrpcClient();
+      const b = await findBot(client, botId);
 
-        if (options.json !== undefined) {
-          const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(b, fields);
-          return;
+      if (options.json !== undefined) {
+        const fields = typeof options.json === 'string' ? options.json : undefined;
+        outputJson(b, fields);
+        return;
+      }
+
+      const status = b.enabled ? (b.runtimeStatus ?? 'disconnected') : 'disabled';
+      const statusColorFn = STATUS_COLORS[status] ?? pc.dim;
+
+      const credentialLines: string[] = [];
+      if (b.credentials && typeof b.credentials === 'object') {
+        // Already masked by the server — there is no unmasked form to opt into.
+        for (const [key, value] of Object.entries(b.credentials)) {
+          credentialLines.push(`${pc.dim(key)}: ${String(value)}`);
         }
+      }
 
-        const status = b.enabled ? (b.runtimeStatus ?? 'disconnected') : 'disabled';
-        const statusColorFn = STATUS_COLORS[status] ?? pc.dim;
-
-        const credentialLines: string[] = [];
-        if (b.credentials && typeof b.credentials === 'object') {
-          for (const [key, value] of Object.entries(b.credentials)) {
-            const val = String(value);
-            const display = options.showCredentials ? val : maskValue(val);
-            credentialLines.push(`${pc.dim(key)}: ${display}`);
-          }
+      const settingsLines: string[] = [];
+      if (b.settings && typeof b.settings === 'object') {
+        for (const [key, value] of Object.entries(b.settings)) {
+          settingsLines.push(`${pc.dim(key)}: ${JSON.stringify(value)}`);
         }
+      }
 
-        const settingsLines: string[] = [];
-        if (b.settings && typeof b.settings === 'object') {
-          for (const [key, value] of Object.entries(b.settings)) {
-            settingsLines.push(`${pc.dim(key)}: ${JSON.stringify(value)}`);
-          }
-        }
-
-        printBoxTable(
-          [
-            { header: 'Field', key: 'field' },
-            { header: 'Value', key: 'value' },
-          ],
-          [
-            { field: 'ID', value: b.id || '' },
-            { field: 'Platform', value: pc.cyan(b.platform || '') },
-            { field: 'Application ID', value: b.applicationId || '' },
-            { field: 'Agent ID', value: b.agentId || '' },
-            { field: 'Status', value: statusColorFn(status) },
-            ...(credentialLines.length > 0
-              ? [{ field: 'Credentials', value: credentialLines }]
-              : []),
-            ...(settingsLines.length > 0 ? [{ field: 'Settings', value: settingsLines }] : []),
-            ...(b.createdAt
-              ? [{ field: 'Created', value: new Date(b.createdAt).toLocaleString() }]
-              : []),
-            ...(b.updatedAt ? [{ field: 'Updated', value: timeAgo(b.updatedAt) }] : []),
-          ],
-          `${b.platform} bot`,
-        );
-      },
-    );
+      printBoxTable(
+        [
+          { header: 'Field', key: 'field' },
+          { header: 'Value', key: 'value' },
+        ],
+        [
+          { field: 'ID', value: b.id || '' },
+          { field: 'Platform', value: pc.cyan(b.platform || '') },
+          { field: 'Application ID', value: b.applicationId || '' },
+          { field: 'Agent ID', value: b.agentId || '' },
+          { field: 'Status', value: statusColorFn(status) },
+          ...(credentialLines.length > 0 ? [{ field: 'Credentials', value: credentialLines }] : []),
+          ...(settingsLines.length > 0 ? [{ field: 'Settings', value: settingsLines }] : []),
+          ...(b.createdAt
+            ? [{ field: 'Created', value: new Date(b.createdAt).toLocaleString() }]
+            : []),
+          ...(b.updatedAt ? [{ field: 'Updated', value: timeAgo(b.updatedAt) }] : []),
+        ],
+        `${b.platform} bot`,
+      );
+    });
 
   // ── add ───────────────────────────────────────────────
 
@@ -830,7 +830,16 @@ export function registerBotCommand(program: Command) {
       }
 
       const client = await getTrpcClient();
-      await client.agentBotProvider.delete.mutate({ id: botId });
+      const removed = await client.agentBotProvider.delete.mutate({ id: botId });
+
+      // The server returns the rows it removed. Printing the checkmark without
+      // reading it is how a delete that matched nothing used to read as done.
+      if (Array.isArray(removed) && removed.length === 0) {
+        console.error(`${pc.red('✗')} Nothing removed — bot ${pc.bold(botId)} still exists`);
+        process.exitCode = 1;
+        return;
+      }
+
       console.log(`${pc.green('✓')} Removed bot ${pc.bold(botId)}`);
     });
 

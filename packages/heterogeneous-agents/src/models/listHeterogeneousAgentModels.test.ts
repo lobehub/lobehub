@@ -279,6 +279,63 @@ describe('heterogeneous agent model discovery', () => {
     );
   });
 
+  it('parses and discovers Devin model variants from JSON', async () => {
+    const stdout = JSON.stringify({
+      families: [
+        {
+          family_label: 'Claude Sonnet 4.6',
+          variants: [
+            { label: 'Claude Sonnet 4.6', model_uid: 'claude-sonnet-4-6' },
+            { label: 'Claude Sonnet 4.6 Thinking', model_uid: 'claude-sonnet-4-6-thinking' },
+          ],
+        },
+        {
+          family_label: 'Duplicate',
+          variants: [{ label: 'Duplicate', model_uid: 'claude-sonnet-4-6' }, {}],
+        },
+      ],
+    });
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseDevinModelCatalog } = await importModule();
+
+    expect(parseDevinModelCatalog(stdout)).toEqual([
+      {
+        id: 'claude-sonnet-4-6',
+        label: 'Claude Sonnet 4.6',
+        modelId: 'claude-sonnet-4-6',
+        providerId: 'devin',
+      },
+      {
+        id: 'claude-sonnet-4-6-thinking',
+        label: 'Claude Sonnet 4.6 Thinking',
+        modelId: 'claude-sonnet-4-6-thinking',
+        providerId: 'devin',
+      },
+    ]);
+    expect(parseDevinModelCatalog('not json')).toEqual([]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/devin',
+        cwd: '/repo',
+        env: { DEVIN_MODEL: 'sonnet' },
+        type: 'devin',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'claude-sonnet-4-6', providerId: 'devin' },
+        { id: 'claude-sonnet-4-6-thinking', providerId: 'devin' },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/devin',
+      ['models', 'list', '--format', 'json'],
+      expect.objectContaining({ cwd: '/repo', env: { DEVIN_MODEL: 'sonnet' } }),
+      expect.any(Function),
+    );
+  });
+
   it('parses and discovers Grok Build models', async () => {
     const stdout = [
       'You are not authenticated.',

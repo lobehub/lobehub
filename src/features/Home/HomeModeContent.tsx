@@ -308,7 +308,7 @@ const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
     return (
       <Row
         description={description}
-        href={taskDetailPath(task.identifier)}
+        href={taskDetailPath(task.identifier, undefined, task.name)}
         title={title}
         // A row that is executing right now wears the shared animated running
         // mark instead of the static glyph — the same liveness signal running
@@ -486,7 +486,7 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     isLogin && !recentsHidden
       ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope, teamView ? 'team' : 'mine')
       : null,
-    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView),
+    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, !teamView, teamView),
     { revalidateOnFocus: false },
   );
 

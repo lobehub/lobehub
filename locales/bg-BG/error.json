@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Щракнете, за да копирате",
   "unknownError.desc": "Възникна неочаквана грешка. Можете да опитате отново или да докладвате за проблема.",
   "unknownError.retry": "Опитай отново",
+  "unknownError.sharedDesc": "Моля, докладвайте за този проблем на",
+  "unknownError.sharedTitle": "Не може да се генерира този отговор",
   "unknownError.title": "Опа, заявката си почива",
   "unknownError.traceIdLabel": "Идентификатор на следа:",
   "unlock.addProxyUrl": "Добавете OpenAI прокси URL (по избор)",

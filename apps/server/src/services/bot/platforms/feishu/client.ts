@@ -216,7 +216,9 @@ async function feishuExtractFiles(
 
   log('extractFiles: msgId=%s, message_type=%s', (message as any).id, raw.message_type);
 
-  const attachments = await downloadMediaFromRawMessage(api, raw);
+  const attachments = await downloadMediaFromRawMessage(api, raw, {
+    warn: (message, ...args) => console.error(`[bot-platform:feishu:client] ${message}`, ...args),
+  });
   if (attachments.length === 0) {
     log('extractFiles: no media items resolved for msgId=%s', (message as any).id);
     return undefined;

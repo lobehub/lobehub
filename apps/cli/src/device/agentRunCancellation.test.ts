@@ -7,16 +7,30 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { executeToolCall } from '../tools';
 import { spawnHeteroAgentRun } from './agentRun';
 
-const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+const { getTaskMock, removeTaskMock, saveTaskMock, spawnMock } = vi.hoisted(() => ({
+  getTaskMock: vi.fn(),
+  removeTaskMock: vi.fn(),
+  saveTaskMock: vi.fn(),
+  spawnMock: vi.fn(),
+}));
 vi.mock('node:child_process', async (original) => ({
   ...(await original<typeof ChildProcessModule>()),
   spawn: spawnMock,
+}));
+vi.mock('../daemon/taskRegistry', () => ({
+  getTask: getTaskMock,
+  removeTask: removeTaskMock,
+  saveTask: saveTaskMock,
 }));
 
 const children: EventEmitter[] = [];
 afterEach(() => {
   for (const child of children.splice(0)) child.emit('close', 0, null);
   vi.useRealTimers();
+  vi.restoreAllMocks();
+  getTaskMock.mockReset();
+  removeTaskMock.mockReset();
+  saveTaskMock.mockReset();
   spawnMock.mockReset();
 });
 
@@ -42,6 +56,39 @@ async function dispatch(operationId: string) {
 }
 
 describe('gateway-dispatched CLI agent cancellation', () => {
+  it('prioritizes persisted process-group cancellation for a live dispatched wrapper', async () => {
+    const child = await dispatch('cancel-live-group');
+    getTaskMock.mockReturnValue({
+      agentType: 'kimi-code',
+      operationId: 'cancel-live-group',
+      pid: 12345,
+      startedAt: new Date().toISOString(),
+      taskId: 'cancel-live-group',
+      topicId: 'fixture-topic',
+    });
+    let groupAlive = true;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (pid !== -12345) return true;
+      if (signal === 'SIGINT') {
+        groupAlive = false;
+        return true;
+      }
+      if (signal === 0 && !groupAlive) {
+        throw Object.assign(new Error('process group exited'), { code: 'ESRCH' });
+      }
+      return true;
+    });
+
+    await expect(
+      executeToolCall('cancelHeteroTask', JSON.stringify({ taskId: 'cancel-live-group' })),
+    ).resolves.toMatchObject({
+      success: true,
+      state: { exited: true, pid: 12345 },
+    });
+    expect(killSpy).toHaveBeenCalledWith(-12345, 'SIGINT');
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
   it('waits for the dispatched wrapper to close and returns structured exit confirmation', async () => {
     const child = await dispatch('cancel-live');
     let settled = false;

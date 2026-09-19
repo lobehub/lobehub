@@ -590,6 +590,20 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   const reportMdPath = path.join(dir, 'report.md');
   const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
 
+  // What this round is, said to the person who has to accept it, in their
+  // language — the delivery's own note, not the verification write-up. It
+  // posts into the discussion as a message from whoever ran the ingest, so a
+  // reviewer reads it where the conversation already is rather than behind a
+  // report link.
+  const proposalMdPath = path.join(dir, 'proposal.md');
+  const proposal = (
+    existsSync(proposalMdPath)
+      ? readFileSync(proposalMdPath, 'utf8')
+      : typeof result.proposal === 'string'
+        ? result.proposal
+        : ''
+  ).trim();
+
   // What kind of delivery this report verified (default: coding).
   const scenario = scenarioFromResult(result);
 
@@ -845,6 +859,33 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     verifyRunId: runId,
   });
 
+  // 4. Post the round's note. It renders as part of the round rather than as
+  //    another message, so the discussion reads "<agent> shipped round N"
+  //    followed by what it says. Last, and never fatal: the round itself is
+  //    the deliverable, and a failed comment must not strand a published round
+  //    behind an aborted ingest.
+  let proposalPosted = false;
+  if (proposal) {
+    try {
+      await client.acceptanceComment.create.mutate({
+        acceptanceId,
+        // Signed by the agent that produced the round, not by whoever's
+        // credentials carried the ingest. Absent outside an agent run, and
+        // then it falls back to the account.
+        authorAgentId: process.env.LOBEHUB_AGENT_ID || undefined,
+        // Derived from the round, so re-ingesting the same round edits nothing
+        // and duplicates nothing.
+        clientId: `proposal:${runId}`,
+        content: proposal,
+        contextRunId: runId,
+        kind: 'proposal',
+      });
+      proposalPosted = true;
+    } catch (e) {
+      log.warn(`proposal not posted to the discussion: ${String(e)}`);
+    }
+  }
+
   // A case with no matching plan item means the run checked something it
   // never planned — worth saying out loud, but not a failure. Only
   // meaningful against a plan that actually names something: with no plan
@@ -864,6 +905,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         inlined,
         origin,
         planItems: plan?.length ?? 0,
+        proposalPosted,
         pullRequest,
         roundIndex,
         roundUrl,
@@ -890,6 +932,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         `${unplanned.length > 0 ? pc.dim(` — ${unplanned.length} unplanned case(s)`) : ''}`,
     );
   }
+  if (proposalPosted) console.log(`${pc.bold('proposal')}: posted to the discussion`);
   if (pullRequest?.url) console.log(`${pc.bold('pr')}: ${pullRequest.url}`);
   if (origin?.topicId) console.log(`${pc.bold('origin topic')}: ${origin.topicId}`);
   console.log(`${pc.bold('verifyRunId')}: ${runId} ${pc.dim('(immutable snapshot)')}`);
@@ -1048,7 +1091,7 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
     run
       .command('ingest <reportDir>')
       .description(
-        'Ingest a local agent-testing report (result.json + report.md + assets) as a new round',
+        'Ingest a local agent-testing report (result.json + report.md + proposal.md + assets) as a new round',
       ),
   ).action(ingestReportAction);
 

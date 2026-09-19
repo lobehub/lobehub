@@ -1,6 +1,17 @@
 import type { GoalItem } from '@lobechat/types';
 
-const DEFAULT_MAX_ATTEMPTS_PER_TASK = 3;
+/**
+ * Attempts a Task gets before the coordinator opens a decision gate, when the
+ * goal does not set its own.
+ *
+ * Long-horizon Tasks spend attempts on more than rejected deliveries: a run that
+ * outlives its lease, a dispatch that never reached the device, a review that
+ * asks for one more piece of evidence. Three attempts ran out on exactly those —
+ * a Task whose work was finished still stopped the whole goal on a person — so
+ * the default leaves room for a few infrastructure retries plus real repair
+ * rounds. A goal can still set a lower `recovery.maxAttemptsPerTask`.
+ */
+const DEFAULT_MAX_ATTEMPTS_PER_TASK = 8;
 /**
  * Conservative on purpose: enough to stop independent Tasks queueing behind one
  * another, low enough that a goal cannot empty its budget in one fan-out before

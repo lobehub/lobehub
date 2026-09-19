@@ -39,9 +39,11 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/apiKey', () => ({
   ApiKeyModel: Object.assign(
-    vi.fn().mockImplementation((_db: unknown, userId: string) => ({
-      updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
-    })),
+    vi.fn(function (_db: unknown, userId: string) {
+      return {
+        updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
+      };
+    }),
     {
       findByKey: mockFindByKey,
     },

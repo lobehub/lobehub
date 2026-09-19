@@ -5,6 +5,20 @@ import { describe, expect, it } from 'vitest';
 import { formatErrorForState, readErrorBudgetContext } from './formatErrorForState';
 
 describe('formatErrorForState', () => {
+  it('classifies an already-wrapped error using its nested provider message', () => {
+    const error = {
+      body: { error: { message: 'insufficient quota' }, provider: 'openai' },
+      type: AgentRuntimeErrorType.ProviderBizError,
+    };
+    const result = formatErrorForState(error);
+    expect(result).toMatchObject({
+      attribution: 'user',
+      body: error.body,
+      type: AgentRuntimeErrorType.InsufficientQuota,
+    });
+    expect(formatErrorForState(result)).toEqual(result);
+  });
+
   describe('input normalization', () => {
     it('handles ChatCompletionErrorPayload — extracts errorType and message', () => {
       const result = formatErrorForState({
@@ -437,7 +451,7 @@ describe('formatErrorForState', () => {
 
 // The cost-admission gate attaches `budget` to the thrown payload, and
 // `formatErrorForState` copies it onto `body` verbatim — `body` is `any`, so
-// reading it back has to narrow rather than cast (LOBE-13726).
+// reading it back has to narrow rather than cast.
 describe('readErrorBudgetContext', () => {
   it('reads the budget context an admission gate attached', () => {
     const formatted = formatErrorForState({

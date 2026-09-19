@@ -100,6 +100,7 @@ export default {
   'agentProfile.files_other': '{{count}} files',
   'agentProfile.knowledgeBases_one': '{{count}} library',
   'agentProfile.knowledgeBases_other': '{{count}} libraries',
+  'agentProfile.runtime': 'Runs on {{name}}',
   'agentProfile.skills_one': '{{count}} skill',
   'agentProfile.skills_other': '{{count}} skills',
   'agentSignal.receipts.agentSignalLabel': 'Agent Signal',
@@ -648,6 +649,8 @@ export default {
   'heteroAgent.executionTarget.noneDesc': 'No device enabled',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
+  'heteroAgent.executionTarget.onlineConnections_one': 'Online · {{count}} connection',
+  'heteroAgent.executionTarget.onlineConnections_other': 'Online · {{count}} connections',
   'heteroAgent.executionTarget.reconnect': 'Reconnect',
   'heteroAgent.executionTarget.reconnectFailed':
     'Could not reconnect this device. Make sure the desktop app is running, then try again.',
@@ -1004,6 +1007,17 @@ export default {
   'droidInstallGuide.menuNotification.title': 'Factory Droid CLI not found',
   'droidInstallGuide.reason': 'LobeHub could not start Factory Droid: {{message}}',
   'droidInstallGuide.title': 'Install Factory Droid CLI',
+  'devinInstallGuide.actions.openDocs': 'Open Install Guide',
+  'devinInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'devinInstallGuide.afterInstall':
+    'After installing, run `devin auth login`, then retry your message or click Re-detect in System Tools.',
+  'devinInstallGuide.desc':
+    'Devin needs the Devin CLI to run locally. Install it and make sure the `devin` command is available in your PATH.',
+  'devinInstallGuide.installWithBrew': 'Windows PowerShell',
+  'devinInstallGuide.installWithNpm': 'macOS / Linux / WSL',
+  'devinInstallGuide.menuNotification.title': 'Devin CLI not found',
+  'devinInstallGuide.reason': 'LobeHub could not start Devin: {{message}}',
+  'devinInstallGuide.title': 'Install Devin CLI',
   'grokBuildInstallGuide.actions.openDocs': 'Open Install Guide',
   'grokBuildInstallGuide.actions.openSystemTools': 'Open System Tools',
   'grokBuildInstallGuide.afterInstall':
@@ -1083,6 +1097,7 @@ export default {
   'newCodexAgent': 'Add Codex',
   'newCursorAgent': 'Add Cursor',
   'newDroidAgent': 'Add Factory Droid',
+  'newDevinAgent': 'Add Devin',
   'newGrokBuildAgent': 'Add Grok Build',
   'newKimiCodeAgent': 'Add Kimi Code',
   'newOpenCodeAgent': 'Add OpenCode',
@@ -1174,6 +1189,7 @@ export default {
   'connectAgent.providerDesc.codex': 'OpenAI coding agent CLI',
   'connectAgent.providerDesc.cursor': 'Cursor coding agent CLI',
   'connectAgent.providerDesc.droid': 'Factory coding agent CLI',
+  'connectAgent.providerDesc.devin': 'Cognition coding agent CLI',
   'connectAgent.providerDesc.grok-build': 'xAI coding agent CLI',
   'connectAgent.providerDesc.amp': 'Sourcegraph coding agent CLI',
   'connectAgent.providerDesc.kimi-code': 'Moonshot AI coding agent CLI',
@@ -1324,6 +1340,7 @@ export default {
   'sendPlaceholderWithAgentAssignment':
     'Ask, create, or start a task. @ to assign tasks to other agents.',
   'sender.unknownMember': 'Member',
+  'steer.tag': 'Steered',
   'sessionGroup.config': 'Category Management',
   'sessionGroup.manageCategory': 'Manage Category',
   'sessionGroup.confirmRemoveGroupAlert':
@@ -1537,6 +1554,7 @@ export default {
   'taskDetail.acceptance.multimodalLlm': 'Multimodal LLM',
   'taskDetail.acceptance.openReport': 'Acceptance report',
   'taskDetail.acceptance.remove': 'Remove acceptance',
+  'taskDetail.acceptance.untitled': 'this acceptance',
   'taskDetail.acceptance.removeConfirm.content':
     "This removes the task's acceptance goal, checklist, and recorded acceptance results. Task artifacts are unaffected.",
   'taskDetail.acceptance.removeConfirm.ok': 'Remove',
@@ -2020,6 +2038,9 @@ export default {
   'goalProcess.graph.view.all': 'Full map',
   'goalProcess.graph.fullscreen': 'Fullscreen',
   'goalProcess.graph.exitFullscreen': 'Exit fullscreen',
+  'goalProcess.linked.open': 'Open goal progress',
+  'goalProcess.portal.openPage': 'Open goal page',
+  'goalProcess.portal.title': 'Goal',
   'goalProcess.graph.legend.hide': 'Hide this kind on the map',
   'goalProcess.graph.legend.show': 'Show this kind on the map',
   'goalProcess.edge.investigates': 'investigates',
@@ -2199,7 +2220,7 @@ export default {
   'taskList.assigneeSearch.memberPlaceholder': 'Search Assignee...',
   'taskList.assigneeSearch.placeholder': 'Search Assignee or Agent...',
   'taskList.assigneeSelector.agentGroup': 'Agents',
-  'taskList.assigneeSelector.memberGroup': 'Assignee',
+  'taskList.assigneeSelector.workspaceMemberGroup': 'Workspace members',
   'taskList.contextMenu.copyConfirm': 'Copy',
   'taskList.contextMenu.copyDescription':
     'Clone this task (and all its subtasks) into another workspace. Status resets to backlog.',
@@ -2392,8 +2413,6 @@ export default {
   'topicComment.updateFailed': 'Failed to update comment',
   'translate.action': 'Translate',
   'translate.clear': 'Clear Translation',
-  'tts.action': 'Text-to-Speech',
-  'tts.clear': 'Clear Speech',
   'turnProcess.done_one': 'Ran {{count}} step',
   'turnProcess.done_other': 'Ran {{count}} steps',
   'turnProcess.ranFor_one': 'Ran {{count}} step ({{duration}})',
@@ -2510,8 +2529,8 @@ export default {
   'viewSwitcher.page': 'Page',
   'viewSwitcher.task': 'Task',
   'workflow.failedSuffix': '(failed)',
-  'workflow.summaryAcrossTools': 'across {{count}} tools',
-  'workflow.summaryCallsLead': '{{count}} calls: {{tools}}',
+  'workflow.summaryCallsTotal_one': '{{count}} call',
+  'workflow.summaryCallsTotal_other': '{{count}} calls',
   'workflow.summaryFailed': '{{count}} failed',
   'workflow.thoughtForDuration': 'Thought for {{duration}}',
   'workflow.toolDisplayName.activateDevice': 'Activated device',
@@ -2639,21 +2658,27 @@ export default {
   'workingPanel.overview.branch.detached': 'Detached HEAD',
   'workingPanel.overview.changes': 'Changes',
   'workingPanel.overview.changes.none': 'No changes',
-  'workingPanel.overview.ci.failure': 'Checks failed',
-  'workingPanel.overview.ci.pending': 'Checks running',
+  'workingPanel.overview.ci.failure': 'Failed',
+  'workingPanel.overview.ci.pending': 'Running',
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
   'workingPanel.overview.emptyTitle': 'Ready to work',
   'workingPanel.overview.environmentError': 'Could not load the repository status',
   'workingPanel.overview.execution.device': 'Connected device',
   'workingPanel.overview.execution.local': 'This device',
+  'workingPanel.overview.files': 'Files',
   'workingPanel.overview.outputs': 'Outputs',
-  'workingPanel.overview.sync.pull': 'Pull incoming commits',
-  'workingPanel.overview.sync.push': 'Push unpushed commits',
+  'workingPanel.overview.sync.ahead_one': '{{count}} commit ahead',
+  'workingPanel.overview.sync.ahead_other': '{{count}} commits ahead',
+  'workingPanel.overview.sync.behind_one': '{{count}} commit behind',
+  'workingPanel.overview.sync.behind_other': '{{count}} commits behind',
+  'workingPanel.overview.sync.pull': 'Pull',
+  'workingPanel.overview.sync.push': 'Push',
   'workingPanel.overview.title': 'Overview',
   'workingPanel.overview.viewAll': 'View all',
   'workingPanel.overview.workspace.empty': 'No workspace selected',
   'workingPanel.overview.workspace.emptyDesc': 'Choose a working directory from the runtime bar',
+  'workingPanel.overview.worktree.of': 'Worktree of {{name}}',
   'workingPanel.progress': 'Progress',
   'workingPanel.progress.allCompleted': 'All tasks completed',
   'workingPanel.resources': 'Resources',
@@ -2750,6 +2775,36 @@ export default {
   'workingPanel.localFile.publish.noTopic': 'Open a topic to publish this page',
   'workingPanel.localFile.publish.note': 'You can unpublish it at any time.',
   'workingPanel.localFile.publish.oversized': 'These files are too large to publish: {{list}}',
+  'workingPanel.localFile.publish.outsideWorkspace.copiedToast':
+    'Published from the workspace copy at {{dir}}',
+  'workingPanel.localFile.publish.outsideWorkspace.closureDescription':
+    'More local files were found. Review the complete list, then click copy again to continue.',
+  'workingPanel.localFile.publish.outsideWorkspace.copyAction': 'Copy to workspace and publish',
+  'workingPanel.localFile.publish.outsideWorkspace.copyFailed':
+    'Could not copy these files: {{list}}',
+  'workingPanel.localFile.publish.outsideWorkspace.copyFailedEntry':
+    'Could not copy the page file. Please try again.',
+  'workingPanel.localFile.publish.outsideWorkspace.copyHint_one':
+    'The page and its 1 local file will be copied to {{dir}} in this workspace and published from there.',
+  'workingPanel.localFile.publish.outsideWorkspace.copyHint_other':
+    'The page and its {{count}} local files will be copied to {{dir}} in this workspace and published from there.',
+  'workingPanel.localFile.publish.outsideWorkspace.copying': 'Copying files…',
+  'workingPanel.localFile.publish.outsideWorkspace.description_one':
+    'This page references 1 file outside the current workspace. That file would stop working after publish.',
+  'workingPanel.localFile.publish.outsideWorkspace.description_other':
+    'This page references {{count}} files outside the current workspace. Those files would stop working after publish.',
+  'workingPanel.localFile.publish.outsideWorkspace.forceAction':
+    'Publish anyway (include files outside the workspace)',
+  'workingPanel.localFile.publish.outsideWorkspace.forceHint':
+    'This publish will include content read from outside the workspace. Use only with files you trust.',
+  'workingPanel.localFile.publish.outsideWorkspace.forceLabel':
+    'Still read and pack these files outside the workspace',
+  'workingPanel.localFile.publish.outsideWorkspace.stillBlocked':
+    'The workspace copy still has missing or outside-workspace files, so it cannot be published yet.',
+  'workingPanel.localFile.publish.outsideWorkspace.source.nested': 'Nested dependency',
+  'workingPanel.localFile.publish.outsideWorkspace.source.workspace': 'Workspace file',
+  'workingPanel.localFile.publish.outsideWorkspace.title': 'Cannot publish this page directly',
+  'workingPanel.localFile.publish.outsideWorkspace.workspace': 'Current workspace: {{path}}',
   'workingPanel.localFile.publish.remotes':
     'These remote URLs stay as they are. After publish they still load from the original hosts.',
   'workingPanel.localFile.publish.scanning': 'Preparing this page…',
@@ -2758,6 +2813,8 @@ export default {
   'workingPanel.localFile.publish.success': 'Published',
   'workingPanel.localFile.publish.tooLarge': 'This page is too large to publish ({{size}} bytes).',
   'workingPanel.localFile.publish.tooMany': 'This page references too many local files to publish.',
+  'workingPanel.localFile.publish.unsupported':
+    'These file types cannot be published and will be skipped: {{list}}',
   'workingPanel.localFile.publish.unresolvedLocals':
     'This page still points at local files that were not packed, so those assets would break after publish.',
   'workingPanel.localFile.publish.version': 'Publish this version',

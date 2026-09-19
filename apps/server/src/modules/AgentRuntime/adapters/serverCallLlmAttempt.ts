@@ -209,6 +209,27 @@ export class ServerCallLlmAttempt {
   }
 
   async execute(): Promise<void> {
+    try {
+      await this.executeModelCall();
+    } catch (error) {
+      const isAlreadyRecorded =
+        error instanceof ModelEmptyError || error instanceof ModelRefusalError;
+      const isAborted = this.runtimeDiagnostics.providerResponse?.aborted;
+      if (!isAlreadyRecorded && !isAborted && !(await isOperationInterrupted(this.ctx))) {
+        const receivedProviderOutput =
+          this.streamError !== undefined ||
+          this.runtimeDiagnostics.providerResponse?.firstEventAt !== undefined;
+        await this.recordCompletionFailure(
+          receivedProviderOutput ? 'stream_error' : 'provider_error',
+          error,
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  private async executeModelCall(): Promise<void> {
     log(
       '[%s][call_llm] calling model-runtime chat (attempt %d/%d, model: %s, messages: %d, tools: %d)',
       this.operationLogId,
@@ -299,14 +320,12 @@ export class ServerCallLlmAttempt {
           this.toolCalls = raw;
 
           await this.streamSink.flushTextBuffer();
-          await this.ctx.streamManager.publishStreamChunk(
-            this.ctx.operationId,
-            this.ctx.stepIndex,
-            {
-              chunkType: 'tools_calling',
-              toolsCalling: payload,
-            },
-          );
+          // Throttled, not published per delta: providers stream tool arguments
+          // token by token and each callback carries the full accumulated call
+          // list, so publishing every one floods Redis and the Gateway with
+          // ever-growing duplicate payloads. The sink coalesces them and always
+          // ships the final snapshot.
+          this.streamSink.queueToolsCalling(payload);
         },
       },
       diagnostics: this.runtimeDiagnostics,
@@ -320,6 +339,10 @@ export class ServerCallLlmAttempt {
 
     await this.streamSink.flushTextBuffer();
     await this.streamSink.flushReasoningBuffer();
+    // Ships the final tool-call snapshot before the step's tool lifecycle events
+    // go out, so the client has the complete `tools` array by the time the first
+    // `tool_start` addresses it.
+    await this.streamSink.flushToolsCallingBuffer();
     this.streamSink.clearBuffers();
     await this.streamSink.waitForImageUploads();
 
@@ -420,7 +443,7 @@ export class ServerCallLlmAttempt {
     return this.imageList.length + contentPartImageCount;
   }
 
-  private async recordCompletionFailure(reason: ModelCompletionFailureReason) {
+  private async recordCompletionFailure(reason: ModelCompletionFailureReason, error?: unknown) {
     try {
       const providerEvidence =
         this.runtimeDiagnostics.providerRequest || this.runtimeDiagnostics.providerResponse
@@ -445,8 +468,17 @@ export class ServerCallLlmAttempt {
           base64ImageEvents: [...this.base64ImageEvents],
           completion: this.completion,
           contentPartEvents: [...this.contentPartEvents],
+          ...(error === undefined
+            ? {}
+            : {
+                error:
+                  error instanceof Error
+                    ? { message: error.message.slice(0, 500), name: error.name }
+                    : { message: String(error).slice(0, 500) },
+              }),
           output: this.snapshot(),
           reasoningPartEvents: [...this.reasoningPartEvents],
+          ...(this.streamError === undefined ? {} : { streamError: this.streamError }),
         },
         ...(runtimeEvidence ? { runtime: runtimeEvidence } : {}),
         stepIndex: this.ctx.stepIndex,

@@ -143,6 +143,8 @@
   "unknownError.copyTraceIdTooltip": "Nhấn để sao chép",
   "unknownError.desc": "Đã xảy ra lỗi không mong muốn. Bạn có thể thử lại hoặc báo cáo tại",
   "unknownError.retry": "Thử lại",
+  "unknownError.sharedDesc": "Vui lòng báo cáo vấn đề này tại",
+  "unknownError.sharedTitle": "Không thể tạo câu trả lời này",
   "unknownError.title": "Rất tiếc, yêu cầu đã tạm nghỉ",
   "unknownError.traceIdLabel": "ID Dấu vết:",
   "unlock.addProxyUrl": "Thêm URL proxy OpenAI (tùy chọn)",

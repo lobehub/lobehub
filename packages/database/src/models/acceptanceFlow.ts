@@ -273,6 +273,89 @@ export class AcceptanceFlowModel {
     }
   }
 
+  /**
+   * Drop a graph the acceptance no longer describes.
+   *
+   * Authoring a journey takes several tries, and until now every try stayed on
+   * the page forever: an abandoned first draft still renders as its own root
+   * with its own unexecuted checks, so the reader cannot tell which graph the
+   * delivery is actually being verified against.
+   *
+   * Only a graph without verified history can go. A settled round renders from
+   * the snapshot it froze, so its results would outlive the map that explains
+   * them. A draft has nothing to preserve: the flow's snapshot and plan items
+   * are stripped from it, leaving the ledger as if the flow had never been
+   * planned. Check assets the nodes pointed at are reusable on their own and
+   * stay put.
+   */
+  async delete(acceptanceId: string, flowId: string) {
+    await this.owned(acceptanceId);
+    return this.db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select()
+        .from(acceptances)
+        .where(eq(acceptances.id, acceptanceId))
+        .for('update');
+      if (['accepted', 'closed'].includes(locked.status))
+        throw new Error('Reopen acceptance before deleting a flow');
+      const [flow] = await tx
+        .select()
+        .from(flows)
+        .where(and(eq(flows.id, flowId), eq(flows.acceptanceId, acceptanceId)))
+        .for('update');
+      if (!flow) throw new Error('Flow not found');
+
+      const [invoked] = await tx
+        .select({ title: flows.title })
+        .from(nodes)
+        .innerJoin(flows, eq(nodes.flowId, flows.id))
+        .where(eq(nodes.subFlowId, flowId));
+      if (invoked)
+        throw new Error(`"${invoked.title}" invokes this flow — remove that subflow node first`);
+
+      const rounds = await tx
+        .select()
+        .from(verifyRuns)
+        .where(eq(verifyRuns.acceptanceId, acceptanceId))
+        .orderBy(asc(verifyRuns.roundIndex))
+        .for('update');
+      const carrying = rounds.filter((round) =>
+        round.flowSnapshots?.some((snapshot) => snapshot.flowId === flowId),
+      );
+      const settled = carrying.find((round) => !isDraftVerifyRun(round));
+      if (settled)
+        throw new Error(
+          `Round ${settled.roundIndex} verified this flow — delete that round first, or leave the graph in place`,
+        );
+      const planned = carrying.flatMap((round) =>
+        (round.plan ?? [])
+          .filter((item) => item.sourceFlowNode?.flowId === flowId)
+          .map((item) => item.id),
+      );
+      const [recorded] = planned.length
+        ? await tx
+            .select({ id: verifyCheckResults.id })
+            .from(verifyCheckResults)
+            .where(inArray(verifyCheckResults.checkItemId, planned))
+            .limit(1)
+        : [];
+      if (recorded) throw new Error('This flow already has recorded results');
+
+      for (const round of carrying)
+        await tx
+          .update(verifyRuns)
+          .set({
+            plan: (round.plan ?? [])
+              .filter((item) => item.sourceFlowNode?.flowId !== flowId)
+              .map((item, index) => ({ ...item, index })),
+            flowSnapshots: round.flowSnapshots!.filter((snapshot) => snapshot.flowId !== flowId),
+          })
+          .where(eq(verifyRuns.id, round.id));
+      await tx.delete(flows).where(eq(flows.id, flowId));
+      return { flowId, title: flow.title, unplannedRounds: carrying.map((round) => round.id) };
+    });
+  }
+
   private async graph(
     flowId: string,
     database: LobeChatDatabase | Transaction = this.db,

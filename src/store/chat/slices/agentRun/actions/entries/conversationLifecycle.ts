@@ -450,12 +450,12 @@ export class ConversationLifecycleActionImpl {
     });
     const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
-    // unchanged when it is available, but recover the provider before the
-    // desktop-only local fallback so both runtime selection and the executor
-    // receive the same heterogeneous identity.
+    // unchanged when it is available. Recover the provider when gateway mode is
+    // off so desktop can still spawn locally and non-desktop (Android/web) still
+    // routes through Gateway instead of the Provider API.
     const heterogeneousProvider =
       agencyConfig?.heterogeneousProvider ??
-      (isDesktop && !isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
+      (!isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
         ? { type: agentConfig.model }
         : undefined);
     const runtimeType = selectRuntimeType({
@@ -782,7 +782,7 @@ export class ConversationLifecycleActionImpl {
                   : undefined,
             ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
             message: merged.content,
-            metadata: merged.metadata,
+            metadata: { ...merged.metadata, steer: true },
           })
           .catch((error: unknown) => {
             console.error('[sendMessage] restarting queued content after Stop failed:', error);
@@ -1710,7 +1710,11 @@ export class ConversationLifecycleActionImpl {
           messageContext: operationContext,
           fileIds: fileIdList,
           message,
-          metadata: requestMetadata,
+          // The server persists the user row on this path, so a queued
+          // follow-up's steer mark must travel with the request.
+          metadata: (metadata as Pick<MessageMetadata, 'steer'> | undefined)?.steer
+            ? { ...requestMetadata, steer: true }
+            : requestMetadata,
           onMessageAccepted: notifyMessageAccepted,
           parentOperationId: operationId,
           replacesOperationId: replaceableGatewayOperationId,

@@ -1,8 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LineClientFactory } from './client';
 
 const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+vi.mock('@/server/services/gateway/runtimeStatus', () => ({
+  BOT_RUNTIME_STATUSES: {
+    connected: 'connected',
+    disconnected: 'disconnected',
+    failed: 'failed',
+    starting: 'starting',
+  },
+  getRuntimeStatusErrorMessage: (e: unknown) => (e instanceof Error ? e.message : 'unknown'),
+  updateBotRuntimeStatus: vi.fn().mockResolvedValue(undefined),
+}));
 
 const APPLICATION_ID = 'Ubotbotbotbotbotbotbotbotbotbotbo';
 
@@ -19,19 +30,6 @@ const createClient = () =>
     },
     {},
   );
-
-beforeEach(() => {
-  vi.mock('@/server/services/gateway/runtimeStatus', () => ({
-    BOT_RUNTIME_STATUSES: {
-      connected: 'connected',
-      disconnected: 'disconnected',
-      failed: 'failed',
-      starting: 'starting',
-    },
-    getRuntimeStatusErrorMessage: (e: unknown) => (e instanceof Error ? e.message : 'unknown'),
-    updateBotRuntimeStatus: vi.fn().mockResolvedValue(undefined),
-  }));
-});
 
 afterEach(() => {
   fetchSpy.mockReset();

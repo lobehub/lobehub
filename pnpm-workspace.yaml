@@ -28,7 +28,7 @@ packages:
   - apps/workbench
 
 minimumReleaseAgeExclude:
-  - '@lobehub/ui@5.20.2'
+  - '@lobehub/*'
 
 # Build scripts run one at a time. Several peer-variant copies of
 # @lobehub/editor resolve in this workspace and every copy's postinstall
@@ -40,6 +40,7 @@ childConcurrency: 1
 allowBuilds:
   '@google/genai': true
   '@lobehub/editor': true
+  '@sentry/cli': true
   '@vercel/speed-insights': true
   core-js: false
   es5-ext: false
@@ -54,7 +55,7 @@ overrides:
   '@ant-design/icons': 6.3.2
   '@react-pdf/image': 3.0.4
   '@types/react': 19.2.13
-  '@vitest/coverage-v8': 3.2.6
+  '@vitest/coverage-v8': 5.0.0
   antd: 6.3.5
   baseline-browser-mapping: 2.10.31
   drizzle-orm: ^0.45.2
@@ -67,7 +68,7 @@ overrides:
   's3rver>fast-xml-parser': 3.21.1
   stylelint-config-clean-order: 7.0.0
   typescript: 6.0.3
-  vitest: 3.2.6
+  vitest: 5.0.0
   'zod@^4': 4.5.4
 
 patchedDependencies:

@@ -58,7 +58,8 @@ const makeApp = () => ({
   storeManager: { get: vi.fn(() => 'stable') },
 });
 
-const channelDir = (channel = 'stable') => path.join(userDataDir, 'renderer-ota-v2', channel);
+const channelDir = (channel = 'stable') =>
+  path.join(userDataDir, 'renderer-ota-v2', channel, APP_VERSION);
 
 const signManifest = (unsigned: Omit<RendererManifest, 'signature'>): RendererManifest => ({
   ...unsigned,
@@ -188,6 +189,52 @@ afterEach(() => {
 });
 
 describe('RendererUpdateManager V2 lifecycle', () => {
+  it.each(['', '0.9.0'])(
+    'ignores prior full-release state with the same mainHash (%s)',
+    async (version) => {
+      const oldDir = path.join(userDataDir, 'renderer-ota-v2', 'stable', version);
+      const oldEntry = path.join(oldDir, 'versions', 'r9', 'apps', 'desktop', 'index.html');
+      mkdirSync(path.dirname(oldEntry), { recursive: true });
+      writeFileSync(oldEntry, '<html>previous full release</html>');
+      writePointer(oldDir, {
+        ...emptyPointer(MAIN_HASH),
+        blacklist: ['r1'],
+        current: 'r9',
+        staged: 'r9',
+      });
+
+      const app = makeApp();
+      const manager = await loadManager(app);
+      manager.initialize();
+      expect(app.rendererUrlManager.setActiveRendererDir).toHaveBeenLastCalledWith(null);
+      expect(manager.getStatus()).toMatchObject({ current: null, staged: null });
+      expect(readFileSync(oldEntry, 'utf8')).toContain('previous full release');
+
+      stubFetch(
+        buildFeed('r0', {
+          'apps/desktop/index.html': entryHtml('builtin'),
+          'assets/entry-e2e.js': 'console.log("builtin")',
+        }),
+      );
+      await manager.checkForUpdates();
+      expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalled();
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      stubFetch(
+        buildFeed('r1', {
+          'apps/desktop/index.html': entryHtml('new patch'),
+          'assets/entry-e2e.js': 'console.log("new patch")',
+        }),
+      );
+      await manager.checkForUpdates();
+      expect(manager.getStatus().staged).toBe('r1');
+      expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
+        kind: 'renderer',
+        version: `${APP_VERSION}.r1`,
+      });
+    },
+  );
+
   it('records both compatibility hashes and rejects the patch before downloading', async () => {
     const app = makeApp();
     const manager = await loadManager(app);
@@ -235,7 +282,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     const app = makeApp();
     const reloadIgnoringCache = vi.fn();
     app.browserManager.browsers.set('app', {
-      browserWindow: { webContents: { reloadIgnoringCache } },
+      reloadIgnoringCache,
     });
     const manager = await loadManager(app);
     manager.initialize();
@@ -259,7 +306,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     );
     expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith('updateReady', {
       kind: 'renderer',
-      version: APP_VERSION,
+      version: `${APP_VERSION}.r1`,
     });
     const fetchedUrls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0]);
     expect(fetchedUrls).toEqual([
@@ -269,7 +316,7 @@ describe('RendererUpdateManager V2 lifecycle', () => {
     expect(fetchedUrls.some((url: string) => url.includes('/renderer/files/'))).toBe(false);
 
     expect(manager.applyStagedNow()).toBe(true);
-    expect(reloadIgnoringCache).toHaveBeenCalledOnce();
+    expect(reloadIgnoringCache).toHaveBeenCalledWith(true);
     expect(
       readFileSync(path.join(otaDir, 'versions', 'r1', 'apps', 'desktop', 'index.html'), 'utf8'),
     ).toBe(entryHtml('v1'));

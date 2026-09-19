@@ -1,4 +1,5 @@
 import { act, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ZoomHUD from './index';
@@ -13,21 +14,15 @@ vi.mock('@lobechat/electron-client-ipc', () => ({
   },
 }));
 
-vi.mock('motion/react', async () => {
-  const React = await import('react');
-  return {
-    AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    m: new Proxy(
-      {},
-      {
-        get:
-          () =>
-          ({ children, ...rest }: any) =>
-            React.createElement('div', rest, children),
-      },
-    ),
-  };
-});
+vi.mock('motion/react', () => ({
+  AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('motion/react-m', () => ({
+  div: ({ children, ...rest }: { children?: ReactNode; [key: string]: unknown }) => (
+    <div {...rest}>{children}</div>
+  ),
+}));
 
 const emit = (factor: number, level: number) => {
   act(() => {

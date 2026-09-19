@@ -13,11 +13,19 @@ const mocks = vi.hoisted(() => ({
   goal: vi.fn(),
 }));
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({ getAgentModelConfig: mocks.agent })),
+  AgentModel: vi.fn(function () {
+    return { getAgentModelConfig: mocks.agent };
+  }),
 }));
-vi.mock('@/database/models/task', () => ({ TaskModel: vi.fn(() => ({ findById: mocks.task })) }));
+vi.mock('@/database/models/task', () => ({
+  TaskModel: vi.fn(function () {
+    return { findById: mocks.task };
+  }),
+}));
 vi.mock('@/database/repositories/aiInfra', () => ({
-  AiInfraRepos: vi.fn(() => ({ getAiProviderModelList: mocks.models })),
+  AiInfraRepos: vi.fn(function () {
+    return { getAiProviderModelList: mocks.models };
+  }),
 }));
 vi.mock('@/server/globalConfig', () => ({
   getServerGlobalConfig: vi.fn().mockResolvedValue({ aiProvider: {} }),

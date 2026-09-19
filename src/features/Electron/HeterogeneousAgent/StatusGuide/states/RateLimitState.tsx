@@ -1,3 +1,4 @@
+import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { CalendarClock, Play, RotateCcw } from 'lucide-react';
@@ -25,11 +26,12 @@ const RateLimitState = ({
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t, i18n } = useTranslation('chat');
+  const quotaContext = readHeterogeneousErrorContext({ type: 'AgentRuntimeError', body: error });
   const rawErrorDetails = error?.stderr || error?.message;
   const dateLocale = i18n.resolvedLanguage || i18n.language || undefined;
   // Prefer the persisted scheduled reset time so the "已安排" copy stays stable
   // even if the live error payload is missing it on reload.
-  const effectiveResetsAt = schedule?.resetsAt ?? error?.rateLimitInfo?.resetsAt;
+  const effectiveResetsAt = schedule?.resetsAt ?? quotaContext?.resetsAt;
   const timezoneLabel = useMemo(
     () => extractTimezoneLabel(rawErrorDetails) || Intl.DateTimeFormat().resolvedOptions().timeZone,
     [rawErrorDetails],
@@ -56,7 +58,7 @@ const RateLimitState = ({
     }
   }, [dateLocale, effectiveResetsAt, timezoneLabel]);
   const rateLimitTypeLabel = useMemo(() => {
-    const rateLimitType = error?.rateLimitInfo?.rateLimitType;
+    const rateLimitType = quotaContext?.rateLimitType;
     if (!rateLimitType) return;
 
     if (rateLimitType === 'seven_day') {
@@ -68,7 +70,7 @@ const RateLimitState = ({
     }
 
     return rateLimitType.replaceAll('_', ' ');
-  }, [error?.rateLimitInfo?.rateLimitType, t]);
+  }, [quotaContext?.rateLimitType, t]);
   // The "~X h Y m" duration string, reused both for the header hint and the
   // scheduling action/label copy.
   const relativeDuration = useMemo(() => {

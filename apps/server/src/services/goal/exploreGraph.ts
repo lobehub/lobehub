@@ -1,7 +1,13 @@
 import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
 import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
 import type { GoalGraphSnapshot, GoalTickResult } from '@lobechat/types';
-import { experimentMembers, experimentOwner } from '@lobechat/utils/goalGraph';
+import {
+  experimentOwner,
+  experimentScope,
+  isProtocolRevision,
+  MAX_PROTOCOL_REVISIONS,
+  protocolRevisionCount,
+} from '@lobechat/utils/goalGraph';
 
 import { GoalExplorationModel, goalExplorationSnapshot } from '@/database/models/goalExploration';
 import type { LobeChatDatabase } from '@/database/type';
@@ -9,8 +15,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { GoalExplorationPlanner } from './explorationPlanner';
 
 export const experimentResults = (graph: GoalGraphSnapshot, nodeId: string): string[] => {
-  const members = experimentMembers(graph, nodeId);
-  members.add(nodeId);
+  const members = experimentScope(graph, nodeId);
   const findings = new Set(
     graph.edges
       .filter((edge) => members.has(edge.sourceNodeId) && edge.kind === 'produces')
@@ -50,18 +55,29 @@ export async function exploreGraph(params: {
             node.kind === 'experiment' ||
             (node.kind === 'task' &&
               node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
-              !experimentOwner(graph, node.id)),
+              !experimentOwner(graph, node.id) &&
+              !isProtocolRevision(graph, node.id)),
         )
         .map((node) => ({
           id: node.id,
           title: node.title,
           status: node.status,
           results: experimentResults(graph, node.id),
+          // Tells the planner which experiments a previous turn authored, so it can
+          // judge whether its own last move helped before repeating that direction.
+          derivedFromId: graph.edges.find(
+            (edge) => edge.sourceNodeId === node.id && edge.kind === 'derived_from',
+          )?.targetNodeId,
+          // An uncontained seed cannot hold a correction, so it reports none left
+          // rather than inviting a choice the apply step would refuse.
+          revisionsRemaining:
+            node.kind === 'experiment' || experimentOwner(graph, node.id)
+              ? Math.max(MAX_PROTOCOL_REVISIONS - protocolRevisionCount(graph, node.id), 0)
+              : 0,
           inputVersionIds: graph.workVersions
             .filter(
               (version) =>
-                (version.nodeId === node.id ||
-                  experimentMembers(graph, node.id).has(version.nodeId)) &&
+                experimentScope(graph, node.id).has(version.nodeId) &&
                 version.relation === 'produced' &&
                 version.work,
             )
@@ -82,6 +98,18 @@ export async function exploreGraph(params: {
         outcome: 'no_progress',
         message: `Experiment limit reached (${policy.maxExperiments}); goal is not yet accepted. ${decision.reason}`,
       };
+    }
+    if (result.outcome === 'revision-limit') {
+      effects.push({ detail: 'paused: revision allowance spent', type: 'goal_status' });
+      return { goalId, outcome: 'no_progress', message: result.reason };
+    }
+    if (result.outcome === 'revised') {
+      effects.push({
+        type: 'created_node',
+        nodeId: result.nodeId,
+        detail: `revised ${result.parentNodeId}: ${decision.reason}`,
+      });
+      return { goalId, nodeId: result.nodeId, outcome: 'advanced', message: decision.reason };
     }
     if (result.outcome === 'expanded') {
       effects.push({

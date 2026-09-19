@@ -49,6 +49,24 @@ export class InterventionController {
   }
 
   /**
+   * Mirrors whether the composer still holds user messages queued behind a
+   * run, so the run hands its turn back at the next step boundary.
+   *
+   * Returns:
+   * - `success: false` when the operation is unknown or not owned by this user.
+   */
+  async setQueuedMessages(params: {
+    operationId: string;
+    pending: boolean;
+  }): Promise<{ success: boolean }> {
+    const { operationId, pending } = params;
+    const success = await this.deps.agentRuntimeService.setQueuedMessages(operationId, pending);
+    log('setQueuedMessages: operationId=%s, pending=%s, success=%s', operationId, pending, success);
+
+    return { success };
+  }
+
+  /**
    * Interrupts a running task and coordinates any device-hosted process shutdown.
    *
    * Call stack:

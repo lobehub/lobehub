@@ -1,8 +1,10 @@
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import type { LucideIcon } from 'lucide-react';
+import { Loader2Icon, type LucideIcon } from 'lucide-react';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo } from 'react';
+
+import PathBreadcrumb from './PathBreadcrumb';
 
 const styles = createStaticStyles(({ css }) => ({
   action: css`
@@ -68,22 +70,23 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
-  dir: css`
+  crumbGroup: css`
     overflow: hidden;
 
-    /* Shrinks long before the filename does — the filename only starts
-       ellipsizing once the directory is fully collapsed. */
+    /* Ancestors give up their width long before the filename does, so the file
+       being previewed is the last thing to ellipsize. */
     flex-shrink: 100;
+    min-width: 0;
 
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    &:last-child {
+      flex-shrink: 1;
+    }
   `,
-  name: css`
-    overflow: hidden;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  separator: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: ${cssVar.colorTextQuaternary};
   `,
   path: css`
     overflow: hidden;
@@ -122,7 +125,7 @@ export const ToolbarActionButton = memo<ToolbarActionButtonProps>(
         type={'button'}
         onClick={onClick}
       >
-        <Icon icon={icon} size={14} spin={loading} />
+        <Icon icon={loading ? Loader2Icon : icon} size={14} spin={loading} />
         {label && <span className={styles.actionLabel}>{label}</span>}
       </button>
     );
@@ -135,39 +138,35 @@ ToolbarActionButton.displayName = 'ToolbarActionButton';
 
 interface PreviewToolbarProps {
   actions?: ReactNode;
+  /** Remote device the file lives on; local when absent. */
+  deviceId?: string;
   path: string;
+  /** Project root the path is shown relative to, when the file lives inside it. */
+  rootPath?: string;
 }
 
-const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, path }) => {
-  const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-  const dir = lastSlash > 0 ? path.slice(0, lastSlash) : '';
-  const sep = lastSlash > 0 ? path[lastSlash] : '';
-  const name = path.slice(lastSlash + 1);
-
-  return (
-    <Flexbox horizontal align={'center'} className={styles.bar} gap={8} justify={'space-between'}>
-      <Tooltip title={path}>
-        <Flexbox horizontal align={'center'} className={styles.path} flex={1}>
-          {dir && <span className={styles.dir}>{dir}</span>}
-          <span className={styles.name}>{dir ? `${sep}${name}` : name}</span>
-        </Flexbox>
-      </Tooltip>
-      {actions && (
-        <Flexbox
-          data-toolbar-actions
-          horizontal
-          align={'center'}
-          className={styles.actions}
-          flex={'none'}
-          gap={2}
-          style={{ marginInlineStart: 'auto' }}
-        >
-          {actions}
-        </Flexbox>
-      )}
-    </Flexbox>
-  );
-});
+const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, deviceId, path, rootPath }) => (
+  <Flexbox horizontal align={'center'} className={styles.bar} gap={8} justify={'space-between'}>
+    <Tooltip title={path}>
+      <Flexbox horizontal align={'center'} className={styles.path} flex={1}>
+        <PathBreadcrumb deviceId={deviceId} path={path} rootPath={rootPath} />
+      </Flexbox>
+    </Tooltip>
+    {actions && (
+      <Flexbox
+        data-toolbar-actions
+        horizontal
+        align={'center'}
+        className={styles.actions}
+        flex={'none'}
+        gap={2}
+        style={{ marginInlineStart: 'auto' }}
+      >
+        {actions}
+      </Flexbox>
+    )}
+  </Flexbox>
+));
 
 PreviewToolbar.displayName = 'PreviewToolbar';
 

@@ -20,7 +20,9 @@ const { getSupportedModels, initRuntime, resolveModel, signOperationToken } = vi
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({

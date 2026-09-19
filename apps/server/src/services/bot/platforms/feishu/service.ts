@@ -24,6 +24,8 @@ import type {
   PinMessageState,
   ReactToMessageParams,
   ReactToMessageState,
+  ReadDocumentParams,
+  ReadDocumentState,
   ReadMessagesParams,
   ReadMessagesState,
   ReplyToThreadParams,
@@ -35,14 +37,19 @@ import type {
   UnpinMessageParams,
   UnpinMessageState,
 } from '@lobechat/builtin-tool-message/executionRuntime';
-import type { LarkApiClient } from '@lobechat/chat-adapter-feishu';
-import { supportedFeishuEmojiTypes, toFeishuEmojiType } from '@lobechat/chat-adapter-feishu';
+import type { LarkApiClient, LarkDocLink } from '@lobechat/chat-adapter-feishu';
+import {
+  flattenLarkMessageContent,
+  parseLarkDocUrl,
+  supportedFeishuEmojiTypes,
+  toFeishuEmojiType,
+} from '@lobechat/chat-adapter-feishu';
 import { DEFAULT_BOT_HISTORY_LIMIT } from '@lobechat/const';
 
 import type { MessageRuntimeService } from '@/server/services/toolExecution/serverRuntimes/message/adapters/types';
 import { PlatformUnsupportedError } from '@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError';
 
-import { MAX_FEISHU_HISTORY_LIMIT } from './const';
+import { MAX_FEISHU_DOCUMENT_CHARS, MAX_FEISHU_HISTORY_LIMIT } from './const';
 import { sendFeishuAttachments } from './sendAttachments';
 
 /**
@@ -86,13 +93,14 @@ const explainHistoryReadError = (error: unknown): Error => {
  * Normalize a Feishu/Lark message object to MessageItem.
  */
 const toMessageItem = (msg: any): MessageItem => {
-  let content: string;
-  try {
-    const parsed = JSON.parse(msg.body?.content ?? '{}');
-    content = parsed.text ?? '';
-  } catch {
-    content = msg.body?.content ?? '';
-  }
+  // History rows carry `msg_type` (receive events say `message_type`). Only
+  // `text` bodies are a plain string; rich text and cards — which is how
+  // meeting minutes and other documents land in a chat — are flattened so
+  // the model sees their text AND the document links, instead of ''.
+  const { text: content } = flattenLarkMessageContent(
+    msg.msg_type ?? msg.message_type,
+    msg.body?.content ?? '{}',
+  );
 
   return {
     author: {
@@ -106,6 +114,62 @@ const toMessageItem = (msg: any): MessageItem => {
       ? new Date(Number(msg.create_time)).toISOString()
       : new Date().toISOString(),
   };
+};
+
+/**
+ * Docx API failures that have a fix on the operator's side, mapped to that
+ * fix. Scope violations are already spelled out by `LarkApiClient`
+ * (`permission_violations`), so this table only covers the codes where the
+ * bare message is misleading — notably `1770032`, which reads as a scope
+ * problem but usually means the *document* is not visible to the app.
+ *
+ * @see https://open.feishu.cn/document/server-docs/docs/docs/docx-v1/document/raw_content
+ */
+const DOCUMENT_READ_ERROR_HINTS: Record<string, string> = {
+  '1770001': 'the document token is malformed — pass the URL exactly as it appears in the chat',
+  '1770002': 'the document does not exist (or the token belongs to a different tenant)',
+  '1770003': 'the document has been deleted',
+  '1770032':
+    'the app cannot see this document. Sharing it into a group the bot is in does not grant access — the owner must add the app as a collaborator (文档「分享」→ 添加协作者 → 搜索应用名), or the space/folder must grant the app access. If the app also lacks the scope, enable `docx:document:readonly` under 权限管理 and re-publish the app',
+};
+
+const explainDocumentReadError = (error: unknown): Error => {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = Object.keys(DOCUMENT_READ_ERROR_HINTS).find((c) => message.includes(c));
+  if (!code) return error instanceof Error ? error : new Error(message);
+  return new Error(`${message} — ${DOCUMENT_READ_ERROR_HINTS[code]}.`);
+};
+
+/**
+ * What a `readDocument` call points at. A bare `documentId` is assumed to be
+ * a docx token — that is what every other docx endpoint takes and what the
+ * model gets back in `ReadDocumentState.documentId`.
+ */
+const resolveDocumentTarget = (
+  params: ReadDocumentParams,
+): Pick<LarkDocLink, 'kind' | 'token'> & { url?: string } => {
+  if (params.url) {
+    const link = parseLarkDocUrl(params.url);
+    if (!link) {
+      throw new Error(
+        `"${params.url}" is not a Feishu/Lark document link. Expected https://<tenant>.feishu.cn/docx/<token> (or /wiki/, /docs/ …)`,
+      );
+    }
+    return link;
+  }
+  if (params.documentId) return { kind: 'docx', token: params.documentId };
+  throw new Error('readDocument needs the document `url` (preferred) or its `documentId`');
+};
+
+const UNREADABLE_KIND_HINTS: Partial<Record<LarkDocLink['kind'], string>> = {
+  base: 'this is a Bitable (多维表格) link; only docx documents and wiki pages wrapping them can be read',
+  doc: 'this is a legacy /docs/ document; the docx API cannot read it — ask the owner to upgrade it to the new docx format (文档右上角「升级」) or share a docx link',
+  file: 'this is a drive file link, not a document — ask for the docx link',
+  minutes:
+    'this is a Feishu Minutes (妙记) link; reading its transcript needs the `minutes:minutes` scope and a dedicated API that is not wired up yet. Meeting minutes shared as docx (智能纪要) can be read',
+  sheets:
+    'this is a spreadsheet link; only docx documents and wiki pages wrapping them can be read',
+  slides: 'this is a slides link; only docx documents and wiki pages wrapping them can be read',
 };
 
 export class FeishuMessageService implements MessageRuntimeService {
@@ -165,6 +229,55 @@ export class FeishuMessageService implements MessageRuntimeService {
       nextCursor: result.pageToken,
       platform: this.platformName,
       totalFetched: messages.length,
+    };
+  };
+
+  /**
+   * Read a docx document (or the docx a wiki node wraps) as plain text.
+   * Reads use the app's own tenant token, so the document has to be
+   * visible to the *app* — see `DOCUMENT_READ_ERROR_HINTS['1770032']`.
+   */
+  readDocument = async (params: ReadDocumentParams): Promise<ReadDocumentState> => {
+    const target = resolveDocumentTarget(params);
+
+    const kindHint = UNREADABLE_KIND_HINTS[target.kind];
+    if (kindHint) throw new Error(`Cannot read ${target.url ?? target.token}: ${kindHint}.`);
+
+    let documentId = target.token;
+    let wikiTitle: string | undefined;
+    if (target.kind === 'wiki') {
+      // A wiki URL names a tree node; the docx endpoints want the object
+      // behind it. Resolving needs `wiki:wiki:readonly` on top of the docx scope.
+      const node = await this.api.getWikiNode(target.token).catch((error) => {
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)} — resolving a wiki link needs the \`wiki:wiki:readonly\` scope and the app must have access to that knowledge space.`,
+        );
+      });
+      if (node.objType !== 'docx' || !node.objToken) {
+        throw new Error(
+          `Wiki node ${target.token} wraps a "${node.objType ?? 'unknown'}" object; only docx pages can be read.`,
+        );
+      }
+      documentId = node.objToken;
+      wikiTitle = node.title;
+    }
+
+    const rawContent = await this.api.getDocxRawContent(documentId).catch((error) => {
+      throw explainDocumentReadError(error);
+    });
+    // Title is nice-to-have: if the metadata call fails after the body
+    // succeeded, still return the body rather than the whole read failing.
+    const meta = await this.api.getDocxDocument(documentId).catch(() => undefined);
+
+    const truncated = rawContent.length > MAX_FEISHU_DOCUMENT_CHARS;
+    return {
+      content: truncated ? rawContent.slice(0, MAX_FEISHU_DOCUMENT_CHARS) : rawContent,
+      documentId,
+      kind: target.kind,
+      platform: this.platformName,
+      title: meta?.title ?? wikiTitle,
+      truncated,
+      url: target.url,
     };
   };
 

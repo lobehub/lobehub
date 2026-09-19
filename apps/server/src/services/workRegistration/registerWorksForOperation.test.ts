@@ -28,30 +28,44 @@ const {
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({
-    findById: mockFindById,
-    listOperationTree: mockListOperationTree,
-  })),
+  AgentOperationModel: vi.fn(function () {
+    return {
+      findById: mockFindById,
+      listOperationTree: mockListOperationTree,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({
-    findById: mockFindMessageById,
-    listMessagePluginsForOperation: mockListPlugins,
-    update: mockUpdateMessage,
-  })),
+  MessageModel: vi.fn(function () {
+    return {
+      findById: mockFindMessageById,
+      listMessagePluginsForOperation: mockListPlugins,
+      update: mockUpdateMessage,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/work', () => ({
-  WorkModel: vi.fn(() => ({
-    findFileVersionByToolCall: mockFindFileVersionByToolCall,
-    registerFile: mockRegisterFile,
-    registerShellGithubResult: mockRegisterShellGithubResult,
-  })),
+  WorkModel: vi.fn(function () {
+    return {
+      findFileVersionByToolCall: mockFindFileVersionByToolCall,
+      registerFile: mockRegisterFile,
+      registerShellGithubResult: mockRegisterShellGithubResult,
+    };
+  }),
 }));
 
-vi.mock('@/server/services/file', () => ({ FileService: vi.fn(() => ({})) }));
-vi.mock('@/server/services/market', () => ({ MarketService: vi.fn(() => ({})) }));
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function () {
+    return {};
+  }),
+}));
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn(function () {
+    return {};
+  }),
+}));
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mockCreateSandboxService,
 }));

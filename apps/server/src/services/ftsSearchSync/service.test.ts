@@ -607,6 +607,29 @@ describe('FtsSearchSyncService', () => {
     expect(harness.client.bulk.mock.calls[0][0]).toContain('"version":7,"version_type":"external"');
   });
 
+  it('records a fenced message tombstone when the projection is ineligible', async () => {
+    const item = { ...work('ineligible-message', 7), entity: 'messages' as const };
+    const harness = createHarness([item], new Map());
+    harness.client.bulk.mockResolvedValue({
+      errors: false,
+      items: [{ index: { status: 201 } }],
+    });
+    const service = new FtsSearchSyncService(
+      harness.builder as never,
+      harness.outbox as never,
+      harness.client,
+      'lobehub-test',
+    );
+
+    const result = await service.drainOnce();
+
+    expect(harness.client.bulk).toHaveBeenCalledWith(
+      expect.stringContaining('{"id":"ineligible-message","fts_search_sync_deleted":true}'),
+    );
+    expect(harness.client.bulk.mock.calls[0][0]).toContain('"version":7,"version_type":"external"');
+    expect(result.bulkRequestSamples[0].messageTombstoneItems).toBe(1);
+  });
+
   it('dead-letters one operation that exceeds the configured byte limit', async () => {
     const item = work('oversized');
     const following = work('following');

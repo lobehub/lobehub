@@ -3,7 +3,6 @@ import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import { shouldDropUnsupportedClaudeAssistantPrefill } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import type {
   ChatImageItem,
-  ChatTTS,
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
@@ -524,12 +523,6 @@ export interface GenerationAction {
   cancelScheduledRun: () => Promise<void>;
 
   /**
-   * Clear TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  clearMessageTTS: (messageId: string) => Promise<void>;
-
-  /**
    * Clear all operations
    */
   clearOperations: () => void;
@@ -656,19 +649,7 @@ export interface GenerationAction {
    */
   retryFailedAssistantStep: (groupMessageId: string, blockId: string) => Promise<void>;
 
-  /**
-   * Save TTS metadata for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  saveMessageTTS: (messageId: string, data: Required<ChatTTS>) => Promise<void>;
-
   scheduleHeteroContinuation: (params: HeteroContinuationScheduleParams) => Promise<void>;
-
-  /**
-   * Start TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  startMessageTTS: (messageId: string) => void;
 
   /**
    * Stop current generation
@@ -757,11 +738,6 @@ export const generationSlice: StateCreator<
 
   clearOperations: () => {
     // Operations are now managed by ChatStore, nothing to clear locally
-  },
-
-  clearMessageTTS: async (messageId: string) => {
-    const chatStore = useChatStore.getState();
-    await chatStore.clearMessageTTS(messageId);
   },
 
   clearTranslate: async (messageId: string) => {
@@ -1293,15 +1269,5 @@ export const generationSlice: StateCreator<
   translateMessage: async (messageId: string, targetLang: string) => {
     const chatStore = useChatStore.getState();
     await chatStore.translateMessage(messageId, targetLang);
-  },
-
-  saveMessageTTS: async (messageId: string, data: Required<ChatTTS>) => {
-    const chatStore = useChatStore.getState();
-    await chatStore.saveMessageTTS(messageId, data);
-  },
-
-  startMessageTTS: (messageId: string) => {
-    const chatStore = useChatStore.getState();
-    chatStore.startMessageTTS(messageId);
   },
 });

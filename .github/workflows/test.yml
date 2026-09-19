@@ -146,14 +146,14 @@ jobs:
         run: pnpm install
 
       - name: Run tests
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --shard=${{ matrix.shard }}/2 --exclude '**/apps/server/**'
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --project app --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
           name: blob-report-${{ matrix.shard }}
-          path: .vitest-reports
+          path: .vitest/blob
           include-hidden-files: true
           retention-days: 1
 
@@ -183,7 +183,7 @@ jobs:
       - name: Download blob reports
         uses: actions/download-artifact@v7
         with:
-          path: .vitest-reports
+          path: .vitest/blob
           pattern: blob-report-*
           merge-multiple: true
 
@@ -212,7 +212,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install bun
         uses: oven-sh/setup-bun@v2
@@ -300,14 +300,14 @@ jobs:
         run: pnpm install
 
       - name: Test Server Coverage
-        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --coverage.reportsDirectory=./apps/server/coverage --dir apps/server --shard=${{ matrix.shard }}/2
+        run: bunx vitest --coverage --silent='passed-only' --reporter=default --reporter=blob --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/2
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
           name: server-blob-report-${{ matrix.shard }}
-          path: .vitest-reports
+          path: .vitest/blob
           include-hidden-files: true
           retention-days: 1
 
@@ -337,7 +337,7 @@ jobs:
       - name: Download blob reports
         uses: actions/download-artifact@v7
         with:
-          path: .vitest-reports
+          path: .vitest/blob
           pattern: server-blob-report-*
           merge-multiple: true
 

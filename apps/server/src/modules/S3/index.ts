@@ -30,6 +30,8 @@ export type FileType = z.infer<typeof fileSchema>;
 
 const DEFAULT_S3_REGION = 'us-east-1';
 const PUBLIC_READ_ACL_HEADER = 'public-read';
+// S3 DeleteObjects rejects more than 1000 keys per request.
+const DELETE_OBJECTS_MAX_KEYS = 1000;
 
 const encodeContentDispositionFilename = (fileName: string) =>
   encodeURIComponent(fileName || 'download').replaceAll(
@@ -43,7 +45,11 @@ export interface PreSignedUpload {
 }
 
 export class S3 {
+  /** Sends requests from this server, through the internal endpoint when one is set. */
   private readonly client: S3Client;
+
+  /** Signs URLs that browsers and model providers open, so it keeps the public endpoint. */
+  private readonly presignClient: S3Client;
 
   private readonly bucket: string;
 
@@ -56,6 +62,8 @@ export class S3 {
     options?: {
       bucket?: string;
       forcePathStyle?: boolean;
+      /** Endpoint this server reaches S3 through, when `endpoint` is only reachable from outside. */
+      internalEndpoint?: string;
       region?: string;
       setAcl?: boolean;
     },
@@ -67,18 +75,26 @@ export class S3 {
     this.bucket = options?.bucket;
     this.setAcl = options?.setAcl || false;
 
-    this.client = new S3Client({
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-      endpoint,
-      forcePathStyle: options?.forcePathStyle,
-      region: options?.region || DEFAULT_S3_REGION,
-      // refs: https://github.com/lobehub/lobe-chat/pull/5479
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      responseChecksumValidation: 'WHEN_REQUIRED',
-    });
+    const createClient = (clientEndpoint: string) =>
+      new S3Client({
+        credentials: {
+          accessKeyId,
+          secretAccessKey,
+        },
+        endpoint: clientEndpoint,
+        forcePathStyle: options?.forcePathStyle,
+        region: options?.region || DEFAULT_S3_REGION,
+        // refs: https://github.com/lobehub/lobe-chat/pull/5479
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
+      });
+
+    const internalEndpoint = options?.internalEndpoint;
+    this.presignClient = createClient(endpoint);
+    this.client =
+      internalEndpoint && internalEndpoint !== endpoint
+        ? createClient(internalEndpoint)
+        : this.presignClient;
   }
 
   public async deleteFile(key: string) {
@@ -91,12 +107,22 @@ export class S3 {
   }
 
   public async deleteFiles(keys: string[]) {
-    const command = new DeleteObjectsCommand({
-      Bucket: this.bucket,
-      Delete: { Objects: keys.map((key) => ({ Key: key })) },
-    });
+    const batches = [];
+    for (let i = 0; i < keys.length; i += DELETE_OBJECTS_MAX_KEYS) {
+      batches.push(keys.slice(i, i + DELETE_OBJECTS_MAX_KEYS));
+    }
+    if (batches.length === 0) batches.push([]);
 
-    return this.client.send(command);
+    const results = [];
+    for (const batch of batches) {
+      const command = new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Objects: batch.map((key) => ({ Key: key })) },
+      });
+      results.push(await this.client.send(command));
+    }
+
+    return results.at(-1)!;
   }
 
   public async getFileContent(key: string, byteLength?: number): Promise<string> {
@@ -167,7 +193,7 @@ export class S3 {
       Key: key,
     });
 
-    const url = await getSignedUrl(this.client, command, { expiresIn: 3600 });
+    const url = await getSignedUrl(this.presignClient, command, { expiresIn: 3600 });
 
     return {
       headers: this.setAcl ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
@@ -204,7 +230,7 @@ export class S3 {
       UploadId: uploadId,
     });
 
-    return getSignedUrl(this.client, command, { expiresIn: 3600 });
+    return getSignedUrl(this.presignClient, command, { expiresIn: 3600 });
   }
 
   public async completeMultipartUpload(
@@ -282,7 +308,7 @@ export class S3 {
       Key: key,
     });
 
-    return getSignedUrl(this.client, command, {
+    return getSignedUrl(this.presignClient, command, {
       expiresIn: expiresIn ?? fileEnv.S3_PREVIEW_URL_EXPIRE_IN,
     });
   }
@@ -298,7 +324,7 @@ export class S3 {
       ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeContentDispositionFilename(fileName)}`,
     });
 
-    return getSignedUrl(this.client, command, {
+    return getSignedUrl(this.presignClient, command, {
       expiresIn: expiresIn ?? fileEnv.S3_PREVIEW_URL_EXPIRE_IN,
     });
   }
@@ -358,6 +384,7 @@ export class FileS3 extends S3 {
     super(fileEnv.S3_ACCESS_KEY_ID, fileEnv.S3_SECRET_ACCESS_KEY, fileEnv.S3_ENDPOINT, {
       bucket: fileEnv.S3_BUCKET,
       forcePathStyle: fileEnv.S3_ENABLE_PATH_STYLE,
+      internalEndpoint: fileEnv.S3_INTERNAL_ENDPOINT,
       region: fileEnv.S3_REGION,
       setAcl: fileEnv.S3_SET_ACL,
     });

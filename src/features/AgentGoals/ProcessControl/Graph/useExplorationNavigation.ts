@@ -1,6 +1,6 @@
 import type { GoalGraphSnapshot } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 type Graph = Pick<GoalGraphSnapshot, 'nodes' | 'edges'>;
 
@@ -18,7 +18,17 @@ export const useExplorationNavigation = (goalId: string, graph: Graph) => {
     (edge) => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId),
   );
   const experiments = nodes.filter((node) => node.kind === 'experiment');
-  const collapsed = new Set(experiments.filter((n) => !state.expanded.has(n.id)).map((n) => n.id));
+  // The canvas refits whenever `collapsed` changes identity, so it must only
+  // change when its contents do — a fresh Set per render refit the map on every
+  // node click and every graph poll.
+  const collapsedKey = experiments
+    .filter((n) => !state.expanded.has(n.id))
+    .map((n) => n.id)
+    .join('\n');
+  const collapsed = useMemo(
+    () => new Set(collapsedKey ? collapsedKey.split('\n') : []),
+    [collapsedKey],
+  );
 
   return {
     collapsed,

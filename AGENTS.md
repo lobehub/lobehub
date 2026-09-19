@@ -79,7 +79,13 @@ Use `bun run check [changed-files...]`.
 
 ### Acceptance
 
-Finishing a feature or fix means proving it on the real product, not only passing the gates above. Before a PR is opened or marked ready, run the `acceptance` skill: drive the change on the surface it reaches (CLI / Web / Electron), capture visually confirmed evidence, and publish a round with `lh acceptance run ingest`. Put the published `https://app.lobehub.com/acceptance/<id>` link in the PR body. Tests, lint, and type-check are gates, never acceptance checks; a change without a published round is not done. Skip only for pure refactors or tooling changes with no user-visible outcome, and say so explicitly in the PR.
+Use the `acceptance` skill to decide whether the delivery needs product verification and whether existing evidence already covers it. Opening or marking a PR ready is a checkpoint for that decision, not a trigger to rerun verification.
+
+- Documentation/instruction-only changes, pure refactors or tooling changes with no product behavior change, and gitlink-only syncs do not require a new acceptance run. State the reason in the PR; for a gitlink sync, link the upstream change and its existing acceptance when available.
+- Reuse a completed acceptance that covers the delivered behavior. If its report and evidence exist only locally, inspect and upload them with `lh acceptance run ingest`; if already published, reuse the link. Do not rerun the product merely to open a PR or obtain a report URL.
+- For new or changed product behavior not covered by valid evidence, verify the affected outcomes on the real product, capture the required evidence, and publish the result. The skill owns reuse criteria and the execution workflow.
+
+When acceptance is required, put its published `https://app.lobehub.com/acceptance/<id>` link in the PR body. Tests, lint, and type-check remain separate quality gates; they do not replace product acceptance.
 
 ### i18n
 

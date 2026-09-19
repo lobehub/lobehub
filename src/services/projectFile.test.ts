@@ -1,14 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockDeviceClient = vi.hoisted(() => ({
+  copyAssetForPublish: { mutate: vi.fn() },
   getLocalFilePreview: { query: vi.fn() },
   getProjectFileIndex: { query: vi.fn() },
+  readExternalAssetForPublish: { query: vi.fn() },
   searchProjectFiles: { query: vi.fn() },
 }));
 
 const mockLocalFileService = vi.hoisted(() => ({
+  copyAssetForPublish: vi.fn(),
   getLocalFilePreview: vi.fn(),
   getProjectFileIndex: vi.fn(),
+  readExternalAssetForPublish: vi.fn(),
   searchProjectFiles: vi.fn(),
 }));
 
@@ -139,6 +143,73 @@ describe('projectFileService', () => {
       contentType: 'text/html',
       type: 'text',
     });
+  });
+
+  it('reads an external publish asset through the dedicated remote RPC', async () => {
+    const { projectFileService } = await import('./projectFile');
+    mockDeviceClient.readExternalAssetForPublish.query.mockResolvedValue({
+      base64: 'AQID',
+      contentType: 'image/png',
+      success: true,
+    });
+
+    await expect(
+      projectFileService.readExternalAssetForPublish({
+        deviceId: 'device-1',
+        path: '/outside/image.png',
+        workingDirectory: '/repo',
+      }),
+    ).resolves.toEqual({ bytes: new Uint8Array([1, 2, 3]), contentType: 'image/png' });
+
+    expect(mockDeviceClient.readExternalAssetForPublish.query).toHaveBeenCalledWith({
+      deviceId: 'device-1',
+      path: '/outside/image.png',
+      workingDirectory: '/repo',
+    });
+    expect(mockDeviceClient.getLocalFilePreview.query).not.toHaveBeenCalled();
+  });
+
+  it('reads an external publish asset through the dedicated desktop service', async () => {
+    const { projectFileService } = await import('./projectFile');
+    const result = { bytes: new Uint8Array([4]), contentType: 'font/woff2' };
+    mockLocalFileService.readExternalAssetForPublish.mockResolvedValue(result);
+
+    await expect(
+      projectFileService.readExternalAssetForPublish({
+        path: '/outside/font.woff2',
+        workingDirectory: '/repo',
+      }),
+    ).resolves.toBe(result);
+
+    expect(mockLocalFileService.readExternalAssetForPublish).toHaveBeenCalledWith({
+      path: '/outside/font.woff2',
+      workingDirectory: '/repo',
+    });
+    expect(mockLocalFileService.getLocalFilePreview).not.toHaveBeenCalled();
+  });
+
+  it('copies a publish asset through the remote RPC or the desktop service', async () => {
+    const { projectFileService } = await import('./projectFile');
+    const params = {
+      from: '/outside/logo.png',
+      to: '/repo/.lobe-artifacts/site/logo.png',
+      workingDirectory: '/repo',
+    };
+    mockDeviceClient.copyAssetForPublish.mutate.mockResolvedValue({ success: true });
+    mockLocalFileService.copyAssetForPublish.mockResolvedValue({ success: true });
+
+    await expect(
+      projectFileService.copyAssetForPublish({ deviceId: 'device-1', ...params }),
+    ).resolves.toEqual({ success: true });
+    expect(mockDeviceClient.copyAssetForPublish.mutate).toHaveBeenCalledWith({
+      deviceId: 'device-1',
+      ...params,
+    });
+
+    await expect(projectFileService.copyAssetForPublish(params)).resolves.toEqual({
+      success: true,
+    });
+    expect(mockLocalFileService.copyAssetForPublish).toHaveBeenCalledWith(params);
   });
 
   it('searches remote project files through device RPC', async () => {

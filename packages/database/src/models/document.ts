@@ -1,4 +1,6 @@
 import { AGENT_ARTIFACT_SOURCE_TYPES } from '@lobechat/const';
+import type { FileAccessScope } from '@lobechat/types';
+import { ordinaryFileAccessScope } from '@lobechat/types';
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
@@ -13,6 +15,10 @@ import {
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import {
+  fileReferenceMatchesAccessScope,
+  notAgentShareFileReference,
+} from '../utils/fileVisibility';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
@@ -67,6 +73,9 @@ export class DocumentModel {
       },
       documents,
     );
+
+  private ordinaryReadScope = () =>
+    and(this.ownership(), notAgentShareFileReference(this.db, documents.fileId));
 
   findOrCreateFolder = async (name: string, parentId?: string): Promise<DocumentItem> => {
     const existing = await this.db.query.documents.findFirst({
@@ -141,7 +150,7 @@ export class DocumentModel {
     total: number;
   }> => {
     const offset = current * pageSize;
-    const conditions = [this.ownership()];
+    const conditions = [this.ordinaryReadScope()];
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
@@ -233,34 +242,50 @@ export class DocumentModel {
   };
 
   findById = async (id: string): Promise<DocumentItem | undefined> => {
-    return this.db.query.documents.findFirst({
-      where: and(this.ownership(), eq(documents.id, id)),
-    });
+    const [document] = await this.db
+      .select()
+      .from(documents)
+      .where(and(this.ordinaryReadScope(), eq(documents.id, id)))
+      .limit(1);
+    return document;
   };
 
   findByIds = async (ids: string[]): Promise<DocumentItem[]> => {
     if (ids.length === 0) return [];
-    return this.db.query.documents.findMany({
-      where: and(this.ownership(), inArray(documents.id, ids)),
-    });
+    return this.db
+      .select()
+      .from(documents)
+      .where(and(this.ordinaryReadScope(), inArray(documents.id, ids)));
   };
 
-  findByFileId = async (fileId: string) => {
-    return this.db.query.documents.findFirst({
+  findByFileId = async (fileId: string, accessScope: FileAccessScope = ordinaryFileAccessScope) => {
+    const [document] = await this.db
+      .select()
+      .from(documents)
       // A file can legitimately own more than one document: `parseDocument`
       // writes a page-editor copy next to the parse cache `parseFile` writes.
       // Pick the oldest one explicitly instead of leaving the choice to the
       // query plan, so repeated lookups keep returning the same content.
       // `created_at` carries no uniqueness guarantee, so `id` breaks ties.
-      orderBy: [asc(documents.createdAt), asc(documents.id)],
-      where: and(this.ownership(), eq(documents.fileId, fileId)),
-    });
+      .where(
+        and(
+          this.ownership(),
+          eq(documents.fileId, fileId),
+          fileReferenceMatchesAccessScope(this.db, documents.fileId, accessScope),
+        ),
+      )
+      .orderBy(asc(documents.createdAt), asc(documents.id))
+      .limit(1);
+    return document;
   };
 
   findBySlug = async (slug: string): Promise<DocumentItem | undefined> => {
-    return this.db.query.documents.findFirst({
-      where: and(this.ownership(), eq(documents.slug, slug)),
-    });
+    const [document] = await this.db
+      .select()
+      .from(documents)
+      .where(and(this.ordinaryReadScope(), eq(documents.slug, slug)))
+      .limit(1);
+    return document;
   };
 
   /**
@@ -274,13 +299,18 @@ export class DocumentModel {
     source: string,
     sourceType: NonNullable<NewDocument['sourceType']>,
   ): Promise<DocumentItem | undefined> => {
-    return this.db.query.documents.findFirst({
-      where: and(
-        this.ownership(),
-        eq(documents.source, source),
-        eq(documents.sourceType, sourceType),
-      ),
-    });
+    const [document] = await this.db
+      .select()
+      .from(documents)
+      .where(
+        and(
+          this.ordinaryReadScope(),
+          eq(documents.source, source),
+          eq(documents.sourceType, sourceType),
+        ),
+      )
+      .limit(1);
+    return document;
   };
 
   update = async (id: string, value: Partial<DocumentItem>) => {
@@ -319,9 +349,42 @@ export class DocumentModel {
         .update(documents)
         .set({ updatedAt: new Date(), visibility })
         .where(and(eq(documents.id, rootId), this.ownership(), eq(documents.userId, this.userId)))
-        .returning({ id: documents.id });
+        .returning({ fileId: documents.fileId, id: documents.id });
 
       if (result.length === 0) throw new Error('Document not found');
+
+      // A page filed into a library owns a paired `files` row, stamped with the
+      // library's visibility when the page was created. The library lists rows
+      // through THAT column while the page opens through the document's, so
+      // leaving it behind splits the two: the row keeps announcing a private
+      // page's title to every member, and the page behind it refuses to open.
+      // Same transaction, and scoped without `files.visibility` for the same
+      // reason as `works` below — a promotion has to reach rows that are still
+      // private.
+      //
+      // `files.userId` is required on top of the workspace scope: `fileId` is a
+      // plain foreign key, and a document can point at a file somebody else
+      // uploaded (parsing another member's shared file yields a caller-owned
+      // document that keeps the original `fileId`). Without the owner check the
+      // workspace scope alone matches every member's file, so taking such a
+      // derived page private would hide the uploader's original from everyone.
+      // The paired row this mirrors is always the caller's own.
+      const fileId = result[0].fileId;
+      if (fileId) {
+        await (trx as LobeChatDatabase)
+          .update(files)
+          .set({ visibility })
+          .where(
+            and(
+              eq(files.id, fileId),
+              eq(files.userId, this.userId),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                { userId: files.userId, workspaceId: files.workspaceId },
+              ),
+            ),
+          );
+      }
 
       // Mirror visibility onto existing Work projections in the same
       // transaction. Scope without works.visibility so a promotion can

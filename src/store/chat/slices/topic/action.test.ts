@@ -38,6 +38,14 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
+vi.mock('swr', async () => {
+  const actual = await vi.importActual('swr');
+  return {
+    ...(actual as any),
+    mutate: vi.fn(),
+  };
+});
+
 // Mock topicService 和 messageService
 vi.mock('@/services/topic', () => ({
   topicService: {
@@ -243,15 +251,6 @@ describe('topic action', () => {
     });
   });
   describe('refreshTopic', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
     afterEach(() => {
       // 在每个测试用例开始前恢复到实际的 SWR 实现
       vi.resetAllMocks();
@@ -2020,6 +2019,86 @@ describe('topic action', () => {
       expect(topicData.hasMore).toBe(false);
     });
   });
+  describe('persisted topic-list cache write-through', () => {
+    const setupBucket = (agentId: string) => {
+      const containerKey = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [containerKey]: {
+              currentPage: 0,
+              hasMore: false,
+              isLoadingMore: false,
+              items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+      vi.mocked(mutate).mockClear();
+
+      return { containerKey, result };
+    };
+
+    it('mirrors a run-end status patch into the cached topic list', () => {
+      const { containerKey, result } = setupBucket('agent-write-through');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          id: 'topic-1',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [matcher, updater, options] = vi.mocked(mutate).mock.calls[0] as [
+        (key: unknown) => boolean,
+        (cached?: { items: ChatTopic[]; total: number }) => unknown,
+        unknown,
+      ];
+
+      expect(options).toEqual({ revalidate: false });
+      // Only this container's list keys — the agent-view key and other
+      // containers keep their own cached pages.
+      expect(matcher(['topic:list', containerKey, { pageSize: 20 }])).toBe(true);
+      expect(matcher(['topic:list', topicMapKey({ agentId: 'other-agent' }), {}])).toBe(false);
+      expect(matcher(['topic:agentView', containerKey, {}])).toBe(false);
+
+      const cached = {
+        items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
+        total: 1,
+      };
+      expect(updater(cached)).toMatchObject({
+        items: [{ id: 'topic-1', status: 'unread' }],
+        total: 1,
+      });
+
+      // A cached page without the patched row (or no entry at all) stays as-is,
+      // so the mutate cannot create a bogus entry.
+      const otherPage = { items: [{ id: 'topic-2', status: 'active' }] as ChatTopic[], total: 1 };
+      expect(updater(otherPage)).toBe(otherPage);
+      expect(updater(undefined)).toBeUndefined();
+    });
+
+    it('does not mirror client-only optimistic rows', () => {
+      const { result } = setupBucket('agent-write-through-add');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          optimistic: true,
+          type: 'addTopic',
+          value: { id: 'topic-optimistic', title: 'New' },
+        });
+      });
+
+      expect(mutate).not.toHaveBeenCalled();
+    });
+  });
   describe('loadMoreAgentTopicsView', () => {
     it('records a pagination error without clearing existing topics or hasMore', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -3496,5 +3575,51 @@ describe('topic action', () => {
       expect(next.excludeTriggers).toEqual(['cron', 'eval']);
       expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
     });
+  });
+});
+
+describe('Topic metadata save failures', () => {
+  const key = topicMapKey({ agentId: 'agent-metadata' });
+  const previous = { heteroSessionId: 'session-a' };
+  const selected = { heteroSessionId: 'session-b' };
+  const setup = () => {
+    useChatStore.setState({
+      activeAgentId: 'agent-metadata',
+      topicDataMap: {
+        [key]: {
+          items: [
+            {
+              id: 'topic-metadata',
+              title: 'A',
+              createdAt: 1,
+              updatedAt: 1,
+              favorite: false,
+              metadata: previous,
+            },
+          ],
+          currentPage: 1,
+          hasMore: false,
+          pageSize: 20,
+          total: 1,
+        },
+      },
+    });
+    vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(new Error('offline'));
+  };
+
+  it('restores the previous metadata if the mutation fails while offline', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValueOnce(new Error('offline'));
+    await expect(
+      useChatStore.getState().updateTopicMetadata('topic-metadata', selected),
+    ).rejects.toThrow('offline');
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(previous);
+  });
+
+  it('keeps the saved metadata if only revalidation fails', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValueOnce([]);
+    await useChatStore.getState().updateTopicMetadata('topic-metadata', selected);
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(selected);
   });
 });

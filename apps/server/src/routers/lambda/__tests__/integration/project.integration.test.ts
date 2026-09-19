@@ -9,7 +9,11 @@ import { taskRouter } from '../../task';
 import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
-vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
+}));
 
 describe('Project Router Integration', () => {
   let serverDB: LobeChatDatabase;

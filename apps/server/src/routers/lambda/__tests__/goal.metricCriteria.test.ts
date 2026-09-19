@@ -2,11 +2,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
@@ -23,15 +27,19 @@ const mockRecordObservation = vi.fn();
 const mockFindById = vi.fn();
 
 vi.mock('@/server/services/goal', () => ({
-  GoalService: vi.fn(() => ({
-    create: mockCreate,
-    recordObservation: mockRecordObservation,
-    setMetricCriteria: mockSetMetricCriteria,
-  })),
+  GoalService: vi.fn(function () {
+    return {
+      create: mockCreate,
+      recordObservation: mockRecordObservation,
+      setMetricCriteria: mockSetMetricCriteria,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/goal', () => ({
-  GoalModel: vi.fn(() => ({ findById: mockFindById })),
+  GoalModel: vi.fn(function () {
+    return { findById: mockFindById };
+  }),
 }));
 
 const mockScheduleGoalAdvance = vi.fn();
