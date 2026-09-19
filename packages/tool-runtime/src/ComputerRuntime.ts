@@ -377,7 +377,9 @@ export abstract class ComputerRuntime {
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         outputFiles,
+        running: r.running,
         shellId: r.commandId || r.shell_id,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout || r.output,
         success: commandSuccess,
@@ -420,12 +422,12 @@ export abstract class ComputerRuntime {
       const outputSuccess = typeof r.success === 'boolean' ? r.success : result.success;
       const outputFiles = r.outputFiles ?? r.output_files;
       const exitCode = r.exitCode ?? r.exit_code;
-      // Believe a service that reports liveness itself; otherwise fall back to
-      // the contract every shell backend here shares — `exitCode` is set only
-      // once the process has exited (see `GetCommandOutputResult`). The old
-      // `r.running ?? false` hard-coded "not running" for every backend that
-      // doesn't send the field, i.e. the whole local-system path, so a state
-      // consumer could never tell a live session from a finished one.
+      // Liveness comes from the backend. The fallback is for backends that do
+      // not report it and is knowingly lossy — a missing `exitCode` also
+      // describes a signalled or never-spawned command — so it stays a last
+      // resort. `r.running ?? false` was worse: it hard-coded "not running" for
+      // every such backend, so no consumer could tell a live session from a
+      // finished one.
       const running = typeof r.running === 'boolean' ? r.running : exitCode === undefined;
 
       const state: GetCommandOutputState = {
@@ -435,6 +437,7 @@ export abstract class ComputerRuntime {
         exitCode,
         outputFiles,
         running,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout,
         success: outputSuccess,
@@ -450,6 +453,7 @@ export abstract class ComputerRuntime {
         outputFiles,
         running,
         shellId: args.commandId,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout,
         success: outputSuccess,

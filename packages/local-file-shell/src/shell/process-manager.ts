@@ -25,8 +25,43 @@ export const MAX_OBSERVATION_TIMEOUT_MS = 600_000;
  * drain the pipes, read the output files and make the trip home — so a wait
  * that spent the entire budget would be aborted right as it produced an answer,
  * charging the agent the full wait for nothing.
+ *
+ * Proportional, with both ends pinned. The floor is what the transport alone
+ * costs: the renderer's client executor gives up 500ms before the server's
+ * deadline (`clientToolExecution`'s `SAFETY_BUFFER_MS`), so anything less than
+ * that is budget we never had. The ceiling keeps a ten-minute wait from
+ * surrendering a minute of itself.
  */
-const OBSERVATION_TIMEOUT_HEADROOM_MS = 5_000;
+const OBSERVATION_TIMEOUT_HEADROOM_RATIO = 0.1;
+const MIN_OBSERVATION_TIMEOUT_HEADROOM_MS = 600;
+const MAX_OBSERVATION_TIMEOUT_HEADROOM_MS = 5_000;
+
+/**
+ * The margin never eats more than half the budget. Below the dispatcher's
+ * minimum (`MIN_TIMEOUT_MS`, 1s) there is no transport left to protect — such a
+ * budget only ever arrives from an in-process caller asking for a short,
+ * deliberate peek, and a peek that never waits is not a peek.
+ */
+const MAX_OBSERVATION_TIMEOUT_HEADROOM_RATIO = 0.5;
+
+/**
+ * What is left of `budget` once the trip home is paid for. Continuous and
+ * monotonic in `budget` — a caller that asks for more must never get a shorter
+ * wait, which is what a subtract-a-constant margin fails at around its own
+ * threshold.
+ */
+const resolveWaitTimeout = (budget: number): number => {
+  const headroom = Math.min(
+    Math.max(
+      Math.ceil(budget * OBSERVATION_TIMEOUT_HEADROOM_RATIO),
+      MIN_OBSERVATION_TIMEOUT_HEADROOM_MS,
+    ),
+    MAX_OBSERVATION_TIMEOUT_HEADROOM_MS,
+    budget * MAX_OBSERVATION_TIMEOUT_HEADROOM_RATIO,
+  );
+
+  return Math.max(budget - headroom, 0);
+};
 const RUN_COMMAND_HEAD_RATIO = 0.2;
 const GET_COMMAND_OUTPUT_HEAD_RATIO = 0;
 const OUTPUT_PREVIEW_TOTAL_MAX_BYTES = 22 * 1024;
@@ -161,6 +196,7 @@ export class ShellProcessManager {
       return {
         error: `Shell ID ${shell_id} not found`,
         output: '',
+        running: false,
         stderr: '',
         stdout: '',
         success: false,
@@ -178,13 +214,7 @@ export class ShellProcessManager {
         typeof timeout === 'number' && Number.isFinite(timeout)
           ? Math.min(Math.max(Math.trunc(timeout), 0), MAX_OBSERVATION_TIMEOUT_MS)
           : DEFAULT_OBSERVATION_TIMEOUT_MS;
-      // Never spend the caller's whole budget on the wait alone. A budget too
-      // small to hold the headroom is honored as-is rather than collapsed to
-      // zero — a short deliberate peek must still peek.
-      const waitTimeout =
-        budget > OBSERVATION_TIMEOUT_HEADROOM_MS
-          ? budget - OBSERVATION_TIMEOUT_HEADROOM_MS
-          : budget;
+      const waitTimeout = resolveWaitTimeout(budget);
 
       if (waitTimeout > 0) {
         let timer: ReturnType<typeof setTimeout> | undefined;
@@ -256,10 +286,20 @@ export class ShellProcessManager {
     const startedAt = shellProcess.startedAt ?? Date.now();
     const durationMs = Math.max(0, (shellProcess.endedAt ?? Date.now()) - startedAt);
 
+    // Liveness is reported, not inferred. A missing `exit_code` does not mean
+    // "still working": a signal-terminated child (`kill` on POSIX) exits
+    // without one, and so does a child that failed to spawn. Leaving the caller
+    // to guess from `exit_code` alone is how a killed session gets described as
+    // still running.
+    const signal = childProcess.signalCode ?? undefined;
+    const running = exitCode === null && !signal && !shellProcess.spawnError;
+
     return {
       duration_ms: durationMs,
       error: shellProcess.spawnError?.message,
       exit_code: shellProcess.spawnError ? undefined : (exitCode ?? undefined),
+      running,
+      signal,
       output: stdout + stderr,
       output_files: {
         stderr: {

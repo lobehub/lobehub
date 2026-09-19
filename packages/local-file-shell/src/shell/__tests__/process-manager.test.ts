@@ -182,9 +182,10 @@ describe('ShellProcessManager', () => {
       }
     });
 
-    // A budget smaller than the headroom is a deliberate peek — honor it rather
-    // than collapsing the wait to nothing.
-    it('should honor a budget shorter than the headroom as-is', async () => {
+    // The renderer's client executor abandons the call 500ms before the same
+    // budget expires, so a small budget that waits all the way to the end is
+    // aborted instead of answering. The floor keeps the margin above that.
+    it('should keep headroom on a small explicit budget', async () => {
       vi.useFakeTimers();
       try {
         const process = createMockProcess();
@@ -197,7 +198,110 @@ describe('ShellProcessManager', () => {
           return result;
         });
 
-        await vi.advanceTimersByTimeAsync(1999);
+        await vi.advanceTimersByTimeAsync(1399);
+        expect(resolved).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(1);
+        await pending;
+        expect(resolved).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // Continuous and monotonic: no budget may buy a shorter wait than a smaller
+    // one. The earlier subtract-a-constant form fell off a cliff, handing 5000ms
+    // a 5000ms wait and 5001ms a 1ms wait.
+    it('should never shorten the wait as the budget grows', async () => {
+      const waits: number[] = [];
+      vi.useFakeTimers();
+      try {
+        for (const budget of [200, 1000, 1200, 2000, 5000, 5001, 6000, 20_000, 60_000]) {
+          const process = createMockProcess();
+          const shellProcess = createShellProcess(manager, `b-${budget}`, process);
+          manager.register(`b-${budget}`, shellProcess);
+
+          let waited = 0;
+          const pending = manager.getOutput({ shell_id: `b-${budget}`, timeout: budget });
+          // Walk the clock forward until the observation gives up.
+          for (let step = 0; step < budget + 10; step += 100) {
+            await vi.advanceTimersByTimeAsync(100);
+            waited = step + 100;
+            if (await Promise.race([pending.then(() => true), Promise.resolve(false)])) break;
+          }
+          await pending;
+          waits.push(waited);
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(waits).toEqual([...waits].sort((a, b) => a - b));
+    });
+
+    // A signal-terminated child exits without an exit code. Callers that read
+    // liveness off `exit_code` alone therefore describe a command the agent
+    // just killed as still running, and go on waiting for it.
+    it('should report a signal-terminated command as finished, with the signal', async () => {
+      const process = createMockProcess();
+      const shellProcess = createShellProcess(manager, 'test-1', process);
+      manager.register('test-1', shellProcess);
+
+      Object.defineProperty(process, 'signalCode', {
+        configurable: true,
+        value: 'SIGKILL',
+        writable: true,
+      });
+      process.emit('exit', null, 'SIGKILL');
+      process.emit('close', null, 'SIGKILL');
+
+      const result = await manager.getOutput({ shell_id: 'test-1' });
+
+      expect(result.exit_code).toBeUndefined();
+      expect(result.running).toBe(false);
+      expect(result.signal).toBe('SIGKILL');
+    });
+
+    it('should report a live command as running', async () => {
+      const process = createMockProcess();
+      manager.register('test-1', createShellProcess(manager, 'test-1', process));
+
+      const result = await manager.getOutput({ shell_id: 'test-1', timeout: 200 });
+
+      expect(result.exit_code).toBeUndefined();
+      expect(result.running).toBe(true);
+      expect(result.signal).toBeUndefined();
+    });
+
+    it('should report an exited command as finished', async () => {
+      const process = createMockProcess();
+      manager.register('test-1', createShellProcess(manager, 'test-1', process));
+
+      (process as { exitCode: number | null }).exitCode = 0;
+      process.emit('exit', 0);
+      process.emit('close', 0);
+
+      const result = await manager.getOutput({ shell_id: 'test-1' });
+
+      expect(result.exit_code).toBe(0);
+      expect(result.running).toBe(false);
+    });
+
+    // Below the dispatcher's 1s minimum there is no transport margin to
+    // protect, so a deliberate short peek still waits — for half its budget.
+    it('should still wait on a budget smaller than the headroom floor', async () => {
+      vi.useFakeTimers();
+      try {
+        const process = createMockProcess();
+        const shellProcess = createShellProcess(manager, 'test-1', process);
+        manager.register('test-1', shellProcess);
+        let resolved = false;
+
+        const pending = manager.getOutput({ shell_id: 'test-1', timeout: 400 }).then(() => {
+          resolved = true;
+        });
+
+        await vi.advanceTimersByTimeAsync(199);
         expect(resolved).toBe(false);
 
         await vi.advanceTimersByTimeAsync(1);
@@ -224,6 +328,7 @@ describe('ShellProcessManager', () => {
           });
 
         await vi.advanceTimersByTimeAsync(MAX_OBSERVATION_TIMEOUT_MS - 5001);
+        // 600_000 − the 5000ms headroom ceiling.
         expect(resolved).toBe(false);
 
         await vi.advanceTimersByTimeAsync(1);

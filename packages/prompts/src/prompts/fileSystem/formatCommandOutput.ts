@@ -27,6 +27,8 @@ export interface FormatCommandOutputParams {
   running?: boolean;
   /** Session id to poll or kill, echoed back so a still-running result is actionable. */
   shellId?: string;
+  /** The signal that terminated the command, when one did. */
+  signal?: string;
   stderr?: string;
   stdout?: string;
   success: boolean;
@@ -69,6 +71,7 @@ export const formatCommandOutput = ({
   outputFiles,
   running,
   shellId,
+  signal,
   stderr,
   stdout,
   error,
@@ -86,6 +89,10 @@ export const formatCommandOutput = ({
     }
     if (hasNonZeroExit) return `Command failed with exit code ${exitCode}`;
     if (exitCode === 0) return 'Command completed successfully.';
+    // Finished without an exit code — killed. Naming the signal matters: the
+    // agent usually sent it, and "terminated" answers a question that
+    // "Output retrieved." leaves open.
+    if (signal) return `Command was terminated by ${signal}`;
     // No lifecycle reported at all: say only what we know.
     return 'Output retrieved.';
   };
@@ -136,7 +143,7 @@ export const formatCommandOutput = ({
       );
     } else if (running) {
       parts.push('(no output yet)');
-    } else if (exitCode !== undefined) {
+    } else if (exitCode !== undefined || signal) {
       parts.push('(no output)');
     }
   }

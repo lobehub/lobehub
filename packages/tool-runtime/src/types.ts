@@ -298,6 +298,8 @@ export interface GetCommandOutputState {
   running?: boolean;
   /** The sandbox workspace was recreated before polling this command. */
   sessionExpiredAndRecreated?: boolean;
+  /** The signal that terminated the command, when one did. */
+  signal?: string;
   stderr?: string;
   stdout?: string;
   success: boolean;

@@ -195,4 +195,38 @@ describe('formatCommandResult', () => {
       Some output"
     `);
   });
+  // `exitCode === undefined` used to be read as "still running"; a signal-killed
+  // command exits without one, so `runCommand` described a killed command as
+  // still going.
+  it('should name the signal rather than claim the command is still running', () => {
+    const result = formatCommandResult({
+      exitCode: undefined,
+      running: false,
+      shellId: 'sh-12',
+      signal: 'SIGKILL',
+      stdout: 'partial work\n',
+      success: true,
+    });
+
+    expect(result).toMatchInlineSnapshot(`
+      "Command was terminated by SIGKILL
+
+      Stdout:
+      partial work
+      "
+    `);
+    expect(result).not.toContain('still running');
+  });
+
+  it('should trust a reported liveness over the exit code', () => {
+    const result = formatCommandResult({
+      exitCode: undefined,
+      running: true,
+      shellId: 'sh-13',
+      success: true,
+    });
+
+    expect(result).toContain('Command is still running after the wait window.');
+    expect(result).not.toContain('(no output)');
+  });
 });

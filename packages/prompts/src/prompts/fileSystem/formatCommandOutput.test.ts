@@ -216,6 +216,33 @@ describe('formatCommandOutput', () => {
       `);
     });
 
+    // A signal-killed command exits without an exit code, so inferring liveness
+    // from that alone describes a command the agent just killed as still going.
+    it('should name the signal that ended a terminated command', () => {
+      const result = formatCommandOutput({
+        canWaitLonger: true,
+        durationMs: 4_000,
+        outputFiles: {
+          stdout: { path: '/tmp/lobehub-shell/sh-12/stdout.log', size: 0, truncated: false },
+        },
+        running: false,
+        shellId: 'sh-12',
+        signal: 'SIGKILL',
+        success: true,
+      });
+
+      expect(result).toMatchInlineSnapshot(`
+        "Command was terminated by SIGKILL
+
+        Duration: 4s
+
+        Full stdout saved to: /tmp/lobehub-shell/sh-12/stdout.log (0 bytes)
+
+        (no output)"
+      `);
+      expect(result).not.toContain('still running');
+    });
+
     // A backend whose schema has no `timeout` must not be told to raise one.
     it('should not advise a longer wait the backend cannot offer', () => {
       const result = formatCommandOutput({
