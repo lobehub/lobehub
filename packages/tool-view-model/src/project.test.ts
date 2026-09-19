@@ -21,10 +21,27 @@ const resolveWith = (projector: ToolProjector) => (identifier?: string | null) =
   identifier === 'lobe-web-browsing' ? projector : undefined;
 
 describe('projectToolViewModels', () => {
-  it('leaves every message untouched when no projector matches', () => {
-    const messages = [toolMessage(), toolMessage({ id: 'a', role: 'assistant' })];
+  it('drops the body of a tool with no projector, keeping its state whole', () => {
+    const [projected] = projectToolViewModels([toolMessage()], () => undefined);
 
-    expect(projectToolViewModels(messages, () => undefined)).toEqual(messages);
+    expect(projected.content).toBe('');
+    expect(projected.contentLength).toBe('RAW BODY'.length);
+    expect(projected.payloadOmitted).toBe('render');
+    // State drives the collapsed row and whole-list selectors, which never get
+    // an "expand" to hydrate on.
+    expect(projected.pluginState).toEqual(toolMessage().pluginState);
+  });
+
+  it('does not flag an empty result, which has nothing to fetch back', () => {
+    const empty = toolMessage({ content: '' });
+
+    expect(projectToolViewModels([empty], () => undefined)[0]).toEqual(empty);
+  });
+
+  it('never touches a non-tool message', () => {
+    const assistant = toolMessage({ id: 'a', role: 'assistant' });
+
+    expect(projectToolViewModels([assistant], () => undefined)[0]).toEqual(assistant);
   });
 
   it('keeps the original content length after the body is dropped', () => {
@@ -58,14 +75,14 @@ describe('projectToolViewModels', () => {
     expect(projected.payloadOmitted).toBe('render');
   });
 
-  it('does not mark a message as omitted when the projector declines', () => {
+  it('respects a projector that declines — it knows the shape, the default does not', () => {
     const [projected] = projectToolViewModels(
       [toolMessage()],
       resolveWith(() => undefined),
     );
 
     expect(projected.payloadOmitted).toBeUndefined();
-    expect(projected.pluginState).toEqual(toolMessage().pluginState);
+    expect(projected.content).toBe('RAW BODY');
   });
 
   it('falls back to the stored payload when a projector throws', () => {
