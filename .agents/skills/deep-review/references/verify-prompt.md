@@ -70,6 +70,10 @@ Set `can_auto_fix: true` only when all are true:
 
 `release-risk` and `exposed_legacy` findings are never auto-fixes.
 
+This flag is an input to the main agent's fix policy, not the decision: a `can_auto_fix: false`
+P0/P1 is still fixed directly unless it is high-risk, so make `auto_fix_reason` say concretely what
+makes the fix risky (competing designs, external contract, permission boundary, persisted data).
+
 ## blocks_release
 
 - `true`: production incident, data corruption, security/auth failure, or a broken acceptance
