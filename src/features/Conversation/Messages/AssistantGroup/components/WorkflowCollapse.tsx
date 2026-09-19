@@ -32,6 +32,7 @@ import {
   getWorkflowSummaryText,
   shapeProseForWorkflowHeadline,
 } from '../toolDisplayNames';
+import { getBlocksEndCreatedAt, getFirstBlockCreatedAt } from './groupChain';
 import type { RenderableAssistantContentBlock } from './types';
 import WorkflowExpandedList from './WorkflowExpandedList';
 
@@ -167,17 +168,38 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       if (ops.length === 0) return undefined;
       return ops.reduce((min, op) => Math.min(min, op.metadata.startTime), Infinity);
     });
+    /** Wall-clock bounds of this collapse's own steps. A long turn folds into
+     *  several collapses, so anchoring to the op start makes every one of them
+     *  read the same run-long number; both the live timer and the finished
+     *  header should cover this fold only. Read as two primitives so the
+     *  selectors stay reference-stable across streaming re-renders. */
+    const segmentStartTime = useConversationStore((s) =>
+      getFirstBlockCreatedAt(s.dbMessages, blocks),
+    );
+    const segmentEndTime = useConversationStore((s) => getBlocksEndCreatedAt(s.dbMessages, blocks));
+    /** Falls back to the op start (then to mount time) when the blocks don't
+     *  resolve against the raw messages. */
+    const workingStartTime = segmentStartTime ?? opStartTime;
 
     const allComplete = toolsPhaseComplete && (workflowChromeComplete || !isGenerating);
     const summaryText = useMemo(() => getWorkflowSummaryText(blocks), [blocks]);
     const completionStatus = useMemo(() => getWorkflowCompletionStatus(allTools), [allTools]);
 
-    /** Sum of per-round model output duration (not reasoning-only); see ModelPerformance.duration */
+    /** How long this fold actually occupied: last step (or tool result) minus
+     *  first step. `performance.duration` only sums per-round model output, so
+     *  a fold that spent minutes inside tool calls or waiting between rounds
+     *  under-reported badly — it is kept solely as a fallback for hosts that
+     *  render blocks without the raw `dbMessages` (share pages, portals). */
+    const wallClockMs =
+      segmentStartTime !== undefined && segmentEndTime !== undefined
+        ? segmentEndTime - segmentStartTime
+        : 0;
     const totalWorkflowMs = useMemo(
       () => blocks.reduce((sum, b) => sum + (b.performance?.duration ?? 0), 0),
       [blocks],
     );
-    const durationText = totalWorkflowMs > 0 ? formatReasoningDuration(totalWorkflowMs) : undefined;
+    const durationMs = wallClockMs > 0 ? wallClockMs : totalWorkflowMs;
+    const durationText = durationMs > 0 ? formatReasoningDuration(durationMs) : undefined;
     const { streaming: streamingDefault, completion: completionDefault } = useMemo(
       () => resolveExpandDefaults(defaultWorkflowExpandLevel),
       [defaultWorkflowExpandLevel],
@@ -309,11 +331,12 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       }
 
       if (activeWorkingStartedAtRef.current === null) {
-        // Initial/remount seeds from op start so elapsed reflects wall-clock
-        // since the op began. Intervention resume seeds from now so pause
-        // time stays excluded from the accumulator.
+        // Initial/remount seeds from this collapse's first step so elapsed
+        // reflects wall-clock since the fold began. Intervention resume seeds
+        // from now so pause time stays excluded from the accumulator.
         const isInitial = accumulatedWorkingMsRef.current === 0;
-        activeWorkingStartedAtRef.current = isInitial && opStartTime ? opStartTime : Date.now();
+        activeWorkingStartedAtRef.current =
+          isInitial && workingStartTime ? workingStartTime : Date.now();
       }
 
       const tick = () => {
@@ -329,7 +352,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
       const interval = setInterval(tick, 1000);
 
       return () => clearInterval(interval);
-    }, [opStartTime, pendingInterventionPresent, streaming]);
+    }, [workingStartTime, pendingInterventionPresent, streaming]);
 
     const showWorkingElapsed =
       !pendingInterventionPresent &&

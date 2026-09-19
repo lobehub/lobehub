@@ -10,6 +10,7 @@ import type { AssistantContentBlock } from '@/types/index';
 import WorkflowCollapse from './WorkflowCollapse';
 
 let mockIsGenerating = true;
+let mockDbMessages: { createdAt?: Date; id: string }[] = [];
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -109,7 +110,8 @@ vi.mock('../../../store', () => ({
     isAssistantGroupItemGenerating: () => () => mockIsGenerating,
     isMessageGenerating: () => () => mockIsGenerating,
   },
-  useConversationStore: (selector: (state: unknown) => unknown) => selector({}),
+  useConversationStore: (selector: (state: unknown) => unknown) =>
+    selector({ dbMessages: mockDbMessages }),
 }));
 
 vi.mock('./WorkflowExpandedList', () => ({
@@ -140,6 +142,7 @@ describe('WorkflowCollapse', () => {
   afterEach(() => {
     cleanup();
     mockIsGenerating = true;
+    mockDbMessages = [];
     vi.useRealTimers();
   });
 
@@ -318,6 +321,60 @@ describe('WorkflowCollapse', () => {
     });
 
     expect(screen.getByText('(4s)')).toBeInTheDocument();
+  });
+
+  it("counts elapsed time from this collapse's first step, not the whole run", () => {
+    // Regression: a long turn folds into several collapses. Anchoring the timer
+    // to the operation start made every fold print the same run-long number —
+    // the elapsed time must cover this fold's own steps only.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-20T10:00:00Z'));
+    mockDbMessages = [
+      { createdAt: new Date('2026-09-20T09:00:00Z'), id: 'block-0' },
+      { createdAt: new Date('2026-09-20T09:59:50Z'), id: 'block-1' },
+    ];
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />);
+
+    expect(screen.getByText('(10s)')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByText('(12s)')).toBeInTheDocument();
+  });
+
+  it('reports a finished fold as wall-clock time, not summed model duration', () => {
+    // Regression: `performance.duration` only counts model output, so a fold
+    // that sat in tool calls for two minutes advertised a few seconds.
+    mockIsGenerating = false;
+    mockDbMessages = [
+      { createdAt: new Date('2026-09-20T09:00:00Z'), id: 'block-1' },
+      { createdAt: new Date('2026-09-20T09:02:00Z'), id: 'tool-result-1' },
+    ];
+
+    const blocks = makeBlocks({ result: { content: 'ok' }, result_msg_id: 'tool-result-1' });
+    blocks[0]!.performance = { duration: 4000 } as any;
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
+
+    expect(screen.getByText('2m')).toBeInTheDocument();
+    expect(screen.queryByText('4s')).not.toBeInTheDocument();
+  });
+
+  it('falls back to model duration when the raw messages are unavailable', () => {
+    // Share pages / portals render blocks without `dbMessages`; a rough number
+    // still beats no number at all.
+    mockIsGenerating = false;
+    mockDbMessages = [];
+
+    const blocks = makeBlocks({ result: { content: 'ok' } });
+    blocks[0]!.performance = { duration: 4000 } as any;
+
+    render(<WorkflowCollapse assistantMessageId="msg-1" blocks={blocks} />);
+
+    expect(screen.getByText('4s')).toBeInTheDocument();
   });
 
   it('cycles expand levels via the toggle button', () => {
