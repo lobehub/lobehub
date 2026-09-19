@@ -1,12 +1,14 @@
-import { Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ExternalLink, EyeIcon, FolderOpen } from 'lucide-react';
+import { ExternalLink, EyeIcon, FolderOpen, MessageSquarePlus } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 
 import { useLocalFileActions } from './useLocalFileActions';
+import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -114,6 +116,11 @@ export const LocalFile = ({
   const { t } = useTranslation('components');
   const { canPreview, handleClick, handleOpenFile, handleOpenFolder, handlePreview } =
     useLocalFileActions({ isDirectory, path, readonly });
+  const { canStartTopic, startTopic } = useStartTopicInDirectory({
+    isDirectory,
+    path,
+    readonly,
+  });
 
   const fileContent = (
     <Flexbox
@@ -144,12 +151,14 @@ export const LocalFile = ({
     </Flexbox>
   );
 
-  // Directory or readonly mode (e.g. share page): no popover, just display
-  if (isDirectory || readonly) {
+  // Readonly mode (e.g. share page): no popover or local actions.
+  if (readonly) {
     return fileContent;
   }
 
-  // File: show popover with actions
+  // Files and directories share the same hover action surface. Directory chips
+  // keep their direct click-to-open behavior while exposing the contextual
+  // "start topic here" action without adding persistent markdown clutter.
   const popoverContent = (
     <div className={styles.segmented}>
       {canPreview && (
@@ -162,10 +171,19 @@ export const LocalFile = ({
         <ExternalLink size={15} />
         {t('LocalFile.action.open')}
       </button>
-      <button className={styles.segment} type={'button'} onClick={handleOpenFolder}>
-        <FolderOpen size={15} />
-        {t('LocalFile.action.showInFolder')}
-      </button>
+      {isDirectory ? (
+        canStartTopic && (
+          <button className={styles.segment} type={'button'} onClick={() => void startTopic()}>
+            <MessageSquarePlus size={15} />
+            {t('LocalFile.action.startTopic')}
+          </button>
+        )
+      ) : (
+        <button className={styles.segment} type={'button'} onClick={handleOpenFolder}>
+          <FolderOpen size={15} />
+          {t('LocalFile.action.showInFolder')}
+        </button>
+      )}
     </div>
   );
 
