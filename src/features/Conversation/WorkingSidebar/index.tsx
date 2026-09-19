@@ -336,6 +336,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const topicWorkingDirectoryConfig = useChatStore(
     (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
+  const topicDeviceId = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.boundDeviceId);
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const sourceWorkingDirectory = useMemo(() => {
     if (!workingDirectory) return undefined;
@@ -379,8 +380,14 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // directory is irrelevant to the user, so hide the tab even when one resolves.
   const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
-  const isGithub = repoType === 'github';
-  const gitPath = reviewAvailable && isGithub ? workingDirectory : undefined;
+  const snapshotConfig =
+    (topicDeviceId ? topicDeviceId === targetDeviceId : isLocalExecution) &&
+    getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
+      ? topicWorkingDirectoryConfig
+      : deviceDirs.find((entry) => getWorkingDirEffectivePath(entry) === workingDirectory);
+  const isGithub =
+    repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
+  const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
   const { data: branchData } = useFetchGitBranch(remoteDeviceId, gitPath);
   const { data: linkedPR } = useFetchGitLinkedPR(
     remoteDeviceId,
@@ -388,7 +395,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     branchData?.branch,
     isGithub,
   );
-  const pullRequest = reviewAvailable && isGithub ? linkedPR?.pullRequest : undefined;
+  const snapshotPR =
+    !branchData || (snapshotConfig?.git?.branch === branchData.branch && !branchData.detached)
+      ? snapshotConfig?.git?.github?.pullRequest
+      : undefined;
+  // A settled empty lookup supersedes the snapshot; failures may keep displaying it.
+  const pullRequest =
+    filesystemEnvironmentAvailable && workingDirectory
+      ? linkedPR?.pullRequestStatus === 'ok'
+        ? linkedPR.pullRequest
+        : (linkedPR?.pullRequest ?? snapshotPR)
+      : undefined;
   const prAvailable = !!pullRequest;
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
@@ -1102,6 +1119,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                         deviceId={remoteDeviceId}
                         key={JSON.stringify([remoteDeviceId, workingDirectory, pullRequest.number])}
                         number={pullRequest.number}
+                        summary={pullRequest}
                         url={pullRequest.url}
                         workingDirectory={workingDirectory}
                         onOpenTab={openTab}

@@ -90,10 +90,11 @@ describe('resolveMergeDock', () => {
     });
   });
 
-  it('unstable: optional check failing warns but still allows merging', () => {
+  it('optional failure: ready headline with a secondary warning when merging is allowed', () => {
     const result = resolveMergeDock(
       makeInput({
         detail: makeDetail({
+          mergeStateStatus: 'UNSTABLE',
           checks: [
             { name: 'ci', required: true, status: 'success' },
             { name: 'verify', required: false, status: 'failure' },
@@ -101,11 +102,24 @@ describe('resolveMergeDock', () => {
         }),
       }),
     );
-    expect(result.status).toMatchObject({ key: 'unstable', tone: 'warning' });
+    expect(result.status).toMatchObject({ key: 'ready', labelKey: PR_KEYS.status.ready });
     expect(result.reasons).toEqual([
       { labelKey: PR_KEYS.reason.optionalFailing, labelParams: { count: 1 } },
     ]);
     expect(result.action).toMatchObject({ kind: 'merge', tone: 'plain' });
+  });
+
+  it('optional failures do not hide a branch protection blocker', () => {
+    const result = resolveMergeDock(
+      makeInput({
+        detail: makeDetail({
+          mergeStateStatus: 'BLOCKED',
+          checks: [{ name: 'optional', required: false, status: 'failure' }],
+        }),
+      }),
+    );
+    expect(result.status.key).toBe('blocked');
+    expect(result.action?.kind).toBe('disabled');
   });
 
   it('autoMerge: armed status with method and a disabled waiting action', () => {
@@ -207,13 +221,12 @@ describe('resolveMergeDock', () => {
           mergeStateStatus: 'BLOCKED',
           reviewDecision: 'REVIEW_REQUIRED',
         }),
-        local: { ahead: 1, dirtyFiles: 0 },
+        local: { ahead: 1 },
       }),
     );
     expect(reasonKeys(result)).toEqual([
       PR_KEYS.reason.checksFailing,
       PR_KEYS.reason.reviewRequired,
-      PR_KEYS.reason.localAhead,
     ]);
   });
 
@@ -294,15 +307,18 @@ describe('resolveMergeDock', () => {
     expect(result.action).toEqual({ kind: 'reopen' });
   });
 
-  it('unpushed: local reasons replace the hint and push pairs with the merge action', () => {
-    const result = resolveMergeDock(makeInput({ local: { ahead: 2, dirtyFiles: 3 } }));
-    expect(result.status.key).toBe('ready');
-    expect(result.reasons).toEqual([
-      { labelKey: PR_KEYS.reason.localAhead, labelParams: { count: 2 } },
-      { labelKey: PR_KEYS.reason.localDirty, labelParams: { count: 3 } },
-    ]);
+  it('local changes do not alter remote merge status or reasons', () => {
+    const remote = makeDetail({
+      checks: [{ name: 'optional', required: false, status: 'failure' }],
+    });
+    const local = { ahead: 2, dirtyFiles: 22 };
+    const withoutLocal = resolveMergeDock(makeInput({ detail: remote }));
+    const result = resolveMergeDock(makeInput({ detail: remote, local }));
+    expect(result.status).toEqual(withoutLocal.status);
+    expect(result.reasons).toEqual(withoutLocal.reasons);
+    expect(result.hintKey).toBe(withoutLocal.hintKey);
     expect(result.showPush).toBe(true);
-    expect(result.hintKey).toBeUndefined();
+    expect(result.action).toEqual(withoutLocal.action);
   });
 
   it('readOnly: no action, no bypass, and the readOnly hint survives reasons', () => {
@@ -347,11 +363,16 @@ describe('resolveMergeDock', () => {
   it('contextLoading: disables the action without flashing the readOnly hint', () => {
     const result = resolveMergeDock(
       makeInput({
-        detail: makeDetail({ viewerCanBypass: false, viewerCanWrite: false }),
+        detail: makeDetail({
+          viewerCanBypass: false,
+          viewerCanWrite: false,
+          checks: [{ name: 'not classified yet', required: false, status: 'failure' }],
+        }),
         ui: { bypass: false, contextLoading: true, method: 'squash' },
       }),
     );
-    expect(result.status.key).toBe('ready');
+    expect(result.status.key).toBe('calculating');
+    expect(result.reasons).toEqual([]);
     expect(result.action).toEqual({ kind: 'disabled', labelKey: PR_KEYS.action.calculating });
     expect(result.hintKey).toBeUndefined();
     expect(result.bypassAvailable).toBe(false);

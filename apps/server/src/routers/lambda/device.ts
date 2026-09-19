@@ -257,10 +257,31 @@ export const deviceRouter = router({
 
   gitPullRequestDetail: deviceProcedure
     .input(
-      z.object({ deviceId: z.string(), number: z.number().int().positive(), path: z.string() }),
+      z.object({
+        coreOnly: z.boolean().optional(),
+        deviceId: z.string(),
+        number: z.number().int().positive(),
+        path: z.string(),
+      }),
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitPullRequestDetail({
+        coreOnly: input.coreOnly,
+        deviceId: input.deviceId,
+        number: input.number,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return result ?? null;
+    }),
+
+  gitPullRequestActivity: deviceProcedure
+    .input(
+      z.object({ deviceId: z.string(), number: z.number().int().positive(), path: z.string() }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.gitPullRequestActivity({
         deviceId: input.deviceId,
         number: input.number,
         path: input.path,

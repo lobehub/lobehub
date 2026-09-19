@@ -5,6 +5,7 @@ import { createLogger } from '../logger';
 import type {
   GitPullRequestAction,
   GitPullRequestActionResult,
+  GitPullRequestActivity,
   GitPullRequestCheck,
   GitPullRequestDetail,
   GitPullRequestDetailResult,
@@ -137,6 +138,40 @@ export const repoFromPullRequestUrl = (url: string): GithubRepoInfo => {
   return { name: match?.[2] ?? '', owner: match?.[1] ?? '' };
 };
 
+const normalizePullRequestActivity = (
+  raw: Pick<GithubPullRequestDetailPayload, 'comments' | 'commits' | 'reviews'>,
+): GitPullRequestActivity => ({
+  comments: (raw.comments ?? []).map((comment) => ({
+    author: comment.author?.login ?? '',
+    body: comment.body ?? '',
+    createdAt: comment.createdAt ?? '',
+    id: comment.id,
+  })),
+  commits: (raw.commits ?? []).map((commit) => ({
+    author: commit.authors?.[0]?.login ?? '',
+    committedAt: commit.committedDate ?? '',
+    message: commit.messageHeadline ?? '',
+    sha: commit.oid,
+  })),
+  reviews: (raw.reviews ?? []).map((review) => ({
+    author: review.author?.login ?? '',
+    state: review.state as GitPullRequestDetail['reviews'][number]['state'],
+    submittedAt: review.submittedAt ?? '',
+  })),
+});
+
+export const getPullRequestActivity = async (payload: {
+  number: number;
+  path: string;
+}): Promise<GitPullRequestActivity> => {
+  const { stdout } = await execFileAsync(
+    'gh',
+    ['pr', 'view', String(payload.number), '--json', 'comments,commits,reviews'],
+    { cwd: payload.path, timeout: 8000 },
+  );
+  return normalizePullRequestActivity(JSON.parse(stdout));
+};
+
 export const normalizePullRequestDetail = (
   raw: GithubPullRequestDetailPayload,
   repo: GithubRepoInfo,
@@ -152,18 +187,7 @@ export const normalizePullRequestDetail = (
     body: raw.body ?? '',
     changedFiles: raw.changedFiles,
     checks: (raw.statusCheckRollup ?? []).map(normalizeCheck),
-    comments: (raw.comments ?? []).map((comment) => ({
-      author: comment.author?.login ?? '',
-      body: comment.body ?? '',
-      createdAt: comment.createdAt ?? '',
-      id: comment.id,
-    })),
-    commits: (raw.commits ?? []).map((commit) => ({
-      author: commit.authors?.[0]?.login ?? '',
-      committedAt: commit.committedDate ?? '',
-      message: commit.messageHeadline ?? '',
-      sha: commit.oid,
-    })),
+    ...normalizePullRequestActivity(raw),
     deletions: raw.deletions,
     headRefName: raw.headRefName,
     headRefOid: raw.headRefOid,
@@ -176,11 +200,6 @@ export const normalizePullRequestDetail = (
     number: raw.number,
     repo: { name: repo.name, owner: repo.owner },
     reviewDecision: (raw.reviewDecision || null) as GitPullRequestDetail['reviewDecision'],
-    reviews: (raw.reviews ?? []).map((review) => ({
-      author: review.author?.login ?? '',
-      state: review.state as GitPullRequestDetail['reviews'][number]['state'],
-      submittedAt: review.submittedAt ?? '',
-    })),
     state: raw.mergedAt ? 'merged' : toLowerOrUndefined(raw.state) === 'closed' ? 'closed' : 'open',
     title: raw.title,
     url: raw.url,
@@ -297,6 +316,7 @@ const isGhMissing = (error: any): boolean => {
 };
 
 export const getPullRequestDetail = async (payload: {
+  coreOnly?: boolean;
   number: number;
   path: string;
 }): Promise<GitPullRequestDetailResult> => {
@@ -305,7 +325,17 @@ export const getPullRequestDetail = async (payload: {
   try {
     const { stdout } = await execFileAsync(
       'gh',
-      ['pr', 'view', String(number), '--json', GITHUB_PULL_REQUEST_DETAIL_FIELDS],
+      [
+        'pr',
+        'view',
+        String(number),
+        '--json',
+        payload.coreOnly
+          ? GITHUB_PULL_REQUEST_DETAIL_FIELDS.split(',')
+              .filter((field) => !['comments', 'commits', 'reviews'].includes(field))
+              .join(',')
+          : GITHUB_PULL_REQUEST_DETAIL_FIELDS,
+      ],
       { cwd: dirPath, timeout: 8000 },
     );
 

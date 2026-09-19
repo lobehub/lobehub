@@ -35,6 +35,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
+  local: css`
+    flex-shrink: 0;
+
+    padding-block: 10px;
+    padding-inline: 16px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+  `,
   headline: css`
     overflow: hidden;
     flex: 1;
@@ -98,90 +108,101 @@ const MergeDock = memo<MergeDockProps>(
     const isError = status.key === 'error';
 
     return (
-      <div className={styles.dock}>
-        <Flexbox horizontal align={'flex-start'} gap={8}>
-          <Icon
-            className={styles.icon}
-            color={TONE_COLOR[status.tone]}
-            icon={DOCK_ICON[status.icon]}
-            size={14}
-            spin={status.icon === 'spinner'}
-            style={{ marginBlockStart: 3 }}
-          />
-          <span
-            className={cx(styles.headline, isError && styles.headlineWrap)}
-            style={isError ? { color: TONE_COLOR.error } : undefined}
+      <>
+        {model.showPush && (
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={styles.local}
+            gap={8}
+            justify={'space-between'}
           >
-            {tr(status.labelKey, status.labelParams)}
-          </span>
-          {isError && (
-            <Flexbox horizontal className={styles.trailing} gap={2}>
-              <Button size={'small'} type={'text'} onClick={onDismissError}>
-                {t('workingPanel.pr.dismiss')}
-              </Button>
-              <Button size={'small'} type={'text'} onClick={onRetry}>
-                {tCommon('retry')}
-              </Button>
-            </Flexbox>
-          )}
-          {status.key === 'autoMerge' && (
+            <span>{t('workingPanel.pr.reason.localAhead', { count: local?.ahead ?? 0 })}</span>
             <Button
-              className={styles.trailing}
-              loading={busy === 'disableAutoMerge'}
+              icon={<Icon icon={ArrowUpIcon} size={12} />}
+              loading={busy === 'push'}
               size={'small'}
-              type={'text'}
-              onClick={() => void onAction({ type: 'disableAutoMerge' })}
+              onClick={() => void onPush()}
             >
-              {t('workingPanel.pr.action.disableAutoMerge')}
+              {busy === 'push'
+                ? t('workingPanel.pr.action.pushing')
+                : t('workingPanel.pr.action.push', { count: local?.ahead ?? 0 })}
             </Button>
-          )}
-        </Flexbox>
-        {model.reasons.length > 0 && (
-          <div className={styles.sub}>
-            {model.reasons.map((reason) => tr(reason.labelKey, reason.labelParams)).join(' · ')}
-          </div>
-        )}
-        {model.hintKey && <div className={styles.sub}>{tr(model.hintKey, model.hintParams)}</div>}
-        {model.action && (
-          <Flexbox horizontal align={'center'} className={styles.actionBar} gap={8}>
-            {model.showPush && (
-              <Button
-                icon={<Icon icon={ArrowUpIcon} size={12} />}
-                loading={busy === 'push'}
-                size={'small'}
-                onClick={() => void onPush()}
-              >
-                {busy === 'push'
-                  ? t('workingPanel.pr.action.pushing')
-                  : t('workingPanel.pr.action.push', { count: local?.ahead ?? 0 })}
-              </Button>
-            )}
-            {model.showUpdateBranch && (
-              <DockActionButton
-                secondary
-                action={UPDATE_BRANCH}
-                busy={busy}
-                detail={detail}
-                onAction={onAction}
-                onPickMethod={() => {}}
-                onToggleBypass={() => {}}
-              />
-            )}
-            <DockActionButton
-              action={model.action}
-              busy={busy}
-              bypass={model.bypassAvailable ? bypass : undefined}
-              detail={detail}
-              onAction={onAction}
-              onToggleBypass={setBypass}
-              onPickMethod={(next) => {
-                setMethod(next);
-                writeMergeMethod(next);
-              }}
-            />
           </Flexbox>
         )}
-      </div>
+        <div className={styles.dock}>
+          <Flexbox horizontal align={'flex-start'} gap={8}>
+            <Icon
+              className={styles.icon}
+              color={TONE_COLOR[status.tone]}
+              icon={DOCK_ICON[status.icon]}
+              size={14}
+              spin={status.icon === 'spinner'}
+              style={{ marginBlockStart: 3 }}
+            />
+            <span
+              className={cx(styles.headline, isError && styles.headlineWrap)}
+              style={isError ? { color: TONE_COLOR.error } : undefined}
+            >
+              {tr(status.labelKey, status.labelParams)}
+            </span>
+            {isError && (
+              <Flexbox horizontal className={styles.trailing} gap={2}>
+                <Button size={'small'} type={'text'} onClick={onDismissError}>
+                  {t('workingPanel.pr.dismiss')}
+                </Button>
+                <Button size={'small'} type={'text'} onClick={onRetry}>
+                  {tCommon('retry')}
+                </Button>
+              </Flexbox>
+            )}
+            {status.key === 'autoMerge' && (
+              <Button
+                className={styles.trailing}
+                loading={busy === 'disableAutoMerge'}
+                size={'small'}
+                type={'text'}
+                onClick={() => void onAction({ type: 'disableAutoMerge' })}
+              >
+                {t('workingPanel.pr.action.disableAutoMerge')}
+              </Button>
+            )}
+          </Flexbox>
+          {model.reasons.length > 0 && (
+            <div className={styles.sub}>
+              {model.reasons.map((reason) => tr(reason.labelKey, reason.labelParams)).join(' · ')}
+            </div>
+          )}
+          {model.hintKey && <div className={styles.sub}>{tr(model.hintKey, model.hintParams)}</div>}
+          {model.action && (
+            <Flexbox horizontal align={'center'} className={styles.actionBar} gap={8}>
+              {model.showUpdateBranch && (
+                <DockActionButton
+                  secondary
+                  action={UPDATE_BRANCH}
+                  busy={busy}
+                  detail={detail}
+                  onAction={onAction}
+                  onPickMethod={() => {}}
+                  onToggleBypass={() => {}}
+                />
+              )}
+              <DockActionButton
+                action={model.action}
+                busy={busy}
+                bypass={model.bypassAvailable ? bypass : undefined}
+                detail={detail}
+                onAction={onAction}
+                onToggleBypass={setBypass}
+                onPickMethod={(next) => {
+                  setMethod(next);
+                  writeMergeMethod(next);
+                }}
+              />
+            </Flexbox>
+          )}
+        </div>
+      </>
     );
   },
 );

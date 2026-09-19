@@ -1,3 +1,4 @@
+import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
 import { Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Button, ScrollArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -8,9 +9,9 @@ import { useTranslation } from 'react-i18next';
 import { electronSystemService } from '@/services/electron/system';
 import {
   useFetchGitAheadBehind,
+  useFetchGitPullRequestActivity,
   useFetchGitPullRequestDetail,
   useFetchGitPullRequestMergeContext,
-  useFetchGitWorkingTreeStatus,
 } from '@/store/device';
 
 import { OverviewRow } from '../Overview/OverviewRow';
@@ -44,12 +45,13 @@ interface PullRequestProps {
   deviceId?: string;
   number: number;
   onOpenTab: (tab: string) => void;
+  summary?: DeviceGitLinkedPullRequest;
   url?: string;
   workingDirectory: string;
 }
 
 const PullRequest = memo<PullRequestProps>(
-  ({ active, deviceId, number, onOpenTab, url, workingDirectory }) => {
+  ({ active, deviceId, number, onOpenTab, summary, url, workingDirectory }) => {
     const { t } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
     const {
@@ -58,13 +60,18 @@ const PullRequest = memo<PullRequestProps>(
       isLoading,
       mutate,
     } = useFetchGitPullRequestDetail(deviceId, workingDirectory, number, { active });
+    const activity = useFetchGitPullRequestActivity(
+      deviceId,
+      workingDirectory,
+      data?.detail?.number,
+      active && data?.detail?.state === 'open',
+    );
     const { data: context } = useFetchGitPullRequestMergeContext(
       deviceId,
       workingDirectory,
       data?.detail ?? undefined,
     );
     const { data: aheadBehind } = useFetchGitAheadBehind(deviceId, workingDirectory);
-    const { data: workingTree } = useFetchGitWorkingTreeStatus(deviceId, workingDirectory);
     const actions = usePullRequestActions({
       deviceId,
       mutateDetail: mutate,
@@ -73,7 +80,7 @@ const PullRequest = memo<PullRequestProps>(
     });
 
     const detail = useMemo(() => {
-      const core = data?.detail;
+      const core = data?.detail ? { ...data.detail, ...activity.data } : undefined;
       if (!core || !context) return core ?? undefined;
       const required = new Set(context.requiredChecks);
       return {
@@ -83,10 +90,10 @@ const PullRequest = memo<PullRequestProps>(
         viewerCanBypass: context.viewerCanBypass,
         viewerCanWrite: context.viewerCanWrite,
       };
-    }, [data?.detail, context]);
+    }, [data?.detail, context, activity.data]);
     const externalUrl = detail?.url ?? url;
 
-    if (isLoading && !data) return <PullRequestSkeleton />;
+    if (isLoading && !data) return <PullRequestSkeleton summary={summary} />;
 
     if (data?.status === 'gh-missing')
       return (
@@ -136,10 +143,7 @@ const PullRequest = memo<PullRequestProps>(
         </Flexbox>
       );
 
-    const local =
-      aheadBehind?.hasUpstream || workingTree
-        ? { ahead: aheadBehind?.ahead ?? 0, dirtyFiles: workingTree?.total ?? 0 }
-        : undefined;
+    const local = aheadBehind?.hasUpstream ? { ahead: aheadBehind.ahead } : undefined;
 
     return (
       <Flexbox className={styles.root}>
@@ -151,12 +155,14 @@ const PullRequest = memo<PullRequestProps>(
           viewportProps={{ className: styles.viewport, style: { overflowX: 'hidden' } }}
         >
           <Header
+            activityLoaded={!!activity.data}
             detail={detail}
             deviceId={deviceId}
             workingDirectory={workingDirectory}
             onAction={actions.run}
           />
           <Sections
+            activity={activity}
             busy={actions.busy}
             detail={detail}
             onAction={actions.run}

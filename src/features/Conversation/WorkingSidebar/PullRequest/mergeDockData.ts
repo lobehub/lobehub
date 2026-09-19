@@ -25,7 +25,6 @@ export interface DockStatus extends DockText {
     | 'autoMerge'
     | 'bypass'
     | 'ready'
-    | 'unstable'
     | 'error';
   tone: Tone;
 }
@@ -66,7 +65,7 @@ export interface MergeDockModel {
 
 export interface MergeDockInput {
   detail: DeviceGitPullRequestDetail;
-  local?: { ahead: number; dirtyFiles: number };
+  local?: { ahead: number };
   ui: {
     bypass: boolean;
     busy?: 'merge' | 'update' | 'push' | 'ready' | 'autoMerge';
@@ -107,8 +106,6 @@ export const PR_KEYS = {
     checksFailing: 'workingPanel.pr.reason.checksFailing',
     checksPending: 'workingPanel.pr.reason.checksPending',
     conflicts: 'workingPanel.pr.reason.conflicts',
-    localAhead: 'workingPanel.pr.reason.localAhead',
-    localDirty: 'workingPanel.pr.reason.localDirty',
     optionalFailing: 'workingPanel.pr.reason.optionalFailing',
     reviewRequired: 'workingPanel.pr.reason.reviewRequired',
     rules: 'workingPanel.pr.reason.rules',
@@ -124,7 +121,6 @@ export const PR_KEYS = {
     error: 'workingPanel.pr.status.error',
     merged: 'workingPanel.pr.status.merged',
     ready: 'workingPanel.pr.status.ready',
-    unstable: 'workingPanel.pr.status.unstable',
     waiting: 'workingPanel.pr.status.waiting',
   },
 } as const;
@@ -157,7 +153,6 @@ const countFailing = (checks: DeviceGitPullRequestDetail['checks'], required: bo
 const buildReasons = (
   detail: DeviceGitPullRequestDetail,
   checksStatus: ChecksStatus,
-  local: MergeDockInput['local'],
 ): { blockers: DockText[]; reasons: DockText[] } => {
   const blockers: DockText[] = [];
   const reasons: DockText[] = [];
@@ -187,13 +182,6 @@ const buildReasons = (
       labelKey: PR_KEYS.reason.optionalFailing,
       labelParams: { count: countFailing(detail.checks, false) },
     });
-  if ((local?.ahead ?? 0) > 0)
-    reasons.push({ labelKey: PR_KEYS.reason.localAhead, labelParams: { count: local!.ahead } });
-  if ((local?.dirtyFiles ?? 0) > 0)
-    reasons.push({
-      labelKey: PR_KEYS.reason.localDirty,
-      labelParams: { count: local!.dirtyFiles },
-    });
 
   return { blockers, reasons };
 };
@@ -219,7 +207,7 @@ const buildStatus = (
     return { icon: 'x', key: 'closed', labelKey: PR_KEYS.status.closed, tone: 'error' };
   if (detail.isDraft)
     return { icon: 'eye', key: 'draft', labelKey: PR_KEYS.status.draft, tone: 'neutral' };
-  if (detail.mergeable === 'UNKNOWN')
+  if (detail.mergeable === 'UNKNOWN' || ui.contextLoading)
     return {
       icon: 'spinner',
       key: 'calculating',
@@ -248,8 +236,6 @@ const buildStatus = (
     return { icon: 'x', key: 'blocked', labelKey: PR_KEYS.status.blocked, tone: 'error' };
   if (checksStatus === 'pending')
     return { icon: 'spinner', key: 'waiting', labelKey: PR_KEYS.status.waiting, tone: 'warning' };
-  if (checksStatus === 'unstable')
-    return { icon: 'x', key: 'unstable', labelKey: PR_KEYS.status.unstable, tone: 'warning' };
   return { icon: 'check', key: 'ready', labelKey: PR_KEYS.status.ready, tone: 'success' };
 };
 
@@ -270,9 +256,13 @@ export const resolveMergeDock = ({ detail, local, ui }: MergeDockInput): MergeDo
     detail.reviewDecision !== 'CHANGES_REQUESTED' &&
     !detail.autoMerge;
 
-  const settled = detail.state === 'open' && !detail.isDraft && detail.mergeable !== 'UNKNOWN';
+  const settled =
+    !ui.contextLoading &&
+    detail.state === 'open' &&
+    !detail.isDraft &&
+    detail.mergeable !== 'UNKNOWN';
   const { blockers, reasons: softReasons } = settled
-    ? buildReasons(detail, checksStatus, local)
+    ? buildReasons(detail, checksStatus)
     : { blockers: [], reasons: [] };
   if (settled && blocked && blockers.length === 0 && checksStatus !== 'pending' && !ui.bypass)
     blockers.push({ labelKey: PR_KEYS.reason.rules });

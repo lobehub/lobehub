@@ -40,13 +40,18 @@ const effectiveConfig = vi.hoisted(() => ({
 }));
 
 const platform = vi.hoisted(() => ({ isDesktop: true }));
-const linkedPR = vi.hoisted(() => ({ number: undefined as number | undefined }));
+const linkedPR = vi.hoisted(() => ({
+  number: undefined as number | undefined,
+  branch: 'feature' as string | undefined,
+  status: undefined as string | undefined,
+}));
 
 vi.mock('@/store/device', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  useFetchGitBranch: () => ({ data: { branch: 'feature' } }),
+  useFetchGitBranch: () => ({ data: linkedPR.branch ? { branch: linkedPR.branch } : undefined }),
   useFetchGitLinkedPR: () => ({
     data: {
+      pullRequestStatus: linkedPR.status,
       pullRequest: linkedPR.number
         ? { number: linkedPR.number, state: 'open', url: 'https://github.com/test/repo/pull/1' }
         : undefined,
@@ -125,6 +130,7 @@ const chatStore = vi.hoisted(() => ({
   threadMaps: {} as Record<string, any[]>,
   // read by the real topicSelectors.currentTopicMetadata (sourcePath resolution)
   topicDataMap: {} as Record<string, unknown>,
+  topicDetailMap: {} as Record<string, unknown>,
 }));
 
 const globalStore = vi.hoisted(() => ({
@@ -414,6 +420,10 @@ beforeEach(() => {
   effectiveConfig.workspaceScoped = false;
   platform.isDesktop = true;
   linkedPR.number = undefined;
+  linkedPR.branch = 'feature';
+  linkedPR.status = undefined;
+  chatStore.topicDataMap = {};
+  chatStore.topicDetailMap = {};
   filesProps.current = undefined;
   renderedReview.current = undefined;
   reviewState.repoType = undefined;
@@ -441,6 +451,74 @@ afterEach(() => {
 });
 
 describe('AgentWorkingSidebar — controlled panel width', () => {
+  it('opens a scoped saved PR before branch lookup and discards it after authoritative empty lookup', () => {
+    linkedPR.branch = undefined;
+    reviewState.workingDirectory = '/repo';
+    chatStore.activeTopicId = 'topic-pr';
+    chatStore.topicDetailMap = {
+      'topic-pr': {
+        id: 'topic-pr',
+        metadata: {
+          workingDirectoryConfig: {
+            path: '/repo',
+            git: {
+              branch: 'feature',
+              github: {
+                pullRequest: {
+                  number: 42,
+                  title: 'Saved PR',
+                  state: 'open',
+                  url: 'https://github.com/test/repo/pull/42',
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    globalStore.status.workingSidebarTab = 'pr';
+    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
+    const { rerender } = render(<AgentWorkingSidebar />);
+    expect(screen.getByRole('textbox', { name: 'PR draft' })).toBeInTheDocument();
+    linkedPR.status = 'ok';
+    rerender(<AgentWorkingSidebar availableWidth={1200} />);
+    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    { path: '/other', boundDeviceId: undefined },
+    { path: '/repo', boundDeviceId: 'other-device' },
+  ])('does not bootstrap a snapshot from another scope: %o', ({ path, boundDeviceId }) => {
+    linkedPR.branch = undefined;
+    reviewState.workingDirectory = '/repo';
+    chatStore.activeTopicId = 'topic-pr';
+    chatStore.topicDetailMap = {
+      'topic-pr': {
+        id: 'topic-pr',
+        metadata: {
+          boundDeviceId,
+          workingDirectoryConfig: {
+            path,
+            git: {
+              github: {
+                pullRequest: {
+                  number: 42,
+                  state: 'open',
+                  title: 'Other PR',
+                  url: 'https://github.com/test/repo/pull/42',
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    globalStore.status.workingSidebarTab = 'pr';
+    localStorageState.openTabsByContext = { 'topic:topic-pr': ['pr'] };
+    render(<AgentWorkingSidebar />);
+    expect(screen.queryByRole('textbox', { name: 'PR draft' })).not.toBeInTheDocument();
+  });
+
   it('resets PR state when the PR number or directory changes', () => {
     reviewState.repoType = 'github';
     reviewState.workingDirectory = '/repo';

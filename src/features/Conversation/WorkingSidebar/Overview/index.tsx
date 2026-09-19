@@ -315,7 +315,6 @@ const Overview = memo<OverviewProps>(
 
         <OverviewRow
           icon={ClipboardListIcon}
-          value={t('workingPanel.overview.changes')}
           trailing={
             changeStats.files > 0 ? (
               <>
@@ -325,6 +324,11 @@ const Overview = memo<OverviewProps>(
             ) : (
               t('workingPanel.overview.changes.none')
             )
+          }
+          value={
+            changeStats.files > 0
+              ? t('workingPanel.pr.reason.localDirty', { count: changeStats.files })
+              : t('workingPanel.overview.changes')
           }
           onClick={() => onOpenTab('review')}
         />

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  getPullRequestActivity,
   getPullRequestDetail,
   normalizeMergeContext,
   normalizePullRequestDetail,
@@ -305,5 +306,55 @@ describe('getPullRequestDetail', () => {
       detail: null,
       status: 'error',
     });
+  });
+});
+
+describe('incremental pull request reads', () => {
+  it('returns core data while the activity request is still pending', async () => {
+    let releaseActivity!: (value: { stdout: string }) => void;
+    const raw = {
+      number: 42,
+      title: 'Ready first',
+      url: 'https://github.com/test/repo/pull/42',
+      state: 'OPEN',
+      headRefOid: 'a'.repeat(40),
+      baseRefName: 'main',
+      headRefName: 'feature',
+      additions: 2,
+      deletions: 1,
+      changedFiles: 1,
+    };
+    childProcessMocks.execFileAsync.mockImplementation(async (_cmd, args) => {
+      const fields = args[args.indexOf('--json') + 1].split(',');
+      if (fields.includes('comments'))
+        return new Promise<{ stdout: string }>((resolve) => {
+          releaseActivity = resolve;
+        });
+      return { stdout: JSON.stringify(raw) };
+    });
+    const core = await getPullRequestDetail({ coreOnly: true, number: 42, path: '/repo' });
+    expect(core.detail).toMatchObject({
+      title: 'Ready first',
+      comments: [],
+      viewerCanWrite: false,
+    });
+    const activity = getPullRequestActivity({ number: 42, path: '/repo' });
+    releaseActivity({
+      stdout: JSON.stringify({
+        comments: [
+          { id: 'c1', author: { login: 'reviewer' }, body: 'Arrived later', createdAt: 'now' },
+        ],
+      }),
+    });
+    expect(await activity).toMatchObject({
+      comments: [{ body: 'Arrived later', author: 'reviewer' }],
+      commits: [],
+      reviews: [],
+    });
+  });
+
+  it('propagates activity failures instead of reporting an empty timeline', async () => {
+    childProcessMocks.execFileAsync.mockRejectedValue(new Error('offline'));
+    await expect(getPullRequestActivity({ number: 42, path: '/repo' })).rejects.toThrow('offline');
   });
 });

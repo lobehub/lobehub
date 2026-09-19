@@ -73,6 +73,7 @@ describe('usePullRequestActions', () => {
     });
 
     expect(mutateDetail).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledWith(deviceKeys.gitPullRequestActivity('dev-1', '/repo', 7));
     expect(mutate).toHaveBeenCalledWith(deviceKeys.gitAheadBehind('dev-1', '/repo'));
     expect(mutate).toHaveBeenCalledWith(deviceKeys.gitWorkingTreeStatus('dev-1', '/repo'));
     const matcher = mutate.mock.calls.find(([key]) => typeof key === 'function')?.[0];

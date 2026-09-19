@@ -11,6 +11,7 @@ import type {
   GitLinkedPullRequestResult,
   GitPullRequestAction,
   GitPullRequestActionResult,
+  GitPullRequestActivity,
   GitPullRequestDetailResult,
   GitPullRequestMergeContext,
   GitPullResult,
@@ -69,11 +70,21 @@ export default class GitController extends ControllerModule {
 
   @IpcMethod()
   async getPullRequestDetail(payload: {
+    coreOnly?: boolean;
     number: number;
     path: string;
   }): Promise<GitPullRequestDetailResult> {
     const { getPullRequestDetail: computePullRequestDetail } = await loadGit();
     return computePullRequestDetail(payload);
+  }
+
+  @IpcMethod()
+  async getPullRequestActivity(payload: {
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestActivity> {
+    const { getPullRequestActivity: computePullRequestActivity } = await loadGit();
+    return computePullRequestActivity(payload);
   }
 
   @IpcMethod()

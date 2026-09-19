@@ -10,6 +10,7 @@ import {
   getGitWorkingTreePatches,
   getGitWorkingTreeStatus,
   getLinkedPullRequest,
+  getPullRequestActivity,
   getPullRequestDetail,
   getPullRequestMergeContext,
   type GitPullRequestAction,
@@ -74,6 +75,7 @@ export const DEVICE_RPC_METHODS = [
   'getGitBranch',
   'getLinkedPullRequest',
   'getPullRequestDetail',
+  'getPullRequestActivity',
   'getPullRequestMergeContext',
   'runPullRequestAction',
   'getGitWorkingTreeStatus',
@@ -210,7 +212,10 @@ export const executeDeviceRpc = async (
     }
 
     case 'getPullRequestDetail': {
-      return getPullRequestDetail(params as { number: number; path: string });
+      return getPullRequestDetail(params as { coreOnly?: boolean; number: number; path: string });
+    }
+    case 'getPullRequestActivity': {
+      return getPullRequestActivity(params as { number: number; path: string });
     }
 
     case 'getPullRequestMergeContext': {

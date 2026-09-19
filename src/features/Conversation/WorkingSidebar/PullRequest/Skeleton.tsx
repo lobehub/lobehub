@@ -1,7 +1,11 @@
+import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { getPullRequestState } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 
 import { sectionStyles } from '../Overview/sectionStyles';
 
@@ -45,49 +49,65 @@ const SectionTitle = ({ width = 64 }: { width?: number }) => (
   </div>
 );
 
-const PullRequestSkeleton = memo(() => (
-  <Flexbox className={styles.root}>
+const PullRequestSkeleton = memo(({ summary }: { summary?: DeviceGitLinkedPullRequest }) => {
+  const { t } = useTranslation('chat');
+  return (
     <Flexbox className={styles.root}>
-      <div className={styles.head}>
-        <Skeleton.Text fontSize={15} rows={2} width={['92%', '60%']} />
-        <Flexbox horizontal align={'center'} gap={6} style={{ marginBlockStart: 6 }}>
-          <Skeleton height={20} radius={6} width={56} />
-          <Skeleton height={18} radius={4} width={96} />
-          <Skeleton height={18} radius={4} width={64} />
+      <Flexbox className={styles.root}>
+        <div className={styles.head}>
+          {summary ? (
+            <>
+              <div>
+                #{summary.number} {summary.title}
+              </div>
+              <div>
+                {t(
+                  `workingPanel.pr.state.${summary.isDraft && getPullRequestState(summary) === 'open' ? 'draft' : getPullRequestState(summary)}`,
+                )}
+              </div>
+            </>
+          ) : (
+            <Skeleton.Text fontSize={15} rows={2} width={['92%', '60%']} />
+          )}
+          <Flexbox horizontal align={'center'} gap={6} style={{ marginBlockStart: 6 }}>
+            <Skeleton height={20} radius={6} width={56} />
+            <Skeleton height={18} radius={4} width={96} />
+            <Skeleton height={18} radius={4} width={64} />
+          </Flexbox>
+        </div>
+        <Flexbox className={sectionStyles.section}>
+          <SectionTitle width={72} />
+          <div className={styles.sectionBody}>
+            <Skeleton.Text fontSize={13} rows={3} width={['100%', '88%', '46%']} />
+          </div>
+        </Flexbox>
+        <Flexbox className={sectionStyles.section}>
+          <SectionTitle width={40} />
+          <Row trailing={72} />
+        </Flexbox>
+        <Flexbox className={sectionStyles.section}>
+          <SectionTitle width={56} />
+        </Flexbox>
+        <Flexbox className={sectionStyles.section}>
+          <SectionTitle width={52} />
+          <Row />
+          <Row />
+        </Flexbox>
+      </Flexbox>
+      <div className={styles.dock}>
+        <Row trailing={40} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          gap={8}
+          style={{ paddingBlock: '6px 0', paddingInline: 8 }}
+        >
+          <Skeleton height={24} radius={6} width={'100%'} />
         </Flexbox>
       </div>
-      <Flexbox className={sectionStyles.section}>
-        <SectionTitle width={72} />
-        <div className={styles.sectionBody}>
-          <Skeleton.Text fontSize={13} rows={3} width={['100%', '88%', '46%']} />
-        </div>
-      </Flexbox>
-      <Flexbox className={sectionStyles.section}>
-        <SectionTitle width={40} />
-        <Row trailing={72} />
-      </Flexbox>
-      <Flexbox className={sectionStyles.section}>
-        <SectionTitle width={56} />
-      </Flexbox>
-      <Flexbox className={sectionStyles.section}>
-        <SectionTitle width={52} />
-        <Row />
-        <Row />
-      </Flexbox>
     </Flexbox>
-    <div className={styles.dock}>
-      <Row trailing={40} />
-      <Flexbox
-        horizontal
-        align={'center'}
-        gap={8}
-        style={{ paddingBlock: '6px 0', paddingInline: 8 }}
-      >
-        <Skeleton height={24} radius={6} width={'100%'} />
-      </Flexbox>
-    </div>
-  </Flexbox>
-));
+  );
+});
 
 PullRequestSkeleton.displayName = 'PullRequestSkeleton';
 

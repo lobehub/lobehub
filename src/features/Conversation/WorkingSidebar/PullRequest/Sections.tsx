@@ -1,5 +1,10 @@
-import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
+import type {
+  DeviceGitPullRequestAction,
+  DeviceGitPullRequestActivity,
+  DeviceGitPullRequestDetail,
+} from '@lobechat/types';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Button, Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronDownIcon,
@@ -9,6 +14,7 @@ import {
 } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { SWRResponse } from 'swr';
 
 import { ChevronRight, OverviewRow, rowStyles } from '../Overview/OverviewRow';
 import { sectionStyles } from '../Overview/sectionStyles';
@@ -85,14 +91,29 @@ const Section = memo<SectionProps>(({ children, count, onToggle, open = true, ti
 Section.displayName = 'PullRequestSection';
 
 interface SectionsProps {
+  activity: Pick<
+    SWRResponse<DeviceGitPullRequestActivity>,
+    'data' | 'error' | 'isValidating' | 'mutate'
+  >;
   busy?: PullRequestBusy;
   detail: DeviceGitPullRequestDetail;
   onAction: (action: DeviceGitPullRequestAction) => Promise<boolean>;
   onOpenTab: (tab: string) => void;
 }
 
-const Sections = memo<SectionsProps>(({ busy, detail, onAction, onOpenTab }) => {
+const Sections = memo<SectionsProps>(({ activity, busy, detail, onAction, onOpenTab }) => {
   const { t } = useTranslation('chat');
+  const { t: tCommon } = useTranslation('common');
+  const activityPlaceholder = activity.error ? (
+    <Flexbox gap={8}>
+      <span>{t('workingPanel.pr.error.load')}</span>
+      <Button loading={activity.isValidating} size={'small'} onClick={() => void activity.mutate()}>
+        {tCommon('retry')}
+      </Button>
+    </Flexbox>
+  ) : (
+    <Skeleton.Text rows={3} />
+  );
   const [open, setOpen] = useState({
     activity: true,
     checks: false,
@@ -155,34 +176,40 @@ const Sections = memo<SectionsProps>(({ busy, detail, onAction, onOpenTab }) => 
         </Section>
       )}
       <Section
-        count={detail.commits.length}
+        count={activity.data ? detail.commits.length : undefined}
         open={open.commits}
         title={t('workingPanel.pr.section.commits')}
         onToggle={toggle('commits')}
       >
-        {detail.commits.map((commit) => (
-          <OverviewRow
-            weak
-            icon={GitCommitHorizontalIcon}
-            key={commit.sha}
-            title={commit.message}
-            value={commit.message.split('\n')[0]}
-            trailing={
-              <>
-                <span className={styles.sha}>{commit.sha.slice(0, 7)}</span>
-                {timeAgo(commit.committedAt)}
-              </>
-            }
-          />
-        ))}
+        {!activity.data
+          ? activityPlaceholder
+          : detail.commits.map((commit) => (
+              <OverviewRow
+                weak
+                icon={GitCommitHorizontalIcon}
+                key={commit.sha}
+                title={commit.message}
+                value={commit.message.split('\n')[0]}
+                trailing={
+                  <>
+                    <span className={styles.sha}>{commit.sha.slice(0, 7)}</span>
+                    {timeAgo(commit.committedAt)}
+                  </>
+                }
+              />
+            ))}
       </Section>
       <Section
-        count={detail.comments.length + detail.reviews.length}
+        count={activity.data ? detail.comments.length + detail.reviews.length : undefined}
         open={open.activity}
         title={t('workingPanel.pr.section.activity')}
         onToggle={toggle('activity')}
       >
-        <ActivityTimeline busy={busy} detail={detail} onAction={onAction} />
+        {activity.data ? (
+          <ActivityTimeline busy={busy} detail={detail} onAction={onAction} />
+        ) : (
+          activityPlaceholder
+        )}
       </Section>
     </>
   );

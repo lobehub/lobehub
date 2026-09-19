@@ -15,6 +15,7 @@ import type {
   DeviceGitLinkedPullRequestLookupStatus,
   DeviceGitPullRequestAction,
   DeviceGitPullRequestActionResult,
+  DeviceGitPullRequestActivity,
   DeviceGitPullRequestDetailResult,
   DeviceGitPullRequestMergeContext,
   DeviceGitRemoveWorktreeResult,
@@ -237,20 +238,41 @@ class GitService {
 
   /** Full detail of a pull request in a working directory. */
   async getPullRequestDetail({
+    coreOnly,
     deviceId,
     number,
     path,
   }: {
+    coreOnly?: boolean;
     deviceId?: string;
     number: number;
     path: string;
   }): Promise<DeviceGitPullRequestDetailResult> {
     return deviceId
-      ? ((await lambdaClient.device.gitPullRequestDetail.query({ deviceId, number, path })) ?? {
+      ? ((await lambdaClient.device.gitPullRequestDetail.query({
+          coreOnly,
+          deviceId,
+          number,
+          path,
+        })) ?? {
           detail: null,
           status: 'error',
         })
-      : electronGitService.getPullRequestDetail({ number, path });
+      : electronGitService.getPullRequestDetail({ coreOnly, number, path });
+  }
+
+  async getPullRequestActivity(params: {
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestActivity> {
+    if (!params.deviceId) return electronGitService.getPullRequestActivity(params);
+    const result = await lambdaClient.device.gitPullRequestActivity.query({
+      ...params,
+      deviceId: params.deviceId,
+    });
+    if (!result) throw new Error('Unable to load pull request activity');
+    return result;
   }
 
   /** Branch protection, viewer permission and base drift for a pull request. */

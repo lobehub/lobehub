@@ -510,6 +510,11 @@ export interface DeviceGitPullRequestDetail {
 }
 
 /** Result of the `getPullRequestDetail` device RPC. */
+export type DeviceGitPullRequestActivity = Pick<
+  DeviceGitPullRequestDetail,
+  'comments' | 'commits' | 'reviews'
+>;
+
 export interface DeviceGitPullRequestDetailResult {
   detail: DeviceGitPullRequestDetail | null;
   status: DeviceGitLinkedPullRequestLookupStatus;

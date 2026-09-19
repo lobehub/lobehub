@@ -11,6 +11,7 @@ import {
   type GitLinkedPullRequestResult,
   type GitPullRequestAction,
   type GitPullRequestActionResult,
+  type GitPullRequestActivity,
   type GitPullRequestDetailResult,
   type GitPullRequestMergeContext,
   type GitPullResult,
@@ -53,10 +54,18 @@ class ElectronGitService {
   }
 
   async getPullRequestDetail(params: {
+    coreOnly?: boolean;
     number: number;
     path: string;
   }): Promise<GitPullRequestDetailResult> {
     return this.ipc.git.getPullRequestDetail(params);
+  }
+
+  async getPullRequestActivity(params: {
+    number: number;
+    path: string;
+  }): Promise<GitPullRequestActivity> {
+    return this.ipc.git.getPullRequestActivity(params);
   }
 
   async getPullRequestMergeContext(params: {

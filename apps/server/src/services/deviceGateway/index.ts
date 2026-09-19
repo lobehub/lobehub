@@ -25,6 +25,7 @@ import type {
   DeviceGitLinkedPullRequestResult,
   DeviceGitPullRequestAction,
   DeviceGitPullRequestActionResult,
+  DeviceGitPullRequestActivity,
   DeviceGitPullRequestDetailResult,
   DeviceGitPullRequestMergeContext,
   DeviceGitRemoteBranchListItem,
@@ -463,6 +464,7 @@ export class DeviceGateway {
 
   /** Full detail of a pull request in a directory on a remote device. */
   gitPullRequestDetail(params: {
+    coreOnly?: boolean;
     deviceId: string;
     number: number;
     path: string;
@@ -471,6 +473,24 @@ export class DeviceGateway {
   }) {
     return this.invokeDeviceRead<DeviceGitPullRequestDetailResult>(
       'getPullRequestDetail',
+      { ...params, timeout: 20_000 },
+      {
+        coreOnly: params.coreOnly,
+        number: params.number,
+        path: params.path,
+      },
+    );
+  }
+
+  gitPullRequestActivity(params: {
+    deviceId: string;
+    number: number;
+    path: string;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<DeviceGitPullRequestActivity>(
+      'getPullRequestActivity',
       { ...params, timeout: 20_000 },
       {
         number: params.number,

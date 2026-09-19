@@ -56,6 +56,7 @@ export const usePullRequestActions = ({
         const cacheDeviceId = deviceId ?? 'local';
         await Promise.all([
           mutateDetail(),
+          mutate(deviceKeys.gitPullRequestActivity(cacheDeviceId, workingDirectory, number)),
           mutate(
             (key: unknown) =>
               Array.isArray(key) &&

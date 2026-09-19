@@ -107,6 +107,8 @@ export interface GitPullRequestDetail {
   viewerCanWrite: boolean;
 }
 
+export type GitPullRequestActivity = Pick<GitPullRequestDetail, 'comments' | 'commits' | 'reviews'>;
+
 export interface GitPullRequestDetailResult {
   detail: GitPullRequestDetail | null;
   status: GitLinkedPullRequestLookupStatus;

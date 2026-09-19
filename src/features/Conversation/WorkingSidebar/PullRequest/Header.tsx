@@ -81,131 +81,136 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface HeaderProps {
+  activityLoaded?: boolean;
   detail: DeviceGitPullRequestDetail;
   deviceId?: string;
   onAction: (action: DeviceGitPullRequestAction) => Promise<boolean>;
   workingDirectory: string;
 }
 
-const Header = memo<HeaderProps>(({ detail, deviceId, onAction, workingDirectory }) => {
-  const { t } = useTranslation('chat');
-  const visual = getDetailVisual(detail);
-  const canChangeBase = detail.viewerCanWrite && detail.state === 'open';
-  const [basePickerOpen, setBasePickerOpen] = useState(false);
-  const { data: remoteBranches } = useGitRemoteBranches(
-    workingDirectory,
-    canChangeBase && basePickerOpen,
-    deviceId,
-  );
-  const baseItems: DropdownItem[] = remoteBranches
-    ? remoteBranches
-        .map((branch) => branch.name.replace(/^[^/]+\//, ''))
-        .filter((name) => name !== detail.headRefName)
-        .map((name) => ({
-          key: name,
-          label: name,
-          onClick: () => {
-            if (name !== detail.baseRefName) void onAction({ base: name, type: 'changeBase' });
-          },
-        }))
-    : [{ disabled: true, key: 'loading', label: t('workingPanel.review.baseRef.loading') }];
+const Header = memo<HeaderProps>(
+  ({ activityLoaded = true, detail, deviceId, onAction, workingDirectory }) => {
+    const { t } = useTranslation('chat');
+    const visual = getDetailVisual(detail);
+    const canChangeBase = detail.viewerCanWrite && detail.state === 'open';
+    const [basePickerOpen, setBasePickerOpen] = useState(false);
+    const { data: remoteBranches } = useGitRemoteBranches(
+      workingDirectory,
+      canChangeBase && basePickerOpen,
+      deviceId,
+    );
+    const baseItems: DropdownItem[] = remoteBranches
+      ? remoteBranches
+          .map((branch) => branch.name.replace(/^[^/]+\//, ''))
+          .filter((name) => name !== detail.headRefName)
+          .map((name) => ({
+            key: name,
+            label: name,
+            onClick: () => {
+              if (name !== detail.baseRefName) void onAction({ base: name, type: 'changeBase' });
+            },
+          }))
+      : [{ disabled: true, key: 'loading', label: t('workingPanel.review.baseRef.loading') }];
 
-  const openOnGithub = () => void electronSystemService.openExternalLink(detail.url);
+    const openOnGithub = () => void electronSystemService.openExternalLink(detail.url);
 
-  const menuItems: DropdownItem[] = [
-    {
-      icon: <Icon icon={LinkIcon} size={14} />,
-      key: 'copy',
-      label: t('workingPanel.pr.menu.copyLink'),
-      onClick: async () => {
-        await copyToClipboard(detail.url);
-        toast.success(t('workingPanel.pr.menu.copied'));
+    const menuItems: DropdownItem[] = [
+      {
+        icon: <Icon icon={LinkIcon} size={14} />,
+        key: 'copy',
+        label: t('workingPanel.pr.menu.copyLink'),
+        onClick: async () => {
+          await copyToClipboard(detail.url);
+          toast.success(t('workingPanel.pr.menu.copied'));
+        },
       },
-    },
-    ...(detail.viewerCanWrite && detail.state !== 'merged'
-      ? [
-          { type: 'divider' as const },
-          detail.state === 'open'
-            ? {
-                danger: true,
-                key: 'close',
-                label: t('workingPanel.pr.menu.close'),
-                onClick: () => void onAction({ type: 'close' }),
-              }
-            : {
-                key: 'reopen',
-                label: t('workingPanel.pr.menu.reopen'),
-                onClick: () => void onAction({ type: 'reopen' }),
-              },
-        ]
-      : []),
-  ];
+      ...(detail.viewerCanWrite && detail.state !== 'merged'
+        ? [
+            { type: 'divider' as const },
+            detail.state === 'open'
+              ? {
+                  danger: true,
+                  key: 'close',
+                  label: t('workingPanel.pr.menu.close'),
+                  onClick: () => void onAction({ type: 'close' }),
+                }
+              : {
+                  key: 'reopen',
+                  label: t('workingPanel.pr.menu.reopen'),
+                  onClick: () => void onAction({ type: 'reopen' }),
+                },
+          ]
+        : []),
+    ];
 
-  return (
-    <div className={styles.head}>
-      <Flexbox horizontal align={'flex-start'} gap={6}>
-        <span className={styles.title}>
-          <span className={rowStyles.num}>#{detail.number}</span>
-          {detail.title}
-        </span>
-        <Flexbox horizontal className={styles.actions} gap={2}>
-          <ActionIcon
-            icon={ExternalLinkIcon}
-            size={'small'}
-            title={t('workingPanel.pr.menu.openOnGithub')}
-            onClick={openOnGithub}
-          />
-          <DropdownMenu items={menuItems} placement={'bottomRight'}>
-            <ActionIcon icon={EllipsisIcon} size={'small'} />
-          </DropdownMenu>
-        </Flexbox>
-      </Flexbox>
-      <Flexbox horizontal align={'center'} className={styles.meta} gap={6}>
-        <span
-          className={sectionStyles.pill}
-          style={{
-            background: `color-mix(in srgb, ${visual.color} 12%, transparent)`,
-            color: visual.color,
-          }}
-        >
-          <Icon icon={visual.icon} size={12} />
-          {t(`workingPanel.pr.state.${visual.state}`)}
-        </span>
-        <span className={styles.ref} title={detail.headRefName}>
-          {detail.headRefName}
-        </span>
-        <Icon icon={ArrowRightIcon} size={11} />
-        {canChangeBase ? (
-          <DropdownMenu
-            virtual
-            items={baseItems}
-            placement={'bottomLeft'}
-            onOpenChange={setBasePickerOpen}
-          >
-            <span
-              className={cx(styles.ref, styles.refButton)}
-              role={'button'}
-              tabIndex={0}
-              title={t('workingPanel.pr.header.changeBase')}
-            >
-              {detail.baseRefName}
-              <Icon icon={ChevronDownIcon} size={10} />
-            </span>
-          </DropdownMenu>
-        ) : (
-          <span className={styles.ref} title={detail.baseRefName}>
-            {detail.baseRefName}
+    return (
+      <div className={styles.head}>
+        <Flexbox horizontal align={'flex-start'} gap={6}>
+          <span className={styles.title}>
+            <span className={rowStyles.num}>#{detail.number}</span>
+            {detail.title}
           </span>
-        )}
-        <span>· {t('workingPanel.pr.header.commits', { count: detail.commits.length })}</span>
-        <span className={styles.stats}>
-          <span className={rowStyles.changeAdditions}>+{detail.additions}</span>{' '}
-          <span className={rowStyles.changeDeletions}>−{detail.deletions}</span>
-        </span>
-      </Flexbox>
-    </div>
-  );
-});
+          <Flexbox horizontal className={styles.actions} gap={2}>
+            <ActionIcon
+              icon={ExternalLinkIcon}
+              size={'small'}
+              title={t('workingPanel.pr.menu.openOnGithub')}
+              onClick={openOnGithub}
+            />
+            <DropdownMenu items={menuItems} placement={'bottomRight'}>
+              <ActionIcon icon={EllipsisIcon} size={'small'} />
+            </DropdownMenu>
+          </Flexbox>
+        </Flexbox>
+        <Flexbox horizontal align={'center'} className={styles.meta} gap={6}>
+          <span
+            className={sectionStyles.pill}
+            style={{
+              background: `color-mix(in srgb, ${visual.color} 12%, transparent)`,
+              color: visual.color,
+            }}
+          >
+            <Icon icon={visual.icon} size={12} />
+            {t(`workingPanel.pr.state.${visual.state}`)}
+          </span>
+          <span className={styles.ref} title={detail.headRefName}>
+            {detail.headRefName}
+          </span>
+          <Icon icon={ArrowRightIcon} size={11} />
+          {canChangeBase ? (
+            <DropdownMenu
+              virtual
+              items={baseItems}
+              placement={'bottomLeft'}
+              onOpenChange={setBasePickerOpen}
+            >
+              <span
+                className={cx(styles.ref, styles.refButton)}
+                role={'button'}
+                tabIndex={0}
+                title={t('workingPanel.pr.header.changeBase')}
+              >
+                {detail.baseRefName}
+                <Icon icon={ChevronDownIcon} size={10} />
+              </span>
+            </DropdownMenu>
+          ) : (
+            <span className={styles.ref} title={detail.baseRefName}>
+              {detail.baseRefName}
+            </span>
+          )}
+          {activityLoaded && (
+            <span>· {t('workingPanel.pr.header.commits', { count: detail.commits.length })}</span>
+          )}
+          <span className={styles.stats}>
+            <span className={rowStyles.changeAdditions}>+{detail.additions}</span>{' '}
+            <span className={rowStyles.changeDeletions}>−{detail.deletions}</span>
+          </span>
+        </Flexbox>
+      </div>
+    );
+  },
+);
 
 Header.displayName = 'PullRequestHeader';
 

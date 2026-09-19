@@ -5,6 +5,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type {
   DeviceGitAheadBehind,
+  DeviceGitPullRequestActivity,
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestDetailResult,
   DeviceGitPullRequestMergeContext,
@@ -232,11 +233,33 @@ export const useFetchGitPullRequestDetail = (
     number !== undefined && isEnabled(deviceId, path)
       ? deviceKeys.gitPullRequestDetail(deviceId ?? 'local', path, number)
       : null,
-    () => gitService.getPullRequestDetail({ deviceId, number: number!, path: path! }),
+    () =>
+      gitService.getPullRequestDetail({ coreOnly: true, deviceId, number: number!, path: path! }),
     {
+      dedupingInterval: 30_000,
       focusThrottleInterval: 60 * 1000,
       refreshInterval: (detail) => pullRequestDetailRefreshInterval(detail, active),
       revalidateOnFocus: true,
+      shouldRetryOnError: false,
+    },
+  );
+
+/** Activity starts once core data can paint; its failure never hides the PR. */
+export const useFetchGitPullRequestActivity = (
+  deviceId: string | undefined,
+  path: string | undefined,
+  number: number | undefined,
+  active = true,
+) =>
+  useClientDataSWR<DeviceGitPullRequestActivity>(
+    number !== undefined && isEnabled(deviceId, path)
+      ? deviceKeys.gitPullRequestActivity(deviceId ?? 'local', path, number)
+      : null,
+    () => gitService.getPullRequestActivity({ deviceId, number: number!, path: path! }),
+    {
+      dedupingInterval: 30_000,
+      focusThrottleInterval: 60_000,
+      refreshInterval: active ? 30_000 : 0,
       shouldRetryOnError: false,
     },
   );
@@ -258,6 +281,7 @@ export const useFetchGitPullRequestMergeContext = (
           path,
           detail.number,
           detail.headRefOid,
+          detail.baseRefName,
         )
       : null,
     () =>
@@ -269,7 +293,12 @@ export const useFetchGitPullRequestMergeContext = (
         path: path!,
         repo: detail!.repo,
       }),
-    { focusThrottleInterval: 60 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
+    {
+      dedupingInterval: 30_000,
+      focusThrottleInterval: 60 * 1000,
+      revalidateOnFocus: true,
+      shouldRetryOnError: false,
+    },
   );
 
 /**
