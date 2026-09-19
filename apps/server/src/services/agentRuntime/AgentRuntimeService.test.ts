@@ -2011,9 +2011,12 @@ describe('AgentRuntimeService', () => {
     let findOperation: MockInstance<AgentOperationModel['findById']>;
 
     beforeEach(() => {
-      findOperation = vi
-        .spyOn(AgentOperationModel.prototype, 'findById')
-        .mockResolvedValue(undefined);
+      findOperation = vi.spyOn(AgentOperationModel.prototype, 'findById');
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+        }),
+      });
     });
 
     afterEach(() => {
