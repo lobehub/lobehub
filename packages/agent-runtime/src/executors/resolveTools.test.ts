@@ -103,7 +103,7 @@ describe('resolveTools executors', () => {
     'includes finish state only when the run opts in (%s)',
     async (includeFinalState) => {
       const state = createState({ host: { includeFinalState } });
-      const result = await finish(host)({ type: 'finish', reason: 'done' }, state);
+      const result = await finish(host)({ type: 'finish', reason: 'completed' }, state);
       const event = publishEvent.mock.calls[0][0];
       expect(event.data.finalState !== undefined).toBe(includeFinalState === true);
       if (includeFinalState) expect(event.data.finalState.status).toBe('done');
