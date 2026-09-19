@@ -21,7 +21,7 @@ const mockService = vi.hoisted(() => ({
 const effectiveAgencyConfig = vi.hoisted(() => ({
   current: {
     boundDeviceId: 'personal-device' as string | undefined,
-    executionTarget: 'local' as const,
+    executionTarget: 'local' as 'local' | 'device',
     heterogeneousProvider: {
       command: 'codex',
       type: 'codex',
@@ -113,7 +113,6 @@ vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     device: {
       getClaudeCodeQuota: { query: mockLambdaClaudeQuota },
-      getCodexQuota: { query: mockLambdaCodexQuota },
     },
   },
 }));
@@ -125,6 +124,8 @@ vi.mock('@/libs/trpc/client', () => ({
 const mockQuotaService = vi.hoisted(() => ({
   getLatestReadings: vi.fn(async (): Promise<unknown[]> => []),
   ingestClaudeSnapshot: vi.fn(async () => undefined),
+  ingestCodexSnapshot: vi.fn(async () => undefined),
+  refreshCodexQuota: vi.fn(),
   listAccounts: vi.fn(async (): Promise<unknown[]> => []),
   listBindings: vi.fn(async (): Promise<unknown[]> => []),
 }));
@@ -281,6 +282,7 @@ beforeEach(() => {
   mockService.getCodexQuota.mockReset();
   mockLambdaClaudeQuota.mockReset();
   mockLambdaCodexQuota.mockReset();
+  mockQuotaService.refreshCodexQuota.mockImplementation(mockLambdaCodexQuota);
   toastErrorMock.mockReset();
   toastSuccessMock.mockReset();
   mockQuotaService.getLatestReadings.mockResolvedValue([]);

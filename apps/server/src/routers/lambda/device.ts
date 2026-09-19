@@ -303,28 +303,6 @@ export const deviceRouter = router({
       return result ?? null;
     }),
 
-  /** Codex subscription quota sampled with the bound device's local login. */
-  getCodexQuota: deviceProcedure
-    .input(
-      z.object({
-        command: z.string().optional(),
-        deviceId: z.string(),
-        env: z.record(z.string(), z.string()).optional(),
-        force: z.boolean().optional(),
-      }),
-    )
-    .query(async ({ ctx, input }) => {
-      const result = await deviceGateway.codexQuota({
-        command: input.command,
-        deviceId: input.deviceId,
-        env: input.env,
-        force: input.force,
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId,
-      });
-      return result ?? null;
-    }),
-
   /** Query a heterogeneous CLI's model catalog on the device that will execute the agent. */
   listHeterogeneousAgentModels: deviceProcedure
     .input(

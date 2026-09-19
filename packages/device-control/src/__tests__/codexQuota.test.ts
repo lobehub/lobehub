@@ -47,6 +47,10 @@ const input = readline.createInterface({ input: process.stdin });
 `,
   );
   await chmod(fixtureCommand, 0o755);
+  await writeFile(
+    path.join(fixtureDir, 'auth.json'),
+    JSON.stringify({ tokens: { account_id: 'fixture-account' } }),
+  );
 });
 
 afterAll(async () => {
@@ -55,14 +59,26 @@ afterAll(async () => {
 
 describe('getCodexQuota', () => {
   it('reads and maps every rate-limit bucket through Codex app-server', async () => {
-    const result = await getCodexQuota({ command: fixtureCommand, force: true });
+    const result = await getCodexQuota({
+      command: fixtureCommand,
+      env: { CODEX_HOME: fixtureDir },
+      force: true,
+    });
 
     expect(result).toMatchObject({
       error: null,
       provider: 'codex',
+      identity: { externalAccountId: 'fixture-account' },
       session: { resetsAt: 1_800_000_000_000, usedPercent: 23, windowMinutes: 300 },
       status: 'ok',
       weekly: { resetsAt: 1_800_604_800_000, usedPercent: 41, windowMinutes: 10_080 },
+    });
+    expect(result.readings).toHaveLength(3);
+    expect(result.readings?.[2]).toMatchObject({
+      scopeKey: 'codex_other',
+      limitName: 'Other models',
+      windowMinutes: 300,
+      utilization: 9,
     });
     expect(result.rateLimits).toEqual([
       {

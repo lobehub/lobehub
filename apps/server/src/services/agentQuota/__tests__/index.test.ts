@@ -245,3 +245,30 @@ describe('AgentQuotaService.recordUsage', () => {
     // no throw = pass; the row is accountId-null and excluded from calibration
   });
 });
+
+describe('Codex quota persistence', () => {
+  it('preserves provider bucket names and monthly durations through DB reads and projection', async () => {
+    const capturedAt = Date.now();
+    const reading = {
+      capturedAt,
+      limitName: 'Other models',
+      limitType: 'weekly_all',
+      resetsAt: capturedAt + 100000,
+      scopeKey: 'codex_other',
+      utilization: 41,
+      windowMinutes: 43200,
+    };
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [reading],
+    });
+    expect(await service.listLatestReadings(account.id)).toContainEqual(
+      expect.objectContaining(reading),
+    );
+    expect(await service.listSnapshotSeries(account.id, new Date(capturedAt - 1))).toContainEqual(
+      expect.objectContaining(reading),
+    );
+    expect((await windows.listByAccount(account.id))[0].windowSeconds).toBe(43200 * 60);
+  });
+});
