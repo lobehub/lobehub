@@ -1,7 +1,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 
 import { getToolProjector } from './registry';
-import type { ToolProjector } from './types';
+import type { ToolProjection, ToolProjector } from './types';
 
 /** Resolves the projector for one tool call. Injectable so the pipeline can be
  *  exercised without mutating the process-wide registry. */
@@ -10,9 +10,32 @@ export type ProjectorResolver = (
   apiName?: string | null,
 ) => ToolProjector | undefined;
 
+/**
+ * What a tool message without a projector gets.
+ *
+ * The body is the MODEL's copy of the result. On screen it reaches exactly two
+ * surfaces, both of which open on demand and both of which now hydrate: the
+ * fallback renderer and the raw/debug viewer. No collapsed row reads it —
+ * inspectors take `result.error` and the settled-ness of `result`, never its
+ * content — so dropping it costs the list nothing.
+ *
+ * `pluginState` is deliberately NOT touched here. It is read far outside the
+ * expanded card: the collapsed row's own chips, `getBuiltinRenderDisplayControl`
+ * deciding whether a card auto-opens, and whole-list selectors
+ * (`selectTodosFromMessages`, `selectActivatedToolIdsFromMessages`,
+ * `selectActivatedSkillsFromMessages`). Those run before any expansion, so
+ * "fetch it back on open" cannot cover them — which is exactly what a per-tool
+ * projector is for: it knows which state keys the collapsed row needs.
+ */
+const BODY_ONLY_PROJECTION: ToolProjection = { content: null, storedPayloadNeededBy: 'render' };
+
 const projectToolMessage = (message: UIChatMessage, resolve: ProjectorResolver): UIChatMessage => {
   const projector = resolve(message.plugin?.identifier, message.plugin?.apiName);
-  if (!projector) return message;
+
+  // No projector: keep the state whole and drop just the body — and only when
+  // there is a body, so an empty result is never flagged for a fetch that would
+  // return nothing.
+  if (!projector) return message.content ? applyProjection(message, BODY_ONLY_PROJECTION) : message;
 
   let projection;
   try {
@@ -37,6 +60,10 @@ const projectToolMessage = (message: UIChatMessage, resolve: ProjectorResolver):
 
   if (!projection) return message;
 
+  return applyProjection(message, projection);
+};
+
+const applyProjection = (message: UIChatMessage, projection: ToolProjection): UIChatMessage => {
   const replacedContent = projection.content !== undefined;
   const replacedState = projection.pluginState !== undefined;
   if (!replacedContent && !replacedState) return message;

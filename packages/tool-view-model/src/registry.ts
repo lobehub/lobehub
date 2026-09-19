@@ -8,9 +8,12 @@ import type { ToolProjector } from './types';
  *
  * Deliberately a static literal rather than the `register*()` pattern the
  * client-side render registry uses: this map is read from the server read path,
- * where there is no app bootstrap to guarantee registration ran first. A tool
- * missing from here keeps today's behaviour (raw payload passes through), so
- * the map can be filled one tool at a time.
+ * where there is no app bootstrap to guarantee registration ran first.
+ *
+ * A tool missing from here still has its BODY dropped — see
+ * `BODY_ONLY_PROJECTION` — and keeps its `pluginState` whole. An entry here is
+ * how a tool additionally sheds state, which needs per-tool knowledge of the
+ * keys its collapsed row reads.
  */
 const toolProjectors: Record<string, Record<string, ToolProjector>> = {
   // Every tool below renders through the SAME shared card,
