@@ -101,6 +101,9 @@ export interface ExecuteLocalToolOptions {
  * into the camelCase format expected by ComputerRuntime.
  */
 export class LocalSystemExecutionRuntime extends ComputerRuntime {
+  /** `lobe-local-system`'s `getCommandOutput` takes a `timeout`; see its manifest. */
+  protected readonly supportsObservationTimeout = true;
+
   private service: ILocalSystemService;
 
   constructor(service: ILocalSystemService) {
