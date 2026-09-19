@@ -253,10 +253,16 @@ const ListSkeleton = memo<{ bordered?: boolean }>(({ bordered }) => (
 ));
 
 interface DeviceManagerProps {
+  /** Render the selected device in this manager. Disable when the host owns the detail pane. */
+  inlineDetail?: boolean;
   /** Open the enrollment wizard (the modal is owned by the route). */
   onConnect: (tab?: 'cli' | 'desktop') => void;
+  /** Called when the selected device changes. Providing it enables controlled selection. */
+  onSelectedDeviceChange?: (deviceId?: string) => void;
   /** Which device pool this surface manages. */
   scope: DeviceScope;
+  /** Controlled selection for hosts that render the detail pane outside the list surface. */
+  selectedDeviceId?: string;
   /**
    * Workspace scope only: narrow the list to one visibility tab — 'public'
    * (shared pool) or 'private' (the caller's own private enrollments). Omitted
@@ -271,7 +277,15 @@ interface DeviceManagerProps {
  * empty state, filtered to the given `scope` (and, for workspace, the active
  * visibility tab).
  */
-const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }) => {
+const DeviceManager = memo<DeviceManagerProps>((props) => {
+  const {
+    inlineDetail = true,
+    onConnect,
+    onSelectedDeviceChange,
+    scope,
+    selectedDeviceId,
+    visibility,
+  } = props;
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
 
@@ -294,7 +308,16 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
   useFetchDeviceInfo();
   const currentDeviceId = !isWorkspace && isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  const [selectedId, setSelectedId] = useState<string>();
+  const [internalSelectedId, setInternalSelectedId] = useState<string>();
+  const selectedId = onSelectedDeviceChange ? selectedDeviceId : internalSelectedId;
+  const setSelectedId = (deviceId?: string) => {
+    if (onSelectedDeviceChange) {
+      onSelectedDeviceChange(deviceId);
+      return;
+    }
+
+    setInternalSelectedId(deviceId);
+  };
 
   // ─── Empty state: onboarding hero + connect options + capabilities ───
   // Now gated by AsyncBoundary so a *failed* device fetch renders a failure +
@@ -369,7 +392,12 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
     >
       <Flexbox horizontal align={'flex-start'} gap={16}>
         <Flexbox className={isWorkspace ? styles.listCol : styles.plainCol} flex={1}>
-          <Flexbox className={styles.listScroll} gap={2} padding={isWorkspace ? 4 : 0}>
+          <Flexbox
+            className={styles.listScroll}
+            gap={2}
+            paddingBlock={4}
+            paddingInline={isWorkspace ? 4 : 0}
+          >
             {devices.map((device) => (
               <DeviceItem
                 device={device}
@@ -377,20 +405,20 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope, visibility }
                 key={device.deviceId}
                 selected={device.deviceId === selectedId}
                 onSelect={() =>
-                  setSelectedId((prev) => (prev === device.deviceId ? undefined : device.deviceId))
+                  setSelectedId(selectedId === device.deviceId ? undefined : device.deviceId)
                 }
               />
             ))}
           </Flexbox>
         </Flexbox>
-        {selected && (
+        {inlineDetail && selected && (
           <Flexbox className={styles.detailCol} flex={1}>
             {/* keyed on deviceId so the form state resets when the selection changes */}
             <DeviceDetailPanel
               device={selected}
               isCurrent={isCurrent(selected.deviceId)}
               key={selected.deviceId}
-              onClose={() => setSelectedId(undefined)}
+              onClose={() => setSelectedId()}
             />
           </Flexbox>
         )}
