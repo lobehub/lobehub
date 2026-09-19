@@ -771,6 +771,16 @@ describe('GatewayHttpClient', () => {
       expect(result).toEqual({ success: false });
     });
 
+    it('bounds the read with a timeout', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ success: true, systemInfo: {} }), ok: true });
+
+      await client.getDeviceSystemInfo('user-1', 'device-1');
+
+      // Without a deadline an unanswered device would park the agent run for
+      // as long as the socket stays open instead of degrading to no system info.
+      expect(vi.mocked(fetch).mock.calls[0][1]).toMatchObject({ signal: expect.anything() });
+    });
+
     it('should handle missing success field', async () => {
       mockFetch({
         json: vi.fn().mockResolvedValue({}),

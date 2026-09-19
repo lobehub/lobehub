@@ -34,14 +34,14 @@ export interface DeviceSystemInfo {
   defaultShell?: string;
   desktopPath: string;
   documentsPath: string;
-  downloadsPath: string;
+  downloadsPath?: string;
   homePath: string;
-  musicPath: string;
-  picturesPath: string;
+  musicPath?: string;
+  picturesPath?: string;
   /** Opt-in tool identifiers supported by this client; absent on older clients. */
   supportedTools?: string[];
   userDataPath: string;
-  videosPath: string;
+  videosPath?: string;
   workingDirectory: string;
 }
 
@@ -193,7 +193,7 @@ export interface SystemInfoResponseMessage {
   requestId: string;
   result: {
     success: boolean;
-    systemInfo: DeviceSystemInfo;
+    systemInfo?: DeviceSystemInfo;
   };
   type: 'system_info_response';
 }

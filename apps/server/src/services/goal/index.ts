@@ -32,6 +32,7 @@ import { MetricModel } from '@/database/models/metric';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
@@ -124,6 +125,11 @@ export interface CreateGoalGraphInput {
    */
   tasks?: Array<CreateGoalTaskInput | string>;
   title: string;
+  /**
+   * The conversation this goal was created from. Recorded as the goal's
+   * `topic` subject so the conversation can find and show it.
+   */
+  topicId?: string;
 }
 
 export interface CreateGoalNodeInput {
@@ -193,6 +199,80 @@ export class GoalService {
     agentId
       ? new GoalGraphModel(this.db, this.userId, this.workspaceId, { id: agentId, type: 'agent' })
       : this.graphModel;
+
+  /**
+   * `/goal` in a conversation: the agent running there creates the goal and
+   * supervises it from that conversation.
+   *
+   * Identity comes from the running operation, never from the caller: the goal
+   * agent is the operation's agent, the conversation is its topic, and that very
+   * run becomes the first planning turn, so the agent can plan straight away with
+   * the returned token instead of waiting for a dispatched turn.
+   */
+  createFromConversation = async (
+    operationId: string,
+    input: Omit<CreateGoalGraphInput, 'agentId' | 'createdByAgentId' | 'topicId'>,
+    /**
+     * A local desktop run keeps its operation client-side, so no server row
+     * exists for `operationId`. Its conversation env names the topic and agent
+     * instead; they are accepted only when the topic is the caller's and belongs
+     * to that agent. Never used for operation-token callers.
+     */
+    localRun?: { agentId: string; topicId: string },
+  ): Promise<{ graph: GoalGraphSnapshot; turnToken: string }> => {
+    const operation = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findOwnOperationById(operationId);
+    let agentId: string;
+    let topicId: string;
+    if (operation) {
+      if (operation.status !== 'running')
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The conversation run has already ended',
+        });
+      if (!operation.agentId || !operation.topicId)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only a conversation run with an agent can create a goal it supervises',
+        });
+      agentId = operation.agentId;
+      topicId = operation.topicId;
+    } else {
+      const topic = localRun
+        ? await new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicById(
+            localRun.topicId,
+          )
+        : undefined;
+      if (!localRun || !topic || topic.agentId !== localRun.agentId)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Conversation run not found' });
+      agentId = localRun.agentId;
+      topicId = topic.id;
+    }
+
+    const created = await this.create({
+      ...input,
+      agentId,
+      config: { ...input.config, manager: input.config?.manager ?? {} },
+      createdByAgentId: agentId,
+      topicId,
+    });
+    try {
+      const state = await new GoalManagerService(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).adoptConversationTurn(created.goal.id, { operationId, topicId });
+      return { graph: (await this.graphModel.getGraph(created.goal.id))!, turnToken: state.token };
+    } catch (error) {
+      // A goal nobody can plan is worse than no goal: the agent would report it
+      // created while its supervisor never gets a turn.
+      await this.goalModel.delete(created.goal.id).catch(() => {});
+      throw error;
+    }
+  };
 
   create = async (input: CreateGoalGraphInput): Promise<GoalGraphSnapshot> => {
     if (input.agentId ?? input.createdByAgentId) {
@@ -306,7 +386,9 @@ export class GoalService {
       maxTotalCost: input.maxTotalCost,
       projectId: input.projectId,
       requirement,
-      subjectType: 'standalone',
+      ...(input.topicId
+        ? { subjectId: input.topicId, subjectType: 'topic' as const }
+        : { subjectType: 'standalone' as const }),
       title: input.title,
     });
     // `/goal` is an agent making the call. Seeding through the user-attributed

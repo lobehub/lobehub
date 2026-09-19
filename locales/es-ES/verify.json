@@ -766,6 +766,7 @@
   "workspace.loadError": "Algo salió mal al cargar tus informes.",
   "workspace.loadErrorTitle": "No se pudieron cargar los informes",
   "workspace.loadMoreError": "No se pudieron cargar más informes",
+  "workspace.pin": "Fijar lista de informes",
   "workspace.renameEmpty": "El título del informe no puede estar vacío",
   "workspace.renameError": "No se pudo renombrar el informe",
   "workspace.renameSuccess": "Informe renombrado",

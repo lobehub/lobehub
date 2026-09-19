@@ -6,3 +6,4 @@ export type {
   ResolvedAgentConfig,
 } from './resolveAgentConfig';
 export { resolveAgentConfig } from './resolveAgentConfig';
+export * from './toolSet';

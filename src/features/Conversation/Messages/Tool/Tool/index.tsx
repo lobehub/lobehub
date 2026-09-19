@@ -62,6 +62,7 @@ const Tool = memo<InspectorProps>(
     const result = toolMessage
       ? {
           content: toolMessage.content,
+          contentLength: toolMessage.contentLength,
           error: toolMessage.error,
           id: toolCallId,
           state: toolMessage.pluginState,
@@ -101,6 +102,7 @@ const Tool = memo<InspectorProps>(
                     requestArgs={requestArgs}
                     result={result}
                     toolCallId={toolCallId}
+                    toolMessageId={toolMessage?.id}
                     type={type}
                   />
                 )}

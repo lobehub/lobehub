@@ -47,6 +47,9 @@ type UpdateTopicMetadataInput = Omit<Partial<ChatTopicMetadata>, 'onboardingSess
 };
 
 export class TopicService {
+  cancelRateLimitContinuation = (id: string) =>
+    lambdaClient.topic.cancelRateLimitContinuation.mutate({ id });
+
   createTopic = (params: CreateTopicParams): Promise<string> => {
     return lambdaClient.topic.createTopic.mutate({
       ...params,

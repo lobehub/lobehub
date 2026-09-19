@@ -34,6 +34,17 @@ import {
 
 import { claudeModelPrice } from './pricing';
 
+const readQuotaWindowMetadata = (raw: Record<string, unknown> | null) => ({
+  ...(typeof raw?.windowMinutes === 'number' &&
+  Number.isFinite(raw.windowMinutes) &&
+  raw.windowMinutes > 0
+    ? { windowMinutes: raw.windowMinutes }
+    : {}),
+  ...(typeof raw?.limitName === 'string' || raw?.limitName === null
+    ? { limitName: raw.limitName }
+    : {}),
+});
+
 export interface AccountLoadView extends AccountLoad {
   capacityUsd?: number;
   label?: string | null;
@@ -116,6 +127,7 @@ export class AgentQuotaService {
         capturedAt: new Date(r.capturedAt),
         deviceId,
         isActive: r.isActive,
+        raw: { windowMinutes: r.windowMinutes, limitName: r.limitName },
         limitType: r.limitType,
         resetsAt: r.resetsAt == null ? null : new Date(r.resetsAt),
         scopeKey: r.scopeKey,
@@ -190,7 +202,7 @@ export class AgentQuotaService {
         method: result.method,
         sampleCount: result.sampleCount,
         scopeKey,
-        windowSeconds: windowSecondsForKind(limitType),
+        windowSeconds: list[0]?.windowSeconds ?? windowSecondsForKind(limitType),
       });
     }
   };
@@ -268,6 +280,7 @@ export class AgentQuotaService {
     const rows = await this.snapshots.latestPerBucket(accountId);
 
     return rows.map((row) => ({
+      ...readQuotaWindowMetadata(row.raw),
       capturedAt: row.capturedAt.getTime(),
       isActive: row.isActive ?? undefined,
       limitType: row.limitType,
@@ -287,6 +300,7 @@ export class AgentQuotaService {
     const rows = await this.snapshots.listRange(accountId, since);
 
     return rows.map((row) => ({
+      ...readQuotaWindowMetadata(row.raw),
       capturedAt: row.capturedAt.getTime(),
       isActive: row.isActive ?? undefined,
       limitType: row.limitType,

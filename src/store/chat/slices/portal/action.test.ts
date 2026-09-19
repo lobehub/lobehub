@@ -274,6 +274,40 @@ describe('chatDockSlice', () => {
   });
 
   describe('openArtifact', () => {
+    it('keeps a parent task portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskDetail('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskDetailId(result.current)).toBe('task-1');
+    });
+
+    it('keeps a parent task result portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskResult('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskResultId(result.current)).toBe('task-1');
+    });
+
     it('should push Artifact view and open portal', () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -399,6 +433,25 @@ describe('chatDockSlice', () => {
       });
       expect(result.current.portalStack).toHaveLength(1);
       expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('third');
+    });
+
+    it('openGoal pushes a Goal view and a node drill-down returns to it on Back', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoal('goal_1');
+      });
+
+      expect(result.current.portalStack).toEqual([{ goalId: 'goal_1', type: PortalViewType.Goal }]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
     });
 
     it('openGoalNode pushes a GoalNode view and exposes it via selector', () => {

@@ -2,6 +2,7 @@ import type { DocumentCommentJson } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorProps } from '@lobehub/editor/react';
 import { useEditor } from '@lobehub/editor/react';
+import { cx } from 'antd-style';
 import type { Ref } from 'react';
 import { memo, useCallback, useImperativeHandle } from 'react';
 
@@ -31,6 +32,8 @@ interface DocumentCommentEditorProps {
   disabled?: boolean;
   editor?: IEditor;
   entityId: string;
+  /** Drop the editor's extra inline padding so the caret lines up with the action bar's first icon. */
+  flush?: boolean;
   getPopupContainer?: EditorProps['getPopupContainer'];
   initialContent: string;
   initialEditorData?: DocumentCommentJson | null;
@@ -46,6 +49,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     autoFocus,
     compact = false,
     disabled,
+    flush = false,
     editor: externalEditor,
     entityId,
     getPopupContainer,
@@ -87,7 +91,14 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     );
 
     return (
-      <div className={`${styles.commentEditor} ${mentionFilledClassName}`} ref={rootRef}>
+      <div
+        ref={rootRef}
+        className={cx(
+          styles.commentEditor,
+          flush && styles.commentEditorFlush,
+          mentionFilledClassName,
+        )}
+      >
         <EditorCanvas
           blockImageCaretGuard
           disabled={disabled}

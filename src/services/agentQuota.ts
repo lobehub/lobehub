@@ -2,6 +2,11 @@ import type {
   ClaudeCodeAccountIdentity,
   ClaudeCodeQuotaReading,
 } from '@lobechat/electron-client-ipc';
+import type {
+  CodexQuotaSnapshot,
+  QuotaAccountIdentity,
+  QuotaLimitReading,
+} from '@lobechat/heterogeneous-agents/quota';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -11,6 +16,19 @@ import { lambdaClient } from '@/libs/trpc/client';
  * fetches the *live* quota from the local CLI login over Electron IPC.
  */
 class AgentQuotaService {
+  ingestCodexSnapshot = async (params: {
+    identity: QuotaAccountIdentity;
+    readings: QuotaLimitReading[];
+  }) => lambdaClient.agentQuota.ingestSnapshot.mutate({ ...params, provider: 'codex' });
+
+  refreshCodexQuota = async (params: {
+    command?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+  }): Promise<CodexQuotaSnapshot | null> =>
+    lambdaClient.agentQuota.refreshCodexQuota.mutate(params);
+
   /** Persist a live Claude snapshot (identity + readings) captured over IPC. */
   ingestClaudeSnapshot = async (params: {
     deviceId?: string;

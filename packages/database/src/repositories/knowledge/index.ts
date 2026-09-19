@@ -36,6 +36,7 @@ import { FileModel } from '../../models/file';
 import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
+import { notAgentShareFile } from '../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 /**
@@ -323,13 +324,10 @@ export class KnowledgeRepo {
 
   /**
    * Scope predicate every file listing shares: ownership plus the exclusion of
-   * sources that belong to another surface (acceptance evidence). Kept as one
-   * helper so a new listing can't accidentally pick up ownership alone and
-   * start leaking hundreds of verification artifacts back into the library.
+   * acceptance evidence by source and visitor attachments by provenance.
    *
-   * `sourceFilter` is the only opt-out: asking for `acceptance` explicitly is a
-   * request for exactly the rows this predicate otherwise hides, so the
-   * exclusion is dropped and `fileSourceFilter` narrows to them instead.
+   * Asking for `acceptance` opts out of only that source filter. Agent-share
+   * provenance remains an access boundary for every ordinary resource read.
    */
   private fileScope = (sourceFilter?: ResourceSourceFilter) =>
     and(
@@ -337,6 +335,7 @@ export class KnowledgeRepo {
       sourceFilter === ResourceSourceFilter.Acceptance
         ? undefined
         : or(isNull(f.source), notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+      notAgentShareFile(f.metadata),
     );
 
   private documentScope = () => buildWorkspaceWhere(this.scope(), d);

@@ -15,8 +15,10 @@ import {
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
+import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
+import { findHeteroExecProcesses } from '@/utils/heteroExecProcess';
 import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
@@ -27,6 +29,13 @@ import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
+
+/**
+ * How long an orphaned `hetero exec` group may take to exit after cancellation.
+ * Covers the 2s graceful window plus SIGKILL, and stays under the server's 10s
+ * `cancelHeteroTask` timeout.
+ */
+const ORPHAN_EXIT_TIMEOUT_MS = 5000;
 
 const logger = createLogger('controllers:GatewayConnectionCtr');
 const deviceProtocolHandler = createProtocolHandler('device');
@@ -248,7 +257,26 @@ export default class GatewayConnectionCtr extends ControllerModule {
     hostname: string;
     platform: string;
   }> {
-    return this.service.getDeviceInfo();
+    const info = this.service.getDeviceInfo();
+    try {
+      const [serverUrl, token] = await Promise.all([
+        this.remoteServerConfigCtr.getRemoteServerUrl(),
+        this.remoteServerConfigCtr.getAccessToken(),
+      ]);
+      if (serverUrl && token && info.deviceId !== 'unknown') {
+        const headers = { 'Content-Type': 'application/json', 'Oidc-Auth': token };
+        setDesktopUserAgentHeader(headers);
+        await backfillDeviceArchitecture({
+          architecture: os.arch(),
+          deviceId: info.deviceId,
+          headers,
+          serverUrl,
+        });
+      }
+    } catch (error) {
+      logger.warn('Could not backfill local device architecture; will retry on next read', error);
+    }
+    return info;
   }
 
   /**
@@ -1144,13 +1172,75 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const entry = this.platformTasks.get(taskId);
 
     if (!entry) {
-      return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
+      return JSON.stringify(await this.cancelUntrackedHeteroExec(taskId, signal as NodeJS.Signals));
     }
 
     // The close handler sends the terminal notify after the whole tree exits.
     this.killPlatformProcessTree(entry.pid, signal as NodeJS.Signals);
 
     return JSON.stringify({ pid: entry.pid, signal, taskId });
+  }
+
+  /**
+   * Cancels an operation that neither in-memory registry knows about.
+   *
+   * Use when:
+   * - The desktop app restarted after dispatching `lh hetero exec`: the
+   *   registries are empty, but the server keeps the task running until the
+   *   device confirms `exited: true`.
+   *
+   * Expects:
+   * - `taskId` is the operation id passed as `--operation-id` to the wrapper.
+   *
+   * Returns:
+   * - `exited: true` only when the OS shows no wrapper for the operation, or
+   *   after every orphaned wrapper group has exited.
+   * - `exited: false` when an orphan survives SIGKILL or the process table
+   *   cannot be read, so a retry never races a live writer.
+   * - Windows keeps the previous unconfirmed answer; orphan lookup is Unix-only.
+   */
+  private async cancelUntrackedHeteroExec(
+    taskId: string,
+    signal: NodeJS.Signals,
+  ): Promise<Record<string, unknown>> {
+    if (process.platform === 'win32') {
+      return { message: `No task found with taskId: ${taskId}`, success: false };
+    }
+
+    let orphans: Awaited<ReturnType<typeof findHeteroExecProcesses>>;
+    try {
+      orphans = await findHeteroExecProcesses(taskId);
+    } catch (error) {
+      logger.warn('cancelHeteroTask: process lookup failed for %s: %O', taskId, error);
+      return {
+        exited: false,
+        message: `Could not inspect running processes for taskId: ${taskId}`,
+        reason: 'lookup_failed',
+        success: false,
+        taskId,
+      };
+    }
+
+    if (orphans.length === 0) {
+      return { exited: true, reason: 'not_found', success: true, taskId };
+    }
+
+    const pids = orphans.map((orphan) => orphan.pid);
+    logger.warn('cancelHeteroTask: terminating orphaned hetero exec for %s: %o', taskId, pids);
+
+    // The wrapper leads a detached group shared by its native agent child, so
+    // this reaches the whole writer tree and escalates to SIGKILL after 2s.
+    for (const pid of pids) this.killPlatformProcessTree(pid, signal);
+
+    const deadline = Date.now() + ORPHAN_EXIT_TIMEOUT_MS;
+    while (pids.some((pid) => this.isPlatformProcessGroupAlive(pid))) {
+      if (Date.now() >= deadline) {
+        return { exited: false, pids, reason: 'orphan_alive', signal, success: false, taskId };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    return { exited: true, pids, reason: 'orphan_terminated', signal, success: true, taskId };
   }
 
   /**

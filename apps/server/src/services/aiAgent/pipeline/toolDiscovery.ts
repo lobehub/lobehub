@@ -1,8 +1,5 @@
-import { AuvManifest } from '@lobechat/builtin-tool-auv';
-import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -20,8 +17,17 @@ import type {
 } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { DeviceUnavailableErrorData } from '@lobechat/device-gateway-client';
+import {
+  resolveClientExecutors,
+  resolveDiscoveryPool,
+  resolveInvocationToolIds,
+} from '@lobechat/mecha';
 import type { ChatTopicBotContext, RequestTrigger } from '@lobechat/types';
-import { getActivePluginIds } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  getActivePluginIds,
+  ordinaryFileAccessScope,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
@@ -38,7 +44,6 @@ import type { PluginModel } from '@/database/models/plugin';
 import {
   type ExecutionPlan,
   executionPlanToManifestExecutionEnv,
-  executionTargetToRuntimeMode,
   isDeviceCapablePlan,
   isDeviceLockedPlan,
   resolveExecutionPlan,
@@ -71,11 +76,7 @@ import {
   resolveUserDisplayMap,
 } from '@/server/utils/connectorAttribution';
 
-import {
-  buildAllowedBuiltinTools,
-  isDeviceToolIdentifier,
-  REMOTE_DEVICE_TOOL_IDENTIFIERS,
-} from '../deviceToolRegistry';
+import { buildAllowedBuiltinTools } from '../deviceToolRegistry';
 import { buildBotConversationGroupContext, buildGroupAgentContext } from '../helpers/groupContext';
 import {
   getMediaAvailabilityFromFileTypes,
@@ -632,7 +633,11 @@ export const discoverTools = async (
     let attachedFileTypes: string[] = [];
     if (attachedFileIds && attachedFileIds.length > 0) {
       const fileModel = new FileModel(deps.db, deps.userId, deps.workspaceId);
-      const fileRecords = await fileModel.findByIds(Array.from(new Set(attachedFileIds)));
+      const uniqueFileIds = Array.from(new Set(attachedFileIds));
+      const fileRecords = await fileModel.findByIds(
+        uniqueFileIds,
+        shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+      );
       attachedFileTypes = fileRecords.map((file) => file.fileType || '');
     }
     const inputFileTypes = [...externalFileTypes, ...attachedFileTypes];
@@ -929,20 +934,17 @@ export const discoverTools = async (
     });
 
     // 5f. Generate tools and manifest map
-    const pluginIds = exclusivePluginIds
-      ? agentPlugins
-      : [
-          ...new Set([
-            ...agentPlugins,
-            ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier, AuvManifest.identifier]),
-            RemoteDeviceManifest.identifier,
-            // Include LobeHub Skills and Composio tools so they are passed to generateToolsDetailed
-            ...activeLobehubSkillManifests.map((m) => m.identifier),
-            ...activeComposioManifests.map((m) => m.identifier),
-            // Connector manifests are also injected as additionalManifests
-            ...activeConnectorManifests.map((m) => m.identifier),
-          ]),
-        ];
+    // Which identifiers the engine considers, what the activator may discover
+    // mid-run, and which tools dispatch to the client are shared rules in
+    // `@lobechat/mecha`; this pipeline only supplies the run's facts.
+    const pluginIds = resolveInvocationToolIds({
+      agentPlugins,
+      composioIds: activeComposioManifests.map((m) => m.identifier),
+      connectorIds: activeConnectorManifests.map((m) => m.identifier),
+      disableLocalSystem,
+      exclusivePluginIds,
+      lobehubSkillIds: activeLobehubSkillManifests.map((m) => m.identifier),
+    });
     log('execAgent: agent configured plugins: %O', pluginIds);
 
     const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
@@ -958,166 +960,44 @@ export const discoverTools = async (
     tools = toolsResult.tools;
     log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
-    // Single guard for every `toolManifestMap[id] = ...` ingest below.
-    // Mirrors the post-merge filter in `createServerToolsEngine`: an
-    // installed plugin, a LobeHub Skill, or a Composio manifest declaring
-    // `identifier: 'lobe-remote-device'` would otherwise reach the
-    // activator-discovery map and let an external bot sender enable it
-    // (). Centralising the check at the ingest layer means
-    // every future manifest source automatically inherits the wall.
-    //
-    // A device-LOCKED run (routed, or explicitly bound but offline) keeps
-    // local-system but must not expose the remote-device picker: leaving it
-    // discoverable lets the activator's explicit activation bypass the rule
-    // gate and re-surface the device list mid-run — inviting redundant
-    // activateDevice calls or switching to a machine the user never chose.
-    // Enforced here (not as a point deletion after the seed) so the later
-    // Skill/Composio ingest loops cannot re-add the identifier.
-    const isManifestIngestAllowed = (identifier: string): boolean => {
-      if (exclusivePluginIds && !exclusivePluginIds.includes(identifier)) return false;
-      if (disabledPluginIdSet.has(identifier)) return false;
-      if (
-        gatewayConfigured &&
-        identifier === AuvManifest.identifier &&
-        !supportedDeviceTools?.includes(identifier)
-      )
-        return false;
-      if (!canUseDevice && isDeviceToolIdentifier(identifier)) return false;
-      if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
-      return true;
-    };
-
     // Start with the scoped manifest map (pluginIds + defaultToolIds)
     const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
-    manifestMap.forEach((manifest, id) => {
-      if (!isManifestIngestAllowed(id)) return;
-      toolManifestMap[id] = manifest;
-    });
-
-    // Also include discoverable builtin tools that are not yet in the map,
-    // so the activator can find their manifests when dynamically enabling them
-    // (e.g., lobe-creds, lobe-task). Exclude discoverable:false tools to prevent
-    // internal infrastructure tools from being surfaced to the activator.
-    const allowedBuiltinTools = buildAllowedBuiltinTools({
-      canUseDevice,
-      deviceLocked,
+    const discovery = resolveDiscoveryPool({
+      builtinTools: buildAllowedBuiltinTools({
+        canUseDevice,
+        deviceLocked,
+        disableLocalSystem,
+        supportedDeviceTools: gatewayConfigured ? (supportedDeviceTools ?? []) : undefined,
+      }),
+      composio: activeComposioManifests,
+      device: gatewayConfigured ? { supportedTools: supportedDeviceTools } : undefined,
+      deviceAccess: { canUseDevice, deviceLocked },
+      deviceCapable,
       disableLocalSystem,
-      supportedDeviceTools: gatewayConfigured ? (supportedDeviceTools ?? []) : undefined,
+      disabledPluginIds,
+      enabledManifests: manifestMap,
+      exclusivePluginIds,
+      executionTarget: executionPlan.target,
+      lobehubSkills: activeLobehubSkillManifests,
     });
-    // Effective runtimeMode from the plan's resolved target — same value the
-    // engine derives, single derivation point.
-    const agentRuntimeMode = executionTargetToRuntimeMode(executionPlan.target);
-    // Mirrors AgentToolsEngine's agentModeRules gate: auto mode lets the model
-    // choose per call whether to run in the cloud sandbox or on the
-    // auto-routed device, so Cloud Sandbox stays allowed there too.
-    const cloudSandboxAllowed = agentRuntimeMode === 'cloud' || executionPlan.target === 'auto';
-    // When sandbox isn't reachable, remove lobe-cloud-sandbox from the
-    // manifest map. The initial seed via getEnabledPluginManifests (which includes
-    // defaultToolIds) may have already placed it there, and the allowedBuiltinTools
-    // loop below only guards the discoverable-builtin append path. Deleting here
-    // covers both sources in a single point.
-    if (!cloudSandboxAllowed) {
-      delete toolManifestMap[CloudSandboxManifest.identifier];
-    }
-    // Same single-point deletion for the device tools: a `none` / `sandbox`
-    // session must not expose the remote-device proxy either — leaving it
-    // discoverable would let the model activate a device mid-run and bypass
-    // the execution plan ("无设备" means NO device, not "no device yet").
-    // Scoped to gateway deployments: in the standalone Electron deployment
-    // (no DEVICE_GATEWAY) local-system routes in-process via the 'client'
-    // executor marking below, and the desktop client owns the tool gate.
-    const stripDeviceTools = gatewayConfigured && !deviceCapable;
-    if (stripDeviceTools) {
-      delete toolManifestMap[AuvManifest.identifier];
-      delete toolManifestMap[RemoteDeviceManifest.identifier];
-      delete toolManifestMap[LocalSystemManifest.identifier];
-    }
-    for (const tool of allowedBuiltinTools) {
-      if (!isManifestIngestAllowed(tool.identifier)) continue;
-      // lobe-cloud-sandbox is only activator-discoverable when the sandbox is
-      // reachable (executionTarget='sandbox', or 'auto' — see cloudSandboxAllowed above).
-      if (tool.identifier === CloudSandboxManifest.identifier && !cloudSandboxAllowed) continue;
-      // device tools are only activator-discoverable in device-capable sessions
-      if (stripDeviceTools && isDeviceToolIdentifier(tool.identifier)) continue;
-      if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
-        toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
-      }
-    }
-
-    // Local System and AUV have `discoverable: isDesktop` in builtinTools,
-    // which evaluates to false on the Node.js server side, so they never enter
-    // the loop above. Explicitly inject them only when the device gateway is
-    // configured AND the plan's target is 'local' — skip for sandbox/none
-    // targets to avoid leaking local-system into non-local sessions. (The
-    // plan already degrades to `none` when device access is denied, so no
-    // separate `canUseDevice` check is needed here.)
-    for (const manifest of [LocalSystemManifest, AuvManifest]) {
-      if (
-        !disableLocalSystem &&
-        isManifestIngestAllowed(manifest.identifier) &&
-        gatewayConfigured &&
-        agentRuntimeMode === 'local' &&
-        !toolManifestMap[manifest.identifier]
-      ) {
-        toolManifestMap[manifest.identifier] = manifest as LobeToolManifest;
-      }
-    }
-
-    // Include lobehub skill and composio manifests for activator discovery.
-    // Uses the disabled-filtered `active*Manifests` (not the raw
-    // lobehubSkillManifests/composioManifests) — otherwise a disabled
-    // skill/composio integration would be re-ingested here and shown to
-    // the model as discoverable in <available_tools>, even though it was
-    // correctly excluded from the actual invocation pool above.
-    for (const manifest of activeLobehubSkillManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      if (!toolManifestMap[manifest.identifier]) {
-        toolManifestMap[manifest.identifier] = manifest;
-      }
-    }
-    for (const manifest of activeComposioManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      if (!toolManifestMap[manifest.identifier]) {
-        toolManifestMap[manifest.identifier] = manifest;
-      }
-    }
-
-    for (const manifest of activeLobehubSkillManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      toolSourceMap[manifest.identifier] = 'lobehubSkill';
-    }
-    for (const manifest of activeComposioManifests) {
-      if (!isManifestIngestAllowed(manifest.identifier)) continue;
-      toolSourceMap[manifest.identifier] = 'composio';
-    }
-
-    // Mark tools that must run on the user's machine (local-system, stdio
-    // MCP) for direct client dispatch only in the standalone deployment
-    // where no DEVICE_GATEWAY is configured. In that mode the legacy
-    // Remote Device proxy isn't available and the embedded Electron runs
-    // both the server and the executor, so tools route in-process.
-    //
-    // With a device-gateway configured, every caller (desktop UI, web,
-    // IM/bot) converges on the device-gateway path: tool calls tunnel to
-    // a registered device's WS connection. `executor` stays unset so the
-    // RemoteDevice proxy resolves the route.
-    if (!gatewayConfigured) {
-      for (const id of Object.keys(toolManifestMap)) {
-        if (toolManifestMap[id]?.executors?.includes('client')) {
-          toolExecutorMap[id] = 'client';
-        }
-      }
-      for (const plugin of installedPlugins) {
-        if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
-          toolExecutorMap[plugin.identifier] = 'client';
-        }
-      }
-      for (const connector of connectorsMcp) {
-        if (connector.mcpConnectionType === 'stdio' && manifestMap.has(connector.identifier)) {
-          toolExecutorMap[connector.identifier] = 'client';
-        }
-      }
-    }
+    Object.assign(toolManifestMap, discovery.manifestMap);
+    Object.assign(toolSourceMap, discovery.sourceMap);
+    Object.assign(
+      toolExecutorMap,
+      resolveClientExecutors({
+        enabledIds: new Set(manifestMap.keys()),
+        hasDeviceProxy: gatewayConfigured,
+        manifestMap: toolManifestMap,
+        stdioIdentifiers: [
+          ...installedPlugins
+            .filter((plugin) => plugin.customParams?.mcp?.type === 'stdio')
+            .map((plugin) => plugin.identifier),
+          ...connectorsMcp
+            .filter((connector) => connector.mcpConnectionType === 'stdio')
+            .map((connector) => connector.identifier),
+        ],
+      }),
+    );
 
     log(
       'execAgent: generated %d tools, %d lobehub skills, %d composio tools',

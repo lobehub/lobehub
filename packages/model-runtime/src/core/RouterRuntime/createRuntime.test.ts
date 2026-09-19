@@ -1676,6 +1676,35 @@ describe('createRouterRuntime', () => {
       expect(mockCreateVideo).toHaveBeenCalledWith(payload, undefined);
     });
 
+    it('should identify video requests when sorting router options', async () => {
+      const mockCreateVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
+      const sortRouterOptions = vi.fn(({ options }) => options);
+
+      class MockRuntime implements LobeRuntimeAI {
+        createVideo = mockCreateVideo;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            models: ['sora-1'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: MockRuntime as any,
+          },
+        ],
+        sortRouterOptions,
+      });
+
+      const runtime = new Runtime();
+      await runtime.createVideo({ model: 'sora-1', params: { prompt: 'a cat' } } as any);
+
+      expect(sortRouterOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'createVideo', model: 'sora-1' }),
+      );
+    });
+
     it('should forward options.metadata to onRouteAttempt', async () => {
       const mockCreateVideo = vi.fn().mockResolvedValue({ inferenceId: 'job-1' });
       const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
@@ -1952,16 +1981,104 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
       await runtime.chat({ messages: [], model: 'gpt-4', temperature: 0.7 });
 
-      expect(sortRouterOptions).toHaveBeenCalledWith({
-        model: 'gpt-4',
-        options: [
-          expect.objectContaining({ id: 'channel-a' }),
-          expect.objectContaining({ id: 'channel-b' }),
-        ],
-        routerId: 'router-a',
-      });
+      expect(sortRouterOptions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'chat',
+          model: 'gpt-4',
+          options: [
+            expect.objectContaining({ id: 'channel-a' }),
+            expect.objectContaining({ id: 'channel-b' }),
+          ],
+          routerId: 'router-a',
+        }),
+      );
       // Reversed order: channel-b is tried first and succeeds
       expect(attemptedKeys).toEqual(['key-2']);
+    });
+
+    it('passes the runtime user and request metadata to channel selection', async () => {
+      const sortRouterOptions = vi.fn(({ options }) => options);
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            id: 'router-a',
+            models: ['gpt-4'],
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: createRecordingRuntime([]) as any,
+          },
+        ],
+        sortRouterOptions,
+      });
+
+      await new Runtime({ userId: 'owner-1' }).chat(
+        { messages: [], model: 'gpt-4', temperature: 0.7 },
+        { metadata: { topicId: 'topic-1' }, user: 'caller-1' },
+      );
+
+      expect(sortRouterOptions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { topicId: 'topic-1' },
+          userId: 'owner-1',
+        }),
+      );
+    });
+
+    it('waits for a successful fallback to update the selected channel', async () => {
+      const attemptedKeys: string[] = [];
+      let releaseBinding!: () => void;
+      const onRouteSuccess = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseBinding = resolve;
+          }),
+      );
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteSuccess,
+        routers: [
+          {
+            apiType: 'openai',
+            id: 'router-a',
+            models: ['gpt-4'],
+            options: [
+              { apiKey: 'key-1', id: 'channel-a', weight: 70 },
+              { apiKey: 'key-2', id: 'channel-b', weight: 30 },
+            ],
+            runtime: createRecordingRuntime(attemptedKeys, new Set(['key-1'])) as any,
+          },
+        ],
+      });
+
+      const request = new Runtime({ userId: 'owner-1' }).chat({
+        messages: [],
+        model: 'gpt-4',
+        temperature: 0.7,
+      });
+      await vi.waitFor(() => expect(onRouteSuccess).toHaveBeenCalledOnce());
+      let settled = false;
+      request.then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      releaseBinding();
+      await request;
+
+      expect(attemptedKeys).toEqual(['key-1', 'key-2']);
+      expect(onRouteSuccess).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channelId: 'channel-b',
+          channelWeight: 30,
+          firstChannelId: 'channel-a',
+          method: 'chat',
+          model: 'gpt-4',
+          routerId: 'router-a',
+          userId: 'owner-1',
+          weighted: true,
+        }),
+      );
     });
 
     it('should still fall back through all options after reordering', async () => {

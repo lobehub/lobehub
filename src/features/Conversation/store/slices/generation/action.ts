@@ -3,7 +3,6 @@ import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import { shouldDropUnsupportedClaudeAssistantPrefill } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import type {
   ChatImageItem,
-  ChatTTS,
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
@@ -24,6 +23,7 @@ import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -508,7 +508,7 @@ const regenerateUserMessageFromSource = async (
  * Handles generation control (stop, cancel, regenerate, continue)
  */
 export interface GenerationAction {
-  cancelHeteroContinuation: () => Promise<void>;
+  cancelHeteroContinuation: (topicId?: string | null) => Promise<void>;
   /**
    * Cancel a specific operation
    */
@@ -522,12 +522,6 @@ export interface GenerationAction {
    * pending user message, so the user can send it now or delete the topic.
    */
   cancelScheduledRun: () => Promise<void>;
-
-  /**
-   * Clear TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  clearMessageTTS: (messageId: string) => Promise<void>;
 
   /**
    * Clear all operations
@@ -656,19 +650,7 @@ export interface GenerationAction {
    */
   retryFailedAssistantStep: (groupMessageId: string, blockId: string) => Promise<void>;
 
-  /**
-   * Save TTS metadata for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  saveMessageTTS: (messageId: string, data: Required<ChatTTS>) => Promise<void>;
-
   scheduleHeteroContinuation: (params: HeteroContinuationScheduleParams) => Promise<void>;
-
-  /**
-   * Start TTS for a message
-   * @deprecated Temporary bridge to ChatStore
-   */
-  startMessageTTS: (messageId: string) => void;
 
   /**
    * Stop current generation
@@ -688,13 +670,17 @@ export const generationSlice: StateCreator<
   [],
   GenerationAction
 > = (set, get) => ({
-  cancelHeteroContinuation: async () => {
-    const topicId = get().context.topicId;
+  cancelHeteroContinuation: async (sourceTopicId) => {
+    const topicId = sourceTopicId ?? get().context.topicId;
     if (!topicId) return;
 
-    const chatStore = useChatStore.getState();
-    await chatStore.updateTopicStatus({ status: 'failed', topicId });
-    await chatStore.updateTopicMetadata(topicId, { scheduledRun: null });
+    const result = await topicService.cancelRateLimitContinuation(topicId);
+    if (result)
+      useChatStore.getState().internal_dispatchTopic({
+        id: topicId,
+        type: 'updateTopic',
+        value: { metadata: result.metadata, status: 'failed' },
+      });
   },
   cancelScheduledRun: async () => {
     const { context, dbMessages, editor } = get();
@@ -757,11 +743,6 @@ export const generationSlice: StateCreator<
 
   clearOperations: () => {
     // Operations are now managed by ChatStore, nothing to clear locally
-  },
-
-  clearMessageTTS: async (messageId: string) => {
-    const chatStore = useChatStore.getState();
-    await chatStore.clearMessageTTS(messageId);
   },
 
   clearTranslate: async (messageId: string) => {
@@ -1293,15 +1274,5 @@ export const generationSlice: StateCreator<
   translateMessage: async (messageId: string, targetLang: string) => {
     const chatStore = useChatStore.getState();
     await chatStore.translateMessage(messageId, targetLang);
-  },
-
-  saveMessageTTS: async (messageId: string, data: Required<ChatTTS>) => {
-    const chatStore = useChatStore.getState();
-    await chatStore.saveMessageTTS(messageId, data);
-  },
-
-  startMessageTTS: (messageId: string) => {
-    const chatStore = useChatStore.getState();
-    chatStore.startMessageTTS(messageId);
   },
 });

@@ -1,3 +1,4 @@
+export { normalizeHeterogeneousMessageError, readHeterogeneousErrorContext } from './messageError';
 export type { HeteroErrorKind, HeteroErrorSpec } from './specs';
 export {
   formatHeteroErrorId,

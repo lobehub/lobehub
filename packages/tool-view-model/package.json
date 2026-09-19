@@ -1,0 +1,15 @@
+{
+  "name": "@lobechat/tool-view-model",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  }
+}

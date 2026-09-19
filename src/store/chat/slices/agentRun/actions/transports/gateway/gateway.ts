@@ -637,6 +637,8 @@ export class GatewayActionImpl {
     metadata?: Pick<MessageMetadata, 'steer' | 'trigger'>;
     /** Called as soon as phase-1 returns with a persisted user message. */
     onMessageAccepted?: () => void;
+    /** Called when a new topic is persisted, before UI hydration and stream setup. */
+    onTopicCreated?: (topicId: string) => void | Promise<void>;
     /** Called when the gateway session completes (agent finished running) */
     onComplete?: () => void;
     /** Temporary sidebar topic inserted by sendMessage before the server creates the real topic. */
@@ -714,6 +716,7 @@ export class GatewayActionImpl {
       metadata,
       onComplete,
       onMessageAccepted,
+      onTopicCreated,
       optimisticTopic,
       parentMessageId,
       parentOperationId,
@@ -797,9 +800,9 @@ export class GatewayActionImpl {
     }
 
     // Agent-share visitor surface: dispatch through the share-authorized mirror.
-    // It accepts only the share-safe subset (prompt / topic / clientIds) —
-    // everything else (tools, devices, mentions) is decided server-side by the
-    // share config, never by this client.
+    // It accepts only the share-safe subset (prompt / topic / clientIds /
+    // the visitor's share-uploaded fileIds) — everything else (tools, devices, mentions) is
+    // decided server-side by the share config, never by this client.
     const agentShareId = executionContext.agentShareId;
 
     const result =
@@ -808,6 +811,7 @@ export class GatewayActionImpl {
         ? await shareChatService.execAgentTask(
             {
               clientIds,
+              fileIds,
               prompt: message,
               shareId: agentShareId,
               steer: metadata?.steer,
@@ -891,6 +895,14 @@ export class GatewayActionImpl {
       onMessageAccepted?.();
     } catch (error) {
       console.error('[Gateway] onMessageAccepted callback failed:', error);
+    }
+
+    if (isCreateNewTopic && result.topicId) {
+      try {
+        await onTopicCreated?.(result.topicId);
+      } catch (error) {
+        console.error('[Gateway] onTopicCreated callback failed:', error);
+      }
     }
 
     let hasInterruptedAfterPersistence = false;
@@ -997,10 +1009,12 @@ export class GatewayActionImpl {
         /* non-critical */
       }
 
-      await this.#get().switchTopic(result.topicId, {
-        clearNewKey: true,
-        skipRefreshMessage: true,
-      });
+      if (!messageContext.isolatedTopic) {
+        await this.#get().switchTopic(result.topicId, {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
+      }
 
       // Refresh the topic list so the new topic appears in topicDataMap (sidebar).
       // Unlike the direct-API sendMessage path (which receives topics[] in the

@@ -17,7 +17,7 @@ import { hookDispatcher } from '../hooks';
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'http://localhost:3010' } }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
-    return {};
+    return { query: vi.fn().mockResolvedValue([]) };
   }),
 }));
 vi.mock('@/server/modules/AgentRuntime', () => ({
@@ -1669,11 +1669,13 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     });
     streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
 
-    // Inject a uiMessages-returning messageService — the runtime queries
-    // through MessageService (not the bare messageModel) so that file URLs
-    // go through FileService postProcessUrl.
-    const stubMessages = [{ id: 'msg_1', role: 'user' }];
+    // The DB read and UI preparation are separate boundaries. Keep their
+    // results distinct so this asserts the event carries the prepared UI view.
+    const rawMessages = [{ id: 'msg_1', role: 'user', content: 'raw' }];
+    const stubMessages = [{ id: 'msg_1', role: 'user', content: 'prepared' }];
+    (service as any).messageModel.query.mockResolvedValue(rawMessages);
     (service as any).messageServiceInstance = {
+      prepareUiMessages: vi.fn().mockResolvedValue(stubMessages),
       queryMessages: vi.fn().mockResolvedValue(stubMessages),
     };
 
@@ -1705,8 +1707,8 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     });
     streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
 
-    const queryMock = vi.fn();
-    (service as any).messageServiceInstance = { queryMessages: queryMock };
+    const queryMock = (service as any).messageModel.query;
+    (service as any).messageServiceInstance = { prepareUiMessages: vi.fn() };
 
     await service.executeStep({
       operationId: 'op-noctx',
@@ -1721,6 +1723,38 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     expect(stepStartCall[1].data).not.toHaveProperty('uiMessages');
     // Did not even attempt the DB query when context is missing.
     expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('sends only the expected revision for a Gateway mux native run', async () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      gatewayMuxEnabledResolver: async () => true,
+      queueService: null,
+    });
+    const coordinator = (service as any).coordinator;
+    const streamManager = (service as any).streamManager;
+
+    coordinator.tryClaimStep = vi.fn().mockResolvedValue(true);
+    coordinator.loadAgentState = vi.fn().mockResolvedValue({
+      lastModified: new Date().toISOString(),
+      origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      status: 'done',
+      stepCount: 3,
+    });
+    streamManager.publishStreamEvent = vi.fn().mockResolvedValue(undefined);
+    (service as any).messageServiceInstance = {
+      prepareUiMessages: vi.fn().mockResolvedValue([{ id: 'large-history', role: 'user' }]),
+    };
+
+    await service.executeStep({
+      context: { phase: 'user_input' } as any,
+      operationId: 'op-patch',
+      stepIndex: 5,
+    });
+
+    const stepStartCall = streamManager.publishStreamEvent.mock.calls.find(
+      ([, evt]: any) => evt?.type === 'step_start',
+    );
+    expect(stepStartCall[1].data).toEqual({ messageRevision: 5 });
   });
 });
 

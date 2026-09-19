@@ -1,4 +1,3 @@
-import { LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
 import {
   and,
   eq,
@@ -27,6 +26,7 @@ import {
   userMemories,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { libraryVisibleFile, notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
 import { searchableMessage } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
@@ -477,7 +477,7 @@ export const hydrateFiles = async (
         ),
         buildWorkspaceWhere(scope, files),
         ne(files.fileType, 'custom/document'),
-        or(isNull(files.source), notInArray(files.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+        libraryVisibleFile(files.source, files.metadata),
       ),
     );
   const fileIds = rows.map(({ id }) => id);
@@ -612,6 +612,7 @@ export const hydratePages = async (
         ),
         buildWorkspaceWhere(scope, documents),
         eq(documents.fileType, 'custom/document'),
+        notAgentShareFileReference(db, documents.fileId),
       ),
     );
   const knowledgeBaseIdsByFile = await getKnowledgeBaseIdsByFile(
@@ -667,6 +668,7 @@ export const hydrateKnowledgeBaseDocuments = async (
         ),
         buildWorkspaceWhere(scope, documents),
         ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        notAgentShareFileReference(db, documents.fileId),
       ),
     );
   const knowledgeBaseIdsByFile = await getKnowledgeBaseIdsByFile(
@@ -698,7 +700,11 @@ export const hydrateKnowledgeBaseDocuments = async (
           })
           .from(documents)
           .where(
-            and(inArray(documents.id, selectedDocumentIds), buildWorkspaceWhere(scope, documents)),
+            and(
+              inArray(documents.id, selectedDocumentIds),
+              buildWorkspaceWhere(scope, documents),
+              notAgentShareFileReference(db, documents.fileId),
+            ),
           );
   const contentById = new Map(contentRows.map(({ content, id }) => [id, content] as const));
 

@@ -3,6 +3,7 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
@@ -21,6 +22,7 @@ import {
   type SubagentIntent,
   type SubagentRunSnapshot,
 } from '@lobechat/heterogeneous-agents';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
 import type {
   ChatMessageError,
@@ -138,7 +140,10 @@ const shouldSuppressTerminalErrorEcho = (content: string, error: ChatMessageErro
   return !!normalizedContent && !!normalizedRawError && normalizedContent === normalizedRawError;
 };
 
-const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError => {
+const toRawHeterogeneousAgentMessageError = (
+  error: unknown,
+  agentType?: string,
+): ChatMessageError => {
   const authRequiredError = maybeClassifyCliAuthRequiredError(error, agentType);
   if (authRequiredError) {
     return {
@@ -197,6 +202,12 @@ const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): C
     type: AgentRuntimeErrorType.AgentRuntimeError,
   };
 };
+
+const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): ChatMessageError =>
+  normalizeHeterogeneousMessageError(
+    toRawHeterogeneousAgentMessageError(error, agentType),
+    agentType,
+  );
 
 const isRecoverableResumeError = (
   error: unknown,
@@ -2460,7 +2471,9 @@ export const executeHeterogeneousAgent = async (
     });
 
     const systemContext = buildLocalHeterogeneousSystemContext({
-      agentSystemContext: heterogeneousProvider.systemContext,
+      // `/goal` reaches a hetero agent as instructions, not a tool: it creates
+      // and plans the goal through `lh` in this same run.
+      agentSystemContext: withConversationGoalPrompt(heterogeneousProvider.systemContext, message),
       contextSelections,
       pageSelections,
     });
@@ -2483,7 +2496,9 @@ export const executeHeterogeneousAgent = async (
       agentId: context.agentId,
       imageList,
       operationId,
-      prompt: message,
+      // `/goal` travels as system-context instructions; the CLI gets only the
+      // request so its own `/goal` command does not take the message over.
+      prompt: stripGoalCommand(message),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,

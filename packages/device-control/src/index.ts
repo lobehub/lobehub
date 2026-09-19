@@ -1,3 +1,4 @@
+export { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 export { DEVICE_RPC_METHODS, type DeviceRpcMethod, executeDeviceRpc } from './dispatch';
 export {
   defaultCopyAssetForPublish,

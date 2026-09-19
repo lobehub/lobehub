@@ -73,3 +73,17 @@ Another successfully loaded file with more content.
 </file>
 </knowledge_base_files>"
 `;
+
+exports[`promptFileContents > should render a paged window with range attributes and a continue notice 1`] = `
+"<knowledge_base_files totalCount="2">
+<instruction>Use the information from these files to answer the user's question. Always cite the source files.</instruction>
+<file id="file-paged" name="long.md" lines="1-2" totalLines="800" totalChars="30334" truncated="true">
+line 1
+line 2
+[Showing lines 1-2 of 800. Call readKnowledge again with offset=3 to continue.]
+</file>
+<file id="file-complete" name="short.md" lines="1-1" totalLines="1" totalChars="9" truncated="false">
+tail line
+</file>
+</knowledge_base_files>"
+`;

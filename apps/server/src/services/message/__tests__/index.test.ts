@@ -1,19 +1,32 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import type * as ToolViewModelModule from '@lobechat/tool-view-model';
+import { projectToolViewModels } from '@lobechat/tool-view-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
+import { UserModel } from '@/database/models/user';
 import { FileService } from '@/server/services/file';
 
 import { MessageService } from '../index';
 
 vi.mock('@/database/models/message');
+vi.mock('@/database/models/user');
 vi.mock('@/server/services/file');
+
+// Spy on the real projector pipeline rather than stubbing it: the assertion
+// that matters is that the UI read path runs it at all, and that with an empty
+// registry it is still a pass-through.
+vi.mock('@lobechat/tool-view-model', async (importOriginal) => {
+  const actual = await importOriginal<typeof ToolViewModelModule>();
+  return { ...actual, projectToolViewModels: vi.fn(actual.projectToolViewModels) };
+});
 
 describe('MessageService', () => {
   let messageService: MessageService;
   let mockDB: LobeChatDatabase;
   let mockMessageModel: MessageModel;
   let mockFileService: FileService;
+  let mockUserModel: UserModel;
   const userId = 'test-user-id';
 
   beforeEach(() => {
@@ -37,6 +50,11 @@ describe('MessageService', () => {
       }),
     } as any;
 
+    // Mux cohort by default; the off case is asserted explicitly below.
+    mockUserModel = {
+      getUserPreference: vi.fn().mockResolvedValue({ lab: { enableGatewayMux: true } }),
+    } as any;
+
     // Mock constructors
     vi.mocked(MessageModel).mockImplementation(function () {
       return mockMessageModel;
@@ -44,8 +62,134 @@ describe('MessageService', () => {
     vi.mocked(FileService).mockImplementation(function () {
       return mockFileService;
     });
+    vi.mocked(UserModel).mockImplementation(function () {
+      return mockUserModel;
+    });
 
     messageService = new MessageService(mockDB, userId);
+  });
+
+  describe('prepareUiMessages', () => {
+    it.each([false, true])(
+      'derives nested UI views without changing raw model data (visitor=%s)',
+      async (visitor) => {
+        mockFileService.getFileAccessUrl = vi.fn(async (file) => `/proxy/${file.id}`);
+        const tool = {
+          content: 'FULL TOOL RESULT',
+          id: 'tool',
+          role: 'tool',
+          plugin: { apiName: 'crawlSinglePage', arguments: '{}', identifier: 'lobe-web-browsing' },
+          pluginState: { results: [] },
+          imageList: [{ id: 'image', url: 'raw/image', width: 42 }],
+          audioList: [{ id: 'audio', url: 'raw/audio', durationMs: 123 }],
+          videoList: [{ id: 'video', url: 'raw/video' }],
+          fileList: [{ id: 'hidden', inaccessible: true, url: '' }],
+        };
+        const raw = [
+          {
+            id: 'group',
+            role: 'assistant',
+            columns: [[tool]],
+            members: [tool],
+            compressedMessages: [tool],
+          },
+        ] as any;
+        const before = structuredClone(raw);
+        const [ui] = await messageService.prepareUiMessages(raw, visitor);
+        for (const nested of [ui.columns![0][0], ui.members![0], ui.compressedMessages![0]]) {
+          expect(nested.content).toBe(visitor ? 'FULL TOOL RESULT' : '');
+          expect(nested.imageList![0]).toEqual({ id: 'image', url: '/proxy/image', width: 42 });
+          expect(nested.audioList![0]).toEqual({
+            id: 'audio',
+            url: '/proxy/audio',
+            durationMs: 123,
+          });
+          expect(nested.videoList![0].url).toBe('/proxy/video');
+          expect(nested.fileList![0].url).toBe('');
+        }
+        expect(raw).toEqual(before);
+        expect(mockFileService.getFileAccessUrl).not.toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'hidden' }),
+        );
+        expect(mockMessageModel.query).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('queryMessages', () => {
+    const toolRow = {
+      content: 'RAW BODY',
+      id: 'tool-1',
+      plugin: { apiName: 'crawlSinglePage', arguments: '{}', identifier: 'lobe-web-browsing' },
+      pluginState: { results: [] },
+      role: 'tool',
+    } as any;
+
+    it('runs the UI read path through the tool view-model projector', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      const [projected] = await messageService.queryMessages({ topicId: 'topic-1' });
+
+      expect(projectToolViewModels).toHaveBeenCalledWith([toolRow]);
+      expect(projected.content).toBe('');
+      expect(projected.contentLength).toBe('RAW BODY'.length);
+      expect(projected.payloadOmitted).toBe('detail');
+    });
+
+    it('keeps the whole payload for a user who is not on the mux', async () => {
+      // Off the mux a run can execute in the browser against this very list, so
+      // projecting here would quietly drop tool results from the LLM context.
+      vi.mocked(mockUserModel.getUserPreference).mockResolvedValue({ lab: {} } as any);
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+
+      expect(result).toEqual([toolRow]);
+    });
+
+    it('keeps the whole payload when the preference read fails', async () => {
+      vi.mocked(mockUserModel.getUserPreference).mockRejectedValue(new Error('db down'));
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+
+      expect(result).toEqual([toolRow]);
+      error.mockRestore();
+    });
+
+    it('reads the lab preference once, not once per step', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      await messageService.queryMessages({ topicId: 'topic-1' });
+      await messageService.queryMessages({ topicId: 'topic-1' });
+      await messageService.queryMessages({ topicId: 'topic-1' });
+
+      expect(mockUserModel.getUserPreference).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a share-visitor snapshot whole, since only the creator could fetch it back', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      const result = await messageService.queryMessages(
+        { topicId: 'topic-1' },
+        { allowShareVisitor: true, skipToolProjection: true },
+      );
+
+      expect(result).toEqual([toolRow]);
+    });
+
+    it('leaves a tool without a projector exactly as stored', async () => {
+      const unprojected = {
+        ...toolRow,
+        plugin: { apiName: 'noSuchApi', arguments: '{}', identifier: 'some-mcp-server' },
+      };
+      vi.mocked(mockMessageModel.query).mockResolvedValue([unprojected]);
+
+      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+
+      expect(result).toEqual([unprojected]);
+    });
   });
 
   describe('removeMessage', () => {
@@ -203,6 +347,24 @@ describe('MessageService', () => {
   });
 
   describe('updateMessage', () => {
+    it('normalizes a known error from a legacy client before persistence', async () => {
+      await messageService.updateMessage(
+        'msg-error',
+        {
+          error: { body: { message: 'insufficient quota' }, type: 'ProviderBizError' },
+        },
+        {},
+      );
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', {
+        error: expect.objectContaining({ attribution: 'user', type: 'InsufficientQuota' }),
+      });
+    });
+
+    it('preserves an explicit error clear', async () => {
+      await messageService.updateMessage('msg-error', { error: null }, {});
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', { error: null });
+    });
+
     it('should update message and return { success: true } when no sessionId/topicId provided', async () => {
       const messageId = 'msg-1';
       const value = { content: 'updated content' };
@@ -231,6 +393,25 @@ describe('MessageService', () => {
   });
 
   describe('batchMutate', () => {
+    it('normalizes known errors on creation and batched updates too', async () => {
+      vi.mocked(mockMessageModel.create).mockResolvedValue({ id: 'msg-error' } as any);
+      vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);
+      const error = { type: 'ProviderBizError' as const, body: { message: 'insufficient quota' } };
+      const message = { content: '', error, role: 'assistant' as const };
+      await messageService.createMessage(message);
+      await messageService.batchMutate([
+        { type: 'createMessage', message },
+        { type: 'updateMessage', id: 'msg-error', value: { error } },
+      ]);
+      const normalized = expect.objectContaining({
+        error: expect.objectContaining({ type: 'InsufficientQuota', attribution: 'user' }),
+      });
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(1, normalized, undefined);
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(2, normalized, undefined);
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', normalized);
+      expect(message.error).toBe(error);
+    });
+
     it('quietly applies create/update/tool updates without querying messages', async () => {
       vi.mocked(mockMessageModel.create).mockResolvedValue({ id: 'msg-created' } as any);
       vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);

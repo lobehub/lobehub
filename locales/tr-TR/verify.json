@@ -766,6 +766,7 @@
   "workspace.loadError": "Raporlarınızı yüklerken bir şeyler ters gitti.",
   "workspace.loadErrorTitle": "Raporlar yüklenemedi",
   "workspace.loadMoreError": "Daha fazla rapor yüklenemedi",
+  "workspace.pin": "Rapor listesini sabitle",
   "workspace.renameEmpty": "Rapor başlığı boş olamaz",
   "workspace.renameError": "Rapor yeniden adlandırılamadı",
   "workspace.renameSuccess": "Rapor yeniden adlandırıldı",

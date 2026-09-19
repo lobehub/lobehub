@@ -2,7 +2,7 @@
 
 Use this reference when changing Elasticsearch field definitions or operating index generations.
 For initial provider cutover and complete environment setup, use
-`docs/self-hosting/advanced/elasticsearch-migration.mdx` from the OSS repository root.
+`docs/self-hosting/advanced/neon-pg-search-migration.mdx` from the OSS repository root.
 
 ## Choose the operation
 

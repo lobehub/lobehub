@@ -1,4 +1,5 @@
 import { isParkedStatus } from '@lobechat/agent-runtime';
+import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { RequestTrigger } from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
 import { isRecord } from '@lobechat/utils/object';
@@ -1208,6 +1209,7 @@ export class CompletionLifecycle {
         duration,
         errorAttribution: formattedError?.attribution,
         errorBudget: readErrorBudgetContext(formattedError),
+        errorHeterogeneous: readHeterogeneousErrorContext(formattedError),
         errorDetail: state?.error,
         errorMessage: this.extractErrorMessage(state?.error) || String(state?.error || ''),
         errorType: formattedError?.type === undefined ? undefined : String(formattedError.type),

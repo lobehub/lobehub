@@ -1,4 +1,5 @@
 import {
+  AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
   AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
   AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
@@ -23,6 +24,7 @@ import { isUuid } from '../utils/uuid';
 const DEFAULT_AGENT_SHARE_CONFIG = {
   allowCreatorViewSessions: false,
   allowReadMemory: false,
+  maxFileStorage: AGENT_SHARE_DEFAULT_MAX_FILE_STORAGE,
   maxTopicsPerVisitor: AGENT_SHARE_DEFAULT_MAX_TOPICS_PER_VISITOR,
   maxTurnsPerTopic: AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC,
   monthlySpendLimit: AGENT_SHARE_DEFAULT_MONTHLY_SPEND_LIMIT,
@@ -38,6 +40,7 @@ const normalizeAgentShareConfig = (
   allowCreatorViewSessions:
     config?.allowCreatorViewSessions ?? DEFAULT_AGENT_SHARE_CONFIG.allowCreatorViewSessions,
   allowReadMemory: config?.allowReadMemory ?? DEFAULT_AGENT_SHARE_CONFIG.allowReadMemory,
+  maxFileStorage: config?.maxFileStorage ?? DEFAULT_AGENT_SHARE_CONFIG.maxFileStorage,
   maxTopicsPerVisitor:
     config?.maxTopicsPerVisitor ?? DEFAULT_AGENT_SHARE_CONFIG.maxTopicsPerVisitor,
   maxTurnsPerTopic: config?.maxTurnsPerTopic ?? DEFAULT_AGENT_SHARE_CONFIG.maxTurnsPerTopic,
@@ -421,6 +424,23 @@ export class AgentShareModel {
   };
 
   /**
+   * Serialize the per-share upload cap decision, to be called from inside the
+   * reservation transaction BEFORE the usage is counted. The cap is a sum over
+   * two tables (settled visitor files + live reservations) that no row lock
+   * covers, and the only lock the reservation itself takes — the creator's
+   * users row, inside the deployment's quota check — comes AFTER the caller's
+   * admission hook. Without this barrier two concurrent visitors both read the
+   * pre-insert sum and both slip under the cap. Transaction-scoped advisory
+   * lock keyed by share id (same pattern as the slug barrier), released
+   * automatically at commit/rollback.
+   */
+  static lockUploadAdmission = async (tx: LobeChatDatabase, shareId: string): Promise<void> => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`agent_share_upload:${shareId}`}))`,
+    );
+  };
+
+  /**
    * Whether an in-flight visitor run is STILL authorized to continue: the
    * agent's share row must exist, still be the SAME instance the run was
    * authorized against (`shareId`), and still be `link`.
@@ -483,8 +503,12 @@ export class AgentShareModel {
         agentBackgroundColor: agents.backgroundColor,
         agentDescription: agents.description,
         agentId: agentShares.agentId,
+        // Model identity is for a server-side capability lookup only (what
+        // media a visitor may attach); the visitor payload never carries it.
+        agentModel: agents.model,
         agentName: agents.name,
         agentOpeningQuestions: agents.openingQuestions,
+        agentProvider: agents.provider,
         agentSlug: agents.slug,
         agentTags: agents.tags,
         agentTitle: agents.title,

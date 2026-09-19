@@ -33,6 +33,8 @@ describe('useDocumentCommentDeepLink', () => {
       expect(result.current.focus).toMatchObject({
         commentId: 'reply-1',
         rootCommentId: 'root-1',
+        // A notification link has to bring its target on screen.
+        scroll: true,
         token: 1,
       }),
     );
@@ -74,6 +76,25 @@ describe('useDocumentCommentDeepLink', () => {
       rootCommentId: 'root-1',
       token: 2,
     });
+  });
+
+  it('pins a thread picked in the body without scrolling the reader to the list', async () => {
+    mocks.location.search = '';
+    const { result } = renderHook(() => useDocumentCommentDeepLink('document-1'));
+
+    act(() => result.current.focusThread('root-9'));
+
+    expect(result.current.focus).toMatchObject({
+      commentId: 'root-9',
+      rootCommentId: 'root-9',
+      scroll: false,
+      token: 1,
+    });
+
+    // A later deep link restores the scrolling contract for its own target.
+    mocks.location.search = '?commentThread=root-1';
+    const linked = renderHook(() => useDocumentCommentDeepLink('document-1'));
+    await waitFor(() => expect(linked.result.current.focus?.scroll).toBe(true));
   });
 
   it('does nothing without a comment thread target', () => {

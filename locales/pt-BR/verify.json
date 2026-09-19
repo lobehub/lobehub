@@ -766,6 +766,7 @@
   "workspace.loadError": "Algo deu errado ao carregar seus relatórios.",
   "workspace.loadErrorTitle": "Não foi possível carregar os relatórios",
   "workspace.loadMoreError": "Não foi possível carregar mais relatórios",
+  "workspace.pin": "Fixar lista de relatórios",
   "workspace.renameEmpty": "O título do relatório não pode estar vazio",
   "workspace.renameError": "Falha ao renomear o relatório",
   "workspace.renameSuccess": "Relatório renomeado",

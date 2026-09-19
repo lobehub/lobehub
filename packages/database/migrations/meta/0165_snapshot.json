@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "0bd6f8c8-bfbd-4149-8ac8-515fbd70e326",
+  "id": "70294fb3-c3c5-4369-8845-32770912b82f",
   "policies": {},
   "prevId": "d1344d93-74f1-4021-9a6e-6cb1b318ded6",
   "roles": {},
@@ -12676,6 +12676,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "source_check_result_id": {
+          "name": "source_check_result_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "user_decision": {
           "name": "user_decision",
           "type": "text",
@@ -12794,6 +12800,15 @@
           "tableFrom": "expertise_hits",
           "tableTo": "agent_operations",
           "columnsFrom": ["operation_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "expertise_hits_source_check_result_id_verify_check_results_id_fk": {
+          "name": "expertise_hits_source_check_result_id_verify_check_results_id_fk",
+          "tableFrom": "expertise_hits",
+          "tableTo": "verify_check_results",
+          "columnsFrom": ["source_check_result_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -13092,6 +13107,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "evidence": {
+          "name": "evidence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "changed_by_user_id": {
           "name": "changed_by_user_id",
           "type": "text",
@@ -13250,6 +13271,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "reason_kind": {
+          "name": "reason_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason_source": {
+          "name": "reason_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "canon_anchor": {
           "name": "canon_anchor",
           "type": "text",
@@ -13299,6 +13332,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'compilable'"
+        },
+        "backtest": {
+          "name": "backtest",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "compiled_criterion_id": {
           "name": "compiled_criterion_id",
@@ -22808,12 +22847,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "environment_instance_id": {
-          "name": "environment_instance_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "device_id": {
           "name": "device_id",
           "type": "uuid",
@@ -22952,27 +22985,6 @@
           "method": "btree",
           "with": {}
         },
-        "project_working_directories_project_instance_unique": {
-          "name": "project_working_directories_project_instance_unique",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "environment_instance_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "project_working_directories_device_id_idx": {
           "name": "project_working_directories_device_id_idx",
           "columns": [
@@ -23012,15 +23024,6 @@
           "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_working_directories_environment_instance_id_environment_instances_id_fk": {
-          "name": "project_working_directories_environment_instance_id_environment_instances_id_fk",
-          "tableFrom": "project_working_directories",
-          "tableTo": "environment_instances",
-          "columnsFrom": ["environment_instance_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "project_working_directories_device_id_devices_id_fk": {

@@ -10,7 +10,7 @@ import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
-import { type RightPanelMode, type State } from './initialState';
+import { type PendingCommentAnchor, type RightPanelMode, type State } from './initialState';
 import { initialState } from './initialState';
 
 const log = debug('page:editor');
@@ -22,6 +22,13 @@ export interface Action {
   handleTitleSubmit: () => Promise<void>;
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
+  setCommentsPanelOpen: (open: boolean) => void;
+  /**
+   * The store outlives a document switch (the resource manager swaps `pageId`
+   * on a mounted PageEditor), so a panel left open on the previous document
+   * would otherwise show the next one's gutter with nothing selected.
+   */
+  setDocumentId: (documentId: string | undefined) => void;
   setEmoji: (emoji: string | undefined) => void;
   /**
    * Mirror the lock health from {@link useEditLock} into the store so banners and
@@ -41,6 +48,8 @@ export interface Action {
     expiresAt?: Date | string | null,
     holderOwnerId?: string | null,
   ) => void;
+  /** Hand a captured body selection to the comment composer, or clear it (`undefined`). */
+  setPendingCommentAnchor: (pending: PendingCommentAnchor | undefined) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
@@ -188,6 +197,17 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         }
       },
 
+      setCommentsPanelOpen: (commentsPanelOpen) => {
+        if (get().commentsPanelOpen !== commentsPanelOpen) set({ commentsPanelOpen });
+      },
+
+      setDocumentId: (documentId) => {
+        if (get().documentId === documentId) return;
+        // A restored anchored draft or a fresh pick reopens it for the new
+        // document; nothing here to show it for should not carry over.
+        set({ commentsPanelOpen: false, documentId });
+      },
+
       setEmoji: (emoji: string | undefined) => {
         const { lastSavedEmoji, metaReadOnly, triggerDebouncedMetaSave } = get();
 
@@ -221,6 +241,17 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         )
           return;
         set({ lockExpiresAt: expiresAt, lockHolderId: holderId, lockHolderOwnerId: holderOwnerId });
+      },
+
+      setPendingCommentAnchor: (pendingCommentAnchor) => {
+        set((state) => ({
+          pendingCommentAnchor,
+          // `?? 0` guards a store instance hydrated before this counter existed
+          // (a hot reload keeps the old state), which would otherwise tick to NaN.
+          pendingCommentAnchorVersion: pendingCommentAnchor
+            ? (state.pendingCommentAnchorVersion ?? 0) + 1
+            : (state.pendingCommentAnchorVersion ?? 0),
+        }));
       },
 
       setRightPanelMode: (rightPanelMode) => {

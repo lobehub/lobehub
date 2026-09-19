@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ChatErrorBudgetContext } from '@lobechat/types';
+import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessengerPlatform } from '@/config/messenger';
@@ -97,6 +97,7 @@ export interface BotCallbackBody {
    * Forwarded verbatim from the agent lifecycle event.
    */
   errorBudget?: ChatErrorBudgetContext;
+  errorHeterogeneous?: ChatErrorHeterogeneousContext;
   errorMessage?: string;
   errorType?: string;
   executionTimeMs?: number;
@@ -474,6 +475,7 @@ export class BotCallbackService {
       lastAssistantContent,
       errorAttribution,
       errorBudget,
+      errorHeterogeneous,
       errorMessage,
       errorType,
       operationId,
@@ -494,6 +496,7 @@ export class BotCallbackService {
         replyLocale,
         errorAttribution,
         errorBudget,
+        errorHeterogeneous,
       );
       const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       if (deliveredChunkCount < 1) {

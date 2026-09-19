@@ -12,6 +12,7 @@ import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
 
 import { usePageEditorStore } from '../store';
 import { usePageEditable } from '../usePageEditable';
+import { useAddCommentItem } from './useAddCommentItem';
 import { useAskCopilotItem } from './useAskCopilotItem';
 import { useDocumentMentionOption } from './useDocumentMentionOption';
 import { useSlashItems } from './useSlashItems';
@@ -31,7 +32,12 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
 
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor, askCopilotTarget);
+  const addCommentItem = useAddCommentItem(editor, documentId);
   const mentionOption = useDocumentMentionOption();
+  const toolbarExtraItems = useMemo(
+    () => [...(askCopilotItem ?? []), ...(addCommentItem ?? [])],
+    [addCommentItem, askCopilotItem],
+  );
 
   const extraPlugins = useMemo(
     () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 })],
@@ -47,9 +53,13 @@ const EditorCanvas = memo<EditorCanvasProps>(({ askCopilotTarget, placeholder, s
       extraPlugins={extraPlugins}
       mentionOption={mentionOption}
       placeholder={placeholder || t('pageEditor.editorPlaceholder')}
+      // Commenting on a selection is a read action: it must survive the page
+      // being locked by another collaborator or opened view-only, when the
+      // formatting toolbar (and Ask Copilot with it) is withheld.
+      readonlySelectionItems={editable ? undefined : addCommentItem}
       slashItems={slashItems}
       style={style}
-      toolbarExtraItems={editable ? askCopilotItem : undefined}
+      toolbarExtraItems={editable ? toolbarExtraItems : undefined}
       unsavedChangesGuard={{
         enabled: true,
         message: t('form.unsavedWarning', { ns: 'ui' }),

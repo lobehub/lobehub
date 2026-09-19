@@ -111,7 +111,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       headerAddon={metadata?.steer ? <Tag>{t('steer.tag')}</Tag> : undefined}
       id={id}
       message={content}
-      messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
+      messageExtra={<UserMessageExtra extra={extra} id={id} />}
       placement={'right'}
       showAvatar={showSender}
       showTitle={showSender}

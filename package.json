@@ -308,6 +308,7 @@
     "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/tool-view-model": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
     "@lobehub/analytics": "^1.6.4",

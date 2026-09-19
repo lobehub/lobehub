@@ -10,9 +10,15 @@ const COMMENT_THREAD_QUERY = 'commentThread';
 export type DocumentCommentFocusMissReason = 'failed' | 'missing';
 
 export interface DocumentCommentFocus {
-  /** The comment to scroll to and highlight; equals `rootCommentId` for roots. */
+  /** The comment to land on and highlight; equals `rootCommentId` for roots. */
   commentId: string;
   rootCommentId: string;
+  /**
+   * Whether landing scrolls the card into view. A notification deep link must
+   * bring its target on screen; a pick made in the body must not move the
+   * reader's viewport (the comment list lives below the document).
+   */
+  scroll: boolean;
   /** Changes on every deep link so the same comment can be focused twice in a row. */
   token: number;
 }
@@ -41,6 +47,7 @@ export const useDocumentCommentDeepLink = (documentId: string) => {
       commentId,
       documentId,
       rootCommentId,
+      scroll: true,
       token: (current?.token ?? 0) + 1,
     }));
 
@@ -53,6 +60,22 @@ export const useDocumentCommentDeepLink = (documentId: string) => {
   }, [documentId, location.hash, location.pathname, location.search, navigate]);
 
   const clearFocus = useCallback(() => setFocus(undefined), []);
+  /**
+   * Pin a thread picked from the body whose card is not loaded yet — the same
+   * pinning a notification deep link gets, minus the URL round trip and minus
+   * the scroll: pointing at a sentence must not throw the reader to the list.
+   */
+  const focusThread = useCallback(
+    (rootCommentId: string) =>
+      setFocus((current) => ({
+        commentId: rootCommentId,
+        documentId,
+        rootCommentId,
+        scroll: false,
+        token: (current?.token ?? 0) + 1,
+      })),
+    [documentId],
+  );
   /** Fall back to the thread root when the linked reply itself is gone. */
   const focusRoot = useCallback(
     () =>
@@ -64,5 +87,10 @@ export const useDocumentCommentDeepLink = (documentId: string) => {
   );
 
   // A focus target belongs to the document it was opened on.
-  return { clearFocus, focus: focus?.documentId === documentId ? focus : undefined, focusRoot };
+  return {
+    clearFocus,
+    focus: focus?.documentId === documentId ? focus : undefined,
+    focusRoot,
+    focusThread,
+  };
 };

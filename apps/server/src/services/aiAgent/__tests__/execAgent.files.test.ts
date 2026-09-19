@@ -477,7 +477,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         prompt: 'What is in this image?',
       });
 
-      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1']);
+      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1'], { type: 'ordinary' });
 
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
       expect(userMessageCall![0].files).toEqual(['file-img-1']);
@@ -516,7 +516,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         prompt: 'Summarize this document',
       });
 
-      expect(mockParseFile).toHaveBeenCalledWith('file-pdf-1');
+      expect(mockParseFile).toHaveBeenCalledWith('file-pdf-1', { type: 'ordinary' });
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       const lastMessage = createOpArgs.initialMessages.at(-1);
@@ -642,7 +642,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       });
 
       // FileModel.findByIds sees deduped input (cheaper query)
-      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1']);
+      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1'], { type: 'ordinary' });
 
       // Only one link row will be inserted
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');

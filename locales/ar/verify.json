@@ -766,6 +766,7 @@
   "workspace.loadError": "حدث خطأ أثناء تحميل تقاريرك.",
   "workspace.loadErrorTitle": "تعذر تحميل التقارير",
   "workspace.loadMoreError": "تعذر تحميل المزيد من التقارير",
+  "workspace.pin": "تثبيت قائمة التقارير",
   "workspace.renameEmpty": "لا يمكن أن يكون عنوان التقرير فارغًا",
   "workspace.renameError": "فشل إعادة تسمية التقرير",
   "workspace.renameSuccess": "تمت إعادة تسمية التقرير",

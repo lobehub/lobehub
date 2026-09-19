@@ -2,6 +2,7 @@
  * @vitest-environment node
  */
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
+import type { UIChatMessage } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +43,15 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 // Mock database and models
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn(async (path: string) => `model:${path}`),
+      getFileAccessUrl: vi.fn(async (file: { id: string }) => `ui:${file.id}`),
+    };
+  }),
+}));
+
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
@@ -181,7 +191,7 @@ describe('AgentRuntimeService', () => {
   const buildPersistedToolChain = (
     finalContent: string,
     finalMetadata?: Record<string, unknown>,
-  ) => [
+  ): UIChatMessage[] => [
     {
       content: 'question',
       createdAt: 1,
@@ -804,6 +814,111 @@ describe('AgentRuntimeService', () => {
           }),
         }),
       );
+    });
+
+    it.each([false, true])(
+      'reuses the entry read for device discovery (device=%s)',
+      async (withDevice) => {
+        const state = {
+          ...mockState,
+          messages: [],
+          origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        };
+        mockCoordinator.loadAgentState.mockResolvedValue(state);
+        const dbMessages = buildPersistedToolChain('full model answer');
+        dbMessages[0].imageList = [{ id: 'file-1', url: 'raw/image', alt: 'image' }];
+        if (withDevice) {
+          dbMessages[0] = {
+            ...dbMessages[0],
+            role: 'tool',
+            pluginState: { metadata: { activeDeviceId: 'device-1', devicePlatform: 'darwin' } },
+          };
+        }
+        const query = (service as any).messageModel.query.mockResolvedValue(dbMessages);
+        vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
+        const step = vi.fn().mockImplementation(async (input) => ({
+          events: [],
+          newState: { ...input, stepCount: 2 },
+          nextContext: mockParams.context,
+        }));
+        vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+
+        const result = await service.executeStep(mockParams);
+
+        expect(result.success).toBe(true);
+        expect(query).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('full model answer');
+        expect(JSON.stringify(step.mock.calls[0][0].messages)).toContain('model:raw/image');
+        expect(dbMessages[0].imageList?.[0].url).toBe('raw/image');
+        expect(step.mock.calls[0][0].binding?.device?.id).toBe(withDevice ? 'device-1' : undefined);
+      },
+    );
+
+    it('shares one DB read while UI preparation is still pending', async () => {
+      const state = {
+        ...mockState,
+        messages: [],
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      };
+      mockCoordinator.loadAgentState.mockResolvedValue(state);
+      const query = (service as any).messageModel.query.mockResolvedValue([]);
+      let resolveUi!: (messages: []) => void;
+      const uiRead = vi.spyOn((service as any).messageService, 'prepareUiMessages').mockReturnValue(
+        new Promise((resolve) => {
+          resolveUi = resolve;
+        }),
+      );
+      const step = vi.fn().mockResolvedValue({
+        events: [],
+        newState: { ...state, stepCount: 2 },
+        nextContext: mockParams.context,
+      });
+      vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+      const running = service.executeStep(mockParams);
+      let startedBeforeUiResolved: boolean;
+      try {
+        await vi.waitFor(() => expect(uiRead).toHaveBeenCalled());
+        startedBeforeUiResolved = query.mock.calls.length > 0;
+        expect(step).not.toHaveBeenCalled();
+      } finally {
+        resolveUi([]);
+        await running;
+      }
+      expect(startedBeforeUiResolved).toBe(true);
+      expect(query).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps ephemeral input while preparing the persisted UI snapshot', async () => {
+      const messages = [{ role: 'user', content: 'transient prompt' }];
+      const state = { ...mockState, messages, origin: { agentId: 'agent', topicId: 'topic' } };
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('stored answer'),
+      );
+      const ui = [{ id: 'ui', role: 'assistant', content: 'UI answer' }];
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue(ui);
+
+      const result = await (service as any).queryStepEntryMessages(state);
+
+      expect(state.messages).toBe(messages);
+      expect(result.uiMessages).toEqual(ui);
+      expect(result.messages).toHaveLength(4);
+    });
+
+    it('hydrates the model even when UI preparation fails', async () => {
+      const state = { ...mockState, messages: [], origin: { agentId: 'agent', topicId: 'topic' } };
+      (service as any).messageModel.query.mockResolvedValue(
+        buildPersistedToolChain('stored answer'),
+      );
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockRejectedValue(
+        new Error('UI failed'),
+      );
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await (service as any).queryStepEntryMessages(state);
+
+      expect(JSON.stringify(state.messages)).toContain('stored answer');
+      expect(result.uiMessages).toBeUndefined();
+      expect(result.messages).toHaveLength(4);
     });
 
     it('should execute step successfully', async () => {
@@ -2008,6 +2123,21 @@ describe('AgentRuntimeService', () => {
   });
 
   describe('interruptOperation', () => {
+    let findOperation: MockInstance<AgentOperationModel['findById']>;
+
+    beforeEach(() => {
+      findOperation = vi.spyOn(AgentOperationModel.prototype, 'findById');
+      mockDb.select.mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
+        }),
+      });
+    });
+
+    afterEach(() => {
+      findOperation.mockRestore();
+    });
+
     it('should interrupt a running operation', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-1',
@@ -2051,7 +2181,7 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('should return false when state not found', async () => {
+    it('should return false when state and owned operation are not found', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue(null);
 
       const result = await service.interruptOperation('non-existent');
@@ -2061,7 +2191,7 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already done', async () => {
+    it('should acknowledge cancellation when operation already done', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-done',
         status: 'done',
@@ -2070,11 +2200,11 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-done');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already in error state', async () => {
+    it('should acknowledge cancellation when operation already in error state', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-err',
         status: 'error',
@@ -2083,11 +2213,11 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-err');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
 
-    it('should return false when operation already interrupted', async () => {
+    it('should acknowledge cancellation when operation already interrupted', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         operationId: 'op-int',
         status: 'interrupted',
@@ -2096,9 +2226,37 @@ describe('AgentRuntimeService', () => {
 
       const result = await service.interruptOperation('op-int');
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
       expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
     });
+
+    it.each(['done', 'error', 'interrupted', 'abandoned'] as const)(
+      'acknowledges an expired runtime state when the owned operation is %s',
+      async (status) => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        findOperation.mockResolvedValue({
+          id: 'op-expired',
+          status,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        expect(await service.interruptOperation('op-expired')).toBe(true);
+        expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+        expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['idle', 'running', 'waiting_for_human', 'waiting_for_async_tool'] as const)(
+      'does not treat missing runtime state as stopped when the owned operation is %s',
+      async (status) => {
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        findOperation.mockResolvedValue({
+          id: 'op-active',
+          status,
+        } as Awaited<ReturnType<AgentOperationModel['findById']>>);
+        expect(await service.interruptOperation('op-active')).toBe(false);
+        expect(mockCoordinator.saveAgentState).not.toHaveBeenCalled();
+        expect(mockCoordinator.markInterrupted).not.toHaveBeenCalled();
+      },
+    );
   });
 
   // Stream events at step / operation boundaries should carry the canonical
@@ -2125,21 +2283,31 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
-    it('opts the snapshot into agent-share visitor rows', async () => {
-      // Regression: `MessageModel.query()` hides share-visitor messages by
-      // default. A visitor run executes under the creator's identity, so
-      // without the opt-in the terminal snapshot for the visitor's topic is
-      // `[]` and the client replaces the conversation it just streamed with
-      // nothing.
-      const queryMessages = vi.fn().mockResolvedValue([]);
-      stubMessageService(service, queryMessages);
+    it.each([
+      { skipToolProjection: false, visitorUserId: undefined },
+      { skipToolProjection: true, visitorUserId: 'visitor_1' },
+    ])(
+      'includes visitor rows with skipToolProjection=$skipToolProjection',
+      async ({ skipToolProjection, visitorUserId }) => {
+        // Regression: `MessageModel.query()` hides share-visitor messages by
+        // default. A visitor run executes under the creator's identity, so
+        // without the opt-in the terminal snapshot for the visitor's topic is
+        // `[]` and the client replaces the conversation it just streamed with
+        // nothing.
+        const queryMessages = vi.fn().mockResolvedValue([]);
+        stubMessageService(service, queryMessages);
 
-      await service.queryUiMessages({
-        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
-      } as any);
+        await service.queryUiMessages({
+          origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+          principal: visitorUserId ? { actor: { shareVisitor: { visitorUserId } } } : undefined,
+        } as any);
 
-      expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
-    });
+        expect(queryMessages).toHaveBeenCalledWith(expect.anything(), {
+          allowShareVisitor: true,
+          skipToolProjection,
+        });
+      },
+    );
 
     it('scopes the snapshot to the run thread when the operation is a subtopic run', async () => {
       // Regression: without `threadId` the snapshot is the topic's MAIN

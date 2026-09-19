@@ -10,6 +10,7 @@ import { AiAgentService } from '../../index';
 // below (which run before the test body) can wire them into stubbed models.
 const {
   mockCreateOperation,
+  mockFindByIds,
   mockGetAgentConfig,
   mockGetUserSettings,
   mockMessageCreate,
@@ -17,6 +18,7 @@ const {
   mockScheduleStaleConnectorToolsRefresh,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
+  mockFindByIds: vi.fn(),
   mockGetAgentConfig: vi.fn(),
   mockGetUserSettings: vi.fn(),
   mockMessageCreate: vi.fn(),
@@ -24,6 +26,14 @@ const {
   // identifier list the share-gate filter allowed through to this call.
   mockResolveByIdentifiers: vi.fn().mockResolvedValue([]),
   mockScheduleStaleConnectorToolsRefresh: vi.fn(),
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn().mockImplementation(function () {
+    return {
+      findByIds: mockFindByIds,
+    };
+  }),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -209,6 +219,7 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
       success: true,
     });
     mockGetUserSettings.mockResolvedValue({ general: { timezone: 'UTC' } });
+    mockFindByIds.mockResolvedValue([]);
     // Pinned plugins on the creator's agent — one granted by the share, the
     // other is a connector-backed identifier that must not be resolved for a
     // visitor.
@@ -272,5 +283,27 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
     expect(resolvedIdentifiers).toEqual(
       expect.arrayContaining(['granted-plugin', 'ungranted-connector']),
     );
+  });
+
+  it('reads attached file types through the exact share visitor scope', async () => {
+    mockFindByIds.mockResolvedValue([{ fileType: 'image/png', id: 'file-visitor' }]);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      fileIds: ['file-visitor'],
+      prompt: 'Describe the image',
+      shareGate: {
+        agentId: 'agent-1',
+        shareConfig: { toolGrants: [] },
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+    });
+
+    expect(mockFindByIds).toHaveBeenCalledWith(['file-visitor'], {
+      shareId: 'share-1',
+      type: 'agentShare',
+      visitorUserId: 'visitor-1',
+    });
   });
 });

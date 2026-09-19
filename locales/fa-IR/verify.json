@@ -766,6 +766,7 @@
   "workspace.loadError": "مشکلی در بارگذاری گزارش‌های شما پیش آمد.",
   "workspace.loadErrorTitle": "بارگذاری گزارش‌ها انجام نشد",
   "workspace.loadMoreError": "بارگذاری گزارش‌های بیشتر انجام نشد",
+  "workspace.pin": "لیست گزارش را پین کنید",
   "workspace.renameEmpty": "عنوان گزارش نمی‌تواند خالی باشد",
   "workspace.renameError": "تغییر نام گزارش شکست خورد",
   "workspace.renameSuccess": "گزارش تغییر نام یافت",

@@ -8,6 +8,7 @@ import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
 import { experimental_buildLlama2Prompt, LobeBedrockAI } from './index';
 
@@ -167,6 +168,42 @@ describe('LobeBedrockAI', () => {
 
         // Assert
         expect(result).toBeInstanceOf(Response);
+      });
+
+      it('captures decoded Bedrock events before protocol transformation', async () => {
+        const providerChunks = [
+          { generation: '', generation_token_count: 1 },
+          { generation: '', generation_token_count: 1, stop_reason: 'stop' },
+        ];
+        (instance['client'].send as Mock).mockResolvedValue({
+          $metadata: { httpStatusCode: 200, requestId: 'request-1' },
+          body: {
+            async *[Symbol.asyncIterator]() {
+              for (const chunk of providerChunks) {
+                yield { chunk: { bytes: new TextEncoder().encode(JSON.stringify(chunk)) } };
+              }
+            },
+          },
+        });
+        const diagnostics: ModelRuntimeDiagnostics = {};
+
+        const response = await instance.chat(
+          {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'meta.llama:1',
+          },
+          { diagnostics },
+        );
+        await response.text();
+
+        expect(diagnostics.providerResponse).toMatchObject({
+          apiMode: 'bedrock_llama',
+          rawEvents: providerChunks,
+          requestId: 'request-1',
+          status: 200,
+          stopReason: 'stop',
+          terminalEventReceived: true,
+        });
       });
 
       it('should handle text messages correctly', async () => {

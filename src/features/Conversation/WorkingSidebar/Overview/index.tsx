@@ -48,51 +48,15 @@ import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
+import { sectionStyles } from './sectionStyles';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   body: css`
     overflow-y: auto;
   `,
   emptyWorkspace: css`
     padding-block: 28px 30px;
     padding-inline: 20px;
-  `,
-  pill: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    height: 20px;
-    padding-inline: 7px;
-    border-radius: 6px;
-
-    font-size: 11.5px;
-    font-weight: 500;
-    line-height: 20px;
-  `,
-  section: css`
-    flex-shrink: 0;
-    padding-block: 8px;
-    padding-inline: 8px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  sectionHeader: css`
-    padding-block: 0 4px;
-    padding-inline: 8px;
-  `,
-  sectionTitle: css`
-    font-size: 10.5px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  `,
-  skeleton: css`
-    padding-block: 4px;
-    padding-inline: 8px;
   `,
 }));
 
@@ -102,6 +66,7 @@ interface OverviewProps {
   deviceId?: string;
   environmentAvailable: boolean;
   onOpenTab: (tab: string) => void;
+  prAvailable?: boolean;
   repoType?: string;
   sourcePath?: string;
   workingDirectory?: string;
@@ -116,6 +81,7 @@ const Overview = memo<OverviewProps>(
     deviceId,
     environmentAvailable,
     onOpenTab,
+    prAvailable,
     repoType,
     sourcePath,
     workingDirectory,
@@ -349,7 +315,6 @@ const Overview = memo<OverviewProps>(
 
         <OverviewRow
           icon={ClipboardListIcon}
-          value={t('workingPanel.overview.changes')}
           trailing={
             changeStats.files > 0 ? (
               <>
@@ -359,6 +324,11 @@ const Overview = memo<OverviewProps>(
             ) : (
               t('workingPanel.overview.changes.none')
             )
+          }
+          value={
+            changeStats.files > 0
+              ? t('workingPanel.pr.reason.localDirty', { count: changeStats.files })
+              : t('workingPanel.overview.changes')
           }
           onClick={() => onOpenTab('review')}
         />
@@ -371,7 +341,7 @@ const Overview = memo<OverviewProps>(
                 iconColor={prVisual.color}
                 trailing={
                   <span
-                    className={styles.pill}
+                    className={sectionStyles.pill}
                     style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
                   >
                     <Icon icon={ci.icon} size={12} />
@@ -389,9 +359,11 @@ const Overview = memo<OverviewProps>(
                   </>
                 }
                 onClick={
-                  pullRequest.url
-                    ? () => void electronSystemService.openExternalLink(pullRequest.url)
-                    : undefined
+                  prAvailable
+                    ? () => onOpenTab('pr')
+                    : pullRequest.url
+                      ? () => void electronSystemService.openExternalLink(pullRequest.url)
+                      : undefined
                 }
               />
             </div>
@@ -402,7 +374,7 @@ const Overview = memo<OverviewProps>(
 
     const workspaceSection = repoType ? (
       isGitLoading ? (
-        <div className={styles.skeleton}>
+        <div className={sectionStyles.skeleton}>
           <Skeleton.Text rows={3} />
         </div>
       ) : gitError ? (
@@ -445,30 +417,32 @@ const Overview = memo<OverviewProps>(
               repoType={repoType}
               onClick={() => onOpenTab('files')}
             />
-            <Flexbox className={styles.section}>{workspaceSection}</Flexbox>
+            <Flexbox className={sectionStyles.section}>{workspaceSection}</Flexbox>
           </>
         )}
 
         {environmentAvailable && !workingDirectory && (
           <Empty
-            className={cx(styles.section, styles.emptyWorkspace)}
+            className={cx(sectionStyles.section, styles.emptyWorkspace)}
             description={t('workingPanel.overview.workspace.emptyDesc')}
             icon={LaptopIcon}
             title={t('workingPanel.overview.workspace.empty')}
           />
         )}
 
-        <ProgressSection className={styles.section} />
+        <ProgressSection className={sectionStyles.section} />
 
         {visibleWorks.length > 0 && (
-          <Flexbox className={styles.section}>
+          <Flexbox className={sectionStyles.section}>
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.sectionHeader}
+              className={sectionStyles.sectionHeader}
               justify={'space-between'}
             >
-              <span className={styles.sectionTitle}>{t('workingPanel.overview.outputs')}</span>
+              <span className={sectionStyles.sectionTitle}>
+                {t('workingPanel.overview.outputs')}
+              </span>
               <Button
                 outdent={'end'}
                 size={'small'}
@@ -486,14 +460,14 @@ const Overview = memo<OverviewProps>(
 
         {!environmentAvailable && !topicId && visibleWorks.length === 0 && (
           <Empty
-            className={styles.section}
+            className={sectionStyles.section}
             description={t('workingPanel.overview.empty')}
             icon={BoxesIcon}
             title={t('workingPanel.overview.emptyTitle')}
           />
         )}
 
-        <Flexbox className={styles.section}>
+        <Flexbox className={sectionStyles.section}>
           <OverviewRow
             weak
             icon={SkillsIcon}

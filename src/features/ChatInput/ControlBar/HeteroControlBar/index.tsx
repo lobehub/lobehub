@@ -164,6 +164,10 @@ const HeteroControlBar = memo(() => {
     isSubscriptionAuth &&
     heteroProvider?.type === 'claude-code' &&
     (isLocalHeteroExecution || !!quotaDeviceId);
+  const shouldShowCodexQuota =
+    isSubscriptionAuth &&
+    heteroProvider?.type === 'codex' &&
+    (isLocalHeteroExecution || !!quotaDeviceId);
 
   if (isAccessLoading) return null;
 
@@ -191,11 +195,20 @@ const HeteroControlBar = memo(() => {
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
-        {(shouldShowApiCredits || (shouldShowClaudeQuota && quotaDeviceId)) && (
+        {(shouldShowApiCredits ||
+          (shouldShowClaudeQuota && quotaDeviceId) ||
+          (shouldShowCodexQuota && quotaDeviceId)) && (
           <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
             {shouldShowApiCredits && <ChatInputCredits />}
             {shouldShowClaudeQuota && quotaDeviceId && (
               <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
+            )}
+            {shouldShowCodexQuota && quotaDeviceId && (
+              <CodexQuotaMenu
+                command={heteroProvider?.command}
+                deviceId={quotaDeviceId}
+                env={heteroProvider?.env}
+              />
             )}
           </Flexbox>
         )}
@@ -218,11 +231,6 @@ const HeteroControlBar = memo(() => {
       <span className={styles.fullAccessLabel}>{tChat('heteroAgent.fullAccess.label')}</span>
     </div>
   );
-  // Codex quota still needs the local CLI (spawned over IPC), so it stays
-  // desktop-local; the SDK runtime badge likewise reports this desktop's own
-  // in-process runtime, not a remote device's.
-  const shouldShowCodexQuota =
-    isSubscriptionAuth && heteroProvider?.type === 'codex' && isLocalHeteroExecution;
   const shouldShowSdkRuntime =
     heteroProvider?.type === 'claude-code' &&
     isLocalHeteroExecution &&
@@ -270,7 +278,11 @@ const HeteroControlBar = memo(() => {
       <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
         {shouldShowApiCredits && <ChatInputCredits />}
         {shouldShowCodexQuota && (
-          <CodexQuotaMenu command={heteroProvider?.command} env={heteroProvider?.env} />
+          <CodexQuotaMenu
+            command={heteroProvider?.command}
+            deviceId={quotaDeviceId}
+            env={heteroProvider?.env}
+          />
         )}
         {shouldShowClaudeQuota && (
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />

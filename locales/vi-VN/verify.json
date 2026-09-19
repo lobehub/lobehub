@@ -766,6 +766,7 @@
   "workspace.loadError": "Đã xảy ra lỗi khi tải báo cáo của bạn.",
   "workspace.loadErrorTitle": "Không thể tải báo cáo",
   "workspace.loadMoreError": "Không thể tải thêm báo cáo",
+  "workspace.pin": "Ghim danh sách báo cáo",
   "workspace.renameEmpty": "Tiêu đề báo cáo không được để trống",
   "workspace.renameError": "Không thể đổi tên báo cáo",
   "workspace.renameSuccess": "Đã đổi tên báo cáo",

@@ -161,8 +161,8 @@ describe('AgentModel.transferAgent', () => {
     const agent = await agentModel.create({ title: 'Learning Agent' });
     const expertiseModel = new ExpertiseModel(serverDB, userId, wsId1);
     const domainId = await expertiseModel.createDomain({
-      agentId: agent.id,
       brief: 'Improve incident response',
+      carrier: { id: agent.id, type: 'agent' },
       domainFilter: 'I practice when I investigate production incidents.',
       title: 'Incident response',
     });

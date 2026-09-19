@@ -13,6 +13,7 @@ import { Artifacts } from './Artifacts';
 import Header from './components/Header';
 import { Document } from './Document';
 import { FilePreview } from './FilePreview';
+import { Goal } from './Goal';
 import { GoalMetric } from './GoalMetric';
 import { GoalNode } from './GoalNode';
 import { GroupThread } from './GroupThread';
@@ -43,6 +44,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
   [PortalViewType.Document]: Document,
   [PortalViewType.Notebook]: Notebook,
   [PortalViewType.FilePreview]: FilePreview,
+  [PortalViewType.Goal]: Goal,
   [PortalViewType.GoalMetric]: GoalMetric,
   [PortalViewType.GoalNode]: GoalNode,
   [PortalViewType.LocalFile]: LocalFile,
@@ -66,29 +68,38 @@ const HomeImpl: PortalImpl = {
 };
 
 interface PortalContentProps {
+  onClose?: () => void;
   renderBody?: (body: React.ReactNode) => React.ReactNode;
+  viewType?: PortalViewType | null;
 }
 
 /**
  * Portal content with Wrapper support
  * Uses the view stack to determine which component to render
  */
-export const PortalContent = memo<PortalContentProps>(({ renderBody }) => {
-  const viewType = useChatStore(chatPortalSelectors.currentViewType);
-  const ViewImpl = viewType ? VIEW_COMPONENTS[viewType] : HomeImpl;
+export const PortalContent = memo<PortalContentProps>(
+  ({ onClose, renderBody, viewType: viewTypeOverride }) => {
+    const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
+    const viewType = viewTypeOverride ?? currentViewType;
+    const ViewImpl = viewType ? VIEW_COMPONENTS[viewType] : HomeImpl;
 
-  const Wrapper = ViewImpl?.Wrapper || Fragment;
-  const CustomHeader = ViewImpl?.Header;
-  const Body = ViewImpl?.Body || HomeBody;
-  const Title = ViewImpl?.Title || HomeTitle;
+    const Wrapper = ViewImpl?.Wrapper || Fragment;
+    const CustomHeader = ViewImpl?.Header;
+    const Body = ViewImpl?.Body || HomeBody;
+    const Title = ViewImpl?.Title || HomeTitle;
 
-  const headerContent = CustomHeader ? <CustomHeader /> : <Header title={<Title />} />;
-  const bodyContent = <Body />;
+    const headerContent = CustomHeader ? (
+      <CustomHeader />
+    ) : (
+      <Header title={<Title />} onClose={onClose} />
+    );
+    const bodyContent = <Body />;
 
-  return (
-    <Wrapper>
-      {headerContent}
-      {renderBody ? renderBody(bodyContent) : bodyContent}
-    </Wrapper>
-  );
-});
+    return (
+      <Wrapper>
+        {headerContent}
+        {renderBody ? renderBody(bodyContent) : bodyContent}
+      </Wrapper>
+    );
+  },
+);

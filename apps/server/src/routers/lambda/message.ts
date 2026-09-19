@@ -28,6 +28,7 @@ import {
   assertCanUseCreateMessageTargets,
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
+  assertCanViewMessageTargets,
 } from './_helpers/conversationResourceGuard';
 import { projectSharedTopicMessages } from './_helpers/projectSharedTopicMessages';
 import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
@@ -393,6 +394,22 @@ export const messageRouter = router({
       return ctx.topicDoctorRepo.repair(input);
     }),
 
+  /**
+   * Raw tool payload for one message, fetched on demand when the projected
+   * read path dropped it (`UIChatMessage.payloadOmitted`).
+   */
+  getToolResultPayload: messageProcedure
+    .input(z.object({ messageId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      // A message id is a locator, not an authorization. In a workspace the
+      // model reads are workspace-scoped, so without this a member who kept an
+      // id could pull tool output from a conversation they cannot open — the
+      // same guard `getMessages` applies before returning the list.
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.messageId]);
+
+      return ctx.messageService.getToolResultPayload(input.messageId);
+    }),
+
   getHeatmaps: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.getHeatmaps();
   }),
@@ -482,9 +499,14 @@ export const messageRouter = router({
       const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
       const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
 
-      return messageModel.query(queryParams, {
+      const messages = await messageModel.query(queryParams, {
         postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
       });
+
+      // This branch reads through its own `MessageModel` (different query
+      // options than `MessageService.queryMessages`), so it applies the tool
+      // view-model step explicitly rather than inheriting it.
+      return new MessageService(ctx.serverDB, ctx.userId, wsId).projectToolPayloads(messages);
     }),
 
   rankModels: messageProcedure.query(async ({ ctx }) => {

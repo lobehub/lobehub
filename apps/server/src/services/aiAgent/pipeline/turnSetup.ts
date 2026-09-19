@@ -6,11 +6,14 @@ import type {
   ChatFileItem,
   ChatTopicMetadata,
   ChatVideoItem,
+  FileAccessScope,
   HeterogeneousProviderConfig,
   HeterogeneousTopicPin,
 } from '@lobechat/types';
 import {
+  agentShareFileAccessScope,
   ChatErrorType,
+  ordinaryFileAccessScope,
   RequestTrigger,
   resolveHeterogeneousProviderTopicModel,
 } from '@lobechat/types';
@@ -146,10 +149,12 @@ const resolveRunAttachments = async (
   deps: TurnSetupDeps,
   {
     attachedFileIds,
+    fileAccessScope,
     files,
     throwIfAborted,
   }: {
     attachedFileIds?: string[];
+    fileAccessScope: FileAccessScope;
     files?: InternalExecAgentParams['files'];
     throwIfAborted: (stage: string) => Promise<void>;
   },
@@ -272,6 +277,7 @@ const resolveRunAttachments = async (
     try {
       const resolved = await resolveAttachmentsByFileIds({
         db: deps.db,
+        fileAccessScope,
         fileIds: attachedFileIds,
         userId: deps.userId,
         workspaceId: deps.workspaceId,
@@ -692,6 +698,7 @@ export const setupTurn = async (
   // `attachedFileIds` → signed URLs + classification.
   const runAttachments = await resolveRunAttachments(deps, {
     attachedFileIds,
+    fileAccessScope: shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
     files,
     throwIfAborted: throwIfExecutionAborted,
   });
