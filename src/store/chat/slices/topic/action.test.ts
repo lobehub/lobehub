@@ -3037,6 +3037,38 @@ describe('topic action', () => {
     });
   });
   describe('summaryTopicTitle', () => {
+    it('summarizes an uncached Project topic using its own Agent messages', async () => {
+      const topicId = 'project-uncached-topic';
+      const messages = [
+        { id: 'project-message', content: 'Work in my project', role: 'user' },
+      ] as UIChatMessage[];
+      useChatStore.setState({
+        activeAgentId: 'unrelated-agent',
+        topicDataMap: {},
+        topicDetailMap: {},
+      });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        id: topicId,
+        title: 'Old title',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      vi.spyOn(messageService, 'getMessages').mockResolvedValue(messages);
+      vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Project summary' },
+      } as never);
+      const update = vi
+        .spyOn(useChatStore.getState(), 'internal_updateTopic')
+        .mockResolvedValue(undefined);
+      await useChatStore.getState().autoRenameTopicTitle(topicId, 'project-agent');
+      expect(messageService.getMessages).toHaveBeenCalledWith({
+        agentId: 'project-agent',
+        topicId,
+      });
+      expect(update).toHaveBeenCalledWith(topicId, { title: 'Project summary' });
+      expect(useChatStore.getState().activeAgentId).toBe('unrelated-agent');
+    });
+
     it('should wait for assistant text before summarizing an audio-only conversation', async () => {
       const topicId = 'topic-1';
       const messages = [

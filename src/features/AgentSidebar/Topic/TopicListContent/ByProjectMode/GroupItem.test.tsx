@@ -5,6 +5,7 @@ import { AccordionRoot } from '@lobehub/ui/base-ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TopicListScopeContext } from '../../TopicListScope';
 import GroupItem from './GroupItem';
 
 const commitAgentDefaultMock = vi.hoisted(() => vi.fn());
@@ -230,4 +231,39 @@ it('uses the bound project name and lets the user jump directly to that project'
   );
   fireEvent.click(screen.getByRole('link', { name: 'Shared Project' }));
   expect(routerPushMock).toHaveBeenCalledWith('/project/shared-project');
+});
+
+it('shows the directory title inside Project scope rather than repeating the project name', () => {
+  directoryRows.push({
+    id: 'binding-scoped',
+    projectName: 'Shared Project',
+    projectSlug: 'shared-project',
+    projectId: 'prj-1',
+    projectAvatar: '📦',
+  });
+  render(
+    <TopicListScopeContext value={{ projectId: 'prj-1' }}>
+      <AccordionRoot defaultValue={['project:/repo-a']}>
+        <GroupItem
+          expanded
+          group={{
+            id: 'project:/repo-a',
+            title: 'repo-a',
+            children: [
+              {
+                id: 'topic-scoped',
+                title: 'Work',
+                createdAt: 1,
+                updatedAt: 1,
+                projectWorkingDirectoryId: 'binding-scoped',
+                metadata: { workingDirectory: '/repo-a' },
+              },
+            ],
+          }}
+        />
+      </AccordionRoot>
+    </TopicListScopeContext>,
+  );
+  expect(screen.getByText('repo-a')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Shared Project' })).not.toBeInTheDocument();
 });

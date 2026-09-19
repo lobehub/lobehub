@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ClipboardCheckIcon, ListTodoIcon, TargetIcon } from 'lucide-react';
+import { ClipboardCheckIcon, ListTodoIcon, SettingsIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
@@ -61,6 +61,12 @@ const ProjectSidebarContent = memo(() => {
             icon={ClipboardCheckIcon}
             title={t('sections.acceptance')}
             onClick={() => navigate(projectAcceptancePath)}
+          />
+          <NavItem
+            active={pathname.includes(`/project/${projectId}/settings`)}
+            icon={SettingsIcon}
+            title={t('topics.settings')}
+            onClick={() => navigate(`/project/${projectId}/settings/general`)}
           />
           {detail?.project && (
             <ProjectDirectoryTopics

@@ -1,6 +1,15 @@
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, createModal, Select, Text, useModalContext } from '@lobehub/ui/base-ui';
+import {
+  Alert,
+  Avatar,
+  Button,
+  createModal,
+  Select,
+  Switch,
+  Text,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +37,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
     !!projectId,
   );
   const [directoryId, setDirectory] = useState('');
+  const [includeDirectory, setIncludeDirectory] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
   const associate = useProjectDirectoryStore((s) => s.associateTopic);
@@ -50,7 +60,14 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
     setPending(true);
     setError(undefined);
     try {
-      await associate({ topicId, projectId, directoryId: selectedDirectory || undefined });
+      await associate({
+        topicId,
+        projectId,
+        directoryId:
+          source || topic.data?.projectWorkingDirectoryId || includeDirectory
+            ? selectedDirectory || undefined
+            : undefined,
+      });
       await useChatStore.getState().refreshTopic();
       close();
       navigate(getProjectConversationPath(projectId, topicId));
@@ -102,20 +119,30 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
             : (setProject(value ?? ''), setDirectory(''))
         }
       />
-      <Select
-        aria-label={t('topics.executionContext')}
-        disabled={pending || !projectId || !!topic.data?.projectWorkingDirectoryId}
-        placeholder={t('topics.executionContext')}
-        value={selectedDirectory || '__none__'}
-        options={[
-          ...(!source ? [{ value: '__none__', label: t('topics.conversationOnly') }] : []),
-          ...options.map((d) => ({
+      {!source && !topic.data?.projectWorkingDirectoryId && (
+        <Flexbox horizontal align="center" justify="space-between">
+          <label htmlFor="associate-topic-directory">{t('topics.addLocation')}</label>
+          <Switch
+            checked={includeDirectory}
+            disabled={pending || !projectId}
+            id="associate-topic-directory"
+            onChange={setIncludeDirectory}
+          />
+        </Flexbox>
+      )}
+      {(source || topic.data?.projectWorkingDirectoryId || includeDirectory) && (
+        <Select
+          aria-label={t('topics.executionContext')}
+          disabled={pending || !projectId || !!topic.data?.projectWorkingDirectoryId}
+          placeholder={t('topics.chooseLocation')}
+          value={selectedDirectory}
+          options={options.map((d) => ({
             value: d.id,
             label: `${d.environmentName || d.name} · ${d.deviceName || d.deviceId} · ${d.path}`,
-          })),
-        ]}
-        onChange={(value) => setDirectory(value === '__none__' ? '' : (value ?? ''))}
-      />
+          }))}
+          onChange={(value) => setDirectory(value ?? '')}
+        />
+      )}
       {source && deviceId && !options.length && projectId && (
         <Button
           onClick={() =>
@@ -131,13 +158,18 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
           {t('directories.bind')}
         </Button>
       )}
-      {error || topic.error || projects.error || directories.error ? (
-        <AsyncError
+      {error ? (
+        <Alert
+          showIcon
           description={error instanceof Error ? error.message : undefined}
-          error={error || topic.error || projects.error || directories.error}
-          onRetry={() =>
-            error ? save() : Promise.all([topic.mutate(), projects.mutate(), directories.mutate()])
-          }
+          title={t('topics.associateFailed')}
+          type="error"
+        />
+      ) : null}
+      {topic.error || projects.error || directories.error ? (
+        <AsyncError
+          error={topic.error || projects.error || directories.error}
+          onRetry={() => Promise.all([topic.mutate(), projects.mutate(), directories.mutate()])}
         />
       ) : null}
       <Flexbox horizontal gap={8} justify="flex-end">
@@ -145,9 +177,11 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
           {t('cancel', { ns: 'common' })}
         </Button>
         <Button
-          disabled={!projectId || !topic.data || (!!source && !selectedDirectory)}
           loading={pending}
           type="primary"
+          disabled={
+            !projectId || !topic.data || ((!!source || includeDirectory) && !selectedDirectory)
+          }
           onClick={save}
         >
           {t('directories.bind')}

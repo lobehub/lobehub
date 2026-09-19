@@ -196,10 +196,23 @@ describe('desktop router shared definition', () => {
         ?.map((route) => route.path)
         .filter((routePath): routePath is string => Boolean(routePath));
 
-      expect(projectPaths).toEqual(['tasks', 'settings', 'goals', 'acceptance']);
+      expect(projectPaths).toEqual([
+        'conversation/:topicId?',
+        'tasks',
+        'settings/:section?',
+        'goals',
+        'acceptance',
+      ]);
+      for (const section of ['general', 'environments', 'directories']) {
+        const matches = matchRoutes(
+          createMainAreaRoutes(factory),
+          `/project/project-1/settings/${section}`,
+        );
+        expect(matches?.at(-1)?.params.section).toBe(section);
+      }
       expect(
         (projectIndexRoute?.element as ReactElement<{ to: string }> | undefined)?.props.to,
-      ).toBe('tasks');
+      ).toBe('conversation');
     },
   );
 

@@ -1,5 +1,6 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import {
+  Alert,
   Avatar,
   Button,
   createModal,
@@ -8,8 +9,9 @@ import {
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { t } from 'i18next';
-import { FolderIcon, MonitorIcon, PlusIcon } from 'lucide-react';
+import { FolderIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -40,6 +42,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
   const name = options.path.split(/[\\/]/).findLast(Boolean) ?? '';
   const { pending, error, save: bindDirectory } = useBindDirectory(options, close);
   const projects = useProjectStore((s) => s.useFetchProjectList)();
+  useDeviceStore((s) => s.useFetchDevices)(true);
   const devices = useDeviceStore((s) => s.devices);
   const deviceName =
     devices.find((d) => d.deviceId === options.deviceId)?.friendlyName ?? options.deviceId;
@@ -52,19 +55,30 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
         padding={16}
         style={{ maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' }}
       >
-        <Text type="secondary">{t('directories.bindDescription')}</Text>
-        <Flexbox gap={4}>
-          <Flexbox horizontal align="center" gap={8}>
-            <Icon icon={MonitorIcon} size={16} />
-            <Text>{deviceName}</Text>
-          </Flexbox>
-          <Flexbox horizontal align="center" gap={8}>
-            <Icon icon={FolderIcon} size={16} />
-            <Text style={{ overflowWrap: 'anywhere' }} type="secondary">
+        <Flexbox
+          horizontal
+          gap={12}
+          padding={16}
+          style={{ background: cssVar.colorFillQuaternary, borderRadius: cssVar.borderRadiusLG }}
+        >
+          <Icon
+            icon={FolderIcon}
+            size={24}
+            style={{ color: cssVar.colorTextSecondary, marginTop: 2 }}
+          />
+          <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+            <Text weight={600}>{name}</Text>
+            <Text fontSize={12} type="secondary">
+              {deviceName}
+            </Text>
+            <Text fontSize={12} style={{ overflowWrap: 'anywhere' }} type="secondary">
               {options.path}
             </Text>
           </Flexbox>
         </Flexbox>
+        <Text fontSize={13} type="secondary">
+          {t('directories.keepFiles', { device: deviceName })}
+        </Text>
         <Text>{t('directories.project')}</Text>
         {projects.error ? (
           <AsyncError error={projects.error} onRetry={projects.mutate} />
@@ -158,10 +172,11 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
           </Text>
         )}
         {error ? (
-          <AsyncError
+          <Alert
+            showIcon
             description={error instanceof Error ? error.message : undefined}
-            error={error}
-            onRetry={save}
+            title={t('directories.bindFailed')}
+            type="error"
           />
         ) : null}
       </Flexbox>
@@ -187,5 +202,5 @@ export const openBindDirectoryModal = (options: BindDirectoryOptions) =>
     content: <BindDirectoryContent {...options} />,
     footer: null,
     styles: { content: { padding: 0 } },
-    width: 520,
+    width: 560,
   });

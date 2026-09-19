@@ -11,6 +11,7 @@ import { useProjectStore } from '@/store/project';
 
 import { GeneralSettings } from './GeneralSettings';
 import { ProjectWorkingDirectories } from './index';
+import { WorkingDirectorySettings } from './WorkingDirectorySettings';
 
 export function ProjectDirectoriesPage() {
   const { t } = useTranslation('project');
@@ -35,11 +36,14 @@ export function ProjectDirectoriesPage() {
           items={[
             { label: t('settings.general'), key: 'general' },
             { label: t('settings.environments'), key: 'environments' },
+            { label: t('settings.workLocations'), key: 'directories' },
           ]}
           onChange={(key) => navigate(`/project/${projectId}/settings/${key}`)}
         />
         {section === 'general' ? (
           <GeneralSettings key={data.data.project.id} project={data.data.project} />
+        ) : section === 'directories' ? (
+          <WorkingDirectorySettings projectId={data.data.project.id} />
         ) : (
           <ProjectWorkingDirectories projectId={data.data.project.id} />
         )}

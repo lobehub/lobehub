@@ -454,6 +454,11 @@ export class ProjectWorkingDirectoryModel {
     return this.db
       .select({
         id: topics.id,
+        createdAt: topics.createdAt,
+        favorite: topics.favorite,
+        metadata: topics.metadata,
+        trigger: topics.trigger,
+        userId: topics.userId,
         title: topics.title,
         status: topics.status,
         agentId: topics.agentId,

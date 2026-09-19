@@ -6,7 +6,6 @@ import {
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
-  Avatar,
   Text,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -16,6 +15,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import Avatar from '@/components/Avatar';
 import { TOPIC_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RingLoadingIcon from '@/components/RingLoading';
 import UnreadDot from '@/components/UnreadDot';
@@ -33,6 +33,7 @@ import { getTopicWorkingDirectorySourcePath } from '@/utils/client/topic';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
 import TopicItem from '../../List/Item';
+import { useTopicListScope } from '../../TopicListScope';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 import {
   getProjectTopicStatusCounts,
@@ -166,6 +167,7 @@ CollapsedUnreadDot.displayName = 'CollapsedProjectUnreadDot';
 
 const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const { id, title, children } = group;
+  const scope = useTopicListScope();
   const navigate = useWorkspaceAwareNavigate();
   const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(
     undefined,
@@ -212,7 +214,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     activeWorkspaceSlug,
   ]);
 
-  const canAddTopic = !!currentAgentId && !!workingDirectory;
+  const canAddTopic = !scope && !!currentAgentId && !!workingDirectory;
 
   const statusCounts = useChatStore(
     (s) => getProjectTopicStatusCounts(children, operationSelectors.visiblyRunningTopicIds(s)),
@@ -249,7 +251,11 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center flex="none" height={24} width={28}>
               {project ? (
-                <Avatar avatar={project.projectAvatar || project.projectName} size={18} />
+                <Avatar
+                  avatar={project.projectAvatar || undefined}
+                  name={project.projectName}
+                  size={18}
+                />
               ) : (
                 <Icon
                   color={cssVar.colorTextTertiary}
@@ -263,7 +269,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
               fontSize={14}
               style={{ color: project ? cssVar.colorText : cssVar.colorTextSecondary, flex: 1 }}
             >
-              {project ? (
+              {project && !scope ? (
                 <a
                   href={`/project/${project.projectSlug ?? project.projectId}`}
                   style={{ color: 'inherit', textDecoration: 'none' }}

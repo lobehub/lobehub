@@ -1,4 +1,28 @@
 export default {
+  'settings.addDirectoryFailed': 'Could not add working directory',
+  'settings.identifier': 'Project identifier',
+  'settings.identifierDescription':
+    'Used in task references. This identifier is set when the project is created.',
+  'settings.slugDescription':
+    'Used in the project URL. Changing it updates the address; leave blank to use the project ID.',
+  'settings.description': 'Description',
+  'settings.generalDescription': 'Manage the project name, address, and description.',
+  'settings.workLocations': 'Working directories',
+  'settings.directoryDescription':
+    'Choose where agents work with files. Each directory is a real path on a specific device.',
+  'settings.environmentDescription':
+    'Define the source for your work. Connect a working directory when you are ready to use files on a device.',
+  'settings.allEnvironments': 'All environments',
+  'settings.viewDirectories': 'Working directories ({{count}})',
+  'directories.noEnvironment': 'No environment linked',
+  'directories.sourceSummary': 'Existing directory',
+  'directories.keepFiles':
+    'Files stay on {{device}}. Linking only organizes the conversations in this directory.',
+  'directories.bindFailed': 'Could not link directory',
+  'topics.associateFailed': 'Could not add conversation to project',
+  'topics.chooseLocation': 'Choose a working directory',
+  'topics.addLocation': 'Add a working directory (optional)',
+
   'topics.complete': 'Mark completed',
   'topics.resume': 'Resume work',
   'topics.gatewayUnavailable': 'Enable Agent Gateway before using this project work location.',
@@ -28,7 +52,6 @@ export default {
   'topics.status.archived': 'Archived',
   'topics.status.unread': 'New results',
   'settings.addDirectory': 'Add work location',
-  'settings.workLocations': 'Work locations',
   'settings.addDirectoryDescription':
     'Choose an existing directory on a device. We check connectivity and the directory before saving.',
   'settings.directoryUnavailable':
@@ -36,15 +59,12 @@ export default {
 
   'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
   'settings.general': 'General',
-  'settings.generalDescription': 'Manage the name people see for this project.',
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
     'Add an existing device directory to start working in this environment.',
   'settings.title': 'Project settings',
   'settings.environments': 'Environments',
   'settings.addEnvironment': 'Add environment',
-  'settings.environmentDescription':
-    'Configure where this project works. Link an environment, add a device directory, then start a topic there.',
   'settings.noEnvironments': 'No environments associated yet',
   'directories.environmentName': 'Environment name',
   'directories.editEnvironment': 'Configure environment',

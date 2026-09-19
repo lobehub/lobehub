@@ -1,34 +1,36 @@
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
-  Avatar,
   Button,
   createModal,
-  DropdownMenu,
   ModalFooter,
   Select,
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import { CheckIcon, ListFilter, PlusIcon } from 'lucide-react';
-import { useState } from 'react';
+import { PlusIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import Filter from '@/features/AgentSidebar/Topic/Filter';
+import { useAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode';
+import ToggleGroups from '@/features/AgentSidebar/Topic/ToggleGroups';
+import ByProjectMode from '@/features/AgentSidebar/Topic/TopicListContent/ByProjectMode';
+import ByStatusMode from '@/features/AgentSidebar/Topic/TopicListContent/ByStatusMode';
+import ByTimeMode from '@/features/AgentSidebar/Topic/TopicListContent/ByTimeMode';
+import FlatMode from '@/features/AgentSidebar/Topic/TopicListContent/FlatMode';
+import { TopicListScopeContext } from '@/features/AgentSidebar/Topic/TopicListScope';
 import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
-import NavItem from '@/features/NavPanel/components/NavItem';
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { getProjectConversationPath } from '../Layout/navigation';
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openEnvironmentModal } from './EnvironmentModal';
-import { directoryAgentName, useDirectoryAgent } from './useDirectoryAgent';
+import { useDirectoryAgent } from './useDirectoryAgent';
 
 function StartDirectoryContent({
   directories,
@@ -131,7 +133,16 @@ function StartDirectoryContent({
     </>
   );
 }
-export function ProjectDirectoryTopics({
+export function ProjectDirectoryTopics(props: { projectId: string; coordinatorAgentId: string }) {
+  const scope = useMemo(() => ({ projectId: props.projectId }), [props.projectId]);
+  return (
+    <TopicListScopeContext value={scope}>
+      <ProjectTopicList {...props} />
+    </TopicListScopeContext>
+  );
+}
+
+function ProjectTopicList({
   projectId,
   coordinatorAgentId,
 }: {
@@ -139,74 +150,23 @@ export function ProjectDirectoryTopics({
   coordinatorAgentId: string;
 }) {
   const { t } = useTranslation('project');
-  const navigate = useWorkspaceAwareNavigate();
-  const { topicId } = useParams<{ topicId?: string }>();
-  const [groupBy, setGroupBy] = useState('status');
+  const { topicGroupMode } = useAgentTopicGroupMode();
   const request = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(projectId);
   const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
-  const inboxId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const groups = new Map<string, NonNullable<typeof request.data>['data']>();
-  const labels = new Map<string, string>();
-  for (const topic of request.data?.data ?? []) {
-    const name =
-      directoryAgentName(
-        { name: topic.agentName, title: topic.agentTitle },
-        topic.agentId === inboxId,
-        t('inbox.title', { ns: 'chat' }),
-      ) ?? t('untitledAgent', { ns: 'chat' });
-    const key =
-      groupBy === 'agent'
-        ? topic.agentId!
-        : groupBy === 'status'
-          ? topic.status || 'active'
-          : 'all';
-    labels.set(
-      key,
-      groupBy === 'agent'
-        ? name
-        : key === 'all'
-          ? t('topics.all')
-          : t(`topics.status.${key}`, { defaultValue: key }),
-    );
-    groups.set(key, [...(groups.get(key) ?? []), topic]);
-  }
-  const order = [
-    'waitingForHuman',
-    'failed',
-    'unread',
-    'running',
-    'active',
-    'scheduled',
-    'completed',
-    'archived',
-  ];
-  const entries = [...groups].sort(([a], [b]) =>
-    groupBy === 'status' ? order.indexOf(a) - order.indexOf(b) : 0,
-  );
   return (
-    <Flexbox gap={8} paddingBlock={12}>
+    <Flexbox gap={1} paddingBlock={12}>
       <Flexbox horizontal align="center" justify="space-between" paddingInline={8}>
-        <Text weight={600}>{t('topics.title')}</Text>
+        <Text fontSize={12} type="secondary" weight={500}>
+          {t('topics.title')}
+        </Text>
         <Flexbox horizontal align="center" gap={2}>
-          <DropdownMenu
-            items={(['status', 'all', 'agent'] as const).map((value) => ({
-              icon: groupBy === value ? <Icon icon={CheckIcon} /> : <div />,
-              key: value,
-              label: t(`topics.group.${value}`),
-              onClick: () => setGroupBy(value),
-            }))}
-          >
-            <ActionIcon
-              aria-label={t('topics.groupBy')}
-              icon={ListFilter}
-              size="small"
-              title={t('topics.groupBy')}
-            />
-          </DropdownMenu>
+          <ToggleGroups />
+          <Filter />
           <ActionIcon
             aria-label={t('sidebar.newConversation')}
             disabled={directories.isLoading || !!directories.error}
             icon={PlusIcon}
+            size="small"
             title={t('sidebar.newConversation')}
             onClick={() =>
               createModal({
@@ -232,46 +192,19 @@ export function ProjectDirectoryTopics({
         />
       ) : null}
       {request.isLoading ? (
-        <Text>{t('loading', { ns: 'common' })}</Text>
+        <SkeletonList />
       ) : !request.data?.data.length && !request.error ? (
         <Text type="secondary">{t('directories.noConversations')}</Text>
       ) : null}
-      {entries.map(([key, topics]) => (
-        <Flexbox gap={4} key={key}>
-          {groupBy !== 'all' && (
-            <Text fontSize={12} style={{ paddingInline: 8 }} type="secondary">
-              {labels.get(key)} · {topics.length}
-            </Text>
-          )}
-          {topics.map((topic) => (
-            <NavItem
-              active={topic.id === topicId}
-              key={topic.id}
-              title={topic.title || t('directories.untitled')}
-              titleColor={cssVar.colorText}
-              extra={
-                groupBy !== 'status' && (
-                  <Text fontSize={12} type="secondary">
-                    {t(`topics.status.${topic.status || 'active'}`, {
-                      defaultValue: topic.status || 'active',
-                    })}
-                  </Text>
-                )
-              }
-              slots={{
-                titlePrefix: (
-                  <Avatar
-                    avatar={topic.agentAvatar || topic.agentName || topic.agentTitle || '🤖'}
-                    size={20}
-                    title={topic.agentName || topic.agentTitle || undefined}
-                  />
-                ),
-              }}
-              onClick={() => navigate(getProjectConversationPath(projectId, topic.id))}
-            />
-          ))}
-        </Flexbox>
-      ))}
+      {topicGroupMode === 'flat' ? (
+        <FlatMode />
+      ) : topicGroupMode === 'byStatus' ? (
+        <ByStatusMode />
+      ) : topicGroupMode === 'byProject' ? (
+        <ByProjectMode />
+      ) : (
+        <ByTimeMode />
+      )}
     </Flexbox>
   );
 }

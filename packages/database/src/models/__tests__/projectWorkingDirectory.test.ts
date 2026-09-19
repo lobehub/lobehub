@@ -290,6 +290,7 @@ describe('project topic journeys', () => {
     );
     const directory = await model.bind(base);
     const work = await model.startTopic(directory.id, 'directory-agent', 'Implementation');
+    await db.update(topics).set({ favorite: true }).where(eq(topics.id, work.id));
     const list = await model.listProjectTopics(base.projectId);
     expect(list).toHaveLength(2);
     expect(list.find((t) => t.id === plain.id)).toMatchObject({
@@ -299,6 +300,10 @@ describe('project topic journeys', () => {
     expect(list.find((t) => t.id === work.id)).toMatchObject({
       agentId: 'directory-agent',
       projectWorkingDirectoryId: directory.id,
+      createdAt: expect.any(Date),
+      favorite: true,
+      metadata: expect.objectContaining({ workingDirectory: base.path }),
+      userId,
     });
     await expect(other.listProjectTopics(base.projectId)).rejects.toThrow('access denied');
   });

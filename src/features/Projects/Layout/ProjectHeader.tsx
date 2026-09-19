@@ -29,7 +29,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
   const items = useMemo<SwitcherItem[]>(
     () =>
       projects.map((item) => ({
-        avatar: item.avatar || item.name,
+        avatar: item.avatar || undefined,
         id: item.slug ?? item.id,
         private: item.visibility === 'private',
         title: item.name,
@@ -61,7 +61,7 @@ const ProjectHeader = memo<ProjectHeaderProps>(({ project }) => {
           }
         >
           <SidebarHeaderSelectTrigger
-            avatar={project?.avatar || project?.name || t('sidebar.title')}
+            avatar={project?.avatar || undefined}
             name={project?.name || t('sidebar.title')}
             title={project?.name || t('sidebar.title')}
           />
