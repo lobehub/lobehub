@@ -2125,21 +2125,31 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
-    it('opts the snapshot into agent-share visitor rows', async () => {
-      // Regression: `MessageModel.query()` hides share-visitor messages by
-      // default. A visitor run executes under the creator's identity, so
-      // without the opt-in the terminal snapshot for the visitor's topic is
-      // `[]` and the client replaces the conversation it just streamed with
-      // nothing.
-      const queryMessages = vi.fn().mockResolvedValue([]);
-      stubMessageService(service, queryMessages);
+    it.each([
+      { skipToolProjection: false, visitorUserId: undefined },
+      { skipToolProjection: true, visitorUserId: 'visitor_1' },
+    ])(
+      'includes visitor rows with skipToolProjection=$skipToolProjection',
+      async ({ skipToolProjection, visitorUserId }) => {
+        // Regression: `MessageModel.query()` hides share-visitor messages by
+        // default. A visitor run executes under the creator's identity, so
+        // without the opt-in the terminal snapshot for the visitor's topic is
+        // `[]` and the client replaces the conversation it just streamed with
+        // nothing.
+        const queryMessages = vi.fn().mockResolvedValue([]);
+        stubMessageService(service, queryMessages);
 
-      await service.queryUiMessages({
-        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
-      } as any);
+        await service.queryUiMessages({
+          origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+          principal: visitorUserId ? { actor: { shareVisitor: { visitorUserId } } } : undefined,
+        } as any);
 
-      expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
-    });
+        expect(queryMessages).toHaveBeenCalledWith(expect.anything(), {
+          allowShareVisitor: true,
+          skipToolProjection,
+        });
+      },
+    );
 
     it('scopes the snapshot to the run thread when the operation is a subtopic run', async () => {
       // Regression: without `threadId` the snapshot is the topic's MAIN
