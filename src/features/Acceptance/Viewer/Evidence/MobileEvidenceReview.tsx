@@ -3,8 +3,8 @@
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
-import { memo } from 'react';
+import { ChevronDown, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ZOOM_STEPS } from '../Review/rejectDraft';
@@ -54,6 +54,39 @@ const styles = createStaticStyles(({ css }) => ({
       font-size: 16px;
     }
   `,
+  /** The fold header: the whole row is the tap target (44px touch minimum),
+      not just the chevron. The chevron's rotation carries the open state. */
+  toggle: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-content: space-between;
+
+    width: 100%;
+    min-height: 44px;
+    padding: 0;
+    border: none;
+
+    text-align: start;
+
+    background: none;
+
+    &:active {
+      opacity: 0.7;
+    }
+  `,
+  toggleChevron: css`
+    transform: rotate(0deg);
+    flex: none;
+    color: ${cssVar.colorTextTertiary};
+    transition: transform 150ms ease-out;
+
+    [data-expanded='true'] & {
+      transform: rotate(180deg);
+    }
+  `,
   footer: css`
     display: flex;
     flex: none;
@@ -92,6 +125,18 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
     uploading,
     zoom,
   } = model;
+
+  // The supplement block folds away by default — the reject's substance is the
+  // marked regions, and the phone should not scroll past an empty textarea to
+  // reach the submit button. It opens itself when there is already text or
+  // screenshots to show (a restored draft, a paste, prior feedback) — folded
+  // content the user cannot see is feedback waiting to be lost. Marked regions
+  // stay out of this: they have their own region-comments section above.
+  const [supplementExpanded, setSupplementExpanded] = useState(() =>
+    Boolean(comment.trim() || attachments.length > 0),
+  );
+  const hasSupplementContent = comment.trim().length > 0 || attachments.length > 0;
+  const hasRegionContent = annotations.length > 0;
 
   return (
     <div className={styles.body}>
@@ -179,7 +224,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
           </>
         )}
         <div className={styles.editor}>
-          {annotations.length > 0 && (
+          {hasRegionContent && (
             <>
               <Text strong>{t('acceptance.review.regionComments')}</Text>
               <MobileRegionNotes
@@ -191,26 +236,50 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
               />
             </>
           )}
-          <Text strong>{t('acceptance.review.supplement')}</Text>
-          <TextArea
-            aria-label={t('acceptance.review.supplement')}
-            autoSize={{ maxRows: 10, minRows: 4 }}
-            placeholder={t('acceptance.review.rejectPlaceholder')}
-            style={{ fontSize: 16 }}
-            value={comment}
-            onChange={(event) => model.setComment(event.target.value)}
-            onPaste={handlePaste}
-          />
-          <AttachmentUploadButton disabled={loading} onFiles={model.uploadFiles} />
-          <AttachmentStrip
-            attachments={attachments}
-            disabled={loading}
-            uploading={uploading}
-            onRemove={model.removeAttachment}
-          />
-          <Text fontSize={12} type={'secondary'}>
-            {t('acceptance.review.draftSaved')}
-          </Text>
+          {/* The supplement fold: the header is a real button (state is
+              perceivable and reachable by assistive tech), the summary tells
+              the folded reader what is already inside — an empty "optional"
+              block that silently holds typed words is how feedback gets lost. */}
+          <button
+            aria-expanded={supplementExpanded}
+            className={styles.toggle}
+            data-expanded={supplementExpanded}
+            type={'button'}
+            onClick={() => setSupplementExpanded((open) => !open)}
+          >
+            <Text strong>{t('acceptance.review.supplement')}</Text>
+            {!supplementExpanded && (
+              <Text fontSize={12} type={'secondary'}>
+                {hasSupplementContent
+                  ? t('acceptance.review.supplementFoldedDraft')
+                  : t('acceptance.review.supplementFoldedEmpty')}
+              </Text>
+            )}
+            <ChevronDown className={styles.toggleChevron} size={16} />
+          </button>
+          {supplementExpanded && (
+            <>
+              <TextArea
+                aria-label={t('acceptance.review.supplement')}
+                autoSize={{ maxRows: 10, minRows: 4 }}
+                placeholder={t('acceptance.review.rejectPlaceholder')}
+                style={{ fontSize: 16 }}
+                value={comment}
+                onChange={(event) => model.setComment(event.target.value)}
+                onPaste={handlePaste}
+              />
+              <AttachmentUploadButton disabled={loading} onFiles={model.uploadFiles} />
+              <AttachmentStrip
+                attachments={attachments}
+                disabled={loading}
+                uploading={uploading}
+                onRemove={model.removeAttachment}
+              />
+              <Text fontSize={12} type={'secondary'}>
+                {t('acceptance.review.draftSaved')}
+              </Text>
+            </>
+          )}
         </div>
       </div>
       <div className={styles.footer}>

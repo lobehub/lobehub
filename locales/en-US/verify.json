@@ -272,6 +272,8 @@
   "acceptance.review.revertToReject": "Change to reject with comment",
   "acceptance.review.submitFailed": "Could not submit. Your draft is saved; please try again.",
   "acceptance.review.supplement": "Additional notes (optional)",
+  "acceptance.review.supplementFoldedDraft": "Draft saved · tap to edit",
+  "acceptance.review.supplementFoldedEmpty": "Optional",
   "acceptance.review.writeFeedback": "Write feedback",
   "acceptance.review.zoomIn": "Zoom in",
   "acceptance.review.zoomOut": "Zoom out",

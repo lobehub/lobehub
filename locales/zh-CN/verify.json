@@ -272,6 +272,8 @@
   "acceptance.review.revertToReject": "改为拒绝并评论",
   "acceptance.review.submitFailed": "提交失败，草稿已保留，请重试。",
   "acceptance.review.supplement": "补充说明(可选)",
+  "acceptance.review.supplementFoldedDraft": "草稿已保存 · 点按填写",
+  "acceptance.review.supplementFoldedEmpty": "可选",
   "acceptance.review.writeFeedback": "填写反馈",
   "acceptance.review.zoomIn": "放大",
   "acceptance.review.zoomOut": "缩小",

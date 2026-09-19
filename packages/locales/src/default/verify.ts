@@ -395,6 +395,8 @@ export default {
   'acceptance.review.revertToAccept': 'Undo send-back · mark accepted',
   'acceptance.review.revertToReject': 'Change to reject with comment',
   'acceptance.review.supplement': 'Additional notes (optional)',
+  'acceptance.review.supplementFoldedDraft': 'Draft saved · tap to edit',
+  'acceptance.review.supplementFoldedEmpty': 'Optional',
   'acceptance.requirementEmpty': 'No acceptance goal recorded for this subject yet.',
   'acceptance.requirementEmptyEditable': 'No acceptance goal yet — click to add one.',
   'acceptance.requirementLabel': 'Acceptance goal',
