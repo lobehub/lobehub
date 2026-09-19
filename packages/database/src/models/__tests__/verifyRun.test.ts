@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, users, verifyRuns } from '../../schemas';
+import { acceptances, agentOperations, users, verifyRuns } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyRunModel } from '../verifyRun';
@@ -222,6 +222,38 @@ describe('VerifyRunModel.findStuckVerifying', () => {
     // Guards the guard: if the interloper stopped landing inside the window this
     // test would quietly stop covering the contaminated case it exists for.
     expect(restIds).toContain(interloper);
+  });
+
+  it('finds dead planned repairs but excludes live, successful and unconfirmed rounds', async () => {
+    const states = [
+      ['dead', 'error', true],
+      ['interrupted', 'interrupted', true],
+      ['live', null, true],
+      ['done', 'done', true],
+      ['draft', 'error', false],
+    ] as const;
+    const ids: Record<string, string> = {};
+    for (const [name, completionReason, confirmed] of states) {
+      const operationId = `op-planned-${name}`;
+      ids[name] = await buildRun(operationId);
+      if (confirmed) await new VerifyRunModel(serverDB, userId).confirmPlan(ids[name]);
+      await serverDB
+        .update(agentOperations)
+        .set({
+          completionReason,
+          parentOperationId: 'parent-operation',
+        })
+        .where(eq(agentOperations.id, operationId));
+      await backdate(ids[name], 10 * 60 * 1000);
+    }
+    const stuck = await VerifyRunModel.findStuckVerifying(
+      serverDB,
+      new Date(Date.now() - 5 * 60 * 1000),
+      { limit: 500 },
+    );
+    const found = stuck.map((run) => run.id);
+    expect(found).toEqual(expect.arrayContaining([ids.dead, ids.interrupted]));
+    for (const name of ['live', 'done', 'draft']) expect(found).not.toContain(ids[name]);
   });
 
   it('ignores operation-less rounds — there is no rollup to address', async () => {

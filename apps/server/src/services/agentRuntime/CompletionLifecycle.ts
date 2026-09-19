@@ -26,7 +26,11 @@ import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { parseAgentSignalMarker } from '@/server/services/agentSignal/operationMarker';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
-import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
+import {
+  instantiateVerifyPlanOnStart,
+  runVerifyOnCompletion,
+  settleFailedRepair,
+} from '@/server/services/verify';
 import {
   registerWorksForOperation,
   resolveRunWorkAccessScope,
@@ -1041,6 +1045,18 @@ export class CompletionLifecycle {
             this.workspaceId,
           ),
         );
+      }
+
+      if (reason === 'error' || reason === 'interrupted') {
+        await this.verifyPlanInstantiations.get(operationId);
+        after(async () => {
+          await settleFailedRepair(
+            this.serverDB,
+            runOrigin.userId || this.userId,
+            operationId,
+            this.workspaceId,
+          );
+        });
       }
 
       // Register entity files edited this round as `file` Works. On the

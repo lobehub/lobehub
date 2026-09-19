@@ -52,4 +52,19 @@ describe('CompletionLifecycle — verify gate scheduling', () => {
     expect(runVerify).toHaveBeenCalledTimes(1);
     expect(runVerify.mock.calls[0][2]).toMatchObject({ operationId: 'op-1' });
   });
+  it.each(['error', 'interrupted'])('settles an aborted repair on %s', async (reason) => {
+    const lifecycle = new CompletionLifecycle({} as any, 'user-1');
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+    const settle = vi.spyOn(verifyServices, 'settleFailedRepair').mockResolvedValue(false);
+
+    await lifecycle.dispatchHooks(
+      'repair-op',
+      { host: { hooks: [] }, origin: {}, status: 'error' },
+      reason,
+    );
+    await Promise.all(after.mock.calls.map(([callback]) => callback()));
+    expect(settle).toHaveBeenCalledWith(expect.anything(), 'user-1', 'repair-op', undefined);
+  });
 });

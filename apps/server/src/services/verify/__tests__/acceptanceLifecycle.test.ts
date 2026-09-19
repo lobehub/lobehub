@@ -323,7 +323,12 @@ describe('Verify acceptance lifecycle', () => {
     });
 
     expect(result).toEqual({ repairOperationId: 'repair-operation' });
-    expect(mocks.agentExec).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1' }));
+    expect(mocks.agentExec).toHaveBeenCalledWith(
+      expect.objectContaining({
+        additionalPluginIds: ['lobe-acceptance-evidence'],
+        taskId: 'task-1',
+      }),
+    );
     expect(mocks.acceptanceAttachPolicyRun).toHaveBeenCalledWith('repair-run', 'acceptance-1');
   });
 });

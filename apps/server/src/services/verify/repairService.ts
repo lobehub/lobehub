@@ -1,3 +1,4 @@
+import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/const/verify';
 import type { VerifyCheckItem, VerifyRunMetadata } from '@lobechat/types';
 import debug from 'debug';
@@ -12,6 +13,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 
 import { AcceptanceService } from './acceptanceService';
+import { settleFailedRepair } from './repairTerminal';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-repair');
@@ -111,6 +113,7 @@ export const createRepairRunner = (params: {
     // for the operation title / logs. `verifyMessageId` parents the new turn under
     // the verify card it responds to.
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
+      additionalPluginIds: [AcceptanceEvidenceIdentifier],
       agentId,
       appContext: { topicId },
       autoStart: true,
@@ -168,7 +171,7 @@ export const maybeAutoRepair = async (
   userId: string,
   operationId: string,
   workspaceId?: string,
-): Promise<void> => {
+): Promise<{ repairOperationId: string } | null | undefined> => {
   const operationModel = new AgentOperationModel(db, userId, workspaceId);
   const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
   const plan = (run?.plan ?? []) as VerifyCheckItem[];
@@ -210,7 +213,7 @@ export const maybeAutoRepair = async (
     userId,
     workspaceId,
   });
-  await new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(operationId, spawner);
+  return new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(operationId, spawner);
 };
 
 // `errored` = the verifier couldn't run (infra), so there's no delivery fault to
@@ -239,7 +242,11 @@ export class VerifyRepairService {
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    private readonly db: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
+  ) {
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.runModel = new VerifyRunModel(db, userId, workspaceId);
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
@@ -306,6 +313,9 @@ export class VerifyRepairService {
       }
     }
     await this.statusService.markRepairing(operationId);
+    // A fast startup failure can precede the plan/parent writes above. Reconcile
+    // after both exist as well as from the completion hook.
+    await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
     log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
 
     return spawned;
