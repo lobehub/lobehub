@@ -541,8 +541,8 @@ describe('runStep inline step loop', () => {
     const pending = continuationFor(3);
 
     mockExecuteStep.mockImplementation(async () => {
-      // Burn the whole inline budget inside the first step.
-      clock += 600_000;
+      // Burn the default inline budget inside the first step.
+      clock += 300_000;
       return {
         continuation: pending,
         nextStepScheduled: false,

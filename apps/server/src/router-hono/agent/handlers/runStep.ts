@@ -38,7 +38,7 @@ const log = debug('lobe-server:agent:run-step');
  * deadline the pending step goes back to the queue and a fresh invocation
  * picks it up.
  */
-const INLINE_STEP_START_DEADLINE_MS = Number(process.env.AGENT_INLINE_STEP_DEADLINE_MS ?? 450_000);
+const INLINE_STEP_START_DEADLINE_MS = Number(process.env.AGENT_INLINE_STEP_DEADLINE_MS ?? 300_000);
 
 /**
  * Longest the loop waits at a step boundary for work the previous step
