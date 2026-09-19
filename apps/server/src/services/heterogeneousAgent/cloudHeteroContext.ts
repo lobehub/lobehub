@@ -115,6 +115,25 @@ export function buildCloudHeteroContext(params: {
     );
   }
 
+  // --- LobeHub CLI availability (always on: the sandbox image ships `lh` and
+  // the runner injects a user-scoped LOBEHUB_JWT + LOBEHUB_SERVER, so nested
+  // `lh` calls authenticate as the current user out of the box) ---
+  workspaceLines.push(
+    '',
+    '## LobeHub CLI (`lh`)',
+    'The LobeHub CLI is pre-installed and pre-authenticated in this sandbox:',
+    '',
+    '- `LOBEHUB_JWT` and `LOBEHUB_SERVER` env vars are already set — every `lh` command runs',
+    '  as the current user without `lh login`, and sub-shells inherit them automatically.',
+    "- Use `lh` to operate the user's LobeHub data directly: documents (`lh doc`), knowledge",
+    '  base (`lh kb`), memory (`lh memory`), files (`lh file`), tasks (`lh task`), topics and',
+    '  messages (`lh topic`, `lh message`), notifications (`lh notify`), and search (`lh search`).',
+    '- Run `lh --help` or `lh <command> --help` to check exact usage before first use.',
+    '',
+    'Do NOT start nested agent runs (`lh hetero exec`) or long-lived daemons (`lh connect`) —',
+    'the wrapper running you already owns that lifecycle.',
+  );
+
   if (repos.length > 0) {
     workspaceLines.push(
       '',
