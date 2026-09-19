@@ -78,12 +78,15 @@ describe('createRunFacts', () => {
     expect(getUserSettings).toHaveBeenNthCalledWith(2, 'visitor-1');
   });
 
-  it('treats a failed settings read as no settings, without retrying', async () => {
+  it('keeps a failed settings read a failure, and does not retry it', async () => {
     getUserSettings.mockRejectedValue(new Error('database unavailable'));
     const runFacts = facts();
 
-    await expect(runFacts.userSettings()).resolves.toBeUndefined();
-    await expect(runFacts.userSettings()).resolves.toBeUndefined();
+    // Swallowing this would read as "nothing is set", which `execAgent` turns
+    // into memory enabled — the opposite of the conservative default a failed
+    // read must keep.
+    await expect(runFacts.userSettings()).rejects.toThrow('database unavailable');
+    await expect(runFacts.userSettings()).rejects.toThrow('database unavailable');
     expect(getUserSettings).toHaveBeenCalledTimes(1);
   });
 });

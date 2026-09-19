@@ -23,8 +23,9 @@ export interface RunFactsSource {
  * settings. Each of those is a round trip between the user pressing send and
  * the operation existing.
  *
- * Failures stay the fetcher's concern; this only remembers the answer —
- * including "there is none", so an unreachable device is not asked twice.
+ * This only remembers answers, including the unhappy ones: an unreachable
+ * device reports no system info and is not asked again, and a settings read
+ * that failed keeps failing for the turn rather than passing as an empty row.
  */
 export interface RunFacts {
   /** System info of a device routed for this run; one RPC per device and scope. */
@@ -36,8 +37,11 @@ export interface RunFacts {
    * A user's settings row. Asked for the market access token when resolving
    * LobeHub skills and for the memory / timezone settings of the turn.
    * Defaults to the run's own user; a share-visitor turn asks for the visitor.
+   *
+   * Rejects when the read fails, so a caller can tell that apart from a row
+   * that simply has nothing set; the failure is remembered, not retried.
    */
-  userSettings: (userId?: string) => Promise<UserSettings | undefined>;
+  userSettings: (userId?: string) => Promise<UserSettings>;
 }
 
 /** Remember the promise, not the value, so concurrent callers share one read. */
@@ -67,12 +71,16 @@ export const createRunFacts = ({ db, userId, workspaceId }: RunFactsSource): Run
     );
   });
 
+  // A failed read stays a failure: callers distinguish it from an empty row.
+  // `execAgent` leaves memory injection at its conservative default when this
+  // rejects, which swallowing here would silently turn into "memory enabled".
+  // The rejected promise is remembered too, so one turn does not retry.
   const readUserSettings = memoize(async (targetUserId: string) => {
     try {
       return await new UserModel(db, targetUserId).getUserSettings();
     } catch (error) {
       log('runFacts: failed to read settings for %s: %O', targetUserId, error);
-      return undefined;
+      throw error;
     }
   });
 

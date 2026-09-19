@@ -211,12 +211,10 @@ export class AiAgentService {
     // The turn's fact reader already holds this row when a run is underway
     // (`execAgent` asks it for the memory / timezone settings too); callers
     // outside a run read it themselves.
-    const settings = runFacts
-      ? await runFacts.userSettings()
-      : await new UserModel(this.db, this.userId).getUserSettings().catch(() => {
-          // non-fatal — MarketService will fall back to trustedClientToken
-          return undefined;
-        });
+    // Non-fatal either way — MarketService falls back to trustedClientToken.
+    const settings = await (
+      runFacts ? runFacts.userSettings() : new UserModel(this.db, this.userId).getUserSettings()
+    ).catch(() => undefined);
     const accessToken = (settings?.market as any)?.accessToken;
 
     this._marketService = new MarketService({
