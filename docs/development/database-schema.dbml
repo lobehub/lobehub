@@ -2869,6 +2869,7 @@ table quick_note_proposals {
     run_id [name: 'quick_note_proposals_run_id_idx']
     source_history_id [name: 'quick_note_proposals_source_history_id_idx']
     current_history_id [name: 'quick_note_proposals_current_history_id_idx']
+    accepted_history_id [name: 'quick_note_proposals_accepted_history_id_idx']
     (quick_note_id, decision_status, validity) [name: 'quick_note_proposals_decision_validity_idx']
     user_id [name: 'quick_note_proposals_user_id_idx']
     workspace_id [name: 'quick_note_proposals_workspace_id_idx']

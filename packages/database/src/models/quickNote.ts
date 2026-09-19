@@ -13,7 +13,7 @@ import type {
   QuickNoteRunKind,
   UserQuickNoteSettings,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import isEqual from 'fast-deep-equal';
 
@@ -954,7 +954,10 @@ export class QuickNoteModel {
               eq(quickNoteProposals.quickNoteId, quickNote.id),
               eq(quickNoteProposals.decisionStatus, 'pending'),
             ),
-          );
+          )
+          .orderBy(asc(quickNoteProposals.id))
+          // Keep the current revision referenced until its immutable input pin is committed.
+          .for('update');
 
         await tx.insert(quickNoteRunInputs).values([
           {
