@@ -149,6 +149,8 @@ export default {
   'LocalFile.action.open': 'Open',
   'LocalFile.action.preview': 'Preview',
   'LocalFile.action.showInFolder': 'Show in Folder',
+  'LocalFile.action.startTopic': 'Start new topic here',
+  'LocalFile.action.startTopicFailed': 'Failed to start a new topic in this folder.',
   'MaxTokenSlider.unlimited': 'Unlimited',
   'ModelSelect.featureTag.audio': 'This model supports audio input recognition.',
   'ModelSelect.featureTag.custom':
