@@ -1,16 +1,17 @@
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   Button,
   createModal,
+  DropdownMenu,
   ModalFooter,
   Select,
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { PlusIcon } from 'lucide-react';
+import { CheckIcon, ListFilter, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -186,36 +187,44 @@ export function ProjectDirectoryTopics({
     <Flexbox gap={8} paddingBlock={12}>
       <Flexbox horizontal align="center" justify="space-between" paddingInline={8}>
         <Text weight={600}>{t('topics.title')}</Text>
-        <ActionIcon
-          aria-label={t('sidebar.newConversation')}
-          disabled={directories.isLoading || !!directories.error}
-          icon={PlusIcon}
-          title={t('sidebar.newConversation')}
-          onClick={() =>
-            createModal({
-              title: t('sidebar.newConversation'),
-              content: (
-                <StartDirectoryContent
-                  coordinatorAgentId={coordinatorAgentId}
-                  directories={directories.data?.data ?? []}
-                  projectId={projectId}
-                />
-              ),
-              footer: null,
-              width: 520,
-            })
-          }
-        />
+        <Flexbox horizontal align="center" gap={2}>
+          <DropdownMenu
+            items={(['status', 'all', 'agent'] as const).map((value) => ({
+              icon: groupBy === value ? <Icon icon={CheckIcon} /> : <div />,
+              key: value,
+              label: t(`topics.group.${value}`),
+              onClick: () => setGroupBy(value),
+            }))}
+          >
+            <ActionIcon
+              aria-label={t('topics.groupBy')}
+              icon={ListFilter}
+              size="small"
+              title={t('topics.groupBy')}
+            />
+          </DropdownMenu>
+          <ActionIcon
+            aria-label={t('sidebar.newConversation')}
+            disabled={directories.isLoading || !!directories.error}
+            icon={PlusIcon}
+            title={t('sidebar.newConversation')}
+            onClick={() =>
+              createModal({
+                title: t('sidebar.newConversation'),
+                content: (
+                  <StartDirectoryContent
+                    coordinatorAgentId={coordinatorAgentId}
+                    directories={directories.data?.data ?? []}
+                    projectId={projectId}
+                  />
+                ),
+                footer: null,
+                width: 520,
+              })
+            }
+          />
+        </Flexbox>
       </Flexbox>
-      <Select
-        aria-label={t('topics.groupBy')}
-        value={groupBy}
-        options={(['status', 'all', 'agent'] as const).map((value) => ({
-          value,
-          label: t(`topics.group.${value}`),
-        }))}
-        onChange={(value) => setGroupBy(value ?? 'status')}
-      />
       {request.error || directories.error ? (
         <AsyncError
           error={request.error || directories.error}
