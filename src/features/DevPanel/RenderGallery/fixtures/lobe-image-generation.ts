@@ -87,6 +87,7 @@ export default defineFixtures({
                   displayName: 'GPT Image 2',
                   id: 'gpt-image-2',
                   parameters: {
+                    background: { default: 'auto' },
                     imageUrls: { default: [] },
                     prompt: { default: '' },
                     size: { default: '1024x1024' },
