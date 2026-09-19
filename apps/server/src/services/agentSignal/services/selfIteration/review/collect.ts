@@ -64,6 +64,8 @@ export interface NightlyReviewReadInput {
   agentId: string;
   /** Maximum summaries to return from the read adapter. */
   limit?: number;
+  /** User-local calendar date (`YYYY-MM-DD`) this review covers. */
+  localDate?: string;
   /** Review window end as an ISO string. */
   reviewWindowEnd: string;
   /** Review window start as an ISO string. */
@@ -465,6 +467,8 @@ export interface NightlyReviewReadAdapters {
 export interface CollectNightlyReviewContextInput {
   /** Stable agent id being reviewed. */
   agentId: string;
+  /** User-local calendar date (`YYYY-MM-DD`) this review covers. */
+  localDate?: string;
   /**
    * Maximum managed skill summaries in the returned context.
    *
@@ -946,6 +950,7 @@ export const createSelfReviewContextService = (
           const maxRelevantMemories = input.maxRelevantMemories ?? DEFAULT_MAX_RELEVANT_MEMORIES;
           const readInput = {
             agentId: input.agentId,
+            localDate: input.localDate,
             reviewWindowEnd: input.reviewWindowEnd,
             reviewWindowStart: input.reviewWindowStart,
             userId: input.userId,

@@ -269,13 +269,15 @@ const SelfReviewProposalBaseSnapshotSchema = z
   .object({
     absent: z.boolean().optional(),
     agentDocumentId: z.string().optional(),
+    agentId: z.string().optional(),
     contentHash: z.string().optional(),
     documentId: z.string().optional(),
     documentUpdatedAt: z.string().optional(),
     managed: z.boolean().optional(),
+    promptHash: z.string().optional(),
     skillName: z.string().optional(),
     targetTitle: z.string().optional(),
-    targetType: z.literal('skill').optional(),
+    targetType: z.enum(['agent_prompt', 'skill']).optional(),
     writable: z.boolean().optional(),
   })
   .passthrough();
