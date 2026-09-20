@@ -30,6 +30,8 @@ export enum RequestTrigger {
   Openapi = 'openapi',
   /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
   Scheduled = 'scheduled',
+  /** A provider event on a pull request (CI failure, review) woke the agent that opened it. */
+  Scm = 'scm',
   SemanticSearch = 'semantic_search',
   SignupEmailLLMReview = 'signup_email_llm_review',
   Topic = 'topic',
