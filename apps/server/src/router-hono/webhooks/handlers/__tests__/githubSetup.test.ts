@@ -80,7 +80,6 @@ describe('githubSetup', () => {
     expect(Object.fromEntries(location.searchParams)).toEqual({
       account: 'arvinxx',
       installed: 'ok',
-      scm: 'github',
     });
 
     const installation = await ScmInstallationModel.findByProviderInstallationId(

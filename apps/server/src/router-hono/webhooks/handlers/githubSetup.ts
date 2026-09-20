@@ -11,12 +11,11 @@ import { consumeScmInstallState } from '@/server/services/scm/oauth/stateStore';
 
 const log = debug('lobe-server:scm:github-setup');
 
-/** Where the user lands after connecting; the page reads `scm=github&installed=ok|error=…`. */
+/** Where the user lands after connecting; the page reads `installed=ok|error=…` from the query. */
 const SETTINGS_PATH = '/settings/integrations/github';
 
 const redirectToSettings = (origin: string, params: Record<string, string>, returnTo?: string) => {
   const target = new URL(returnTo ?? SETTINGS_PATH, origin);
-  target.searchParams.set('scm', 'github');
   for (const [key, value] of Object.entries(params)) target.searchParams.set(key, value);
   return Response.redirect(target, 302);
 };
