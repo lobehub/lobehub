@@ -88,7 +88,7 @@ const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
 
   return opts.next({
     ctx: {
-      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, ctx.workspaceId),
+      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
     },
   });
 });
@@ -106,7 +106,7 @@ const workspaceAgentShareAdminProcedure = agentShareProcedure
 interface AgentSharePermissionContext {
   serverDB: LobeChatDatabase;
   userId: string;
-  workspaceId?: string;
+  workspaceId?: string | null;
   workspacePermissionCodes?: string[];
 }
 

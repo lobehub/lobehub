@@ -581,6 +581,89 @@ describe('TopicModel', () => {
   });
 
   describe('queryBySender', () => {
+    it('keeps Workspace visitor topics visible after an owner handover', async () => {
+      const workspaceId = 'topic-share-handover-workspace';
+      const senderId = 'topic-share-handover-visitor';
+
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Topic share handover workspace',
+        primaryOwnerId: userId,
+        slug: 'topic-share-handover-workspace',
+      });
+      await serverDB.insert(agents).values({
+        id: 'agent-share-handover',
+        userId,
+        workspaceId,
+      });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({ agentId: 'agent-share-handover', visibility: 'link', workspaceId })
+        .returning();
+      await serverDB.insert(topics).values({
+        agentId: 'agent-share-handover',
+        agentShareId: share.id,
+        id: 't-visitor-handover',
+        senderId,
+        title: 'handover visitor topic',
+        userId,
+        workspaceId,
+      });
+
+      const oldOwnerModel = new TopicModel(serverDB, userId, workspaceId);
+      const newOwnerModel = new TopicModel(serverDB, otherUserId, workspaceId);
+
+      await expect(
+        newOwnerModel.queryBySender({ senderId, shareId: share.id }),
+      ).resolves.toHaveLength(1);
+      await expect(newOwnerModel.countBySender({ senderId, shareId: share.id })).resolves.toBe(1);
+      await expect(newOwnerModel.countShareVisitors({ shareId: share.id })).resolves.toEqual({
+        topicCount: 1,
+        visitorCount: 1,
+      });
+
+      // The old owner remains in the same raw Workspace scope as a sanity
+      // check that this is not a special case for the replacement owner.
+      await expect(
+        oldOwnerModel.queryBySender({ senderId, shareId: share.id }),
+      ).resolves.toHaveLength(1);
+    });
+
+    it('keeps personal share visitor topics bound to their owner', async () => {
+      await serverDB.insert(agents).values({ id: 'agent-share-personal-scope', userId });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({ agentId: 'agent-share-personal-scope', visibility: 'link' })
+        .returning();
+      await serverDB.insert(topics).values({
+        agentId: 'agent-share-personal-scope',
+        agentShareId: share.id,
+        id: 't-visitor-personal-scope',
+        senderId: 'topic-share-personal-visitor',
+        title: 'personal visitor topic',
+        userId,
+      });
+
+      const otherOwnerModel = new TopicModel(serverDB, otherUserId);
+
+      await expect(
+        otherOwnerModel.queryBySender({
+          senderId: 'topic-share-personal-visitor',
+          shareId: share.id,
+        }),
+      ).resolves.toEqual([]);
+      await expect(
+        otherOwnerModel.countBySender({
+          senderId: 'topic-share-personal-visitor',
+          shareId: share.id,
+        }),
+      ).resolves.toBe(0);
+      await expect(otherOwnerModel.countShareVisitors({ shareId: share.id })).resolves.toEqual({
+        topicCount: 0,
+        visitorCount: 0,
+      });
+    });
+
     it('projects only the visitor-safe runningOperation fields, stripping the rest of metadata', async () => {
       await serverDB.insert(agents).values({ id: 'agent-share-running', userId });
       const [share] = await serverDB
