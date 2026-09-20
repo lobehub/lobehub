@@ -1080,6 +1080,59 @@ describe('AgentRuntimeService', () => {
       expect(mockQueueService.scheduleMessage).toHaveBeenCalled();
     });
 
+    describe('frozen credential snapshot', () => {
+      const frozen = {
+        credentials: [{ key: 'OPENAI', name: 'OpenAI', type: 'apiKey' }],
+        workspaceId: undefined,
+      };
+
+      /**
+       * Snapshot the state AT the save, not the object afterwards: the runtime
+       * keeps mutating `newState`, so a later clear would otherwise read back as
+       * if it had been persisted.
+       */
+      const runStepWithToolCall = async (apiName: string) => {
+        const stateWithSnapshot = { ...mockState, operationCredentials: frozen };
+        mockCoordinator.loadAgentState.mockResolvedValue(stateWithSnapshot);
+
+        let persisted: string | undefined;
+        mockCoordinator.saveStepResult.mockImplementationOnce(async (_id: string, result: any) => {
+          persisted = JSON.stringify(result.newState);
+        });
+
+        const mockRuntime = {
+          step: vi.fn().mockResolvedValue({
+            events: [],
+            newState: { ...stateWithSnapshot, status: 'running', stepCount: 2 },
+            nextContext: {
+              payload: { toolCall: { apiName, identifier: 'lobe-creds' } },
+              phase: 'tool_result',
+            },
+          }),
+        };
+        vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+        await service.executeStep(mockParams);
+
+        expect(persisted).toBeDefined();
+        return JSON.parse(persisted!);
+      };
+
+      it('drops the snapshot in the state it persists after the run saves a credential', async () => {
+        const persistedState = await runStepWithToolCall('saveCreds');
+
+        expect(persistedState.operationCredentials).toBeUndefined();
+      });
+
+      it('keeps the snapshot when the creds call only read', async () => {
+        const persistedState = await runStepWithToolCall('injectCredsToSandbox');
+
+        expect(persistedState.operationCredentials).toEqual({
+          credentials: frozen.credentials,
+        });
+      });
+    });
+
     it('should resume async tools with the last pending tool result as parentMessageId', async () => {
       const pendingTools = [
         {

@@ -2203,6 +2203,18 @@ export class AgentRuntimeService {
           }
         }
 
+        // A credential the run just saved or connected changes the list the next
+        // step must show, so the snapshot frozen at creation no longer holds.
+        // Dropped before the save below — that write is what the next step
+        // reloads, and nothing else persists the state on a plain step.
+        if (
+          stepChangedCredentials(stepResult.nextContext) &&
+          stepResult.newState.operationCredentials
+        ) {
+          stepResult.newState.operationCredentials = undefined;
+          log('[%s][%d] Credentials changed in-run; dropped the snapshot', operationId, stepIndex);
+        }
+
         // Save state, coordinator will handle event sending automatically
         await this.coordinator.saveStepResult(operationId, {
           ...stepResult,
@@ -2344,17 +2356,6 @@ export class AgentRuntimeService {
           stepIndex,
           stepResult,
         });
-
-        // A credential the run just saved or connected changes the list the
-        // next step must show, so the snapshot frozen at creation no longer
-        // holds. Drop it and let the remaining steps read the list live.
-        if (
-          stepChangedCredentials(stepPresentationData.toolsResult) &&
-          stepResult.newState.operationCredentials
-        ) {
-          stepResult.newState.operationCredentials = undefined;
-          log('[%s][%d] Credentials changed in-run; dropped the snapshot', operationId, stepIndex);
-        }
 
         // Update step tracking in state metadata for afterStep hooks (cross-step accumulator)
         const hasAfterStepHooks = stepResult.newState.host?.hooks?.some(
