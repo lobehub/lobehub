@@ -140,6 +140,15 @@ For mapping changes, generation operations, repeat/resume behavior, or deploymen
 [Mapping migration workflow](references/mapping-migrations.md). It routes to the public command guide
 and adds recovery, automation, and local Docker rehearsal rules.
 
+- Treat managed and Serverless Elasticsearch APIs as capability-constrained. Create operational
+  metadata and control indexes with the smallest portable request, and add topology, storage, or
+  index settings only after verifying that the target service supports them; settings accepted by a
+  self-managed cluster may be rejected by a managed service.
+- Make idempotent Elasticsearch resource creation depend on the structured error type, such as
+  `resource_already_exists_exception`, not a broad HTTP status range. Preserve any other creation
+  failure and stop before follow-up reads or mutations instead of turning a rejected request into a
+  misleading verification error.
+
 Elasticsearch cannot change an existing field's type or index-time analyzer in place. The code
 declares the target and Elasticsearch records the live state, per entity:
 
