@@ -117,6 +117,14 @@ export const createChatStreamFallbackResponse = async ({
               }
               return;
             } catch (error) {
+              // A deferred consumer callback can reject before EOF. Cancelling
+              // first lets the observer reach a terminal state without waiting
+              // forever inside the current pull.
+              try {
+                await active.reader.cancel(error);
+              } catch {
+                // The reader may already be errored and the observer terminal.
+              }
               const result = await active.observation.finished;
               if (await shouldFallbackTerminalAttempt(result)) {
                 await activateNextAttempt();

@@ -897,6 +897,37 @@ describe('createRouterRuntime', () => {
       expect(calls).toBe(2);
     });
 
+    it('surfaces a committed callback error without waiting for stream completion', async () => {
+      const callbackError = new Error('consumer callback failed');
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) =>
+          createChatResponse(options, { text: 'partial' });
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: vi.fn(),
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const response = await new Runtime().chat(
+        { messages: [], model: 'gpt-4' },
+        { callback: { onText: vi.fn().mockRejectedValue(callbackError) } },
+      );
+
+      const outcome = await Promise.race([
+        response.text().then(
+          () => 'completed',
+          (error) => error,
+        ),
+        new Promise((resolve) => setTimeout(() => resolve('timeout'), 100)),
+      ]);
+
+      expect(outcome).toBeInstanceOf(Error);
+      expect((outcome as Error).message).toContain(callbackError.message);
+    });
+
     it.each([
       ['text', { text: 'partial' }],
       ['reasoning', { thinking: 'partial reasoning' }],
