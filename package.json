@@ -42,6 +42,8 @@
     "apps/workbench"
   ],
   "scripts": {
+    "alint": "alint",
+    "alint:setup": "bun .agents/alint/setup.ts",
     "build": "bun run build:spa && bun run build:spa:auth && bun run build:spa:workbench && bun run build:spa:share && bun run build:spa:copy && bun run build:next",
     "build:analyze": "cross-env NODE_OPTIONS=--max-old-space-size=81920 next experimental-analyze",
     "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:auth && pnpm run build:spa:workbench && pnpm run build:spa:share && cross-env WORKBENCH_REQUIRED=1 SHARE_REQUIRED=1 pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build",
@@ -486,6 +488,7 @@
     "zustand-utils": "^2.1.1"
   },
   "devDependencies": {
+    "@alint-js/cli": "0.7.1",
     "@commitlint/cli": "^19.8.1",
     "@edge-runtime/vm": "^5.0.0",
     "@huggingface/tasks": "^0.19.90",

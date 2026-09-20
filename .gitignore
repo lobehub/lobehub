@@ -173,3 +173,7 @@ docs/superpowers/
 # synthesized by plugins/vite/completionSounds.ts
 public/sounds/
 apps/desktop/resources/sounds/
+
+# alint: local provider setup (holds the API key) and result cache
+.alint/
+.alintcache

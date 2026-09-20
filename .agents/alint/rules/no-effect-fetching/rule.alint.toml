@@ -1,0 +1,18 @@
+name = "no-effect-fetching"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component or hook file from the LobeHub web client.
+
+Team rule (data-fetching-architecture): remote data is read through SWR hooks (`useSWR`, `useClientDataSWR`, `useOnlyFetchOnceSWR`, or the `useFetch*` / `useSWR*` hooks that zustand stores expose), never by calling a service inside `useEffect` and copying the result into `useState`. The SWR path gives request dedupe, cache, revalidation, and shared loading/error state; an effect-based fetch loses all of that, races on unmount, and refetches on every mount.
+
+Report each `useEffect` (or `useLayoutEffect`) whose body, directly or through an async helper defined in the same file, performs a remote read and stores the result in component state: a `*Service.*` call that hits the server, a tRPC client call (`lambdaClient`, `edgeClient`, `trpc.*`), or `fetch`. Use the line of the `useEffect` call. Name the call in the message. In the suggestion, sketch the SWR hook shape (key, fetcher, and which local state it replaces).
+
+Do not report effects that:
+- only subscribe or unsubscribe to events, timers, observers, or websocket messages;
+- write (mutations, analytics, telemetry) in response to a user action or lifecycle;
+- sync props or URL state into local state;
+- read from a zustand store, `localStorage`, or a synchronous source;
+- talk to a local-only bridge rather than the server: Electron IPC (`electronSystemService`, `autoUpdateService`, `desktop*Service`, `window.electron`, anything backed by `ipcRenderer`), the local file system, or the device gateway.
+
+If uncertain, use low confidence rather than forcing a finding.
+"""
