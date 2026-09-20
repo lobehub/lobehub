@@ -18,11 +18,15 @@ const buildState = (
 ): AgentState => state as AgentState;
 
 const webBrowsing = {
-  api: [{ name: 'search', parameters: { properties: {}, type: 'object' } }],
+  api: [{ description: 'Search the web', name: 'search', parameters: {} }],
   identifier: 'lobe-web-browsing',
+  meta: { title: 'Web Browsing' },
   type: 'builtin',
-};
-const searchTool = { function: { name: 'lobe-web-browsing____search' }, type: 'function' };
+} as unknown as NonNullable<AgentState['toolManifestMap']>[string];
+const searchTool = {
+  function: { name: 'lobe-web-browsing____search' },
+  type: 'function',
+} as unknown as NonNullable<AgentState['tools']>[number];
 
 describe('resolveServerCallLlmTooling', () => {
   // Regression: `serverCallLlmContextBuilder` needs this to compute

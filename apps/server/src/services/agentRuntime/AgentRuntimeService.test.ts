@@ -503,7 +503,7 @@ describe('AgentRuntimeService', () => {
           manifestMap,
           sourceMap: { 'lobe-web-browsing': 'builtin' },
           tools: [{ function: { name: 'search' }, type: 'function' }],
-        } as OperationCreationParams['toolSet'],
+        } as unknown as OperationCreationParams['toolSet'],
       });
 
       const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
