@@ -190,6 +190,24 @@ Elasticsearch 单独预留至少 2 GB 内存。Linux 宿主机必须设置 `vm.m
 Cloud，请不要在 `COMPOSE_PROFILES` 中启用 `elasticsearch` profile，在 `.env` 中设置 `ES_URL` 和 `ES_API_KEY`，
 且不要设置 `ES_ALLOW_INSECURE_HTTP`；第 2 到第 4 步完全相同。
 
+### 重建当前 Elasticsearch schema generation
+
+如果投影或 capture 行为的改动要求重新生成全部历史文档，先升级所有应用和持续同步 worker，再从 PostgreSQL 创建一个 mapping 版本不变的新物理 generation：
+
+```bash
+docker compose run --rm fts-search-reindex \
+  --apply --rebuild-current --entity=messages --yes
+```
+
+命令会输出 run ID，以及类似 `<namespace>-messages-v1-r<run-id>` 的索引名。若任务中断，使用相同命令并增加 `--run-id=<run-id>` 继续。持续同步会同时写入现有 generation 和重建 generation；不要暂停应用写入或同步 worker。回填显示 `ready_for_incremental_sync` 且 `messages` Outbox 空闲后，按精确物理索引名切换：
+
+```bash
+docker compose run --rm fts-search-reindex \
+  --promote --entity=messages --generation=<精确索引名> --yes
+```
+
+alias 和逻辑 schema 版本保持不变。观察期内保留旧 generation，出现问题时可按其精确名称切回。确认无需回滚后，再依次执行 `--retire --entity=messages --yes` 和 `--purge --entity=messages --yes`。
+
 这一模式的安全边界：`ES_ALLOW_INSECURE_HTTP=true` 允许向非回环主机使用明文 HTTP，并允许省略
 `ES_API_KEY`；但它永远不允许通过明文 HTTP 发送 API 密钥，因此不要把它与 `ES_API_KEY` 和 `http://`
 地址同时使用。Elasticsearch 服务没有公开端口，也不要为它添加端口，因为该节点接受未认证的请求。Elastic Cloud

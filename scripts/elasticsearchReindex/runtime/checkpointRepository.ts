@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
@@ -14,6 +14,7 @@ import { z } from 'zod';
 import {
   getFtsSearchIndexAlias,
   getFtsSearchPhysicalIndexName,
+  parseFtsSearchPhysicalIndexName,
 } from '../../../packages/database/src/repositories/ftsSearchDocument';
 
 export interface FtsSearchReindexBatchFailure {
@@ -155,14 +156,19 @@ const checkpointSchema = z
        * same alias is also a valid target; a newer one or a foreign index never is.
        */
       const alias = getFtsSearchIndexAlias(checkpoint.run.namespace, progress.entity);
-      const suffix = progress.physicalIndex.startsWith(`${alias}-v`)
-        ? progress.physicalIndex.slice(alias.length + 2)
-        : '';
-      const version = /^\d+$/.test(suffix) ? Number(suffix) : Number.NaN;
-      if (!(version >= 1 && version <= checkpoint.run.schemaVersion)) {
+      const identity = parseFtsSearchPhysicalIndexName(alias, progress.physicalIndex);
+      const validVersion =
+        identity &&
+        identity.builtSchemaVersion >= 1 &&
+        identity.builtSchemaVersion <= checkpoint.run.schemaVersion;
+      const validRunIdentity =
+        !identity?.reindexRunId ||
+        identity.builtSchemaVersion < checkpoint.run.schemaVersion ||
+        identity.reindexRunId === checkpoint.run.id;
+      if (!validVersion || !validRunIdentity) {
         context.addIssue({
           code: 'custom',
-          message: `Expected physical index ${alias}-v<n> with n <= ${checkpoint.run.schemaVersion}`,
+          message: `Expected physical index ${alias}-v<n>[-r<run-id>] with n <= ${checkpoint.run.schemaVersion} and the checkpoint run ID on same-version rebuilds`,
           path: ['progress', progress.entity, 'physicalIndex'],
         });
       }
@@ -176,10 +182,10 @@ const errorMessage = (error: unknown) =>
 
 const now = () => new Date().toISOString();
 
-const checkpointFileName = (namespace: string, schemaVersion: number) => {
+const checkpointFileName = (namespace: string, schemaVersion: number, runId?: string) => {
   const safeNamespace = namespace.replaceAll(/[^\w-]/g, '_').slice(0, 80) || 'search';
   const namespaceHash = createHash('sha256').update(namespace).digest('hex').slice(0, 12);
-  return `${CHECKPOINT_FILE_PREFIX}${safeNamespace}-${namespaceHash}-v${schemaVersion}.json`;
+  return `${CHECKPOINT_FILE_PREFIX}${safeNamespace}-${namespaceHash}-v${schemaVersion}${runId ? `-r${runId}` : ''}.json`;
 };
 
 const stateOf = ({ progress, run }: FtsSearchReindexCheckpointFile): FtsSearchReindexRunState => ({
@@ -221,18 +227,39 @@ export class FtsSearchReindexFileRepository {
     this.stateDirectory = path.resolve(options.stateDirectory);
   }
 
-  private checkpointPath(namespace: string, schemaVersion: number) {
-    return path.join(this.stateDirectory, checkpointFileName(namespace, schemaVersion));
+  private checkpointPath(namespace: string, schemaVersion: number, runId?: string) {
+    return path.join(this.stateDirectory, checkpointFileName(namespace, schemaVersion, runId));
   }
 
   private async findCheckpointPath(runId: string): Promise<string | undefined> {
     const checkpointPath = this.runPaths.get(runId);
-    if (!checkpointPath) return;
-    const checkpoint = await this.readCheckpoint(checkpointPath);
-    if (checkpoint.run.id !== runId) {
-      throw new Error(`FTS reindex checkpoint run ID changed unexpectedly: ${checkpointPath}`);
+    if (checkpointPath) {
+      const checkpoint = await this.readCheckpoint(checkpointPath);
+      if (checkpoint.run.id !== runId) {
+        throw new Error(`FTS reindex checkpoint run ID changed unexpectedly: ${checkpointPath}`);
+      }
+      return checkpointPath;
     }
-    return checkpointPath;
+    const files = await readdir(this.stateDirectory).catch((error) => {
+      if (isMissingFileError(error)) return [];
+      throw error;
+    });
+    const matching = files.filter(
+      (file) => file.startsWith(CHECKPOINT_FILE_PREFIX) && file.endsWith(`-r${runId}.json`),
+    );
+    if (matching.length > 1) {
+      throw new Error(`Multiple FTS reindex checkpoints claim run ${runId}`);
+    }
+    if (matching.length === 0) return;
+    const discoveredPath = path.join(this.stateDirectory, matching[0]);
+    const checkpoint = await this.readCheckpoint(discoveredPath);
+    if (checkpoint.run.id !== runId) {
+      throw new Error(
+        `FTS reindex checkpoint run ID does not match its filename: ${discoveredPath}`,
+      );
+    }
+    this.runPaths.set(runId, discoveredPath);
+    return discoveredPath;
   }
 
   private stateOf(
@@ -460,6 +487,7 @@ export class FtsSearchReindexFileRepository {
     schemaVersion: number,
     entities: readonly FtsSearchDocumentEntity[] = FTS_SEARCH_DOCUMENT_ENTITIES,
     physicalIndexes: Partial<Record<FtsSearchDocumentEntity, string>> = {},
+    runId?: string,
   ): Promise<FtsSearchReindexRunState> {
     if (entities.length === 0)
       throw new Error('A reindex generation must cover at least one entity');
@@ -499,7 +527,7 @@ export class FtsSearchReindexFileRepository {
       }
       return changed;
     };
-    const checkpointPath = this.checkpointPath(namespace, schemaVersion);
+    const checkpointPath = this.checkpointPath(namespace, schemaVersion, runId);
     const existing = await this.readCheckpointIfExists(checkpointPath);
     if (existing) {
       this.assertCaptureFingerprint(existing, await this.readCaptureFingerprint());
@@ -550,7 +578,7 @@ export class FtsSearchReindexFileRepository {
           baseRevision,
           captureFingerprint,
           createdAt: timestamp,
-          id: randomUUID(),
+          id: runId ?? randomUUID(),
           namespace,
           schemaVersion,
           status: 'backfilling',
@@ -565,16 +593,55 @@ export class FtsSearchReindexFileRepository {
   async getTargetRun(
     namespace: string,
     schemaVersion: number,
+    runId?: string,
   ): Promise<FtsSearchReindexRunState | undefined> {
-    const checkpointPath = this.checkpointPath(namespace, schemaVersion);
+    const checkpointPath = this.checkpointPath(namespace, schemaVersion, runId);
     const checkpoint = await this.readCheckpointIfExists(checkpointPath);
     return checkpoint ? this.stateOf(checkpointPath, checkpoint) : undefined;
+  }
+
+  async getGenerationRun(
+    namespace: string,
+    schemaVersion: number,
+    runId: string | null,
+  ): Promise<FtsSearchReindexRunState | undefined> {
+    if (!runId) return this.getTargetRun(namespace, schemaVersion);
+    const rebuilt = await this.getTargetRun(namespace, schemaVersion, runId);
+    if (rebuilt) return rebuilt;
+    const canonical = await this.getTargetRun(namespace, schemaVersion);
+    return canonical?.run.id === runId ? canonical : undefined;
+  }
+
+  async listRuns(namespace?: string): Promise<FtsSearchReindexRunState[]> {
+    const files = await readdir(this.stateDirectory).catch((error) => {
+      if (isMissingFileError(error)) return [];
+      throw error;
+    });
+    const runs: FtsSearchReindexRunState[] = [];
+    for (const file of files.filter(
+      (item) => item.startsWith(CHECKPOINT_FILE_PREFIX) && item.endsWith('.json'),
+    )) {
+      const checkpointPath = path.join(this.stateDirectory, file);
+      const checkpoint = await this.readCheckpoint(checkpointPath);
+      if (namespace && checkpoint.run.namespace !== namespace) continue;
+      runs.push(this.stateOf(checkpointPath, checkpoint));
+    }
+    return runs.sort((left, right) => left.run.createdAt.localeCompare(right.run.createdAt));
   }
 
   async getRun(runId: string): Promise<FtsSearchReindexRunState | undefined> {
     const checkpointPath = await this.findCheckpointPath(runId);
     if (!checkpointPath) return;
     return this.stateOf(checkpointPath, await this.readCheckpoint(checkpointPath));
+  }
+
+  async assertRunCaptureFingerprint(runId: string): Promise<void> {
+    const checkpointPath = await this.findCheckpointPath(runId);
+    if (!checkpointPath) throw new Error(`Missing reindex run ${runId}`);
+    this.assertCaptureFingerprint(
+      await this.readCheckpoint(checkpointPath),
+      await this.readCaptureFingerprint(),
+    );
   }
 
   async listUnresolvedFailures(runId: string, entity?: FtsSearchDocumentEntity) {

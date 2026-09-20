@@ -13,6 +13,7 @@ import {
   FtsSearchDocumentBuilder,
   getFtsSearchIndexAlias,
   getFtsSearchIndexSchemaVersion,
+  getFtsSearchPhysicalIndexName,
 } from '../../packages/database/src/repositories/ftsSearchDocument';
 import { FtsSearchSyncOutboxRepository } from '../../packages/database/src/repositories/ftsSearchSyncOutbox';
 import * as schema from '../../packages/database/src/schemas';
@@ -90,17 +91,39 @@ const readNonNegativeIntegerArgument = (name: string) => {
   return value;
 };
 
+const readStringArgument = (name: string) => {
+  const argumentsForName = process.argv.filter((item) => item.startsWith(`${name}=`));
+  if (argumentsForName.length > 1) throw new Error(`${name} may only be provided once`);
+  const value = argumentsForName[0]?.slice(name.length + 1);
+  if (value !== undefined && value.length === 0) throw new Error(`${name} requires a value`);
+  return value;
+};
+
+const readUuidArgument = (name: string) => {
+  const value = readStringArgument(name);
+  if (
+    value !== undefined &&
+    !/^[\da-f]{8}-[\da-f]{4}-[1-8][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(value)
+  ) {
+    throw new Error(`${name} must be a UUID`);
+  }
+  return value?.toLowerCase();
+};
+
 const args = new Set(process.argv.slice(2));
 const { command, releaseLockOwner } = resolveFtsSearchMigrationCommand(process.argv.slice(2));
 const apply = args.has('--apply');
 const startup = args.has('--startup');
 const freshRun = args.has('--fresh-run');
 const inPlace = args.has('--in-place');
+const rebuildCurrent = args.has('--rebuild-current');
 const promote = args.has('--promote');
 const retire = args.has('--retire');
 const purge = args.has('--purge');
 const skipFailureArgument = process.argv.find((item) => item.startsWith('--skip-failure='));
 const promoteVersion = readPositiveIntegerArgument('--version');
+const promoteGenerationName = readStringArgument('--generation');
+const rebuildRunId = readUuidArgument('--run-id');
 const batchSize = readPositiveIntegerArgument('--batch-size');
 const bulkConcurrency = readPositiveIntegerArgument('--bulk-concurrency');
 const bulkMaxBytes = readPositiveIntegerArgument('--bulk-max-bytes');
@@ -120,6 +143,7 @@ const knownArguments = new Set([
   '--apply',
   '--fresh-run',
   '--in-place',
+  '--rebuild-current',
   '--promote',
   '--retire',
   '--purge',
@@ -140,6 +164,7 @@ const unknownArgument = process.argv
       !item.startsWith('--entity=') &&
       !item.startsWith('--entity-concurrency=') &&
       !item.startsWith('--entity-range-concurrency=') &&
+      !item.startsWith('--generation=') &&
       !item.startsWith('--elasticsearch-api-key-env=') &&
       !item.startsWith('--elasticsearch-url-env=') &&
       !item.startsWith('--expected-elasticsearch-host-prefix=') &&
@@ -147,6 +172,7 @@ const unknownArgument = process.argv
       !item.startsWith('--max-request-retries=') &&
       !item.startsWith('--request-timeout-ms=') &&
       !item.startsWith('--retry-base-delay-ms=') &&
+      !item.startsWith('--run-id=') &&
       !item.startsWith('--release-lock=') &&
       !item.startsWith('--skip-failure=') &&
       !item.startsWith('--telemetry-environment=') &&
@@ -277,8 +303,11 @@ const declaredGenerations = (): Array<[number, FtsSearchDocumentEntity[]]> => {
   return [...groups].sort(([left], [right]) => left - right);
 };
 
-const readCheckpoint = (checkpointNamespace: string, schemaVersion: number) =>
-  repository.getTargetRun(checkpointNamespace, schemaVersion);
+const readCheckpoint = (
+  checkpointNamespace: string,
+  schemaVersion: number,
+  reindexRunId: string | null,
+) => repository.getGenerationRun(checkpointNamespace, schemaVersion, reindexRunId);
 
 const generationAuditValue = (generation: FtsSearchGenerationSummary) => ({
   ...generation,
@@ -295,9 +324,7 @@ const generationAuditValue = (generation: FtsSearchGenerationSummary) => ({
 
 const readStatus = async () => {
   const runs = [];
-  for (const [schemaVersion] of declaredGenerations()) {
-    const state = await repository.getTargetRun(namespace, schemaVersion);
-    if (!state) continue;
+  for (const state of await repository.listRuns(namespace)) {
     const unresolvedFailures = await repository.listUnresolvedFailures(state.run.id);
     runs.push({
       baseRevision: state.run.baseRevision,
@@ -405,10 +432,12 @@ const run = async () => {
       installCaptureInfrastructure: () => outbox.installCaptureInfrastructure(),
       runWithLockRetry,
       run: async () => {
-        const state = await repository.getTargetRun(
-          namespace,
-          getFtsSearchIndexSchemaVersion(failureReference.entity),
-        );
+        const state = rebuildRunId
+          ? await repository.getRun(rebuildRunId)
+          : await repository.getTargetRun(
+              namespace,
+              getFtsSearchIndexSchemaVersion(failureReference.entity),
+            );
         if (!state) throw new Error(`No reindex run exists for namespace ${namespace}`);
         const skipped = await repository.skipFailure(
           state.run.id,
@@ -438,9 +467,11 @@ const run = async () => {
             const result = await promoteGeneration({
               client,
               entity,
+              generation: promoteGenerationName,
               namespace,
               outboxStats: await outbox.stats(),
               readCheckpoint,
+              validateCheckpointCapture: (runId) => repository.assertRunCaptureFingerprint(runId),
               version: promoteVersion,
             });
             console.log(JSON.stringify({ ...result, entity, type: 'generation_promoted' }));
@@ -541,6 +572,7 @@ const run = async () => {
               namespace,
               outboxStats: await outbox.stats(),
               readCheckpoint,
+              validateCheckpointCapture: (runId) => repository.assertRunCaptureFingerprint(runId),
             });
             console.log(JSON.stringify({ ...result, entity, type: 'generation_promoted' }));
           },
@@ -609,12 +641,18 @@ const run = async () => {
   const generations = declaredGenerations().filter(([, generationEntities]) =>
     generationEntities.some((entity) => requestedEntities.has(entity)),
   );
+  if (rebuildCurrent && rebuildRunId && generations.length !== 1) {
+    throw new Error('--run-id can only resume entities from one declared schema version');
+  }
   for (const [schemaVersion, generationEntities] of generations) {
+    const processEntities = generationEntities.filter((entity) => requestedEntities.has(entity));
     await applyGeneration({
       client,
       endpointHostname,
-      generationEntities,
-      processEntities: generationEntities.filter((entity) => requestedEntities.has(entity)),
+      generationEntities: rebuildCurrent ? processEntities : generationEntities,
+      processEntities,
+      rebuildCurrentForGeneration: rebuildCurrent,
+      rebuildRunIdForGeneration: rebuildRunId,
       schemaVersion,
     });
   }
@@ -626,6 +664,8 @@ const applyGeneration = async ({
   generationEntities,
   freshRunForGeneration = freshRun,
   processEntities,
+  rebuildCurrentForGeneration = false,
+  rebuildRunIdForGeneration,
   schemaVersion,
 }: {
   client: FtsSearchReindexHttpClient;
@@ -633,15 +673,81 @@ const applyGeneration = async ({
   generationEntities: FtsSearchDocumentEntity[];
   freshRunForGeneration?: boolean;
   processEntities: FtsSearchDocumentEntity[];
+  rebuildCurrentForGeneration?: boolean;
+  rebuildRunIdForGeneration?: string;
   schemaVersion: number;
 }) => {
-  const existing = await repository.getTargetRun(namespace, schemaVersion);
+  const existing = rebuildCurrentForGeneration
+    ? rebuildRunIdForGeneration
+      ? await repository.getRun(rebuildRunIdForGeneration)
+      : undefined
+    : await repository.getTargetRun(namespace, schemaVersion);
+  if (
+    existing &&
+    (existing.run.namespace !== namespace || existing.run.schemaVersion !== schemaVersion)
+  ) {
+    throw new Error(
+      `Reindex run ${existing.run.id} belongs to ${existing.run.namespace} v${existing.run.schemaVersion}, not ${namespace} v${schemaVersion}`,
+    );
+  }
+  if (rebuildCurrentForGeneration && rebuildRunIdForGeneration && !existing) {
+    throw new Error(
+      `No checkpoint exists for rebuild run ${rebuildRunIdForGeneration}; restore its checkpoint or start without --run-id after removing the orphan target`,
+    );
+  }
+  const trackedEntities = existing
+    ? existing.progress.map(({ entity }) => entity)
+    : generationEntities;
+  const runEntities = rebuildCurrentForGeneration ? trackedEntities : generationEntities;
+  const missingRequestedEntity = processEntities.find(
+    (entity) => !trackedEntities.includes(entity),
+  );
+  if (missingRequestedEntity) {
+    throw new Error(
+      `Reindex run ${existing?.run.id} does not cover ${missingRequestedEntity}; start a separate current-version rebuild`,
+    );
+  }
   /**
    * `--in-place` pins each requested entity to the index its alias serves today instead of a new
    * `<alias>-v<schemaVersion>`; the checkpoint remembers that choice, so a resume needs no flag.
    */
   const physicalIndexes: Partial<Record<FtsSearchDocumentEntity, string>> = {};
-  if (inPlace) {
+  let currentRebuildRunId: string | undefined;
+  if (rebuildCurrentForGeneration) {
+    currentRebuildRunId = existing?.run.id ?? randomUUID();
+    for (const entity of trackedEntities) {
+      const status = await describeEntityGeneration({ client, entity, namespace, readCheckpoint });
+      if (
+        status.classification !== 'in_sync' ||
+        status.mappingChange !== 'identical' ||
+        !status.live
+      ) {
+        throw new Error(
+          `${entity} cannot rebuild its current version while ${status.alias} is ${status.classification} with mapping change ${status.mappingChange ?? 'unknown'}; finish the existing schema migration first`,
+        );
+      }
+      const expectedIndex = getFtsSearchPhysicalIndexName(
+        namespace,
+        entity,
+        schemaVersion,
+        currentRebuildRunId,
+      );
+      const conflicting = status.candidates.find(
+        (candidate) =>
+          candidate.state === 'open' &&
+          candidate.version === schemaVersion &&
+          candidate.index !== expectedIndex &&
+          candidate.supersededByReindexRunId !== status.live?.reindexRunId,
+      );
+      if (conflicting) {
+        throw new Error(
+          `${conflicting.index} is an unfinished same-version generation; resume it with --run-id=${conflicting.reindexRunId ?? '<run-id>'} or retire it before starting another rebuild`,
+        );
+      }
+      const pinned = existing?.progress.find((progress) => progress.entity === entity);
+      physicalIndexes[entity] = pinned?.physicalIndex ?? expectedIndex;
+    }
+  } else if (inPlace) {
     for (const entity of processEntities) {
       const pinned = existing?.progress.find((progress) => progress.entity === entity);
       if (pinned) {
@@ -667,7 +773,7 @@ const applyGeneration = async ({
       physicalIndexes[entity] = inPlaceIndex;
     }
   }
-  let mode: 'fresh' | 'resume' | 'upgrade' | 'upgrade_in_place';
+  let mode: 'fresh' | 'rebuild_current' | 'resume' | 'upgrade' | 'upgrade_in_place';
   if (existing) {
     if (freshRunForGeneration) {
       throw new Error(
@@ -675,6 +781,8 @@ const applyGeneration = async ({
       );
     }
     mode = 'resume';
+  } else if (rebuildCurrentForGeneration) {
+    mode = 'rebuild_current';
   } else {
     /**
      * Without a checkpoint, the live aliases decide what this generation is: none exist on a
@@ -725,8 +833,9 @@ const applyGeneration = async ({
       return repository.createOrResume(
         namespace,
         schemaVersion,
-        generationEntities,
+        runEntities,
         physicalIndexes,
+        currentRebuildRunId,
       );
     },
   });
@@ -810,7 +919,7 @@ const applyGeneration = async ({
       validateIncrementalSyncSource: () => outbox.assertCaptureInfrastructure(),
     },
   );
-  const result = await service.run(namespace, schemaVersion, generationEntities);
+  const result = await service.run(namespace, schemaVersion, runEntities, prepared.run.id);
   console.log(JSON.stringify(result));
   const currentStatus = await printStatus();
   await auditLogger.append({

@@ -28,3 +28,6 @@ still verify registration, current pointers, field coverage and version/fingerpr
 
 This catalog does not execute migrations or reconstruct old documents with the current builder.
 Build, promote, rollback, retire and purge continue through the Elasticsearch reindex commands.
+When mapping version is unchanged but projection or capture semantics require historical repair, the
+same command can build `<alias>-v<n>-r<runId>` from PostgreSQL. The suffix identifies a physical
+generation; `_meta.schema_version` remains `n`, and the numbered mapping catalog is unchanged.

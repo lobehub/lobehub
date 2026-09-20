@@ -109,15 +109,18 @@ const originalDeclaredVersions = FTS_SEARCH_DOCUMENT_ENTITIES.map(
 const buildMeta = ({
   fingerprint = DECLARED_FINGERPRINT,
   reindexRunId = '00000000-0000-4000-8000-000000000001',
+  supersededByReindexRunId,
   version,
 }: {
   fingerprint?: string | null;
   reindexRunId?: string;
+  supersededByReindexRunId?: string;
   version: number;
 }): NonNullable<FtsSearchReindexGenerationDescription['meta']> => ({
   reindex_run_id: reindexRunId,
   schema_version: version,
   ...(fingerprint === null ? {} : { schema_fingerprint: fingerprint }),
+  ...(supersededByReindexRunId ? { superseded_by_reindex_run_id: supersededByReindexRunId } : {}),
 });
 
 const buildGeneration = (
@@ -160,6 +163,9 @@ const createClient = (generations: FtsSearchReindexGenerationDescription[]) => (
   ensureRetiredIndexProtection: vi
     .fn<FtsSearchGenerationElasticsearchClient['ensureRetiredIndexProtection']>()
     .mockResolvedValue(),
+  markGenerationSuperseded: vi
+    .fn<FtsSearchGenerationElasticsearchClient['markGenerationSuperseded']>()
+    .mockResolvedValue(),
   promoteAlias: vi.fn<FtsSearchGenerationElasticsearchClient['promoteAlias']>().mockResolvedValue(),
 });
 
@@ -193,8 +199,11 @@ const createRunState = (
 });
 
 const createCheckpointReader = (
-  states: Record<number, FtsSearchReindexRunState | undefined> = {},
-): FtsSearchGenerationCheckpointReader => vi.fn(async (_namespace, version) => states[version]);
+  states: Record<string | number, FtsSearchReindexRunState | undefined> = {},
+): FtsSearchGenerationCheckpointReader =>
+  vi.fn(async (_namespace, version, runId) =>
+    runId && Object.hasOwn(states, runId) ? states[runId] : states[version],
+  );
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => {
@@ -420,15 +429,19 @@ describe('promoteGeneration', () => {
 
   const promote = ({
     entity = ENTITY,
+    generation,
     generations,
     outboxStats = IDLE_OUTBOX,
     states = {},
+    validateCheckpointCapture = vi.fn(async () => {}),
     version,
   }: {
     entity?: FtsSearchDocumentEntity;
+    generation?: string;
     generations: FtsSearchReindexGenerationDescription[];
     outboxStats?: FtsSearchSyncOutboxStats;
-    states?: Record<number, FtsSearchReindexRunState | undefined>;
+    states?: Record<string | number, FtsSearchReindexRunState | undefined>;
+    validateCheckpointCapture?: (runId: string) => Promise<void>;
     version?: number;
   }) => {
     const client = createClient(generations);
@@ -437,9 +450,11 @@ describe('promoteGeneration', () => {
       result: promoteGeneration({
         client,
         entity,
+        generation,
         namespace: NAMESPACE,
         outboxStats,
         readCheckpoint: createCheckpointReader(states),
+        validateCheckpointCapture,
         version,
       }),
     };
@@ -461,6 +476,53 @@ describe('promoteGeneration', () => {
       ALIAS,
       [physicalIndex(1)],
       physicalIndex(2),
+    );
+    expect(client.markGenerationSuperseded).toHaveBeenCalledExactlyOnceWith(
+      physicalIndex(1),
+      '00000000-0000-4000-8000-000000000001',
+    );
+  });
+
+  it('requires and promotes an exact physical generation when the schema version is unchanged', async () => {
+    setDeclaredVersion(ENTITY, 1);
+    const liveRunId = '00000000-0000-4000-8000-000000000001';
+    const rebuildRunId = '00000000-0000-4000-8000-000000000002';
+    const rebuildIndex = getFtsSearchPhysicalIndexName(NAMESPACE, ENTITY, 1, rebuildRunId);
+    const rebuildState = createRunState(1, 'completed');
+    rebuildState.run.id = rebuildRunId;
+    rebuildState.progress.find(({ entity }) => entity === ENTITY)!.physicalIndex = rebuildIndex;
+    const validateCheckpointCapture = vi.fn(async () => {});
+    const generations = [
+      buildManagedGeneration(1, {
+        isWriteIndex: true,
+        meta: buildMeta({ reindexRunId: liveRunId, version: 1 }),
+      }),
+      buildManagedGeneration(1, {
+        aliased: false,
+        index: rebuildIndex,
+        meta: buildMeta({ reindexRunId: rebuildRunId, version: 1 }),
+      }),
+    ];
+
+    const ambiguous = promote({ generations, states: { [rebuildRunId]: rebuildState } });
+    await expect(ambiguous.result).rejects.toThrow('Multiple v1 generations exist');
+
+    const selected = promote({
+      generation: rebuildIndex,
+      generations,
+      states: { [rebuildRunId]: rebuildState },
+      validateCheckpointCapture,
+    });
+    await expect(selected.result).resolves.toEqual({
+      alias: ALIAS,
+      from: [physicalIndex(1)],
+      outcome: 'promoted',
+      to: rebuildIndex,
+    });
+    expect(validateCheckpointCapture).toHaveBeenCalledExactlyOnceWith(rebuildRunId);
+    expect(selected.client.markGenerationSuperseded).toHaveBeenCalledExactlyOnceWith(
+      physicalIndex(1),
+      rebuildRunId,
     );
   });
 
@@ -726,6 +788,30 @@ describe('retireGenerations', () => {
     expect(client.deleteIndex).not.toHaveBeenCalled();
   });
 
+  it('retires a same-version generation only after the live run marked it superseded', async () => {
+    const liveRunId = '00000000-0000-4000-8000-000000000002';
+    const rebuiltIndex = getFtsSearchPhysicalIndexName(NAMESPACE, ENTITY, 1, liveRunId);
+    const previous = buildManagedGeneration(1, {
+      aliased: false,
+      meta: buildMeta({ supersededByReindexRunId: liveRunId, version: 1 }),
+    });
+    const live = buildManagedGeneration(1, {
+      index: rebuiltIndex,
+      isWriteIndex: true,
+      meta: buildMeta({ reindexRunId: liveRunId, version: 1 }),
+    });
+    const { client, result } = retire({ generations: [previous, live] });
+
+    await expect(result).resolves.toMatchObject({ closed: [physicalIndex(1)], kept: rebuiltIndex });
+    expect(client.closeIndex).toHaveBeenCalledExactlyOnceWith(physicalIndex(1));
+
+    const unmarked = retire({
+      generations: [buildManagedGeneration(1, { aliased: false }), live],
+    });
+    await expect(unmarked.result).resolves.toMatchObject({ closed: [] });
+    expect(unmarked.client.closeIndex).not.toHaveBeenCalled();
+  });
+
   it.each(['open', 'closed'] as const)(
     'preserves an alias-attached generation in the %s state alongside the write index',
     async (state) => {
@@ -837,7 +923,7 @@ describe('planRetiredGenerations', () => {
       alreadyClosed: [physicalIndex(2)],
       blockedBy: [
         `${physicalIndex(0)} has no known managed reindex identity`,
-        `${physicalIndex(4)} is not older than the live generation`,
+        `${physicalIndex(4)} is neither older than the live generation nor marked as superseded by it`,
       ],
       close: [physicalIndex(1)],
       purgeCandidates: [physicalIndex(2)],
