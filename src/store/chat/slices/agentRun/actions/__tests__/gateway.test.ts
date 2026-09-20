@@ -1,8 +1,9 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import { RequestTrigger } from '@lobechat/types';
+import { type ExecAgentResult, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ConstVersion from '@/const/version';
+import { getPendingInterventions } from '@/features/Conversation/store/slices/data/pendingInterventions';
 import { aiAgentService } from '@/services/aiAgent';
 import { messageService } from '@/services/message';
 import { shareChatService } from '@/services/shareChat';
@@ -12,6 +13,7 @@ import * as serverConfigStore from '@/store/serverConfig';
 
 import type { GatewayConnection } from '../transports/gateway/gateway';
 import { GatewayActionImpl } from '../transports/gateway/gateway';
+import { createMockMessage } from './fixtures';
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
@@ -674,6 +676,96 @@ describe('GatewayActionImpl', () => {
       expect(onTopicCreated).toHaveBeenCalledTimes(1);
       expect(switchTopic).not.toHaveBeenCalled();
       expect(connectToGateway).toHaveBeenCalled();
+    });
+
+    const precreatedInterventionResult: ExecAgentResult = {
+      agentId: 'agent-1',
+      assistantMessageId: 'ast-resumed',
+      autoStarted: true,
+      createdAt: '2026-09-19T00:00:00.000Z',
+      message: 'ok',
+      operationId: 'server-op-resumed',
+      status: 'created',
+      success: true,
+      timestamp: '2026-09-19T00:00:00.000Z',
+      token: 'test-token',
+      topicId: 'topic-1',
+      userMessageId: 'user-1',
+    };
+
+    it.each(['approved', 'rejected'] as const)(
+      'removes a %s question from pending interventions before connecting the precreated continuation',
+      async (status) => {
+        const { action, connectToGateway, replaceMessages } = createExecuteTestAction();
+        const context = {
+          agentId: 'agent-1',
+          scope: 'thread' as const,
+          threadId: 'thread-1',
+          topicId: 'topic-1',
+        };
+        const question = createMockMessage({
+          id: 'question-1',
+          plugin: {
+            apiName: 'askUserQuestion',
+            arguments: '{}',
+            identifier: 'lobe-agent',
+            type: 'default',
+          },
+          pluginIntervention: { status: 'pending' },
+          role: 'tool',
+          tool_call_id: 'call-question',
+        });
+        let displayedMessages = [question];
+        const resolvedMessages = [
+          { ...question, pluginIntervention: { status } },
+          createMockMessage({ id: 'ast-resumed', role: 'assistant' }),
+        ];
+        vi.mocked(messageService.getMessages).mockResolvedValueOnce(resolvedMessages);
+        replaceMessages.mockImplementation((messages) => {
+          displayedMessages = messages;
+        });
+        connectToGateway.mockImplementation(() => {
+          // No continuation events have arrived: the answer alone must dismiss the form.
+          expect(getPendingInterventions(displayedMessages)).toEqual([]);
+        });
+        const executionsBefore = vi.mocked(aiAgentService.execAgentTask).mock.calls.length;
+        expect(getPendingInterventions(displayedMessages)).toHaveLength(1);
+
+        await action.executeGatewayAgent({
+          context,
+          message: '',
+          parentMessageId: question.id,
+          precreatedResult: precreatedInterventionResult,
+        });
+
+        expect(connectToGateway).toHaveBeenCalledOnce();
+        expect(messageService.getMessages).toHaveBeenLastCalledWith({
+          ...context,
+          skipWorks: true,
+        });
+        expect(displayedMessages).toEqual(resolvedMessages);
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledTimes(executionsBefore);
+      },
+    );
+
+    it('still connects the accepted continuation when its initial message refresh fails', async () => {
+      const { action, connectToGateway, replaceMessages } = createExecuteTestAction();
+      const error = new Error('message refresh unavailable');
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(messageService.getMessages).mockRejectedValueOnce(error);
+
+      await action.executeGatewayAgent({
+        context: { agentId: 'agent-1', topicId: 'topic-1' },
+        message: '',
+        precreatedResult: precreatedInterventionResult,
+      });
+
+      expect(connectToGateway).toHaveBeenCalledOnce();
+      expect(replaceMessages).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[Gateway] Failed to refresh messages after intervention resolution:',
+        error,
+      );
     });
 
     it.each([
