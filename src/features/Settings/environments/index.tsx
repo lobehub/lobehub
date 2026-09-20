@@ -5,6 +5,7 @@ import { memo } from 'react';
 
 import { MAX_WIDTH } from '@/const/layoutTokens';
 import EnvironmentManager from '@/features/EnvironmentManager';
+import EnvironmentsGate from '@/features/EnvironmentManager/EnvironmentsGate';
 
 /**
  * Thin: the group, its title and its create action all live in the manager,
@@ -13,7 +14,9 @@ import EnvironmentManager from '@/features/EnvironmentManager';
  */
 const Page = memo(() => (
   <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>
-    <EnvironmentManager />
+    <EnvironmentsGate>
+      <EnvironmentManager />
+    </EnvironmentsGate>
   </Flexbox>
 ));
 
