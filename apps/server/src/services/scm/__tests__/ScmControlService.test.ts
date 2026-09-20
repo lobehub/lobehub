@@ -15,6 +15,7 @@ import {
 } from '@/database/schemas';
 
 import { SCM_MAX_WAKES, ScmControlService } from '../ScmControlService';
+import type { ScmInboundEvent } from '../types';
 
 const serverDB = await getTestDB();
 const userId = 'scm-control-user';
@@ -62,14 +63,14 @@ const changeRequestEvent = (kind: 'merged' | 'opened') =>
     type: 'change_request',
   }) as const;
 
-const checksEvent = {
+const checksEvent: Extract<ScmInboundEvent, { type: 'checks' }> = {
   checks: [],
   headSha: baseRow.headSha,
   installationId: '90001',
   numbers: [5],
   repoFullName: baseRow.repoFullName,
   type: 'checks',
-} as const;
+};
 
 const reviewEvent = (login: string) =>
   ({

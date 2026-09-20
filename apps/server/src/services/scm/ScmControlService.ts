@@ -119,7 +119,7 @@ export class ScmControlService {
 
     const service = new AcceptanceService(this.db, row.userId, row.workspaceId ?? undefined);
     const accepted = await service.acceptFromScmMerge(row.acceptanceId, {
-      mergedByExternalLogin: row.mergedByExternalId ?? undefined,
+      mergedByExternalId: row.mergedByExternalId ?? undefined,
       number: row.number,
       provider: row.provider,
       repoFullName: row.repoFullName,

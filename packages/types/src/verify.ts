@@ -381,7 +381,8 @@ export interface VerifyRunDecisionDetail {
    * pipeline tell a human verdict apart from a merge-driven one.
    */
   changeRequest?: {
-    mergedByExternalLogin?: string;
+    /** Provider user id of whoever merged; resolves through the SCM identities. */
+    mergedByExternalId?: string;
     number: number;
     provider: string;
     repoFullName: string;
