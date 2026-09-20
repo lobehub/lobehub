@@ -107,6 +107,38 @@ describe('observeChatAttempt', () => {
     expect(finished).toHaveBeenCalledTimes(1);
   });
 
+  it('does not block response completion on a pending observer', async () => {
+    let releaseObserver!: () => void;
+    const finished = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseObserver = resolve;
+        }),
+    );
+    const response = await observeChatAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('answer');
+        await callback?.onFinal?.({ text: 'answer' });
+        return new Response('answer');
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+    const responseText = response.text();
+
+    const outcome = await Promise.race([
+      responseText.then(() => 'completed'),
+      new Promise((resolve) => setTimeout(() => resolve('blocked'), 50)),
+    ]);
+    releaseObserver();
+
+    expect(outcome).toBe('completed');
+    await expect(responseText).resolves.toBe('answer');
+    expect(finished).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [
       'content text',

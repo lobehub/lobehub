@@ -131,8 +131,6 @@ export const observeChatAttempt = async (
     } catch (error) {
       // Observability failures must never retry a provider call or suppress its output.
       console.error('[RouterRuntime] Failed to report attempt completion:', error);
-    } finally {
-      resolveFinished(result);
     }
   };
 
@@ -178,7 +176,8 @@ export const observeChatAttempt = async (
       usage,
     };
     options?.signal?.removeEventListener('abort', onAbort);
-    await report(finalResult);
+    resolveFinished(finalResult);
+    void report(finalResult);
     await flushTerminalCallbacks();
     return finalResult;
   };
