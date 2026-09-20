@@ -13,6 +13,7 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { useEnvironmentActions } from './useEnvironmentData';
 
 /**
@@ -30,10 +31,24 @@ const CreateEnvironmentContent = memo(() => {
   const actions = useEnvironmentActions();
 
   const [name, setName] = useState('');
+  // Tracks whether the name is still the one the repository suggested. A name
+  // the person typed is theirs, and picking a different repository must not
+  // overwrite it; a suggested one is just a default and follows the pick.
+  const [nameIsSuggested, setNameIsSuggested] = useState(true);
+  const [repository, setRepository] = useState<GithubRepositorySelection | undefined>();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   const trimmed = name.trim();
+
+  const pickRepository = (selection: GithubRepositorySelection | undefined) => {
+    setRepository(selection);
+    setError(undefined);
+    // Naming a thing that does not exist yet is the harder half of this dialog,
+    // so the repository answers it: an environment for a repository is almost
+    // always called after it.
+    if (nameIsSuggested) setName(selection?.repository ?? '');
+  };
 
   const submit = async () => {
     if (!trimmed || creating) return;
@@ -41,7 +56,24 @@ const CreateEnvironmentContent = memo(() => {
     setCreating(true);
     setError(undefined);
     try {
-      await actions.createEnvironment({ name: trimmed });
+      await actions.createEnvironment({
+        // The repository is the environment's one source. Every repository
+        // carries the owner GitHub reported for it, so the checkout URL is
+        // built from the pair rather than from whichever owner the list was
+        // filtered by — those differ for a repository reached as a collaborator.
+        configuration: repository
+          ? {
+              sources: [
+                {
+                  kind: 'git',
+                  ref: repository.defaultBranch,
+                  url: `https://github.com/${repository.owner}/${repository.repository}`,
+                },
+              ],
+            }
+          : undefined,
+        name: trimmed,
+      });
       close();
     } catch (cause) {
       // The one failure the user can act on is a name already taken, and it is
@@ -59,24 +91,35 @@ const CreateEnvironmentContent = memo(() => {
 
   return (
     <>
-      <Flexbox gap={8} paddingBlock={8} paddingInline={16}>
-        <Input
-          autoFocus
-          placeholder={t('environments.namePlaceholder')}
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-            setError(undefined);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') void submit();
-          }}
-        />
-        {error && (
-          <Text fontSize={12} type={'danger'}>
-            {error}
+      {/* Repository first, name second. The name is the harder question and the
+          repository usually answers it, so asking for the name first makes the
+          person invent something they are about to be handed. */}
+      <Flexbox gap={12} paddingBlock={8} paddingInline={16}>
+        <GithubRepositoryPicker value={repository} onChange={pickRepository} onLeave={close} />
+
+        <Flexbox gap={6}>
+          <Text fontSize={12} type={'secondary'} weight={500}>
+            {t('environments.nameLabel')}
           </Text>
-        )}
+          <Input
+            autoFocus
+            placeholder={t('environments.namePlaceholder')}
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              setNameIsSuggested(false);
+              setError(undefined);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void submit();
+            }}
+          />
+          {error && (
+            <Text fontSize={12} type={'danger'}>
+              {error}
+            </Text>
+          )}
+        </Flexbox>
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('environments.cancel')}</Button>
@@ -102,5 +145,5 @@ export const openCreateEnvironmentModal = () =>
     maskClosable: true,
     styles: { content: { padding: 0 } },
     title: translate('environments.create', { ns: 'setting' }),
-    width: 'min(90vw, 420px)',
+    width: 'min(90vw, 480px)',
   });

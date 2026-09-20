@@ -50,7 +50,11 @@ export const useEnvironmentActions = () => {
       await refreshInstances();
     },
 
-    createEnvironment: async (params: { description?: string; name: string }) => {
+    createEnvironment: async (params: {
+      configuration?: SandboxEnvironmentSpecification;
+      description?: string;
+      name: string;
+    }) => {
       await sandboxWorkspaceService.createEnvironment(params);
       await refreshEnvironments();
     },

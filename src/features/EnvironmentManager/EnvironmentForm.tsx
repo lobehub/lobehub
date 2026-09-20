@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { SandboxEnvironmentSpecification } from '@/services/sandboxWorkspace';
 
+import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import type { SandboxEnvironment } from './useEnvironmentData';
 
 interface EnvironmentFormProps {
@@ -16,6 +17,7 @@ interface EnvironmentFormProps {
   onSave: (params: {
     configuration: SandboxEnvironmentSpecification;
     description: string;
+    name: string;
   }) => Promise<void>;
 }
 
@@ -106,13 +108,19 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
   const [saved, setSaved] = useState(() => ({
     configuration: toSpecification(toFormState(configuration)),
     description: environment.description ?? '',
+    name: environment.name,
   }));
   const [state, setState] = useState<FormState>(() => toFormState(configuration));
   const [description, setDescription] = useState(environment.description ?? '');
+  const [name, setName] = useState(environment.name);
   const [saving, setSaving] = useState(false);
 
+  const trimmedName = name.trim();
   const next = toSpecification(state);
-  const dirty = !isEqual(next, saved.configuration) || description !== saved.description;
+  const dirty =
+    !isEqual(next, saved.configuration) ||
+    description !== saved.description ||
+    trimmedName !== saved.name;
 
   const patch = (changes: Partial<FormState>) =>
     setState((current) => ({ ...current, ...changes }));
@@ -123,18 +131,78 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
       ),
     });
 
+  const source = state.sources[0];
+
+  // The picker speaks in owner/name; the specification stores a checkout URL.
+  // Translating at this boundary keeps the stored shape the execution plane's
+  // and the chosen shape the person's.
+  const selection = (() => {
+    const path = source?.url?.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
+    const [owner, repository] = path?.split('/') ?? [];
+
+    return owner && repository ? { defaultBranch: source?.ref, owner, repository } : undefined;
+  })();
+
+  const pickRepository = (picked: GithubRepositorySelection | undefined) =>
+    patch({
+      sources: picked
+        ? [
+            {
+              // A source the person just chose keeps whatever folder they had
+              // set, but takes the new repository's default branch — the old
+              // branch belonged to the old repository.
+              path: source?.path,
+              ref: picked.defaultBranch,
+              url: `https://github.com/${picked.owner}/${picked.repository}`,
+            },
+          ]
+        : [],
+    });
+
   const save = async () => {
+    // A nameless environment is not a thing anyone can pick out of a list, and
+    // the name is the one field with no sensible empty value — so the save is
+    // refused rather than silently storing a blank.
+    if (!trimmedName) return;
     setSaving(true);
     try {
-      await onSave({ configuration: next, description });
-      setSaved({ configuration: next, description });
+      await onSave({ configuration: next, description, name: trimmedName });
+      setSaved({ configuration: next, description, name: trimmedName });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Flexbox gap={20} paddingBlock={8}>
+    <Flexbox gap={20}>
+      <Flexbox gap={2}>
+        <Text fontSize={12} type={'secondary'} weight={500}>
+          {t('environments.form.title')}
+        </Text>
+        <Text fontSize={12} type={'secondary'}>
+          {t('environments.form.desc')}
+        </Text>
+        {/* Scoped to these fields, because it is only true of these fields. An
+            instance's own directory persists today — that part was verified end
+            to end — so a page-wide "none of this does anything yet" told people
+            the working thing was broken too. What is genuinely inert is the
+            build: nothing clones a source or runs a setup command. */}
+        <Text fontSize={12} type={'warning'}>
+          {t('environments.form.pending')}
+        </Text>
+      </Flexbox>
+
+      <Flexbox gap={6}>
+        <Text fontSize={12} type={'secondary'} weight={500}>
+          {t('environments.nameLabel')}
+        </Text>
+        <Input
+          placeholder={t('environments.namePlaceholder')}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </Flexbox>
+
       <Flexbox gap={6}>
         <Text fontSize={12} type={'secondary'} weight={500}>
           {t('environments.form.description')}
@@ -153,43 +221,28 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
         <Text fontSize={12} type={'secondary'}>
           {t('environments.form.sourcesHint')}
         </Text>
-        {state.sources.map((source, index) => (
-          <Flexbox horizontal align={'center'} gap={8} key={index}>
-            <Input
-              placeholder={'https://github.com/owner/repo.git'}
-              style={{ flex: 2 }}
-              value={source.url}
-              onChange={(event) => updateSource(index, { url: event.target.value })}
-            />
+        {/* One repository, so no list and no way to add a second. The same
+            picker the create dialog uses, so the two agree on what choosing a
+            repository looks like; branch and folder stay free text because
+            they narrow a choice already made rather than making one. */}
+        <GithubRepositoryPicker value={selection} onChange={pickRepository} />
+
+        {source && (
+          <Flexbox horizontal align={'center'} gap={8}>
             <Input
               placeholder={t('environments.form.ref')}
               style={{ flex: 1 }}
               value={source.ref ?? ''}
-              onChange={(event) => updateSource(index, { ref: event.target.value })}
+              onChange={(event) => updateSource(0, { ref: event.target.value })}
             />
             <Input
               placeholder={t('environments.form.path')}
               style={{ flex: 1 }}
               value={source.path ?? ''}
-              onChange={(event) => updateSource(index, { path: event.target.value })}
-            />
-            <ActionIcon
-              icon={Trash2Icon}
-              size={'small'}
-              title={t('environments.form.removeSource')}
-              onClick={() => patch({ sources: state.sources.filter((_, at) => at !== index) })}
+              onChange={(event) => updateSource(0, { path: event.target.value })}
             />
           </Flexbox>
-        ))}
-        <Flexbox horizontal>
-          <Button
-            icon={<Icon icon={PlusIcon} />}
-            size={'small'}
-            onClick={() => patch({ sources: [...state.sources, { url: '' }] })}
-          >
-            {t('environments.form.addSource')}
-          </Button>
-        </Flexbox>
+        )}
       </Flexbox>
 
       <Flexbox gap={6}>
@@ -311,7 +364,13 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave }) => 
           <Text fontSize={12} type={'secondary'}>
             {t('environments.form.staleWarning')}
           </Text>
-          <Button loading={saving} size={'small'} type={'primary'} onClick={save}>
+          <Button
+            disabled={!trimmedName}
+            loading={saving}
+            size={'small'}
+            type={'primary'}
+            onClick={save}
+          >
             {t('environments.form.save')}
           </Button>
         </Flexbox>

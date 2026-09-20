@@ -40,8 +40,11 @@ class SandboxWorkspaceService {
    */
   listEnvironments = async () => lambdaClient.sandboxWorkspace.listEnvironments.query();
 
-  createEnvironment = async (params: { description?: string; name: string }) =>
-    lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
+  createEnvironment = async (params: {
+    configuration?: SandboxEnvironmentSpecification;
+    description?: string;
+    name: string;
+  }) => lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
 
   /**
    * Edits the specification. Nothing is rebuilt — every instance of it just
@@ -119,6 +122,13 @@ class SandboxWorkspaceService {
 
   listFiles = async (params: { path?: string; recursive?: boolean; topicId?: string } = {}) =>
     lambdaClient.sandboxWorkspace.listFiles.query(params);
+
+  /**
+   * Repositories this account can build an environment from. Answers
+   * `connected: false` rather than failing when GitHub is not linked — for the
+   * picker that is a state to resolve, not an error.
+   */
+  listGithubRepositories = async () => lambdaClient.sandboxWorkspace.listGithubRepositories.query();
 
   readFile = async (params: { path: string; topicId?: string }) =>
     lambdaClient.sandboxWorkspace.readFile.query(params);

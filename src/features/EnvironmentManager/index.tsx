@@ -1,128 +1,56 @@
 'use client';
 
-import { Center, Empty, Flexbox, FormGroup, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { ChevronRightIcon, ContainerIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
+import ListSkeleton from '@/components/ListSkeleton';
+
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
-import EnvironmentForm from './EnvironmentForm';
-import InstanceList from './InstanceList';
-import {
-  type SandboxEnvironment,
-  useEnvironmentActions,
-  useEnvironments,
-  useInstances,
-} from './useEnvironmentData';
+import EnvironmentDetailPanel from './EnvironmentDetailPanel';
+import EnvironmentItem from './EnvironmentItem';
+import { useEnvironments, useInstances } from './useEnvironmentData';
 
-interface EnvironmentRowProps {
-  environment: SandboxEnvironment;
-}
+const styles = createStaticStyles(({ css }) => ({
+  detailCol: css`
+    align-self: stretch;
 
-const EnvironmentRow = memo<EnvironmentRowProps>(({ environment }) => {
-  const { t } = useTranslation('setting');
-  const [open, setOpen] = useState(false);
-  const { data: instanceData } = useInstances();
-  const actions = useEnvironmentActions();
+    min-width: 0;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-  const instances = (instanceData?.instances ?? []).filter(
-    (instance) => instance.environmentId === environment.id,
-  );
+    background: ${cssVar.colorBgContainer};
+  `,
+  /**
+   * One frame around the list, on the page's own surface — the device manager's
+   * shape. A filled settings group would have put a second card inside the
+   * first and repeated the page's title inside it; the route already says what
+   * this page is.
+   */
+  listCol: css`
+    overflow: hidden;
 
-  return (
-    <Flexbox
-      gap={8}
-      paddingBlock={8}
-      style={{ borderBlockEnd: '1px solid var(--color-border-secondary)' }}
-    >
-      <Flexbox horizontal align={'center'} gap={8}>
-        <ActionIcon
-          icon={ChevronRightIcon}
-          size={'small'}
-          style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 0.15s' }}
-          onClick={() => setOpen(!open)}
-        />
-        <Flexbox flex={1} gap={2}>
-          <Text fontSize={14} weight={500}>
-            {environment.name}
-          </Text>
-          <Text fontSize={12} type={'secondary'}>
-            {/* The count needs its own key: `empty` has no plural form, so
-                passing it a count rendered "no instances yet" over an
-                environment that had some. */}
-            {environment.description ||
-              (instances.length === 0
-                ? t('environments.instances.empty')
-                : t('environments.instances.count', { count: instances.length }))}
-          </Text>
-        </Flexbox>
-        <ActionIcon
-          icon={Trash2Icon}
-          size={'small'}
-          title={t('environments.remove')}
-          onClick={() => actions.removeEnvironment(environment.id)}
-        />
-      </Flexbox>
+    min-width: 0;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-      {open && (
-        <Flexbox gap={20} paddingInline={32}>
-          <EnvironmentForm
-            environment={environment}
-            onSave={({ configuration, description }) =>
-              actions.updateEnvironment({ configuration, description, id: environment.id })
-            }
-          />
-          <InstanceList
-            instances={instances}
-            snapshotsUnavailable={instanceData?.snapshotsUnavailable ?? false}
-            onRemove={actions.removeInstance}
-            onCreate={({ name, workingDirectory }) =>
-              actions.createInstance({ environmentId: environment.id, name, workingDirectory })
-            }
-          />
-        </Flexbox>
-      )}
-    </Flexbox>
-  );
-});
+    background: ${cssVar.colorBgContainer};
+  `,
+  listScroll: css`
+    overflow-y: auto;
 
-EnvironmentRow.displayName = 'SandboxEnvironmentRow';
+    /* Cap the list so a long shelf of environments stays scrollable rather than
+       pushing the page down past the panel sitting beside it. */
+    max-height: 480px;
+  `,
+}));
 
-/** Three skeleton rows' worth — what the list occupies before it knows its length. */
-const LIST_MIN_HEIGHT = 3 * 56;
-
-/**
- * The list's own shape while it loads: three rows, each a name over its
- * description, separated the way the real rows are. A placeholder that matches
- * what replaces it means nothing jumps when the data lands — and a slab of the
- * wrong height was more visible than the wait it covered.
- */
-const EnvironmentListSkeleton = memo(() => (
-  <Flexbox gap={4}>
-    {[0, 1, 2].map((row) => (
-      <Flexbox
-        horizontal
-        align={'center'}
-        gap={8}
-        key={row}
-        paddingBlock={8}
-        paddingInline={28}
-        style={{ borderBlockEnd: '1px solid var(--color-border-secondary)' }}
-      >
-        <Flexbox flex={1} gap={6}>
-          <Skeleton.Text rows={1} style={{ width: 140 }} />
-          <Skeleton.Text rows={1} style={{ width: 240 }} />
-        </Flexbox>
-        {/* Where the row's action sits, so the column of icons on the right
-            is already there when the real rows land. */}
-        <Skeleton.Avatar shape={'square'} size={24} />
-      </Flexbox>
-    ))}
-  </Flexbox>
-));
-
-EnvironmentListSkeleton.displayName = 'EnvironmentListSkeleton';
+/** What the list occupies before it knows its length — the skeleton's own rows. */
+const LIST_MIN_HEIGHT = 4 * 72;
 
 /**
  * Environments and the instances built from them.
@@ -130,73 +58,148 @@ EnvironmentListSkeleton.displayName = 'EnvironmentListSkeleton';
  * An environment is a SPECIFICATION — the sources to check out, what makes them
  * usable, what they run with. What a sandbox builds from it is a cache, which is
  * why a copy can be thrown away and made again rather than repaired by hand.
+ *
+ * List beside detail, the shape the device manager uses: the rows carry only
+ * what tells one environment from another, and picking one opens everything
+ * else about it next to the list rather than in place of it.
  */
 const EnvironmentManager = memo(() => {
   const { t } = useTranslation('setting');
-  const { data, isLoading } = useEnvironments();
+  const { data, error, isLoading, isValidating, mutate } = useEnvironments();
+  const {
+    data: instanceData,
+    isValidating: instancesValidating,
+    mutate: refreshInstances,
+  } = useInstances();
+
+  const [selectedId, setSelectedId] = useState<string>();
+  // Whether the selected environment opens with its instance-create form
+  // showing. The row's "new instance" action is a shortcut into the panel, not
+  // a second way to make one.
+  const [adding, setAdding] = useState(false);
 
   const environments = data?.environments ?? [];
+  const instances = instanceData?.instances ?? [];
+  const selected = selectedId
+    ? environments.find((environment) => environment.id === selectedId)
+    : undefined;
 
-  // A `FormGroup` with free content, not a `Form` fed a bare node: the form
-  // shell lays out FORM ITEMS, each carrying its own row padding, and gives an
-  // unstructured child none — which rendered this list as a sliver. The group
-  // is the shape the workspace budget page uses for the same job.
-  const title = (
-    <Flexbox horizontal align={'baseline'} gap={8}>
-      <span>{t('environments.title')}</span>
-      {/* The one thing a reader has to know before filling anything in: what
-          they write is stored faithfully and not yet acted on. It sits with the
-          title rather than as a banner competing with it. */}
-      <Text fontSize={12} type={'secondary'}>
-        {t('environments.pending')}
-      </Text>
-    </Flexbox>
-  );
+  const select = (id: string) => {
+    setSelectedId((current) => (current === id ? undefined : id));
+    setAdding(false);
+  };
+
+  const createInstance = (id: string) => {
+    setSelectedId(id);
+    setAdding(true);
+  };
+
+  // Both lists, because the two halves of what this page shows are fetched
+  // separately and the slow one — instance state, which needs the execution
+  // plane — is the one worth a manual refresh.
+  const refresh = () => {
+    void mutate();
+    void refreshInstances();
+  };
 
   return (
-    <FormGroup
-      collapsible={false}
-      gap={16}
-      title={title}
-      variant={'filled'}
-      extra={
-        <Button
-          icon={<Icon icon={PlusIcon} />}
-          type={'primary'}
-          onClick={openCreateEnvironmentModal}
-        >
-          {t('environments.create')}
-        </Button>
-      }
-    >
-      {isLoading ? (
-        <EnvironmentListSkeleton />
-      ) : environments.length === 0 ? (
-        // Sized to the three rows the skeleton drew, so an empty list holds the
-        // same ground a loading one did, and the card does not collapse to a
-        // strip the moment the answer is "none".
-        <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
-          <Empty
-            description={t('environments.desc')}
-            descriptionProps={{ fontSize: 13 }}
-            icon={ContainerIcon}
-            style={{ maxWidth: 360 }}
-            title={t('environments.empty')}
-            action={
-              <Button icon={<Icon icon={PlusIcon} />} onClick={openCreateEnvironmentModal}>
-                {t('environments.create')}
-              </Button>
-            }
+    <Flexbox gap={16}>
+      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+        {/* What an environment IS, in one line. The header bar above gives the
+            page its name, which names the thing without saying what it is —
+            and "environment" is a word every tool spends differently. The
+            caveat that used to sit here now sits with the fields it is about,
+            because it was never true of the whole page. */}
+        <Text fontSize={12} style={{ minWidth: 0 }} type={'secondary'}>
+          {t('environments.desc')}
+        </Text>
+        <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+          <Button
+            icon={<Icon icon={RefreshCwIcon} />}
+            loading={isValidating || instancesValidating}
+            title={t('environments.refresh')}
+            onClick={refresh}
           />
-        </Center>
-      ) : (
-        <Flexbox gap={4}>
-          {environments.map((environment) => (
-            <EnvironmentRow environment={environment} key={environment.id} />
-          ))}
+          <Button
+            icon={<Icon icon={PlusIcon} />}
+            type={'primary'}
+            onClick={openCreateEnvironmentModal}
+          >
+            {t('environments.create')}
+          </Button>
         </Flexbox>
-      )}
-    </FormGroup>
+      </Flexbox>
+
+      <AsyncBoundary
+        data={data}
+        error={error}
+        errorVariant={'block'}
+        isEmpty={environments.length === 0}
+        isLoading={isLoading}
+        empty={
+          // Inside the same frame the rows land in, sized to the skeleton's
+          // rows: loading, empty and loaded are one surface whose contents
+          // change, not three surfaces of three different heights.
+          <Flexbox className={styles.listCol}>
+            <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
+              <Empty
+                description={t('environments.desc')}
+                descriptionProps={{ fontSize: 13 }}
+                icon={ContainerIcon}
+                style={{ maxWidth: 360 }}
+                title={t('environments.empty')}
+                action={
+                  <Button icon={<Icon icon={PlusIcon} />} onClick={openCreateEnvironmentModal}>
+                    {t('environments.create')}
+                  </Button>
+                }
+              />
+            </Center>
+          </Flexbox>
+        }
+        loading={
+          <Flexbox className={styles.listCol}>
+            <Flexbox padding={4}>
+              <ListSkeleton />
+            </Flexbox>
+          </Flexbox>
+        }
+        onRetry={refresh}
+      >
+        <Flexbox horizontal align={'flex-start'} gap={16}>
+          <Flexbox className={styles.listCol} flex={1}>
+            <Flexbox className={styles.listScroll} gap={2} padding={4}>
+              {environments.map((environment) => (
+                <EnvironmentItem
+                  environment={environment}
+                  key={environment.id}
+                  selected={environment.id === selectedId}
+                  instanceCount={
+                    instances.filter((instance) => instance.environmentId === environment.id).length
+                  }
+                  onCreateInstance={() => createInstance(environment.id)}
+                  onSelect={() => select(environment.id)}
+                />
+              ))}
+            </Flexbox>
+          </Flexbox>
+          {selected && (
+            <Flexbox className={styles.detailCol} flex={1}>
+              {/* Keyed on the environment so the form's draft state resets when
+                  the selection changes — a description typed for one
+                  environment must not survive into another. */}
+              <EnvironmentDetailPanel
+                adding={adding}
+                environment={selected}
+                key={selected.id}
+                onAddingChange={setAdding}
+                onClose={() => setSelectedId(undefined)}
+              />
+            </Flexbox>
+          )}
+        </Flexbox>
+      </AsyncBoundary>
+    </Flexbox>
   );
 });
 
