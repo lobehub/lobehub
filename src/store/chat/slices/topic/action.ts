@@ -1931,7 +1931,7 @@ export class ChatTopicActionImpl {
    * 'active') never reached the cache: the last FETCHED snapshot — taken while
    * the run was still `running` — stayed there, and a reload repainted a
    * finished topic with the running spinner until the revalidation corrected it
-   * a moment later (LOBE-14032). Same write-through idea as
+   * a moment later. Same write-through idea as
    * `#writeThroughMessageCache` in the message slice.
    *
    * Only `updateTopic` is mirrored. It patches a row a fetch already produced,
