@@ -1,5 +1,5 @@
 import type { EnvironmentConfiguration, EnvironmentVisibility } from '@lobechat/types';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import type { EnvironmentItem, NewEnvironment } from '../schemas';
 import { environments, users } from '../schemas';
@@ -91,6 +91,23 @@ export class EnvironmentModel {
   private visible = () => environmentVisibility(this.userId, this.workspaceId);
 
   /**
+   * Narrows a listing to one pool.
+   *
+   * Personal rows have no pool to be in — they are all private to their owner,
+   * and there is no workspace for anything to be published to. So asking for
+   * the published pool outside a workspace is answered with nothing rather than
+   * ignored: a filter that silently does not apply makes two tabs show the same
+   * list, which reads as "these are the same rows" when it means "the question
+   * did not reach anything".
+   */
+  private pool = (visibility?: EnvironmentVisibility) => {
+    if (!visibility) return undefined;
+    if (this.workspaceId) return eq(environments.visibility, visibility);
+
+    return visibility === 'private' ? undefined : sql`false`;
+  };
+
+  /**
    * Environments with the member who made them.
    *
    * `user_id` is the creator, and in a workspace two colleagues each keep their
@@ -124,14 +141,7 @@ export class EnvironmentModel {
       })
       .from(environments)
       .leftJoin(users, eq(environments.userId, users.id))
-      .where(
-        and(
-          this.visible(),
-          // Personal environments have no pool to belong to, so a visibility
-          // filter there would answer for a distinction that does not exist.
-          visibility && this.workspaceId ? eq(environments.visibility, visibility) : undefined,
-        ),
-      )
+      .where(and(this.visible(), this.pool(visibility)))
       .orderBy(asc(environments.createdAt));
 
   /** Readable, not necessarily writable — a published environment resolves here for every member. */
