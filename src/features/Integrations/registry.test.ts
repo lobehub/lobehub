@@ -2,7 +2,7 @@ import './Github/definition';
 
 import { describe, expect, it } from 'vitest';
 
-import { filterIntegrations, findIntegration, INTEGRATIONS, isIntegrationId } from './registry';
+import { findIntegration, INTEGRATIONS, isIntegrationId, UPCOMING_INTEGRATIONS } from './registry';
 
 describe('integrations registry', () => {
   it('registers GitHub once, even when the definition module is evaluated again', async () => {
@@ -17,10 +17,9 @@ describe('integrations registry', () => {
     expect(findIntegration('github')?.name).toBe('GitHub');
   });
 
-  it('matches the search on name and keywords, case-insensitively', () => {
-    expect(filterIntegrations('').map((i) => i.id)).toEqual(INTEGRATIONS.map((i) => i.id));
-    expect(filterIntegrations('GIT').map((i) => i.id)).toContain('github');
-    expect(filterIntegrations('pull request').map((i) => i.id)).toContain('github');
-    expect(filterIntegrations('jira')).toEqual([]);
+  it('keeps upcoming integrations out of the routable set', () => {
+    for (const item of UPCOMING_INTEGRATIONS) {
+      expect(isIntegrationId(item.id)).toBe(false);
+    }
   });
 });

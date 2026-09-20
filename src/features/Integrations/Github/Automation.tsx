@@ -12,12 +12,12 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
-    padding-block: 4px;
-    padding-inline: 20px;
+    padding-block: 2px;
+    padding-inline: 16px;
     border-radius: ${cssVar.borderRadiusLG};
   `,
   row: css`
-    padding-block: 16px;
+    padding-block: 12px;
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};

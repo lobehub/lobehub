@@ -1,3 +1,4 @@
+import { Figma, Notion, Vercel, Zapier } from '@lobehub/icons';
 import type { ComponentType } from 'react';
 
 /** Stable id of an integration; doubles as its settings sub-route (`/settings/integrations/<id>`). */
@@ -9,8 +10,6 @@ export interface IntegrationDefinition {
   /** Brand mark, rendered at the size the host passes. */
   icon: ComponentType<{ size?: number; style?: React.CSSProperties }>;
   id: IntegrationId;
-  /** Lower-case words the overview search matches besides the name. */
-  keywords: string[];
   /** Display name — brand names are not translated. */
   name: string;
 }
@@ -32,13 +31,18 @@ export const findIntegration = (id: string | undefined): IntegrationDefinition |
 export const isIntegrationId = (value: string | undefined): value is IntegrationId =>
   !!value && INTEGRATIONS.some((item) => item.id === value);
 
-/** Search over name and keywords; an empty query matches everything. */
-export const filterIntegrations = (query: string): IntegrationDefinition[] => {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return INTEGRATIONS;
-  return INTEGRATIONS.filter(
-    (item) =>
-      item.name.toLowerCase().includes(needle) ||
-      item.keywords.some((keyword) => keyword.includes(needle)),
-  );
-};
+/** Integrations on the roadmap: shown in the directory as a hint, not openable. */
+export type UpcomingIntegrationId = 'figma' | 'notion' | 'vercel' | 'zapier';
+
+export interface UpcomingIntegration {
+  icon: IntegrationDefinition['icon'];
+  id: UpcomingIntegrationId;
+  name: string;
+}
+
+export const UPCOMING_INTEGRATIONS: UpcomingIntegration[] = [
+  { icon: Notion, id: 'notion', name: 'Notion' },
+  { icon: Figma, id: 'figma', name: 'Figma' },
+  { icon: Vercel, id: 'vercel', name: 'Vercel' },
+  { icon: Zapier, id: 'zapier', name: 'Zapier' },
+];

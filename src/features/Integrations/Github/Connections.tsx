@@ -4,14 +4,14 @@ import type { ScmInstallationItem } from '@lobechat/database/schemas';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { Avatar, Button, DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
-    padding-block: 4px;
-    padding-inline: 20px;
+    padding-block: 2px;
+    padding-inline: 16px;
     border-radius: ${cssVar.borderRadiusLG};
   `,
   dot: css`
@@ -28,8 +28,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorWarning};
   `,
   emptyState: css`
-    padding-block: 32px;
-    padding-inline: 24px;
+    padding-block: 24px;
+    padding-inline: 20px;
     border-radius: ${cssVar.borderRadiusLG};
 
     color: ${cssVar.colorTextSecondary};
@@ -38,7 +38,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorFillQuaternary};
   `,
   row: css`
-    padding-block: 14px;
+    padding-block: 10px;
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -68,25 +68,23 @@ const manageUrl = (item: ScmInstallationItem) =>
     ? `https://github.com/organizations/${item.accountLogin}/settings/installations/${item.installationId}`
     : `https://github.com/settings/installations/${item.installationId}`;
 
-/** Where GitHub lists the apps a user has authorized. */
-const AUTHORIZATIONS_URL = 'https://github.com/settings/apps/authorizations';
-
 interface ConnectionsProps {
-  identity: { avatarUrl: string | null; externalLogin: string } | null;
   installations: ScmInstallationItem[];
   installHref?: string;
+  /** Workspace rows say who enabled them; personal rows belong to the viewer. */
+  scope: 'personal' | 'workspace';
 }
 
 /**
- * Who is connected: every account or organization the App is installed on,
- * plus the user's own GitHub identity captured during install. Repository
- * changes and uninstalls happen on GitHub, so each row hands off there.
+ * Who is connected: every account or organization the App is installed on.
+ * Repository changes and uninstalls happen on GitHub, so each row hands off
+ * there.
  */
-const Connections = memo<ConnectionsProps>(({ identity, installHref, installations }) => {
+const Connections = memo<ConnectionsProps>(({ installHref, installations, scope }) => {
   const { t } = useTranslation('integration');
 
   return (
-    <Flexbox gap={12}>
+    <Flexbox gap={10}>
       <Flexbox horizontal align="center" gap={16} justify="space-between">
         <Text strong style={{ fontSize: 16 }}>
           {t('github.connections.title')}
@@ -113,27 +111,30 @@ const Connections = memo<ConnectionsProps>(({ identity, installHref, installatio
                 : t('github.connections.selectedRepositories', {
                     count: item.repositories.length,
                   });
+            const kind =
+              item.accountType === 'organization'
+                ? t('github.connections.organization')
+                : t('github.connections.personal');
+            const date = new Date(item.createdAt).toLocaleDateString();
+            const detail =
+              scope === 'workspace'
+                ? `${kind} · ${repositories} · ${t('github.connections.enabledBy', {
+                    date,
+                    login: item.installedByExternalLogin ?? item.accountLogin,
+                  })}`
+                : `${kind} · ${repositories} · ${t('github.connections.connectedOn', { date })}`;
             const suspended = Boolean(item.suspendedAt);
             return (
-              <Flexbox horizontal align="center" className={styles.row} gap={14} key={item.id}>
+              <Flexbox horizontal align="center" className={styles.row} gap={12} key={item.id}>
                 <Avatar
                   avatar={item.metadata.accountAvatarUrl ?? undefined}
-                  size={40}
+                  size={36}
                   title={item.accountLogin}
                 />
-                <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+                <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
                   <Text strong>{item.accountLogin}</Text>
                   <Text style={{ fontSize: 13 }} type="secondary">
-                    {t('github.connections.enabledBy', {
-                      date: new Date(item.createdAt).toLocaleDateString(),
-                      login: item.installedByExternalLogin ?? item.accountLogin,
-                    })}
-                  </Text>
-                  <Text style={{ fontSize: 13 }} type="secondary">
-                    {item.accountType === 'organization'
-                      ? t('github.connections.organization')
-                      : t('github.connections.personal')}{' '}
-                    · {repositories}
+                    {detail}
                   </Text>
                 </Flexbox>
                 <DropdownMenu
@@ -161,33 +162,6 @@ const Connections = memo<ConnectionsProps>(({ identity, installHref, installatio
           })}
         </Block>
       )}
-
-      <Block className={styles.card} variant={'filled'}>
-        <Flexbox horizontal align="center" className={styles.row} gap={14}>
-          <Flexbox flex={1} gap={2}>
-            <Text strong>{t('github.connections.personalAccount.title')}</Text>
-            <Text style={{ fontSize: 13 }} type="secondary">
-              {identity
-                ? t('github.connections.personalAccount.connectedAs', {
-                    login: identity.externalLogin,
-                  })
-                : t('github.connections.personalAccount.notConnected')}
-            </Text>
-          </Flexbox>
-          {identity ? (
-            <a href={AUTHORIZATIONS_URL} rel="noreferrer" target="_blank">
-              <Flexbox horizontal align="center" gap={4}>
-                <Text>{t('github.connections.personalAccount.manage')}</Text>
-                <Icon icon={ChevronRightIcon} size="small" />
-              </Flexbox>
-            </a>
-          ) : (
-            <Button disabled={!installHref} href={installHref} size="small">
-              {t('github.connections.personalAccount.connect')}
-            </Button>
-          )}
-        </Flexbox>
-      </Block>
     </Flexbox>
   );
 });

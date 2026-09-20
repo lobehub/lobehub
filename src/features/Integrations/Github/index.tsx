@@ -8,6 +8,7 @@ import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 
@@ -32,23 +33,33 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  docs: css`
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    color: ${cssVar.colorTextSecondary};
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
   hero: css`
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
 
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
+    width: 56px;
+    height: 56px;
+    border-radius: ${cssVar.borderRadiusLG};
 
-    color: ${cssVar.colorBgLayout};
+    color: ${cssVar.colorText};
 
-    background: ${cssVar.colorText};
+    background: ${cssVar.colorFillTertiary};
   `,
   infoBar: css`
-    padding-block: 16px;
-    padding-inline: 20px;
+    padding-block: 10px;
+    padding-inline: 16px;
     border-radius: ${cssVar.borderRadiusLG};
   `,
   infoLabel: css`
@@ -72,14 +83,16 @@ interface GithubIntegrationProps {
 }
 
 /**
- * The GitHub integration page: what it does, who enabled it, the connected
- * accounts, the automation switches and the pull requests it has heard
- * about. Connecting hands off to the server route that owns the GitHub
- * handshake; GitHub sends the user back here with the outcome in the query.
+ * The GitHub integration page: what it does, the connected accounts and the
+ * automation switches. In a workspace an info bar also says who enabled it.
+ * Connecting hands off to the server route that owns the GitHub handshake;
+ * GitHub sends the user back here with the outcome in the query.
  */
 const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const { t, ready } = useTranslation('integration');
   const appOrigin = useAppOrigin();
+  const workspaceSlug = useActiveWorkspaceSlug();
+  const scope = workspaceSlug ? 'workspace' : 'personal';
   const data = useGithubIntegration();
 
   useEffect(() => {
@@ -96,7 +109,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       toast.error(t(`github.installResult.error.${error}` as any));
     } else if (error) toast.error(t('github.installResult.error.unknown', { code: error }));
 
-    for (const key of ['installed', 'error', 'account', 'scm']) url.searchParams.delete(key);
+    for (const key of ['installed', 'error', 'account']) url.searchParams.delete(key);
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
   }, [t, ready]);
 
@@ -116,69 +129,69 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const BrandIcon = GITHUB_INTEGRATION.icon;
 
   return (
-    <Flexbox gap={32}>
+    <Flexbox gap={24}>
       <span className={styles.back} onClick={onBack}>
         <Icon icon={ArrowLeftIcon} size="small" />
         <Text type="secondary">{t('overview.title')}</Text>
       </span>
 
-      <Flexbox horizontal align="center" gap={20}>
+      <Flexbox horizontal align="center" gap={16}>
         <span className={styles.hero}>
-          <BrandIcon size={36} />
+          <BrandIcon size={32} />
         </span>
-        <Flexbox gap={4}>
-          <Text strong style={{ fontSize: 22 }}>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
+          <Text strong style={{ fontSize: 20 }}>
             {GITHUB_INTEGRATION.name}
           </Text>
           <Text type="secondary">{t('github.tagline')}</Text>
         </Flexbox>
+        <a
+          className={styles.docs}
+          href={GITHUB_INTEGRATION.docsUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <Icon icon={BookOpenIcon} size="small" />
+          <Text style={{ fontSize: 13 }} type="secondary">
+            {t('github.info.docsLink')}
+          </Text>
+        </a>
       </Flexbox>
 
-      {data.isInitialLoading ? (
-        <Skeleton height={64} />
-      ) : (
+      {scope === 'workspace' && !data.isInitialLoading ? (
         <Block className={styles.infoBar} variant={'filled'}>
           <Flexbox horizontal align="center" gap={32} wrap="wrap">
             {first ? (
               <Flexbox horizontal align="center" gap={10}>
                 <Avatar
                   avatar={identity?.avatarUrl ?? first.metadata.accountAvatarUrl ?? undefined}
-                  size={28}
+                  size={24}
                   title={first.installedByExternalLogin ?? first.accountLogin}
                 />
-                <Flexbox gap={2}>
+                <Flexbox gap={1}>
                   <span className={styles.infoLabel}>{t('github.info.enabledBy')}</span>
-                  <Text>
+                  <Text style={{ fontSize: 13 }}>
                     {first.installedByExternalLogin ?? first.accountLogin} ·{' '}
                     {new Date(first.createdAt).toLocaleDateString()}
                   </Text>
                 </Flexbox>
               </Flexbox>
             ) : (
-              <Flexbox gap={2}>
+              <Flexbox gap={1}>
                 <span className={styles.infoLabel}>{t('github.info.status')}</span>
-                <Text>
+                <Text style={{ fontSize: 13 }}>
                   {config?.enabled ? t('github.info.notConnected') : t('github.info.notConfigured')}
                 </Text>
               </Flexbox>
             )}
-            <Flexbox gap={2}>
-              <span className={styles.infoLabel}>{t('github.info.docs')}</span>
-              <a href={GITHUB_INTEGRATION.docsUrl} rel="noreferrer" target="_blank">
-                <Flexbox horizontal align="center" gap={4}>
-                  <Icon icon={BookOpenIcon} size="small" />
-                  <Text>{t('github.info.docsLink')}</Text>
-                </Flexbox>
-              </a>
-            </Flexbox>
           </Flexbox>
         </Block>
-      )}
+      ) : null}
 
       {data.isInitialLoading ? (
-        <Skeleton height={120} />
+        <Skeleton height={96} />
       ) : (
-        <Connections identity={identity} installHref={installHref} installations={installations} />
+        <Connections installHref={installHref} installations={installations} scope={scope} />
       )}
 
       <Automation />
