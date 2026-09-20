@@ -33,6 +33,20 @@ omit reconstructible message history and tool-set fields; share-visitor redactio
 always takes precedence. Internal state persistence and local done events are
 unaffected. This option does not change terminal message-patch reconciliation.
 
+### 0.2 Projected `tool_end` results
+
+`tool_end` announces that a tool finished; it is not how the result reaches the
+screen. On this wire the event drives an executor's `onAfterCall` hook and the
+Work-view refresh, both of which read `result.success` / `result.workRegistration`.
+So the gateway push drops `result.content` and runs `result.state` through the same
+per-tool projectors the read path uses, keeping mid-run and settled renders
+identical. The body arrives with the message (`message_patch` / `getMessages`),
+where it is already projected and hydrated on demand.
+
+This is applied in `GatewayStreamNotifier`, the WS transport seam. In-process
+consumers — the OpenAI-compatible Responses endpoint, recorded step events — install
+their own stream manager, never reach this path, and keep the real body.
+
 ### 0.1 Native runtime message reconciliation
 
 For the server-owned native agent harness, protocol v2 avoids repeating the complete

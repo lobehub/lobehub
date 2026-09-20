@@ -1,4 +1,5 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
+import { projectToolEndResult } from '@lobechat/tool-view-model';
 import type { ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -22,6 +23,21 @@ import {
 import type { IStreamEventManager, PublishAgentRuntimeEndParams } from './types';
 
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
+
+/**
+ * Reduce an event to what the gateway wire actually needs.
+ *
+ * Today that means `tool_end`: the body of a tool result reaches the screen
+ * through the read path, which already projects it, so shipping the raw body
+ * here is a second copy of the largest payload on the connection. See
+ * `projectToolEndResult` for what survives and why.
+ *
+ * This is the transport seam on purpose. The shared stream-manager chokepoint
+ * would also catch the Responses API and the CLI's `--verbose`, both of which
+ * print the body.
+ */
+const projectGatewayEventData = (data: unknown, eventType: unknown): unknown =>
+  eventType === 'tool_end' ? projectToolEndResult(data) : data;
 
 const POST_TIMEOUT = 5000; // 5s per request
 const MAX_INFLIGHT = 20; // bounded concurrency
@@ -402,7 +418,13 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     const sanitizedEvent =
       event.data === undefined
         ? event
-        : { ...event, data: sanitizeGatewayEventData(event.data, redaction, event.type) };
+        : {
+            ...event,
+            data: projectGatewayEventData(
+              sanitizeGatewayEventData(event.data, redaction, event.type),
+              event.type,
+            ),
+          };
     const pushes: Promise<void>[] = [
       this.httpPost('/api/operations/push-event', {
         event: sanitizedEvent,
