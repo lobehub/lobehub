@@ -450,25 +450,21 @@ export const discoverTools = async (
   const toolReads = disableTools
     ? undefined
     : {
+        // The fallbacks sit OUTSIDE `traceDiscoveryStage` on purpose: the wrapper
+        // only marks a span errored when its callback throws, so absorbing the
+        // failure inside it would report a healthy stage for a failed read.
         agentDocuments: started(
-          traceDiscoveryStage('agent_documents', async () => {
-            try {
-              return await deps.agentDocumentsService.hasDocuments(resolvedAgentId);
-            } catch {
-              // Agent documents check is non-critical
-              return false;
-            }
-          }),
+          traceDiscoveryStage('agent_documents', () =>
+            deps.agentDocumentsService.hasDocuments(resolvedAgentId),
+          ).catch(() => false), // non-critical
         ),
         attachedFileTypes: started(readAttachedFileTypes()),
         composioManifests: started(
-          traceDiscoveryStage('composio', async () => {
-            try {
-              return await deps.composioService.getComposioManifests(resolvedAgentId);
-            } catch (error) {
-              log('execAgent: failed to fetch composio manifests: %O', error);
-              return [] as LobeToolManifest[];
-            }
+          traceDiscoveryStage('composio', () =>
+            deps.composioService.getComposioManifests(resolvedAgentId),
+          ).catch((error) => {
+            log('execAgent: failed to fetch composio manifests: %O', error);
+            return [] as LobeToolManifest[];
           }),
         ),
         connectors: started(readConnectors()),

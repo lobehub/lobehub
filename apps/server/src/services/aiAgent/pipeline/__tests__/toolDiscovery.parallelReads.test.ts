@@ -1,3 +1,4 @@
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +14,7 @@ const {
   mockGetAgentConfig,
   mockGetUserSettings,
   mockMessageCreate,
+  discoverySpan,
   mockScheduleStaleConnectorToolsRefresh,
   reads,
 } = vi.hoisted(() => {
@@ -57,6 +59,7 @@ const {
   };
 
   return {
+    discoverySpan: { end: vi.fn(), setAttribute: vi.fn(), setStatus: vi.fn() },
     mockCreateOperation: vi.fn(),
     mockGetAgentConfig: vi.fn(),
     mockGetUserSettings: vi.fn(),
@@ -72,6 +75,12 @@ vi.mock('@/database/models/file', () => ({
       findByIds: vi.fn().mockResolvedValue([]),
     };
   }),
+}));
+
+vi.mock('@lobechat/observability-otel/modules/agent-runtime', () => ({
+  tracer: {
+    startActiveSpan: (_name: string, fn: (span: unknown) => unknown) => fn(discoverySpan),
+  },
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -301,5 +310,23 @@ describe('discoverTools - independent reads run together', () => {
       'plugins',
       'skills',
     ]);
+  }, 15_000);
+
+  // A stage that degrades to an empty result still has to report the failure on
+  // its span: absorbing it inside `traceDiscoveryStage` would leave the stage
+  // looking healthy, and these spans are the only per-stage breakdown there is.
+  it('reports a failed read on its span while the run still starts', async () => {
+    reads.composio.mockImplementationOnce(async () => {
+      reads.started.push('composio');
+      throw new Error('composio down');
+    });
+
+    const result = await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    expect(result.success).toBe(true);
+    expect(discoverySpan.setStatus).toHaveBeenCalledWith({
+      code: SpanStatusCode.ERROR,
+      message: 'composio down',
+    });
   }, 15_000);
 });
