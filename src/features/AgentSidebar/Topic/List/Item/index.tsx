@@ -538,11 +538,20 @@ const TopicItemRow = memo<TopicItemRowProps>(
           extra={
             <>
               <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
-              <RunningElapsedTime
-                agentId={activeAgentId}
-                runStartedAt={runStartedAt}
-                topicId={id}
-              />
+              {/* Gated on the SAME boolean that draws the running ring: both say
+                  "this row is visibly running", and a row that stopped spinning
+                  must not keep counting. The server `runStartedAt` fallback only
+                  knows the persisted `running` status, which outlives the answer
+                  — it stays set through the post-visible-output tail where the
+                  ring is deliberately masked (#16518) and the terminal
+                  bookkeeping can run for tens of seconds. */}
+              {shouldShowRunningIcon && (
+                <RunningElapsedTime
+                  agentId={activeAgentId}
+                  runStartedAt={runStartedAt}
+                  topicId={id}
+                />
+              )}
             </>
           }
           onClick={handleClick}

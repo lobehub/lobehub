@@ -289,6 +289,40 @@ describe('TopicItem active state', () => {
     expect(screen.queryByTestId('topic-item-icon')).not.toBeInTheDocument();
   });
 
+  // Same masked tail, now with the server fallback in play: the answer is
+  // visibly complete (ring masked) while the operation finishes its terminal
+  // bookkeeping, which on the server routinely runs for seconds. `runStartedAt`
+  // only knows the persisted `running` status, so it stays set across that
+  // whole window — without the ring's own gate the row kept counting next to a
+  // finished answer.
+  it('hides the running elapsed time during the masked running tail', () => {
+    vi.useFakeTimers();
+    const now = Date.UTC(2026, 0, 1, 0, 2, 37);
+    vi.setSystemTime(now);
+    runningStartTimeMock.value = undefined;
+    activeTopicIdMock.value = 'tpc_test';
+    agentRuntimeRunningMock.value = true;
+    useTopicNavigationMock.mockReturnValue({
+      isInAgentSubRoute: false,
+      isInTopicContextRoute: true,
+      navigateToTopic: vi.fn(),
+      routeTopicId: 'tpc_test',
+      urlTopicId: 'tpc_test',
+    });
+
+    render(
+      <TopicItem
+        id="tpc_test"
+        runStartedAt={new Date(now - 157_000).toISOString()}
+        status="running"
+        title="Topic"
+      />,
+    );
+
+    expect(screen.queryByTestId('ring-loading')).not.toBeInTheDocument();
+    expect(screen.queryByText('02:37')).not.toBeInTheDocument();
+  });
+
   it('keeps idle topics iconless', () => {
     useTopicNavigationMock.mockReturnValue({
       isInAgentSubRoute: false,
