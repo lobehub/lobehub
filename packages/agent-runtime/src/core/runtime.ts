@@ -468,7 +468,6 @@ export class AgentRuntime {
       messages: [],
       status: 'idle',
       stepCount: 0,
-      toolManifestMap: {},
       usage: AgentRuntime.createDefaultUsage(),
       // User provided values override defaults
       ...(partialState || { operationId: '' }),

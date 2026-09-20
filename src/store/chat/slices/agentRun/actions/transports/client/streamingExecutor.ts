@@ -361,13 +361,13 @@ export class StreamingExecutorActionImpl {
         },
         modelRuntimeConfig,
         operationId: operationId ?? agentId,
+        // Single copy of the run's tool set, like the server's state.
         operationToolSet: {
           enabledToolIds,
           manifestMap: toolManifestMap,
           sourceMap: {},
           tools: toolsDetailed.tools ?? [],
         },
-        toolManifestMap,
         userInterventionConfig,
       });
     const state: AgentState = {

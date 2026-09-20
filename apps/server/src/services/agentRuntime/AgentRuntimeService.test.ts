@@ -470,8 +470,8 @@ describe('AgentRuntimeService', () => {
           stepCount: 0,
           messages: [],
           modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          operationToolSet: expect.objectContaining({ manifestMap: {} }),
           origin: expect.objectContaining({ userId: mockParams.userId }),
-          toolManifestMap: {},
           world: expect.objectContaining({ agent: mockParams.agentConfig }),
         }),
       );
@@ -490,6 +490,29 @@ describe('AgentRuntimeService', () => {
         priority: 'high',
         delay: 50,
       });
+    });
+
+    it('stores the run tool set once, on the operation slot', async () => {
+      const manifestMap = { 'lobe-web-browsing': { identifier: 'lobe-web-browsing' } };
+
+      await service.createOperation({
+        ...mockParams,
+        toolSet: {
+          enabledToolIds: ['lobe-web-browsing'],
+          executorMap: {},
+          manifestMap,
+          sourceMap: { 'lobe-web-browsing': 'builtin' },
+          tools: [{ function: { name: 'search' }, type: 'function' }],
+        } as OperationCreationParams['toolSet'],
+      });
+
+      const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
+      expect(state.operationToolSet.manifestMap).toEqual(manifestMap);
+      // Manifests are the heaviest thing on the state and it is re-serialized at
+      // every step, so the legacy top-level mirrors are not written any more.
+      for (const mirror of ['toolExecutorMap', 'toolManifestMap', 'toolSourceMap', 'tools']) {
+        expect(mirror in state).toBe(false);
+      }
     });
 
     it('keeps the frozen model facts on the run state but out of durable storage', async () => {

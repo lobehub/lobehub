@@ -209,6 +209,56 @@ describe('normalizeAgentState', () => {
     expect(normalized.metadata).toEqual({});
   });
 
+  it('lifts the legacy top-level tool mirrors into the operation slot', () => {
+    const manifestMap = { 'lobe-web-browsing': { identifier: 'lobe-web-browsing' } };
+    const state = {
+      ...baseState(),
+      toolExecutorMap: { 'lobe-web-browsing': 'server' },
+      toolManifestMap: manifestMap,
+      toolSourceMap: { 'lobe-web-browsing': 'builtin' },
+      tools: [{ function: { name: 'search' }, type: 'function' }],
+    } as unknown as AgentState;
+
+    const normalized = normalizeAgentState(state);
+
+    expect(normalized.operationToolSet).toEqual({
+      enabledToolIds: [],
+      executorMap: { 'lobe-web-browsing': 'server' },
+      manifestMap,
+      sourceMap: { 'lobe-web-browsing': 'builtin' },
+      tools: [{ function: { name: 'search' }, type: 'function' }],
+    });
+    // The blob no longer carries the tool set twice.
+    expect('toolManifestMap' in normalized).toBe(false);
+    expect('toolSourceMap' in normalized).toBe(false);
+    expect('toolExecutorMap' in normalized).toBe(false);
+    expect('tools' in normalized).toBe(false);
+    // Input is not mutated.
+    expect(state.toolManifestMap).toBe(manifestMap);
+  });
+
+  it('keeps the operation slot over the legacy tool mirrors', () => {
+    const state = {
+      ...baseState(),
+      operationToolSet: {
+        enabledToolIds: ['lobe-web-browsing'],
+        executorMap: {},
+        manifestMap: { 'lobe-web-browsing': { identifier: 'lobe-web-browsing' } },
+        sourceMap: {},
+        tools: [],
+      },
+      toolManifestMap: { stale: { identifier: 'stale' } },
+    } as unknown as AgentState;
+
+    const normalized = normalizeAgentState(state);
+
+    expect(normalized.operationToolSet?.manifestMap).toEqual({
+      'lobe-web-browsing': { identifier: 'lobe-web-browsing' },
+    });
+    expect(normalized.operationToolSet?.enabledToolIds).toEqual(['lobe-web-browsing']);
+    expect('toolManifestMap' in normalized).toBe(false);
+  });
+
   it('lifts a partial device binding without inventing an id', () => {
     const state = {
       ...baseState(),

@@ -62,6 +62,30 @@ const LEGACY_KEY_PATHS: Record<string, readonly string[]> = {
   deviceSystemInfo: ['binding', 'device', 'systemInfo'],
 };
 
+/**
+ * Top-level keys that mirrored a slot instead of hiding in `metadata`. The tool
+ * set used to be written twice — once as `operationToolSet`, once as these four
+ * — which doubled the heaviest part of the blob on every step. They are lifted
+ * into the slot and dropped.
+ */
+const LEGACY_MIRROR_PATHS: Record<string, readonly string[]> = {
+  toolExecutorMap: ['operationToolSet', 'executorMap'],
+  toolManifestMap: ['operationToolSet', 'manifestMap'],
+  toolSourceMap: ['operationToolSet', 'sourceMap'],
+  tools: ['operationToolSet', 'tools'],
+};
+
+const LEGACY_MIRROR_KEYS = Object.keys(LEGACY_MIRROR_PATHS);
+
+/**
+ * An empty mirror carries no tool set, so lifting it would only rewrite the blob
+ * for nothing (and would hide a populated slot behind an empty default).
+ */
+const isPopulatedMirror = (value: unknown) =>
+  Array.isArray(value)
+    ? value.length > 0
+    : !!value && typeof value === 'object' && Object.keys(value).length > 0;
+
 const LEGACY_KEYS = Object.keys(LEGACY_KEY_PATHS);
 
 const isPresent = (record: Record<string, unknown>, key: string) =>
@@ -96,22 +120,51 @@ const setIfAbsent = (root: Record<string, unknown>, path: readonly string[], val
  * (the in-flight state blob has a hard 10MB ceiling). `null` legacy values
  * are treated as absent: the slots use `undefined` only. Returns the same
  * object when nothing needed lifting.
+ *
+ * The run's tool set is lifted the same way, from the four top-level mirrors it
+ * used to be written to alongside `operationToolSet` — see
+ * {@link LEGACY_MIRROR_PATHS}.
  */
 export const normalizeAgentState = <T extends AgentState>(state: T): T => {
   const metadata = state.metadata;
-  if (!metadata || !LEGACY_KEYS.some((key) => Object.prototype.hasOwnProperty.call(metadata, key)))
-    return state;
+  const hasLegacyMetadata =
+    !!metadata && LEGACY_KEYS.some((key) => Object.prototype.hasOwnProperty.call(metadata, key));
+  const mirrorKeys = LEGACY_MIRROR_KEYS.filter(
+    (key) =>
+      isPresent(state as unknown as Record<string, unknown>, key) &&
+      isPopulatedMirror((state as unknown as Record<string, unknown>)[key]),
+  );
+  if (!hasLegacyMetadata && mirrorKeys.length === 0) return state;
 
   const next = { ...state } as Record<string, unknown>;
-  for (const [legacyKey, path] of Object.entries(LEGACY_KEY_PATHS)) {
-    if (isPresent(metadata, legacyKey)) setIfAbsent(next, path, metadata[legacyKey]);
+
+  if (metadata && hasLegacyMetadata) {
+    for (const [legacyKey, path] of Object.entries(LEGACY_KEY_PATHS)) {
+      if (isPresent(metadata, legacyKey)) setIfAbsent(next, path, metadata[legacyKey]);
+    }
+
+    const strippedMetadata: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(metadata)) {
+      if (!LEGACY_KEYS.includes(key)) strippedMetadata[key] = value;
+    }
+    next.metadata = strippedMetadata;
   }
 
-  const strippedMetadata: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(metadata)) {
-    if (!LEGACY_KEYS.includes(key)) strippedMetadata[key] = value;
+  if (mirrorKeys.length > 0) {
+    for (const key of mirrorKeys) {
+      setIfAbsent(
+        next,
+        LEGACY_MIRROR_PATHS[key],
+        (state as unknown as Record<string, unknown>)[key],
+      );
+      delete next[key];
+    }
+    // `setIfAbsent` cloned the slot on the way in, so this default cannot reach
+    // the caller's state. A pre-slot blob never had the enabled ids, and the step
+    // delta then starts from nothing — how those operations already behaved.
+    const toolSet = next.operationToolSet as Record<string, unknown>;
+    if (toolSet.enabledToolIds === undefined) toolSet.enabledToolIds = [];
   }
-  next.metadata = strippedMetadata;
 
   return next as T;
 };

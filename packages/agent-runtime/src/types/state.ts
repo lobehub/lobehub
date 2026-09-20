@@ -463,14 +463,25 @@ export interface AgentState {
     counts: Record<string, number>;
   };
 
-  /** Tool executor map for routing tool execution between server and client */
+  /**
+   * Legacy mirrors of {@link OperationToolSet}, kept only so operations that
+   * started before `operationToolSet` existed still resolve their tools. Nothing
+   * writes them: the maps are the heaviest thing on the state and it is
+   * re-serialized at every step boundary. Read through `selectToolManifestMap`
+   * and friends, which prefer the slot; `normalizeAgentState` lifts these into it
+   * on load.
+   *
+   * @deprecated Use `operationToolSet`.
+   */
   toolExecutorMap?: Record<string, ToolExecutor>;
 
-  toolManifestMap: Record<string, any>;
+  /** @deprecated Use `operationToolSet.manifestMap`. */
+  toolManifestMap?: Record<string, any>;
 
+  /** @deprecated Use `operationToolSet.tools`. */
   tools?: any[];
 
-  /** Tool source map for routing tool execution to correct handler */
+  /** @deprecated Use `operationToolSet.sourceMap`. */
   toolSourceMap?: Record<string, ToolSource>;
 
   /**

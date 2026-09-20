@@ -1,4 +1,8 @@
-import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
+import {
+  DEFAULT_SECURITY_BLACKLIST,
+  InterventionChecker,
+  selectToolManifestMap,
+} from '@lobechat/agent-runtime';
 import {
   type ChatToolPayload,
   classifyToolInterventionPresentation,
@@ -168,7 +172,7 @@ const actionsFor = (
  * Unknown tools and incomplete discovery placeholders remain Review-only.
  */
 const hasAuthoritativeApiDefinition = (state: any, tool: ChatToolPayload): boolean => {
-  const baseManifestMap = state?.operationToolSet?.manifestMap ?? state?.toolManifestMap ?? {};
+  const baseManifestMap = selectToolManifestMap(state ?? {});
   const activatedManifestMap = Object.fromEntries(
     (Array.isArray(state?.activatedStepTools) ? state.activatedStepTools : [])
       .filter(

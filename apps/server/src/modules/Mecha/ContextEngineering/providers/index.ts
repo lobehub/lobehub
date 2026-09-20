@@ -1,4 +1,4 @@
-import type { AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
@@ -191,7 +191,7 @@ export const createServerContextFactProviders = ({
     // providers, so presence in the tool set is the connection).
     listConnectedConnectorIds: async (agentId) => {
       const connected = await loadConnectedComposioIds(db, userId, ctx.workspaceId, agentId);
-      const sourceMap = state.operationToolSet?.sourceMap ?? state.toolSourceMap ?? {};
+      const sourceMap = selectToolSourceMap(state);
       for (const [identifier, source] of Object.entries(sourceMap)) {
         if (source === 'lobehubSkill') connected.add(identifier);
       }

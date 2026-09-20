@@ -1115,13 +1115,14 @@ export class AgentRuntimeService {
         // modelRuntimeConfig at state level for executor fallback
         modelRuntimeConfig,
         operationId,
+        // The run's only copy of its tool set. The manifest map is the heaviest
+        // thing on the state and the state is re-serialized at every step, so the
+        // former top-level mirrors (`tools`, `toolManifestMap`, `toolSourceMap`,
+        // `toolExecutorMap`) are no longer written; readers go through
+        // `selectToolManifestMap` and friends.
         operationToolSet,
         status: 'idle',
         stepCount: initialStepCount,
-        // Backward-compat: resolved tool fields read by RuntimeExecutors
-        toolExecutorMap: operationToolSet.executorMap,
-        toolManifestMap: operationToolSet.manifestMap,
-        toolSourceMap: operationToolSet.sourceMap,
         // How the run executes — frozen from here on.
         plan: {
           eval: evalRuntime,
@@ -1157,7 +1158,6 @@ export class AgentRuntimeService {
           userMemory,
           userTimezone,
         },
-        tools: operationToolSet.tools,
         // User intervention config for headless mode in async tasks
         userInterventionConfig,
       } as Partial<AgentState>;

@@ -1,6 +1,7 @@
 export * from './llmErrorClassifier';
 export * from './messageSelectors';
 export * from './normalizeAgentState';
+export * from './operationToolSet';
 export * from './replay';
 export * from './runtimeRetry';
 export * from './status';
