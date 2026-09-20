@@ -281,6 +281,11 @@ tags:
     push:
       branches:
         - main
+    workflow_run:
+      workflows:
+        - Upstream Sync
+      types:
+        - completed
     workflow_dispatch:
 
   permissions:
@@ -299,6 +304,7 @@ tags:
 
   jobs:
     deploy:
+      if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
       runs-on: ubuntu-latest
       timeout-minutes: 90
 
@@ -328,7 +334,7 @@ tags:
           run: vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
   ```
 
-  每次 `main` 分支更新后，该工作流都会自动构建并部署；也可以在 **Actions → Vercel Prebuilt Deploy → Run workflow** 中手动触发。
+  每次 `main` 分支更新后，该工作流都会自动构建并部署；仓库内置的 **Upstream Sync** 工作流成功完成后也会触发部署。必须补充这一触发条件，是因为[使用 `GITHUB_TOKEN` 推送的提交不会启动另一个工作流](https://docs.github.com/zh-cn/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)。你也可以在 **Actions → Vercel Prebuilt Deploy → Run workflow** 中手动触发。
 
   ### 关闭 Vercel 原生 Git 部署
 
