@@ -11,8 +11,13 @@ import openaiModels from 'model-bank/openai';
  * know — the caller should then store the tokens without a computed cost
  * rather than guess a price.
  */
+interface BankModelCard {
+  id: string;
+  pricing?: { units?: { name: string; rate?: number; unit: string }[] };
+}
+
 const bankModelPrice = (
-  models: typeof anthropicModels,
+  models: readonly BankModelCard[],
   modelId: string,
 ): QuotaModelPrice | null => {
   const model = models.find((m) => m.id === modelId);
