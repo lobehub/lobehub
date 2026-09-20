@@ -142,6 +142,26 @@ describe('MobileEvidenceReview notes button', () => {
   });
 });
 
+describe('MobileEvidenceReview image row', () => {
+  it('keeps one row under the image: the hint and the image switcher, no zoom controls', () => {
+    render(<MobileEvidenceReview model={withImage()} />);
+
+    // The switcher follows the stage instead of sitting above it.
+    const stage = screen.getByText('stage-stub');
+    const next = screen.getByRole('button', { name: 'acceptance.review.nextImage' });
+    expect(stage.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'acceptance.review.previousImage' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('acceptance.review.mobileBrowseHint')).toBeInTheDocument();
+
+    // Zoom is two fingers only on a phone.
+    expect(screen.queryByRole('button', { name: 'acceptance.review.zoomIn' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'acceptance.review.zoomOut' })).toBeNull();
+    expect(screen.queryByText(/^\d+%$/)).toBeNull();
+  });
+});
+
 describe('MobileEvidenceReview marking mode', () => {
   it('enters marking mode from the button beside the notes button', () => {
     const advance = vi.fn();

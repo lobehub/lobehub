@@ -3,11 +3,10 @@
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronLeft, ChevronRight, NotebookPen, PencilLine, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, NotebookPen, PencilLine } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ZOOM_STEPS } from '../Review/rejectDraft';
 import type { RejectReviewModel } from '../Review/useRejectReview';
 import { AttachmentStrip, AttachmentUploadButton } from './attachments';
 import { EvidenceStage } from './EvidenceStage';
@@ -146,28 +145,6 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
       <div className={styles.scroll}>
         {activeEvidence && (
           <>
-            <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-              <ActionIcon
-                aria-label={t('acceptance.review.previousImage')}
-                disabled={activeIndex <= 0}
-                icon={ChevronLeft}
-                size={{ blockSize: 44, size: 20 }}
-                onClick={() => model.selectEvidence(activeIndex - 1)}
-              />
-              <Text aria-live={'polite'} style={{ flex: 1, textAlign: 'center' }}>
-                {t('acceptance.review.imageNumber', {
-                  current: activeIndex + 1,
-                  total: evidence.length,
-                })}
-              </Text>
-              <ActionIcon
-                aria-label={t('acceptance.review.nextImage')}
-                disabled={activeIndex >= evidence.length - 1}
-                icon={ChevronRight}
-                size={{ blockSize: 44, size: 20 }}
-                onClick={() => model.selectEvidence(activeIndex + 1)}
-              />
-            </Flexbox>
             <div className={styles.stage}>
               <EvidenceStage
                 touch
@@ -182,10 +159,11 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 onZoom={model.setZoom}
               />
             </div>
-            <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-              {/* The hint is the region's receipt: it says the box landed AND
-                  that it is still editable. It shares the zoom row so the
-                  image above keeps the height a row of its own would cost. */}
+            {/* One row under the image: the hint on the left (in marking mode it
+                is the region's receipt — the box landed and is still editable),
+                the image switcher on the right. Zoom has no controls here: two
+                fingers do it, and a percentage nobody sets is noise on a phone. */}
+            <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
               <Text fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
                 {drawing && activeAnnotations.length > 0
                   ? t('acceptance.review.mobileDrawnHint', { count: activeAnnotations.length })
@@ -196,19 +174,24 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                     )}
               </Text>
               <ActionIcon
-                aria-label={t('acceptance.review.zoomOut')}
-                disabled={zoom <= ZOOM_STEPS[0]}
-                icon={ZoomOut}
+                aria-label={t('acceptance.review.previousImage')}
+                disabled={activeIndex <= 0}
+                icon={ChevronLeft}
                 size={{ blockSize: 44, size: 20 }}
-                onClick={() => model.stepZoom(-1)}
+                onClick={() => model.selectEvidence(activeIndex - 1)}
               />
-              <Text fontSize={12}>{Math.round(zoom * 100)}%</Text>
+              <Text aria-live={'polite'} fontSize={12} style={{ whiteSpace: 'nowrap' }}>
+                {t('acceptance.review.imageNumber', {
+                  current: activeIndex + 1,
+                  total: evidence.length,
+                })}
+              </Text>
               <ActionIcon
-                aria-label={t('acceptance.review.zoomIn')}
-                disabled={zoom >= ZOOM_STEPS.at(-1)!}
-                icon={ZoomIn}
+                aria-label={t('acceptance.review.nextImage')}
+                disabled={activeIndex >= evidence.length - 1}
+                icon={ChevronRight}
                 size={{ blockSize: 44, size: 20 }}
-                onClick={() => model.stepZoom(1)}
+                onClick={() => model.selectEvidence(activeIndex + 1)}
               />
             </Flexbox>
           </>
