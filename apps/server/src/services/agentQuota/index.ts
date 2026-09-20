@@ -33,7 +33,7 @@ import {
   QuotaCostSource,
 } from '@/database/types/agentQuota';
 
-import { claudeModelPrice } from './pricing';
+import { claudeModelPrice, codexModelPrice } from './pricing';
 
 const readQuotaWindowMetadata = (raw: Record<string, unknown> | null) => ({
   ...(typeof raw?.windowMinutes === 'number' &&
@@ -245,7 +245,11 @@ export class AgentQuotaService {
       ? await this.accounts.findByExternalId(params.provider, params.externalAccountId)
       : null;
 
-    const price = params.model ? claudeModelPrice(params.model) : null;
+    const price = params.model
+      ? params.provider === 'codex'
+        ? codexModelPrice(params.model)
+        : claudeModelPrice(params.model)
+      : null;
     const costUsd = price ? computeTurnCostUsd(params.usage, price) : null;
 
     const row = {

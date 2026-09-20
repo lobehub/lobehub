@@ -510,7 +510,7 @@ export const executeHeterogeneousAgent = async (
     usage: unknown;
   }) => {
     if (
-      adapterType !== 'claude-code' ||
+      (adapterType !== 'claude-code' && adapterType !== 'codex') ||
       (heterogeneousProvider.authMode ?? 'subscription') !== 'subscription'
     )
       return;
@@ -522,14 +522,28 @@ export const executeHeterogeneousAgent = async (
         messageId: intent.messageId,
         model: intent.model,
         operationId,
-        provider: 'claude-code',
+        provider: adapterType,
         topicId: context.topicId ?? undefined,
-        usage: {
-          cacheRead: u.inputCachedTokens,
-          cacheWrite5m: u.inputWriteCacheTokens,
-          input: u.inputCacheMissTokens,
-          output: u.totalOutputTokens,
-        },
+        usage:
+          adapterType === 'codex'
+            ? {
+                // Codex has no cache-write tier, and its reasoning output bills
+                // at the output rate as its own ledger tier — split it out of
+                // the plain output count.
+                cacheRead: u.inputCachedTokens,
+                input: u.inputCacheMissTokens,
+                output:
+                  u.totalOutputTokens === undefined
+                    ? undefined
+                    : u.totalOutputTokens - (u.outputReasoningTokens ?? 0),
+                reasoning: u.outputReasoningTokens,
+              }
+            : {
+                cacheRead: u.inputCachedTokens,
+                cacheWrite5m: u.inputWriteCacheTokens,
+                input: u.inputCacheMissTokens,
+                output: u.totalOutputTokens,
+              },
       })
       .catch(() => {});
   };
@@ -1978,6 +1992,21 @@ export const executeHeterogeneousAgent = async (
         .catch(() => {
           runExternalAccountId = quotaAccountPlan.externalAccountId;
         });
+    }
+    if (adapterType === 'codex' && !providerBindingActive) {
+      // Same attribution contract as Claude, but Codex has no per-account spawn
+      // mapping (resolveQuotaAccountSpawnPlan returns NO_ROUTING), so the live
+      // sampler identity is the only source. A sampler failure leaves the run
+      // unattributed rather than misattributed.
+      heterogeneousAgentService
+        .getCodexQuota({
+          command: resolveHeterogeneousAgentCommand(adapterType, heterogeneousProvider.command),
+          env: sessionEnv,
+        })
+        .then((snapshot) => {
+          runExternalAccountId = snapshot?.identity?.externalAccountId ?? undefined;
+        })
+        .catch(() => {});
     }
     ipcRunSessionId = result.sessionId;
     if (!ipcRunSessionId) throw new Error('Agent session returned no sessionId');

@@ -412,6 +412,7 @@ export default {
   'heteroAgent.claudeQuota.calendar.legendMore': 'Heavy',
   'heteroAgent.claudeQuota.calendar.legendReset': 'Window reset',
   'heteroAgent.claudeQuota.calendar.monthSpend': 'Daily spend',
+  'heteroAgent.claudeQuota.calendar.monthlyHistory': 'Monthly windows',
   'heteroAgent.claudeQuota.calendar.noLedgerSpend': 'No token usage recorded in this window',
   'heteroAgent.claudeQuota.calendar.noLedgerSpendHint':
     'Token history is only recorded for runs started in LobeHub after usage tracking was enabled. Earlier usage and runs started directly from the terminal cannot be backfilled.',
@@ -480,6 +481,7 @@ export default {
   'heteroAgent.claudeSdkRuntime.state.stale': 'SDK stale',
   'heteroAgent.claudeSdkRuntime.state.starting': 'SDK starting',
   'heteroAgent.claudeSdkRuntime.tooltip': '{{state}}. Active background tasks: {{count}}.',
+  'heteroAgent.codexQuota.calendar.title': 'Codex usage calendar',
   'heteroAgent.codexQuota.doesNotExpire': 'Does not expire',
   'heteroAgent.codexQuota.errorConnection':
     "Couldn't reach the Codex quota endpoint. Check your network or LobeHub proxy settings.",
@@ -509,6 +511,7 @@ export default {
   'heteroAgent.codexQuota.totalEarned_one': '{{count}} earned in total',
   'heteroAgent.codexQuota.totalEarned_other': '{{count}} earned in total',
   'heteroAgent.codexQuota.tooltip': 'View Codex quota',
+  'heteroAgent.kimiCodeQuota.calendar.title': 'Kimi Code usage calendar',
   'heteroAgent.kimiCodeQuota.errorGeneric': "Couldn't load Kimi Code quota. Try again later.",
   'heteroAgent.kimiCodeQuota.extraUsage': 'Extra Usage',
   'heteroAgent.kimiCodeQuota.fiveHour': '5-hour',

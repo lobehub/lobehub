@@ -6,14 +6,22 @@ import {
   buildDailySpend,
   buildSessionGrid,
   buildWindowStats,
+  currentWindow,
   formatTokens,
   isCalendarMonthAvailable,
+  matchesSeries,
+  MONTHLY_WINDOW_MS,
+  type QuotaSeriesKey,
   type QuotaWindowSpan,
+  selectProviderQuotaAccount,
   selectQuotaAccount,
+  seriesId,
   shouldShowHeatDot,
   trackedCostOf,
   utilizationLevelOf,
   utilizationStatusOf,
+  windowMsOf,
+  windowSeriesIdOf,
 } from './quotaCalendarModel';
 
 const hour = 60 * 60 * 1000;
@@ -150,6 +158,23 @@ describe('quota calendar window statistics', () => {
     expect(selectQuotaAccount([accounts[0]])).toEqual(accounts[0]);
   });
 
+  it('selects the calendar account only inside the pool of the provider it opened for', () => {
+    const accounts = [
+      { externalAccountId: 'claude-ext', id: 'acc-claude', provider: 'claude-code' },
+      { externalAccountId: 'codex-ext', id: 'acc-codex', provider: 'codex' },
+      { externalAccountId: 'kimi-a', id: 'acc-kimi-a', provider: 'kimi-code' },
+      { externalAccountId: 'kimi-b', id: 'acc-kimi-b', provider: 'kimi-code' },
+    ];
+
+    expect(selectProviderQuotaAccount(accounts, 'kimi-code', 'kimi-b')).toEqual(accounts[3]);
+    expect(selectProviderQuotaAccount(accounts, 'codex')).toEqual(accounts[1]);
+    // Two kimi accounts and no explicit choice: ambiguous, not "any of them".
+    expect(selectProviderQuotaAccount(accounts, 'kimi-code')).toBeUndefined();
+    // No account of the opened provider: unavailable, never another provider's.
+    expect(selectProviderQuotaAccount(accounts, 'kimi-code', 'claude-ext')).toBeUndefined();
+    expect(selectProviderQuotaAccount([accounts[0]], 'codex')).toBeUndefined();
+  });
+
   it('limits calendar navigation to the two fully loaded months', () => {
     const now = at('2026-08-09T12:00:00');
 
@@ -180,6 +205,64 @@ describe('quota calendar window statistics', () => {
     [120, 'error'],
   ] as const)('maps %s%% utilization to %s pressure', (utilization, status) => {
     expect(utilizationStatusOf(utilization)).toBe(status);
+  });
+});
+
+describe('monthly quota series', () => {
+  const monthlySeries = (scopeKey: string): QuotaSeriesKey => ({ scopeKey, type: 'monthly' });
+  const monthReading = (limitType: string, capturedAt: number, resetsAt: number | null) => ({
+    capturedAt,
+    limitType,
+    resetsAt,
+    scopeKey: '',
+    utilization: 40,
+    windowMinutes: 43_200,
+  });
+
+  it('keeps month buckets out of the session and weekly series', () => {
+    const total = monthReading('month_total', 0, null);
+
+    expect(matchesSeries(total, { scopeKey: '', type: 'session' })).toBe(false);
+    expect(matchesSeries(total, { scopeKey: '', type: 'weekly' })).toBe(false);
+    expect(matchesSeries(total, monthlySeries('month_total'))).toBe(true);
+    // month_total and month_code are distinct quotas, not one monthly bucket.
+    expect(matchesSeries(monthReading('month_code', 0, null), monthlySeries('month_total'))).toBe(
+      false,
+    );
+    expect(matchesSeries(monthReading('month_code', 0, null), monthlySeries('month_code'))).toBe(
+      true,
+    );
+  });
+
+  it('buckets monthly windows by limitType instead of folding them into session', () => {
+    expect(windowSeriesIdOf('month_total', '')).toBe('monthly:month_total');
+    expect(windowSeriesIdOf('month_code', '')).toBe('monthly:month_code');
+    expect(windowSeriesIdOf('weekly_all', '')).toBe('weekly:');
+    expect(windowSeriesIdOf('weekly_scoped', 'Fable')).toBe('weekly:Fable');
+    expect(windowSeriesIdOf('session', '')).toBe('session:');
+    expect(windowSeriesIdOf('five_hour', '')).toBe('session:');
+  });
+
+  it('spans the 30-day window Kimi reports for its monthly buckets', () => {
+    expect(windowMsOf(monthlySeries('month_total'))).toBe(MONTHLY_WINDOW_MS);
+    expect(seriesId(monthlySeries('month_total'))).toBe('monthly:month_total');
+  });
+
+  it('finds the live monthly window from readings', () => {
+    const now = at('2026-08-09T12:00:00');
+    const resetsAt = at('2026-09-01T00:00:00');
+
+    const live = currentWindow(
+      [monthReading('month_total', now - 60_000, resetsAt)],
+      monthlySeries('month_total'),
+      now,
+    );
+
+    expect(live).toMatchObject({
+      peakUtilization: 40,
+      resetsAt,
+      windowStartAt: resetsAt - MONTHLY_WINDOW_MS,
+    });
   });
 });
 

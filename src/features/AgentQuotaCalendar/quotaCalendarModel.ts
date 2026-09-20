@@ -13,11 +13,14 @@ import dayjs from 'dayjs';
  *
  * Two limit windows matter to a coding agent and both are first-class here: the
  * 5-hour session window it actually works in, and the 7-day weekly window that
- * caps the week.
+ * caps the week. Kimi Code adds monthly buckets (`month_total` / `month_code`),
+ * which get their own series so they are never folded into the session view.
  */
 
 export const WEEKLY_WINDOW_MS = CLAUDE_WEEKLY_WINDOW_SECONDS * 1000;
 export const SESSION_WINDOW_MS = CLAUDE_SESSION_WINDOW_SECONDS * 1000;
+/** Kimi reports its month buckets as a 43200-minute (30-day) window. */
+export const MONTHLY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Two provider-reported reset instants for the same window may jitter a bit. */
 const RESET_MATCH_TOLERANCE_MS = 5 * 60 * 1000;
@@ -26,17 +29,37 @@ export const dayKeyOf = (time: number) => dayjs(time).format('YYYY-MM-DD');
 
 /** Which limit series a calendar view is reading. */
 export interface QuotaSeriesKey {
-  /** `''` for the account-wide weekly; a model name for a scoped weekly. */
+  /**
+   * `''` for the account-wide weekly; a model name for a scoped weekly. For a
+   * monthly series it carries the limitType itself (`month_total` /
+   * `month_code` are distinct quotas with an empty provider scopeKey).
+   */
   scopeKey: string;
-  type: 'session' | 'weekly';
+  type: 'monthly' | 'session' | 'weekly';
 }
 
 export const SESSION_SERIES: QuotaSeriesKey = { scopeKey: '', type: 'session' };
 
 export const seriesId = (series: QuotaSeriesKey) => `${series.type}:${series.scopeKey}`;
 
+/**
+ * Series bucket for a persisted or projected window row, mirroring
+ * `matchesSeries` for readings: weekly rows keep their model scope, monthly
+ * rows keep their limitType, everything else is the session window.
+ */
+export const windowSeriesIdOf = (limitType: string, scopeKey: string): string =>
+  limitType.startsWith('weekly')
+    ? `weekly:${scopeKey || ''}`
+    : limitType.startsWith('month')
+      ? `monthly:${limitType}`
+      : 'session:';
+
 export const windowMsOf = (series: QuotaSeriesKey) =>
-  series.type === 'session' ? SESSION_WINDOW_MS : WEEKLY_WINDOW_MS;
+  series.type === 'session'
+    ? SESSION_WINDOW_MS
+    : series.type === 'weekly'
+      ? WEEKLY_WINDOW_MS
+      : MONTHLY_WINDOW_MS;
 
 export interface BurnPoint {
   time: number;
@@ -87,6 +110,21 @@ export const selectQuotaAccount = <T extends QuotaAccountCandidate>(
   return accounts.length === 1 ? accounts[0] : undefined;
 };
 
+/**
+ * The account a calendar view reads: only the pool of the provider it was
+ * opened for, narrowed by the requested external account. Never falls back to
+ * another provider's account.
+ */
+export const selectProviderQuotaAccount = <T extends QuotaAccountCandidate & { provider: string }>(
+  accounts: T[],
+  provider: string,
+  externalAccountId?: string,
+): T | undefined =>
+  selectQuotaAccount(
+    accounts.filter((account) => account.provider === provider),
+    externalAccountId,
+  );
+
 /** The 90-day query guarantees complete data for the current and previous month. */
 export const isCalendarMonthAvailable = (month: dayjs.Dayjs, now: number) => {
   const current = dayjs(now).startOf('month');
@@ -97,10 +135,19 @@ const isSessionReading = (reading: QuotaLimitReading) =>
   reading.limitType === 'session' || reading.limitType === 'five_hour';
 
 /** Does this reading belong to the series a view is showing? */
-export const matchesSeries = (reading: QuotaLimitReading, series: QuotaSeriesKey) =>
-  series.type === 'session'
-    ? isSessionReading(reading)
-    : reading.limitType.startsWith('weekly') && (reading.scopeKey || '') === series.scopeKey;
+export const matchesSeries = (reading: QuotaLimitReading, series: QuotaSeriesKey) => {
+  switch (series.type) {
+    case 'session': {
+      return isSessionReading(reading);
+    }
+    case 'weekly': {
+      return reading.limitType.startsWith('weekly') && (reading.scopeKey || '') === series.scopeKey;
+    }
+    case 'monthly': {
+      return reading.limitType.startsWith('month') && reading.limitType === series.scopeKey;
+    }
+  }
+};
 
 const sortByCapturedAt = (readings: QuotaLimitReading[]) =>
   [...readings].sort((a, b) => a.capturedAt - b.capturedAt);

@@ -76,11 +76,13 @@ const mockStopSession = vi.fn();
 const mockCancelSession = vi.fn();
 const mockGetSessionInfo = vi.fn();
 const mockGetClaudeCodeIdentity = vi.fn(async (..._args: any[]) => null);
+const mockGetCodexQuota = vi.fn(async (..._args: any[]) => null);
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
     cancelSession: (...args: unknown[]) => mockCancelSession(...args),
     getClaudeCodeIdentity: (...args: any[]) => mockGetClaudeCodeIdentity(...args),
+    getCodexQuota: (...args: any[]) => mockGetCodexQuota(...args),
     getSessionInfo: (...args: any[]) => mockGetSessionInfo(...args),
     sendPrompt: (...args: any[]) => mockSendPrompt(...args),
     startSession: (...args: any[]) => mockStartSession(...args),
@@ -519,6 +521,7 @@ const codexTurnCompleted = (usage?: {
   cached_input_tokens?: number;
   input_tokens?: number;
   output_tokens?: number;
+  reasoning_output_tokens?: number;
 }) => ({
   ...(usage ? { usage } : {}),
   type: 'turn.completed',
@@ -4819,6 +4822,103 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         provider: 'claude-code',
         usage: { input: 100, output: 20 },
       });
+    });
+
+    // Codex turns burn the same subscription-shaped quota as Claude's, so they
+    // ledger too — with reasoning output split into its own tier (it bills at
+    // the output rate but is priced separately) and no cache-write tier.
+    it('ledgers codex turn usage via agentQuotaService.recordUsage with the reasoning split', async () => {
+      await runWithEvents(
+        [
+          codexSessionConfigured('gpt-5.3-codex'),
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Done.'),
+          codexTurnCompleted({
+            cached_input_tokens: 400,
+            input_tokens: 1000,
+            output_tokens: 300,
+            reasoning_output_tokens: 100,
+          }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const codexLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.provider === 'codex',
+      );
+      expect(codexLedgerCall).toBeDefined();
+      expect(codexLedgerCall![0]).toMatchObject({
+        model: 'gpt-5.3-codex',
+        provider: 'codex',
+        usage: { cacheRead: 400, input: 600, output: 200, reasoning: 100 },
+      });
+      expect(codexLedgerCall![0].usage.cacheWrite5m).toBeUndefined();
+    });
+
+    // Codex has no per-account spawn mapping, so attribution reads the live
+    // sampler identity of the login the run actually uses.
+    it('attributes codex ledger rows to the live codex login identity', async () => {
+      mockGetCodexQuota.mockResolvedValueOnce({
+        identity: { externalAccountId: 'chatgpt-acc-1' },
+      });
+
+      await runWithEvents(
+        [
+          codexSessionConfigured('gpt-5.3-codex'),
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Done.'),
+          codexTurnCompleted({ input_tokens: 100, output_tokens: 50 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const codexLedgerCall = mockRecordQuotaUsage.mock.calls.find(
+        ([p]: any) => p.provider === 'codex',
+      );
+      expect(codexLedgerCall).toBeDefined();
+      expect(codexLedgerCall![0].externalAccountId).toBe('chatgpt-acc-1');
+    });
+
+    // kimi-code must stay out of the ledger: its adapter emits no usage, and
+    // even if a usage-bearing turn_metadata event arrived, the gate only
+    // ledgers subscription-billed providers (claude-code, codex).
+    it('does NOT ledger kimi-code turn usage', async () => {
+      await runWithEvents(
+        [
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              data: {
+                model: 'kimi-k2.6',
+                phase: 'turn_metadata',
+                provider: 'kimi-code',
+                usage: {
+                  inputCacheMissTokens: 10,
+                  totalInputTokens: 10,
+                  totalOutputTokens: 5,
+                  totalTokens: 15,
+                },
+              },
+              type: 'step_complete',
+            }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'kimi', type: 'kimi-code' as const },
+          },
+        },
+      );
+
+      expect(mockRecordQuotaUsage).not.toHaveBeenCalled();
     });
 
     it('does NOT create a Thread when topicId is missing (non-topic-scoped run)', async () => {

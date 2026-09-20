@@ -274,6 +274,59 @@ describe('AgentQuotaService.recordUsage', () => {
     });
     // no throw = pass; the row is accountId-null and excluded from calibration
   });
+
+  it('prices a codex turn from the openai model bank, reasoning at the output rate', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-codex-1',
+      model: 'gpt-5.3-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { cacheRead: 1_000_000, input: 10_000, output: 30_000, reasoning: 10_000 },
+    });
+
+    // gpt-5.3-codex: in $1.75, out $14, cacheRead $0.175 per MTok →
+    // 0.01*1.75 + (0.03+0.01)*14 + 1*0.175 = 0.7525
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBeCloseTo(0.7525, 6);
+  });
+
+  it('stores tokens without a cost for a codex model the bank does not know', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-unknown-codex-model',
+      model: 'gpt-9-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { output: 40_000 },
+    });
+
+    // row exists (tokens kept) but contributes no fabricated cost
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBe(0);
+  });
 });
 
 describe('Codex quota persistence', () => {
