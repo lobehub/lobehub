@@ -62,10 +62,12 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
 const eventBodyUnused: ReadonlySet<string> = new Set([
   // `lobe-agent-documents`' hook only fires for list-mutating APIs and reads
   // `result.success`; a read is neither.
+  'lobe-agent-documents/listDocuments',
   'lobe-agent-documents/readDocument',
   // `lobe-local-system`'s hook is scoped to `runCommand`.
   'lobe-local-system/readFile',
-  // `lobe-web-browsing` registers no hook at all.
+  // `lobe-user-memory` and `lobe-web-browsing` register no hook at all.
+  'lobe-user-memory/searchUserMemory',
   'lobe-web-browsing/crawlMultiPages',
   'lobe-web-browsing/crawlSinglePage',
 ]);

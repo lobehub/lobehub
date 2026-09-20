@@ -75,6 +75,21 @@ describe('projectToolEndResult', () => {
     expect(projected.result.state.exitCode).toBe(0);
   });
 
+  // A tool can shed its body without having a projector: the body reaching the
+  // screen is the read path's business, and only the hooks matter here.
+  it.each([
+    ['lobe-agent-documents', 'listDocuments'],
+    ['lobe-user-memory', 'searchUserMemory'],
+  ])('drops the body of %s/%s while leaving its unprojected state', (identifier, apiName) => {
+    const state = { items: [{ id: 'a' }] };
+    const projected = projectToolEndResult(
+      toolEndData({ content: 'RAW BODY', state, success: true }, identifier, apiName),
+    ) as any;
+
+    expect('content' in projected.result).toBe(false);
+    expect(projected.result.state).toBe(state);
+  });
+
   it('keeps the body of a tool with no projector — nothing has vouched for it', () => {
     const data = toolEndData({ content: 'RAW BODY', state: { anything: 1 } }, 'some-mcp-plugin');
 
