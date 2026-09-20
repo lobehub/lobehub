@@ -447,6 +447,9 @@ importers:
 
   ../../packages/file-loaders:
     dependencies:
+      '@lobechat/utils':
+        specifier: workspace:*
+        version: link:../utils
       '@xmldom/xmldom':
         specifier: ^0.9.10
         version: 0.9.10
