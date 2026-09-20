@@ -33,48 +33,6 @@ vi.mock('../redis', () => ({
   getAgentRuntimeRedisClient: () => mockRedis,
 }));
 
-describe('tool_end body', () => {
-  it('drops the result body, which no consumer on the wire opens', () => {
-    // The client fires `onAfterCall` and decides Work refreshes from
-    // `result.success` / `result.state`; the body the user reads arrives with
-    // the message through the read path.
-    const data = {
-      isSuccess: true,
-      payload: { toolCalling: { apiName: 'runCommand', identifier: 'lobe-local-system' } },
-      result: { content: 'x'.repeat(10_000), state: { exitCode: 0 }, success: true },
-    };
-
-    const stripped = stripFinalStateInEventData(data, 'tool_end') as typeof data;
-
-    expect(stripped.result).toEqual({ state: { exitCode: 0 }, success: true });
-    expect(stripped.isSuccess).toBe(true);
-    expect(stripped.payload).toEqual(data.payload);
-  });
-
-  it('leaves the result state whole — a hook may read any key on it', () => {
-    const state = { commandId: 'sh-1', exitCode: 0, output: 'out', stdout: 'out' };
-
-    const stripped = stripFinalStateInEventData(
-      { result: { content: 'body', state } },
-      'tool_end',
-    ) as { result: { state: unknown } };
-
-    expect(stripped.result.state).toEqual(state);
-  });
-
-  it('passes a tool_end that carries no body through untouched', () => {
-    const data = { isSuccess: false, result: { success: false } };
-
-    expect(stripFinalStateInEventData(data, 'tool_end')).toBe(data);
-  });
-
-  it('does not touch the body of other event types', () => {
-    const data = { result: { content: 'keep me' } };
-
-    expect(stripFinalStateInEventData(data, 'stream_end')).toBe(data);
-  });
-});
-
 describe('StreamEventManager', () => {
   let streamManager: StreamEventManager;
 

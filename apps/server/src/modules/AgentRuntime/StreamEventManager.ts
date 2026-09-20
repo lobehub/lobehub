@@ -91,27 +91,6 @@ const stripStateForStream = <T extends Record<string, any>>(
  * Returns the original reference when no stripping is needed so the
  * common path stays allocation-free.
  */
-/**
- * `tool_end` announces that a tool finished; it is not how the result reaches
- * the screen. The client uses this event to fire an executor's `onAfterCall`
- * hook and to decide whether a Work view needs refreshing, and both read
- * `result.success` / `result.state` — never the body. The body the user sees
- * arrives with the message itself, through the read path.
- *
- * Measured on one production run, `result.content` was 65 kB of the 166 kB
- * these events spent, for a field nothing on the other end opens.
- *
- * `result.state` is deliberately left whole: a hook may read any key on it, and
- * unlike the render path there is no per-tool audit behind that guess.
- */
-const stripToolEndBody = (data: Record<string, unknown>): unknown => {
-  const result = data.result;
-  if (!isRecord(result) || result.content === undefined) return data;
-
-  const { content: _content, ...rest } = result;
-  return { ...data, result: rest };
-};
-
 export const stripFinalStateInEventData = (data: unknown, eventType?: unknown): unknown => {
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
@@ -122,8 +101,6 @@ export const stripFinalStateInEventData = (data: unknown, eventType?: unknown): 
     const { finalState: _finalState, ...rest } = record;
     return rest;
   }
-  if (eventType === 'tool_end') return stripToolEndBody(record);
-
   const finalState = record.finalState;
   if (!finalState || typeof finalState !== 'object') return data;
   return { ...record, finalState: stripStateForStream(finalState as Record<string, any>) };
