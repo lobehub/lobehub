@@ -288,7 +288,7 @@ describe('generateObject via Responses API', () => {
       {
         content: [
           { text: 'What is wrong in this frame?', type: 'input_text' },
-          { image_url: 'data:image/png;base64,AAAA', type: 'input_image' },
+          { detail: 'high', image_url: 'data:image/png;base64,AAAA', type: 'input_image' },
         ],
         role: 'user',
       },
