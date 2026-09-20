@@ -139,7 +139,12 @@ export interface ToolDiscoveryInput {
   disableTools?: boolean;
   discordContext?: any;
   exclusivePluginIds?: string[];
-  files?: InternalExecAgentParams['files'];
+  /**
+   * Mime types of the raw bot/IM uploads. The stage only ever looked at the
+   * mime type, and keeping the request JSON-safe is what lets a deferred init
+   * carry it on the operation state (LOBE-13745).
+   */
+  externalFileTypes?: string[];
   functionTools?: InternalExecAgentParams['functionTools'];
   globalMemoryEnabled: boolean;
   hasMentionedAgents: boolean;
@@ -277,7 +282,7 @@ export const discoverTools = async (
     disabledPluginIds,
     discordContext,
     exclusivePluginIds,
-    files,
+    externalFileTypes: rawExternalFileTypes,
     functionTools,
     globalMemoryEnabled,
     hasMentionedAgents,
@@ -792,7 +797,7 @@ export const discoverTools = async (
     const modelAbilities =
       builtinModels.find((item) => item.id === model && item.providerId === provider)?.abilities ??
       builtinModels.find((item) => item.id === model)?.abilities;
-    const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
+    const externalFileTypes = rawExternalFileTypes ?? [];
     const inputFileTypes = [...externalFileTypes, ...(await toolReads.attachedFileTypes)];
     const inputMediaAvailability = getMediaAvailabilityFromFileTypes(inputFileTypes);
     let historyMediaAvailability = { hasAudios: false, hasImages: false, hasVideos: false };

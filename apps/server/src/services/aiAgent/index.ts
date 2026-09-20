@@ -58,16 +58,12 @@ import { createGraphAwareAgentFactory } from './helpers/agentFactory';
 import { createGroupActionMemberBridgeHook } from './hooks/threadRunHooks';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
-import {
-  buildApprovalResumeContext,
-  claimApprovalResume,
-  tryReuseInterventionContinuation,
-} from './pipeline/approvalResume';
+import { claimApprovalResume, tryReuseInterventionContinuation } from './pipeline/approvalResume';
 import { dispatchHeteroAgent } from './pipeline/heteroDispatch';
-import { createHistoryMessagesLoader, prepareOperation } from './pipeline/operationPrep';
+import { buildOperationInitRequest, runOperationInit } from './pipeline/operationInit';
+import { createHistoryMessagesLoader } from './pipeline/operationPrep';
 import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
-import { discoverTools } from './pipeline/toolDiscovery';
 import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { createRunFacts, type RunFacts } from './runFacts';
 import { applyShareGateToAgentConfig } from './shareGate';
@@ -1169,98 +1165,71 @@ export class AiAgentService {
     // injected separately via `initialContext.mentionedAgents` below.
     const hasMentionedAgents = !appContext?.groupId && !!mentionedAgents?.length;
 
-    // Stage 5 (5a–5f) — tool discovery (see `pipeline/toolDiscovery`).
-    const discovery = await discoverTools(
+    // 15. Generate operation ID: op_{timestamp}_{agentId}_{topicId}_{random}
+    const operationId =
+      continuationOperationId ?? `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+
+    // Stages 5–18 — the run's init: the tool surface, the message/context
+    // assembly, and the human decision a resumed approval turns into the first
+    // context. One call so the same work can later run in the step-0 worker
+    // instead of on the send path (LOBE-13745).
+    const initRequest = buildOperationInitRequest({
+      additionalPluginIds,
+      agentSlug,
+      approvalOwnerAssistantId,
+      approvedToolEntries,
+      attachedFileIds,
+      botContext,
+      botPlatformContext,
+      disableLocalSystem,
+      disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
+      disableTools: params.disableTools,
+      disabledPluginIds,
+      discordContext,
+      ephemeralUserMessage,
+      exclusivePluginIds,
+      files,
+      functionTools,
+      globalMemoryEnabled,
+      hasMentionedAgents,
+      isFixedDeviceTarget: turn.isFixedDeviceTarget,
+      localDeviceId,
+      mentionedAgents,
+      operationId,
+      parentMessageId,
+      requestTrigger: requestTriggerMetadata.trigger,
+      requestedDeviceId,
+      resumeApproval,
+      resumeApprovalPlugin,
+      resumeApprovals,
+      resumeFromHistory: runFromHistory,
+      resumeToolResult,
+      runAttachments,
+      selectedToolIds,
+      topicBoundDeviceId: turn.topicBoundDeviceId,
+    });
+
+    const { discovery, initialContext, prep } = await runOperationInit(
       {
         agentDocumentsService: this.agentDocumentsService,
+        agentModel: this.agentModel,
+        bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
         composioService: this.composioService,
         connectorModel: this.connectorModel,
         connectorToolModel: this.connectorToolModel,
         db: this.db,
         getMarketService: () => this.getMarketService(runFacts),
+        loadHistoryMessages,
         messageModel: this.messageModel,
         pluginModel: this.pluginModel,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      },
-      runContext,
-      {
-        additionalPluginIds,
-        agentSlug,
-        attachedFileIds,
-        botContext,
-        disableLocalSystem,
-        disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
-        disableTools: params.disableTools,
-        disabledPluginIds,
-        discordContext,
-        exclusivePluginIds,
-        files,
-        functionTools,
-        globalMemoryEnabled,
-        hasMentionedAgents,
-        isFixedDeviceTarget: turn.isFixedDeviceTarget,
-        loadHistoryMessages,
-        localDeviceId,
-        requestTrigger: requestTriggerMetadata.trigger,
-        requestedDeviceId,
-        selectedToolIds,
         throwIfExecutionAborted,
-        topicBoundDeviceId: turn.topicBoundDeviceId,
-      },
-    );
-
-    // 15. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
-    const timestamp = Date.now();
-    const operationId =
-      continuationOperationId ?? `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
-
-    // Stages 9.4–18 — device system info, agent-management context, persona
-    // memory, history + message assembly, the base initial runtime context,
-    // workspace init, the OperationSkillSet, and the expertise snapshot
-    // (see `pipeline/operationPrep`).
-    const prep = await prepareOperation(
-      {
-        agentDocumentsService: this.agentDocumentsService,
-        agentModel: this.agentModel,
-        bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
-        db: this.db,
         topicModel: this.topicModel,
         userId: this.userId,
         workspaceId: this.workspaceId,
       },
       runContext,
-      {
-        botPlatformContext,
-        disabledPluginIds,
-        discovery,
-        ephemeralUserMessage,
-        globalMemoryEnabled,
-        hasMentionedAgents,
-        loadHistoryMessages,
-        mentionedAgents,
-        operationId,
-        runAttachments,
-        runFromHistory,
-        throwIfExecutionAborted,
-      },
+      initRequest,
     );
-
-    // 16b/16c — override the initial context with the human decision
-    // (see `pipeline/approvalResume`). Pure; no-op on a fresh send.
-    const initialContext = buildApprovalResumeContext({
-      approvalOwnerAssistantId,
-      approvedToolEntries,
-      assistantMessageId: turn.assistantMessageId,
-      initialContext: prep.initialContext,
-      messageCount: prep.allMessages.length,
-      operationId,
-      parentMessageId,
-      resumeApproval,
-      resumeApprovalPlugin,
-      resumeApprovals,
-      resumeToolResult,
-    });
 
     // 17. Log final operation parameters summary
     log(
