@@ -120,17 +120,21 @@ export class EnvironmentModel {
    * filter already excludes everyone else's private rows, so the tab shows the
    * caller's own unpublished environments rather than every unpublished one.
    */
-  query = async (visibility?: EnvironmentVisibility): Promise<EnvironmentWithCreator[]> =>
-    this.db
+  query = async (visibility?: EnvironmentVisibility): Promise<EnvironmentWithCreator[]> => {
+    // Flat columns, assembled below — NOT a nested `creator: { … }` selection.
+    // Drizzle decides whether a joined object is null from the FIRST field it
+    // sees: a null there marks the whole object absent, and a later non-null
+    // field from the same table does not undo it (`mapResultRow`). Sorted
+    // alphabetically, the first field was `avatar` — so every creator without
+    // one came back as no creator at all, and their rows rendered as "Unknown".
+    const rows = await this.db
       .select({
         configuration: environments.configuration,
         createdAt: environments.createdAt,
-        creator: {
-          avatar: users.avatar,
-          fullName: users.fullName,
-          id: users.id,
-          username: users.username,
-        },
+        creatorAvatar: users.avatar,
+        creatorFullName: users.fullName,
+        creatorId: users.id,
+        creatorUsername: users.username,
         description: environments.description,
         id: environments.id,
         name: environments.name,
@@ -143,6 +147,21 @@ export class EnvironmentModel {
       .leftJoin(users, eq(environments.userId, users.id))
       .where(and(this.visible(), this.pool(visibility)))
       .orderBy(asc(environments.createdAt));
+
+    return rows.map(({ creatorAvatar, creatorFullName, creatorId, creatorUsername, ...row }) => ({
+      ...row,
+      // The id is what says a creator was found; a deleted account leaves the
+      // join empty and the row keeps its place in the listing with no creator.
+      creator: creatorId
+        ? {
+            avatar: creatorAvatar,
+            fullName: creatorFullName,
+            id: creatorId,
+            username: creatorUsername,
+          }
+        : null,
+    }));
+  };
 
   /** Readable, not necessarily writable — a published environment resolves here for every member. */
   findById = async (id: string): Promise<EnvironmentItem | undefined> => {
