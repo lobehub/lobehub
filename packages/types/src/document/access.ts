@@ -8,6 +8,11 @@ export const AgentShareDocumentProvenanceSchema = z.object({
 
 export type AgentShareDocumentProvenance = z.infer<typeof AgentShareDocumentProvenanceSchema>;
 
+/**
+ * Share provenance is an access boundary, not a lifecycle owner. Share-authored documents remain
+ * creator-owned and intentionally outlive visitor topics so a creator-facing history can expose
+ * them later.
+ */
 export type DocumentAccessScope =
   ({ type: 'agentShare' } & AgentShareDocumentProvenance) | { type: 'ordinary' };
 
