@@ -38,7 +38,6 @@ const createReadSnapshot = async (
       content: result.content,
       firstLineNumber: result.loc[0] + 1,
       lineRange: result.loc,
-      path: reference.path,
       totalLines: result.totalLineCount,
       truncated: result.truncated,
     });

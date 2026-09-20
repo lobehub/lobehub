@@ -63,16 +63,6 @@ export abstract class ComputerRuntime {
   protected readonly supportsObservationTimeout: boolean = false;
 
   /**
-   * Builds the backend-specific readFile arguments that continue reading at a
-   * given 0-based end-exclusive window. Local-system reads take `loc`; the
-   * cloud sandbox manifest exposes 1-based `startLine`/`endLine` instead and
-   * ignores `loc`, so that runtime overrides this.
-   */
-  protected formatReadFileContinuation(nextRange: [number, number]): string {
-    return `loc=[${nextRange[0]}, ${nextRange[1]}]`;
-  }
-
-  /**
    * Call the underlying service to execute a tool.
    * Each subclass maps this to its own transport (IPC, HTTP, tRPC, etc.).
    */
@@ -173,12 +163,11 @@ export abstract class ComputerRuntime {
         truncated: r.truncated === true ? true : undefined,
       };
 
-      // Show the window the service actually returned (including its default
-      // [0, 1000] slice when the caller passed no loc) plus the file's total
-      // line count. The system prompt tells the model the response carries
-      // totalLineCount; rendering only the caller-supplied args here meant a
-      // default-window read looked identical to a full read, and the model had
-      // to burn extra turns discovering the file was truncated.
+      // Number every returned line (1-based gutter) and, when the window
+      // stops before EOF, prefix a `(lines 1-1000 of 2545)` marker. Rendering
+      // only the caller-supplied args here meant a default-window read looked
+      // identical to a full read, and the model had to burn extra turns
+      // discovering the file was truncated.
       const hasLoc = Array.isArray(r.loc) && r.loc.length === 2;
       const lineRange: [number, number] | undefined = hasLoc
         ? [r.loc[0], r.loc[1]]
@@ -194,13 +183,11 @@ export abstract class ComputerRuntime {
       const content = formatFileContent({
         content: fileContent,
         firstLineNumber,
-        formatContinuation: (nextRange) => this.formatReadFileContinuation(nextRange),
         lineRange,
-        path: args.path,
         totalLines: r.totalLineCount ?? r.totalLines,
         // When the service cut the content at its char cap, the window's tail
-        // was never delivered — a "continue at loc=[end, ...]" hint would
-        // silently skip it, so the hint is suppressed.
+        // was never delivered — a "(lines 1-1000 of N)" marker would claim
+        // coverage the payload doesn't have, so it is suppressed.
         truncated: r.truncated === true,
       });
 
