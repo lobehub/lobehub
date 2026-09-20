@@ -9,6 +9,20 @@ export interface GitHubUserProfile {
   websiteUrl?: string;
 }
 
+/**
+ * A repository as the environment picker needs it: enough to name it, show
+ * whether it is private, and know which branch to check out by default.
+ * Deliberately not {@link GitHubRepository}, which carries contribution
+ * evidence this list has no use for.
+ */
+export interface GitHubOwnerRepository {
+  defaultBranch?: string;
+  isPrivate: boolean;
+  name: string;
+  /** The account the repository belongs to — the `owner` half of `owner/name`. */
+  owner: string;
+}
+
 export interface GitHubOrganization {
   description?: string;
   followerCount?: number;

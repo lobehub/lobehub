@@ -8,9 +8,9 @@ import EnvironmentManager from '@/features/EnvironmentManager';
 import EnvironmentsGate from '@/features/EnvironmentManager/EnvironmentsGate';
 
 /**
- * Thin: the group, its title and its create action all live in the manager,
- * the way the workspace budget page composes its groups. Wrapping it in a
- * `Form` would lay it out as a form ITEM and give it none of an item's padding.
+ * Thin: the toolbar, the list and the detail panel all live in the manager, the
+ * way the devices page composes its own. The page's heading comes from the
+ * settings route (`tab.environments`), so nothing here repeats it.
  */
 const Page = memo(() => (
   <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>

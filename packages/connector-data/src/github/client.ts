@@ -15,6 +15,7 @@ import type {
   GitHubContribution,
   GitHubContributionCollectionOptions,
   GitHubOrganization,
+  GitHubOwnerRepository,
   GitHubPullRequest,
   GitHubRepository,
   GitHubRepositoryContributor,
@@ -24,6 +25,8 @@ import type {
 export interface GitHubConnectorClient {
   getUserProfile: () => Promise<GitHubUserProfile>;
   getUserProfileReadme: () => Promise<string | undefined>;
+  /** Every repository this account can reach, newest activity first. */
+  listAccessibleRepositories: () => Promise<GitHubOwnerRepository[]>;
   /** Lists repositories associated with the user during the configured contribution window. */
   listContributedRepositories: () => Promise<GitHubContributedRepository[]>;
   /** Lists high-star repositories with contribution evidence in the configured window. */
@@ -103,6 +106,25 @@ export function createGitHubConnectorClient({
     listRecentPullRequests: async () => (await getRepositories()).pulls,
     listRecentRepositories: async () => (await getRepositories()).recent,
     listRepositoryContributors: (repository) => loadRepositoryContributors(transport, repository),
+    listAccessibleRepositories: async () => {
+      const repositories = await transport.listAccessibleRepositories({ perPage: 100 });
+
+      // A repository the caller cannot address — missing either half of
+      // `owner/name` — is dropped rather than rendered as a row that cannot be
+      // turned into a checkout URL.
+      return repositories.flatMap(({ defaultBranch, isPrivate, name, owner: login }) =>
+        name && login
+          ? [
+              {
+                defaultBranch: defaultBranch ?? undefined,
+                isPrivate: isPrivate === true,
+                name,
+                owner: login,
+              },
+            ]
+          : [],
+      );
+    },
     listUserOrganizations: () => loadOrganizations(transport),
   };
 }

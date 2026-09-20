@@ -1,4 +1,5 @@
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
+import { ConnectorDataError } from '@lobechat/connector-data';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -7,6 +8,7 @@ import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { ConnectorDataService } from '@/server/services/connectorData';
 import { MarketService } from '@/server/services/market';
 import { resolveSandboxWorkspaceClaim } from '@/server/services/sandbox';
 import { SandboxWorkspaceFilesError } from '@/server/services/sandbox/workspaceFiles';
@@ -31,6 +33,14 @@ const relativePathSchema = z.string().refine(isSafeSandboxCwd, {
  * already talking to.
  */
 const topicIdSchema = z.string().min(1).max(255).optional();
+
+/**
+ * "You have not connected GitHub" travels as an error from the connector layer,
+ * but for the picker it is an answer, not a failure — the one it is there to
+ * help the user fix.
+ */
+const isGithubUnavailable = (error: unknown): boolean =>
+  error instanceof ConnectorDataError && error.provider === 'github' && !error.retryable;
 
 /**
  * Statuses the execution plane uses deliberately, each carrying something the
@@ -168,7 +178,11 @@ const configurationSchema = z.object({
   excludePaths: z.array(relativePathSchema).max(64).optional(),
   internetAccess: z.boolean().optional(),
   maintenanceCommand: z.string().max(8000).optional(),
-  sources: z.array(environmentSourceSchema).max(8).optional(),
+  // One repository per environment. The wire format stays a list because the
+  // execution plane checks out an array of sources, but an environment that
+  // builds from two repositories has no single working directory to hand a
+  // conversation — and the picker that fills this offers exactly one.
+  sources: z.array(environmentSourceSchema).max(1).optional(),
 });
 
 /** Postgres surfaces the driver error somewhere down the `cause` chain. */
@@ -596,6 +610,33 @@ export const sandboxWorkspaceRouter = router({
 
       return ctx.instanceModel.delete(input.id);
     }),
+
+  /**
+   * Every repository this account can build an environment from, newest
+   * activity first, each carrying the owner it belongs to so the caller can
+   * group them without a second request per organization.
+   *
+   * A missing GitHub connection is NOT an error here: it is the state the
+   * picker exists to resolve, so it answers `connected: false` and lets the
+   * UI offer the connection instead of a failure.
+   */
+  listGithubRepositories: entitledProcedure.query(async ({ ctx }) => {
+    const service = new ConnectorDataService(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    );
+
+    try {
+      const client = await service.getGitHubClient();
+
+      return { connected: true, repositories: await client.listAccessibleRepositories() };
+    } catch (error) {
+      if (isGithubUnavailable(error)) return { connected: false, repositories: [] };
+
+      throw error;
+    }
+  }),
 
   removeFile: entitledProcedure
     .input(

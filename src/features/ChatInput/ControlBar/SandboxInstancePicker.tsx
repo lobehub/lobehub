@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AppWindowMacIcon,
@@ -49,11 +49,41 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
   `,
+  skeletonRow: css`
+    display: flex;
+    gap: 10px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 8px;
+  `,
   temporary: css`
     padding-block-end: 4px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
+
+/**
+ * The shape the environment section is about to take: a group caption over a
+ * row the size of an instance. Without it the section is simply absent while
+ * the list loads and then snaps into either a list or a "create one" row — and
+ * an empty gap where a choice belongs reads as "there is nothing here", which
+ * is the one thing it does not yet know.
+ */
+const EnvironmentSectionSkeleton = memo(() => (
+  <Flexbox gap={2}>
+    <Skeleton.Text className={styles.environment} rows={1} style={{ width: 96 }} />
+    <div className={styles.skeletonRow}>
+      <Skeleton.Avatar shape={'square'} size={28} />
+      <Flexbox flex={1} gap={4}>
+        <Skeleton.Text rows={1} style={{ width: 120 }} />
+        <Skeleton.Text rows={1} style={{ width: 180 }} />
+      </Flexbox>
+    </div>
+  </Flexbox>
+));
+
+EnvironmentSectionSkeleton.displayName = 'SandboxInstancePicker.EnvironmentSectionSkeleton';
 
 interface SandboxInstancePickerProps {
   /** Whether this plan includes a persistent workspace. Without one, the menu
@@ -107,9 +137,12 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       () => sandboxWorkspaceService.listInstances({ topicId, withSizes: false }),
       { revalidateOnFocus: false },
     );
-    const { data: environmentData, error: environmentError } = useSWR(
-      entitled && open ? 'sandbox-environments' : null,
-      () => sandboxWorkspaceService.listEnvironments(),
+    const {
+      data: environmentData,
+      error: environmentError,
+      isLoading: environmentsLoading,
+    } = useSWR(entitled && open ? 'sandbox-environments' : null, () =>
+      sandboxWorkspaceService.listEnvironments(),
     );
 
     const instances = data?.instances ?? [];
@@ -185,6 +218,8 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
             onClick={() => leaveTo(openSandboxWorkspaceUpsell)}
           />
         )}
+
+        {entitled && environmentsLoading && <EnvironmentSectionSkeleton />}
 
         {entitled && environmentError && (
           <Text className={styles.notice}>{t('sandboxWorkspace.environmentsUnavailable')}</Text>
