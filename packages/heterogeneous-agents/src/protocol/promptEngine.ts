@@ -12,6 +12,15 @@ export interface HeterogeneousPromptEngineInput {
    * blocks are prepended to a USER message, so on a resumed session every
    * earlier turn's copy is still in the CLI's transcript. Re-sending it each
    * turn would stack duplicates for the whole life of the conversation.
+   *
+   * Rollout consequence, accepted deliberately: a conversation that already had
+   * a CLI session before this shipped resumes into a transcript that never saw
+   * the guide, and keeps resuming without it. Delivering it there needs
+   * per-session "has this been delivered" state rather than this flag. The gap
+   * self-heals whenever the native session does not survive — transcript GC
+   * (30 days), a changed cwd, a recycled sandbox — because every one of those
+   * falls back to a fresh session, and the resume-fallback prompt always
+   * carries the guide.
    */
   isNewSession?: boolean;
   prompt: string;
