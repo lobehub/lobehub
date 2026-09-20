@@ -16,6 +16,7 @@ import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
 import Preview from './Preview';
 import { type FieldType } from './type';
+import { useExportMessages } from './useExportMessages';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
   exportMode: 'full',
@@ -66,6 +67,9 @@ const ShareJSON = memo(() => {
   ];
 
   const { dbMessages, systemRole, title, topic } = useShareData();
+  // Tool bodies the read path left on the server would otherwise serialize as
+  // empty strings and be lost on re-import — see `useExportMessages`.
+  const { isHydrating, messages: exportMessages } = useExportMessages(dbMessages);
 
   // Always include tool messages (includeTool: true)
   const data =
@@ -73,13 +77,13 @@ const ShareJSON = memo(() => {
       ? generateMessages({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
         })
       : generateFullExport({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
           topic: topic ?? undefined,
         });
@@ -92,7 +96,11 @@ const ShareJSON = memo(() => {
     <>
       <Button
         block
+        // Both actions serialize `content`; until the omitted tool bodies land
+        // it is still the projected view, which would export as empty results.
+        disabled={isHydrating}
         icon={CopyIcon}
+        loading={isHydrating}
         size={isMobile ? undefined : 'large'}
         type={'primary'}
         onClick={async () => {
@@ -104,6 +112,7 @@ const ShareJSON = memo(() => {
       </Button>
       <Button
         block
+        disabled={isHydrating}
         size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.json`);
