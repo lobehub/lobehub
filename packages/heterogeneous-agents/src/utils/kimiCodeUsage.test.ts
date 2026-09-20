@@ -113,7 +113,7 @@ describe('kimiCodeUsage', () => {
           { model: 'kimi-code/k2', usage: { inputOther: 10, output: 5 } },
           { model: 'kimi-code/k3', usage: { inputOther: 20, output: 6 } },
         ]),
-      ).toMatchObject({ model: 'k3' });
+      ).toMatchObject({ model: 'kimi-k3' });
     });
 
     it('passes a model without the kimi-code/ prefix through unchanged', () => {
@@ -186,7 +186,7 @@ describe('kimiCodeUsage', () => {
       await expect(
         readKimiCodeSessionUsage('session-1', { env: { KIMI_CODE_HOME: kimiHome } }),
       ).resolves.toEqual({
-        model: 'k3',
+        model: 'kimi-k3',
         usage: {
           inputCacheMissTokens: 325,
           inputCachedTokens: 45_784,

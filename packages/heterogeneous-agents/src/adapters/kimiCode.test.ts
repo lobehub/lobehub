@@ -226,7 +226,7 @@ describe('KimiCodeAdapter', () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
         data: {
-          model: 'k3',
+          model: 'kimi-k3',
           phase: 'turn_metadata',
           provider: 'kimi-code',
           usage: {
