@@ -231,7 +231,7 @@ export class AgentOwnedByGroupError extends Error {
 }
 
 interface AgentTransferOptions {
-  /** Delete dedicated visitor-upload objects after their DB rows commit. */
+  /** Best-effort deletion of dedicated visitor-upload objects after their DB rows commit. */
   onRevokedShareFiles?: (urls: string[]) => Promise<void>;
   rejectForeignTopicCommentAuthors?: boolean;
 }
@@ -2629,7 +2629,16 @@ export class AgentModel {
     });
 
     if (revokedShareFileUrls.length > 0) {
-      await options.onRevokedShareFiles?.(revokedShareFileUrls);
+      try {
+        await options.onRevokedShareFiles?.(revokedShareFileUrls);
+      } catch (error) {
+        // The transfer and file-row deletion have already committed, so a storage outage must not
+        // make callers retry an operation that can no longer be replayed from the original scope.
+        console.error(
+          '[AgentModel.transferAgents] Failed to delete revoked Agent Share files after commit',
+          error,
+        );
+      }
     }
 
     return results;

@@ -68,6 +68,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await serverDB.delete(users);
 });
 
@@ -1137,6 +1138,40 @@ describe('AgentModel.transferAgent', () => {
 
     expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toHaveLength(0);
     expect(onRevokedShareFiles).toHaveBeenCalledWith([file.url]);
+  });
+
+  it('keeps the committed transfer successful when visitor upload cleanup fails', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Agent with failed visitor upload cleanup' });
+    const [share] = await serverDB
+      .insert(agentShares)
+      .values({ agentId: agent.id, visibility: 'link' })
+      .returning();
+    const [file] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'image/png',
+        metadata: { agentShare: { shareId: share.id, visitorUserId: targetUserId } },
+        name: 'visitor.png',
+        size: 42,
+        url: `agent-shares/${share.id}/visitor.png`,
+        userId,
+      })
+      .returning();
+    const cleanupError = new Error('storage unavailable');
+    const onRevokedShareFiles = vi.fn().mockRejectedValue(cleanupError);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      model.transferAgent(agent.id, wsId1, userId, undefined, { onRevokedShareFiles }),
+    ).resolves.toMatchObject({ agentId: agent.id });
+
+    expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toHaveLength(0);
+    expect(onRevokedShareFiles).toHaveBeenCalledWith([file.url]);
+    expect(consoleError).toHaveBeenCalledWith(
+      '[AgentModel.transferAgents] Failed to delete revoked Agent Share files after commit',
+      cleanupError,
+    );
   });
 
   it('keeps a public share and pauses a private share on same-workspace owner changes', async () => {

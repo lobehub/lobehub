@@ -83,6 +83,8 @@ export default {
     'This agent does not exist or is no longer accessible — it may have been deleted or set to private by its owner.',
   'permission.configAccess.agentChatOnly':
     'You can only use this Agent, not configure it. You were returned to chat.',
+  'permission.configAccess.agentManageRestricted':
+    'Only the Agent creator or a workspace admin can manage external sharing. You were returned to chat.',
   'permission.configAccess.agentRoleRestricted':
     'Your workspace role cannot configure Agents. You were returned to chat.',
   'permission.configAccess.groupChatOnly':

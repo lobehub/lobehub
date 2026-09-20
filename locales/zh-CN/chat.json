@@ -1341,6 +1341,7 @@
   "pageSelection.lines": "第 {{start}}-{{end}} 行",
   "pageSelection.reference": "选中文本",
   "permission.configAccess.agentChatOnly": "您对此代理只有使用权限，无法配置。您已返回到聊天界面。",
+  "permission.configAccess.agentManageRestricted": "只有代理创建者或工作区管理员可以管理外部分享。您已返回到聊天界面。",
   "permission.configAccess.agentRoleRestricted": "您的工作区角色无法配置代理。您已返回到聊天界面。",
   "permission.configAccess.groupChatOnly": "您对此代理组只有使用权限，无法配置。您已返回到聊天界面。",
   "permission.configAccess.groupRoleRestricted": "您的工作区角色无法配置代理组。您已返回到聊天界面。",

@@ -50,11 +50,15 @@ const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
       // resource, and conflating them made authors think their own Agent had
       // rejected them.
       const isRoleRestricted = !canEditContent;
+      const isManagementRestricted =
+        requiredAccess === 'manage' && canEditResource && !canManageResource;
       const messageKey =
         resourceType === 'agent'
           ? isRoleRestricted
             ? 'permission.configAccess.agentRoleRestricted'
-            : 'permission.configAccess.agentChatOnly'
+            : isManagementRestricted
+              ? 'permission.configAccess.agentManageRestricted'
+              : 'permission.configAccess.agentChatOnly'
           : isRoleRestricted
             ? 'permission.configAccess.groupRoleRestricted'
             : 'permission.configAccess.groupChatOnly';
@@ -65,8 +69,11 @@ const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
       accessReady,
       canConfigure,
       canEditContent,
+      canEditResource,
+      canManageResource,
       navigate,
       redirectPath,
+      requiredAccess,
       resourceType,
       t,
     ]);
