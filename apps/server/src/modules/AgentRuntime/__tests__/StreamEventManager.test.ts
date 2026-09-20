@@ -330,6 +330,30 @@ describe('StreamEventManager', () => {
       // finalState passed as a param, so the error message survives.
       expect(parsed.reasonDetail).toBe('boom');
     });
+
+    // Reaching `world.expertise` means destructuring `world`; a run without an
+    // expertise snapshot — the common case — must still ship its world.
+    it('keeps the world snapshot when it carries no expertise', async () => {
+      const world = {
+        agent: { systemRole: 'you are a helpful agent' },
+        group: { agentMap: {} },
+        userTimezone: 'Asia/Shanghai',
+      };
+      mockRedis.xadd.mockResolvedValue('event-id-world');
+
+      await streamManager.publishAgentRuntimeEnd({
+        finalState: { cost: { total: 1 }, messages: [], status: 'done', stepCount: 1, world },
+        operationId: 'test-operation-id',
+        reason: 'done',
+        stepIndex: 1,
+      });
+
+      const dataArg = mockRedis.xadd.mock.calls[0]?.find(
+        (a: any) => typeof a === 'string' && a.startsWith('{'),
+      );
+
+      expect(JSON.parse(dataArg).finalState.world).toEqual(world);
+    });
   });
 
   it.each([undefined, 'execution_complete'])(

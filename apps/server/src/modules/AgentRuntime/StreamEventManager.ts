@@ -77,7 +77,10 @@ const stripStateForStream = <T extends Record<string, any>>(
     world,
     ...rest
   } = state;
-  if (!world || typeof world !== 'object' || !('expertise' in world)) return rest as T;
+  // `world` had to be destructured to reach its expertise snapshot, so it must be
+  // put back: everything else on it (agent, group, channel …) has to survive.
+  if (!world || typeof world !== 'object') return rest as T;
+  if (!('expertise' in world)) return { ...rest, world } as unknown as T;
   const { expertise: _worldExpertise, ...worldRest } = world as Record<string, unknown>;
   return { ...rest, world: worldRest } as unknown as T;
 };

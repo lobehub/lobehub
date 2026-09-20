@@ -88,6 +88,10 @@ describe('OperationTraceRecorder', () => {
             toolManifestMap: {},
             toolSourceMap: {},
             tools: [],
+            world: {
+              agent: { systemRole: 'kept' },
+              expertise: { contentHash: 'hash', renderedContext: '<expertise/>' },
+            },
           },
           reason: 'done',
           type: 'done',
@@ -120,6 +124,8 @@ describe('OperationTraceRecorder', () => {
       expect(doneEvent.finalState.toolManifestMap).toBeUndefined();
       expect(doneEvent.finalState.toolSourceMap).toBeUndefined();
       expect(doneEvent.finalState.tools).toBeUndefined();
+      // Only the expertise snapshot leaves `world`; the rest of it is kept.
+      expect(doneEvent.finalState.world).toEqual({ agent: { systemRole: 'kept' } });
     });
 
     it('emits messagesDelta-only beyond step 0 and only stores messagesBaseline when isCompression', async () => {
