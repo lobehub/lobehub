@@ -3786,6 +3786,22 @@ When I am ___, I need ___
   'environments.hasInstances': 'Remove its instances first',
   'environments.pending':
     'Stored, but not yet acted on: nothing can build from a specification until the execution plane supports it.',
+  'environments.unavailable.title': 'Persistent sandbox is not available here',
+  'environments.unavailable.desc':
+    'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
+  'environments.upgrade.title': 'Upgrade to Pro to unlock sandbox environments',
+  'environments.upgrade.desc':
+    'Give cloud-sandbox runs a persistent working directory. An environment describes what the sandbox needs — repositories, setup, variables — and its instances keep everything between sessions.',
+  'environments.upgrade.cta': 'Upgrade to Pro',
+  'environments.upgrade.benefits.environments.title': 'Sandbox setup written once',
+  'environments.upgrade.benefits.environments.desc':
+    'Repositories, setup command and variables live in the environment; every sandbox built from it starts ready.',
+  'environments.upgrade.benefits.persist.title': 'Files survive the sandbox',
+  'environments.upgrade.benefits.persist.desc':
+    'The working directory is kept when the sandbox is recycled; the next run continues where the last stopped.',
+  'environments.upgrade.benefits.instances.title': 'One instance per task',
+  'environments.upgrade.benefits.instances.desc':
+    'Parallel conversations each run in their own instance of the environment, so nothing overwrites anything else.',
   'environments.form.description': 'Description',
   'environments.form.descriptionPlaceholder': 'What this environment is for',
   'environments.form.sources': 'Source code',
