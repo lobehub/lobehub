@@ -20,6 +20,10 @@ export interface FormatFileContentParams {
 const numberLines = (content: string, firstLineNumber: number): string => {
   if (content === '') return content;
   const lines = content.split('\n');
+  // A trailing newline (newline-terminated file) produces a synthetic empty
+  // element that isn't a real line — numbering it would claim a line beyond
+  // the file's totalLineCount.
+  if (lines.length > 1 && lines.at(-1) === '') lines.pop();
   const width = String(firstLineNumber + lines.length - 1).length;
   return lines
     .map((line, index) => `${String(firstLineNumber + index).padStart(width)} ${line}`)

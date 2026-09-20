@@ -366,6 +366,28 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     expect(output.content).toContain('content truncated');
     expect(output.state?.truncated).toBe(true);
   });
+
+  // The cloud sandbox reader returns no `loc` and its startLine/endLine args
+  // are 1-based inclusive; the fallback window must be normalized before the
+  // formatter's end-exclusive math, or a full 200-line read is labeled
+  // "(lines 1-199 of ...)" and the gutter contradicts the marker.
+  it('normalizes a loc-less 1-based inclusive window (cloud sandbox shape)', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'some lines',
+        fileType: 'txt',
+        filename: 'big.txt',
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt', startLine: 1 });
+
+    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain('1 some lines');
+  });
 });
 
 describe('LocalSystemExecutionRuntime.executeToolCall — working directory anchoring', () => {

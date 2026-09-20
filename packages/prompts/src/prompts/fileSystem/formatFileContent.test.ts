@@ -89,6 +89,16 @@ describe('formatFileContent', () => {
     expect(result).not.toContain('(lines');
   });
 
+  it('should not number a synthetic line from a trailing newline', () => {
+    const result = formatFileContent({
+      content: 'a\nb\n',
+      firstLineNumber: 1,
+      lineRange: [0, 2],
+      totalLines: 2,
+    });
+    expect(result).toBe('1 a\n2 b');
+  });
+
   it('should not mark a window without a total line count', () => {
     const result = formatFileContent({
       content: 'some lines',
