@@ -779,7 +779,7 @@ describe('createRouterRuntime', () => {
         }),
       );
 
-    it('falls back after a billed empty completion and exposes only the successful attempt', async () => {
+    it('falls back after an unbilled empty completion and exposes only the successful attempt', async () => {
       const finished = vi.fn();
       const returned = vi.fn().mockResolvedValue(undefined);
       const final = vi.fn();
@@ -798,7 +798,7 @@ describe('createRouterRuntime', () => {
               final: {
                 finishReason: 'STOP',
                 text: '',
-                usage: { cost: 0.001, totalOutputTokens: 147 },
+                usage: { cost: 0, totalOutputTokens: 147 },
               },
             });
             response.headers.set('content-length', '0');

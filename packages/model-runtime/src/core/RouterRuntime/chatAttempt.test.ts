@@ -34,7 +34,7 @@ describe('observeChatAttempt', () => {
         const data = {
           speed: { duration: 1000, latency: 1300, tps: 100, ttft: 200 },
           text: 'firstlast',
-          usage: { totalOutputTokens: 100 },
+          usage: { cost: 0.001, totalOutputTokens: 100 },
         };
         await callback?.onCompletion?.(data);
         await callback?.onFinal?.(data);
@@ -52,6 +52,10 @@ describe('observeChatAttempt', () => {
       speed: { ttft: 200, duration: 1000, latency: 1300, tps: 100 },
     });
     expect(finished).toHaveBeenCalledTimes(1);
+    expect(finished.mock.calls[0][0].usage).toMatchObject({
+      cost: 0.001,
+      totalOutputTokens: 100,
+    });
   });
 
   it('retains reported input usage when the caller cancels before final usage', async () => {
