@@ -779,7 +779,7 @@ describe('createRouterRuntime', () => {
         }),
       );
 
-    it('falls back after an unbilled empty completion and exposes only the successful attempt', async () => {
+    it('follows the fallback policy after an empty completion and exposes one attempt', async () => {
       const finished = vi.fn();
       const returned = vi.fn().mockResolvedValue(undefined);
       const final = vi.fn();

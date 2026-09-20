@@ -626,9 +626,9 @@ export const createRouterRuntime = ({
     }
 
     /**
-     * Keep hosted chat fallback open until the response body reaches a terminal
+     * Keep routed chat fallback open until the response body reaches a terminal
      * outcome. Bytes and callbacks remain private until the first visible model
-     * output, preventing a second billable request after a partial answer or tool call.
+     * output, preventing transparent replay after a partial answer or tool call.
      */
     private async runChatWithStreamFallback(
       payload: ChatStreamPayload,

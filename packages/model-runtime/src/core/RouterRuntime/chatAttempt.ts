@@ -41,7 +41,7 @@ const createStreamChunkError = (error: unknown, provider: string) =>
 
 /**
  * Observe the actual response body lifecycle. Terminal callbacks are delayed until
- * EOF so an upstream disconnect after `onFinal` cannot be billed as a success.
+ * EOF so an upstream disconnect after `onFinal` cannot be reported as completed.
  * Optional callback deferral lets the router discard an uncommitted attempt before
  * switching to a fallback channel.
  */
