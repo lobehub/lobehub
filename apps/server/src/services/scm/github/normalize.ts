@@ -78,8 +78,12 @@ const pullRequestSnapshot = (repo: Json, pr: Json): ScmChangeRequestSnapshot => 
   mergeStateStatus: str(pr.mergeable_state)?.toUpperCase() ?? null,
   mergedAt: date(pr.merged_at),
   mergedByExternalId: str(pr.merged_by?.id),
-  metadata:
-    pr.mergeable === null || pr.mergeable === undefined ? {} : { mergeable: String(pr.mergeable) },
+  metadata: {
+    ...(pr.mergeable === null || pr.mergeable === undefined
+      ? {}
+      : { mergeable: String(pr.mergeable) }),
+    ...(typeof repo.private === 'boolean' ? { repoPrivate: repo.private } : {}),
+  },
   number: Number(pr.number),
   provider: 'github',
   repoExternalId: str(repo.id),

@@ -22,7 +22,7 @@ describe('normalizeGitHubEvent', () => {
         headSha: 'a'.repeat(40),
         isDraft: false,
         mergeStateStatus: 'CLEAN',
-        metadata: { mergeable: 'true' },
+        metadata: { mergeable: 'true', repoPrivate: false },
         number: 19_719,
         provider: 'github',
         repoFullName: 'lobehub/lobehub',

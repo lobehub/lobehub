@@ -3,6 +3,7 @@ import type {
   BotSenderMetadata,
   ChatTopicBotContext,
   ExecAgentParams,
+  ExternalOriginMetadata,
   LobeAgentChatConfig,
   RuntimeMentionedAgent,
   UserInterventionConfig,
@@ -134,6 +135,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * as well as activator-discoverable manifests.
    */
   exclusivePluginIds?: string[];
+  /**
+   * Provider event that produced this server-injected turn (a GitHub CI
+   * failure waking the agent, …), persisted on the user message as
+   * `metadata.externalOrigin` so the bubble carries its source.
+   */
+  externalOrigin?: ExternalOriginMetadata;
   /** External files to upload to S3 and attach to the user message */
   files?: Array<{
     /** Pre-downloaded buffer (from adapter/platform layer) */

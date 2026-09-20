@@ -23,6 +23,7 @@ const userId = 'scm-control-user';
 const mocks = vi.hoisted(() => ({
   execAgent: vi.fn(),
   jobLog: vi.fn(),
+  postComment: vi.fn(),
   redisSet: vi.fn(),
   reviewFeedback: vi.fn(),
 }));
@@ -38,7 +39,9 @@ vi.mock('@/server/modules/AgentRuntime/redis', () => ({
 vi.mock('../github/app', () => ({
   fetchGitHubJobLogTail: mocks.jobLog,
   fetchGitHubReviewFeedback: mocks.reviewFeedback,
+  postGitHubPullRequestComment: mocks.postComment,
 }));
+vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.test/' } }));
 vi.mock('@/server/workflows/expertiseRejection', () => ({
   ExpertiseRejectionWorkflow: { trigger: vi.fn(async () => {}) },
 }));
@@ -89,6 +92,7 @@ beforeEach(async () => {
   mocks.redisSet.mockResolvedValue('OK');
   mocks.jobLog.mockResolvedValue('npm ERR! test failed\n');
   mocks.reviewFeedback.mockResolvedValue([]);
+  mocks.postComment.mockResolvedValue('c-1');
 });
 
 afterEach(async () => {
@@ -241,6 +245,13 @@ describe('ScmControlService — wake', () => {
     expect(call).toMatchObject({
       agentId: 'agt_control',
       appContext: { topicId: topic.id },
+      externalOrigin: {
+        kind: 'ci_failed',
+        label: 'arvinxx/sandbox#5',
+        provider: 'github',
+        resourceId: row.id,
+        url: baseRow.url,
+      },
       steer: false,
       trigger: 'scm',
       userInterventionConfig: { approvalMode: 'headless' },
@@ -387,5 +398,120 @@ describe('ScmControlService — wake', () => {
       detail: 'wake failed: topic busy',
     });
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
+  });
+});
+
+describe('ScmControlService — comments in GitHub', () => {
+  const bindAndOpen = async (extra: Record<string, unknown>) => {
+    const topic = await createTopic();
+    const installation = await ScmInstallationModel.bind(serverDB, {
+      accountExternalId: '1',
+      accountLogin: 'arvinxx',
+      accountType: 'user',
+      installationId: '90001',
+      provider: 'github',
+      repositorySelection: 'all',
+      userId,
+    });
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: 's', subjectType: 'standalone', userId })
+      .returning();
+    return ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { acceptanceId: acceptance.id, installationId: installation.id, topicId: topic.id },
+      ...extra,
+    });
+  };
+
+  it('posts one comment with the acceptance and conversation links on a private repository', async () => {
+    const row = await bindAndOpen({ metadata: { repoPrivate: true } });
+
+    const first = await control().handle({
+      event: changeRequestEvent('opened'),
+      kind: 'opened',
+      row,
+    });
+    expect(first).toEqual({ commentId: 'c-1', outcome: 'commented' });
+    expect(mocks.postComment).toHaveBeenCalledTimes(1);
+    const body = mocks.postComment.mock.calls[0][0].body as string;
+    expect(body).toContain(`https://app.test/acceptance/${row.acceptanceId}`);
+    expect(body).toContain(`https://app.test/agent/agt_control?topic=${row.topicId}`);
+
+    const stored = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(stored?.metadata.lobehubCommentId).toBe('c-1');
+
+    const again = await control().handle({
+      event: changeRequestEvent('opened'),
+      kind: 'synchronized',
+      row: stored!,
+    });
+    expect(again).toMatchObject({ outcome: 'skipped', detail: 'already commented' });
+    expect(mocks.postComment).toHaveBeenCalledTimes(1);
+
+    // A concurrent handler still holding the pre-comment row is stopped by
+    // the fresh read even when its claim would have gone through.
+    const stale = await control().handle({
+      event: changeRequestEvent('opened'),
+      kind: 'synchronized',
+      row,
+    });
+    expect(stale).toMatchObject({ outcome: 'skipped', detail: 'already commented' });
+    expect(mocks.postComment).toHaveBeenCalledTimes(1);
+
+    // And when the claim itself is lost, nothing is posted either.
+    mocks.redisSet.mockResolvedValueOnce(null);
+    const unclaimed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      links: { acceptanceId: row.acceptanceId, installationId: row.installationId },
+      metadata: { repoPrivate: true },
+      number: 6,
+      url: 'https://github.com/arvinxx/sandbox/pull/6',
+    });
+    expect(
+      await control().handle({
+        event: changeRequestEvent('opened'),
+        kind: 'opened',
+        row: unclaimed,
+      }),
+    ).toMatchObject({ outcome: 'skipped', detail: 'comment already in flight' });
+    expect(mocks.postComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet on public repositories unless opted in, and without links', async () => {
+    const publicRow = await bindAndOpen({ metadata: { repoPrivate: false } });
+    expect(
+      await control().handle({
+        event: changeRequestEvent('opened'),
+        kind: 'opened',
+        row: publicRow,
+      }),
+    ).toMatchObject({ outcome: 'skipped', detail: 'commentOnPublicRepositories is off' });
+
+    await serverDB
+      .update(users)
+      .set({ preference: { integration: { github: { commentOnPublicRepositories: true } } } })
+      .where(eq(users.id, userId));
+    expect(
+      await control().handle({
+        event: changeRequestEvent('opened'),
+        kind: 'opened',
+        row: publicRow,
+      }),
+    ).toMatchObject({ outcome: 'commented' });
+
+    const unlinked = await ScmChangeRequestModel.upsert(serverDB, {
+      ...baseRow,
+      metadata: { repoPrivate: true },
+      number: 9,
+      url: 'https://github.com/arvinxx/sandbox/pull/9',
+    });
+    expect(
+      await control().handle({
+        event: changeRequestEvent('opened'),
+        kind: 'opened',
+        row: unlinked,
+      }),
+    ).toMatchObject({ outcome: 'skipped', detail: 'no links to share' });
   });
 });

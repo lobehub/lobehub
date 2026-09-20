@@ -9,11 +9,16 @@ import { UserModel } from '@/database/models/user';
 import type { ScmChangeRequestItem } from '@/database/schemas';
 import { works } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 
-import { fetchGitHubJobLogTail, fetchGitHubReviewFeedback } from './github/app';
+import {
+  fetchGitHubJobLogTail,
+  fetchGitHubReviewFeedback,
+  postGitHubPullRequestComment,
+} from './github/app';
 import type { ScmInboundEvent } from './types';
 import { buildCiFailurePrompt, buildReviewPrompt, type ScmWakeReason } from './wakePrompt';
 
@@ -34,6 +39,7 @@ export interface ScmControlEvent {
 
 export type ScmControlOutcome =
   | { detail?: string; outcome: 'accepted'; acceptanceId: string }
+  | { commentId: string; outcome: 'commented' }
   | { detail?: string; outcome: 'skipped' }
   | { operationId: string; outcome: 'woken'; reason: ScmWakeReason };
 
@@ -56,6 +62,12 @@ export class ScmControlService {
 
   handle = async ({ event, kind, row }: ScmControlEvent): Promise<ScmControlOutcome> => {
     switch (kind) {
+      case 'opened':
+      case 'ready_for_review':
+      case 'reopened':
+      case 'synchronized': {
+        return this.commentOnce(row);
+      }
       case 'merged': {
         if (!(await this.isEnabled(row, 'acceptOnMerge'))) {
           return { detail: 'acceptOnMerge is off', outcome: 'skipped' };
@@ -94,9 +106,84 @@ export class ScmControlService {
   private isEnabled = async (
     row: ScmChangeRequestItem,
     key: keyof GithubIntegrationPreference,
-  ): Promise<boolean> => {
-    const preference = await new UserModel(this.db, row.userId).getUserPreference();
-    return preference?.integration?.github?.[key] !== false;
+  ): Promise<boolean> => (await this.preference(row))?.[key] !== false;
+
+  private preference = async (
+    row: ScmChangeRequestItem,
+  ): Promise<GithubIntegrationPreference | undefined> =>
+    (await new UserModel(this.db, row.userId).getUserPreference())?.integration?.github;
+
+  // --------------- link comment ---------------
+
+  /**
+   * Once per pull request, leave a comment pointing at the LobeHub side of
+   * it: the acceptance it delivers and the conversation that opened it. Only
+   * when at least one link exists (a bare "tracked" comment says nothing),
+   * and only for the repository visibility the user allowed.
+   */
+  private commentOnce = async (row: ScmChangeRequestItem): Promise<ScmControlOutcome> => {
+    if (row.metadata.lobehubCommentId) return { detail: 'already commented', outcome: 'skipped' };
+    if (!row.acceptanceId && !row.topicId)
+      return { detail: 'no links to share', outcome: 'skipped' };
+    if (!row.installationId) return { detail: 'no installation', outcome: 'skipped' };
+    // `opened` and the `synchronize` that follows the first push arrive a
+    // second apart and are handled concurrently; the row each handler holds
+    // predates the other's write, so a per-row claim decides who comments.
+    if (!(await this.claimOnce(`scm:comment:${row.id}`, 300))) {
+      return { detail: 'comment already in flight', outcome: 'skipped' };
+    }
+    const fresh = await ScmChangeRequestModel.findById(this.db, row.id);
+    if (fresh?.metadata.lobehubCommentId)
+      return { detail: 'already commented', outcome: 'skipped' };
+
+    const isPrivate = row.metadata.repoPrivate;
+    if (isPrivate === undefined)
+      return { detail: 'repository visibility unknown', outcome: 'skipped' };
+    const key = isPrivate ? 'commentOnPrivateRepositories' : 'commentOnPublicRepositories';
+    const preference = await this.preference(row);
+    const allowed = isPrivate ? preference?.[key] !== false : preference?.[key] === true;
+    if (!allowed) return { detail: `${key} is off`, outcome: 'skipped' };
+
+    const installationId = await this.providerInstallationId(row.installationId);
+    if (!installationId) return { detail: 'installation not found', outcome: 'skipped' };
+
+    const origin = appEnv.APP_URL.replace(/\/$/, '');
+    const lines = ['**LobeHub** is tracking this pull request.', ''];
+    if (row.acceptanceId) lines.push(`- Acceptance: ${origin}/acceptance/${row.acceptanceId}`);
+    if (row.topicId) {
+      const topic = await new TopicModel(
+        this.db,
+        row.userId,
+        row.workspaceId ?? undefined,
+      ).findById(row.topicId);
+      if (topic?.agentId)
+        lines.push(`- Conversation: ${origin}/agent/${topic.agentId}?topic=${row.topicId}`);
+    }
+    lines.push(
+      '',
+      'Merging accepts the delivery; a failing check or review feedback reaches the agent that opened it.',
+    );
+
+    const commentId = await postGitHubPullRequestComment({
+      body: lines.join('\n'),
+      installationId,
+      number: row.number,
+      repoFullName: row.repoFullName,
+    });
+    if (!commentId) return { detail: 'comment failed', outcome: 'skipped' };
+
+    await ScmChangeRequestModel.upsert(this.db, {
+      metadata: { lobehubCommentId: commentId },
+      number: row.number,
+      provider: row.provider,
+      repoFullName: row.repoFullName,
+      state: row.state,
+      url: row.url,
+      userId: row.userId,
+      workspaceId: row.workspaceId,
+    });
+    log('commented on %s#%d (%s)', row.repoFullName, row.number, commentId);
+    return { commentId, outcome: 'commented' };
   };
 
   // --------------- merge → accepted ---------------
@@ -163,6 +250,13 @@ export class ScmControlService {
         agentId: topic.agentId,
         appContext: { topicId: row.topicId },
         autoStart: true,
+        externalOrigin: {
+          kind: reason,
+          label: `${row.repoFullName}#${row.number}`,
+          provider: row.provider,
+          resourceId: row.id,
+          url: row.url,
+        },
         prompt,
         steer: running,
         trigger: RequestTrigger.Scm,
@@ -236,16 +330,14 @@ export class ScmControlService {
   };
 
   /** One wake per change request per window; Redis-less deployments never debounce. */
-  private claimWakeWindow = async (changeRequestId: string): Promise<boolean> => {
+  private claimWakeWindow = (changeRequestId: string): Promise<boolean> =>
+    this.claimOnce(`scm:wake:${changeRequestId}`, WAKE_DEBOUNCE_SECONDS);
+
+  /** Redis SETNX with a TTL; without Redis every claim succeeds. */
+  private claimOnce = async (key: string, ttlSeconds: number): Promise<boolean> => {
     const redis = getAgentRuntimeRedisClient();
     if (!redis) return true;
-    const claimed = await redis.set(
-      `scm:wake:${changeRequestId}`,
-      '1',
-      'EX',
-      WAKE_DEBOUNCE_SECONDS,
-      'NX',
-    );
+    const claimed = await redis.set(key, '1', 'EX', ttlSeconds, 'NX');
     return claimed === 'OK';
   };
 }

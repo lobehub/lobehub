@@ -116,6 +116,8 @@ export interface ScmChangeRequestMetadata {
    * two provider timestamps.
    */
   lastProviderEventAt?: string;
+  /** Provider id of the LobeHub comment posted on this change request, once posted. */
+  lobehubCommentId?: string;
   /** Provider's mergeability verdict, when it exposes one (`MERGEABLE`, `CONFLICTING`, …). */
   mergeable?: string;
   /**
@@ -132,6 +134,8 @@ export interface ScmChangeRequestMetadata {
    * whatever order the deliveries arrive in.
    */
   reviewers?: Record<string, { at?: string; decision: 'approved' | 'changes_requested' }>;
+  /** Whether the repository is private, when the provider said. Drives the comment switches. */
+  repoPrivate?: boolean;
 }
 
 /** Processing state of one inbound webhook delivery. */
