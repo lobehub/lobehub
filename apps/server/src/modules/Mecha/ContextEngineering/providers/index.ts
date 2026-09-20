@@ -199,6 +199,12 @@ export const createServerContextFactProviders = ({
     },
 
     listCredentials: async ({ workspaceId: scopeWorkspaceId }) => {
+      // Frozen when the operation was created, so a run renders {{CREDS_LIST}}
+      // without a Market round trip per step. The scope must match: inside a
+      // workspace the agent only sees that workspace's shared credentials.
+      const frozen = state.operationCredentials;
+      if (frozen && frozen.workspaceId === scopeWorkspaceId) return frozen.credentials;
+
       // Read market accessToken from DB so the server-side runtime can
       // authenticate with the Market API instead of falling back to an
       // anonymous trustedClientToken (which 401s on creds endpoints).

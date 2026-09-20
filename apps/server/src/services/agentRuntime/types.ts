@@ -13,6 +13,7 @@ import type {
   ChatTopicBotContext,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
+  FrozenCredentialFacts,
   UserInterventionConfig,
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
@@ -533,6 +534,8 @@ export interface OperationCreationParams {
   modelRuntimeConfig?: any;
   /** Marks the source claim non-rollbackable once deterministic runtime state is durable. */
   onInterventionPrepared?: () => void;
+  /** Credentials frozen for the run; see {@link FrozenCredentialFacts}. */
+  operationCredentials?: FrozenCredentialFacts;
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;

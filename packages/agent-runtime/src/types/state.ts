@@ -20,6 +20,7 @@ import type {
   EvalToolForwardingConfig,
   ExecutionPlan,
   ExpertiseContextSnapshot,
+  FrozenCredentialFacts,
   FrozenModelFacts,
   LobeAgentChatConfig,
   LobeAgentConfig,
@@ -372,6 +373,13 @@ export interface AgentState {
     };
   };
 
+  /**
+   * Credentials this run listed once when it was created. A step renders
+   * `{{CREDS_LIST}}` from here instead of asking the Market API again; absent
+   * when the run has changed its own credentials since, and the steps after
+   * that read the list live.
+   */
+  operationCredentials?: FrozenCredentialFacts;
   operationId: string;
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;

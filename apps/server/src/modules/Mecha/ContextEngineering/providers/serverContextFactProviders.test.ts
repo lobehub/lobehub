@@ -3,14 +3,21 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createServerContextFactProviders } from './index';
 
-const { findById, getInfoForAIGeneration, getUserSettings, loadConnectedComposioIds, pluginQuery } =
-  vi.hoisted(() => ({
-    findById: vi.fn(),
-    getInfoForAIGeneration: vi.fn(),
-    getUserSettings: vi.fn(),
-    loadConnectedComposioIds: vi.fn(),
-    pluginQuery: vi.fn(),
-  }));
+const {
+  credsList,
+  findById,
+  getInfoForAIGeneration,
+  getUserSettings,
+  loadConnectedComposioIds,
+  pluginQuery,
+} = vi.hoisted(() => ({
+  credsList: vi.fn(),
+  findById: vi.fn(),
+  getInfoForAIGeneration: vi.fn(),
+  getUserSettings: vi.fn(),
+  loadConnectedComposioIds: vi.fn(),
+  pluginQuery: vi.fn(),
+}));
 
 vi.mock('@/database/models/user', () => ({
   UserModel: Object.assign(
@@ -34,6 +41,14 @@ vi.mock('@/server/modules/AgentRuntime/adapters/composioConnectedIds', () => ({
   loadConnectedComposioIds,
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.test' } }));
+vi.mock('@/server/services/market', () => ({
+  MarketService: class {
+    market = {
+      creds: { list: credsList },
+      organizations: { creds: () => ({ list: credsList }) },
+    };
+  },
+}));
 
 const source = (state: Record<string, unknown> = {}) => ({
   ctx: { serverDB: {}, userId: 'owner-1', workspaceId: 'ws-1' } as never,
@@ -41,6 +56,42 @@ const source = (state: Record<string, unknown> = {}) => ({
 });
 
 describe('createServerContextFactProviders', () => {
+  describe('listCredentials', () => {
+    const frozen = {
+      credentials: [{ key: 'OPENAI', name: 'OpenAI', type: 'apiKey' }],
+      workspaceId: 'ws-1',
+    };
+
+    it('answers from the run snapshot without asking the Market API', async () => {
+      const providers = createServerContextFactProviders(source({ operationCredentials: frozen }));
+
+      await expect(providers.listCredentials!({ workspaceId: 'ws-1' })).resolves.toEqual(
+        frozen.credentials,
+      );
+      expect(credsList).not.toHaveBeenCalled();
+      expect(getUserSettings).not.toHaveBeenCalled();
+    });
+
+    it('reads live when the snapshot was taken in another scope', async () => {
+      getUserSettings.mockResolvedValue({ market: { accessToken: 't' } });
+      credsList.mockResolvedValue({ data: [{ key: 'LIVE', name: 'Live', type: 'apiKey' }] });
+      const providers = createServerContextFactProviders(source({ operationCredentials: frozen }));
+
+      await expect(providers.listCredentials!({ workspaceId: undefined })).resolves.toEqual([
+        expect.objectContaining({ key: 'LIVE' }),
+      ]);
+      expect(credsList).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads live when the run has no snapshot', async () => {
+      credsList.mockResolvedValue({ data: [] });
+      const providers = createServerContextFactProviders(source());
+
+      await expect(providers.listCredentials!({ workspaceId: 'ws-1' })).resolves.toEqual([]);
+      expect(credsList).toHaveBeenCalled();
+    });
+  });
+
   it('answers nothing without a database or user', () => {
     expect(createServerContextFactProviders({ ctx: {} as never, state: {} as never })).toEqual({});
   });

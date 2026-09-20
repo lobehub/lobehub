@@ -4,6 +4,7 @@ import type { DeviceUnavailableErrorData, WorkingDirConfig } from '../device';
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
+export * from './credentialFacts';
 export * from './modelFacts';
 
 export type AgentSignalOperationKind =

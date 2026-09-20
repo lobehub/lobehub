@@ -1,3 +1,4 @@
+import { CredsIdentifier } from '@lobechat/builtin-tool-creds';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
@@ -23,7 +24,12 @@ import {
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
-import type { ChatTopicBotContext, FrozenModelFacts, RequestTrigger } from '@lobechat/types';
+import type {
+  ChatTopicBotContext,
+  FrozenCredentialFacts,
+  FrozenModelFacts,
+  RequestTrigger,
+} from '@lobechat/types';
 import {
   agentShareFileAccessScope,
   getActivePluginIds,
@@ -144,6 +150,12 @@ export interface ToolDiscoveryResult {
    * context: it travels on the operation and the context engine injects it.
    */
   connectorOwnershipNote?: string;
+  /**
+   * Credentials listed once for the whole operation; see
+   * {@link FrozenCredentialFacts}. Absent when the run cannot inject
+   * credentials, or when the Market API did not answer.
+   */
+  credentialFacts?: FrozenCredentialFacts;
   executionPlan?: ExecutionPlan;
   hasAgentDocuments: boolean;
   hasEnabledKnowledgeBases: boolean;
@@ -178,6 +190,41 @@ export interface ToolDiscoveryResult {
  * Returns the connector credential ownership note as run context when the run
  * borrows connectors other members authorized; the context engine injects it.
  */
+/**
+ * The credentials the run may reference, read once. Inside a workspace an agent
+ * only sees the workspace's shared organization credentials, never the
+ * operator's personal ones — the scope is recorded on the snapshot so a step in
+ * another scope falls back to a live read.
+ *
+ * Never fails the turn: without an answer the steps read the list live, exactly
+ * as they did before the snapshot existed.
+ */
+const readCredentialFacts = async (
+  deps: ToolDiscoveryDeps,
+): Promise<FrozenCredentialFacts | undefined> => {
+  try {
+    const marketService = await deps.getMarketService();
+    const result = deps.workspaceId
+      ? await marketService.market.organizations.creds({ workspaceId: deps.workspaceId }).list()
+      : await marketService.market.creds.list();
+    const creds = (result as any)?.data ?? [];
+    return {
+      credentials: creds.map((cred: any) => ({
+        description: cred.description,
+        key: cred.key,
+        name: cred.name,
+        ownerDisplayName: cred.ownerDisplayName,
+        ownerType: cred.ownerType,
+        type: cred.type,
+      })),
+      workspaceId: deps.workspaceId,
+    };
+  } catch (error) {
+    log('execAgent: failed to freeze credential facts: %O', error);
+    return undefined;
+  }
+};
+
 export const discoverTools = async (
   deps: ToolDiscoveryDeps,
   ctx: ExecRunContext,
@@ -223,6 +270,8 @@ export const discoverTools = async (
   } = input;
 
   let tools: any[] | undefined;
+  /** Started once the tool set is known; awaited at the return. */
+  let credentialFactsPromise: Promise<FrozenCredentialFacts | undefined> | undefined;
   let toolsResult: { enabledToolIds: string[]; tools?: any[] | undefined } = {
     enabledToolIds: [],
     tools: undefined,
@@ -989,6 +1038,14 @@ export const discoverTools = async (
     tools = toolsResult.tools;
     log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
+    // Only a run that can inject credentials renders {{CREDS_LIST}}. Kick the
+    // read off here and await it at the end: it is one Market round trip, and
+    // every step of the run reads the answer back off the operation instead of
+    // asking again.
+    if (toolsResult.enabledToolIds.includes(CredsIdentifier)) {
+      credentialFactsPromise = readCredentialFacts(deps);
+    }
+
     // Start with the scoped manifest map (pluginIds + defaultToolIds)
     const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
     const discovery = resolveDiscoveryPool({
@@ -1128,6 +1185,7 @@ export const discoverTools = async (
     connectorOwnershipNote,
     executionPlan,
     hasAgentDocuments,
+    credentialFacts: await credentialFactsPromise,
     hasEnabledKnowledgeBases,
     lobehubSkillManifests,
     modelFacts,

@@ -86,6 +86,7 @@ import {
   isSuccessLikeCompletionReason,
   normalizeCompletionMessages,
 } from './CompletionLifecycle';
+import { stepChangedCredentials } from './credentialFacts';
 import { logToolCallPc } from './formalObservation';
 import { type AgentHook, hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
@@ -929,6 +930,7 @@ export class AgentRuntimeService {
       agentGroup,
       agentShareVisitor,
       modelRuntimeConfig,
+      operationCredentials,
       userId,
       autoStart = true,
       stream,
@@ -1114,6 +1116,9 @@ export class AgentRuntimeService {
         maxSteps,
         // modelRuntimeConfig at state level for executor fallback
         modelRuntimeConfig,
+        // Read once during discovery; dropped again as soon as the run changes
+        // its own credentials (see the creds invalidation after a step).
+        operationCredentials,
         operationId,
         // The run's only copy of its tool set. The manifest map is the heaviest
         // thing on the state and the state is re-serialized at every step, so the
@@ -2339,6 +2344,17 @@ export class AgentRuntimeService {
           stepIndex,
           stepResult,
         });
+
+        // A credential the run just saved or connected changes the list the
+        // next step must show, so the snapshot frozen at creation no longer
+        // holds. Drop it and let the remaining steps read the list live.
+        if (
+          stepChangedCredentials(stepPresentationData.toolsResult) &&
+          stepResult.newState.operationCredentials
+        ) {
+          stepResult.newState.operationCredentials = undefined;
+          log('[%s][%d] Credentials changed in-run; dropped the snapshot', operationId, stepIndex);
+        }
 
         // Update step tracking in state metadata for afterStep hooks (cross-step accumulator)
         const hasAfterStepHooks = stepResult.newState.host?.hooks?.some(

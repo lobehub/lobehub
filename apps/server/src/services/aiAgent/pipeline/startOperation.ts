@@ -282,6 +282,9 @@ export const startOperation = async (
         provider,
       },
       hooks,
+      // Listed once during discovery: every step renders {{CREDS_LIST}} from
+      // here instead of asking the Market API again.
+      operationCredentials: discovery.credentialFacts,
       operationId,
       parentOperationId,
       signal,
