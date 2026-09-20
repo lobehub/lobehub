@@ -1,0 +1,38 @@
+---
+title: Using Eden AI API Key in LobeHub
+description: >-
+  Learn how to configure and use Eden AI in LobeHub, obtain your API key, and
+  start chatting with 100+ OpenAI-compatible models through one EU-hosted API.
+tags:
+  - LobeHub
+  - Eden AI
+  - OpenAI Compatible
+  - API Key
+  - Web UI
+---
+
+# Using Eden AI in LobeHub
+
+[Eden AI](https://www.edenai.co) provides unified, OpenAI-compatible access to 100+ models from many providers (OpenAI, Anthropic, Google, Mistral, DeepSeek, and more) through a single EU-hosted endpoint and API key. Models use the `provider/model` naming scheme (e.g. `anthropic/claude-sonnet-4-5`, `mistral/codestral-latest`).
+
+This guide will walk you through how to use Eden AI in LobeHub:
+
+<Steps>
+  ### Step 1: Get Your Eden AI API Key
+
+  - Sign up and log in to the [Eden AI platform](https://app.edenai.run).
+  - Open your account settings and create an API key.
+
+  ### Step 2: Configure Eden AI in LobeHub
+
+  - Go to `Settings` -> `AI Service Provider` and find `Eden AI`.
+  - Paste your API key into the input.
+  - Pick an Eden AI model and start chatting.
+
+  <Callout type={'info'}>
+    The default endpoint is `https://api.edenai.run/v3`. For EU-only data
+    residency you can point the proxy URL to `https://api.eu.edenai.run/v3`.
+  </Callout>
+</Steps>
+
+You can now use the models provided by Eden AI in LobeHub.
