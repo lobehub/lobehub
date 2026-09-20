@@ -253,7 +253,7 @@ jobs:
   test-desktop:
     needs: check-duplicate-run
     if: needs.check-duplicate-run.outputs.should_skip != 'true'
-    name: Test Desktop App
+    name: Test Desktop App & alint
 
     runs-on: ubuntu-latest
     env:

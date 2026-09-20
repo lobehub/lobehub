@@ -34,7 +34,7 @@ Findings are warnings. Treat them like a reviewer's comment: fix, or explain in 
 
 ## CI
 
-The `alint ·` steps at the end of the Test Desktop App job in `.github/workflows/test.yml` run on every push and pull request, on the change's diff only, and never fail the check (they reuse that job's root install instead of paying for a runner of their own):
+The `alint ·` steps at the end of the "Test Desktop App & alint" job in `.github/workflows/test.yml` run on every push and pull request, on the change's diff only, and never fail the check (they reuse that job's root install instead of paying for a runner of their own):
 
 - `alint --dirty` lints the working tree against `HEAD` and keeps only findings on changed lines. The steps fetch the merge base (against the PR base, or `canary` on a push) and run `git reset --mixed <merge-base>`, which turns the whole change into dirty changes, so the scope is exactly its diff and nothing older is reported. On a push to `canary` itself the diff is empty and nothing runs.
 - Findings become inline warning annotations (`.agents/alint/annotate.ts`) plus a table in the job summary.
