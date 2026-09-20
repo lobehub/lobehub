@@ -788,7 +788,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
+          'data: {"latency":10}\n\n',
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
@@ -864,7 +864,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
+          'data: {"latency":10}\n\n',
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
