@@ -1,4 +1,5 @@
 import { listDocumentsProjector, readDocumentProjector } from './projectors/agentDocuments';
+import { grepContentProjector } from './projectors/grepContent';
 import { runCommandProjector } from './projectors/localSystem';
 import { readFileProjector } from './projectors/readFile';
 import { searchUserMemoryProjector } from './projectors/userMemory';
@@ -33,7 +34,12 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
     listDocuments: listDocumentsProjector,
     readDocument: readDocumentProjector,
   },
+  // `grepContent` is the same tool on both hosts, down to the shared inspector.
+  'lobe-cloud-sandbox': {
+    grepContent: grepContentProjector,
+  },
   'lobe-local-system': {
+    grepContent: grepContentProjector,
     readFile: readFileProjector,
     runCommand: runCommandProjector,
   },
@@ -72,7 +78,10 @@ const eventBodyUnused: ReadonlySet<string> = new Set([
   // `result.success`; a read is neither.
   'lobe-agent-documents/listDocuments',
   'lobe-agent-documents/readDocument',
-  // `lobe-local-system`'s hook is scoped to `runCommand`.
+  // `lobe-cloud-sandbox` registers no hook, and `lobe-local-system`'s is scoped
+  // to `runCommand`.
+  'lobe-cloud-sandbox/grepContent',
+  'lobe-local-system/grepContent',
   'lobe-local-system/readFile',
   // `lobe-user-memory` and `lobe-web-browsing` register no hook at all.
   'lobe-user-memory/searchUserMemory',

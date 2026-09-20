@@ -144,6 +144,8 @@ describe('registry', () => {
       'codex/command_execution',
       'lobe-agent-documents/listDocuments',
       'lobe-agent-documents/readDocument',
+      'lobe-cloud-sandbox/grepContent',
+      'lobe-local-system/grepContent',
       'lobe-local-system/readFile',
       'lobe-local-system/runCommand',
       'lobe-user-memory/searchUserMemory',
@@ -214,5 +216,40 @@ describe('searchUserMemoryProjector', () => {
     const [projected] = projectToolViewModels([memoryMessage({})], getToolProjector);
 
     expect(projected.pluginState).toEqual({ resultCount: 0 });
+  });
+});
+
+describe('grepContentProjector', () => {
+  const grepMessage = (pluginState: unknown, identifier = 'lobe-local-system') =>
+    toolMessage({
+      content: 'RAW BODY',
+      plugin: { apiName: 'grepContent', arguments: '{}', identifier },
+      pluginState,
+    } as Partial<UIChatMessage>);
+
+  it.each(['lobe-local-system', 'lobe-cloud-sandbox'])(
+    'drops the match list on %s and leaves the count the chip reads',
+    (identifier) => {
+      const matches = Array.from({ length: 40 }, (_, index) => `/repo/src/file-${index}.ts`);
+
+      const [projected] = projectToolViewModels(
+        [grepMessage({ matches, pattern: 'useEffect', totalMatches: 40 }, identifier)],
+        getToolProjector,
+      );
+
+      expect(projected.pluginState).toEqual({ pattern: 'useEffect', totalMatches: 40 });
+      expect(projected.content).toBe('');
+      expect(projected.contentLength).toBe('RAW BODY'.length);
+      expect(projected.payloadOmitted).toBe('render');
+    },
+  );
+
+  it('keeps a zero-match state renderable', () => {
+    const [projected] = projectToolViewModels(
+      [grepMessage({ matches: [], pattern: 'nothing', totalMatches: 0 })],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({ pattern: 'nothing', totalMatches: 0 });
   });
 });
