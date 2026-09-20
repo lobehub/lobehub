@@ -18,6 +18,12 @@ import type { ToolProjector } from './types';
  * `BODY_ONLY_PROJECTION` — and keeps its `pluginState` whole. An entry here is
  * how a tool additionally sheds state, which needs per-tool knowledge of the
  * keys its collapsed row reads.
+ *
+ * Before adding one, check that the tool's row does NOT open by itself:
+ * `needExpand` is `renderDisplayControl !== 'collapsed'`, so a tool whose
+ * manifest declares `expand` / `alwaysExpand` mounts its card on every
+ * conversation load — and a projection that hydrates on expansion would then
+ * cost a round trip per row instead of saving anything.
  */
 const toolProjectors: Record<string, Record<string, ToolProjector>> = {
   // Every tool below renders through the SAME shared card,
