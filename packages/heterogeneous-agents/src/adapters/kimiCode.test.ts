@@ -1,8 +1,39 @@
-import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { KimiCodeAdapter } from './kimiCode';
 
+const tempDirs: string[] = [];
+
+const makeTempKimiHome = async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-kimi-adapter-'));
+  tempDirs.push(dir);
+  return dir;
+};
+
+const writeWireLog = async (
+  kimiHome: string,
+  sessionId: string,
+  usageRecords: Record<string, number>[],
+) => {
+  const dir = path.join(kimiHome, 'sessions', 'wd_test', sessionId, 'agents', 'main');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, 'wire.jsonl'),
+    usageRecords
+      .map((usage) => JSON.stringify({ content: 'Working.', role: 'assistant', usage }))
+      .join('\n'),
+  );
+};
+
 describe('KimiCodeAdapter', () => {
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
+  });
+
   it('maps the documented text, parallel tools, results, and resume hint sequence', () => {
     const adapter = new KimiCodeAdapter();
     const first = adapter.adapt({
@@ -168,5 +199,60 @@ describe('KimiCodeAdapter', () => {
     expect(adapter.adapt({ role: 'assistant', tool_calls: [{ id: 3 }] })).toEqual([]);
     expect(adapter.adapt({ role: 'meta', type: 'system.version', version: '0.28.0' })).toEqual([]);
     expect(adapter.adapt({ status: 'complete', type: 'goal.summary' })).toEqual([]);
+  });
+
+  describe('collectPostRunUsage', () => {
+    it('emits aggregated wire-log usage as a turn_metadata step_complete on the last step', async () => {
+      const kimiHome = await makeTempKimiHome();
+      const adapter = new KimiCodeAdapter();
+      adapter.adapt({ role: 'meta', session_id: 'session-1', type: 'session.resume_hint' });
+      // Two steps, so the usage event must land on stepIndex 1.
+      adapter.adapt({
+        role: 'assistant',
+        tool_calls: [
+          { function: { arguments: '{}', name: 'Read' }, id: 'call-1', type: 'function' },
+        ],
+      });
+      adapter.adapt({ content: 'contents', role: 'tool', tool_call_id: 'call-1' });
+      adapter.adapt({ content: 'Done.', role: 'assistant' });
+      await writeWireLog(kimiHome, 'session-1', [
+        { inputCacheRead: 22_784, inputOther: 225, output: 27 },
+        { inputCacheCreation: 10, inputOther: 100, output: 53 },
+      ]);
+
+      const events = await adapter.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } });
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        data: {
+          phase: 'turn_metadata',
+          provider: 'kimi-code',
+          usage: {
+            inputCacheMissTokens: 325,
+            inputCachedTokens: 22_784,
+            inputWriteCacheTokens: 10,
+            totalInputTokens: 23_119,
+            totalOutputTokens: 80,
+            totalTokens: 23_199,
+          },
+        },
+        stepIndex: 1,
+        type: 'step_complete',
+      });
+    });
+
+    it('no-ops without a session id or wire log', async () => {
+      const kimiHome = await makeTempKimiHome();
+
+      const noSession = new KimiCodeAdapter();
+      await expect(
+        noSession.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } }),
+      ).resolves.toEqual([]);
+
+      const missingLog = new KimiCodeAdapter();
+      missingLog.adapt({ role: 'meta', session_id: 'nope', type: 'session.resume_hint' });
+      await expect(
+        missingLog.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } }),
+      ).resolves.toEqual([]);
+    });
   });
 });

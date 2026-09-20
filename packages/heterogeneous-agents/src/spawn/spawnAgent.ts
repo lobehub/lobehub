@@ -800,6 +800,12 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
         if (code === 0 && !killedByUs) {
           for (const event of pipeline.validateCompletion()) queue.push(event);
         }
+        // Kimi Code reports usage only via its on-disk session wire log, so
+        // it can only be collected now that the process has exited. The hook
+        // is a no-op for every other agent type.
+        for (const event of await pipeline.collectPostRunUsage({ env: childEnv })) {
+          queue.push(event);
+        }
       } catch (err) {
         streamError = err instanceof Error ? err : new Error(String(err));
       } finally {

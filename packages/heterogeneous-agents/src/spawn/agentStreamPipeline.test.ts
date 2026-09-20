@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentStreamPipeline } from './agentStreamPipeline';
+
+const tempDirs: string[] = [];
 
 const init = (sessionId = 'cc-1') =>
   `${JSON.stringify({
@@ -53,6 +59,10 @@ const contentOf = (events: { data?: any; type: string }[]) =>
   events.find((e) => e.type === 'tool_result')?.data?.content;
 
 describe('AgentStreamPipeline', () => {
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
+  });
+
   it('runs JSONL → adapter → toStreamEvent and stamps operationId', async () => {
     const pipeline = new AgentStreamPipeline({
       agentType: 'claude-code',
@@ -177,11 +187,65 @@ describe('AgentStreamPipeline', () => {
     expect(Array.isArray(flushed)).toBe(true);
   });
 
+  describe('collectPostRunUsage', () => {
+    it('no-ops for adapters without a post-run usage hook', async () => {
+      const pipeline = new AgentStreamPipeline({
+        agentType: 'claude-code',
+        operationId: 'op-1',
+      });
+
+      await expect(pipeline.collectPostRunUsage()).resolves.toEqual([]);
+    });
+
+    it('emits Kimi Code wire-log usage as an operationId-stamped turn_metadata event', async () => {
+      const kimiHome = await mkdtemp(path.join(os.tmpdir(), 'lobe-kimi-pipeline-'));
+      tempDirs.push(kimiHome);
+      const wireDir = path.join(kimiHome, 'sessions', 'wd_test', 'session-9', 'agents', 'main');
+      await mkdir(wireDir, { recursive: true });
+      await writeFile(
+        path.join(wireDir, 'wire.jsonl'),
+        `${JSON.stringify({
+          content: 'Done.',
+          role: 'assistant',
+          usage: { inputCacheRead: 1000, inputOther: 200, output: 50 },
+        })}\n`,
+      );
+
+      const pipeline = new AgentStreamPipeline({
+        agentType: 'kimi-code',
+        operationId: 'op-kimi',
+      });
+      await pipeline.push(
+        `${JSON.stringify({ role: 'meta', session_id: 'session-9', type: 'session.resume_hint' })}\n`,
+      );
+
+      const events = await pipeline.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } });
+
+      expect(events).toEqual([
+        expect.objectContaining({
+          data: {
+            phase: 'turn_metadata',
+            provider: 'kimi-code',
+            usage: {
+              inputCacheMissTokens: 200,
+              inputCachedTokens: 1000,
+              inputWriteCacheTokens: undefined,
+              totalInputTokens: 1200,
+              totalOutputTokens: 50,
+              totalTokens: 1250,
+            },
+          },
+          operationId: 'op-kimi',
+          stepIndex: 0,
+          type: 'step_complete',
+        }),
+      ]);
+    });
+  });
+
   describe('tool_result image upload ()', () => {
     it('rewrites base64 pluginState.images into uploaded references', async () => {
-      const uploadImage = vi
-        .fn()
-        .mockResolvedValue({ fileId: 'file_1', url: 'https://cdn/x.png' });
+      const uploadImage = vi.fn().mockResolvedValue({ fileId: 'file_1', url: 'https://cdn/x.png' });
       const pipeline = new AgentStreamPipeline({
         agentType: 'claude-code',
         operationId: 'op-1',
@@ -225,7 +289,9 @@ describe('AgentStreamPipeline', () => {
       expect(uploadImage).toHaveBeenCalledTimes(1);
       expect(imagesOf(events)).toBeUndefined();
       // The `[Image: …]` placeholder is still the content fallback.
-      expect(events.find((e) => e.type === 'tool_result')?.data?.content).toBe('[Image: image/png]');
+      expect(events.find((e) => e.type === 'tool_result')?.data?.content).toBe(
+        '[Image: image/png]',
+      );
     });
 
     it('drops the image when the uploader declines (returns undefined)', async () => {
