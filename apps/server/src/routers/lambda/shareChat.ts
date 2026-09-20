@@ -400,6 +400,26 @@ export const shareChatRouter = router({
       const dirname = parts.join('/');
 
       const { id } = await ctx.serverDB.transaction(async (trx) => {
+        // Transfer hard revocation locks this same Agent row before it snapshots
+        // and deletes share files. Taking the lock first gives the two paths a
+        // single order: if settlement wins, transfer sees and removes this
+        // file; if transfer wins, the locked recheck below rejects the stale
+        // share before a new file row can escape the cleanup snapshot.
+        const tx = trx as LobeChatDatabase;
+        const lockedAgent = await AgentShareModel.lockScopedAgentRow(tx, share.agentId, {
+          userId: share.ownerId,
+          workspaceId: share.workspaceId ?? undefined,
+        });
+        if (
+          !lockedAgent ||
+          !(await AgentShareModel.isRunStillAuthorized(tx, {
+            agentId: share.agentId,
+            shareId: share.shareId,
+          }))
+        ) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' });
+        }
+
         const lockedUpload = await fileUploadService.model.findLatestByPathnameForUpdate(
           input.pathname,
           trx,

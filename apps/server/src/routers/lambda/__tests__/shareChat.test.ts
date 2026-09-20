@@ -52,10 +52,14 @@ vi.mock('@/server/featureFlags', () => ({
 }));
 
 const mockAccessCheck = vi.fn();
+const mockIsRunStillAuthorized = vi.fn();
+const mockLockScopedAgentRow = vi.fn();
 const mockLockUploadAdmission = vi.fn();
 vi.mock('@/database/models/agentShare', () => ({
   AgentShareModel: {
     findByShareIdWithAccessCheck: (...args: any[]) => mockAccessCheck(...args),
+    isRunStillAuthorized: (...args: any[]) => mockIsRunStillAuthorized(...args),
+    lockScopedAgentRow: (...args: any[]) => mockLockScopedAgentRow(...args),
     lockUploadAdmission: (...args: any[]) => mockLockUploadAdmission(...args),
   },
 }));
@@ -240,6 +244,8 @@ describe('shareChatRouter', () => {
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
     mockGetFeatureFlagsState.mockResolvedValue({ enableAgentShare: true });
     mockAccessCheck.mockResolvedValue(share);
+    mockIsRunStillAuthorized.mockResolvedValue(true);
+    mockLockScopedAgentRow.mockResolvedValue({ id: share.agentId, workspaceId: null });
     mockFindById.mockResolvedValue(visitorTopic);
     mockIsRunningOperationAlive.mockResolvedValue(true);
     mockCountBySender.mockResolvedValue(0);
@@ -798,6 +804,34 @@ describe('shareChatRouter', () => {
       expect(mockFileCreate.mock.calls[0][0]).not.toHaveProperty('fileHash');
       expect(mockFileCreate.mock.calls[0][0]).not.toHaveProperty('source');
       expect(mockUploadSettle).toHaveBeenCalledWith('upload-1', 'file-new', expect.anything());
+    });
+
+    it('serializes settlement with Agent transfer and revalidates the share after the lock', async () => {
+      const caller = await createCaller();
+
+      await caller.createFile(input);
+
+      expect(mockLockScopedAgentRow).toHaveBeenCalledWith({ trx: true }, share.agentId, {
+        userId: OWNER,
+        workspaceId: undefined,
+      });
+      expect(mockIsRunStillAuthorized).toHaveBeenCalledWith(
+        { trx: true },
+        { agentId: share.agentId, shareId: share.shareId },
+      );
+      expect(mockLockScopedAgentRow.mock.invocationCallOrder[0]).toBeLessThan(
+        mockUploadFindLatestForUpdate.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('rejects settlement when hard revocation wins the Agent row lock', async () => {
+      mockLockScopedAgentRow.mockResolvedValue(null);
+      const caller = await createCaller();
+
+      await expect(caller.createFile(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockFileCreate).not.toHaveBeenCalled();
+      expect(mockUploadSettle).not.toHaveBeenCalled();
     });
 
     it('ignores a client-supplied hash instead of registering the object for dedup', async () => {

@@ -31,6 +31,14 @@ const goalGraphMigration = readMigrationFiles({
 
 if (!goalGraphMigration) throw new Error('Goal Graph migration not found');
 
+const agentShareTenancyMigration = readMigrationFiles({
+  migrationsFolder: path.join(__dirname, '../../../migrations'),
+}).find((migration) =>
+  migration.sql.some((statement) => statement.includes('topics_agent_share_id_agent_shares_id_fk')),
+);
+
+if (!agentShareTenancyMigration) throw new Error('Agent Share tenancy migration not found');
+
 const setupTopicCommentMigrationDependencies = async (client: PGlite) => {
   await client.exec(`
     CREATE TABLE users (id text PRIMARY KEY);
@@ -108,6 +116,66 @@ const setupGoalGraphMigrationDependencies = async (client: PGlite) => {
 
 const runGoalGraphMigration = async (client: PGlite) => {
   for (const statement of goalGraphMigration.sql) await client.exec(statement);
+};
+
+const setupAgentShareTenancyMigrationDependencies = async (client: PGlite) => {
+  await client.exec(`
+    CREATE TABLE workspaces (id text PRIMARY KEY);
+    CREATE TABLE agents (
+      id text PRIMARY KEY,
+      workspace_id text
+    );
+    CREATE TABLE agent_shares (
+      id uuid PRIMARY KEY,
+      agent_id text NOT NULL
+    );
+    CREATE TABLE topics (
+      id text PRIMARY KEY,
+      agent_id text,
+      sender_id text
+    );
+    CREATE TABLE files (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      workspace_id text,
+      metadata jsonb,
+      size integer NOT NULL,
+      url text
+    );
+    CREATE TABLE file_uploads (
+      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      user_id text NOT NULL,
+      workspace_id text,
+      pathname text NOT NULL,
+      size integer NOT NULL,
+      status text NOT NULL,
+      file_id text REFERENCES files(id) ON DELETE SET NULL,
+      expires_at timestamp with time zone NOT NULL,
+      updated_at timestamp with time zone DEFAULT now() NOT NULL
+    );
+    CREATE UNIQUE INDEX file_uploads_live_pathname_unique
+      ON file_uploads (pathname)
+      WHERE status IN ('active', 'cleaning');
+
+    INSERT INTO workspaces (id) VALUES ('workspace-1');
+    INSERT INTO agents (id, workspace_id) VALUES ('agent-1', 'workspace-1');
+    INSERT INTO agent_shares (id, agent_id)
+    VALUES ('00000000-0000-0000-0000-000000000001', 'agent-1');
+    INSERT INTO topics (id, agent_id, sender_id)
+    VALUES ('topic-1', 'agent-1', 'visitor-1');
+    INSERT INTO files (id, user_id, workspace_id, metadata, size, url) VALUES (
+      'file-1',
+      'owner-1',
+      NULL,
+      '{"agentShare":{"shareId":"00000000-0000-0000-0000-000000000001","visitorUserId":"visitor-1"}}',
+      10,
+      'files/owner-1/agent-share/00000000-0000-0000-0000-000000000001/cat.png'
+    );
+  `);
+};
+
+const runAgentShareTenancyMigration = async (client: PGlite) => {
+  for (const statement of agentShareTenancyMigration.sql) await client.exec(statement);
 };
 
 describe('DrizzleMigrationModel', () => {
@@ -302,6 +370,35 @@ describe('0148 Goal Graph migration', () => {
           );
         `),
       ).rejects.toThrow();
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+describe('0168 Workspace Agent Share tenancy migration', () => {
+  it('requeues visitor objects for durable cleanup before deleting stale shares', async () => {
+    const client = new PGlite();
+
+    try {
+      await setupAgentShareTenancyMigrationDependencies(client);
+      await runAgentShareTenancyMigration(client);
+
+      const shares = await client.query('SELECT id FROM agent_shares');
+      const topics = await client.query('SELECT id FROM topics');
+      const files = await client.query('SELECT id FROM files');
+      const uploads = await client.query<{
+        expires_at: Date;
+        file_id: string | null;
+        status: string;
+      }>('SELECT status, file_id, expires_at FROM file_uploads');
+
+      expect(shares.rows).toEqual([]);
+      expect(topics.rows).toEqual([]);
+      expect(files.rows).toEqual([]);
+      expect(uploads.rows).toHaveLength(1);
+      expect(uploads.rows[0]).toMatchObject({ file_id: null, status: 'active' });
+      expect(new Date(uploads.rows[0].expires_at).getTime()).toBeLessThanOrEqual(Date.now());
     } finally {
       await client.close();
     }
