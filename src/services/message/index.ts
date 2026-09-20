@@ -186,6 +186,11 @@ export class MessageService {
     return lambdaClient.message.getToolResultPayload.query({ messageId });
   };
 
+  /** Bulk form, for surfaces that need every omitted row at once (export). */
+  getToolResultPayloads = async (messageIds: string[]) => {
+    return lambdaClient.message.getToolResultPayloads.query({ messageIds });
+  };
+
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
     return lambdaClient.message.diagnoseTopic.query(params);
   };

@@ -69,7 +69,7 @@ const ShareJSON = memo(() => {
   const { dbMessages, systemRole, title, topic } = useShareData();
   // Tool bodies the read path left on the server would otherwise serialize as
   // empty strings and be lost on re-import — see `useExportMessages`.
-  const { isHydrating, messages: exportMessages } = useExportMessages(dbMessages);
+  const { isHydrating, isIncomplete, messages: exportMessages } = useExportMessages(dbMessages);
 
   // Always include tool messages (includeTool: true)
   const data =
@@ -98,7 +98,7 @@ const ShareJSON = memo(() => {
         block
         // Both actions serialize `content`; until the omitted tool bodies land
         // it is still the projected view, which would export as empty results.
-        disabled={isHydrating}
+        disabled={isHydrating || isIncomplete}
         icon={CopyIcon}
         loading={isHydrating}
         size={isMobile ? undefined : 'large'}
@@ -112,7 +112,7 @@ const ShareJSON = memo(() => {
       </Button>
       <Button
         block
-        disabled={isHydrating}
+        disabled={isHydrating || isIncomplete}
         size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.json`);

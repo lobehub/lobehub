@@ -282,6 +282,26 @@ export class MessageService {
   }
 
   /**
+   * Stored tool payloads for several messages at once.
+   *
+   * A topic can hold hundreds of projected tool rows, and an export needs every
+   * one of them; asking per row would be that many authenticated round trips,
+   * each repeating the same authorization and joins. Ownership is enforced by
+   * the model read, so ids the caller may not see simply do not come back.
+   */
+  async getToolResultPayloads(
+    messageIds: string[],
+  ): Promise<Record<string, { content: string; pluginState?: unknown }>> {
+    if (messageIds.length === 0) return {};
+
+    const rows = await this.messageModel.queryByIds(messageIds);
+
+    return Object.fromEntries(
+      rows.map((row) => [row.id, { content: row.content ?? '', pluginState: row.pluginState }]),
+    );
+  }
+
+  /**
    * Quiet write-behind batch for streaming runtimes. Unlike createMessage /
    * updateMessage, this intentionally does not query the full message list after
    * each write; callers flush before reconciliation boundaries themselves.

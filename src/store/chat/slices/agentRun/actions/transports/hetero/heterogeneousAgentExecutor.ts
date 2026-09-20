@@ -2500,7 +2500,14 @@ export const executeHeterogeneousAgent = async (
     const resumeReplayMessages = resumeSessionId
       ? buildResumeReplayMessages(
           shouldHydrateResumeReplay(heterogeneousProvider.type)
-            ? await hydrateProjectedToolMessages(replaySource, messageService.getToolResultPayload)
+            ? // A degraded transcript still resumes; a thrown error would lose
+              // the prompt, so `missing` is deliberately not acted on here.
+              (
+                await hydrateProjectedToolMessages(
+                  replaySource,
+                  messageService.getToolResultPayloads,
+                )
+              ).messages
             : replaySource,
           message,
         )

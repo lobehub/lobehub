@@ -23,12 +23,18 @@ export const useExportMessages = (messages: UIChatMessage[]) => {
 
   const { data, isLoading } = useSWR(
     omittedIds.length > 0 ? ['shareExportMessages', ...omittedIds] : null,
-    () => hydrateProjectedToolMessages(messages, messageService.getToolResultPayload),
+    () => hydrateProjectedToolMessages(messages, messageService.getToolResultPayloads),
     { revalidateOnFocus: false },
   );
 
+  // A row we could not restore would serialize as an empty result and import
+  // would take it as the truth, so the export stays blocked rather than
+  // quietly shipping a lossy file.
+  const incomplete = omittedIds.length > 0 && (!data || data.missing.length > 0);
+
   return {
     isHydrating: omittedIds.length > 0 && isLoading,
-    messages: data ?? messages,
+    isIncomplete: incomplete && !isLoading,
+    messages: data?.messages ?? messages,
   };
 };

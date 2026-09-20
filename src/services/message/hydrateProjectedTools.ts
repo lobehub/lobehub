@@ -1,47 +1,65 @@
 import type { UIChatMessage } from '@lobechat/types';
-import pMap from 'p-map';
 
-/** Bounded so restoring a long topic can't stampede the API. */
-const HYDRATE_CONCURRENCY = 6;
+export interface StoredToolPayload {
+  content: string;
+  pluginState?: unknown;
+}
+
+export interface HydratedToolMessages {
+  messages: UIChatMessage[];
+  /** Ids whose stored payload could not be fetched — the row is still projected. */
+  missing: string[];
+}
 
 /**
- * Restore the stored body of any tool message the read path projected away,
- * for the ONE consumer that feeds it back to a model.
+ * Put back the stored payload of every tool message the read path projected
+ * away, for the consumers that need the real thing rather than a render.
  *
- * Everything else the store drives is a render, which the view model already
- * satisfies. A resume replay is different: it rebuilds a transcript that the
- * external CLI then resumes from, so an emptied tool result would be written to
- * disk and every later turn would read it back as a tool that returned nothing.
+ * Both halves are restored. Projectors reduce `pluginState` as well as the body
+ * — a document loses its text and XML, a command its stdout, a crawl its page —
+ * so restoring only the body would still hand a lossy row to an export that
+ * calls itself lossless.
  *
- * Only runs when a GC'd session forces a rebuild, so the fetch cost lands on a
- * path that is already doing far more expensive work.
+ * Failures are reported rather than thrown: a resume replay would rather ship a
+ * degraded transcript than lose the user's prompt, while an export must refuse
+ * to serialize. `missing` lets each caller pick.
  */
 export const hydrateProjectedToolMessages = async (
   messages: UIChatMessage[] | undefined,
-  fetchStoredPayload: (messageId: string) => Promise<{ content: string } | undefined | null>,
-): Promise<UIChatMessage[] | undefined> => {
-  if (!messages?.length) return messages;
+  fetchStoredPayloads: (messageIds: string[]) => Promise<Record<string, StoredToolPayload>>,
+): Promise<HydratedToolMessages> => {
+  if (!messages?.length) return { messages: messages ?? [], missing: [] };
 
   const projected = messages.filter((m) => m.role === 'tool' && !!m.payloadOmitted);
-  if (projected.length === 0) return messages;
+  if (projected.length === 0) return { messages, missing: [] };
 
-  const restored = new Map<string, string>();
-  await pMap(
-    projected,
-    async (m) => {
-      try {
-        const payload = await fetchStoredPayload(m.id);
-        if (typeof payload?.content === 'string') restored.set(m.id, payload.content);
-      } catch (error) {
-        // Replay the trimmed body rather than failing the turn: a degraded
-        // transcript still resumes, a thrown error loses the user's prompt.
-        console.error('[resumeReplay] failed to restore tool payload %s: %O', m.id, error);
-      }
-    },
-    { concurrency: HYDRATE_CONCURRENCY },
-  );
+  const ids = projected.map((m) => m.id);
 
-  if (restored.size === 0) return messages;
+  let restored: Record<string, StoredToolPayload> = {};
+  try {
+    restored = await fetchStoredPayloads(ids);
+  } catch (error) {
+    console.error(
+      '[hydrateProjectedTools] failed to restore %d tool payloads: %O',
+      ids.length,
+      error,
+    );
+    return { messages, missing: ids };
+  }
 
-  return messages.map((m) => (restored.has(m.id) ? { ...m, content: restored.get(m.id)! } : m));
+  const missing = ids.filter((id) => typeof restored[id]?.content !== 'string');
+
+  return {
+    messages: messages.map((m) => {
+      const payload = restored[m.id];
+      if (typeof payload?.content !== 'string') return m;
+
+      return {
+        ...m,
+        content: payload.content,
+        ...(payload.pluginState !== undefined && { pluginState: payload.pluginState }),
+      };
+    }),
+    missing,
+  };
 };

@@ -398,6 +398,15 @@ export const messageRouter = router({
    * Raw tool payload for one message, fetched on demand when the projected
    * read path dropped it (`UIChatMessage.payloadOmitted`).
    */
+  /** Bulk form of {@link getToolResultPayload}; see its note on ids as locators. */
+  getToolResultPayloads: messageProcedure
+    .input(z.object({ messageIds: z.array(z.string()).min(1).max(500) }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
+
+      return ctx.messageService.getToolResultPayloads(input.messageIds);
+    }),
+
   getToolResultPayload: messageProcedure
     .input(z.object({ messageId: z.string() }))
     .query(async ({ input, ctx }) => {
