@@ -114,6 +114,34 @@ export const createGitHubMarketTransport = ({
         };
       });
     },
+    listAccessibleRepositories: async ({ perPage }) => {
+      // `/user/repos` already spans the organizations the token belongs to, so
+      // one call answers the whole picker. Listing per organization would be
+      // one request per organization for the same set.
+      const data = await proxy({
+        endpoint: '/user/repos',
+        method: 'GET',
+        parameters: [
+          { in: 'query', name: 'per_page', value: perPage },
+          { in: 'query', name: 'sort', value: 'updated' },
+        ],
+      });
+      if (!Array.isArray(data)) {
+        throw new Error('GitHub Market repository response is invalid');
+      }
+
+      return data.map((item) => {
+        const record = toRecord(item);
+        const owner = toRecord(record?.owner);
+
+        return {
+          defaultBranch: typeof record?.default_branch === 'string' ? record.default_branch : null,
+          isPrivate: record?.private === true,
+          name: typeof record?.name === 'string' ? record.name : null,
+          owner: typeof owner?.login === 'string' ? owner.login : null,
+        };
+      });
+    },
     listUserOrganizations: async ({ perPage }) => {
       const data = await proxy({
         endpoint: '/user/orgs',

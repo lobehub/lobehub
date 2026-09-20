@@ -3774,18 +3774,18 @@ When I am ___, I need ___
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
   'tab.environments': 'Environments',
-  'environments.title': 'Environments',
-  'environments.desc': 'What a run should have around it, and the instances built from each one.',
+  'environments.desc':
+    'What a sandbox run needs around it: a repository, its setup, its variables. Each instance built from one keeps its own files between sessions.',
   'environments.create': 'New environment',
   'environments.cancel': 'Cancel',
   'environments.createFailed': 'Could not create the environment',
   'environments.namePlaceholder': 'Environment name',
   'environments.empty': 'No environments yet',
+  'environments.removeFailed': 'Could not delete this environment',
+  'environments.instances.removeFailed': 'Could not delete this instance',
   'environments.remove': 'Delete environment',
   'environments.duplicateName': 'You already have an environment with this name',
   'environments.hasInstances': 'Remove its instances first',
-  'environments.pending':
-    'Stored, but not yet acted on: nothing can build from a specification until the execution plane supports it.',
   'environments.unavailable.title': 'Persistent sandbox is not available here',
   'environments.unavailable.desc':
     'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
@@ -3802,6 +3802,20 @@ When I am ___, I need ___
   'environments.upgrade.benefits.instances.title': 'One instance per task',
   'environments.upgrade.benefits.instances.desc':
     'Parallel conversations each run in their own instance of the environment, so nothing overwrites anything else.',
+  'environments.github.label': 'Repository',
+  'environments.github.notConnected':
+    'No GitHub connection yet — connect one to build an environment from a repository',
+  'environments.nameLabel': 'Name',
+  'environments.github.optional': 'optional',
+  'environments.github.organization': 'Organization',
+  'environments.github.organizationPlaceholder': 'Search organizations',
+  'environments.github.repository': 'Repository',
+  'environments.github.repositoryPlaceholder': 'Search repositories',
+  'environments.github.repositoryPending': 'Choose an organization first',
+  'environments.github.noRepositories': 'This connection cannot see any repositories yet',
+  'environments.github.connect': 'Connect GitHub',
+  'environments.github.reviewAccess': 'Review access',
+  'environments.instances.create': 'New instance',
   'environments.form.description': 'Description',
   'environments.form.descriptionPlaceholder': 'What this environment is for',
   'environments.form.sources': 'Source code',
@@ -3848,4 +3862,16 @@ When I am ___, I need ___
   'environments.form.exclude': 'Regenerable paths',
   'environments.form.excludeHint':
     'One per line, relative to the copy. Listing a path says it can be rebuilt, so it is kept apart from your work and may be discarded to reclaim space. Anything named here that cannot be rebuilt is work you can lose.',
+  'environments.meta.creator': 'Created by',
+  'environments.meta.creatorTooltip': 'Created by {{name}}',
+  'environments.meta.unknownCreator': 'Unknown',
+  'environments.meta.created': 'Created',
+  'environments.meta.createdAt': 'Created {{time}}',
+  'environments.detail.close': 'Close',
+  'environments.form.title': 'Specification',
+  'environments.form.desc':
+    'What an instance is built from — where the code comes from and what makes it usable.',
+  'environments.form.pending':
+    'Recorded, not run yet: nothing clones these sources or executes this setup. An instance still keeps its own directory between sessions.',
+  'environments.refresh': 'Refresh',
 };

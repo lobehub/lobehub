@@ -2,7 +2,7 @@
 
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Input, Tag, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Input, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +12,11 @@ import { formatSize } from '@/utils/format';
 import type { SandboxInstance } from './useEnvironmentData';
 
 interface InstanceListProps {
+  /** Whether the create form is showing. Owned by the caller so the row's
+   *  "new instance" action can open the fold straight into it. */
+  adding: boolean;
   instances: SandboxInstance[];
+  onAddingChange: (adding: boolean) => void;
   onCreate: (params: { name: string; workingDirectory: string }) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
   /** Sizes are missing rather than zero when the sandbox could not be reached. */
@@ -27,9 +31,9 @@ interface InstanceListProps {
  * have them overwrite each other's work.
  */
 const InstanceList = memo<InstanceListProps>(
-  ({ instances, onCreate, onRemove, snapshotsUnavailable }) => {
+  ({ adding, instances, onAddingChange, onCreate, onRemove, snapshotsUnavailable }) => {
     const { t } = useTranslation('setting');
-    const [adding, setAdding] = useState(false);
+
     const [name, setName] = useState('');
     const [workingDirectory, setWorkingDirectory] = useState('');
     const [busy, setBusy] = useState(false);
@@ -46,7 +50,7 @@ const InstanceList = memo<InstanceListProps>(
         await onCreate({ name: name.trim(), workingDirectory });
         setName('');
         setWorkingDirectory('');
-        setAdding(false);
+        onAddingChange(false);
       } finally {
         setBusy(false);
       }
@@ -101,7 +105,19 @@ const InstanceList = memo<InstanceListProps>(
               icon={Trash2Icon}
               size={'small'}
               title={t('environments.instances.remove')}
-              onClick={() => onRemove(instance.id)}
+              // A rejected promise here used to disappear: the row stayed, and
+              // a refused delete was indistinguishable from a click that did
+              // nothing. The execution plane refuses while a conversation is
+              // still using the instance, and that reason is the one worth
+              // showing.
+              onClick={() =>
+                onRemove(instance.id).catch((error: unknown) =>
+                  toast.error(
+                    (error as { message?: string })?.message ||
+                      t('environments.instances.removeFailed'),
+                  ),
+                )
+              }
             />
           </Flexbox>
         ))}
@@ -137,7 +153,11 @@ const InstanceList = memo<InstanceListProps>(
           </Flexbox>
         ) : (
           <Flexbox horizontal>
-            <Button icon={<Icon icon={PlusIcon} />} size={'small'} onClick={() => setAdding(true)}>
+            <Button
+              icon={<Icon icon={PlusIcon} />}
+              size={'small'}
+              onClick={() => onAddingChange(true)}
+            >
               {t('environments.instances.add')}
             </Button>
           </Flexbox>

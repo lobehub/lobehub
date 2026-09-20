@@ -2,9 +2,28 @@ import type { EnvironmentConfiguration } from '@lobechat/types';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import type { EnvironmentItem, NewEnvironment } from '../schemas';
-import { environments } from '../schemas';
+import { environments, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload } from '../utils/workspace';
+
+export interface EnvironmentCreator {
+  avatar: string | null;
+  fullName: string | null;
+  id: string | null;
+  username: string | null;
+}
+
+export type EnvironmentWithCreator = Pick<
+  EnvironmentItem,
+  | 'configuration'
+  | 'createdAt'
+  | 'description'
+  | 'id'
+  | 'name'
+  | 'updatedAt'
+  | 'userId'
+  | 'workspaceId'
+> & { creator: EnvironmentCreator | null };
 
 /**
  * Rows this member owns. Always both the member AND the workspace the
@@ -56,10 +75,34 @@ export class EnvironmentModel {
 
   private ownership = () => environmentOwnership(this.userId, this.workspaceId);
 
-  query = async (): Promise<EnvironmentItem[]> =>
+  /**
+   * Environments with the member who made them.
+   *
+   * `user_id` is the creator, and in a workspace two colleagues each keep their
+   * own — so a list that shows only names cannot say whose is whose. The join
+   * is left because a removed account must not take its environments out of
+   * the listing with it.
+   */
+  query = async (): Promise<EnvironmentWithCreator[]> =>
     this.db
-      .select()
+      .select({
+        configuration: environments.configuration,
+        createdAt: environments.createdAt,
+        creator: {
+          avatar: users.avatar,
+          fullName: users.fullName,
+          id: users.id,
+          username: users.username,
+        },
+        description: environments.description,
+        id: environments.id,
+        name: environments.name,
+        updatedAt: environments.updatedAt,
+        userId: environments.userId,
+        workspaceId: environments.workspaceId,
+      })
       .from(environments)
+      .leftJoin(users, eq(environments.userId, users.id))
       .where(this.ownership())
       .orderBy(asc(environments.createdAt));
 
