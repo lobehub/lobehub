@@ -1,0 +1,107 @@
+name: alint
+
+# Model-backed lint rules (.agents/alint) on the files a PR changes. Advisory:
+# findings land as inline warning annotations and a job summary, never as a
+# failing check. Skips itself when the provider secret is unavailable (forks).
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'locales/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  alint:
+    name: alint (changed files)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      ALINT_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    steps:
+      - name: Provider available?
+        id: provider
+        run: |
+          if [ -z "$ALINT_API_KEY" ]; then
+            echo "::notice::alint skipped: no provider secret in this context (fork PR or secret unset)"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.provider.outputs.available == 'true'
+        env:
+          REF_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Setup environment
+        if: steps.provider.outputs.available == 'true'
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        if: steps.provider.outputs.available == 'true'
+        run: pnpm install
+
+      - name: Restore alint cache
+        if: steps.provider.outputs.available == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .alintcache
+          key: alint-${{ hashFiles('alint.config.toml', '.agents/alint/rules/**') }}-${{ github.event.pull_request.head.sha }}
+          restore-keys: |
+            alint-${{ hashFiles('alint.config.toml', '.agents/alint/rules/**') }}-
+
+      - name: Set up provider and rules
+        if: steps.provider.outputs.available == 'true'
+        run: |
+          bun run alint:setup
+          node_modules/.bin/alint plugin install
+
+      # alint --dirty lints the working tree against HEAD and keeps only the
+      # findings on changed lines. Moving HEAD to the merge base turns the
+      # whole PR into "dirty" changes, so the scope is exactly the PR's diff.
+      - name: Expose the PR diff as dirty changes
+        if: steps.provider.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          MERGE_BASE=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" --jq .merge_base_commit.sha)
+          echo "merge base: ${MERGE_BASE}"
+          git fetch --no-tags --depth=1 origin "${MERGE_BASE}"
+          git reset --mixed "${MERGE_BASE}"
+          git status --short | head -50
+
+      - name: Lint changed files
+        if: steps.provider.outputs.available == 'true'
+        run: |
+          node_modules/.bin/alint --dirty --format json > alint-output.json || status=$?
+          # 1 = findings at error level (none of ours yet), 2 = alint could not run
+          if [ "${status:-0}" = "2" ]; then cat alint-output.json; exit 2; fi
+          bun .agents/alint/annotate.ts alint-output.json
+
+      - name: Calibrate rule fixtures (when rules or fixtures changed)
+        if: steps.provider.outputs.available == 'true'
+        run: |
+          if git status --porcelain -- alint.config.toml .agents/alint | grep -q .; then
+            cd .agents/alint && bunx vitest run fixtures.test.ts
+          else
+            echo "rules and fixtures unchanged; skipping calibration"
+          fi

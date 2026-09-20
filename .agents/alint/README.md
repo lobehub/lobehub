@@ -32,6 +32,16 @@ Defaults are DeepSeek `deepseek-flash` at `https://api.deepseek.com/v1`; overrid
 
 Findings are warnings. Treat them like a reviewer's comment: fix, or explain in the PR why the rule's carve-out applies.
 
+## CI
+
+`.github/workflows/alint.yml` runs on every pull request, on the PR's diff only, and never fails the check:
+
+- `alint --dirty` lints the working tree against `HEAD` and keeps only findings on changed lines. The job fetches the merge base and runs `git reset --mixed <merge-base>`, which turns the whole PR into dirty changes, so the scope is exactly the PR's diff and nothing older is reported.
+- Findings become inline warning annotations (`.agents/alint/annotate.ts`) plus a table in the job summary.
+- The provider key comes from the `DEEPSEEK_API_KEY` repository secret. Fork PRs cannot read it, so the job posts a notice and exits green.
+- When `alint.config.toml` or anything under `.agents/alint` changed, the fixture suite runs too, so a rule edit is calibrated before it lands.
+- `.alintcache` is restored from the last run with the same rule set, keyed by the rule and config files.
+
 ## Cost and behaviour, measured 2026-09-20
 
 | Run                                   | Jobs | Wall | Tokens     |
