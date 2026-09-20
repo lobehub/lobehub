@@ -2,6 +2,7 @@ import type { SQLWrapper } from 'drizzle-orm';
 import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
+import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type {
@@ -50,6 +51,7 @@ export async function searchFolders(
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: documents.knowledgeBaseId,
+      metadata: documents.metadata,
       score: score.as('score'),
       slug: documents.slug,
       title: documents.title,
@@ -85,6 +87,7 @@ export async function searchFolders(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        notAgentShareDocument(hits.metadata),
         context.liftsExclusionFilter ? excludeKb(hits.knowledgeBaseId) : undefined,
       ),
     )
@@ -143,6 +146,7 @@ export async function searchPages(
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: documents.knowledgeBaseId,
+      metadata: documents.metadata,
       score: score.as('score'),
       title: documents.title,
       updatedAt: documents.updatedAt,
@@ -176,6 +180,7 @@ export async function searchPages(
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
+        notAgentShareDocument(hits.metadata),
         notAgentShareFileReference(db, hits.fileId),
         context.liftsExclusionFilter ? excludeKb(hits.knowledgeBaseId, hits.fileId) : undefined,
       ),
@@ -238,6 +243,7 @@ export async function searchKnowledgeBaseDocuments(
         userClause,
         folderClause,
         inArray(documents.knowledgeBaseId, knowledgeBaseIds),
+        notAgentShareDocument(documents.metadata),
         notAgentShareFileReference(db, documents.fileId),
         matchClause,
       ),
@@ -266,7 +272,13 @@ export async function searchKnowledgeBaseDocuments(
       ),
     )
     .where(
-      and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), matchClause),
+      and(
+        userClause,
+        folderClause,
+        notAgentShareDocument(documents.metadata),
+        notAgentShareFileReference(db, documents.fileId),
+        matchClause,
+      ),
     )
     .orderBy(sql`${score} DESC`)
     .limit(limit);

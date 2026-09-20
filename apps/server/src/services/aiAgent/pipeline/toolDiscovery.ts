@@ -92,7 +92,11 @@ import {
   isMultimodalUnderstandingConfigured,
 } from '../helpers/mediaAvailability';
 import { resolveServerSearchDecision } from '../searchDecision';
-import { filterPluginsByShareGate, shareGateGrantsCloudSandbox } from '../shareGate';
+import {
+  filterPluginsByShareGate,
+  getShareGrantActivatedPluginIds,
+  shareGateGrantsCloudSandbox,
+} from '../shareGate';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import { markDegradedStage, traceDiscoveryStage } from './discoveryTracing';
 
@@ -320,6 +324,7 @@ export const discoverTools = async (
             ...(additionalPluginIds || []),
             ...(selectedToolIds || []),
             ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
+            ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
           ]),
         ];
 

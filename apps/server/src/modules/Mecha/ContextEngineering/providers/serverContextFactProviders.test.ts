@@ -4,15 +4,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { createServerContextFactProviders } from './index';
 
 const {
+  agentDocumentsConstructor,
   credsList,
   findById,
+  getAgentContextDocuments,
   getInfoForAIGeneration,
   getUserSettings,
   loadConnectedComposioIds,
   pluginQuery,
 } = vi.hoisted(() => ({
+  agentDocumentsConstructor: vi.fn(),
   credsList: vi.fn(),
   findById: vi.fn(),
+  getAgentContextDocuments: vi.fn(),
   getInfoForAIGeneration: vi.fn(),
   getUserSettings: vi.fn(),
   loadConnectedComposioIds: vi.fn(),
@@ -39,6 +43,16 @@ vi.mock('@/database/models/workspace', () => ({
 }));
 vi.mock('@/server/modules/AgentRuntime/adapters/composioConnectedIds', () => ({
   loadConnectedComposioIds,
+}));
+vi.mock('@/server/services/agentDocuments', () => ({
+  AgentDocumentsService: class {
+    constructor(...args: unknown[]) {
+      agentDocumentsConstructor(...args);
+    }
+
+    getAgentContextDocuments = getAgentContextDocuments;
+    getDocumentByFilename = vi.fn();
+  },
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.test' } }));
 vi.mock('@/server/services/market', () => ({
@@ -203,5 +217,37 @@ describe('createServerContextFactProviders', () => {
       appUrl: 'https://app.test',
       slug: undefined,
     });
+  });
+
+  it('loads Share context documents only from the exact visitor topic scope', async () => {
+    getAgentContextDocuments.mockResolvedValue([]);
+    const providers = createServerContextFactProviders({
+      ctx: {
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        serverDB: {},
+        topicId: 'topic-fallback',
+        userId: 'owner-1',
+      } as never,
+      state: { origin: { topicId: 'topic-1' } } as never,
+    });
+
+    await providers.listAgentDocuments!('agent-1');
+
+    expect(agentDocumentsConstructor).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'owner-1',
+      undefined,
+      undefined,
+      {
+        shareId: 'share-1',
+        topicId: 'topic-1',
+        type: 'agentShare',
+        visitorUserId: 'visitor-1',
+      },
+    );
   });
 });

@@ -12,6 +12,19 @@ export const AgentDocumentsApiName = {
   updateLoadRule: 'updateLoadRule',
 } as const;
 
+/**
+ * Document APIs a shared-agent visitor may use after the owner grants this tool.
+ * The server still scopes every call to the exact share, visitor, and topic.
+ */
+export const AGENT_SHARE_DOCUMENT_API_NAMES = new Set<string>([
+  AgentDocumentsApiName.createDocument,
+  AgentDocumentsApiName.listDocuments,
+  AgentDocumentsApiName.modifyNodes,
+  AgentDocumentsApiName.readDocument,
+  AgentDocumentsApiName.renameDocument,
+  AgentDocumentsApiName.replaceDocumentContent,
+]);
+
 export interface CreateDocumentArgs {
   content: string;
   hintIsSkill?: boolean;
@@ -26,6 +39,8 @@ export interface CreateDocumentState {
   /** Owning agent id — used to attribute the created document's Work. */
   agentId?: string;
   documentId?: string;
+  /** The caller may preview/copy this result but must not open the owner-only editor. */
+  readonly?: boolean;
 }
 
 export interface ReadDocumentArgs {

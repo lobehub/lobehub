@@ -358,6 +358,18 @@ export type BuiltinManifestResolver = (
   context: BuiltinToolResolveContext,
 ) => BuiltinToolManifest | null;
 
+export interface BuiltinRestrictedManifestResolveContext {
+  /** API names left after the runtime has applied its access policy. */
+  allowedApiNames: readonly string[];
+  /** Policy boundary responsible for the reduced API surface. */
+  restriction: 'agentShare' | 'toolSelection';
+}
+
+/** Resolve a builtin-owned manifest for a known restricted API surface. */
+export type BuiltinRestrictedManifestResolver = (
+  context: BuiltinRestrictedManifestResolveContext,
+) => BuiltinToolManifest | undefined;
+
 export interface LobeBuiltinTool {
   /** Identity (hoisted from `manifest.meta`): icon shown in UI lists. */
   avatar?: string;
@@ -378,6 +390,16 @@ export interface LobeBuiltinTool {
    * a resolver never breaks those synchronous reads.
    */
   resolveManifest?: BuiltinManifestResolver;
+  /**
+   * Optional manifest for a policy-restricted API subset.
+   *
+   * This callback stays on the in-process builtin registry rather than the
+   * serializable manifest contract. It lets the owning package narrow both
+   * instructions and schemas when policy changes their actual semantics.
+   * Unknown subsets must return `undefined` so callers fail closed instead of
+   * attaching stale capability metadata.
+   */
+  resolveRestrictedManifest?: BuiltinRestrictedManifestResolver;
   /** Identity (hoisted from `manifest.meta`): tags shown in UI / discovery. */
   tags?: string[];
   /** Identity (hoisted from `manifest.meta`): display name. Falls back to `identifier`. */

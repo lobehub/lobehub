@@ -26,6 +26,7 @@ import {
   userMemories,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { libraryVisibleFile, notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
 import { searchableMessage } from '../../../utils/searchableMessage';
@@ -612,6 +613,7 @@ export const hydratePages = async (
         ),
         buildWorkspaceWhere(scope, documents),
         eq(documents.fileType, 'custom/document'),
+        notAgentShareDocument(documents.metadata),
         notAgentShareFileReference(db, documents.fileId),
       ),
     );
@@ -668,6 +670,7 @@ export const hydrateKnowledgeBaseDocuments = async (
         ),
         buildWorkspaceWhere(scope, documents),
         ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
+        notAgentShareDocument(documents.metadata),
         notAgentShareFileReference(db, documents.fileId),
       ),
     );
@@ -703,6 +706,7 @@ export const hydrateKnowledgeBaseDocuments = async (
             and(
               inArray(documents.id, selectedDocumentIds),
               buildWorkspaceWhere(scope, documents),
+              notAgentShareDocument(documents.metadata),
               notAgentShareFileReference(db, documents.fileId),
             ),
           );

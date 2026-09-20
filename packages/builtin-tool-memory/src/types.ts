@@ -24,6 +24,12 @@ export const MemoryApiName = {
 
 export type MemoryApiNameType = (typeof MemoryApiName)[keyof typeof MemoryApiName];
 
+/** APIs available to an Agent Share visitor when the creator grants read access. */
+export const MEMORY_READ_API_NAMES: ReadonlySet<MemoryApiNameType> = new Set([
+  MemoryApiName.queryTaxonomyOptions,
+  MemoryApiName.searchUserMemory,
+]);
+
 /**
  * APIs that mutate the user's memory store. Single source of truth shared by
  * the Agent Share server gate (which strips them from visitor runs

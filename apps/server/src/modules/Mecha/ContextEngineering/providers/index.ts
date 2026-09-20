@@ -3,7 +3,11 @@ import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onbo
 import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
-import { getActivePluginIds } from '@lobechat/types';
+import {
+  agentShareDocumentAccessScope,
+  getActivePluginIds,
+  ordinaryDocumentAccessScope,
+} from '@lobechat/types';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
@@ -63,6 +67,13 @@ export const createServerContextFactProviders = ({
   if (!serverDB || !userId) return {};
   const db = serverDB;
   const workspaceId = state.origin?.workspaceId ?? ctx.workspaceId;
+  const documentAccessScope = ctx.agentShareVisitor
+    ? agentShareDocumentAccessScope({
+        shareId: ctx.agentShareVisitor.shareId,
+        topicId: state.origin?.topicId ?? ctx.topicId ?? '',
+        visitorUserId: ctx.agentShareVisitor.visitorUserId,
+      })
+    : ordinaryDocumentAccessScope;
 
   return {
     findTopic: async (topicId) => {
@@ -181,6 +192,8 @@ export const createServerContextFactProviders = ({
         db,
         userId,
         workspaceId,
+        undefined,
+        documentAccessScope,
       ).getAgentContextDocuments(agentId);
       return toAgentContextDocuments(docs);
     },

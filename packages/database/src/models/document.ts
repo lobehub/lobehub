@@ -1,6 +1,10 @@
 import { AGENT_ARTIFACT_SOURCE_TYPES } from '@lobechat/const';
-import type { FileAccessScope } from '@lobechat/types';
-import { ordinaryFileAccessScope } from '@lobechat/types';
+import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
+import {
+  ordinaryDocumentAccessScope,
+  ordinaryFileAccessScope,
+  stripAgentShareDocumentProvenance,
+} from '@lobechat/types';
 import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
@@ -15,6 +19,7 @@ import {
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { documentMatchesAccessScope } from '../utils/documentVisibility';
 import {
   fileReferenceMatchesAccessScope,
   notAgentShareFileReference,
@@ -41,6 +46,7 @@ export class DocumentModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private documentAccessScope: DocumentAccessScope;
   /**
    * Visibility of the agent that owns the calling tool execution, when this
    * model is instantiated inside a tool runtime. `'public'` tightens
@@ -57,11 +63,13 @@ export class DocumentModel {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
   ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
     this.callerAgentVisibility = callerAgentVisibility;
+    this.documentAccessScope = documentAccessScope;
   }
 
   private ownership = () =>
@@ -74,13 +82,31 @@ export class DocumentModel {
       documents,
     );
 
-  private ordinaryReadScope = () =>
-    and(this.ownership(), notAgentShareFileReference(this.db, documents.fileId));
+  private readScope = () =>
+    and(
+      this.ownership(),
+      documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
+      notAgentShareFileReference(this.db, documents.fileId),
+    );
+
+  private scopeMetadata = (metadata?: Record<string, any> | null) => {
+    const sanitizedMetadata = stripAgentShareDocumentProvenance(metadata);
+    if (this.documentAccessScope.type !== 'agentShare') return sanitizedMetadata;
+
+    return {
+      ...sanitizedMetadata,
+      agentShare: {
+        shareId: this.documentAccessScope.shareId,
+        topicId: this.documentAccessScope.topicId,
+        visitorUserId: this.documentAccessScope.visitorUserId,
+      },
+    };
+  };
 
   findOrCreateFolder = async (name: string, parentId?: string): Promise<DocumentItem> => {
     const existing = await this.db.query.documents.findFirst({
       where: and(
-        this.ownership(),
+        this.readScope(),
         eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
         eq(documents.filename, name),
         parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
@@ -123,7 +149,11 @@ export class DocumentModel {
       .values(
         buildWorkspacePayload(
           { userId: this.userId, workspaceId: this.workspaceId },
-          { ...params, ...(visibility ? { visibility } : {}) },
+          {
+            ...params,
+            metadata: this.scopeMetadata(params.metadata),
+            ...(visibility ? { visibility } : {}),
+          },
         ),
       )
       .returning()) as DocumentItem[];
@@ -132,11 +162,11 @@ export class DocumentModel {
   };
 
   delete = async (id: string) => {
-    return this.db.delete(documents).where(and(eq(documents.id, id), this.ownership()));
+    return this.db.delete(documents).where(and(eq(documents.id, id), this.readScope()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(documents).where(this.ownership());
+    return this.db.delete(documents).where(this.readScope());
   };
 
   query = async ({
@@ -150,7 +180,7 @@ export class DocumentModel {
     total: number;
   }> => {
     const offset = current * pageSize;
-    const conditions = [this.ordinaryReadScope()];
+    const conditions = [this.readScope()];
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
@@ -245,7 +275,7 @@ export class DocumentModel {
     const [document] = await this.db
       .select()
       .from(documents)
-      .where(and(this.ordinaryReadScope(), eq(documents.id, id)))
+      .where(and(this.readScope(), eq(documents.id, id)))
       .limit(1);
     return document;
   };
@@ -255,7 +285,7 @@ export class DocumentModel {
     return this.db
       .select()
       .from(documents)
-      .where(and(this.ordinaryReadScope(), inArray(documents.id, ids)));
+      .where(and(this.readScope(), inArray(documents.id, ids)));
   };
 
   findByFileId = async (fileId: string, accessScope: FileAccessScope = ordinaryFileAccessScope) => {
@@ -283,7 +313,7 @@ export class DocumentModel {
     const [document] = await this.db
       .select()
       .from(documents)
-      .where(and(this.ordinaryReadScope(), eq(documents.slug, slug)))
+      .where(and(this.readScope(), eq(documents.slug, slug)))
       .limit(1);
     return document;
   };
@@ -303,11 +333,7 @@ export class DocumentModel {
       .select()
       .from(documents)
       .where(
-        and(
-          this.ordinaryReadScope(),
-          eq(documents.source, source),
-          eq(documents.sourceType, sourceType),
-        ),
+        and(this.readScope(), eq(documents.source, source), eq(documents.sourceType, sourceType)),
       )
       .limit(1);
     return document;
@@ -317,12 +343,16 @@ export class DocumentModel {
     // visibility is intentionally not updatable via this path. The only legal
     // transition is `private → public` via `publishToWorkspace`; strip any
     // incoming value so callers can't sneak around the one-way rule.
-    const { visibility: _ignored, ...patch } = value;
+    const { metadata, visibility: _ignored, ...patch } = value;
 
     return this.db
       .update(documents)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(and(this.ownership(), eq(documents.id, id)));
+      .set({
+        ...patch,
+        ...(metadata !== undefined && { metadata: this.scopeMetadata(metadata) }),
+        updatedAt: new Date(),
+      })
+      .where(and(this.readScope(), eq(documents.id, id)));
   };
 
   /**
