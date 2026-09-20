@@ -341,6 +341,7 @@ export class AgentShareModel {
     db: LobeChatDatabase,
     workspaceId: string,
     shareId: string,
+    options: AgentShareModelOptions = {},
   ) =>
     db.transaction(async (transaction) => {
       const tx = transaction as LobeChatDatabase;
@@ -358,6 +359,9 @@ export class AgentShareModel {
         workspaceId,
       });
       if (!agent) return null;
+      // The administrator may lose membership or `agent:update:all` while waiting for this lock.
+      // Recheck inside the transaction so a revocation that won the race also wins the mutation.
+      await options.authorizeMutation?.(tx, share.agentId);
 
       const [updated] = await tx
         .update(agentShares)

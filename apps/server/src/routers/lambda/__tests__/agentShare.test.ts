@@ -186,6 +186,7 @@ describe('agentShareRouter', () => {
       expect.anything(),
       'workspace-1',
       shareId,
+      expect.objectContaining({ authorizeMutation: expect.any(Function) }),
     );
   });
 

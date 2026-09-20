@@ -10,6 +10,7 @@ import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermi
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { FileModel } from '@/database/models/file';
+import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
@@ -265,6 +266,20 @@ export const agentShareRouter = router({
           ctx.serverDB,
           ctx.workspaceId,
           input.shareId,
+          {
+            authorizeMutation: async (db) => {
+              const allowed = await new RbacModel(db, ctx.userId).hasPermission(
+                'agent:update:all',
+                { workspaceId: ctx.workspaceId },
+              );
+              if (!allowed) {
+                throw new TRPCError({
+                  code: 'FORBIDDEN',
+                  message: 'You do not have permission to perform this action.',
+                });
+              }
+            },
+          },
         ),
       ),
     ),

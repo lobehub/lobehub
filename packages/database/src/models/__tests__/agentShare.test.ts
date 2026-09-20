@@ -236,6 +236,21 @@ describe('AgentShareModel', () => {
         visibility: 'private',
       });
     });
+
+    it('rechecks administrator authority after taking the Agent lock', async () => {
+      const workspaceShare = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+      const authorizeMutation = vi.fn().mockRejectedValue(new Error('stale-admin-authority'));
+
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, workspaceShare.id, {
+          authorizeMutation,
+        }),
+      ).rejects.toThrow('stale-admin-authority');
+      expect(authorizeMutation).toHaveBeenCalledWith(expect.anything(), workspaceAgentId);
+      await expect(workspaceAgentShareModel.getByAgentId(workspaceAgentId)).resolves.toMatchObject({
+        visibility: 'link',
+      });
+    });
   });
 
   describe('owner operations', () => {
