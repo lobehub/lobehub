@@ -12,6 +12,14 @@ export interface ISnapshotStore {
   /** Remove partial snapshot (after finalizing) */
   removePartial: (operationId: string) => Promise<void>;
   save: (snapshot: ExecutionSnapshot) => Promise<void>;
-  /** Save in-progress partial snapshot */
-  savePartial: (operationId: string, partial: Partial<ExecutionSnapshot>) => Promise<void>;
+  /**
+   * Save in-progress partial snapshot. `signal` lets a caller that no longer
+   * owns the operation abort an upload it already started, so it cannot land on
+   * top of the partial the new owner is writing.
+   */
+  savePartial: (
+    operationId: string,
+    partial: Partial<ExecutionSnapshot>,
+    options?: { signal?: AbortSignal },
+  ) => Promise<void>;
 }

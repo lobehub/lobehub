@@ -1489,6 +1489,11 @@ export class AgentRuntimeService {
       stepLockOwner,
     );
     if (!claimed) {
+      // Someone else owns this operation now. Whatever this invocation buffered
+      // for the trace belongs to their partial from here — every return below
+      // leaves without it, so drop it once, up front, rather than per exit.
+      this.traceRecorder.discardPartial();
+
       let currentState: AgentState | null | undefined = null;
       try {
         currentState = await this.coordinator.loadAgentState(operationId);
@@ -1617,10 +1622,6 @@ export class AgentRuntimeService {
         operationId,
         stepIndex,
       );
-      // Steps this invocation accumulated but has not uploaded are now the
-      // other worker's to record. Uploading ours on top would roll back its
-      // partial, so drop them instead.
-      this.traceRecorder.discardPartial();
       return {
         locked: true,
         nextStepScheduled: false,

@@ -31,9 +31,13 @@ const createStore = () => {
     ),
     removePartial: vi.fn<(operationId: string) => Promise<void>>(async () => {}),
     save: vi.fn<(snapshot: ExecutionSnapshot) => Promise<void>>(async () => {}),
-    savePartial: vi.fn<(operationId: string, partial: Partial<ExecutionSnapshot>) => Promise<void>>(
-      async () => {},
-    ),
+    savePartial: vi.fn<
+      (
+        operationId: string,
+        partial: Partial<ExecutionSnapshot>,
+        options?: { signal?: AbortSignal },
+      ) => Promise<void>
+    >(async () => {}),
   };
   return store as typeof store & ISnapshotStore;
 };
@@ -117,6 +121,28 @@ describe('OperationTraceRecorder partial accumulation', () => {
     first.resolve();
     await recorder.flushPartial();
 
+    expect(store.savePartial).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts the upload in flight when the operation is handed over', async () => {
+    const upload = deferred();
+    let seenSignal: AbortSignal | undefined;
+    store.savePartial.mockImplementation(async (_id, _partial, options) => {
+      seenSignal = options?.signal;
+      await upload.promise;
+    });
+
+    await recorder.appendStep(OPERATION_ID, stepParams(0));
+    expect(seenSignal?.aborted).toBe(false);
+
+    recorder.discardPartial();
+
+    // The upload already on the wire is cancelled, so it cannot land on top of
+    // the partial the new owner is writing.
+    expect(seenSignal?.aborted).toBe(true);
+
+    upload.resolve();
+    await recorder.flushPartial();
     expect(store.savePartial).toHaveBeenCalledTimes(1);
   });
 

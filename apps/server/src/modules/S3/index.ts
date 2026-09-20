@@ -337,6 +337,8 @@ export class S3 {
     buffer: Buffer,
     contentType?: string,
     cacheControl?: string,
+    /** `abortSignal` cancels an upload whose result the caller no longer wants written. */
+    options?: { abortSignal?: AbortSignal },
   ) {
     const command = new PutObjectCommand({
       ACL: this.setAcl ? 'public-read' : undefined,
@@ -347,7 +349,7 @@ export class S3 {
       Key: path,
     });
 
-    return this.client.send(command);
+    return this.client.send(command, { abortSignal: options?.abortSignal });
   }
 
   public async uploadContent(path: string, content: string) {

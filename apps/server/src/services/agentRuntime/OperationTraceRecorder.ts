@@ -102,6 +102,9 @@ export class OperationTraceRecorder {
   /** Set when the cached partial has steps the store has not seen yet. */
   private dirty = false;
 
+  /** Aborts the upload in flight when this invocation stops owning the operation. */
+  private saveAbort: AbortController | undefined;
+
   constructor(private readonly store: ISnapshotStore | null) {}
 
   get enabled(): boolean {
@@ -150,6 +153,11 @@ export class OperationTraceRecorder {
   discardPartial(): void {
     this.dirty = false;
     this.cached = null;
+    // An upload already in flight was started while this invocation still owned
+    // the operation, and carries a partial the new owner has moved past. Abort
+    // it rather than let it land on top of theirs.
+    this.saveAbort?.abort();
+    this.saveAbort = undefined;
   }
 
   private async loadCachedPartial(operationId: string): Promise<Partial<ExecutionSnapshot>> {
@@ -185,12 +193,17 @@ export class OperationTraceRecorder {
       const partial = this.cached?.operationId === operationId ? this.cached.partial : undefined;
       if (!partial) return;
 
+      const abort = new AbortController();
+      this.saveAbort = abort;
       try {
-        await this.store!.savePartial(operationId, partial);
+        await this.store!.savePartial(operationId, partial, { signal: abort.signal });
       } catch (e) {
         // Matches the previous behaviour: a failed partial upload degrades the
-        // trace, it never fails the step that produced it.
+        // trace, it never fails the step that produced it. An abort lands here
+        // too — the partial it carried is deliberately not written.
         log('[%s] partial snapshot upload failed: %O', operationId, e);
+      } finally {
+        if (this.saveAbort === abort) this.saveAbort = undefined;
       }
     }
   }

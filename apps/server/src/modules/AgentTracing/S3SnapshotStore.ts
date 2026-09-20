@@ -129,9 +129,19 @@ export class S3SnapshotStore implements ISnapshotStore {
     }
   }
 
-  async savePartial(operationId: string, partial: Partial<ExecutionSnapshot>): Promise<void> {
+  async savePartial(
+    operationId: string,
+    partial: Partial<ExecutionSnapshot>,
+    options?: { signal?: AbortSignal },
+  ): Promise<void> {
     const compressed = await this.encodeSnapshot(partial);
-    await this.s3.uploadBuffer(this.partialKey(operationId), compressed, ZSTD_CONTENT_TYPE);
+    await this.s3.uploadBuffer(
+      this.partialKey(operationId),
+      compressed,
+      ZSTD_CONTENT_TYPE,
+      undefined,
+      { abortSignal: options?.signal },
+    );
   }
 
   async removePartial(operationId: string): Promise<void> {
