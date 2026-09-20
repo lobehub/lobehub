@@ -57,6 +57,7 @@ const buildModel = (overrides: Partial<RejectReviewModel> = {}): RejectReviewMod
     removeAttachment: vi.fn(),
     selectEvidence: vi.fn(),
     setComment: vi.fn(),
+    setZoom: vi.fn(),
     stepZoom: vi.fn(),
     submitReject: vi.fn(),
     uploadFiles: vi.fn(),

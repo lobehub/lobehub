@@ -179,6 +179,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 onRemove={canvas.onRemove}
                 onSwipe={(direction) => model.selectEvidence(activeIndex + direction)}
                 onUpdate={canvas.onUpdate}
+                onZoom={model.setZoom}
               />
             </div>
             <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>

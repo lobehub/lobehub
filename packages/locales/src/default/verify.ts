@@ -15,7 +15,7 @@ export default {
   'acceptance.review.backToImages': 'Back to images',
   'acceptance.review.writeFeedback': 'Write feedback',
   'acceptance.review.mobileDrawHint': 'Drag to mark an issue',
-  'acceptance.review.mobileBrowseHint': 'Swipe to switch · scroll to read',
+  'acceptance.review.mobileBrowseHint': 'Swipe to switch · pinch to zoom',
   'acceptance.review.mobileRegionCommentsEmpty':
     'Drag on the image above to mark a region; its comment lands here.',
   'acceptance.review.mobileDrawnHint':
