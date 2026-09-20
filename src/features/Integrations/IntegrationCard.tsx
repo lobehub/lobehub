@@ -13,14 +13,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
     padding: 16px;
     border-radius: ${cssVar.borderRadiusLG};
-    transition: border-color 0.2s ease;
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease;
 
     &:hover {
-      border-color: ${cssVar.colorPrimaryBorderHover};
+      border-color: ${cssVar.colorBorder};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   compact: css`
-    padding-block: 12px;
+    padding-block: 14px;
   `,
   dot: css`
     display: inline-block;
@@ -38,18 +41,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border-radius: ${cssVar.borderRadius};
 
-    color: ${cssVar.colorText};
+    color: ${cssVar.colorBgLayout};
 
-    background: ${cssVar.colorFillTertiary};
+    background: ${cssVar.colorText};
   `,
 }));
 
 interface IntegrationCardProps {
-  /** Shorter card for the Enabled strip; the full card carries a description. */
+  /** Shorter card for the Enabled strip: name plus status, no description. */
   compact?: boolean;
   enabled: boolean;
   integration: IntegrationDefinition;
@@ -60,42 +63,37 @@ const IntegrationCard = memo<IntegrationCardProps>(({ compact, enabled, integrat
   const { t } = useTranslation('integration');
   const Icon = integration.icon;
 
+  const status = (
+    <Flexbox horizontal align="center" gap={6} style={{ flex: 'none' }}>
+      {enabled ? <span className={styles.dot} /> : null}
+      <Text style={{ fontSize: 13 }} type="secondary">
+        {enabled ? t('overview.status.enabled') : t('overview.status.notConnected')}
+      </Text>
+    </Flexbox>
+  );
+
   return (
     <Block
       className={cx(styles.card, compact && styles.compact)}
       role="button"
-      variant={'outlined'}
+      variant={'filled'}
       onClick={() => onOpen(integration.id)}
     >
-      <Flexbox horizontal align="center" gap={12}>
+      <Flexbox horizontal align="center" gap={14}>
         <span className={styles.icon}>
-          <Icon size={24} />
+          <Icon size={26} />
         </span>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Text strong style={{ fontSize: 15 }}>
             {integration.name}
           </Text>
-          {compact ? (
-            <Flexbox horizontal align="center" gap={6}>
-              {enabled ? <span className={styles.dot} /> : null}
-              <Text style={{ fontSize: 13 }} type="secondary">
-                {enabled ? t('overview.status.enabled') : t('overview.status.notConnected')}
-              </Text>
-            </Flexbox>
-          ) : (
+          {compact ? null : (
             <Text style={{ fontSize: 13 }} type="secondary">
               {t(`${integration.id}.tagline`)}
             </Text>
           )}
         </Flexbox>
-        {!compact && enabled ? (
-          <Flexbox horizontal align="center" gap={6}>
-            <span className={styles.dot} />
-            <Text style={{ fontSize: 13 }} type="secondary">
-              {t('overview.status.enabled')}
-            </Text>
-          </Flexbox>
-        ) : null}
+        {status}
       </Flexbox>
     </Block>
   );

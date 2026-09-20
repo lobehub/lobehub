@@ -15,7 +15,6 @@ import { useGithubIntegration } from '../useGithubIntegration';
 import Automation from './Automation';
 import Connections from './Connections';
 import { GITHUB_INTEGRATION } from './definition';
-import RecentPullRequests from './RecentPullRequests';
 
 const RETURN_TO = '/settings/integrations/github';
 
@@ -41,15 +40,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 64px;
     height: 64px;
-    border-radius: ${cssVar.borderRadiusLG};
+    border-radius: 16px;
 
-    color: ${cssVar.colorText};
+    color: ${cssVar.colorBgLayout};
 
-    background: ${cssVar.colorFillTertiary};
+    background: ${cssVar.colorText};
   `,
   infoBar: css`
-    padding-block: 14px;
-    padding-inline: 16px;
+    padding-block: 16px;
+    padding-inline: 20px;
     border-radius: ${cssVar.borderRadiusLG};
   `,
   infoLabel: css`
@@ -117,7 +116,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const BrandIcon = GITHUB_INTEGRATION.icon;
 
   return (
-    <Flexbox gap={28}>
+    <Flexbox gap={32}>
       <span className={styles.back} onClick={onBack}>
         <Icon icon={ArrowLeftIcon} size="small" />
         <Text type="secondary">{t('overview.title')}</Text>
@@ -138,7 +137,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       {data.isInitialLoading ? (
         <Skeleton height={64} />
       ) : (
-        <Block className={styles.infoBar} variant={'outlined'}>
+        <Block className={styles.infoBar} variant={'filled'}>
           <Flexbox horizontal align="center" gap={32} wrap="wrap">
             {first ? (
               <Flexbox horizontal align="center" gap={10}>
@@ -183,8 +182,6 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       )}
 
       <Automation />
-
-      <RecentPullRequests items={data.changeRequests} />
     </Flexbox>
   );
 });

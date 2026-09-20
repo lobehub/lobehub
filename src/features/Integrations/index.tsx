@@ -2,22 +2,15 @@
 
 import './Github/definition';
 
-import { createStaticStyles } from 'antd-style';
 import { memo, useEffect } from 'react';
 import { useParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import GithubIntegration from './Github';
+import IntegrationsLayout from './Layout';
 import Overview from './Overview';
 import { type IntegrationId, isIntegrationId } from './registry';
-
-const styles = createStaticStyles(({ css }) => ({
-  page: css`
-    overflow-y: auto;
-    flex: 1;
-  `,
-}));
 
 const BASE_PATH = '/settings/integrations';
 
@@ -39,9 +32,9 @@ const IntegrationsSettings = memo(() => {
   const back = () => navigate(BASE_PATH);
 
   return (
-    <div className={styles.page}>
+    <IntegrationsLayout>
       {selected === 'github' ? <GithubIntegration onBack={back} /> : <Overview onOpen={open} />}
-    </div>
+    </IntegrationsLayout>
   );
 });
 

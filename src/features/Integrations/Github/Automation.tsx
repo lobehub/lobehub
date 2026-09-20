@@ -13,11 +13,11 @@ import { preferenceSelectors } from '@/store/user/selectors';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 4px;
-    padding-inline: 16px;
+    padding-inline: 20px;
     border-radius: ${cssVar.borderRadiusLG};
   `,
   row: css`
-    padding-block: 14px;
+    padding-block: 16px;
 
     &:not(:last-child) {
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
@@ -27,12 +27,30 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 type SwitchKey = keyof GithubIntegrationPreference;
 
-const SWITCHES: SwitchKey[] = ['acceptOnMerge', 'wakeOnCiFailure', 'wakeOnReview'];
+interface SwitchGroup {
+  /** Switches whose absent value means on; the rest default to off. */
+  defaultOn: SwitchKey[];
+  id: 'automation' | 'comments';
+  keys: SwitchKey[];
+}
+
+const GROUPS: SwitchGroup[] = [
+  {
+    defaultOn: ['acceptOnMerge', 'wakeOnCiFailure', 'wakeOnReview'],
+    id: 'automation',
+    keys: ['acceptOnMerge', 'wakeOnCiFailure', 'wakeOnReview'],
+  },
+  {
+    defaultOn: ['commentOnPrivateRepositories'],
+    id: 'comments',
+    keys: ['commentOnPrivateRepositories', 'commentOnPublicRepositories'],
+  },
+];
 
 /**
- * What LobeHub does on its own when GitHub reports activity. Every switch
- * is on unless the user turned it off; the server reads the same
- * preference before acting, so a switch here is the whole opt-out.
+ * What LobeHub does on its own when GitHub reports activity, and what it
+ * writes back. The server reads the same preference before acting, so a
+ * switch here is the whole opt-out (or opt-in, for public-repo comments).
  */
 const Automation = memo(() => {
   const { t } = useTranslation('integration');
@@ -46,33 +64,40 @@ const Automation = memo(() => {
     updatePreference({ integration: { github: { ...preference, [key]: next } } });
 
   return (
-    <Flexbox gap={12}>
-      <Flexbox gap={4}>
-        <Text strong style={{ fontSize: 15 }}>
-          {t('github.automation.title')}
-        </Text>
-        <Text style={{ fontSize: 13 }} type="secondary">
-          {t('github.automation.description')}
-        </Text>
-      </Flexbox>
-      <Block className={styles.card} variant={'outlined'}>
-        {SWITCHES.map((key) => (
-          <Flexbox horizontal align="center" className={styles.row} gap={24} key={key}>
-            <Flexbox flex={1} gap={2}>
-              <Text strong>{t(`github.automation.${key}.title`)}</Text>
-              <Text style={{ fontSize: 13 }} type="secondary">
-                {t(`github.automation.${key}.description`)}
-              </Text>
-            </Flexbox>
-            <Switch
-              checked={preference?.[key] !== false}
-              loading={!isPreferenceInit}
-              onChange={(next: boolean) => toggle(key, next)}
-            />
+    <>
+      {GROUPS.map((group) => (
+        <Flexbox gap={12} key={group.id}>
+          <Flexbox gap={4}>
+            <Text strong style={{ fontSize: 16 }}>
+              {t(`github.${group.id}.title`)}
+            </Text>
+            <Text type="secondary">{t(`github.${group.id}.description`)}</Text>
           </Flexbox>
-        ))}
-      </Block>
-    </Flexbox>
+          <Block className={styles.card} variant={'filled'}>
+            {group.keys.map((key) => {
+              const checked = group.defaultOn.includes(key)
+                ? preference?.[key] !== false
+                : preference?.[key] === true;
+              return (
+                <Flexbox horizontal align="center" className={styles.row} gap={24} key={key}>
+                  <Flexbox flex={1} gap={2}>
+                    <Text strong>{t(`github.${group.id}.${key}.title` as any)}</Text>
+                    <Text style={{ fontSize: 13 }} type="secondary">
+                      {t(`github.${group.id}.${key}.description` as any)}
+                    </Text>
+                  </Flexbox>
+                  <Switch
+                    checked={checked}
+                    loading={!isPreferenceInit}
+                    onChange={(next: boolean) => toggle(key, next)}
+                  />
+                </Flexbox>
+              );
+            })}
+          </Block>
+        </Flexbox>
+      ))}
+    </>
   );
 });
 

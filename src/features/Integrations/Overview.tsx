@@ -15,27 +15,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   emptyState: css`
     padding-block: 32px;
     padding-inline: 24px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${cssVar.borderRadiusLG};
 
     color: ${cssVar.colorTextSecondary};
     text-align: center;
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
 
-    @media (width <= 720px) {
-      grid-template-columns: 1fr;
-    }
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  list: css`
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  `,
+  search: css`
+    height: 44px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   sectionLabel: css`
     font-size: 12px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
   `,
   strip: css`
     display: grid;
@@ -68,9 +69,10 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
   const enabled = matches.filter((item) => enabledById[item.id]);
 
   return (
-    <Flexbox gap={28}>
+    <Flexbox gap={32}>
       <SearchBar
         allowClear
+        className={styles.search}
         placeholder={t('overview.searchPlaceholder')}
         prefix={<Icon color={cssVar.colorTextDescription} icon={SearchIcon} />}
         value={query}
@@ -95,7 +97,7 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
             <Text type="secondary">{t('overview.noMatch', { query })}</Text>
           </div>
         ) : (
-          <div className={styles.grid}>
+          <div className={styles.list}>
             {matches.map((item) => (
               <IntegrationCard
                 enabled={enabledById[item.id]}

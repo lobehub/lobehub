@@ -12,22 +12,17 @@ export const useGithubIntegration = () => {
   const config = useSWR(scmKeys.config(), () => scmService.getConfig());
   const identity = useSWR(scmKeys.identity('github'), () => scmService.getIdentity('github'));
   const installations = useSWR(scmKeys.installations(null), () => scmService.listInstallations());
-  const changeRequests = useSWR(scmKeys.changeRequests(null), () =>
-    scmService.listChangeRequests({ limit: 20 }),
-  );
 
   const isInitialLoading =
     config.data === undefined || installations.data === undefined || identity.data === undefined;
-  const error = config.error ?? installations.error ?? identity.error ?? changeRequests.error;
+  const error = config.error ?? installations.error ?? identity.error;
   const mutate = () => {
     void config.mutate();
     void identity.mutate();
     void installations.mutate();
-    void changeRequests.mutate();
   };
 
   return {
-    changeRequests: changeRequests.data ?? [],
     config: config.data?.github,
     enabled: (installations.data?.length ?? 0) > 0,
     error,

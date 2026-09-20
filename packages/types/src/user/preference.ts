@@ -229,6 +229,10 @@ export type UserLab = z.infer<typeof UserLabSchema>;
 export interface GithubIntegrationPreference {
   /** Merging a linked pull request accepts its acceptance. */
   acceptOnMerge?: boolean;
+  /** Post a LobeHub comment (acceptance + conversation links) on pull requests in private repositories. Default on. */
+  commentOnPrivateRepositories?: boolean;
+  /** Same for public repositories. Default off: a public thread is not the place for internal links. */
+  commentOnPublicRepositories?: boolean;
   /** A failing check wakes the agent that opened the pull request. */
   wakeOnCiFailure?: boolean;
   /** Review feedback (changes requested, comments) wakes the agent. */
@@ -241,6 +245,8 @@ export interface UserIntegrationPreference {
 
 export const GithubIntegrationPreferenceSchema = z.object({
   acceptOnMerge: z.boolean().optional(),
+  commentOnPrivateRepositories: z.boolean().optional(),
+  commentOnPublicRepositories: z.boolean().optional(),
   wakeOnCiFailure: z.boolean().optional(),
   wakeOnReview: z.boolean().optional(),
 });

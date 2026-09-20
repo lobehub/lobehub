@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 4px;
-    padding-inline: 16px;
+    padding-inline: 20px;
     border-radius: ${cssVar.borderRadiusLG};
   `,
   dot: css`
@@ -30,11 +30,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   emptyState: css`
     padding-block: 32px;
     padding-inline: 24px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${cssVar.borderRadiusLG};
 
     color: ${cssVar.colorTextSecondary};
     text-align: center;
+
+    background: ${cssVar.colorFillQuaternary};
   `,
   row: css`
     padding-block: 14px;
@@ -87,7 +88,7 @@ const Connections = memo<ConnectionsProps>(({ identity, installHref, installatio
   return (
     <Flexbox gap={12}>
       <Flexbox horizontal align="center" gap={16} justify="space-between">
-        <Text strong style={{ fontSize: 15 }}>
+        <Text strong style={{ fontSize: 16 }}>
           {t('github.connections.title')}
         </Text>
         <Button
@@ -104,7 +105,7 @@ const Connections = memo<ConnectionsProps>(({ identity, installHref, installatio
       {installations.length === 0 ? (
         <div className={styles.emptyState}>{t('github.connections.empty')}</div>
       ) : (
-        <Block className={styles.card} variant={'outlined'}>
+        <Block className={styles.card} variant={'filled'}>
           {installations.map((item) => {
             const repositories =
               item.repositorySelection === 'all'
@@ -125,7 +126,7 @@ const Connections = memo<ConnectionsProps>(({ identity, installHref, installatio
                   <Text style={{ fontSize: 13 }} type="secondary">
                     {t('github.connections.enabledBy', {
                       date: new Date(item.createdAt).toLocaleDateString(),
-                      login: item.installedByExternalLogin ?? '—',
+                      login: item.installedByExternalLogin ?? item.accountLogin,
                     })}
                   </Text>
                   <Text style={{ fontSize: 13 }} type="secondary">
@@ -161,7 +162,7 @@ const Connections = memo<ConnectionsProps>(({ identity, installHref, installatio
         </Block>
       )}
 
-      <Block className={styles.card} variant={'outlined'}>
+      <Block className={styles.card} variant={'filled'}>
         <Flexbox horizontal align="center" className={styles.row} gap={14}>
           <Flexbox flex={1} gap={2}>
             <Text strong>{t('github.connections.personalAccount.title')}</Text>

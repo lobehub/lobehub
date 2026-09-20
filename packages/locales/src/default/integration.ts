@@ -1,44 +1,24 @@
 export default {
-  'github.activity.ci.failure': 'CI failed',
-  'github.activity.ci.pending': 'CI running',
-  'github.activity.ci.success': 'CI passed',
-  'github.activity.ci.unknown': 'No CI',
-  'github.activity.description':
-    'Pull requests in connected repositories. CI results, reviews and merges land here as they happen on GitHub.',
-  'github.activity.draft': 'Draft',
-  'github.activity.empty':
-    'No pull requests yet. Open one in a connected repository and it will show up here.',
-  'github.activity.event.ci_failed': 'A check failed',
-  'github.activity.event.ci_passed': 'All checks passed',
-  'github.activity.event.closed': 'Closed',
-  'github.activity.event.conflict': 'Has conflicts',
-  'github.activity.event.merged': 'Merged',
-  'github.activity.event.opened': 'Opened',
-  'github.activity.event.ready_for_review': 'Ready for review',
-  'github.activity.event.reopened': 'Reopened',
-  'github.activity.event.review_approved': 'Approved',
-  'github.activity.event.review_changes_requested': 'Changes requested',
-  'github.activity.event.review_commented': 'Review comment',
-  'github.activity.event.synchronized': 'New commits pushed',
-  'github.activity.linkedAcceptance': 'Linked acceptance',
-  'github.activity.review.approved': 'Approved',
-  'github.activity.review.changes_requested': 'Changes requested',
-  'github.activity.review.review_required': 'Review required',
-  'github.activity.state.closed': 'Closed',
-  'github.activity.state.merged': 'Merged',
-  'github.activity.state.open': 'Open',
-  'github.activity.title': 'Recent pull requests',
   'github.automation.acceptOnMerge.description':
     'When a pull request linked to an acceptance is merged, mark the acceptance as accepted and complete its task.',
   'github.automation.acceptOnMerge.title': 'Accept deliveries on merge',
   'github.automation.description': 'What LobeHub does on its own when GitHub reports activity.',
   'github.automation.title': 'Automation',
   'github.automation.wakeOnCiFailure.description':
-    'When a check fails, wake the agent that opened the pull request with the failing job log. At most three times per pull request.',
-  'github.automation.wakeOnCiFailure.title': 'Wake agents on CI failure',
+    'When a check fails, notify the agent that opened the pull request with the failing job log. At most three times per pull request.',
+  'github.automation.wakeOnCiFailure.title': 'Notify agents on CI failure',
   'github.automation.wakeOnReview.description':
     'When a reviewer requests changes or comments, deliver the feedback to the agent that opened the pull request.',
-  'github.automation.wakeOnReview.title': 'Wake agents on review feedback',
+  'github.automation.wakeOnReview.title': 'Notify agents on review feedback',
+  'github.comments.commentOnPrivateRepositories.description':
+    'Post one comment linking the acceptance and the conversation behind the pull request.',
+  'github.comments.commentOnPrivateRepositories.title': 'Private repositories',
+  'github.comments.commentOnPublicRepositories.description':
+    'Off by default: a public thread is not the place for links into your workspace.',
+  'github.comments.commentOnPublicRepositories.title': 'Public repositories',
+  'github.comments.description':
+    'Leave a comment on pull requests with links back to the LobeHub acceptance and conversation.',
+  'github.comments.title': 'Comments in GitHub',
   'github.connections.allRepositories': 'All repositories',
   'github.connections.connect': 'Connect account',
   'github.connections.empty':
@@ -80,5 +60,9 @@ export default {
   'overview.searchPlaceholder': 'Search integrations',
   'overview.status.enabled': 'Enabled',
   'overview.status.notConnected': 'Not connected',
+  'origin.event.ci_failed': 'CI failed',
+  'origin.event.review_changes_requested': 'Changes requested',
+  'origin.event.review_commented': 'Review comment',
+  'origin.provider.github': 'GitHub',
   'overview.title': 'Integrations',
 };
