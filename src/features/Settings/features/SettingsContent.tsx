@@ -64,6 +64,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
     [SettingsTabs.Labs]: t('labs:title'),
     [SettingsTabs.Memory]: t('setting:tab.memory'),
     [SettingsTabs.Messenger]: t('setting:tab.messenger'),
+    [SettingsTabs.Integrations]: t('setting:tab.integrations'),
     [SettingsTabs.Notification]: t('setting:tab.notification'),
     [SettingsTabs.Plans]: t('subscription:tab.plans'),
     [SettingsTabs.Profile]: t('auth:profile.title'),

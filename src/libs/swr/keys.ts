@@ -1095,6 +1095,20 @@ export const messengerKeys = {
   ]),
 };
 
+// ---- scm (GitHub App integration) --------------------------------------
+export const scmKeys = {
+  changeRequests: def('scm:changeRequests', (workspaceId: string | null | undefined) => [
+    'scm:changeRequests',
+    workspaceId ?? null,
+  ]),
+  config: def('scm:config', () => ['scm:config']),
+  identity: def('scm:identity', (provider: string) => ['scm:identity', provider]),
+  installations: def('scm:installations', (workspaceId: string | null | undefined) => [
+    'scm:installations',
+    workspaceId ?? null,
+  ]),
+};
+
 // ---- verify (deliverable judging) ---------------------------------------
 export const expertiseKeys = {
   domain: def('expertise:domain', (domainId: string) => ['expertise:domain', domainId]),
@@ -1512,6 +1526,7 @@ export const swrKeys = {
   localFile: localFileKeys,
   message: messageKeys,
   messenger: messengerKeys,
+  scm: scmKeys,
   notebook: notebookSWRKeys,
   ollama: ollamaKeys,
   onboarding: onboardingKeys,

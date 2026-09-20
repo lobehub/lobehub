@@ -73,6 +73,7 @@ describe('settings useCategory', () => {
       SettingsTabs.Appearance,
       SettingsTabs.Hotkey,
       SettingsTabs.Messenger,
+      SettingsTabs.Integrations,
     ]);
     expect(generalGroup?.items.map((item) => item.key)).toEqual([
       SettingsTabs.Stats,

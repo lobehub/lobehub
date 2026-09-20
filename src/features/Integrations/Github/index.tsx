@@ -1,0 +1,194 @@
+'use client';
+
+import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
+import { ArrowLeftIcon, BookOpenIcon } from 'lucide-react';
+import { memo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
+
+import AsyncError from '@/components/AsyncError';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
+
+import { useGithubIntegration } from '../useGithubIntegration';
+import Automation from './Automation';
+import Connections from './Connections';
+import { GITHUB_INTEGRATION } from './definition';
+import RecentPullRequests from './RecentPullRequests';
+
+const RETURN_TO = '/settings/integrations/github';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  back: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    color: ${cssVar.colorTextSecondary};
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+  `,
+  hero: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 64px;
+    height: 64px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  infoBar: css`
+    padding-block: 14px;
+    padding-inline: 16px;
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+  infoLabel: css`
+    font-size: 11px;
+    font-weight: 500;
+    color: ${cssVar.colorTextTertiary};
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  `,
+}));
+
+const KNOWN_ERRORS = new Set([
+  'exchange_failed',
+  'identity_taken',
+  'installation_fetch_failed',
+  'missing_installation',
+]);
+
+interface GithubIntegrationProps {
+  onBack: () => void;
+}
+
+/**
+ * The GitHub integration page: what it does, who enabled it, the connected
+ * accounts, the automation switches and the pull requests it has heard
+ * about. Connecting hands off to the server route that owns the GitHub
+ * handshake; GitHub sends the user back here with the outcome in the query.
+ */
+const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
+  const { t, ready } = useTranslation('integration');
+  const appOrigin = useAppOrigin();
+  const data = useGithubIntegration();
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !ready) return;
+    const url = new URL(window.location.href);
+    const installed = url.searchParams.get('installed');
+    const error = url.searchParams.get('error');
+    const account = url.searchParams.get('account');
+    if (!installed && !error) return;
+
+    if (installed === 'ok') toast.success(t('github.installResult.success', { account }));
+    else if (installed === 'updated') toast.success(t('github.installResult.updated'));
+    else if (error && KNOWN_ERRORS.has(error)) {
+      toast.error(t(`github.installResult.error.${error}` as any));
+    } else if (error) toast.error(t('github.installResult.error.unknown', { code: error }));
+
+    for (const key of ['installed', 'error', 'account', 'scm']) url.searchParams.delete(key);
+    window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
+  }, [t, ready]);
+
+  if (data.error && data.isInitialLoading) {
+    return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
+  }
+
+  const { config, identity, installations } = data;
+  // Absolute on purpose: on desktop the renderer lives on app://renderer and a
+  // relative link never reaches the server route.
+  const installHref =
+    config?.enabled && appOrigin
+      ? `${urlJoin(appOrigin, config.installPath)}?returnTo=${encodeURIComponent(RETURN_TO)}`
+      : undefined;
+
+  const first = installations.at(-1);
+  const BrandIcon = GITHUB_INTEGRATION.icon;
+
+  return (
+    <Flexbox gap={28}>
+      <span className={styles.back} onClick={onBack}>
+        <Icon icon={ArrowLeftIcon} size="small" />
+        <Text type="secondary">{t('overview.title')}</Text>
+      </span>
+
+      <Flexbox horizontal align="center" gap={20}>
+        <span className={styles.hero}>
+          <BrandIcon size={36} />
+        </span>
+        <Flexbox gap={4}>
+          <Text strong style={{ fontSize: 22 }}>
+            {GITHUB_INTEGRATION.name}
+          </Text>
+          <Text type="secondary">{t('github.tagline')}</Text>
+        </Flexbox>
+      </Flexbox>
+
+      {data.isInitialLoading ? (
+        <Skeleton height={64} />
+      ) : (
+        <Block className={styles.infoBar} variant={'outlined'}>
+          <Flexbox horizontal align="center" gap={32} wrap="wrap">
+            {first ? (
+              <Flexbox horizontal align="center" gap={10}>
+                <Avatar
+                  avatar={identity?.avatarUrl ?? first.metadata.accountAvatarUrl ?? undefined}
+                  size={28}
+                  title={first.installedByExternalLogin ?? first.accountLogin}
+                />
+                <Flexbox gap={2}>
+                  <span className={styles.infoLabel}>{t('github.info.enabledBy')}</span>
+                  <Text>
+                    {first.installedByExternalLogin ?? first.accountLogin} ·{' '}
+                    {new Date(first.createdAt).toLocaleDateString()}
+                  </Text>
+                </Flexbox>
+              </Flexbox>
+            ) : (
+              <Flexbox gap={2}>
+                <span className={styles.infoLabel}>{t('github.info.status')}</span>
+                <Text>
+                  {config?.enabled ? t('github.info.notConnected') : t('github.info.notConfigured')}
+                </Text>
+              </Flexbox>
+            )}
+            <Flexbox gap={2}>
+              <span className={styles.infoLabel}>{t('github.info.docs')}</span>
+              <a href={GITHUB_INTEGRATION.docsUrl} rel="noreferrer" target="_blank">
+                <Flexbox horizontal align="center" gap={4}>
+                  <Icon icon={BookOpenIcon} size="small" />
+                  <Text>{t('github.info.docsLink')}</Text>
+                </Flexbox>
+              </a>
+            </Flexbox>
+          </Flexbox>
+        </Block>
+      )}
+
+      {data.isInitialLoading ? (
+        <Skeleton height={120} />
+      ) : (
+        <Connections identity={identity} installHref={installHref} installations={installations} />
+      )}
+
+      <Automation />
+
+      <RecentPullRequests items={data.changeRequests} />
+    </Flexbox>
+  );
+});
+
+GithubIntegration.displayName = 'GithubIntegration';
+
+export default GithubIntegration;

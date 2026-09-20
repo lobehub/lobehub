@@ -5,6 +5,7 @@ import {
   AppWindowIcon,
   BellIcon,
   Blocks,
+  BlocksIcon,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -117,6 +118,13 @@ export const useCategory = () => {
         icon: MessageCircleIcon,
         key: SettingsTabs.Messenger,
         label: t('tab.messenger'),
+      },
+      // Third-party integrations (the GitHub App today) are bound to the user
+      // or workspace that connected them, so they sit with the account.
+      {
+        icon: BlocksIcon,
+        key: SettingsTabs.Integrations,
+        label: t('tab.integrations'),
       },
     ].filter(Boolean) as CategoryItem[];
 
