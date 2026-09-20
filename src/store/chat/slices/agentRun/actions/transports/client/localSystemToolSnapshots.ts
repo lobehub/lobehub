@@ -37,6 +37,7 @@ const createReadSnapshot = async (
       content: result.content,
       lineRange: result.loc,
       path: reference.path,
+      totalLines: result.totalLineCount,
     });
     const state = {
       charCount: result.charCount,

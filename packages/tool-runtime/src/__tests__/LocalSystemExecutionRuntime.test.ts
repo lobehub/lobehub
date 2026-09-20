@@ -275,6 +275,49 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     expect(output.state?.images).toBeUndefined();
     expect(output.content).toContain('hello');
   });
+
+  // Regression: a default-window read used to render a bare `File: <path>`
+  // header with no hint that only the first 200 lines were returned, so the
+  // model re-read the file over and over to discover it was truncated. The
+  // service always reports the actual window (`loc`) and `totalLineCount`;
+  // the content header must surface both plus how to continue.
+  it('surfaces the returned window and total line count on truncated reads', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'first 200 lines…',
+        fileType: 'txt',
+        filename: 'big.txt',
+        loc: [0, 200],
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/big.txt' });
+
+    expect(output.content).toContain('(lines 0-200 of 2545)');
+    expect(output.content).toContain('loc=[200, 400]');
+  });
+
+  it('omits the continuation hint when the window reaches the end of the file', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'tail',
+        fileType: 'txt',
+        filename: 'big.txt',
+        loc: [2500, 2545],
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ endLine: 2545, path: '/tmp/big.txt', startLine: 2500 });
+
+    expect(output.content).toContain('(lines 2500-2545 of 2545)');
+    expect(output.content).not.toContain('to continue reading');
+  });
 });
 
 describe('LocalSystemExecutionRuntime.executeToolCall — working directory anchoring', () => {

@@ -162,15 +162,24 @@ export abstract class ComputerRuntime {
         totalLines: r.totalLineCount ?? r.totalLines,
       };
 
+      // Show the window the service actually returned (including its default
+      // [0, 200] slice when the caller passed no loc) plus the file's total
+      // line count. The system prompt tells the model the response carries
+      // totalLineCount; rendering only the caller-supplied args here meant a
+      // default-window read looked identical to a full read, and the model had
+      // to burn extra turns discovering the file was truncated.
       const lineRange: [number, number] | undefined =
-        args.startLine !== undefined && args.endLine !== undefined
-          ? [args.startLine, args.endLine]
-          : undefined;
+        Array.isArray(r.loc) && r.loc.length === 2
+          ? [r.loc[0], r.loc[1]]
+          : args.startLine !== undefined && args.endLine !== undefined
+            ? [args.startLine, args.endLine]
+            : undefined;
 
       const content = formatFileContent({
         content: fileContent,
         lineRange,
         path: args.path,
+        totalLines: r.totalLineCount ?? r.totalLines,
       });
 
       return { content, state, success: true };
