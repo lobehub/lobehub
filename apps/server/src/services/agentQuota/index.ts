@@ -6,6 +6,7 @@ import {
   isScopedWeeklyLimit,
   isSessionLimit,
   isWeeklyAllLimit,
+  type KimiCodeExtraUsage,
   MIN_CALIBRATION_SAMPLES,
   projectWindows,
   type QuotaAccountIdentity,
@@ -92,6 +93,7 @@ export class AgentQuotaService {
   ingestSnapshot = async (params: {
     credentialRef?: QuotaAccountCredentialRef;
     deviceId?: string;
+    extraUsage?: KimiCodeExtraUsage | null;
     identity: QuotaAccountIdentity;
     provider: string;
     readings: QuotaLimitReading[];
@@ -101,6 +103,14 @@ export class AgentQuotaService {
       params.identity as AccountIdentityInput,
       params.credentialRef ? { credentialRef: params.credentialRef } : {},
     );
+    // The wallet is not a limit reading, so it can't ride the snapshots table —
+    // keep the latest sample on the account row or the persisted view loses the
+    // Extra Usage section between live samples.
+    if (params.extraUsage !== undefined) {
+      await this.accounts.update(account.id, {
+        metadata: { ...account.metadata, extraUsage: params.extraUsage },
+      });
+    }
     await this.ingestReadings(account.id, params.readings, params.deviceId);
     // Ingestion is the only moment new evidence arrives, so it is also the only
     // sensible calibration trigger. Cheap and self-guarding: without enough clean

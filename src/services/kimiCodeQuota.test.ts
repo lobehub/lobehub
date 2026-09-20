@@ -67,9 +67,47 @@ describe('account-scoped Kimi Code quota', () => {
     const result = await createKimiCodeQuotaReader({})({});
     expect(result.identity?.externalAccountId).toBe('external-a');
     expect(agentQuotaService.ingestKimiCodeSnapshot).toHaveBeenCalledWith({
+      extraUsage: null,
       identity: sample.identity,
       readings: [reading],
     });
+  });
+
+  it('publishes the wallet even when the windows did not move', async () => {
+    const extraUsage = {
+      balanceCents: 1234,
+      currency: 'USD',
+      monthlyChargeLimitCents: 5000,
+      monthlyChargeLimitEnabled: true,
+      monthlyUsedCents: 42,
+      totalCents: 2000,
+    };
+    // Same readings as persisted (fresh === []), but a live wallet is present.
+    vi.mocked(heterogeneousAgentService.getKimiCodeQuota).mockResolvedValue({
+      ...sample,
+      extraUsage,
+    });
+    await createKimiCodeQuotaReader({})({ force: true });
+    expect(agentQuotaService.ingestKimiCodeSnapshot).toHaveBeenCalledWith({
+      extraUsage,
+      identity: sample.identity,
+      readings: [],
+    });
+  });
+
+  it('surfaces an unavailable login instead of stale persisted quota', async () => {
+    vi.mocked(heterogeneousAgentService.getKimiCodeQuota).mockResolvedValue({
+      ...sample,
+      identity: undefined,
+      monthly: null,
+      readings: undefined,
+      reason: 'credentials-expired' as const,
+      session: null,
+      status: 'unavailable' as const,
+    });
+    const result = await createKimiCodeQuotaReader({})({ force: true });
+    expect(result.status).toBe('unavailable');
+    expect(result.reason).toBe('credentials-expired');
   });
 
   it('keeps local quota usable when the persistence backend is unavailable', async () => {

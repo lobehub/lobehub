@@ -1,4 +1,5 @@
 import type {
+  KimiCodeExtraUsage,
   KimiCodeQuotaSnapshot,
   QuotaAccountIdentity,
   QuotaLimitReading,
@@ -9,7 +10,11 @@ import {
 } from '@lobechat/heterogeneous-agents/quota';
 
 export const buildKimiCodePanelSnapshot = (
-  account: { externalAccountId?: string | null; updatedAt?: Date | string | null },
+  account: {
+    externalAccountId?: string | null;
+    metadata?: Record<string, unknown> | null;
+    updatedAt?: Date | string | null;
+  },
   persisted: QuotaLimitReading[],
   live: KimiCodeQuotaSnapshot | null,
   now = Date.now(),
@@ -35,9 +40,14 @@ export const buildKimiCodePanelSnapshot = (
   const identity: QuotaAccountIdentity = {
     externalAccountId: account.externalAccountId ?? undefined,
   };
+  // The wallet belongs to this account row (ingest writes it there), so it is
+  // safe to serve without an identity-matched live sample — unlike a wallet
+  // borrowed from another account's live sample.
+  const persistedExtraUsage =
+    (account.metadata?.['extraUsage'] as KimiCodeExtraUsage | null | undefined) ?? null;
   return {
     error: null,
-    extraUsage: sample?.extraUsage ?? null,
+    extraUsage: sample?.extraUsage ?? persistedExtraUsage,
     identity,
     monthly: windows.monthly,
     monthlyCode: windows.monthlyCode,

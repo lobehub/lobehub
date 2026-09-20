@@ -88,11 +88,14 @@ export const createKimiCodeQuotaReader = (source: KimiCodeQuotaSource) => {
               previous.capturedAt >= reading.capturedAt,
           ),
       );
-      if (!source.deviceId && fresh?.length) {
+      // Ingest when there are new readings OR a wallet to persist — the wallet
+      // moves independently of the limit windows.
+      if (!source.deviceId && (fresh?.length || live.extraUsage)) {
         try {
           account = await agentQuotaService.ingestKimiCodeSnapshot({
+            extraUsage: live.extraUsage,
             identity: live.identity!,
-            readings: fresh,
+            readings: fresh ?? [],
           });
         } catch (error) {
           console.error('[kimiCodeQuota:ingest]', error);
@@ -111,6 +114,10 @@ export const createKimiCodeQuotaReader = (source: KimiCodeQuotaSource) => {
       account = undefined;
       readings = [];
     }
+    // A deterministically unavailable login (missing/expired credentials) is a
+    // current fact, not a gap to paper over with stale readings — surface it so
+    // the panel shows the sign-in guidance instead of stale quota.
+    if (live?.status === 'unavailable') return live;
     if (account && readings.length) return buildKimiCodePanelSnapshot(account, readings, live);
     return (
       live ??
@@ -137,6 +144,7 @@ export const createKimiCodeQuotaReader = (source: KimiCodeQuotaSource) => {
       ) {
         trustedAccountId = snapshot.identity.externalAccountId;
         await agentQuotaService.ingestKimiCodeSnapshot({
+          extraUsage: snapshot.extraUsage,
           identity: snapshot.identity,
           readings: snapshot.readings,
         });

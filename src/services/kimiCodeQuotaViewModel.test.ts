@@ -67,6 +67,31 @@ describe('Kimi Code account view', () => {
       ).extraUsage,
     ).toEqual(extraUsage);
   });
+  it('serves the Extra Usage wallet from account metadata between live samples', () => {
+    const extraUsage = {
+      balanceCents: 1234,
+      currency: 'USD',
+      monthlyChargeLimitCents: 5000,
+      monthlyChargeLimitEnabled: true,
+      monthlyUsedCents: 42,
+      totalCents: 2000,
+    };
+    const withWallet = { ...account, metadata: { extraUsage } };
+    // No live sample (fresh mount): the wallet survives from the account row.
+    expect(buildKimiCodePanelSnapshot(withWallet, [reading], null, now).extraUsage).toEqual(
+      extraUsage,
+    );
+    // An identity-matched live sample still wins over the persisted wallet.
+    const fresherWallet = { ...extraUsage, balanceCents: 999 };
+    expect(
+      buildKimiCodePanelSnapshot(
+        withWallet,
+        [reading],
+        { ...live, extraUsage: fresherWallet, identity: { externalAccountId: 'a' } },
+        now,
+      ).extraUsage,
+    ).toEqual(fresherWallet);
+  });
   it('rebuilds all four windows from persisted readings', () => {
     const readings = [
       reading,

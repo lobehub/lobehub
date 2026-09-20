@@ -154,6 +154,16 @@ export const agentQuotaRouter = router({
     .input(
       z.object({
         deviceId: z.string().optional(),
+        extraUsage: z
+          .object({
+            balanceCents: z.number(),
+            currency: z.string(),
+            monthlyChargeLimitCents: z.number(),
+            monthlyChargeLimitEnabled: z.boolean(),
+            monthlyUsedCents: z.number(),
+            totalCents: z.number(),
+          })
+          .nullish(),
         identity: z.object({
           displayName: z.string().optional(),
           email: z.string().optional(),
@@ -190,6 +200,7 @@ export const agentQuotaRouter = router({
       return ctx.quotaService.ingestSnapshot({
         credentialRef: { origin: 'keychain' },
         deviceId: deviceRow?.id,
+        extraUsage: input.extraUsage,
         identity: input.identity,
         provider: input.provider,
         readings: input.readings,

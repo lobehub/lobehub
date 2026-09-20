@@ -4,6 +4,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import type {
   CodexQuotaSnapshot,
+  KimiCodeExtraUsage,
   KimiCodeQuotaSnapshot,
   QuotaAccountIdentity,
   QuotaLimitReading,
@@ -31,6 +32,7 @@ class AgentQuotaService {
     lambdaClient.agentQuota.refreshCodexQuota.mutate(params);
 
   ingestKimiCodeSnapshot = async (params: {
+    extraUsage?: KimiCodeExtraUsage | null;
     identity: QuotaAccountIdentity;
     readings: QuotaLimitReading[];
   }) => lambdaClient.agentQuota.ingestSnapshot.mutate({ ...params, provider: 'kimi-code' });

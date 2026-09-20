@@ -61,6 +61,14 @@ type AccessTokenLookup =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+// A trailing-slash regex (`/\/+$/`) is polynomial on slash-heavy input
+// (CodeQL js/redos); trim by index instead.
+const trimTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+};
+
 const asNonEmpty = (value: string | null | undefined): string | null =>
   typeof value === 'string' && value.trim().length > 0 ? value : null;
 
@@ -71,11 +79,11 @@ const getKimiCodeHomePath = (options: FetchKimiCodeQuotaOptions) =>
   path.join(homedir(), '.kimi-code');
 
 const getKimiCodeBaseUrl = (options: FetchKimiCodeQuotaOptions) =>
-  (
+  trimTrailingSlashes(
     asNonEmpty(options.env?.KIMI_CODE_BASE_URL) ??
-    asNonEmpty(process.env.KIMI_CODE_BASE_URL) ??
-    DEFAULT_BASE_URL
-  ).replace(/\/+$/, '');
+      asNonEmpty(process.env.KIMI_CODE_BASE_URL) ??
+      DEFAULT_BASE_URL,
+  );
 
 const baseSnapshot = () => ({
   extraUsage: null,
