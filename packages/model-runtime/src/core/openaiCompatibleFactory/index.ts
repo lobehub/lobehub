@@ -1188,9 +1188,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (shouldUseResponses) {
           log('calling responses.create for structured output');
+          // Chat Completions content parts are not valid Responses input: a `text` part must
+          // become `input_text` and an `image_url` part `input_image`, or the API rejects the
+          // whole request. String content survives untouched, which is why text-only callers
+          // never hit this.
+          const input = await convertOpenAIResponseInputs(messages as any, {
+            forceImageBase64: chatCompletion?.forceImageBase64,
+            forceVideoBase64: chatCompletion?.forceVideoBase64,
+            provider: this.id,
+            strictToolPairing: true,
+          });
           const preparedRequest = this.prepareResponsesRequest(
             {
-              input: messages,
+              input,
               model,
               ...getGenerateObjectResponsesReasoningParams(payload),
               ...this.resolvePromptCacheKeyParams(model, options?.user),
