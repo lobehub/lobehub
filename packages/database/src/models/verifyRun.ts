@@ -621,7 +621,8 @@ export class VerifyRunModel {
   };
 
   /**
-   * One page of runs stranded in `verifying` since before `olderThan`, across
+   * One page of runs stranded in `verifying`, or confirmed `planned` rounds
+   * whose child operation aborted, since before `olderThan`, across
    * all owners — the sweep's input (see `sweepStuckVerifyRuns`).
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
@@ -656,7 +657,17 @@ export class VerifyRunModel {
     const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
 
     const conditions = [
-      eq(verifyRuns.status, 'verifying'),
+      or(
+        eq(verifyRuns.status, 'verifying'),
+        and(
+          eq(verifyRuns.status, 'planned'),
+          isNotNull(verifyRuns.planConfirmedAt),
+          sql`exists (select 1 from ${agentOperations}
+            where ${agentOperations.id} = ${verifyRuns.operationId}
+              and ${agentOperations.parentOperationId} is not null
+              and ${agentOperations.completionReason} in ('error', 'interrupted'))`,
+        ),
+      )!,
       lt(verifyRuns.updatedAt, olderThan),
       isNotNull(verifyRuns.operationId),
     ];

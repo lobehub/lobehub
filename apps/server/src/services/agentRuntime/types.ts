@@ -532,6 +532,8 @@ export interface OperationCreationParams {
   modelRuntimeConfig?: any;
   /** Marks the source claim non-rollbackable once deterministic runtime state is durable. */
   onInterventionPrepared?: () => void;
+  /** Prepare dependent records after persistence and before execution dispatch. */
+  onOperationCreated?: (operationId: string) => Promise<void>;
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;

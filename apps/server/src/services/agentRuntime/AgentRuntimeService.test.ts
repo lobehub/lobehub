@@ -492,6 +492,52 @@ describe('AgentRuntimeService', () => {
       });
     });
 
+    it('waits for dependent records before dispatch without losing the prepared context', async () => {
+      let release!: () => void;
+      const prepared = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const onOperationCreated = vi.fn<(operationId: string) => Promise<void>>(
+        async () => prepared,
+      );
+      const initialContext = {
+        ...mockParams.initialContext,
+        payload: {
+          assistantMessageId: 'repair-assistant',
+          parentMessageId: 'verify-card',
+        },
+      } as OperationCreationParams['initialContext'];
+      const creation = service.createOperation({
+        ...mockParams,
+        initialContext,
+        onOperationCreated,
+      });
+      try {
+        await vi.waitFor(() =>
+          expect(onOperationCreated).toHaveBeenCalledWith(mockParams.operationId),
+        );
+        expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+      } finally {
+        release();
+      }
+      await creation;
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ context: initialContext }),
+      );
+    });
+
+    it('does not dispatch when dependent record preparation fails', async () => {
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          onOperationCreated: async () => {
+            throw new Error('Plan unavailable');
+          },
+        }),
+      ).rejects.toThrow('Plan unavailable');
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
     it('should create operation successfully with autoStart=false', async () => {
       const params = { ...mockParams, autoStart: false };
 

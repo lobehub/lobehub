@@ -259,7 +259,10 @@ export const finalizeVerifyRun = async (
 ): Promise<void> => {
   // Repair-aware: no-ops until every required check is terminal, and may spawn a
   // repair (→ `repairing`), in which case finalize defers to the repair op.
-  await maybeAutoRepair(db, userId, operationId, workspaceId);
+  const repair = await maybeAutoRepair(db, userId, operationId, workspaceId);
+  // The child owns settlement even when it failed before the spawn returned
+  // and already recomputed this parent from repairing back to failed.
+  if (repair) return;
 
   const settled = await new VerifyRunModel(db, userId, workspaceId).findByOperation(operationId);
   if (settled?.status !== 'passed' && settled?.status !== 'failed' && settled?.status !== 'errored')
