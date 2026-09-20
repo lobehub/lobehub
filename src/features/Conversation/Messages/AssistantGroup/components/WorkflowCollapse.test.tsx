@@ -202,7 +202,24 @@ describe('WorkflowCollapse', () => {
     expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
-  it('auto-collapses on completion by default', () => {
+  it("respects defaultWorkflowExpandLevel='collapsed' after completion", () => {
+    mockIsGenerating = false;
+    render(
+      <WorkflowCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks({ result: { content: 'ok' } })}
+        defaultWorkflowExpandLevel="collapsed"
+      />,
+    );
+
+    expect(getExpandedKeys()).toBe('[]');
+  });
+
+  it('keeps the full list expanded on completion by default', () => {
+    // Regression: the built-in completion default used to be 'collapsed', so
+    // inspecting a finished turn's long tool list took three hops (open fold →
+    // semi scroll → ⤢ full). Full is the built-in default now; users who want
+    // the old summary-only row pass defaultWorkflowExpandLevel='collapsed'.
     const { rerender } = render(
       <WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
     );
@@ -217,11 +234,12 @@ describe('WorkflowCollapse', () => {
       />,
     );
 
-    expect(getExpandedKeys()).toBe('[]');
+    expect(getExpandedKeys()).toBe('["workflow"]');
+    expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
-  it('skips the completion auto-collapse while suppressAutoCollapse is set', () => {
-    // Regression: the animated semi → collapsed transition used to run right
+  it('keeps the completion level while suppressAutoCollapse is set', () => {
+    // Regression: the animated full → collapsed transition used to run right
     // before the parent folded the whole workflow into ProcessFold, shrinking
     // the layout twice and making the conversation visibly jitter.
     const { rerender } = render(
@@ -242,12 +260,21 @@ describe('WorkflowCollapse', () => {
     expect(getExpandedKeys()).toBe('["workflow"]');
   });
 
-  it('collapses late when suppressAutoCollapse is released after completion', () => {
+  it('applies the completion level when suppressAutoCollapse is released after completion', () => {
     // The turn ended but never folded (e.g. tool-only turn with no final
-    // answer), so nothing else collapses the workflow — the late release must.
+    // answer), so nothing else applies the completion level — the late
+    // release must. The { completion: 'collapsed' } override pins completion
+    // down while streaming keeps the built-in semi, so the release has an
+    // observable effect.
     const { rerender } = render(
-      <WorkflowCollapse suppressAutoCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
+      <WorkflowCollapse
+        suppressAutoCollapse
+        assistantMessageId="msg-1"
+        blocks={makeBlocks()}
+        defaultWorkflowExpandLevel={{ completion: 'collapsed' }}
+      />,
     );
+    expect(getExpandedKeys()).toBe('["workflow"]');
 
     mockIsGenerating = false;
     rerender(
@@ -255,6 +282,7 @@ describe('WorkflowCollapse', () => {
         suppressAutoCollapse
         assistantMessageId="msg-1"
         blocks={makeBlocks({ result: { content: 'ok' } })}
+        defaultWorkflowExpandLevel={{ completion: 'collapsed' }}
       />,
     );
     expect(getExpandedKeys()).toBe('["workflow"]');
@@ -263,6 +291,7 @@ describe('WorkflowCollapse', () => {
       <WorkflowCollapse
         assistantMessageId="msg-1"
         blocks={makeBlocks({ result: { content: 'ok' } })}
+        defaultWorkflowExpandLevel={{ completion: 'collapsed' }}
         suppressAutoCollapse={false}
       />,
     );
@@ -471,15 +500,21 @@ describe('WorkflowCollapse', () => {
       />,
     );
 
-    // Completion default falls back to 'collapsed' since only streaming is overridden.
-    expect(getExpandedKeys()).toBe('[]');
+    // Completion default falls back to the built-in 'full' since only
+    // streaming is overridden — the workflow already renders expanded.
+    expect(getExpandedKeys()).toBe('["workflow"]');
 
     act(() => {
       screen.getByRole('button', { name: 'toggle-accordion-header' }).click();
     });
 
+    expect(getExpandedKeys()).toBe('[]');
+    // Collapsed shows no toggle; re-expanding must land at full (not semi cap).
+    act(() => {
+      screen.getByRole('button', { name: 'toggle-accordion-header' }).click();
+    });
+
     expect(getExpandedKeys()).toBe('["workflow"]');
-    // The toggle next to the header would offer "collapse" because we landed at 'full' directly.
     expect(screen.getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
   });
 
