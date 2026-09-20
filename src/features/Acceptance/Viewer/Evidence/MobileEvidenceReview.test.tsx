@@ -142,8 +142,8 @@ describe('MobileEvidenceReview notes button', () => {
   });
 });
 
-describe('MobileEvidenceReview image row', () => {
-  it('keeps one row under the image: the hint and the image switcher, no zoom controls', () => {
+describe('MobileEvidenceReview image switcher', () => {
+  it('keeps one full-width switcher under the image: no hint text, no zoom controls', () => {
     render(<MobileEvidenceReview model={withImage()} />);
 
     // The switcher follows the stage instead of sitting above it.
@@ -153,7 +153,10 @@ describe('MobileEvidenceReview image row', () => {
     expect(
       screen.getByRole('button', { name: 'acceptance.review.previousImage' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('acceptance.review.mobileBrowseHint')).toBeInTheDocument();
+    expect(screen.getByText('acceptance.review.imageNumber')).toBeInTheDocument();
+
+    // No explanatory copy under the image, in either mode.
+    expect(screen.queryByText('acceptance.review.mobileBrowseHint')).toBeNull();
 
     // Zoom is two fingers only on a phone.
     expect(screen.queryByRole('button', { name: 'acceptance.review.zoomIn' })).toBeNull();
@@ -186,7 +189,7 @@ describe('MobileEvidenceReview marking mode', () => {
     // What is left is about the regions: the list (empty so far) and the hint.
     expect(screen.getByText('acceptance.review.regionComments')).toBeInTheDocument();
     expect(screen.getByText('acceptance.review.mobileRegionCommentsEmpty')).toBeInTheDocument();
-    expect(screen.getByText('acceptance.review.mobileDrawHint')).toBeInTheDocument();
+    expect(screen.queryByText('acceptance.review.mobileDrawHint')).toBeNull();
 
     // Done leaves the mode; the regions themselves are the model's to keep.
     fireEvent.click(doneButton()!);
@@ -204,7 +207,6 @@ describe('MobileEvidenceReview marking mode', () => {
     expect(
       screen.getByRole('textbox', { name: 'acceptance.review.annotationPlaceholder' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('acceptance.review.mobileDrawnHint')).toBeInTheDocument();
   });
 
   it('has no marking entry when there is no image to draw on', () => {

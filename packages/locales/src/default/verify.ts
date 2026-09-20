@@ -14,12 +14,8 @@ export default {
     'This is a past round. Return to all rounds to review the current delivery.',
   'acceptance.review.backToImages': 'Back to images',
   'acceptance.review.writeFeedback': 'Write feedback',
-  'acceptance.review.mobileDrawHint': 'Drag to mark an issue',
-  'acceptance.review.mobileBrowseHint': 'Swipe to switch · pinch to zoom',
   'acceptance.review.mobileRegionCommentsEmpty':
     'Drag on the image above to mark a region; its comment lands here.',
-  'acceptance.review.mobileDrawnHint':
-    '{{count}} region(s) marked · drag to move, corner dot to resize',
   'acceptance.review.draftSaved': 'Your draft is saved on this device.',
   'acceptance.review.removeAttachment': 'Remove attachment',
   'acceptance.review.regionImage': 'Image {{image}} · Region {{region}}',

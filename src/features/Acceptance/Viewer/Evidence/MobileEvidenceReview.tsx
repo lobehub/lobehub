@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
+import { TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronLeft, ChevronRight, NotebookPen, PencilLine } from 'lucide-react';
@@ -40,6 +40,18 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     flex: 1 1 auto;
     min-height: 40dvh;
+  `,
+  /** The image switcher spans the full width, edge to edge, like the buttons
+      under it: the arrows sit where a thumb lands, the counter between them. */
+  switcher: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
   `,
   /** Two equal thumb-sized buttons: what to do next with the image, and where
       the written note goes. */
@@ -159,20 +171,11 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 onZoom={model.setZoom}
               />
             </div>
-            {/* One row under the image: the hint on the left (in marking mode it
-                is the region's receipt — the box landed and is still editable),
-                the image switcher on the right. Zoom has no controls here: two
-                fingers do it, and a percentage nobody sets is noise on a phone. */}
-            <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
-              <Text fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
-                {drawing && activeAnnotations.length > 0
-                  ? t('acceptance.review.mobileDrawnHint', { count: activeAnnotations.length })
-                  : t(
-                      drawing
-                        ? 'acceptance.review.mobileDrawHint'
-                        : 'acceptance.review.mobileBrowseHint',
-                    )}
-              </Text>
+            {/* The image switcher is one full-width block under the stage:
+                previous at the left edge, the counter in the middle, next at
+                the right edge. No hint text — the phone shows, it does not
+                explain — and no zoom controls: two fingers do that. */}
+            <div className={styles.switcher}>
               <ActionIcon
                 aria-label={t('acceptance.review.previousImage')}
                 disabled={activeIndex <= 0}
@@ -180,7 +183,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 size={{ blockSize: 44, size: 20 }}
                 onClick={() => model.selectEvidence(activeIndex - 1)}
               />
-              <Text aria-live={'polite'} fontSize={12} style={{ whiteSpace: 'nowrap' }}>
+              <Text aria-live={'polite'} fontSize={13} style={{ flex: 1, textAlign: 'center' }}>
                 {t('acceptance.review.imageNumber', {
                   current: activeIndex + 1,
                   total: evidence.length,
@@ -193,7 +196,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 size={{ blockSize: 44, size: 20 }}
                 onClick={() => model.selectEvidence(activeIndex + 1)}
               />
-            </Flexbox>
+            </div>
           </>
         )}
         {drawing ? (
