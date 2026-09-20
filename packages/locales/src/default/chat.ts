@@ -1274,7 +1274,6 @@ export default {
   'memory.on.desc': 'Allow AI to actively search and manage your memories during conversation.',
   'memory.on.title': 'Enable Memory Tool',
   'memory.title': 'Memory',
-  'gatewayMode.beta': 'Beta',
   'gatewayMode.cardTitle': 'Agent Gateway Mode',
   'gatewayMode.desc':
     "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",

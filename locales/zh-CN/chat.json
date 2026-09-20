@@ -393,7 +393,6 @@
   "floatingChatPanel.expand": "展开聊天",
   "followUpPlaceholder": "继续跟进。",
   "followUpPlaceholderHeterogeneous": "继续跟进。",
-  "gatewayMode.beta": "Beta",
   "gatewayMode.cardTitle": "Agent Gateway 模式",
   "gatewayMode.desc": "通过 LobeHub 的 Agent Gateway 在云端执行 Agent，即使关闭网页，任务也会继续运行。",
   "globalApproval.collapse": "收起",
