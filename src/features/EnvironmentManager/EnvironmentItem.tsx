@@ -2,14 +2,24 @@
 
 import { Github } from '@lobehub/icons';
 import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, Text, toast } from '@lobehub/ui/base-ui';
+import { Avatar, Button, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { ContainerIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import {
+  ContainerIcon,
+  EyeOffIcon,
+  GlobeIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+
 import { repositoryPath } from './repository';
+import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -101,13 +111,67 @@ interface EnvironmentItemProps {
 const EnvironmentItem = memo<EnvironmentItemProps>(
   ({ environment, instanceCount, onCreateInstance, onSelect, selected }) => {
     const { t } = useTranslation('setting');
+    const { t: tCommon } = useTranslation('common');
     const actions = useEnvironmentActions();
+    const canEdit = useCanEditEnvironment()(environment);
 
     const repository = repositoryPath(environment.configuration);
     const creator =
       environment.creator?.fullName ||
       environment.creator?.username ||
       t('environments.meta.unknownCreator');
+
+    const setVisibility = (visibility: 'private' | 'public') =>
+      actions
+        .setEnvironmentVisibility({ id: environment.id, visibility })
+        .catch((error: unknown) =>
+          toast.error(
+            (error as { message?: string })?.message || t('environments.visibility.changeFailed'),
+          ),
+        );
+
+    const publish = () =>
+      confirmModal({
+        // The shared dialog, because this is the same decision a shared device
+        // asks about and an answer learned once should transfer.
+        content: <VisibilityConfirmContent variant={'publish'} />,
+        okText: t('environments.visibility.publish'),
+        onOk: () => setVisibility('public'),
+        title: t('environments.visibility.publishConfirmTitle'),
+      });
+
+    const makePrivate = () =>
+      confirmModal({
+        content: <VisibilityConfirmContent variant={'makePrivate'} />,
+        okButtonProps: { danger: true },
+        okText: tCommon('makePrivate.confirm.ok'),
+        onOk: () => setVisibility('private'),
+        title: tCommon('makePrivate.confirm.title'),
+      });
+
+    // Only a workspace row has a pool to be in, and only its creator may move
+    // it between pools — demoting a colleague's published environment would
+    // take away instances other people are working in.
+    const visibilityItems =
+      environment.workspaceId && canEdit
+        ? environment.visibility === 'private'
+          ? [
+              {
+                icon: <Icon icon={GlobeIcon} />,
+                key: 'publish',
+                label: t('environments.visibility.publish'),
+                onClick: publish,
+              },
+            ]
+          : [
+              {
+                icon: <Icon icon={EyeOffIcon} />,
+                key: 'makePrivate',
+                label: tCommon('makePrivate'),
+                onClick: makePrivate,
+              },
+            ]
+        : [];
 
     const remove = () =>
       actions
@@ -140,9 +204,18 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
         </div>
 
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis fontSize={15} weight={500}>
-            {environment.name}
-          </Text>
+          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+            <Text ellipsis fontSize={15} weight={500}>
+              {environment.name}
+            </Text>
+            {/* Whose environment this is, said once and only where it is not
+                obvious: a published row in a workspace could be anyone's, and
+                running in someone else's is the thing worth knowing before you
+                do it. */}
+            {environment.visibility === 'public' && !canEdit && (
+              <Tag>{t('environments.visibility.sharedByTag', { name: creator })}</Tag>
+            )}
+          </Flexbox>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
             {/* The repository leads because it is what the name is usually taken
                 from, and it truncates because it is the only part of this line
@@ -177,28 +250,34 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
               </span>
             </Tooltip>
           )}
-          <span onClick={(event) => event.stopPropagation()}>
-            <DropdownMenu
-              placement={'bottomRight'}
-              items={[
-                {
-                  icon: <Icon icon={PlusIcon} />,
-                  key: 'create-instance',
-                  label: t('environments.instances.create'),
-                  onClick: onCreateInstance,
-                },
-                {
-                  danger: true,
-                  icon: <Icon icon={Trash2Icon} />,
-                  key: 'remove',
-                  label: t('environments.remove'),
-                  onClick: remove,
-                },
-              ]}
-            >
-              <Button icon={MoreHorizontalIcon} />
-            </DropdownMenu>
-          </span>
+          {/* Nothing here acts on an environment you only have the use of, so
+              the menu goes away rather than offering items that would be
+              refused. */}
+          {canEdit && (
+            <span onClick={(event) => event.stopPropagation()}>
+              <DropdownMenu
+                placement={'bottomRight'}
+                items={[
+                  {
+                    icon: <Icon icon={PlusIcon} />,
+                    key: 'create-instance',
+                    label: t('environments.instances.create'),
+                    onClick: onCreateInstance,
+                  },
+                  ...visibilityItems,
+                  {
+                    danger: true,
+                    icon: <Icon icon={Trash2Icon} />,
+                    key: 'remove',
+                    label: t('environments.remove'),
+                    onClick: remove,
+                  },
+                ]}
+              >
+                <Button icon={MoreHorizontalIcon} />
+              </DropdownMenu>
+            </span>
+          )}
         </Flexbox>
       </Flexbox>
     );

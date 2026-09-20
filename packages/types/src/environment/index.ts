@@ -1,3 +1,12 @@
+/**
+ * Who, inside a workspace, an environment resolves for.
+ *
+ * `private` is the default and the only meaning a personal environment has.
+ * `public` lets every member of the workspace run in it — and therefore in its
+ * instances, which carry whatever a session left in them.
+ */
+export type EnvironmentVisibility = 'private' | 'public';
+
 /** Abstract source material; paths are relative destinations within an instance. */
 export type EnvironmentSource =
   | { kind: 'git'; path?: string; ref?: string; url: string }

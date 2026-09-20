@@ -4,13 +4,14 @@ import { Github } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ContainerIcon, XIcon } from 'lucide-react';
+import { ContainerIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EnvironmentForm from './EnvironmentForm';
 import InstanceSection from './InstanceSection';
 import { repositoryPath } from './repository';
+import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions, useInstances } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -77,6 +78,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
     const { t } = useTranslation('setting');
     const actions = useEnvironmentActions();
     const { data } = useInstances();
+    const canEdit = useCanEditEnvironment()(environment);
 
     const repository = repositoryPath(environment.configuration);
     const creator =
@@ -103,6 +105,9 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
                   ? t('environments.instances.empty')
                   : t('environments.instances.count', { count: instanceCount })}
               </Tag>
+              {environment.workspaceId && environment.visibility === 'public' && (
+                <Tag size={'small'}>{t('environments.visibility.publicTag')}</Tag>
+              )}
             </Flexbox>
           </Flexbox>
           <ActionIcon
@@ -129,22 +134,37 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(
           </Flexbox>
         </Flexbox>
 
+        {/* Said plainly, rather than letting someone discover it by typing into
+            a field whose save would be refused. A published environment is one
+            you can run in; reshaping it stays with whoever made it. */}
+        {!canEdit && (
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Icon icon={LockIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
+            <Text fontSize={12} type={'secondary'}>
+              {t('environments.visibility.readonlyHint')}
+            </Text>
+          </Flexbox>
+        )}
+
         <Flexbox className={styles.section}>
           <InstanceSection
             adding={adding}
+            editable={canEdit}
             environmentId={environment.id}
             onAddingChange={onAddingChange}
           />
         </Flexbox>
 
-        <Flexbox className={styles.section}>
-          <EnvironmentForm
-            environment={environment}
-            onSave={({ configuration, description, name }) =>
-              actions.updateEnvironment({ configuration, description, id: environment.id, name })
-            }
-          />
-        </Flexbox>
+        {canEdit && (
+          <Flexbox className={styles.section}>
+            <EnvironmentForm
+              environment={environment}
+              onSave={({ configuration, description, name }) =>
+                actions.updateEnvironment({ configuration, description, id: environment.id, name })
+              }
+            />
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

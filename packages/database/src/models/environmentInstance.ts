@@ -5,7 +5,7 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { EnvironmentInstanceItem, NewEnvironmentInstance } from '../schemas';
 import { environmentInstances, environments } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { environmentOwnership } from './environment';
+import { environmentOwnership, environmentVisibility } from './environment';
 
 /**
  * The part of a specification a build actually depends on, projected so two
@@ -44,6 +44,12 @@ export interface CreateEnvironmentInstanceParams extends EnvironmentInstanceBind
  * statement reaches through the environment. That is load-bearing rather than
  * incidental: an instance's captured state includes a home directory, and a
  * home directory holds credentials.
+ *
+ * Which is why the two directions differ. READS follow the environment's
+ * visibility, so a member can run in an environment a colleague published —
+ * that is what publishing one means. WRITES stay with the creator: using a
+ * shared environment must not let anyone reshape it, add copies to it, or
+ * delete the copies other people are working in.
  */
 export class EnvironmentInstanceModel {
   private db: LobeChatDatabase;
@@ -56,14 +62,23 @@ export class EnvironmentInstanceModel {
     this.workspaceId = workspaceId;
   }
 
-  /** Environments this member owns, as a subquery the instance statements filter through. */
+  /** Environments this member owns, as a subquery the write statements filter through. */
   private ownedEnvironments = () =>
     this.db
       .select({ id: environments.id })
       .from(environments)
       .where(environmentOwnership(this.userId, this.workspaceId));
 
+  /** Environments this member may see — their own, plus the workspace's published ones. */
+  private visibleEnvironments = () =>
+    this.db
+      .select({ id: environments.id })
+      .from(environments)
+      .where(environmentVisibility(this.userId, this.workspaceId));
+
   private ownership = () => inArray(environmentInstances.environmentId, this.ownedEnvironments());
+
+  private visible = () => inArray(environmentInstances.environmentId, this.visibleEnvironments());
 
   /**
    * Instances with the one thing that cannot be read off the row: whether this
@@ -93,7 +108,7 @@ export class EnvironmentInstanceModel {
       .innerJoin(environments, eq(environments.id, environmentInstances.environmentId))
       .where(
         and(
-          environmentOwnership(this.userId, this.workspaceId),
+          environmentVisibility(this.userId, this.workspaceId),
           params.environmentId
             ? eq(environmentInstances.environmentId, params.environmentId)
             : undefined,
@@ -101,7 +116,27 @@ export class EnvironmentInstanceModel {
       )
       .orderBy(asc(environmentInstances.createdAt));
 
+  /** Readable: this is what a run resolves through, including in a published environment. */
   findById = async (id: string): Promise<EnvironmentInstanceItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(environmentInstances)
+      .where(and(eq(environmentInstances.id, id), this.visible()))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
+   * The same row, but only when the caller owns the environment behind it.
+   *
+   * Every destructive path looks the instance up through this rather than
+   * {@link findById}, because those paths act on the execution plane BEFORE
+   * they touch the row: a member of a published environment who could pass the
+   * read check would delete the snapshot and only then be refused the row,
+   * leaving captured state nobody can name.
+   */
+  findOwnedById = async (id: string): Promise<EnvironmentInstanceItem | undefined> => {
     const [row] = await this.db
       .select()
       .from(environmentInstances)
@@ -123,7 +158,7 @@ export class EnvironmentInstanceModel {
     const [row] = await this.db
       .select()
       .from(environmentInstances)
-      .where(and(eq(environmentInstances.workingDirectory, workingDirectory), this.ownership()))
+      .where(and(eq(environmentInstances.workingDirectory, workingDirectory), this.visible()))
       .limit(1);
 
     return row;

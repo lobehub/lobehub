@@ -11,6 +11,10 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 const mockCreate = vi.fn();
 const mockFindById = vi.fn();
+// Separate from `findById` on purpose: the two answer different questions now,
+// and a test that stubs the readable lookup must not accidentally satisfy a
+// path that is supposed to demand ownership.
+const mockFindOwnedById = vi.fn();
 const mockUpdate = vi.fn();
 
 vi.mock('@/database/models/environment', () => ({
@@ -19,7 +23,9 @@ vi.mock('@/database/models/environment', () => ({
       create: mockCreate,
       delete: vi.fn(),
       findById: mockFindById,
+      findOwnedById: mockFindOwnedById,
       query: vi.fn(),
+      setVisibility: vi.fn(),
       update: mockUpdate,
     };
   }),
@@ -28,6 +34,7 @@ vi.mock('@/database/models/environment', () => ({
 const mockInstanceCreate = vi.fn();
 const mockInstanceDelete = vi.fn();
 const mockInstanceFindById = vi.fn();
+const mockInstanceFindOwnedById = vi.fn();
 
 vi.mock('@/database/models/environmentInstance', () => ({
   EnvironmentInstanceModel: vi.fn(function () {
@@ -35,6 +42,8 @@ vi.mock('@/database/models/environmentInstance', () => ({
       create: mockInstanceCreate,
       delete: mockInstanceDelete,
       findById: mockInstanceFindById,
+      findOwnedById: mockInstanceFindOwnedById,
+      findByWorkingDirectory: vi.fn(),
       query: vi.fn(),
       update: vi.fn(),
     };
@@ -132,7 +141,7 @@ describe('sandboxWorkspaceRouter', () => {
     const instanceId = '0726286c-f1a1-4c9e-980d-80a8e837321d';
 
     beforeEach(() => {
-      mockInstanceFindById.mockResolvedValue({ id: instanceId });
+      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId });
     });
 
     it('deletes the row when the execution plane has no snapshot for it', async () => {
@@ -217,7 +226,7 @@ describe('sandboxWorkspaceRouter', () => {
     };
 
     it('forks the copy off the same environment and copies the built state', async () => {
-      mockInstanceFindById.mockResolvedValue(source);
+      mockInstanceFindOwnedById.mockResolvedValue(source);
       mockInstanceCreate.mockResolvedValue({ id: 'copy-id' });
       mockCopyEnvironment.mockResolvedValue(undefined);
 
@@ -240,7 +249,7 @@ describe('sandboxWorkspaceRouter', () => {
     it('removes the row again when the built state fails to copy', async () => {
       // Otherwise the copy is an instance the UI shows as ready while its
       // directory holds nothing — the person would find out by running in it.
-      mockInstanceFindById.mockResolvedValue(source);
+      mockInstanceFindOwnedById.mockResolvedValue(source);
       mockInstanceCreate.mockResolvedValue({ id: 'copy-id' });
       mockCopyEnvironment.mockRejectedValue(new Error('upstream down'));
 

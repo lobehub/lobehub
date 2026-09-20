@@ -1,5 +1,6 @@
 'use client';
 
+import type { EnvironmentVisibility } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -63,9 +64,18 @@ const LIST_MIN_HEIGHT = 4 * 72;
  * what tells one environment from another, and picking one opens everything
  * else about it next to the list rather than in place of it.
  */
-const EnvironmentManager = memo(() => {
+interface EnvironmentManagerProps {
+  /**
+   * Workspace pages only: which pool to manage — `public` (published to the
+   * workspace) or `private` (the caller's own). Omitted on the personal page,
+   * where an environment has no pool to belong to.
+   */
+  visibility?: EnvironmentVisibility;
+}
+
+const EnvironmentManager = memo<EnvironmentManagerProps>(({ visibility }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isLoading, isValidating, mutate } = useEnvironments();
+  const { data, error, isLoading, isValidating, mutate } = useEnvironments(visibility);
   const {
     data: instanceData,
     isValidating: instancesValidating,
@@ -123,7 +133,7 @@ const EnvironmentManager = memo(() => {
           <Button
             icon={<Icon icon={PlusIcon} />}
             type={'primary'}
-            onClick={openCreateEnvironmentModal}
+            onClick={() => openCreateEnvironmentModal(visibility)}
           >
             {t('environments.create')}
           </Button>
@@ -147,12 +157,17 @@ const EnvironmentManager = memo(() => {
                 descriptionProps={{ fontSize: 13 }}
                 icon={ContainerIcon}
                 style={{ maxWidth: 360 }}
-                title={t('environments.empty')}
                 action={
-                  <Button icon={<Icon icon={PlusIcon} />} onClick={openCreateEnvironmentModal}>
+                  <Button
+                    icon={<Icon icon={PlusIcon} />}
+                    onClick={() => openCreateEnvironmentModal(visibility)}
+                  >
                     {t('environments.create')}
                   </Button>
                 }
+                title={t(
+                  visibility === 'public' ? 'environments.emptyPublished' : 'environments.empty',
+                )}
               />
             </Center>
           </Flexbox>

@@ -1,5 +1,6 @@
 'use client';
 
+import type { EnvironmentVisibility } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import {
   Button,
@@ -25,7 +26,11 @@ import { useEnvironmentActions } from './useEnvironmentData';
  * else about an environment is edited once it exists, where the form can
  * explain what each part does.
  */
-const CreateEnvironmentContent = memo(() => {
+interface CreateEnvironmentContentProps {
+  visibility?: EnvironmentVisibility;
+}
+
+const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(({ visibility }) => {
   const { t } = useTranslation('setting');
   const { close } = useModalContext();
   const actions = useEnvironmentActions();
@@ -73,6 +78,10 @@ const CreateEnvironmentContent = memo(() => {
             }
           : undefined,
         name: trimmed,
+        // Created into the pool the person is looking at. Opening the dialog
+        // from the Private tab and having the result land in the workspace's
+        // shared list would be a publication nobody asked for.
+        visibility,
       });
       close();
     } catch (cause) {
@@ -138,9 +147,9 @@ const CreateEnvironmentContent = memo(() => {
 
 CreateEnvironmentContent.displayName = 'CreateEnvironmentContent';
 
-export const openCreateEnvironmentModal = () =>
+export const openCreateEnvironmentModal = (visibility?: EnvironmentVisibility) =>
   createModal({
-    content: <CreateEnvironmentContent />,
+    content: <CreateEnvironmentContent visibility={visibility} />,
     footer: null,
     maskClosable: true,
     styles: { content: { padding: 0 } },
