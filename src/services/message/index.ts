@@ -16,6 +16,7 @@ import {
   type UpdateMessageResult,
 } from '@lobechat/types';
 import { type HeatmapsProps } from '@lobehub/charts';
+import pMap from 'p-map';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -99,6 +100,9 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
   const [operation] = operations;
   if (operation.type === 'updateToolMessage') return `tool-message-${operation.id}`;
 };
+
+/** Matches the `getToolResultPayloads` input cap in the lambda router. */
+const TOOL_PAYLOAD_BATCH_SIZE = 500;
 
 export class MessageService {
   batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
@@ -186,9 +190,29 @@ export class MessageService {
     return lambdaClient.message.getToolResultPayload.query({ messageId });
   };
 
-  /** Bulk form, for surfaces that need every omitted row at once (export). */
+  /**
+   * Bulk form, for surfaces that need every omitted row at once (export).
+   *
+   * Chunked to the endpoint's own cap: a tool-dense topic can hold more
+   * projected rows than one request accepts, and the schema would reject the
+   * whole set rather than return what it could.
+   */
   getToolResultPayloads = async (messageIds: string[]) => {
-    return lambdaClient.message.getToolResultPayloads.query({ messageIds });
+    const chunks: string[][] = [];
+    for (let i = 0; i < messageIds.length; i += TOOL_PAYLOAD_BATCH_SIZE) {
+      chunks.push(messageIds.slice(i, i + TOOL_PAYLOAD_BATCH_SIZE));
+    }
+
+    const results = await pMap(
+      chunks,
+      (ids) => lambdaClient.message.getToolResultPayloads.query({ messageIds: ids }),
+      { concurrency: 3 },
+    );
+
+    return Object.assign({}, ...results) as Record<
+      string,
+      { content: string; pluginState?: unknown }
+    >;
   };
 
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
