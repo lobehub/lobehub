@@ -8,7 +8,7 @@ import {
 } from '@lobechat/const';
 import type { ShareVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { and, eq, exists, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 
 import type {
   AgentShareConfig,
@@ -16,7 +16,7 @@ import type {
   AgentShareItem,
   NormalizedAgentShareConfig,
 } from '../schemas';
-import { agents, agentShares, users } from '../schemas';
+import { agents, agentShares, topics, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { isUuid } from '../utils/uuid';
@@ -507,6 +507,16 @@ export class AgentShareModel {
    */
   deleteByAgentId = async (agentId: string): Promise<AgentShareItem | null> =>
     this.withScopedAgentLock(agentId, async (tx, agent) => {
+      // Rolling-deploy writers from before `topics.agentShareId` existed can
+      // leave visitor rows scoped only by Agent + sender. Delete those before
+      // the FK cascade removes the tagged rows, so a later share instance can
+      // never inherit conversations from the revoked link.
+      await tx
+        .delete(topics)
+        .where(
+          and(eq(topics.agentId, agentId), isNotNull(topics.senderId), isNull(topics.agentShareId)),
+        );
+
       const [deleted] = await tx
         .delete(agentShares)
         .where(and(eq(agentShares.agentId, agentId), AgentShareModel.shareScope(agent)))
@@ -596,8 +606,8 @@ export class AgentShareModel {
    * The share and Agent must also remain in the same tenancy. Moving an Agent
    * between personal and Workspace scope, or between Workspaces, hard-deletes
    * the old share; the join is defense in depth if a partial/manual write ever
-   * leaves a mismatched row behind. A same-Workspace owner handover keeps a
-   * public link live and pauses a private one until its new owner republishes.
+   * leaves a mismatched row behind. A same-Workspace owner handover pauses the
+   * link until its new owner reviews and republishes it.
    *
    * Deliberately cheap (one indexed lookup + a primary-key join): it runs once
    * per runtime step. Returns `false` — never throws — for an ordinary

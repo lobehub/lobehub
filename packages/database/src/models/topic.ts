@@ -42,6 +42,7 @@ import type { TopicItem } from '../schemas';
 import {
   agentOperations,
   agents,
+  agentShares,
   chatGroups,
   messagePlugins,
   messages,
@@ -1322,6 +1323,52 @@ export class TopicModel {
   // **************** Agent Share (visitor-scoped) *************** //
 
   /**
+   * Transitional scope for visitor topics created before `agentShareId` was
+   * available on every rolling-deploy writer.
+   *
+   * The timestamp boundary is essential: a hard-revoked share can later be
+   * recreated for the same Agent, and an older null-scoped topic must never be
+   * inherited by that new share instance. Once the bounded backfill has
+   * converged, the first indexed branch serves every normal read.
+   */
+  private shareVisitorScope = (shareId: string) =>
+    or(
+      eq(topics.agentShareId, shareId),
+      and(
+        isNull(topics.agentShareId),
+        sql`EXISTS (
+          SELECT 1
+          FROM ${agentShares}
+          WHERE ${agentShares.id} = ${shareId}
+            AND ${agentShares.agentId} = ${topics.agentId}
+            AND ${agentShares.createdAt} <= ${topics.createdAt}
+        )`,
+      ),
+    );
+
+  /** Ownership- and share-scoped visitor lookup, including rollout-era null rows. */
+  findByIdForShareVisitor = async (params: {
+    senderId: string;
+    shareId: string;
+    topicId: string;
+  }): Promise<TopicItem | undefined> => {
+    const [topic] = await this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          this.workspaceScope(),
+          eq(topics.id, params.topicId),
+          eq(topics.senderId, params.senderId),
+          this.shareVisitorScope(params.shareId),
+        ),
+      )
+      .limit(1);
+
+    return topic;
+  };
+
+  /**
    * Share-visitor topic list for one visitor on one shared agent. The model is
    * constructed with the CREATOR's userId (visitor topics carry it), so the
    * caller — the shareChat router — must have already authorized the visitor
@@ -1351,7 +1398,7 @@ export class TopicModel {
       })
       .from(topics)
       .where(
-        and(this.workspaceScope(), eq(topics.agentShareId, shareId), eq(topics.senderId, senderId)),
+        and(this.workspaceScope(), this.shareVisitorScope(shareId), eq(topics.senderId, senderId)),
       )
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
@@ -1380,7 +1427,7 @@ export class TopicModel {
       .select({ count: count(topics.id) })
       .from(topics)
       .where(
-        and(this.workspaceScope(), eq(topics.agentShareId, shareId), eq(topics.senderId, senderId)),
+        and(this.workspaceScope(), this.shareVisitorScope(shareId), eq(topics.senderId, senderId)),
       );
 
     return result[0].count;
@@ -1412,7 +1459,7 @@ export class TopicModel {
       })
       .from(topics)
       .where(
-        and(this.workspaceScope(), eq(topics.agentShareId, shareId), isNotNull(topics.senderId)),
+        and(this.workspaceScope(), this.shareVisitorScope(shareId), isNotNull(topics.senderId)),
       );
 
     return {

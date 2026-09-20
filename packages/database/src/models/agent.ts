@@ -16,6 +16,7 @@ import {
   gt,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   like,
   ne,
@@ -2141,10 +2142,10 @@ export class AgentModel {
       // hard-revoke the old URL. The FK cascade removes its visitor topics so
       // creating a new share later cannot resurrect the old audience's data.
       //
-      // A same-workspace owner handover keeps that tenancy principal. Public
-      // Agents keep the link; private Agents pause it until the recipient
-      // explicitly republishes. This deliberately does not follow General
-      // Access edit grants: share management remains creator/admin authority.
+      // A same-workspace owner handover keeps that tenancy principal but pauses
+      // every external link until the recipient explicitly reviews and
+      // republishes it. This deliberately does not follow General Access edit
+      // grants: share management remains creator/admin authority.
       const hardRevokeAgentIds = foundAgents
         .filter(
           (agent) =>
@@ -2180,6 +2181,20 @@ export class AgentModel {
           }
         }
 
+        // Rows written by an older server during rollout have no share FK and
+        // therefore cannot participate in the cascade below. They are visitor
+        // rows by construction (`senderId IS NOT NULL`), so remove them from
+        // every hard-revoked Agent before a new share can be created.
+        await trx
+          .delete(topics)
+          .where(
+            and(
+              inArray(topics.agentId, hardRevokeAgentIds),
+              isNotNull(topics.senderId),
+              isNull(topics.agentShareId),
+            ),
+          );
+
         await trx.delete(agentShares).where(inArray(agentShares.agentId, hardRevokeAgentIds));
       }
 
@@ -2188,8 +2203,7 @@ export class AgentModel {
           (agent) =>
             agent.workspaceId !== null &&
             agent.workspaceId === targetWorkspaceId &&
-            agent.userId !== targetUserId &&
-            (targetVisibility ?? agent.visibility) === 'private',
+            agent.userId !== targetUserId,
         )
         .map((agent) => agent.id);
       if (pauseShareAgentIds.length > 0) {
@@ -2693,18 +2707,15 @@ export class AgentModel {
     const ownedGroups = await this.findOwnedGroupMemberships(trx, [agentId]);
     if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
 
-    // The workspace remains the billing/data principal across this handover.
-    // Public Agents keep their link. A private Agent's link is paused until
-    // the recipient explicitly republishes it, preventing an inherited share
-    // from becoming an invisible ongoing exposure.
-    if (agent.visibility === 'private') {
-      await trx
-        .update(agentShares)
-        .set({ updatedAt: new Date(), visibility: 'private' })
-        .where(
-          and(eq(agentShares.agentId, agentId), eq(agentShares.workspaceId, this.workspaceId)),
-        );
-    }
+    // The Workspace remains the billing/data principal, but creator-scoped
+    // grants do not: allowReadMemory would immediately switch to the
+    // recipient's personal memory after the owner id changes. Pause every
+    // inherited link until the recipient explicitly reviews and republishes
+    // it, regardless of the Agent's internal Workspace visibility.
+    await trx
+      .update(agentShares)
+      .set({ updatedAt: new Date(), visibility: 'private' })
+      .where(and(eq(agentShares.agentId, agentId), eq(agentShares.workspaceId, this.workspaceId)));
 
     // A PRIVATE agent stops resolving for everyone but the recipient. Groups
     // that reference it and are NOT the recipient's would render a silent hole

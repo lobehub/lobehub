@@ -1077,13 +1077,21 @@ describe('AgentModel.transferAgent', () => {
       .insert(agentShares)
       .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' })
       .returning();
-    await serverDB.insert(topics).values({
-      agentId: agent.id,
-      agentShareId: share.id,
-      id: 'shared-agent-visitor-topic',
-      senderId: targetUserId,
-      userId,
-    });
+    await serverDB.insert(topics).values([
+      {
+        agentId: agent.id,
+        agentShareId: share.id,
+        id: 'shared-agent-visitor-topic',
+        senderId: targetUserId,
+        userId,
+      },
+      {
+        agentId: agent.id,
+        id: 'shared-agent-legacy-visitor-topic',
+        senderId: targetUserId,
+        userId,
+      },
+    ]);
 
     await expect(model.transferAgent(agent.id, null, targetUserId)).resolves.toMatchObject({
       agentId: agent.id,
@@ -1098,6 +1106,12 @@ describe('AgentModel.transferAgent', () => {
     expect(remaining).toHaveLength(0);
     expect(
       await serverDB.select().from(topics).where(eq(topics.id, 'shared-agent-visitor-topic')),
+    ).toHaveLength(0);
+    expect(
+      await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.id, 'shared-agent-legacy-visitor-topic')),
     ).toHaveLength(0);
   });
 
@@ -1174,7 +1188,7 @@ describe('AgentModel.transferAgent', () => {
     );
   });
 
-  it('keeps a public share and pauses a private share on same-workspace owner changes', async () => {
+  it('pauses every share on same-workspace owner changes', async () => {
     const model = new AgentModel(serverDB, userId, wsId1);
     const publicAgent = await model.create({ title: 'Public Agent', visibility: 'public' });
     const privateAgent = await model.create({ title: 'Private Agent', visibility: 'private' });
@@ -1190,7 +1204,7 @@ describe('AgentModel.transferAgent', () => {
       .select()
       .from(agentShares)
       .where(inArray(agentShares.agentId, [publicAgent.id, privateAgent.id]));
-    expect(shares.find((share) => share.agentId === publicAgent.id)?.visibility).toBe('link');
+    expect(shares.find((share) => share.agentId === publicAgent.id)?.visibility).toBe('private');
     expect(shares.find((share) => share.agentId === privateAgent.id)?.visibility).toBe('private');
   });
 });

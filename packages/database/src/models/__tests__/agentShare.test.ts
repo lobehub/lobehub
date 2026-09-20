@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { AgentShareConfig } from '../../schemas';
-import { agents, agentShares, users, workspaces } from '../../schemas';
+import { agents, agentShares, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentShareModel } from '../agentShare';
 
@@ -342,6 +342,12 @@ describe('AgentShareModel', () => {
     // disable flow uses (see the cycle test below).
     it('updates visibility, and hard-deletes the share on demand', async () => {
       const created = await agentShareModel.create(agentId);
+      await serverDB.insert(topics).values({
+        agentId,
+        id: 'agent-share-legacy-visitor-topic',
+        senderId: otherUserId,
+        userId,
+      });
 
       const updated = await agentShareModel.updateVisibility(agentId, 'link');
       expect(updated?.visibility).toBe('link');
@@ -349,6 +355,12 @@ describe('AgentShareModel', () => {
       const deleted = await agentShareModel.deleteByAgentId(agentId);
       expect(deleted?.id).toBe(created?.id);
       expect(await AgentShareModel.findByShareId(serverDB, created!.id)).toBeNull();
+      expect(
+        await serverDB
+          .select()
+          .from(topics)
+          .where(eq(topics.id, 'agent-share-legacy-visitor-topic')),
+      ).toHaveLength(0);
     });
 
     it('returns null for missing shares', async () => {

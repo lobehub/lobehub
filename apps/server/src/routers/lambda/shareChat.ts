@@ -106,9 +106,17 @@ const findVisitorTopicOrThrow = async (
   topicModel: TopicModel,
   params: { shareId: string; topicId: string; visitorUserId: string },
 ) => {
-  const topic = await topicModel.findById(params.topicId);
+  const topic = await topicModel.findByIdForShareVisitor({
+    senderId: params.visitorUserId,
+    shareId: params.shareId,
+    topicId: params.topicId,
+  });
 
-  if (!topic || topic.senderId !== params.visitorUserId || topic.agentShareId !== params.shareId) {
+  if (
+    !topic ||
+    topic.senderId !== params.visitorUserId ||
+    (topic.agentShareId !== null && topic.agentShareId !== params.shareId)
+  ) {
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
   }
 

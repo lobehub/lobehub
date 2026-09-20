@@ -71,7 +71,7 @@ afterEach(async () => {
 });
 
 describe('AgentModel.transferAgentOwnership', () => {
-  it('keeps a public share during a same-workspace ownership handover', async () => {
+  it('pauses a public share during a same-workspace ownership handover', async () => {
     const agent = await ownerModel.create({
       slug: 'shared-handover',
       title: 'Shared Handover',
@@ -81,7 +81,7 @@ describe('AgentModel.transferAgentOwnership', () => {
       .insert(agentShares)
       .values({
         agentId: agent.id,
-        shareConfig: { monthlySpendLimit: 5 },
+        shareConfig: { allowReadMemory: true, monthlySpendLimit: 5 },
         visibility: 'link',
         workspaceId: wsId,
       })
@@ -95,7 +95,12 @@ describe('AgentModel.transferAgentOwnership', () => {
     expect(row.userId).toBe(recipientId);
     const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: share.id, visibility: 'link', workspaceId: wsId });
+    expect(rows[0]).toMatchObject({
+      id: share.id,
+      shareConfig: { allowReadMemory: true, monthlySpendLimit: 5 },
+      visibility: 'private',
+      workspaceId: wsId,
+    });
   });
 
   it('pauses a private share during a same-workspace ownership handover', async () => {

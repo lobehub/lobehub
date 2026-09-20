@@ -581,6 +581,61 @@ describe('TopicModel', () => {
   });
 
   describe('queryBySender', () => {
+    it('keeps rolling-deploy visitor topics visible before the share backfill finishes', async () => {
+      await serverDB.insert(agents).values({ id: 'agent-share-legacy-topic', userId });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: 'agent-share-legacy-topic',
+          createdAt: new Date('2026-01-02T00:00:00.000Z'),
+          visibility: 'link',
+        })
+        .returning();
+      await serverDB.insert(topics).values([
+        {
+          agentId: 'agent-share-legacy-topic',
+          createdAt: new Date('2026-01-03T00:00:00.000Z'),
+          id: 't-visitor-legacy-current-share',
+          senderId: 'visitor-user-legacy',
+          title: 'legacy current share',
+          userId,
+        },
+        {
+          agentId: 'agent-share-legacy-topic',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 't-visitor-legacy-old-share',
+          senderId: 'visitor-user-legacy',
+          title: 'legacy old share',
+          userId,
+        },
+      ]);
+
+      await expect(
+        topicModel.queryBySender({ senderId: 'visitor-user-legacy', shareId: share.id }),
+      ).resolves.toEqual([expect.objectContaining({ id: 't-visitor-legacy-current-share' })]);
+      await expect(
+        topicModel.countBySender({ senderId: 'visitor-user-legacy', shareId: share.id }),
+      ).resolves.toBe(1);
+      await expect(topicModel.countShareVisitors({ shareId: share.id })).resolves.toEqual({
+        topicCount: 1,
+        visitorCount: 1,
+      });
+      await expect(
+        topicModel.findByIdForShareVisitor({
+          senderId: 'visitor-user-legacy',
+          shareId: share.id,
+          topicId: 't-visitor-legacy-current-share',
+        }),
+      ).resolves.toMatchObject({ id: 't-visitor-legacy-current-share' });
+      await expect(
+        topicModel.findByIdForShareVisitor({
+          senderId: 'visitor-user-legacy',
+          shareId: share.id,
+          topicId: 't-visitor-legacy-old-share',
+        }),
+      ).resolves.toBeUndefined();
+    });
+
     it('keeps Workspace visitor topics visible after an owner handover', async () => {
       const workspaceId = 'topic-share-handover-workspace';
       const senderId = 'topic-share-handover-visitor';

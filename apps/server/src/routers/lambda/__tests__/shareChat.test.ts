@@ -72,6 +72,7 @@ const TopicModelMock = vi.fn(function () {
   return {
     countBySender: mockCountBySender,
     findById: mockFindById,
+    findByIdForShareVisitor: mockFindById,
     isRunningOperationAlive: mockIsRunningOperationAlive,
     queryBySender: mockQueryBySender,
   };
