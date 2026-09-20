@@ -230,6 +230,12 @@ export class AgentOwnedByGroupError extends Error {
   }
 }
 
+interface AgentTransferOptions {
+  /** Delete dedicated visitor-upload objects after their DB rows commit. */
+  onRevokedShareFiles?: (urls: string[]) => Promise<void>;
+  rejectForeignTopicCommentAuthors?: boolean;
+}
+
 export class AgentModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -2056,7 +2062,7 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
+    options: AgentTransferOptions = {},
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }> => {
     const [result] = await this.transferAgents(
       [agentId],
@@ -2079,11 +2085,11 @@ export class AgentModel {
     targetWorkspaceId: string | null,
     targetUserId: string,
     targetVisibility?: 'private' | 'public',
-    options: { rejectForeignTopicCommentAuthors?: boolean } = {},
+    options: AgentTransferOptions = {},
   ): Promise<{ agentId: string; slug: string | null; transferJobId: string | null }[]> => {
     if (agentIds.length === 0) return [];
 
-    return this.db.transaction(async (trx) => {
+    const { results, revokedShareFileUrls } = await this.db.transaction(async (trx) => {
       // 1. Verify all agents exist and belong to current scope. FOR UPDATE so
       // two concurrent transfers of the same agent serialize HERE, before the
       // pending-job guard below: the loser re-reads after the winner commits
@@ -2146,7 +2152,34 @@ export class AgentModel {
             (agent.workspaceId === null && agent.userId !== targetUserId),
         )
         .map((agent) => agent.id);
+      let revokedShareFileUrls: string[] = [];
       if (hardRevokeAgentIds.length > 0) {
+        const sharesToRevoke = await trx
+          .select({ id: agentShares.id })
+          .from(agentShares)
+          .where(inArray(agentShares.agentId, hardRevokeAgentIds));
+        const shareIds = sharesToRevoke.map((share) => share.id);
+
+        if (shareIds.length > 0) {
+          // Visitor uploads are dedicated objects (never global-file dedup
+          // entries). Remove their hidden accounting rows in the same
+          // transaction as the hard revoke, then delete the storage objects
+          // through the post-commit callback below.
+          const revokedFiles = await trx
+            .select({ id: files.id, url: files.url })
+            .from(files)
+            .where(inArray(sql<string>`${files.metadata} -> 'agentShare' ->> 'shareId'`, shareIds));
+          if (revokedFiles.length > 0) {
+            await trx.delete(files).where(
+              inArray(
+                files.id,
+                revokedFiles.map((file) => file.id),
+              ),
+            );
+            revokedShareFileUrls = revokedFiles.map((file) => file.url);
+          }
+        }
+
         await trx.delete(agentShares).where(inArray(agentShares.agentId, hardRevokeAgentIds));
       }
 
@@ -2585,12 +2618,21 @@ export class AgentModel {
       // everything reaching here is a `referenced` link the caller confirmed.
       await trx.delete(chatGroupsAgents).where(inArray(chatGroupsAgents.agentId, agentIds));
 
-      return agentIds.map((id) => ({
-        agentId: id,
-        slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
-        transferJobId,
-      }));
+      return {
+        results: agentIds.map((id) => ({
+          agentId: id,
+          slug: resolvedSlugs.get(id) ?? agentById.get(id)?.slug ?? null,
+          transferJobId,
+        })),
+        revokedShareFileUrls,
+      };
     });
+
+    if (revokedShareFileUrls.length > 0) {
+      await options.onRevokedShareFiles?.(revokedShareFileUrls);
+    }
+
+    return results;
   };
 
   /**

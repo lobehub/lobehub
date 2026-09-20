@@ -68,6 +68,11 @@ interface LockedAgentSnapshot {
   workspaceId: string | null;
 }
 
+interface AgentShareModelOptions {
+  /** Re-check Workspace share authority after the Agent row lock is acquired. */
+  authorizeMutation?: (tx: LobeChatDatabase, agentId: string) => Promise<void>;
+}
+
 /**
  * Static share-slug rules shared by the owner-facing `updateSlug` and the
  * best-effort seed in `create`. A UUID-shaped slug would be unreachable:
@@ -83,11 +88,18 @@ const getShareSlugRejection = (
 };
 
 export class AgentShareModel {
+  private authorizeMutation?: AgentShareModelOptions['authorizeMutation'];
   private db: LobeChatDatabase;
   private userId: string;
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    options: AgentShareModelOptions = {},
+  ) {
+    this.authorizeMutation = options.authorizeMutation;
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
@@ -127,8 +139,9 @@ export class AgentShareModel {
    * writes on the same agent's share can never interleave.
    *
    * Returns `null` (never locks) when the agent does not exist in the requested
-   * scope. Personal scope additionally requires ownership; Workspace callers
-   * are authorized by the router before reaching the model.
+   * scope. Personal scope additionally requires ownership. Workspace callers
+   * are checked once by the router and again through `authorizeMutation` after
+   * this lock, closing the owner-handover race between authorization and write.
    */
   static lockScopedAgentRow = async (
     tx: LobeChatDatabase,
@@ -220,6 +233,7 @@ export class AgentShareModel {
       });
 
       if (!agent) return null;
+      await this.authorizeMutation?.(tx, agentId);
       return mutation(tx, agent);
     });
 

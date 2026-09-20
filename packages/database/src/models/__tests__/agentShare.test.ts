@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eq, sql } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { AgentShareConfig } from '../../schemas';
@@ -189,6 +189,15 @@ describe('AgentShareModel', () => {
   });
 
   describe('workspace administrator operations', () => {
+    it('rechecks Workspace mutation authority after taking the Agent lock', async () => {
+      const authorizeMutation = vi.fn().mockRejectedValue(new Error('stale-authority'));
+      const model = new AgentShareModel(serverDB, userId, workspaceId, { authorizeMutation });
+
+      await expect(model.create(workspaceAgentId, 'link')).rejects.toThrow('stale-authority');
+      expect(authorizeMutation).toHaveBeenCalledWith(expect.anything(), workspaceAgentId);
+      await expect(model.getByAgentId(workspaceAgentId)).resolves.toBeNull();
+    });
+
     it('lists only minimal audit metadata and force-disables within the workspace', async () => {
       const workspaceShare = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
       await workspaceAgentShareModel.updateConfig(workspaceAgentId, {

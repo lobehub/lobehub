@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { eq, inArray } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -1111,6 +1111,32 @@ describe('AgentModel.transferAgent', () => {
     await model.transferAgent(agent.id, wsId1, userId);
     const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
     expect(rows).toHaveLength(0);
+  });
+
+  it('removes visitor uploads when a scope transfer hard-revokes the share', async () => {
+    const model = new AgentModel(serverDB, userId);
+    const agent = await model.create({ title: 'Agent with visitor upload' });
+    const [share] = await serverDB
+      .insert(agentShares)
+      .values({ agentId: agent.id, visibility: 'link' })
+      .returning();
+    const [file] = await serverDB
+      .insert(files)
+      .values({
+        fileType: 'image/png',
+        metadata: { agentShare: { shareId: share.id, visitorUserId: targetUserId } },
+        name: 'visitor.png',
+        size: 42,
+        url: `agent-shares/${share.id}/visitor.png`,
+        userId,
+      })
+      .returning();
+    const onRevokedShareFiles = vi.fn().mockResolvedValue(undefined);
+
+    await model.transferAgent(agent.id, wsId1, userId, undefined, { onRevokedShareFiles });
+
+    expect(await serverDB.select().from(files).where(eq(files.id, file.id))).toHaveLength(0);
+    expect(onRevokedShareFiles).toHaveBeenCalledWith([file.url]);
   });
 
   it('keeps a public share and pauses a private share on same-workspace owner changes', async () => {

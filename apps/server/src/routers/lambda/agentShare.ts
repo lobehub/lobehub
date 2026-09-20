@@ -85,10 +85,23 @@ export const agentShareConfigPatchSchema = agentShareConfigSchema.refine(
 
 const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, workspaceId, {
+        authorizeMutation: workspaceId
+          ? (db, agentId) =>
+              assertCanPerformResourceAction({
+                action: 'manage',
+                db,
+                resourceId: agentId,
+                resourceType: 'agent',
+                userId: ctx.userId,
+                workspaceId,
+              })
+          : undefined,
+      }),
     },
   });
 });

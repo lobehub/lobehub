@@ -46,6 +46,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { EditLockService } from '@/server/services/editLock';
+import { FileService } from '@/server/services/file';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
   assertCanEditResource,
@@ -1135,7 +1136,13 @@ export const agentRouter = router({
           input.targetWorkspaceId,
           ctx.userId,
           input.targetVisibility,
-          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+          {
+            onRevokedShareFiles: (urls) =>
+              new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).deleteFiles(
+                urls,
+              ),
+            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
+          },
         );
       } catch (error) {
         if (
@@ -1319,7 +1326,13 @@ export const agentRouter = router({
           input.targetWorkspaceId,
           ctx.userId,
           input.targetVisibility,
-          { rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx) },
+          {
+            onRevokedShareFiles: (urls) =>
+              new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).deleteFiles(
+                urls,
+              ),
+            rejectForeignTopicCommentAuthors: isWorkspaceNonOwner(ctx),
+          },
         );
       } catch (error) {
         if (
