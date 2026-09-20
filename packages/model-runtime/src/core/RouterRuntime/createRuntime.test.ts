@@ -2,6 +2,8 @@ import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LobeVertexAI } from '../../providers/vertexai';
+import type { ChatMethodOptions, OnFinishData } from '../../types';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import { getRuntimeSignatureScopeSource } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { createRouterRuntime } from './createRuntime';
@@ -720,6 +722,365 @@ describe('createRouterRuntime', () => {
   });
 
   describe('fallback mechanism', () => {
+    const consumeResponse = async (response: Response) => {
+      const reader = response.body!.getReader();
+      let text = '';
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) return text + decoder.decode();
+        text += decoder.decode(value, { stream: true });
+      }
+    };
+
+    const createChatResponse = (
+      options: ChatMethodOptions | undefined,
+      config: {
+        bodyError?: unknown;
+        final?: OnFinishData;
+        image?: boolean;
+        text?: string;
+        thinking?: string;
+        toolCall?: boolean;
+      },
+    ) =>
+      new Response(
+        new ReadableStream({
+          async start(controller) {
+            if (config.text !== undefined) {
+              await options?.callback?.onText?.(config.text);
+              controller.enqueue(new TextEncoder().encode(config.text));
+            }
+            if (config.thinking !== undefined) {
+              await options?.callback?.onThinking?.(config.thinking);
+              controller.enqueue(new TextEncoder().encode(config.thinking));
+            }
+            if (config.image) {
+              const image = { data: 'data:image/png;base64,AA==', id: 'image-1' };
+              await options?.callback?.onBase64Image?.({ image, images: [image] });
+              controller.enqueue(new TextEncoder().encode('image'));
+            }
+            if (config.toolCall) {
+              const toolCall = {
+                function: { arguments: '{}', name: 'lookup' },
+                id: 'tool-1',
+                type: 'function' as const,
+              };
+              await options?.callback?.onToolsCalling?.({ chunk: [], toolsCalling: [toolCall] });
+              controller.enqueue(new TextEncoder().encode('tool-call'));
+            }
+            if (config.final) {
+              await options?.callback?.onCompletion?.(config.final);
+              await options?.callback?.onFinal?.(config.final);
+            }
+            if (config.bodyError) controller.error(config.bodyError);
+            else controller.close();
+          },
+        }),
+      );
+
+    it('falls back after a billed empty completion and exposes only the successful attempt', async () => {
+      const finished = vi.fn();
+      const returned = vi.fn().mockResolvedValue(undefined);
+      const final = vi.fn();
+      let calls = 0;
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          options!.diagnostics!.providerRequest = {
+            apiMode: `attempt-${calls}`,
+            payload: { call: calls },
+            sentAt: calls,
+          };
+          if (calls === 1) {
+            const response = createChatResponse(options, {
+              final: {
+                finishReason: 'STOP',
+                text: '',
+                usage: { cost: 0.001, totalOutputTokens: 147 },
+              },
+            });
+            response.headers.set('content-length', '0');
+            return response;
+          }
+
+          return createChatResponse(options, {
+            final: { finishReason: 'STOP', text: 'answer', usage: { cost: 0.002 } },
+            text: 'answer',
+          });
+        };
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'lobehub',
+        onRouteAttempt: returned,
+        onRouteAttemptFinished: finished,
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const runtime = new Runtime({ userId: 'user-1' });
+      const diagnostics: ModelRuntimeDiagnostics = {};
+      const response = await runtime.chat(
+        { messages: [], model: 'gpt-4' },
+        {
+          callback: { onFinal: final },
+          diagnostics,
+          metadata: { trigger: RequestTrigger.Chat },
+        },
+      );
+
+      expect(await response.text()).toBe('answer');
+      expect(response.headers.get('content-length')).toBeNull();
+      expect(calls).toBe(2);
+      expect(final).toHaveBeenCalledTimes(1);
+      expect(final).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routeAttempt: expect.objectContaining({ outcome: 'completed' }),
+          text: 'answer',
+          usage: expect.objectContaining({ cost: 0.002 }),
+        }),
+      );
+      expect(finished).toHaveBeenCalledTimes(2);
+      expect(finished.mock.calls.map(([result]) => result.outcome)).toEqual(['empty', 'completed']);
+      expect(finished.mock.calls.map(([result]) => result.success)).toEqual([false, true]);
+      expect(finished.mock.calls[0][0].requestId).toBe(finished.mock.calls[1][0].requestId);
+      expect(finished.mock.calls[0][0].attemptId).not.toBe(finished.mock.calls[1][0].attemptId);
+      expect(
+        finished.mock.calls.map(([result]) => result.diagnostics.providerRequest.apiMode),
+      ).toEqual(['attempt-1', 'attempt-2']);
+      expect(diagnostics.providerRequest?.apiMode).toBe('attempt-2');
+      expect(returned).toHaveBeenCalledWith(expect.objectContaining({ completionPending: true }));
+    });
+
+    it('falls back when the body is interrupted before any output', async () => {
+      let calls = 0;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          return calls === 1
+            ? createChatResponse(options, { bodyError: new Error('disconnected') })
+            : createChatResponse(options, { final: { text: 'recovered' }, text: 'recovered' });
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: vi.fn(),
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+
+      const response = await new Runtime().chat({ messages: [], model: 'gpt-4' });
+
+      expect(await response.text()).toBe('recovered');
+      expect(calls).toBe(2);
+    });
+
+    it.each([
+      ['text', { text: 'partial' }],
+      ['reasoning', { thinking: 'partial reasoning' }],
+      ['image', { image: true }],
+      ['tool call', { toolCall: true }],
+    ] as const)('does not replay after partial %s output', async (_label, partial) => {
+      const upstreamError = new Error('disconnected');
+      let calls = 0;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          return createChatResponse(options, { ...partial, bodyError: upstreamError });
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: vi.fn(),
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const response = await new Runtime().chat({ messages: [], model: 'gpt-4' });
+
+      await expect(consumeResponse(response)).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.StreamChunkError,
+      });
+      expect(calls).toBe(1);
+    });
+
+    it('does not fallback after cancellation', async () => {
+      const cancelled = vi.fn();
+      const final = vi.fn();
+      const finished = vi.fn();
+      let calls = 0;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async () => {
+          calls += 1;
+          return new Response(new ReadableStream({ cancel: cancelled }));
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: finished,
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const response = await new Runtime().chat(
+        { messages: [], model: 'gpt-4' },
+        { callback: { onFinal: final } },
+      );
+
+      await response.body!.cancel();
+
+      expect(calls).toBe(1);
+      expect(cancelled).toHaveBeenCalledTimes(1);
+      expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'cancelled' }));
+      expect(final).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routeAttempt: expect.objectContaining({ outcome: 'cancelled' }),
+        }),
+      );
+    });
+
+    it('surfaces one terminal empty error after all routes return empty completions', async () => {
+      const final = vi.fn();
+      const finished = vi.fn();
+      let calls = 0;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          return createChatResponse(options, {
+            final: { finishReason: 'STOP', text: '', usage: { cost: 0.001 } },
+          });
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: finished,
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const response = await new Runtime().chat(
+        { messages: [], model: 'gpt-4' },
+        { callback: { onFinal: final } },
+      );
+
+      await expect(consumeResponse(response)).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.ModelEmptyCompletion,
+      });
+      expect(calls).toBe(2);
+      expect(finished).toHaveBeenCalledTimes(2);
+      expect(final).toHaveBeenCalledTimes(1);
+      expect(final).toHaveBeenCalledWith(
+        expect.objectContaining({ routeAttempt: expect.objectContaining({ outcome: 'empty' }) }),
+      );
+    });
+
+    it('surfaces one terminal error after every route disconnects before output', async () => {
+      const final = vi.fn();
+      let calls = 0;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          return createChatResponse(options, { bodyError: new Error(`disconnected-${calls}`) });
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttemptFinished: vi.fn(),
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const response = await new Runtime().chat(
+        { messages: [], model: 'gpt-4' },
+        { callback: { onFinal: final } },
+      );
+
+      await expect(consumeResponse(response)).rejects.toThrow('disconnected-2');
+      expect(calls).toBe(2);
+      expect(final).toHaveBeenCalledTimes(1);
+      expect(final).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routeAttempt: expect.objectContaining({ outcome: 'interrupted' }),
+        }),
+      );
+    });
+
+    it('keeps stream-terminal fallback disabled unless the router opts in', async () => {
+      let calls = 0;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          return createChatResponse(options, { final: { text: '' } });
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'byok-router',
+        onRouteAttemptFinished: vi.fn(),
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+      });
+      const response = await new Runtime().chat({ messages: [], model: 'gpt-4' });
+
+      await expect(consumeResponse(response)).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.ModelEmptyCompletion,
+      });
+      expect(calls).toBe(1);
+    });
+
+    it('correlates fallback attempts and the successful completion without reusing request IDs', async () => {
+      const finished = vi.fn();
+      const returned = vi.fn().mockResolvedValue(undefined);
+      const final = vi.fn();
+      let calls = 0;
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          if (++calls === 1) throw new Error('first channel failed');
+          await options?.callback?.onFinal?.({ text: 'answer' });
+          return new Response('answer');
+        };
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt: returned,
+        onRouteAttemptFinished: finished,
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+      });
+      const runtime = new Runtime();
+      const response = await runtime.chat(
+        { model: 'gpt-4', messages: [] },
+        { callback: { onFinal: final } },
+      );
+      await response.text();
+      expect(finished).toHaveBeenCalledTimes(2);
+      const first = finished.mock.calls[0][0];
+      const second = finished.mock.calls[1][0];
+      expect(first.outcome).toBe('failed');
+      expect(second.outcome).toBe('completed');
+      expect(first.requestId).toBe(second.requestId);
+      expect(first.attemptId).not.toBe(second.attemptId);
+      expect(final.mock.calls[0][0].routeAttempt).toEqual({
+        attemptId: second.attemptId,
+        outcome: 'completed',
+        requestId: second.requestId,
+      });
+      expect(returned.mock.calls[1][0].attemptId).toBe(second.attemptId);
+      const nextResponse = await runtime.chat({ model: 'gpt-4', messages: [] });
+      await nextResponse.text();
+      expect(finished.mock.calls[2][0].requestId).not.toBe(second.requestId);
+    });
+
     it('should only use raw-audio-compatible routes for audio messages', async () => {
       const attemptedRoutes: string[] = [];
 
