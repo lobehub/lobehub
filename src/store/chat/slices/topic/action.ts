@@ -98,6 +98,8 @@ type TopicPatchScope = {
   scope?: TopicMapScope;
 };
 
+type PendingTopicStatusSource = 'cache' | 'server';
+
 /**
  * Options for switchTopic action
  */
@@ -717,7 +719,7 @@ export class ChatTopicActionImpl {
    * Returns the row to trust: the fetched one, or the fetched one with the
    * pending status re-applied when it predates the write.
    */
-  #applyPendingStatusWrite = (item: ChatTopic, confirmMatchingStatus = true): ChatTopic => {
+  #applyPendingStatusWrite = (item: ChatTopic, source: PendingTopicStatusSource): ChatTopic => {
     const pending = this.#pendingTopicStatusWrites.get(item.id);
     if (!pending) return item;
     if (pending.expiresAt <= Date.now()) {
@@ -725,7 +727,7 @@ export class ChatTopicActionImpl {
       return item;
     }
     if (item.status === pending.status) {
-      if (confirmMatchingStatus) this.#pendingTopicStatusWrites.delete(item.id);
+      if (source === 'server') this.#pendingTopicStatusWrites.delete(item.id);
       return item;
     }
     return { ...item, status: pending.status };
@@ -740,21 +742,24 @@ export class ChatTopicActionImpl {
    * the sidebar restores that stale spinner. This step deliberately
    * handles statuses only; client-only optimistic rows are still added later by
    * {@link #reconcileFetchedTopics} and never enter the persisted response.
+   * Persisting the pin also means a failed write can survive until the next
+   * successful revalidation; that bounded, self-healing window is preferable to
+   * reintroducing an older response after a confirmed local terminal event.
    */
   #applyPendingStatusWrites = (
     items: ChatTopic[],
-    options?: { confirmMatchingStatus?: boolean },
+    source: PendingTopicStatusSource,
   ): ChatTopic[] => {
     if (this.#pendingTopicStatusWrites.size === 0) return items;
-    return items.map((item) => this.#applyPendingStatusWrite(item, options?.confirmMatchingStatus));
+    return items.map((item) => this.#applyPendingStatusWrite(item, source));
   };
 
   #reconcileFetchedTopics = (
     items: ChatTopic[],
-    currentItems?: ChatTopic[],
-    options?: { confirmMatchingStatus?: boolean },
+    currentItems: ChatTopic[] | undefined,
+    source: PendingTopicStatusSource,
   ): ChatTopic[] => {
-    let next = this.#applyPendingStatusWrites(items, options);
+    let next = this.#applyPendingStatusWrites(items, source);
 
     // In-flight first-send optimistic rows are client-only, so any refetch
     // landing mid-send (e.g. the fire-and-forget refreshTopic after a previous
@@ -1068,7 +1073,7 @@ export class ChatTopicActionImpl {
     // (the button reading as a no-op until pressed a second time). The pin is
     // dropped when the persist fails, so a write that never reached the DB
     // still reverts here.
-    const fresh = this.#applyPendingStatusWrite(fetched);
+    const fresh = this.#applyPendingStatusWrite(fetched, 'server');
     if (fresh.status !== fetched.status) return false;
 
     // Server still parked — nothing to fold in.
@@ -1222,7 +1227,7 @@ export class ChatTopicActionImpl {
           this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
         }
 
-        return { ...result, items: this.#applyPendingStatusWrites(result.items) };
+        return { ...result, items: this.#applyPendingStatusWrites(result.items, 'server') };
       },
       {
         // onData: responsible for state updates (fires for both cached and fresh data)
@@ -1232,11 +1237,9 @@ export class ChatTopicActionImpl {
           const { total: totalCount } = result;
 
           const currentData = this.#get().topicDataMap[containerKey];
-          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, {
-            // `result` can be a cached response or a list already normalized by
-            // the fetcher. Neither proves the server observed the pending write.
-            confirmMatchingStatus: false,
-          });
+          // `result` can be a cached response or a list already normalized by
+          // the fetcher. Neither proves the server observed the pending write.
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, 'cache');
 
           // Fire BEFORE the no-change early return below: on a cold boot the
           // cached list arrives with no `currentData`, and that first delivery
@@ -1364,12 +1367,14 @@ export class ChatTopicActionImpl {
       async () => {
         if (!agentId) return { items: [], total: 0 };
 
-        return topicService.getTopics({
+        const result = await topicService.getTopics({
           agentId,
           current: 0,
           pageSize,
           withDetails,
         });
+
+        return { ...result, items: this.#applyPendingStatusWrites(result.items, 'server') };
       },
       {
         onData: (result) => {
@@ -1377,7 +1382,7 @@ export class ChatTopicActionImpl {
           const { total: totalCount } = result;
 
           const currentData = this.#get().agentTopicsViewMap[containerKey];
-          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items);
+          const topics = this.#reconcileFetchedTopics(result.items, currentData?.items, 'cache');
 
           // Preserve appended pages on refresh — same convention as
           // `useFetchTopics` so the user keeps their scroll position after
@@ -1462,7 +1467,8 @@ export class ChatTopicActionImpl {
         withDetails,
       });
 
-      const nextItems = [...currentData.items, ...result.items];
+      const topics = this.#applyPendingStatusWrites(result.items, 'server');
+      const nextItems = [...currentData.items, ...topics];
       const hasMore = result.total > nextItems.length;
 
       this.#set(
@@ -1550,7 +1556,8 @@ export class ChatTopicActionImpl {
       });
 
       const currentTopics = currentData?.items || [];
-      const nextItems = [...currentTopics, ...result.items];
+      const topics = this.#applyPendingStatusWrites(result.items, 'server');
+      const nextItems = [...currentTopics, ...topics];
       const hasMore = result.total > nextItems.length;
 
       this.#set(
@@ -1613,7 +1620,10 @@ export class ChatTopicActionImpl {
           // pending status writes here too (no tmp-row re-prepend: optimistic
           // rows don't belong in search results).
           this.#set(
-            { searchTopics: this.#reconcileFetchedTopics(data), isSearchingTopic: false },
+            {
+              isSearchingTopic: false,
+              searchTopics: this.#reconcileFetchedTopics(data, undefined, 'server'),
+            },
             false,
             n('useSearchTopics(success)', { keywords }),
           );
@@ -2139,6 +2149,7 @@ export class ChatTopicActionImpl {
     const items = this.#reconcileFetchedTopics(
       params.items,
       append ? undefined : currentData?.items,
+      'cache',
     );
 
     const nextItems = append ? [...(currentData?.items || []), ...items] : items;
