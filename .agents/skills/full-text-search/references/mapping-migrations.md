@@ -122,7 +122,8 @@ code zero alone does not mean the backfill is complete.
 
 - Never use production to test or tune migration parameters.
 - Exercise migration-script changes through the real workflow in both Docker and Dev PostgreSQL plus
-  Dev Elastic Cloud before production.
+  Dev Elastic Cloud before production. Give every rehearsal an explicit timeout and the smallest
+  dataset or batch count that proves the behavior; never run a full large-table backfill just to test.
 - Design Elasticsearch scripts for Docker and Elastic Cloud compatibility; verify every API and
   setting used instead of assuming the two environments support the same capabilities.
 - For large production migrations, consider Vercel Sandbox as an isolated execution environment to
