@@ -23,7 +23,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
-import { ClaudeCodeQuotaMenu, CodexQuotaMenu } from './QuotaMenu';
+import { ClaudeCodeQuotaMenu, CodexQuotaMenu, KimiCodeQuotaMenu } from './QuotaMenu';
 
 const styles = createStaticStyles(({ css }) => ({
   // Pinned to the same 28px row as the plain ControlBar so the composer footer
@@ -168,6 +168,13 @@ const HeteroControlBar = memo(() => {
     isSubscriptionAuth &&
     heteroProvider?.type === 'codex' &&
     (isLocalHeteroExecution || !!quotaDeviceId);
+  // Kimi Code carries no client-side auth mode: whether the login is a
+  // subscription is only knowable from the sampled snapshot, so gate exactly
+  // like Claude and let the snapshot's unavailable reason explain the rest.
+  const shouldShowKimiCodeQuota =
+    isSubscriptionAuth &&
+    heteroProvider?.type === 'kimi-code' &&
+    (isLocalHeteroExecution || !!quotaDeviceId);
 
   if (isAccessLoading) return null;
 
@@ -197,7 +204,8 @@ const HeteroControlBar = memo(() => {
         </Flexbox>
         {(shouldShowApiCredits ||
           (shouldShowClaudeQuota && quotaDeviceId) ||
-          (shouldShowCodexQuota && quotaDeviceId)) && (
+          (shouldShowCodexQuota && quotaDeviceId) ||
+          (shouldShowKimiCodeQuota && quotaDeviceId)) && (
           <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
             {shouldShowApiCredits && <ChatInputCredits />}
             {shouldShowClaudeQuota && quotaDeviceId && (
@@ -209,6 +217,9 @@ const HeteroControlBar = memo(() => {
                 deviceId={quotaDeviceId}
                 env={heteroProvider?.env}
               />
+            )}
+            {shouldShowKimiCodeQuota && quotaDeviceId && (
+              <KimiCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
             )}
           </Flexbox>
         )}
@@ -283,6 +294,9 @@ const HeteroControlBar = memo(() => {
             deviceId={quotaDeviceId}
             env={heteroProvider?.env}
           />
+        )}
+        {shouldShowKimiCodeQuota && (
+          <KimiCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {shouldShowClaudeQuota && (
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />

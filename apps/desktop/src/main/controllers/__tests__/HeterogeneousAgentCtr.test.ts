@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
-import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
+import type { CodexQuotaSnapshot, KimiCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import {
   HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
@@ -620,6 +620,14 @@ vi.mock('@/modules/heterogeneousAgent/codexQuota', () => ({
   fetchCodexQuota: fetchCodexQuotaMock,
 }));
 
+const { fetchKimiCodeQuotaMock } = vi.hoisted(() => ({
+  fetchKimiCodeQuotaMock: vi.fn(),
+}));
+
+vi.mock('@/modules/heterogeneousAgent/kimiCodeQuota', () => ({
+  fetchKimiCodeQuota: fetchKimiCodeQuotaMock,
+}));
+
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
@@ -703,6 +711,7 @@ describe('HeterogeneousAgentCtr', () => {
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
     consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
+    fetchKimiCodeQuotaMock.mockReset();
     claudeSdkSessionCloseMock.mockReset();
     claudeSdkSessionConstructMock.mockReset();
     codexAppServerCanReuse.value = true;
@@ -1211,6 +1220,66 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(staleRequest).resolves.toEqual(staleQuota);
       await expect(ctr.getCodexQuota(source)).resolves.toEqual(refreshedQuota);
       expect(fetchCodexQuotaMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('getKimiCodeQuota', () => {
+    it('passes env and kimiCodeHomePath through to the quota sampler', async () => {
+      const quota = {
+        error: null,
+        extraUsage: null,
+        monthly: null,
+        monthlyCode: null,
+        provider: 'kimi-code',
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: 1,
+        weekly: null,
+      } satisfies KimiCodeQuotaSnapshot;
+      fetchKimiCodeQuotaMock.mockResolvedValue(quota);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const params = {
+        env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' },
+        kimiCodeHomePath: '/tmp/kimi-code-home',
+      };
+
+      await expect(ctr.getKimiCodeQuota(params)).resolves.toEqual(quota);
+      expect(fetchKimiCodeQuotaMock).toHaveBeenCalledWith({
+        env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' },
+        kimiCodeHomePath: '/tmp/kimi-code-home',
+      });
+    });
+
+    it('reuses automatic quota reads while explicit refresh bypasses the cache', async () => {
+      const quota = {
+        error: null,
+        extraUsage: null,
+        monthly: null,
+        monthlyCode: null,
+        provider: 'kimi-code',
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: Date.now(),
+        weekly: null,
+      } satisfies KimiCodeQuotaSnapshot;
+      fetchKimiCodeQuotaMock.mockResolvedValue(quota);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const params = { env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' } };
+
+      await ctr.getKimiCodeQuota(params);
+      await ctr.getKimiCodeQuota(params);
+
+      expect(fetchKimiCodeQuotaMock).toHaveBeenCalledTimes(1);
+
+      await ctr.getKimiCodeQuota({ ...params, force: true });
+
+      expect(fetchKimiCodeQuotaMock).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -28,6 +28,7 @@ import {
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
+import { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
 import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
@@ -61,6 +62,7 @@ export const DEVICE_RPC_METHODS = [
   'listHeterogeneousAgentModels',
   'getClaudeCodeQuota',
   'getCodexQuota',
+  'getKimiCodeQuota',
   'listProjectSkills',
   'prepareSkillDirectory',
   'browseDirectory',
@@ -149,6 +151,10 @@ export const executeDeviceRpc = async (
 
     case 'getCodexQuota': {
       return getCodexQuota(params as GetCodexQuotaParams);
+    }
+
+    case 'getKimiCodeQuota': {
+      return getKimiCodeQuota(params as GetKimiCodeQuotaParams);
     }
 
     case 'listProjectSkills': {

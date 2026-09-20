@@ -16,11 +16,12 @@ vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
 }));
 
 const mockCodexQuota = vi.fn();
+const mockKimiCodeQuota = vi.fn();
 const mockFindAccount = vi.fn();
 const mockLatestReadings = vi.fn();
 const mockVisibleDevice = vi.fn();
 vi.mock('@/server/services/deviceGateway', () => ({
-  deviceGateway: { codexQuota: mockCodexQuota },
+  deviceGateway: { codexQuota: mockCodexQuota, kimiCodeQuota: mockKimiCodeQuota },
 }));
 vi.mock('../deviceWorkspaceGuard', () => ({ assertWorkspaceDeviceVisible: mockVisibleDevice }));
 const mockFindByDeviceId = vi.fn();
@@ -199,6 +200,59 @@ describe('agentQuota.refreshCodexQuota', () => {
       createCaller('workspace').refreshCodexQuota({ deviceId: 'remote' }),
     ).rejects.toThrow('hidden device');
     expect(mockCodexQuota).not.toHaveBeenCalled();
+    expect(mockIngestSnapshot).not.toHaveBeenCalled();
+  });
+});
+
+describe('agentQuota.refreshKimiCodeQuota', () => {
+  const snapshot = {
+    error: null,
+    identity: { externalAccountId: 'kimi-account' },
+    provider: 'kimi-code',
+    readings: READINGS,
+    status: 'ok',
+    updatedAt: 1_700_000_000_000,
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockVisibleDevice.mockResolvedValue(undefined);
+    mockFindAccount.mockResolvedValue(undefined);
+    mockLatestReadings.mockResolvedValue([]);
+    mockFindByDeviceId.mockResolvedValue({ id: 'device-row' });
+    mockFindWorkspaceDeviceById.mockResolvedValue(undefined);
+    mockKimiCodeQuota.mockResolvedValue(snapshot);
+  });
+
+  it('refreshes and persists the remote account rather than returning an isolated device sample', async () => {
+    const result = await createCaller().refreshKimiCodeQuota({ deviceId: 'remote' });
+    expect(result).toEqual(snapshot);
+    expect(mockIngestSnapshot).toHaveBeenCalledWith({
+      deviceId: 'device-row',
+      identity: snapshot.identity,
+      provider: 'kimi-code',
+      readings: READINGS,
+    });
+  });
+
+  it('does not append the same cached readings twice', async () => {
+    mockFindAccount.mockResolvedValue({ id: 'account' });
+    mockLatestReadings.mockResolvedValue(READINGS);
+    await createCaller().refreshKimiCodeQuota({ deviceId: 'remote' });
+    expect(mockIngestSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('does not persist an unidentified sample', async () => {
+    mockKimiCodeQuota.mockResolvedValue({ ...snapshot, identity: null });
+    await createCaller().refreshKimiCodeQuota({ deviceId: 'remote' });
+    expect(mockIngestSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('checks workspace device visibility before sampling', async () => {
+    mockVisibleDevice.mockRejectedValue(new Error('hidden device'));
+    await expect(
+      createCaller('workspace').refreshKimiCodeQuota({ deviceId: 'remote' }),
+    ).rejects.toThrow('hidden device');
+    expect(mockKimiCodeQuota).not.toHaveBeenCalled();
     expect(mockIngestSnapshot).not.toHaveBeenCalled();
   });
 });

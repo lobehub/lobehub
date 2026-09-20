@@ -12,6 +12,7 @@ import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
+  KimiCodeQuotaSnapshot,
 } from '@lobechat/heterogeneous-agents/quota';
 import type {
   DeviceCopyAssetForPublishResult,
@@ -575,6 +576,20 @@ export class DeviceGateway {
   }) {
     return this.invokeDeviceRead<CodexQuotaSnapshot>('getCodexQuota', params, {
       command: params.command,
+      env: params.env,
+      force: params.force,
+    });
+  }
+
+  /** Kimi Code subscription quota sampled from the login on a remote device. */
+  kimiCodeQuota(params: {
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<KimiCodeQuotaSnapshot>('getKimiCodeQuota', params, {
       env: params.env,
       force: params.force,
     });

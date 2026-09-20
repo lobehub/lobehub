@@ -509,6 +509,18 @@ export default {
   'heteroAgent.codexQuota.totalEarned_one': '{{count}} earned in total',
   'heteroAgent.codexQuota.totalEarned_other': '{{count}} earned in total',
   'heteroAgent.codexQuota.tooltip': 'View Codex quota',
+  'heteroAgent.kimiCodeQuota.errorGeneric': "Couldn't load Kimi Code quota. Try again later.",
+  'heteroAgent.kimiCodeQuota.extraUsage': 'Extra Usage',
+  'heteroAgent.kimiCodeQuota.fiveHour': '5-hour',
+  'heteroAgent.kimiCodeQuota.monthly': 'Monthly',
+  'heteroAgent.kimiCodeQuota.monthlyCap': '{{used}} of {{limit}} used this month',
+  'heteroAgent.kimiCodeQuota.monthlyCode': 'Monthly code',
+  'heteroAgent.kimiCodeQuota.title': 'Kimi Code quota',
+  'heteroAgent.kimiCodeQuota.tooltip': 'View Kimi Code quota',
+  'heteroAgent.kimiCodeQuota.unavailableExpired':
+    'Kimi Code login has expired. Sign in with the kimi CLI again, then refresh.',
+  'heteroAgent.kimiCodeQuota.unavailableNotFound':
+    'No Kimi Code login found. Run kimi in a terminal to sign in first.',
   'heteroAgent.quota.compactLeft': '{{percent}}%',
   'heteroAgent.quota.exhausted': 'Exhausted',
   'heteroAgent.quota.duration.day_one': '{{count}}d',

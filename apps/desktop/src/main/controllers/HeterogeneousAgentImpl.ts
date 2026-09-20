@@ -14,6 +14,7 @@ import type {
   CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
   HeterogeneousCliAgentType,
+  KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
@@ -48,6 +49,7 @@ import {
   CLAUDE_CODE_QUOTA_FRESH_MS,
   createQuotaCacheKey,
   fetchClaudeCodeQuota,
+  KIMI_CODE_QUOTA_FRESH_MS,
   QuotaSnapshotCache,
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
@@ -125,6 +127,7 @@ import {
   createLambdaFileStorePort,
   type RemoteServerAuth,
 } from '@/modules/heterogeneousAgent/fileStorePort';
+import { fetchKimiCodeQuota } from '@/modules/heterogeneousAgent/kimiCodeQuota';
 import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
 import {
@@ -380,6 +383,12 @@ interface GetClaudeCodeQuotaParams {
   force?: boolean;
 }
 
+interface GetKimiCodeQuotaParams {
+  env?: Record<string, string>;
+  force?: boolean;
+  kimiCodeHomePath?: string | null;
+}
+
 export interface SessionInfo {
   agentSessionId?: string;
 }
@@ -632,6 +641,9 @@ export default class HeterogeneousAgentCtr {
     freshMs: CLAUDE_CODE_QUOTA_FRESH_MS,
   });
   private readonly codexQuotaCache = new QuotaSnapshotCache<CodexQuotaSnapshot>();
+  private readonly kimiCodeQuotaCache = new QuotaSnapshotCache<KimiCodeQuotaSnapshot>({
+    freshMs: KIMI_CODE_QUOTA_FRESH_MS,
+  });
 
   /**
    * Typed as optional on purpose: a deferred chunk cannot assume the registry
@@ -3272,6 +3284,21 @@ export default class HeterogeneousAgentCtr {
     return this.claudeCodeQuotaCache.get(
       sourceKey,
       () => fetchClaudeCodeQuota({ env: params.env }),
+      { force: params.force },
+    );
+  }
+
+  /**
+   * Read the Kimi Code subscription quota. No CLI is spawned: the quota comes
+   * from the Kimi usage API using the local `kimi` login, and the request goes
+   * through the app's global proxy dispatcher.
+   */
+  async getKimiCodeQuota(params: GetKimiCodeQuotaParams = {}): Promise<KimiCodeQuotaSnapshot> {
+    const sourceKey = createQuotaCacheKey('kimi-code', params.env, params.kimiCodeHomePath);
+
+    return this.kimiCodeQuotaCache.get(
+      sourceKey,
+      () => fetchKimiCodeQuota({ env: params.env, kimiCodeHomePath: params.kimiCodeHomePath }),
       { force: params.force },
     );
   }

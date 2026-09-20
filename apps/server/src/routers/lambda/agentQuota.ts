@@ -28,7 +28,7 @@ const quotaProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   });
 });
 
-const providerSchema = z.enum(['claude-code', 'codex']);
+const providerSchema = z.enum(['claude-code', 'codex', 'kimi-code']);
 
 const readingSchema = z.object({
   capturedAt: z.number(),
@@ -91,6 +91,58 @@ export const agentQuotaRouter = router({
           deviceId: device?.id,
           identity: snapshot.identity,
           provider: 'codex',
+          readings,
+        });
+      }
+      return snapshot;
+    }),
+
+  /** Refresh on the execution device and publish its sample to the account quota layer. */
+  refreshKimiCodeQuota: quotaProcedure
+    .use(cloudWorkspaceAuth)
+    .input(
+      z.object({
+        deviceId: z.string(),
+        env: z.record(z.string(), z.string()).optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.workspaceId) await assertWorkspaceDeviceVisible(ctx.deviceModel, input.deviceId);
+      const snapshot = await deviceGateway.kimiCodeQuota({
+        ...input,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (
+        snapshot?.status !== 'ok' ||
+        !snapshot.identity?.externalAccountId ||
+        !snapshot.readings?.length
+      )
+        return snapshot ?? null;
+      const account = await ctx.accountModel.findByExternalId(
+        'kimi-code',
+        snapshot.identity.externalAccountId,
+      );
+      const latest = account ? await ctx.quotaService.listLatestReadings(account.id) : [];
+      const readings = snapshot.readings.filter(
+        (reading) =>
+          !latest.some(
+            (previous) =>
+              previous.limitType === reading.limitType &&
+              previous.scopeKey === reading.scopeKey &&
+              previous.capturedAt >= reading.capturedAt,
+          ),
+      );
+      if (readings.length) {
+        const device =
+          (ctx.workspaceId
+            ? await ctx.deviceModel.findWorkspaceDeviceById(input.deviceId)
+            : undefined) ?? (await ctx.deviceModel.findByDeviceId(input.deviceId));
+        await ctx.quotaService.ingestSnapshot({
+          deviceId: device?.id,
+          identity: snapshot.identity,
+          provider: 'kimi-code',
           readings,
         });
       }

@@ -6,6 +6,7 @@ export {
   defaultReadExternalAssetForPublish,
   EXTERNAL_PUBLISH_ASSET_MAX_BYTES,
 } from './filePreview';
+export { getKimiCodeQuota, type GetKimiCodeQuotaParams } from './kimiCodeQuota';
 export {
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,

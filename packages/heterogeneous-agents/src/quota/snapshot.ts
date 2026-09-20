@@ -94,3 +94,34 @@ export interface ClaudeCodeQuotaSnapshot {
   updatedAt: number;
   weekly: HeteroQuotaWindow | null;
 }
+
+/** Booster-wallet top-up balance reported alongside the Kimi Code rate limits. */
+export interface KimiCodeExtraUsage {
+  balanceCents: number;
+  currency: string;
+  monthlyChargeLimitCents: number;
+  monthlyChargeLimitEnabled: boolean;
+  monthlyUsedCents: number;
+  totalCents: number;
+}
+
+export type KimiCodeQuotaUnavailableReason = 'credentials-expired' | 'credentials-not-found';
+
+export interface KimiCodeQuotaSnapshot {
+  error: string | null;
+  extraUsage: KimiCodeExtraUsage | null;
+  identity?: QuotaAccountIdentity | null;
+  /** `limit_month_total` (windowMinutes 43200). */
+  monthly: HeteroQuotaWindow | null;
+  /** `limit_month_code` (windowMinutes 43200). */
+  monthlyCode: HeteroQuotaWindow | null;
+  provider: 'kimi-code';
+  readings?: QuotaLimitReading[];
+  reason?: KimiCodeQuotaUnavailableReason;
+  /** `limit_5h` (windowMinutes 300). */
+  session: HeteroQuotaWindow | null;
+  status: 'error' | 'ok' | 'unavailable';
+  updatedAt: number;
+  /** `limit_7d` (windowMinutes 10080). */
+  weekly: HeteroQuotaWindow | null;
+}
