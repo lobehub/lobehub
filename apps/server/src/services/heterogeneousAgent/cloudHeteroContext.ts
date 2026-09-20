@@ -1,3 +1,5 @@
+import type { SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
+
 export interface ConversationHistoryEntry {
   content: string;
   role: 'assistant' | 'user';
@@ -17,6 +19,18 @@ export interface ConversationHistoryEntry {
  * via sandboxRunner → spawnHeteroSandbox. If nothing meaningful to inject,
  * returns undefined so no extra block is added.
  */
+/**
+ * Where the run keeps its files. Absent or `ephemeral` renders the original
+ * wording byte for byte; `persistent` describes the instance directory the
+ * execution plane starts the run in — by its place in the workspace, never by
+ * an absolute path, which is the plane's to choose.
+ */
+export interface CloudHeteroSandboxPlacement {
+  /** Chosen subdirectory of the workspace, relative to its root. */
+  cwd?: string;
+  mode?: SandboxMode;
+}
+
 export function buildCloudHeteroContext(params: {
   repos: string[];
   /** Static systemContext from HeterogeneousProviderConfig.systemContext (agent-level). */
@@ -29,8 +43,10 @@ export function buildCloudHeteroContext(params: {
   conversationHistory?: ConversationHistoryEntry[];
   /** GitHub OAuth token injected as GITHUB_TOKEN env var in the sandbox. */
   githubToken?: string;
+  sandbox?: CloudHeteroSandboxPlacement;
 }): string {
-  const { repos, agentSystemContext, conversationHistory, githubToken } = params;
+  const { repos, agentSystemContext, conversationHistory, githubToken, sandbox } = params;
+  const persistent = sandbox?.mode === 'persistent';
 
   const parts: string[] = [];
 
@@ -40,23 +56,48 @@ export function buildCloudHeteroContext(params: {
   }
 
   // --- Cloud workspace context ---
+  // A persistent run is told what survives and what its neighbours are; the
+  // push discipline stays, because a workspace on network storage is still not
+  // where the source of truth for code lives.
+  const placementLines: string[] = persistent
+    ? [
+        '## Cloud Workspace',
+        sandbox?.cwd
+          ? `You are running inside a LobeHub cloud sandbox. Your working directory is \`${sandbox.cwd}\`, a subdirectory of a **persistent workspace**: files written there survive session expiry and are still there in your next session.`
+          : 'You are running inside a LobeHub cloud sandbox. Your working directory is a **persistent workspace**: files written there survive session expiry and are shared with the other conversation topics that use this workspace.',
+        "The workspace root is above you. Its other subdirectories belong to this user's other topics — reachable with relative paths, but do not write into them unless the user asks.",
+        'The workspace is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes. Install packages and build where the toolchain puts things by default.',
+        '',
+        '## Sandbox Persistence',
+        'Files in your working directory persist across sessions; anything written outside it may not.',
+        'The remote GitHub repository is still the source of truth for code:',
+        '',
+        '1. **Always commit and push** — after making changes, run `git add`, `git commit`, and `git push`.',
+        '   Never leave code changes uncommitted at the end of a task.',
+        '2. **Confirm push success** — verify with `git log --oneline origin/<branch>`',
+        '   before reporting a task as complete.',
+        '',
+      ]
+    : [
+        '## Cloud Workspace',
+        'You are running inside a LobeHub cloud sandbox. Your working directory is `/workspace`.',
+        '',
+        '## Sandbox Persistence — CRITICAL',
+        'This sandbox is **ephemeral**: it will be destroyed after ~1 hour of inactivity.',
+        '**Any file changes that are not pushed to a remote will be permanently lost.**',
+        '',
+        'Rules you MUST follow for every code change:',
+        '',
+        '1. **Always commit and push** — after making changes, run `git add`, `git commit`, and `git push`.',
+        '   Never leave code changes uncommitted at the end of a task.',
+        '2. **Confirm push success** — verify with `git log --oneline origin/<branch>`',
+        '   before reporting a task as complete.',
+        '3. **Never rely on local-only state** — treat every file in `/workspace` as temporary.',
+        '   The source of truth is the remote GitHub repository.',
+        '',
+      ];
   const workspaceLines: string[] = [
-    '## Cloud Workspace',
-    'You are running inside a LobeHub cloud sandbox. Your working directory is `/workspace`.',
-    '',
-    '## Sandbox Persistence — CRITICAL',
-    'This sandbox is **ephemeral**: it will be destroyed after ~1 hour of inactivity.',
-    '**Any file changes that are not pushed to a remote will be permanently lost.**',
-    '',
-    'Rules you MUST follow for every code change:',
-    '',
-    '1. **Always commit and push** — after making changes, run `git add`, `git commit`, and `git push`.',
-    '   Never leave code changes uncommitted at the end of a task.',
-    '2. **Confirm push success** — verify with `git log --oneline origin/<branch>`',
-    '   before reporting a task as complete.',
-    '3. **Never rely on local-only state** — treat every file in `/workspace` as temporary.',
-    '   The source of truth is the remote GitHub repository.',
-    '',
+    ...placementLines,
     '## Pushing to GitHub — Public vs Private Repos',
     '',
     'Before pushing, check whether the repo is public or private:',
@@ -115,21 +156,25 @@ export function buildCloudHeteroContext(params: {
     );
   }
 
+  // Repos are cloned into the working directory, wherever that is: an absolute
+  // path is only known for the ephemeral box.
+  const repoRoot = persistent ? '.' : '/workspace';
+  const repoRootLabel = persistent ? 'your working directory' : '`/workspace`';
   if (repos.length > 0) {
     workspaceLines.push(
       '',
       '## GitHub Repositories',
-      'The following repositories were pre-cloned into `/workspace` before this conversation started:',
+      `The following repositories were pre-cloned into ${repoRootLabel} before this conversation started:`,
       ...repos.map((repo) => {
         const dir = repoToLocalDir(repo);
         const url = toGithubUrl(repo);
-        return `- \`/workspace/${dir}\`  (${url})`;
+        return `- \`${repoRoot}/${dir}\`  (${url})`;
       }),
       '',
       'You can start working in any of these directories immediately.',
       githubToken
         ? 'If a directory is missing (clone may have failed), you can recover it yourself using the available GITHUB_TOKEN.'
-        : 'If a directory is missing (clone may have failed), you can run `git clone <url> /workspace/<dir>` yourself to recover it.',
+        : `If a directory is missing (clone may have failed), you can run \`git clone <url> ${repoRoot}/<dir>\` yourself to recover it.`,
     );
   } else {
     workspaceLines.push(
@@ -137,7 +182,7 @@ export function buildCloudHeteroContext(params: {
       'No GitHub repositories have been pre-cloned for this conversation.',
       githubToken
         ? 'If you need a repository, you can clone it yourself using the available GITHUB_TOKEN.'
-        : 'If you need a repository, ask the user to add it in the repo selector, or clone it yourself with `git clone <url> /workspace/<dir>`.',
+        : `If you need a repository, ask the user to add it in the repo selector, or clone it yourself with \`git clone <url> ${repoRoot}/<dir>\`.`,
     );
   }
 

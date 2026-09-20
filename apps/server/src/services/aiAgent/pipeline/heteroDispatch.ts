@@ -44,6 +44,10 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import type { MarketService } from '@/server/services/market';
+import {
+  resolveSandboxSessionConfig,
+  type SandboxSessionConfig,
+} from '@/server/services/sandbox/session';
 
 import {
   type DeviceDispatchRoute,
@@ -61,7 +65,14 @@ const log = debug('lobe-server:ai-agent-service');
 export interface HeteroDispatchDeps {
   bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
-  getMarketService: () => Promise<MarketService>;
+  /**
+   * With a `sandboxWorkspace` claim, a service whose trust token carries the
+   * entitlement a persistent sandbox run needs — built for that run rather
+   * than taken from the cache, because the claim is signed into the token.
+   */
+  getMarketService: (options?: {
+    sandboxWorkspace: NonNullable<SandboxSessionConfig['claim']>;
+  }) => Promise<MarketService>;
   messageModel: MessageModel;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
   topicModel: TopicModel;
@@ -463,6 +474,22 @@ export const dispatchHeteroAgent = async (
     }
   }
 
+  // Where a cloud-sandbox run keeps its files: the same resolution the plain
+  // cloud-sandbox runtime does, so a hetero topic bound to an environment
+  // instance runs in that instance rather than in a throwaway box. Only for
+  // providers the cloud sandbox can host at all; device-only providers never
+  // read it. Never throws — a failed lookup is the ephemeral sandbox.
+  const sandbox = supportsCloudHeterogeneousSandbox(heteroType)
+    ? await resolveSandboxSessionConfig({
+        isShareVisitorRun: !!ctx.shareGate,
+        serverDB: deps.db,
+        topicId,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      })
+    : undefined;
+  const sandboxPlacement = sandbox && { cwd: sandbox.cwd, mode: sandbox.mode };
+
   // Build the primary context without conversation history. If native resume
   // fails, the CLI switches to the complete fallback prompt on its fresh
   // retry; successful same-session runs never consume the duplicate history.
@@ -477,6 +504,7 @@ export const dispatchHeteroAgent = async (
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
     githubToken,
     repos: topicRepos,
+    sandbox: sandboxPlacement,
   });
   const resumeFallbackSystemContext =
     resumeSessionId && conversationHistory
@@ -485,6 +513,7 @@ export const dispatchHeteroAgent = async (
           conversationHistory,
           githubToken,
           repos: topicRepos,
+          sandbox: sandboxPlacement,
         })
       : undefined;
 
@@ -1129,7 +1158,11 @@ export const dispatchHeteroAgent = async (
       // `aiAgent` import. Only this cloud-CLI branch needs it.
       const { spawnHeteroSandbox } =
         await import('@/server/services/heterogeneousAgent/sandboxRunner');
-      const marketService = await deps.getMarketService();
+      // The entitlement rides on the trust token; without it the execution
+      // plane routes to the ephemeral sandbox whatever the request says.
+      const marketService = await deps.getMarketService(
+        sandbox?.claim ? { sandboxWorkspace: sandbox.claim } : undefined,
+      );
       // The sandbox authenticates its nested `lh` calls with this JWT. The
       // narrow `hetero-operation` token (used for the device-dispatch path
       // above) is rejected by `oidcAuth`, so CC capabilities that hit
@@ -1145,6 +1178,11 @@ export const dispatchHeteroAgent = async (
         args: heteroExecArgs,
         jwt: sandboxJwt,
         marketService,
+        sandbox: sandbox && {
+          cwd: sandbox.cwd,
+          environment: sandbox.environment,
+          mode: sandbox.mode,
+        },
         workspaceId: deps.workspaceId,
       }).catch(async (err) => {
         // Fire-and-forget: execAgent has already returned `autoStarted`, and

@@ -1,5 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import type { SandboxWorkspaceClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   ExecAgentResult,
@@ -204,8 +205,11 @@ export class AiAgentService {
     };
   }
 
-  private async getMarketService(runFacts?: RunFacts): Promise<MarketService> {
-    if (this._marketService) return this._marketService;
+  private async getMarketService(
+    runFacts?: RunFacts,
+    options?: { sandboxWorkspace: SandboxWorkspaceClaim },
+  ): Promise<MarketService> {
+    if (!options && this._marketService) return this._marketService;
 
     // The turn's fact reader already holds this row when a run is underway
     // (`execAgent` asks it for the memory / timezone settings too); callers
@@ -215,6 +219,15 @@ export class AiAgentService {
       runFacts ? runFacts.userSettings() : new UserModel(this.db, this.userId).getUserSettings()
     ).catch(() => undefined);
     const accessToken = (settings?.market as any)?.accessToken;
+
+    // A sandbox-workspace claim is signed into the trust token, so a service
+    // carrying one is built for that run and kept out of the shared cache.
+    if (options) {
+      return new MarketService({
+        accessToken,
+        userInfo: { sandboxWorkspace: options.sandboxWorkspace, userId: this.userId },
+      });
+    }
 
     this._marketService = new MarketService({
       accessToken,
@@ -1069,7 +1082,7 @@ export class AiAgentService {
         {
           bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
           db: this.db,
-          getMarketService: () => this.getMarketService(runFacts),
+          getMarketService: (options) => this.getMarketService(runFacts, options),
           messageModel: this.messageModel,
           resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
           topicModel: this.topicModel,
