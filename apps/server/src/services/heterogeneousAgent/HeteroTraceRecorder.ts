@@ -148,11 +148,14 @@ export class HeteroTraceRecorder {
     if (!this.store) return null;
 
     try {
-      // The run's last batch usually landed here, so the copy it left behind
-      // saves the finalizing read as well.
-      const cached = partialCache.get(operationId)?.partial;
+      // Always read the authoritative partial here, even with a copy in hand.
+      // `heteroFinish` is its own request and can land on an instance whose
+      // copy stopped at an earlier batch; finalizing from that would publish a
+      // snapshot missing every batch another instance recorded, and then delete
+      // the partial that had them. The per-batch write is fenced against that;
+      // this one write is not, so it does not get to guess.
       partialCache.delete(operationId);
-      const partial = cached ?? (await this.store.loadPartial(operationId));
+      const partial = await this.store.loadPartial(operationId);
       if (!partial) return null;
 
       const steps = (partial.steps ?? []).slice().sort((a, b) => a.stepIndex - b.stepIndex);

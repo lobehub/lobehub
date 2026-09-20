@@ -251,20 +251,23 @@ describe('HeteroTraceRecorder', () => {
       expect(fencing.partials.get('op-conflict')?.steps?.[0].content).toBe('aZc');
     });
 
-    it('finalizes from the copy the last batch left behind', async () => {
+    it('finalizes from the stored partial, not from the copy it happens to hold', async () => {
       const fencing = new FencingSnapshotStore();
       const rec = new HeteroTraceRecorder(fencing);
 
       await rec.appendBatch('op-final', [chunk('op-final', 0, 100, 'a')]);
-      const readsAfterAppend = fencing.reads;
 
-      const totals = await rec.finalize('op-final', { completionReason: 'done' });
+      // `heteroFinish` can land here while later batches were recorded
+      // elsewhere. Finalizing from the copy would drop them and then delete the
+      // partial that had them.
+      fencing.writeElsewhere('op-final', {
+        startedAt: 100,
+        steps: [{ content: 'a-then-elsewhere', startedAt: 100, stepIndex: 0 } as never],
+      });
 
-      expect(totals).not.toBeNull();
-      expect(fencing.reads).toBe(readsAfterAppend);
-      // The copy is dropped with the run, so a second finalize has to read.
       await rec.finalize('op-final', { completionReason: 'done' });
-      expect(fencing.reads).toBe(readsAfterAppend + 1);
+
+      expect(fencing.saved.get('op-final')?.steps[0].content).toBe('a-then-elsewhere');
     });
 
     it('keeps re-reading for a store that cannot fence a write', async () => {
