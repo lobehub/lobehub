@@ -195,7 +195,8 @@ export const observeChatAttempt = async (
         visibleOutput ? createStreamChunkError(error, attempt.providerId) : error,
       );
     }
-    if (!latestFinishData) return finish('interrupted');
+    // JSON-mode responses do not emit stream callbacks; reaching body EOF is their terminal success.
+    if (!latestFinishData) return finish(streaming ? 'interrupted' : 'completed');
 
     const finalContent = content || latestFinishData.text;
     const finalReasoning = reasoning || getReasoningContent(latestFinishData);

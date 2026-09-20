@@ -872,6 +872,45 @@ describe('createRouterRuntime', () => {
       );
     });
 
+    it('returns a non-streaming JSON response without retrying another route', async () => {
+      const finished = vi.fn();
+      const returned = vi.fn().mockResolvedValue(undefined);
+      let calls = 0;
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async () => {
+          calls += 1;
+          return Response.json({ id: 'response-1', output: 'answer' });
+        };
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt: returned,
+        onRouteAttemptFinished: finished,
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const response = await new Runtime().chat({
+        messages: [],
+        model: 'gpt-4',
+        responseMode: 'json',
+        stream: false,
+      });
+
+      await expect(response.json()).resolves.toEqual({ id: 'response-1', output: 'answer' });
+      expect(calls).toBe(1);
+      expect(finished).toHaveBeenCalledOnce();
+      expect(finished).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'completed', streaming: false, success: true }),
+      );
+      expect(returned).toHaveBeenCalledWith(
+        expect.objectContaining({ completionPending: true, success: true }),
+      );
+    });
+
     it('falls back when the body is interrupted before any output', async () => {
       let calls = 0;
       class MockRuntime implements LobeRuntimeAI {
@@ -1104,6 +1143,7 @@ describe('createRouterRuntime', () => {
         routers: [
           { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
         ],
+        shouldFallbackChatAttempt: () => true,
       });
       const runtime = new Runtime();
       const response = await runtime.chat(
@@ -1116,6 +1156,12 @@ describe('createRouterRuntime', () => {
       const second = finished.mock.calls[1][0];
       expect(first.outcome).toBe('failed');
       expect(second.outcome).toBe('completed');
+      expect(returned.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ completionPending: false, success: false }),
+      );
+      expect(returned.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ completionPending: true, success: true }),
+      );
       expect(first.requestId).toBe(second.requestId);
       expect(first.attemptId).not.toBe(second.attemptId);
       expect(final.mock.calls[0][0].routeAttempt).toEqual({
