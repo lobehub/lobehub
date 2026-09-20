@@ -399,6 +399,25 @@ describe('replyTemplate', () => {
       expect(output).not.toContain('secret upstream payload');
     });
 
+    it('names the unreachable device instead of falling to the legacy tier', () => {
+      // A hetero dispatch failure (device offline / unregistered / no gateway)
+      // reaches the bot as `DeviceGatewayNotConfigured` with no attribution, so
+      // without its own mapping it rendered a bare "Agent Execution Failed".
+      const output = renderAgentError(
+        'DeviceGatewayNotConfigured',
+        '{"error":"DEVICE_NOT_FOUND","success":false}',
+        'op-device',
+      );
+      expect(output).toContain("Couldn't reach the device this agent runs on");
+      expect(output).toContain('op-device');
+      expect(output).not.toContain('Agent Execution Failed');
+      expect(output).not.toContain('DEVICE_NOT_FOUND');
+
+      const zh = renderAgentError('DeviceGatewayNotConfigured', undefined, 'op-device', 'zh-CN');
+      expect(zh).toContain('无法连接到运行该 Agent 的设备');
+      expect(zh).not.toContain('Agent 执行失败');
+    });
+
     it('classifies a legacy envelope before choosing IM copy', () => {
       const output = renderAgentError('ProviderBizError', 'insufficient quota', 'op-quota');
       expect(output).toContain('Provider quota exhausted');

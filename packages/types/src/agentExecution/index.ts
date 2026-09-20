@@ -339,6 +339,20 @@ export interface ExecAgentResult {
   status: string;
   /** Whether the operation was created successfully */
   success: boolean;
+  /**
+   * The failure was already announced through the run's terminal lifecycle —
+   * `CompletionLifecycle` fired its `onComplete` hooks, so every consumer of
+   * those hooks (IM bot completion callback, task lifecycle) has been told.
+   *
+   * Callers that render failures themselves must not report it a second time:
+   * a hetero dispatch failure finalizes the run AND returns `success: false`,
+   * which used to put two error messages in the same IM thread. Absent /
+   * `false` means no hook consumer was reachable, so the caller owns the
+   * report — as it still does when delivery itself fails, because a hook with
+   * no fallback throws `CriticalHookDeliveryError` out of `execAgent` instead
+   * of resolving to this result.
+   */
+  terminalReported?: boolean;
   /** ISO timestamp */
   timestamp: string;
   /** Short-lived JWT token for Gateway WebSocket authentication */
