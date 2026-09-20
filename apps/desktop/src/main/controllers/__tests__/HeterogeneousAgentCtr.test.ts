@@ -215,6 +215,10 @@ const {
   piRpcSessionRunMock: vi.fn(),
 }));
 
+const { ensureResumeTranscriptMock } = vi.hoisted(() => ({
+  ensureResumeTranscriptMock: vi.fn(async () => ({ path: '', written: false })),
+}));
+
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
 
@@ -552,6 +556,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
 
   return {
     ...actual,
+    ensureClaudeCodeResumeTranscript: ensureResumeTranscriptMock,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerClient: MockCodexAppServerClient,
     CodexThreadSession: MockCodexThreadSession,
@@ -1266,6 +1271,35 @@ describe('HeterogeneousAgentCtr', () => {
         },
         type: 'user',
       });
+    });
+
+    it('re-introduces the CLI when this turn rebuilt a garbage-collected transcript', async () => {
+      // `--resume` keeps working because the transcript was rebuilt, so the
+      // session id survives — but the rebuild is made of persisted chat rows,
+      // which never carried the introduction the original session was given.
+      ensureResumeTranscriptMock.mockResolvedValueOnce({ path: '/tmp/t.jsonl', written: true });
+
+      const { writes } = await runSendPrompt(
+        'carry on',
+        { cwd: '/work/dir', resumeSessionId: 'sess-gc' },
+        [],
+        { resumeReplayMessages: [{ content: 'earlier', role: 'user' }] } as any,
+      );
+
+      const msg = JSON.parse(writes[0].trimEnd());
+      expect(msg.message.content).toEqual([cliGuideBlock, { text: 'carry on', type: 'text' }]);
+    });
+
+    it('does not re-introduce the CLI when the transcript did not need rebuilding', async () => {
+      const { writes } = await runSendPrompt(
+        'carry on',
+        { cwd: '/work/dir', resumeSessionId: 'sess-live' },
+        [],
+        { resumeReplayMessages: [{ content: 'earlier', role: 'user' }] } as any,
+      );
+
+      const msg = JSON.parse(writes[0].trimEnd());
+      expect(msg.message.content).toEqual([{ text: 'carry on', type: 'text' }]);
     });
 
     it('places system context before the user prompt in stream-json content blocks', async () => {
