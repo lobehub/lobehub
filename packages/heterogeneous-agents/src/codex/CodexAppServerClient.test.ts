@@ -164,6 +164,35 @@ describe('CodexAppServerClient', () => {
     ).toBe(false);
   });
 
+  it('reuses a process when only LobeHub session provenance changes', () => {
+    const client = new CodexAppServerClient({
+      clientVersion: '1.0.0',
+      commandPath: '/usr/local/bin/codex',
+      cwd: '/workspace',
+      env: {
+        ...process.env,
+        CODEX_HOME: '/tmp/codex',
+        LOBEHUB_AGENT_ID: 'agent-1',
+        LOBEHUB_OPERATION_ID: 'operation-1',
+        LOBEHUB_TOPIC_ID: 'topic-1',
+      },
+    });
+
+    expect(
+      client.canReuseFor({
+        commandPath: '/usr/local/bin/codex',
+        cwd: '/workspace',
+        env: {
+          ...process.env,
+          CODEX_HOME: '/tmp/codex',
+          LOBEHUB_AGENT_ID: 'agent-2',
+          LOBEHUB_OPERATION_ID: 'operation-2',
+          LOBEHUB_TOPIC_ID: 'topic-2',
+        },
+      }),
+    ).toBe(true);
+  });
+
   it('does not reuse a relative custom command across working directories', () => {
     const client = new CodexAppServerClient({
       clientVersion: '1.0.0',

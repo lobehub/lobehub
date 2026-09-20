@@ -294,7 +294,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
 
     async run(runOptions: any) {
-      codexAppServerRunMock(runOptions);
+      await codexAppServerRunMock(runOptions);
       if (codexAppServerShouldFailResume.value && this.options.initialThreadId) {
         this.canFallbackToExec = false;
         const error = new Error('Thread not found');
@@ -3153,7 +3153,11 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
-    it('reuses one native app-server client for multiple new Codex sessions', async () => {
+    it('reuses one native app-server client for concurrent sessions with different provenance', async () => {
+      let releaseFirstRun!: () => void;
+      const firstRun = new Promise<void>((resolve) => {
+        releaseFirstRun = resolve;
+      });
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
@@ -3161,16 +3165,39 @@ describe('HeterogeneousAgentCtr', () => {
       const first = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
+        env: {
+          LOBEHUB_AGENT_ID: 'agent-1',
+          LOBEHUB_OPERATION_ID: 'operation-1',
+          LOBEHUB_TOPIC_ID: 'topic-1',
+        },
         useCodexAppServer: true,
       });
       const second = await ctr.startSession({
         agentType: 'codex',
         command: 'codex',
+        env: {
+          LOBEHUB_AGENT_ID: 'agent-1',
+          LOBEHUB_OPERATION_ID: 'operation-2',
+          LOBEHUB_TOPIC_ID: 'topic-1',
+        },
         useCodexAppServer: true,
       });
 
-      await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
-      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId: second.sessionId });
+      codexAppServerRunMock.mockImplementationOnce(() => firstRun);
+      const firstPrompt = ctr.sendPrompt({
+        operationId: 'operation-1',
+        prompt: 'first',
+        sessionId: first.sessionId,
+      });
+      await vi.waitFor(() => expect(codexAppServerRunMock).toHaveBeenCalledTimes(1));
+      const secondPrompt = ctr.sendPrompt({
+        operationId: 'operation-2',
+        prompt: 'second',
+        sessionId: second.sessionId,
+      });
+      await vi.waitFor(() => expect(codexAppServerRunMock).toHaveBeenCalledTimes(2));
+      releaseFirstRun();
+      await Promise.all([firstPrompt, secondPrompt]);
 
       expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(1);
       expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
