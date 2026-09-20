@@ -22,16 +22,22 @@ exports[`DocumentExplorerTree menu ownership > goes native for the folder row co
     "type": "normal",
   },
   {
+    "id": "2",
+    "label": "workingPanel.resources.tree.uploadFile",
+    "sfSymbol": "square.and.arrow.up",
+    "type": "normal",
+  },
+  {
     "type": "separator",
   },
   {
-    "id": "3",
+    "id": "4",
     "label": "workingPanel.resources.tree.rename",
     "sfSymbol": "pencil",
     "type": "normal",
   },
   {
-    "id": "4",
+    "id": "5",
     "label": "delete",
     "sfSymbol": "trash",
     "type": "normal",
