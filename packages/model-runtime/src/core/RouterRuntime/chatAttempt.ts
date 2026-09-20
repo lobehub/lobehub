@@ -263,6 +263,8 @@ export const observeChatAttempt = async (
       terminalCallback(callback?.onCompletion, data);
     },
     onContentPart: async (data) => {
+      if (data.partType === 'image') imageCount += 1;
+      else content += data.content;
       if (data.partType === 'image' || data.content.trim()) visibleOutput = true;
       await runOrBuffer(async () => {
         await callback?.onContentPart?.(data);
@@ -285,6 +287,8 @@ export const observeChatAttempt = async (
       });
     },
     onReasoningPart: async (data) => {
+      if (data.partType === 'image') imageCount += 1;
+      else reasoning += data.content;
       if (data.partType === 'image' || data.content.trim()) visibleOutput = true;
       await runOrBuffer(async () => {
         await callback?.onReasoningPart?.(data);

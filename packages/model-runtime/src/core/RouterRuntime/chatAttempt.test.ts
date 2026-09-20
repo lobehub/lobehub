@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatMethodOptions, OnFinishData } from '../../types';
+import type { ChatMethodOptions, ChatStreamCallbacks, OnFinishData } from '../../types';
 import { observeChatAttempt } from './chatAttempt';
 
 describe('observeChatAttempt', () => {
@@ -105,6 +105,47 @@ describe('observeChatAttempt', () => {
     expect(await response.text()).toBe('answer');
     expect(finished.mock.calls[0][0].speed).toBeUndefined();
     expect(finished).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      'content text',
+      async (callback?: ChatStreamCallbacks) => {
+        await callback?.onContentPart?.({ content: 'answer', partType: 'text' });
+      },
+    ],
+    [
+      'reasoning text',
+      async (callback?: ChatStreamCallbacks) => {
+        await callback?.onReasoningPart?.({ content: 'reason', partType: 'text' });
+      },
+    ],
+    [
+      'structured image',
+      async (callback?: ChatStreamCallbacks) => {
+        await callback?.onContentPart?.({
+          content: 'base64-image',
+          mimeType: 'image/png',
+          partType: 'image',
+        });
+      },
+    ],
+  ] as const)('counts %s as a non-empty completion', async (_label, emitPart) => {
+    const finished = vi.fn();
+    const response = await observeChatAttempt(
+      async ({ callback }) => {
+        await emitPart(callback);
+        await callback?.onFinal?.({ text: '' });
+        return new Response('');
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+
+    expect(await response.text()).toBe('');
+    expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'completed' }));
   });
 
   it('adds attempt identity without replacing provider performance', async () => {
