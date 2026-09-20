@@ -1441,6 +1441,14 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                 handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
                 path: 'devices',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/environments'),
+                  'Desktop > Workspace > Settings > Environments',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'environments',
+              },
               // Account-level tabs mirrored inside the workspace so members can
               // adjust user settings without leaving the workspace. Same pages
               // as personal `/settings/*`; only the chrome is workspace-owned.
