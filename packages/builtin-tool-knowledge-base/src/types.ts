@@ -44,6 +44,12 @@ export interface SearchKnowledgeBaseState {
   documents: KnowledgeBaseDocumentResult[];
   errors?: { bm25?: string; vector?: string };
   fileResults: FileSearchResult[];
+  /**
+   * How many hits `fileResults` held, pinned by the read-path projector before
+   * it drops the three lists. The collapsed chip shows only this number; the
+   * card hydrates the real hits when the row is expanded.
+   */
+  resultCount?: number;
   totalResults: number;
 }
 

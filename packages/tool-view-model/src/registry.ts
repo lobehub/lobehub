@@ -2,6 +2,7 @@ import { listDocumentsProjector, readDocumentProjector } from './projectors/agen
 import { grepContentProjector } from './projectors/grepContent';
 import { runCommandProjector } from './projectors/localSystem';
 import { readFileProjector } from './projectors/readFile';
+import { searchKnowledgeBaseProjector, webSearchProjector } from './projectors/searchResults';
 import { searchUserMemoryProjector } from './projectors/userMemory';
 import { crawlProjector } from './projectors/webBrowsing';
 import type { ToolProjector } from './types';
@@ -38,6 +39,9 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
   'lobe-cloud-sandbox': {
     grepContent: grepContentProjector,
   },
+  'lobe-knowledge-base': {
+    searchKnowledgeBase: searchKnowledgeBaseProjector,
+  },
   'lobe-local-system': {
     grepContent: grepContentProjector,
     readFile: readFileProjector,
@@ -49,6 +53,7 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
   'lobe-web-browsing': {
     crawlMultiPages: crawlProjector,
     crawlSinglePage: crawlProjector,
+    search: webSearchProjector,
   },
   'opencode': {
     bash: runCommandProjector,
@@ -83,10 +88,13 @@ const eventBodyUnused: ReadonlySet<string> = new Set([
   'lobe-cloud-sandbox/grepContent',
   'lobe-local-system/grepContent',
   'lobe-local-system/readFile',
-  // `lobe-user-memory` and `lobe-web-browsing` register no hook at all.
+  // `lobe-knowledge-base`, `lobe-user-memory` and `lobe-web-browsing` register
+  // no hook at all.
+  'lobe-knowledge-base/searchKnowledgeBase',
   'lobe-user-memory/searchUserMemory',
   'lobe-web-browsing/crawlMultiPages',
   'lobe-web-browsing/crawlSinglePage',
+  'lobe-web-browsing/search',
 ]);
 
 /** Whether a `tool_end` for this tool can travel without its result body. */

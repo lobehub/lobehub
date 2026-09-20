@@ -145,12 +145,14 @@ describe('registry', () => {
       'lobe-agent-documents/listDocuments',
       'lobe-agent-documents/readDocument',
       'lobe-cloud-sandbox/grepContent',
+      'lobe-knowledge-base/searchKnowledgeBase',
       'lobe-local-system/grepContent',
       'lobe-local-system/readFile',
       'lobe-local-system/runCommand',
       'lobe-user-memory/searchUserMemory',
       'lobe-web-browsing/crawlMultiPages',
       'lobe-web-browsing/crawlSinglePage',
+      'lobe-web-browsing/search',
       'opencode/bash',
       'pi/bash',
     ]);
@@ -290,5 +292,82 @@ describe('a row that is still running', () => {
 
     expect(projected.pluginState).toEqual({ pattern: 'x', totalMatches: 1 });
     expect(projected.payloadOmitted).toBe('render');
+  });
+});
+
+describe('search-result projectors', () => {
+  const searchMessage = (identifier: string, apiName: string, pluginState: unknown) =>
+    toolMessage({
+      content: 'RAW BODY',
+      plugin: { apiName, arguments: '{}', identifier },
+      pluginState,
+    } as Partial<UIChatMessage>);
+
+  it('drops web search hits and keeps the small fields beside them', () => {
+    const results = Array.from({ length: 12 }, (_, index) => ({
+      content: 'x'.repeat(400),
+      title: `hit ${index}`,
+      url: `https://example.com/${index}`,
+    }));
+
+    const [projected] = projectToolViewModels(
+      [
+        searchMessage('lobe-web-browsing', 'search', {
+          costTime: 812,
+          query: 'lobehub',
+          resultNumbers: 12,
+          results,
+        }),
+      ],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({
+      costTime: 812,
+      query: 'lobehub',
+      resultCount: 12,
+      resultNumbers: 12,
+    });
+    expect(projected.payloadOmitted).toBe('render');
+  });
+
+  it('drops all three knowledge-base hit lists and counts the one the chip shows', () => {
+    const [projected] = projectToolViewModels(
+      [
+        searchMessage('lobe-knowledge-base', 'searchKnowledgeBase', {
+          chunks: [{ text: 'x'.repeat(2000) }, { text: 'y' }],
+          documents: [{ id: 'd1' }],
+          fileResults: [{ id: 'f1' }, { id: 'f2' }, { id: 'f3' }],
+          totalResults: 3,
+        }),
+      ],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({ resultCount: 3, totalResults: 3 });
+  });
+
+  // An empty search still has to read as settled, or the chip cannot tell
+  // "found nothing" from "still running".
+  it.each([
+    ['lobe-web-browsing', 'search', { query: 'nothing', results: [] }, { query: 'nothing' }],
+    ['lobe-knowledge-base', 'searchKnowledgeBase', { fileResults: [] }, {}],
+  ])('reports zero hits for an empty %s/%s', (identifier, apiName, state, rest) => {
+    const [projected] = projectToolViewModels(
+      [searchMessage(identifier, apiName, state)],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({ ...rest, resultCount: 0 });
+  });
+
+  it('leaves an error-only state alone apart from the body', () => {
+    const [projected] = projectToolViewModels(
+      [searchMessage('lobe-web-browsing', 'search', { errorDetail: 'upstream 500', query: 'x' })],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({ errorDetail: 'upstream 500', query: 'x' });
+    expect(projected.content).toBe('');
   });
 });
