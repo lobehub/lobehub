@@ -3227,6 +3227,126 @@ table resource_transfer_requests {
   }
 }
 
+table scm_change_requests {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  repo_full_name varchar(255) [not null]
+  repo_external_id varchar(255)
+  number integer [not null]
+  external_id varchar(255)
+  url text [not null]
+  title text
+  author_external_id varchar(255)
+  author_external_login varchar(255)
+  head_ref varchar(255)
+  head_sha varchar(255)
+  base_ref varchar(255)
+  is_draft boolean [not null, default: false]
+  state text [not null]
+  merged_at "timestamp with time zone"
+  closed_at "timestamp with time zone"
+  merged_by_external_id varchar(255)
+  ci_status text
+  ci_head_sha varchar(255)
+  checks jsonb
+  review_decision text
+  merge_state_status varchar(255)
+  installation_id uuid
+  acceptance_id uuid
+  work_id text
+  topic_id text
+  task_id text
+  wake_count integer [not null, default: 0]
+  last_wake_at "timestamp with time zone"
+  last_event_at "timestamp with time zone"
+  last_event_kind text
+  metadata jsonb [not null, default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (provider, repo_full_name, number) [name: 'scm_change_requests_provider_repo_number_unique', unique]
+    acceptance_id [name: 'scm_change_requests_acceptance_id_idx']
+    topic_id [name: 'scm_change_requests_topic_id_idx']
+    work_id [name: 'scm_change_requests_work_id_idx']
+    installation_id [name: 'scm_change_requests_installation_id_idx']
+    (user_id, updated_at) [name: 'scm_change_requests_user_updated_at_idx']
+    workspace_id [name: 'scm_change_requests_workspace_id_idx']
+    head_sha [name: 'scm_change_requests_head_sha_idx']
+  }
+}
+
+table scm_identities {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  provider text [not null]
+  external_user_id varchar(255) [not null]
+  external_login varchar(255) [not null]
+  credentials text
+  token_expires_at "timestamp with time zone"
+  metadata jsonb [not null, default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (provider, external_user_id) [name: 'scm_identities_provider_external_user_unique', unique]
+    (provider, user_id) [name: 'scm_identities_provider_user_unique', unique]
+    token_expires_at [name: 'scm_identities_token_expires_at_idx']
+  }
+}
+
+table scm_installations {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  provider text [not null]
+  installation_id varchar(255) [not null]
+  account_login varchar(255) [not null]
+  account_external_id varchar(255) [not null]
+  account_type text [not null]
+  repository_selection text [not null]
+  repositories jsonb [not null, default: `[]`]
+  installed_by_external_user_id varchar(255)
+  installed_by_external_login varchar(255)
+  suspended_at "timestamp with time zone"
+  revoked_at "timestamp with time zone"
+  metadata jsonb [not null, default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (provider, installation_id) [name: 'scm_installations_provider_installation_unique', unique]
+    user_id [name: 'scm_installations_user_id_idx']
+    workspace_id [name: 'scm_installations_workspace_id_idx']
+    (provider, account_login) [name: 'scm_installations_provider_account_idx']
+  }
+}
+
+table scm_webhook_deliveries {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  provider text [not null]
+  delivery_id varchar(255) [not null]
+  event varchar(255) [not null]
+  action varchar(255)
+  installation_id varchar(255)
+  repo_full_name varchar(255)
+  number integer
+  status text [not null]
+  error text
+  received_at "timestamp with time zone" [not null, default: `now()`]
+  processed_at "timestamp with time zone"
+
+  indexes {
+    (provider, delivery_id) [name: 'scm_webhook_deliveries_provider_delivery_unique', unique]
+    received_at [name: 'scm_webhook_deliveries_received_at_idx']
+  }
+}
+
 table session_groups {
   id text [pk, not null]
   name text [not null]
