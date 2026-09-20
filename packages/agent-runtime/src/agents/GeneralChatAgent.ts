@@ -26,6 +26,7 @@ import {
   type SubAgentsBatchResultPayload,
 } from '../types';
 import { selectRunTools, selectToolManifestMap } from '../utils/operationToolSet';
+import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
 
 const TOOL_NOT_ALLOWED_CONTENT =
@@ -160,7 +161,7 @@ export class GeneralChatAgent implements Agent {
     const toolsToExecute: ChatToolPayload[] = [];
 
     // Get security blacklist for resolver metadata
-    const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
+    const securityBlacklist = selectSecurityBlacklist(state) ?? DEFAULT_SECURITY_BLACKLIST;
 
     // Resolvers see one flat record: the run ledger plus the facts they audit
     // against — the security blacklist and the plan's working directory (the
@@ -172,7 +173,7 @@ export class GeneralChatAgent implements Agent {
     };
 
     // Get user config (default to 'manual' mode)
-    const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
+    const userConfig = selectUserInterventionConfig(state) || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
 
     // Global audits: default to security blacklist audit if not provided
@@ -753,7 +754,7 @@ export class GeneralChatAgent implements Agent {
           // Request approval for tools that need intervention
           // Non-headless mode waits for human approval; headless mode returns blocked tool results.
           if (toolsNeedingIntervention.length > 0) {
-            if (state.userInterventionConfig?.approvalMode === 'headless') {
+            if (selectUserInterventionConfig(state)?.approvalMode === 'headless') {
               instructions.push({
                 payload: {
                   blockedContent:

@@ -549,6 +549,17 @@ describe('AgentRuntimeService', () => {
       });
     });
 
+    it('records the approval mode as a run policy', async () => {
+      await service.createOperation({
+        ...mockParams,
+        userInterventionConfig: { approvalMode: 'headless' },
+      });
+
+      const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
+      expect(state.principal.policy.userIntervention).toEqual({ approvalMode: 'headless' });
+      expect('userInterventionConfig' in state).toBe(false);
+    });
+
     it('stores the run tool set once, on the operation slot', async () => {
       const manifestMap = { 'lobe-web-browsing': { identifier: 'lobe-web-browsing' } };
 
@@ -688,11 +699,11 @@ describe('AgentRuntimeService', () => {
         expertise,
       });
 
+      // What the model is told about the run lives on the world slot.
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
-          enableExpertise: true,
-          expertise,
+          world: expect.objectContaining({ enableExpertise: true, expertise }),
         }),
       );
     });

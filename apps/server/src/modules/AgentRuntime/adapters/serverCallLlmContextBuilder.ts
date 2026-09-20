@@ -1,4 +1,9 @@
-import type { AgentState, CallLLMPayload } from '@lobechat/agent-runtime';
+import {
+  type AgentState,
+  type CallLLMPayload,
+  selectEnableExpertise,
+  selectExpertise,
+} from '@lobechat/agent-runtime';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
@@ -127,10 +132,10 @@ export const buildServerCallLlmContext = async ({
     botPlatformContext: state.world?.channel?.botPlatform,
     ...(facts.step.workspaceContext && { workspaceContext: facts.step.workspaceContext }),
     discordContext: state.world?.channel?.discord,
-    enableExpertise: state.enableExpertise,
+    enableExpertise: selectEnableExpertise(state),
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     evalContext: state.world?.eval,
-    expertise: state.expertise,
+    expertise: selectExpertise(state),
     forceFinish: state.forceFinish,
     ...(facts.step.groupAgentBuilderContext && {
       groupAgentBuilderContext: facts.step.groupAgentBuilderContext,

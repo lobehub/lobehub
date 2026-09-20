@@ -4,6 +4,7 @@ export * from './normalizeAgentState';
 export * from './operationToolSet';
 export * from './replay';
 export * from './runtimeRetry';
+export * from './stateSlots';
 export * from './status';
 export * from './stepContextComputer';
 export * from './tokenCounter';

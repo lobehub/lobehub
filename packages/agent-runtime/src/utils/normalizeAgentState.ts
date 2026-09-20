@@ -63,16 +63,21 @@ const LEGACY_KEY_PATHS: Record<string, readonly string[]> = {
 };
 
 /**
- * Top-level keys that mirrored a slot instead of hiding in `metadata`. The tool
- * set used to be written twice — once as `operationToolSet`, once as these four
- * — which doubled the heaviest part of the blob on every step. They are lifted
- * into the slot and dropped.
+ * Top-level keys the slots absorbed, rather than legacy `metadata` keys. The
+ * tool set used to be written twice — once as `operationToolSet`, once as the
+ * four mirrors — which doubled the heaviest part of the blob on every step; the
+ * run policies and the expertise snapshot simply had no home yet. All are lifted
+ * into their slot and dropped from the top level.
  */
 const LEGACY_MIRROR_PATHS: Record<string, readonly string[]> = {
+  enableExpertise: ['world', 'enableExpertise'],
+  expertise: ['world', 'expertise'],
+  securityBlacklist: ['principal', 'policy', 'securityBlacklist'],
   toolExecutorMap: ['operationToolSet', 'executorMap'],
   toolManifestMap: ['operationToolSet', 'manifestMap'],
   toolSourceMap: ['operationToolSet', 'sourceMap'],
   tools: ['operationToolSet', 'tools'],
+  userInterventionConfig: ['principal', 'policy', 'userIntervention'],
 };
 
 const LEGACY_MIRROR_KEYS = Object.keys(LEGACY_MIRROR_PATHS);
@@ -81,10 +86,12 @@ const LEGACY_MIRROR_KEYS = Object.keys(LEGACY_MIRROR_PATHS);
  * An empty mirror carries no tool set, so lifting it would only rewrite the blob
  * for nothing (and would hide a populated slot behind an empty default).
  */
-const isPopulatedMirror = (value: unknown) =>
-  Array.isArray(value)
-    ? value.length > 0
-    : !!value && typeof value === 'object' && Object.keys(value).length > 0;
+const isPopulatedMirror = (value: unknown) => {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === 'object') return Object.keys(value).length > 0;
+  // A scalar mirror (`enableExpertise`) always carries its decision.
+  return true;
+};
 
 const LEGACY_KEYS = Object.keys(LEGACY_KEY_PATHS);
 
@@ -162,8 +169,8 @@ export const normalizeAgentState = <T extends AgentState>(state: T): T => {
     // `setIfAbsent` cloned the slot on the way in, so this default cannot reach
     // the caller's state. A pre-slot blob never had the enabled ids, and the step
     // delta then starts from nothing — how those operations already behaved.
-    const toolSet = next.operationToolSet as Record<string, unknown>;
-    if (toolSet.enabledToolIds === undefined) toolSet.enabledToolIds = [];
+    const toolSet = next.operationToolSet as Record<string, unknown> | undefined;
+    if (toolSet && toolSet.enabledToolIds === undefined) toolSet.enabledToolIds = [];
   }
 
   return next as T;

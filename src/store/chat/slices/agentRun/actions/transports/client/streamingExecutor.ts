@@ -368,7 +368,8 @@ export class StreamingExecutorActionImpl {
           sourceMap: {},
           tools: toolsDetailed.tools ?? [],
         },
-        userInterventionConfig,
+        // What this run may do — the approval mode its tool calls answer to.
+        principal: { policy: { userIntervention: userInterventionConfig } },
       });
     const state: AgentState = {
       ...baseState,

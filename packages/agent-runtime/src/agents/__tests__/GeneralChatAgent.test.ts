@@ -3428,57 +3428,72 @@ describe('GeneralChatAgent', () => {
       ]);
     });
 
-    it('should resolve blocked tool in headless mode when global resolver with policy always triggers', async () => {
-      const customResolver: GlobalInterventionAuditConfig = {
-        type: 'customBlocker',
-        policy: 'always',
-        resolver: async (toolArgs) => toolArgs.blocked === true,
-      };
+    // The approval mode lives on `principal.policy.userIntervention`; operations
+    // created before the move carry it at the top level. Both must still reach
+    // the decision, or a background run parks for an approval nobody can give.
+    it.each([
+      {
+        shape: 'policy slot',
+        state: { principal: { policy: { userIntervention: { approvalMode: 'headless' } } } },
+      },
+      {
+        shape: 'legacy top level',
+        state: { userInterventionConfig: { approvalMode: 'headless' } },
+      },
+    ])(
+      'should resolve blocked tool in headless mode when global resolver with policy always triggers (%s)',
+      async ({ state: interventionState }) => {
+        const customResolver: GlobalInterventionAuditConfig = {
+          type: 'customBlocker',
+          policy: 'always',
+          resolver: async (toolArgs) => toolArgs.blocked === true,
+        };
 
-      const agent = new GeneralChatAgent({
-        agentConfig: { maxSteps: 100 },
-        globalInterventionAudits: [customResolver],
-        operationId: 'test-session',
-        modelRuntimeConfig: mockModelRuntimeConfig,
-      });
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          globalInterventionAudits: [customResolver],
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
 
-      const blockedTool: ChatToolPayload = {
-        id: 'call-1',
-        identifier: 'my-tool',
-        apiName: 'doSomething',
-        arguments: '{"blocked":true}',
-        type: 'default',
-      };
+        const blockedTool: ChatToolPayload = {
+          id: 'call-1',
+          identifier: 'my-tool',
+          apiName: 'doSomething',
+          arguments: '{"blocked":true}',
+          type: 'default',
+        };
 
-      const state = createMockState({
-        toolManifestMap: {
-          'my-tool': { identifier: 'my-tool' },
-        },
-        userInterventionConfig: { approvalMode: 'headless' },
-      });
-
-      const context = createMockContext('llm_result', {
-        hasToolsCalling: true,
-        toolsCalling: [blockedTool],
-        parentMessageId: 'msg-1',
-      });
-
-      const result = await agent.runner(context, state);
-
-      // Headless/CLI has no human intervention UI, so return a blocked tool result for replan.
-      expect(result).toEqual([
-        {
-          payload: {
-            blockedContent:
-              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
-            blockedReason: 'human_intervention_unavailable',
-            parentMessageId: 'msg-1',
-            toolsCalling: [blockedTool],
+        const state = createMockState({
+          toolManifestMap: {
+            'my-tool': { identifier: 'my-tool' },
           },
-          type: 'resolve_blocked_tools',
-        },
-      ]);
-    });
+          ...(interventionState as Record<string, unknown>),
+        });
+
+        const context = createMockContext('llm_result', {
+          hasToolsCalling: true,
+          toolsCalling: [blockedTool],
+          parentMessageId: 'msg-1',
+        });
+
+        const result = await agent.runner(context, state);
+
+        // Headless/CLI has no human intervention UI, so return a blocked tool result for replan.
+        expect(result).toEqual([
+          {
+            payload: {
+              blockedContent:
+                'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+              blockedReason: 'human_intervention_unavailable',
+              parentMessageId: 'msg-1',
+              toolsCalling: [blockedTool],
+            },
+            type: 'resolve_blocked_tools',
+          },
+        ]);
+      },
+    );
 
     it('should execute tool in headless mode when global resolver with policy required triggers', async () => {
       const customResolver: GlobalInterventionAuditConfig = {

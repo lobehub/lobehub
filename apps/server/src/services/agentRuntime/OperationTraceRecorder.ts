@@ -385,8 +385,9 @@ export class OperationTraceRecorder {
             // Remove reconstructible fields from finalState:
             // - messages: from messagesBaseline + messagesDelta chain
             // - operationToolSet: from toolsetBaseline (step 0)
-            // - toolManifestMap/tools/toolSourceMap: backward-compat copies of operationToolSet
-            // - expertise: immutable operation-level snapshot retained in working state
+            // - toolManifestMap/tools/toolSourceMap: legacy mirrors of operationToolSet
+            // - world.expertise (and its legacy top-level copy): immutable
+            //   operation-level snapshot retained in working state
             const {
               expertise: _expertise,
               messages: _msgs,
@@ -394,10 +395,15 @@ export class OperationTraceRecorder {
               toolManifestMap: _tmm,
               toolSourceMap: _tsm,
               tools: _tools,
+              world: _world,
               // activatedStepTools is kept since it's the cumulative record
               ...restState
             } = e.finalState;
-            return { ...e, finalState: restState };
+            const { expertise: _worldExpertise, ...worldRest } = _world ?? {};
+            return {
+              ...e,
+              finalState: _world ? { ...restState, world: worldRest } : restState,
+            };
           }
           return e;
         }),

@@ -1060,8 +1060,6 @@ export class AgentRuntimeService {
       const initialState = {
         activatedStepTools,
         createdAt: new Date().toISOString(),
-        enableExpertise,
-        expertise,
         // Store initialContext for executeSync to use
         initialContext,
         lastModified: new Date().toISOString(),
@@ -1140,7 +1138,9 @@ export class AgentRuntimeService {
             shareVisitor: agentShareVisitor,
           },
           audit: { clientIp: appContext?.clientIp, userAgent: appContext?.userAgent },
-          policy: { deviceAccess: deviceAccessPolicy },
+          // What the run may do, decided once here: device access and the
+          // approval mode its tool calls answer to.
+          policy: { deviceAccess: deviceAccessPolicy, userIntervention: userInterventionConfig },
         },
         // What the model is told about the run's world — frozen from here on;
         // the context engine reads it on every step.
@@ -1151,15 +1151,15 @@ export class AgentRuntimeService {
           }),
           connectorOwnershipNote,
           disabledPluginIds,
+          enableExpertise,
           eval: evalContext,
+          expertise,
           group: agentGroup,
           projectInstructions,
           searchDecision,
           userMemory,
           userTimezone,
         },
-        // User intervention config for headless mode in async tasks
-        userInterventionConfig,
       } as Partial<AgentState>;
 
       // Use coordinator to create operation, automatically sends initialization event.

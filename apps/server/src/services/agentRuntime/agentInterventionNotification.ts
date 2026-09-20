@@ -1,7 +1,9 @@
 import {
   DEFAULT_SECURITY_BLACKLIST,
   InterventionChecker,
+  selectSecurityBlacklist,
   selectToolManifestMap,
+  selectUserInterventionConfig,
 } from '@lobechat/agent-runtime';
 import {
   type ChatToolPayload,
@@ -244,8 +246,10 @@ export const buildRuntimeInterventionNotification = async ({
   }
 
   const items: NotifyAgentInterventionItem[] = [];
-  const securityBlacklist = state?.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
-  const resolvedApprovalMode = approvalMode(state?.userInterventionConfig?.approvalMode);
+  const securityBlacklist = selectSecurityBlacklist(state ?? {}) ?? DEFAULT_SECURITY_BLACKLIST;
+  const resolvedApprovalMode = approvalMode(
+    selectUserInterventionConfig(state ?? {})?.approvalMode,
+  );
 
   for (const tool of pendingTools) {
     const toolMessageId = toolMessageIds[tool.id];
