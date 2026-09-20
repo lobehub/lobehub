@@ -781,6 +781,7 @@ describe('createRouterRuntime', () => {
 
     it('follows the fallback policy after an empty completion and exposes one attempt', async () => {
       const finished = vi.fn();
+      const onRouteSuccess = vi.fn();
       const returned = vi.fn().mockResolvedValue(undefined);
       const final = vi.fn();
       let calls = 0;
@@ -816,8 +817,15 @@ describe('createRouterRuntime', () => {
         id: 'lobehub',
         onRouteAttempt: returned,
         onRouteAttemptFinished: finished,
+        onRouteSuccess,
         routers: [
-          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+          {
+            apiType: 'openai',
+            id: 'router-a',
+            models: ['gpt-4'],
+            options: [{ id: 'channel-a' }, { id: 'channel-b' }],
+            runtime: MockRuntime,
+          },
         ],
         shouldFallbackChatAttempt: () => true,
       });
@@ -853,6 +861,15 @@ describe('createRouterRuntime', () => {
       ).toEqual(['attempt-1', 'attempt-2']);
       expect(diagnostics.providerRequest?.apiMode).toBe('attempt-2');
       expect(returned).toHaveBeenCalledWith(expect.objectContaining({ completionPending: true }));
+      expect(onRouteSuccess).toHaveBeenCalledOnce();
+      expect(onRouteSuccess).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channelId: 'channel-b',
+          firstChannelId: 'channel-a',
+          model: 'gpt-4',
+          routerId: 'router-a',
+        }),
+      );
     });
 
     it('falls back when the body is interrupted before any output', async () => {

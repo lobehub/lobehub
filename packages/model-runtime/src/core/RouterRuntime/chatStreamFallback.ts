@@ -4,6 +4,7 @@ import type { RouteAttemptFinished } from './routeAttempt';
 export interface ChatStreamFallbackAttempt {
   index: number;
   observation: ChatAttemptObservation;
+  onCompleted?: () => Promise<void>;
   reader?: ReadableStreamDefaultReader<Uint8Array>;
   response: Response;
 }
@@ -56,6 +57,11 @@ export const createChatStreamFallbackResponse = async ({
     return shouldFallback(result);
   };
 
+  const commitTerminalAttempt = async (result: RouteAttemptFinished) => {
+    await active.observation.commit();
+    if (result.outcome === 'completed') await active.onCompleted?.();
+  };
+
   return new Response(
     new ReadableStream<Uint8Array>(
       {
@@ -72,7 +78,7 @@ export const createChatStreamFallbackResponse = async ({
                 continue;
               }
 
-              await active.observation.commit();
+              await commitTerminalAttempt(result);
               if (result.outcome === 'completed') controller.close();
               else controller.error(result.error ?? new Error(`Chat attempt ${result.outcome}`));
               return;
@@ -102,7 +108,7 @@ export const createChatStreamFallbackResponse = async ({
                 continue;
               }
 
-              await active.observation.commit();
+              await commitTerminalAttempt(result);
               if (result.outcome === 'completed') {
                 flushBufferedChunks(controller);
                 controller.close();
@@ -117,7 +123,7 @@ export const createChatStreamFallbackResponse = async ({
                 continue;
               }
 
-              await active.observation.commit();
+              await commitTerminalAttempt(result);
               controller.error(error);
               return;
             }

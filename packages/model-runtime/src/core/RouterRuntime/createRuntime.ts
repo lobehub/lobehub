@@ -655,6 +655,8 @@ export const createRouterRuntime = ({
           `No provider route supports raw audio input for model ${payload.model}`,
         );
       }
+      const firstChannelId = routerOptions[0]?.id;
+      const weighted = routerOptions.some((option) => option.weight !== undefined);
 
       const reportReturnedAttempt = (
         attempt: RouteAttemptStart,
@@ -748,6 +750,25 @@ export const createRouterRuntime = ({
           return {
             index: optionIndex,
             observation,
+            onCompleted: async () => {
+              if (!params.onRouteSuccess) return;
+
+              try {
+                await params.onRouteSuccess({
+                  channelId,
+                  channelWeight: optionItem.weight,
+                  firstChannelId,
+                  method: routeContext.method,
+                  model: payload.model,
+                  routerId: matchedRouter.id,
+                  userId: routeAttemptUserId,
+                  weighted,
+                });
+              } catch (error) {
+                // Affinity storage must not turn a successful upstream response into a fallback.
+                console.error('[RouterRuntime] onRouteSuccess callback failed:', error);
+              }
+            },
             reader: response.body?.getReader(),
             response,
           };
