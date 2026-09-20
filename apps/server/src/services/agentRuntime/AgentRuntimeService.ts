@@ -1142,6 +1142,15 @@ export class AgentRuntimeService {
           // approval mode its tool calls answer to.
           policy: { deviceAccess: deviceAccessPolicy, userIntervention: userInterventionConfig },
         },
+        // Compat mirrors for a rolling deploy: a worker still running the
+        // pre-slot build reads only these, and a missing approval mode defaults
+        // to `manual` there — which parks a headless run on an approval nobody
+        // can give. Drop them (and the matching entries in
+        // `normalizeAgentState`'s COMPAT_MIRROR_PATHS) once no pre-slot worker
+        // can pick up a step.
+        enableExpertise,
+        expertise,
+        userInterventionConfig,
         // What the model is told about the run's world — frozen from here on;
         // the context engine reads it on every step.
         world: {

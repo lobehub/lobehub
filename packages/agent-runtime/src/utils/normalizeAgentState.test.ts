@@ -278,13 +278,15 @@ describe('normalizeAgentState', () => {
     });
     expect(normalized.world?.expertise).toBe(expertise);
     expect(normalized.world?.enableExpertise).toBe(false);
-    for (const legacy of [
+    // Kept, not dropped: a worker still running the pre-slot build reads only
+    // the top-level copy, and would park a headless run without it.
+    for (const compat of [
       'enableExpertise',
       'expertise',
       'securityBlacklist',
       'userInterventionConfig',
     ]) {
-      expect(legacy in normalized).toBe(false);
+      expect(compat in normalized).toBe(true);
     }
   });
 
@@ -298,7 +300,7 @@ describe('normalizeAgentState', () => {
     const normalized = normalizeAgentState(state);
 
     expect(normalized.principal?.policy?.userIntervention).toEqual({ approvalMode: 'auto-run' });
-    expect('userInterventionConfig' in normalized).toBe(false);
+    expect(normalized.userInterventionConfig).toEqual({ approvalMode: 'headless' });
   });
 
   it('lifts a partial device binding without inventing an id', () => {

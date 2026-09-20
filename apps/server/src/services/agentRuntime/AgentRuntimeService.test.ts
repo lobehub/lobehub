@@ -557,7 +557,9 @@ describe('AgentRuntimeService', () => {
 
       const [, state] = mockCoordinator.saveAgentState.mock.calls[0];
       expect(state.principal.policy.userIntervention).toEqual({ approvalMode: 'headless' });
-      expect('userInterventionConfig' in state).toBe(false);
+      // Mirrored at the top level for the rolling-deploy window: a worker on the
+      // pre-slot build reads only that, and would park this headless run.
+      expect(state.userInterventionConfig).toEqual({ approvalMode: 'headless' });
     });
 
     it('stores the run tool set once, on the operation slot', async () => {
@@ -699,10 +701,13 @@ describe('AgentRuntimeService', () => {
         expertise,
       });
 
-      // What the model is told about the run lives on the world slot.
+      // What the model is told about the run lives on the world slot, with the
+      // top-level mirror kept for pre-slot workers during a rolling deploy.
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({
+          enableExpertise: true,
+          expertise,
           world: expect.objectContaining({ enableExpertise: true, expertise }),
         }),
       );

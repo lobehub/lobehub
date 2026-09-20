@@ -63,24 +63,40 @@ const LEGACY_KEY_PATHS: Record<string, readonly string[]> = {
 };
 
 /**
- * Top-level keys the slots absorbed, rather than legacy `metadata` keys. The
- * tool set used to be written twice — once as `operationToolSet`, once as the
- * four mirrors — which doubled the heaviest part of the blob on every step; the
- * run policies and the expertise snapshot simply had no home yet. All are lifted
- * into their slot and dropped from the top level.
+ * Top-level keys the `operationToolSet` slot absorbed, rather than legacy
+ * `metadata` keys. The tool set used to be written twice, which doubled the
+ * heaviest part of the blob on every step, so these are lifted into the slot and
+ * dropped from the top level.
  */
 const LEGACY_MIRROR_PATHS: Record<string, readonly string[]> = {
-  enableExpertise: ['world', 'enableExpertise'],
-  expertise: ['world', 'expertise'],
-  securityBlacklist: ['principal', 'policy', 'securityBlacklist'],
   toolExecutorMap: ['operationToolSet', 'executorMap'],
   toolManifestMap: ['operationToolSet', 'manifestMap'],
   toolSourceMap: ['operationToolSet', 'sourceMap'],
   tools: ['operationToolSet', 'tools'],
+};
+
+/**
+ * Run policies and the expertise snapshot: lifted into their slot but KEPT at
+ * the top level.
+ *
+ * A rolling deploy runs old and new builds side by side over the same Redis
+ * states. A worker on the pre-slot build reads only the top-level copy and
+ * defaults a missing approval mode to `manual`, which parks a headless run on an
+ * approval nobody can give — so dropping the copy here would strand exactly the
+ * operations a new instance created during that window. The producer writes both
+ * for the same reason.
+ *
+ * Remove both halves once no pre-slot worker can pick up a step.
+ */
+const COMPAT_MIRROR_PATHS: Record<string, readonly string[]> = {
+  enableExpertise: ['world', 'enableExpertise'],
+  expertise: ['world', 'expertise'],
+  securityBlacklist: ['principal', 'policy', 'securityBlacklist'],
   userInterventionConfig: ['principal', 'policy', 'userIntervention'],
 };
 
 const LEGACY_MIRROR_KEYS = Object.keys(LEGACY_MIRROR_PATHS);
+const COMPAT_MIRROR_KEYS = Object.keys(COMPAT_MIRROR_PATHS);
 
 /**
  * An empty mirror carries no tool set, so lifting it would only rewrite the blob
@@ -130,18 +146,18 @@ const setIfAbsent = (root: Record<string, unknown>, path: readonly string[], val
  *
  * The run's tool set is lifted the same way, from the four top-level mirrors it
  * used to be written to alongside `operationToolSet` — see
- * {@link LEGACY_MIRROR_PATHS}.
+ * {@link LEGACY_MIRROR_PATHS}. The run policies and the expertise snapshot are
+ * lifted but deliberately left in place for now — see {@link COMPAT_MIRROR_PATHS}.
  */
 export const normalizeAgentState = <T extends AgentState>(state: T): T => {
   const metadata = state.metadata;
   const hasLegacyMetadata =
     !!metadata && LEGACY_KEYS.some((key) => Object.prototype.hasOwnProperty.call(metadata, key));
-  const mirrorKeys = LEGACY_MIRROR_KEYS.filter(
-    (key) =>
-      isPresent(state as unknown as Record<string, unknown>, key) &&
-      isPopulatedMirror((state as unknown as Record<string, unknown>)[key]),
-  );
-  if (!hasLegacyMetadata && mirrorKeys.length === 0) return state;
+  const topLevel = state as unknown as Record<string, unknown>;
+  const hasMirror = (key: string) => isPresent(topLevel, key) && isPopulatedMirror(topLevel[key]);
+  const mirrorKeys = LEGACY_MIRROR_KEYS.filter(hasMirror);
+  const compatKeys = COMPAT_MIRROR_KEYS.filter(hasMirror);
+  if (!hasLegacyMetadata && mirrorKeys.length === 0 && compatKeys.length === 0) return state;
 
   const next = { ...state } as Record<string, unknown>;
 
@@ -157,13 +173,14 @@ export const normalizeAgentState = <T extends AgentState>(state: T): T => {
     next.metadata = strippedMetadata;
   }
 
+  // Lifted and left in place: the old build still reads these (see above).
+  for (const key of compatKeys) {
+    setIfAbsent(next, COMPAT_MIRROR_PATHS[key], topLevel[key]);
+  }
+
   if (mirrorKeys.length > 0) {
     for (const key of mirrorKeys) {
-      setIfAbsent(
-        next,
-        LEGACY_MIRROR_PATHS[key],
-        (state as unknown as Record<string, unknown>)[key],
-      );
+      setIfAbsent(next, LEGACY_MIRROR_PATHS[key], topLevel[key]);
       delete next[key];
     }
     // `setIfAbsent` cloned the slot on the way in, so this default cannot reach
