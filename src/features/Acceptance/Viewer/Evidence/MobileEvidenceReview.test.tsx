@@ -20,7 +20,15 @@ vi.mock('./attachments', () => ({
     ) : null,
 }));
 
+// The image stage measures itself and draws on a canvas — neither exists in
+// jsdom, and neither is what these tests are about.
+vi.mock('./EvidenceStage', () => ({
+  EvidenceStage: () => <div>stage-stub</div>,
+}));
+
 afterEach(cleanup);
+
+const evidenceItem = { fileUrl: 'https://example.com/shot.png', id: 'e1' };
 
 const buildModel = (overrides: Partial<RejectReviewModel> = {}): RejectReviewModel =>
   ({
@@ -54,50 +62,51 @@ const buildModel = (overrides: Partial<RejectReviewModel> = {}): RejectReviewMod
     ...overrides,
   }) as RejectReviewModel;
 
-const supplementToggle = () =>
-  screen.getByRole('button', { name: /acceptance\.review\.supplement/ });
+const supplementButton = () =>
+  screen.getByRole('button', { name: /acceptance\.review\.supplementButton/ });
 const supplementField = () =>
   screen.queryByRole('textbox', { name: 'acceptance.review.supplement' });
+const drawButton = () => screen.queryByRole('button', { name: 'acceptance.review.drawRegion' });
 
-describe('MobileEvidenceReview supplement fold', () => {
-  it('folds the supplement by default and reveals it on tap', () => {
+describe('MobileEvidenceReview notes button', () => {
+  it('keeps the notes closed by default and opens them on tap', () => {
     render(<MobileEvidenceReview model={buildModel()} />);
 
-    // Folded: the field is not on the page, the fold says so itself.
-    expect(supplementToggle()).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByText('acceptance.review.supplementFoldedEmpty')).toBeInTheDocument();
+    // Closed: the field is not on the page; the button says so itself.
+    expect(supplementButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(supplementButton()).toHaveTextContent('acceptance.review.supplementButton');
     expect(supplementField()).not.toBeInTheDocument();
 
-    // Tapping the header opens the field in place.
-    fireEvent.click(supplementToggle());
-    expect(supplementToggle()).toHaveAttribute('aria-expanded', 'true');
+    // Tapping the button opens the field in place.
+    fireEvent.click(supplementButton());
+    expect(supplementButton()).toHaveAttribute('aria-expanded', 'true');
     expect(supplementField()).toBeInTheDocument();
     expect(screen.getByText('upload-stub')).toBeInTheDocument();
   });
 
-  it('continues the reviewer action after expanding: typing lands in the model', () => {
+  it('continues the reviewer action after opening: typing lands in the model', () => {
     const setComment = vi.fn();
     render(<MobileEvidenceReview model={buildModel({ setComment })} />);
 
-    fireEvent.click(supplementToggle());
+    fireEvent.click(supplementButton());
     fireEvent.change(supplementField()!, { target: { value: 'wrong color here' } });
 
     expect(setComment).toHaveBeenCalledWith('wrong color here');
   });
 
-  it('folds back on a second tap, keeping the summary honest about saved content', () => {
+  it('closes on a second tap, keeping the button honest about saved content', () => {
     render(<MobileEvidenceReview model={buildModel({ comment: 'already typed' })} />);
 
-    // A restored draft opens itself — never fold away words the user wrote.
+    // A restored draft opens itself — never hide words the user wrote.
     expect(supplementField()).toBeInTheDocument();
 
-    fireEvent.click(supplementToggle());
+    fireEvent.click(supplementButton());
     expect(supplementField()).not.toBeInTheDocument();
-    // The folded row names the draft instead of the empty "optional" hint.
-    expect(screen.getByText('acceptance.review.supplementFoldedDraft')).toBeInTheDocument();
+    // The closed button names the draft instead of the plain label.
+    expect(supplementButton()).toHaveTextContent('acceptance.review.supplementButtonDraft');
   });
 
-  it('auto-expands when screenshots are already attached', () => {
+  it('auto-opens when screenshots are already attached', () => {
     render(
       <MobileEvidenceReview
         model={buildModel({
@@ -109,7 +118,7 @@ describe('MobileEvidenceReview supplement fold', () => {
     expect(supplementField()).toBeInTheDocument();
   });
 
-  it('keeps marked regions visible above the fold without auto-expanding the supplement', () => {
+  it('keeps marked regions visible without auto-opening the notes', () => {
     render(
       <MobileEvidenceReview
         model={buildModel({
@@ -120,9 +129,56 @@ describe('MobileEvidenceReview supplement fold', () => {
       />,
     );
 
-    // Regions have their own always-visible section; the supplement stays folded.
+    // Regions have their own always-visible section; the notes stay closed.
     expect(screen.getByText('acceptance.review.regionComments')).toBeInTheDocument();
     expect(supplementField()).not.toBeInTheDocument();
-    expect(supplementToggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(supplementButton()).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+describe('MobileEvidenceReview draw button', () => {
+  it('sits beside the notes button and switches drawing on', () => {
+    const advance = vi.fn();
+    render(
+      <MobileEvidenceReview
+        model={buildModel({
+          activeEvidence: evidenceItem,
+          activeIndex: 0,
+          advance,
+          evidence: [evidenceItem],
+          hasEvidence: true,
+        })}
+      />,
+    );
+
+    // Not pressed while drags pan the image.
+    expect(drawButton()).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(drawButton()!);
+    expect(advance).toHaveBeenCalledWith('toggle-draw');
+  });
+
+  it('shows as pressed while drags mark regions', () => {
+    render(
+      <MobileEvidenceReview
+        model={buildModel({
+          activeEvidence: evidenceItem,
+          activeIndex: 0,
+          drawing: true,
+          evidence: [evidenceItem],
+          hasEvidence: true,
+        })}
+      />,
+    );
+
+    expect(drawButton()).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('acceptance.review.mobileDrawHint')).toBeInTheDocument();
+  });
+
+  it('is absent when there is no image to draw on', () => {
+    render(<MobileEvidenceReview model={buildModel()} />);
+
+    expect(drawButton()).not.toBeInTheDocument();
+    expect(supplementButton()).toBeInTheDocument();
   });
 });

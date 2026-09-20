@@ -1,9 +1,9 @@
 'use client';
 
 import { Flexbox, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronDown, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, NotebookPen, PencilLine, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,13 +34,25 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
     padding-block-end: 12px;
   `,
-  /** The image keeps a fixed slice of the screen so the notes under it are
-      reachable without a second screen — but stays tall enough to circle on. */
+  /** The image is what the reviewer came to look at, so it takes every pixel
+      the rows below it do not need. When the notes open underneath, it yields
+      down to a floor that still leaves room to circle on, then the page scrolls. */
   stage: css`
     display: flex;
+    flex: 1 1 auto;
+    min-height: 40dvh;
+  `,
+  /** Two equal thumb-sized buttons: what to do next with the image, and where
+      the written note goes. Each carries its own on/off state. */
+  actions: css`
+    display: flex;
     flex: none;
-    height: 42dvh;
-    min-height: 220px;
+    gap: 8px;
+
+    > button {
+      flex: 1;
+      min-height: 44px;
+    }
   `,
   editor: css`
     display: flex;
@@ -52,39 +64,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     textarea {
       font-size: 16px;
-    }
-  `,
-  /** The fold header: the whole row is the tap target (44px touch minimum),
-      not just the chevron. The chevron's rotation carries the open state. */
-  toggle: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    justify-content: space-between;
-
-    width: 100%;
-    min-height: 44px;
-    padding: 0;
-    border: none;
-
-    text-align: start;
-
-    background: none;
-
-    &:active {
-      opacity: 0.7;
-    }
-  `,
-  toggleChevron: css`
-    transform: rotate(0deg);
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 150ms ease-out;
-
-    [data-expanded='true'] & {
-      transform: rotate(180deg);
     }
   `,
   footer: css`
@@ -126,12 +105,12 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
     zoom,
   } = model;
 
-  // The supplement block folds away by default — the reject's substance is the
+  // The supplement stays closed until asked for — the reject's substance is the
   // marked regions, and the phone should not scroll past an empty textarea to
   // reach the submit button. It opens itself when there is already text or
-  // screenshots to show (a restored draft, a paste, prior feedback) — folded
+  // screenshots to show (a restored draft, a paste, prior feedback) — hidden
   // content the user cannot see is feedback waiting to be lost. Marked regions
-  // stay out of this: they have their own region-comments section above.
+  // stay out of this: they have their own region-comments section.
   const [supplementExpanded, setSupplementExpanded] = useState(() =>
     Boolean(comment.trim() || attachments.length > 0),
   );
@@ -179,21 +158,18 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
               />
             </div>
             <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-              {/* A mode switch, not an action button. A single button labelled
-                  with the mode it would LEAVE says nothing about which mode is
-                  on, and its 44px slab sat oddly beside the small zoom icons. */}
-              <Segmented
-                size={'small'}
-                value={drawing ? 'draw' : 'browse'}
-                options={[
-                  { label: t('acceptance.review.browseImage'), value: 'browse' },
-                  { label: t('acceptance.review.drawRegion'), value: 'draw' },
-                ]}
-                onChange={(value) => {
-                  if ((value === 'draw') !== drawing) model.advance('toggle-draw');
-                }}
-              />
-              <Flexbox flex={1} />
+              {/* The hint is the region's receipt: it says the box landed AND
+                  that it is still editable. It shares the zoom row so the
+                  image above keeps the height a row of its own would cost. */}
+              <Text fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
+                {drawing && activeAnnotations.length > 0
+                  ? t('acceptance.review.mobileDrawnHint', { count: activeAnnotations.length })
+                  : t(
+                      drawing
+                        ? 'acceptance.review.mobileDrawHint'
+                        : 'acceptance.review.mobileBrowseHint',
+                    )}
+              </Text>
               <ActionIcon
                 aria-label={t('acceptance.review.zoomOut')}
                 disabled={zoom <= ZOOM_STEPS[0]}
@@ -210,77 +186,75 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 onClick={() => model.stepZoom(1)}
               />
             </Flexbox>
-            {/* The hint is the region's receipt: it says the box landed AND
-                that it is still editable, right above the note it belongs to. */}
-            <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
-              {drawing && activeAnnotations.length > 0
-                ? t('acceptance.review.mobileDrawnHint', { count: activeAnnotations.length })
-                : t(
-                    drawing
-                      ? 'acceptance.review.mobileDrawHint'
-                      : 'acceptance.review.mobileBrowseHint',
-                  )}
-            </Text>
           </>
         )}
-        <div className={styles.editor}>
-          {hasRegionContent && (
-            <>
-              <Text strong>{t('acceptance.review.regionComments')}</Text>
-              <MobileRegionNotes
-                annotations={annotations}
-                evidence={evidence}
-                onChange={model.editAnnotation}
-                onJump={model.jumpToRegion}
-                onRemove={model.removeAnnotation}
-              />
-            </>
+        {/* Two buttons side by side, each a switch the reviewer can read the
+            state of: "draw region" is pressed while drags mark regions instead
+            of panning; "notes" is expanded while the written note is open
+            below. A folded header row read as a heading, not as something to
+            tap — a button says what it is. */}
+        <div className={styles.actions}>
+          {activeEvidence && (
+            <Button
+              aria-pressed={drawing}
+              icon={PencilLine}
+              type={drawing ? 'primary' : 'default'}
+              onClick={() => model.advance('toggle-draw')}
+            >
+              {t('acceptance.review.drawRegion')}
+            </Button>
           )}
-          {/* The supplement fold: the header is a real button (state is
-              perceivable and reachable by assistive tech), the summary tells
-              the folded reader what is already inside — an empty "optional"
-              block that silently holds typed words is how feedback gets lost. */}
-          <button
+          <Button
             aria-expanded={supplementExpanded}
-            className={styles.toggle}
-            data-expanded={supplementExpanded}
-            type={'button'}
+            icon={NotebookPen}
+            type={supplementExpanded ? 'primary' : 'default'}
             onClick={() => setSupplementExpanded((open) => !open)}
           >
-            <Text strong>{t('acceptance.review.supplement')}</Text>
-            {!supplementExpanded && (
-              <Text fontSize={12} type={'secondary'}>
-                {hasSupplementContent
-                  ? t('acceptance.review.supplementFoldedDraft')
-                  : t('acceptance.review.supplementFoldedEmpty')}
-              </Text>
-            )}
-            <ChevronDown className={styles.toggleChevron} size={16} />
-          </button>
-          {supplementExpanded && (
-            <>
-              <TextArea
-                aria-label={t('acceptance.review.supplement')}
-                autoSize={{ maxRows: 10, minRows: 4 }}
-                placeholder={t('acceptance.review.rejectPlaceholder')}
-                style={{ fontSize: 16 }}
-                value={comment}
-                onChange={(event) => model.setComment(event.target.value)}
-                onPaste={handlePaste}
-              />
-              <AttachmentUploadButton disabled={loading} onFiles={model.uploadFiles} />
-              <AttachmentStrip
-                attachments={attachments}
-                disabled={loading}
-                uploading={uploading}
-                onRemove={model.removeAttachment}
-              />
-              <Text fontSize={12} type={'secondary'}>
-                {t('acceptance.review.draftSaved')}
-              </Text>
-            </>
-          )}
+            {hasSupplementContent && !supplementExpanded
+              ? t('acceptance.review.supplementButtonDraft')
+              : t('acceptance.review.supplementButton')}
+          </Button>
         </div>
+        {(hasRegionContent || supplementExpanded) && (
+          <div className={styles.editor}>
+            {hasRegionContent && (
+              <>
+                <Text strong>{t('acceptance.review.regionComments')}</Text>
+                <MobileRegionNotes
+                  annotations={annotations}
+                  evidence={evidence}
+                  onChange={model.editAnnotation}
+                  onJump={model.jumpToRegion}
+                  onRemove={model.removeAnnotation}
+                />
+              </>
+            )}
+            {supplementExpanded && (
+              <>
+                <Text strong>{t('acceptance.review.supplement')}</Text>
+                <TextArea
+                  aria-label={t('acceptance.review.supplement')}
+                  autoSize={{ maxRows: 10, minRows: 4 }}
+                  placeholder={t('acceptance.review.rejectPlaceholder')}
+                  style={{ fontSize: 16 }}
+                  value={comment}
+                  onChange={(event) => model.setComment(event.target.value)}
+                  onPaste={handlePaste}
+                />
+                <AttachmentUploadButton disabled={loading} onFiles={model.uploadFiles} />
+                <AttachmentStrip
+                  attachments={attachments}
+                  disabled={loading}
+                  uploading={uploading}
+                  onRemove={model.removeAttachment}
+                />
+                <Text fontSize={12} type={'secondary'}>
+                  {t('acceptance.review.draftSaved')}
+                </Text>
+              </>
+            )}
+          </div>
+        )}
       </div>
       <div className={styles.footer}>
         {failed && (
