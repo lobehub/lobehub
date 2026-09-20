@@ -64,11 +64,11 @@ const isActiveProviderApiKeyNotEmpty = (s: AIProviderStoreState) => {
 
 const providerConfigById =
   (id: string) =>
-  (s: AIProviderStoreState): AiProviderRuntimeConfig | undefined => {
-    if (!id) return undefined;
+    (s: AIProviderStoreState): AiProviderRuntimeConfig | undefined => {
+      if (!id) return undefined;
 
-    return s.aiProviderRuntimeConfig?.[id];
-  };
+      return s.aiProviderRuntimeConfig?.[id];
+    };
 
 const isProviderConfigUpdating = (id: string) => (s: AIProviderStoreState) =>
   s.aiProviderConfigUpdatingIds.includes(id);
@@ -96,11 +96,11 @@ const isProviderFetchOnClient =
     const isProviderApiKeyNotEmpty = !!config?.keyVaults.apiKey;
     if (!isProviderEndpointNotEmpty && !isProviderApiKeyNotEmpty) return false;
 
-    // 2. If only contains baseUrl, force on Client
-    if (isProviderEndpointNotEmpty && !isProviderApiKeyNotEmpty) return true;
-
-    // 3. Follow the user settings.
+    // 2. Follow the user settings.
     if (typeof config?.fetchOnClient !== 'undefined') return config?.fetchOnClient;
+
+    // 3. If contains baseUrl, force on Client
+    if (isProviderEndpointNotEmpty) return true;
 
     // 4. On Server, by default.
     return false;
