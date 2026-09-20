@@ -34,11 +34,11 @@ Findings are warnings. Treat them like a reviewer's comment: fix, or explain in 
 
 ## CI
 
-The `alint` job in `.github/workflows/test.yml` runs on every pull request, on the PR's diff only, and never fails the check:
+The `alint ·` steps at the end of the Test Desktop App job in `.github/workflows/test.yml` run on every push and pull request, on the change's diff only, and never fail the check (they reuse that job's root install instead of paying for a runner of their own):
 
-- `alint --dirty` lints the working tree against `HEAD` and keeps only findings on changed lines. The job fetches the merge base and runs `git reset --mixed <merge-base>`, which turns the whole PR into dirty changes, so the scope is exactly the PR's diff and nothing older is reported.
+- `alint --dirty` lints the working tree against `HEAD` and keeps only findings on changed lines. The steps fetch the merge base (against the PR base, or `canary` on a push) and run `git reset --mixed <merge-base>`, which turns the whole change into dirty changes, so the scope is exactly its diff and nothing older is reported. On a push to `canary` itself the diff is empty and nothing runs.
 - Findings become inline warning annotations (`.agents/alint/annotate.ts`) plus a table in the job summary.
-- The provider key comes from the `DEEPSEEK_API_KEY` repository secret. Fork PRs cannot read it, so the job posts a notice and exits green.
+- The provider key comes from the `DEEPSEEK_API_KEY` repository secret. Fork PRs cannot read it, so the steps are skipped.
 - When `alint.config.toml` or anything under `.agents/alint` changed, the fixture suite runs too, so a rule edit is calibrated before it lands.
 - `.alintcache` is restored from the last run with the same rule set, keyed by the rule and config files.
 
