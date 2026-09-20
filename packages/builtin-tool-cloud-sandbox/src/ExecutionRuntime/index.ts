@@ -36,6 +36,16 @@ export class CloudSandboxExecutionRuntime extends ComputerRuntime {
     return this.sandboxService.callTool(toolName, params);
   }
 
+  /**
+   * The cloud sandbox manifest exposes 1-based `startLine`/`endLine`
+   * (inclusive) and the sandbox reader ignores `loc`, so the continuation
+   * hint must use those parameters — a `loc=[...]` hint would re-read the
+   * whole file instead of the next window.
+   */
+  protected formatReadFileContinuation(nextRange: [number, number]): string {
+    return `startLine=${nextRange[0] + 1}, endLine=${nextRange[1]}`;
+  }
+
   // ==================== Cloud-Specific: Code Execution ====================
 
   async executeCode(args: ExecuteCodeParams): Promise<BuiltinServerRuntimeOutput> {

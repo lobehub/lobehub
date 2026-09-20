@@ -70,6 +70,81 @@ describe('formatFileContent', () => {
     expect(result).toContain('loc=[2500, 2545]');
   });
 
+  it('should continue with a window the same size as the returned one', () => {
+    const result = formatFileContent({
+      content: 'some lines',
+      lineRange: [0, 1000],
+      path: '/src/big.ts',
+      totalLines: 2545,
+    });
+    expect(result).toContain('loc=[1000, 2000]');
+  });
+
+  it('should clamp the displayed window at the total line count', () => {
+    const result = formatFileContent({
+      content: 'line 1\nline 2',
+      lineRange: [0, 1000],
+      path: '/src/small.ts',
+      totalLines: 2,
+    });
+    expect(result).toContain('(lines 0-2 of 2)');
+    expect(result).not.toContain('to continue reading');
+  });
+
+  it('should not append a continuation hint when the service truncated the content', () => {
+    const result = formatFileContent({
+      content:
+        'partial content\n[content truncated: response was 600000 chars, kept first 500000.]',
+      lineRange: [0, 1000],
+      path: '/src/big.ts',
+      totalLines: 2545,
+      truncated: true,
+    });
+    expect(result).toContain('(lines 0-1000 of 2545)');
+    expect(result).not.toContain('to continue reading');
+  });
+
+  it('should use the backend-specific continuation arguments when provided', () => {
+    const result = formatFileContent({
+      content: 'some lines',
+      formatContinuation: ([start, end]) => `startLine=${start + 1}, endLine=${end}`,
+      lineRange: [0, 200],
+      path: '/src/big.ts',
+      totalLines: 2545,
+    });
+    expect(result).toContain('startLine=201, endLine=400');
+    expect(result).not.toContain('loc=');
+  });
+
+  it('should prefix each line with its 1-based line number', () => {
+    const result = formatFileContent({
+      content: 'function test() {\n  return true;\n}',
+      firstLineNumber: 11,
+      lineRange: [10, 13],
+      path: '/src/utils.ts',
+      totalLines: 100,
+    });
+    expect(result).toMatchInlineSnapshot(`
+      "File: /src/utils.ts (lines 10-13 of 100)
+
+      11→function test() {
+      12→  return true;
+      13→}
+      [Showing lines 10-13 of 100 total. Call readFile again with loc=[13, 16] to continue reading.]"
+    `);
+  });
+
+  it('should pad line numbers to the width of the last line', () => {
+    const result = formatFileContent({
+      content: 'a\nb\nc',
+      firstLineNumber: 9,
+      path: '/src/pad.ts',
+    });
+    expect(result).toContain(' 9→a');
+    expect(result).toContain('10→b');
+    expect(result).toContain('11→c');
+  });
+
   it('should handle empty content', () => {
     const result = formatFileContent({
       content: '',

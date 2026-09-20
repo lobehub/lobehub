@@ -168,7 +168,7 @@ When the user requests a file deliverable or download, export the finalized file
 
 <tool_usage_guidelines>
 - For listing directory contents: Use 'listFiles' with the target directory path.
-- For reading a file: Use 'readFile' with the file path. Optionally specify startLine/endLine for partial reads.
+- For reading a file: Use 'readFile' with the file path. Optionally specify startLine/endLine (both 1-based, endLine inclusive) for partial reads. The response header reports the returned window and the file's total line count, each line is prefixed with its 1-based line number, and a truncated window ends with a hint naming the startLine/endLine to continue with.
 - For writing files: Use 'writeFile' with the file path and content. Set createDirectories: true if needed.
 - For editing files: Use 'editFile'. Always read the file first to verify content before editing.
 - For executing code directly: Use 'executeCode' with the code and optional language (python/javascript/typescript). This is preferred over runCommand for simple code execution.

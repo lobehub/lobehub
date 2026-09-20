@@ -240,6 +240,11 @@ export interface LocalReadFileResult {
    * Total line count of the entire file.
    */
   totalLineCount: number;
+  /**
+   * True when the content was cut at the output character cap before the
+   * requested `loc` window ended.
+   */
+  truncated?: boolean;
 }
 
 export interface LocalSearchFilesParams {

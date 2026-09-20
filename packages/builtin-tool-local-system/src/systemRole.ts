@@ -49,9 +49,10 @@ You have access to a set of tools to interact with the user's local file system:
 <tool_usage_guidelines>
 - For reading a file: Use 'readFile'. Provide the following parameters:
     - 'path': The exact file path.
-    - 'loc' (Optional): A two-element array [startLine, endLine], 0-based and end-exclusive: '[0, 200]' reads the first 200 lines, '[200, 400]' reads the next 200.
-    - If 'loc' is omitted, it defaults to '[0, 200]'. The response header always reports the returned window and the file's total line count, e.g. '(lines 0-200 of 2545)'.
-    - 'grepContent' line numbers are 1-based while 'loc' is 0-based: to read around a grep hit at line N, use 'loc: [N - 1, ...]'.
+    - 'loc' (Optional): A two-element array [startLine, endLine], 0-based and end-exclusive: '[0, 1000]' reads the first 1000 lines, '[1000, 2000]' reads the next 1000. Request a wider window to read more at once — output is capped at 500K chars.
+    - If 'loc' is omitted, it defaults to '[0, 1000]'. The response header always reports the returned window and the file's total line count, e.g. '(lines 0-1000 of 2545)'.
+    - Each line in the response is prefixed with its 1-based line number (e.g. '  42→...') for reference — never include these prefixes in 'editFile' old_string/new_string or 'writeFile' content.
+    - 'grepContent' line numbers are 1-based while 'loc' is 0-based: to read around a grep hit at line N, use 'loc: [N - 1, ...]'. The line-number prefixes in 'readFile' output are 1-based, so they match 'grepContent'.
     - To read the entire file: check the total line count in the response header, then call 'readFile' again with 'loc: [0, totalLineCount]' to get the full content.
 - For searching files: Use 'searchFiles' with the 'keywords' parameter (search string). 'keywords' is split on whitespace and every token must appear as a substring of the filename (case- and diacritic-insensitive, order-independent). Pass only the discriminating words — long phrases full of optional words will return nothing. You can optionally add the following filter parameters to narrow down the search:
     - 'contentContains': Find files whose content includes specific text.

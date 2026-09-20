@@ -318,6 +318,83 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     expect(output.content).toContain('(lines 2500-2545 of 2545)');
     expect(output.content).not.toContain('to continue reading');
   });
+
+  it('prefixes each content line with its 1-based line number', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'alpha\nbeta\ngamma',
+        fileType: 'txt',
+        filename: 'a.txt',
+        loc: [10, 13],
+        totalCharCount: 15,
+        totalLineCount: 13,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ loc: [10, 13], path: '/tmp/a.txt' });
+
+    expect(output.content).toContain('11→alpha');
+    expect(output.content).toContain('12→beta');
+    expect(output.content).toContain('13→gamma');
+    // State keeps the raw content for UI rendering; only the agent-facing
+    // text carries the gutter.
+    expect(output.state?.content).toBe('alpha\nbeta\ngamma');
+  });
+
+  // Regression: when the service cut the content at its char cap, the loc
+  // continuation hint used to point past content that was never delivered,
+  // silently skipping the window's tail. The embedded truncation warning
+  // already tells the model to narrow the range.
+  it('suppresses the continuation hint when the service truncated the content', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content:
+          'partial\n[content truncated: response was 600000 chars, kept first 500000. Use a smaller line range or grep to narrow down.]',
+        fileType: 'txt',
+        filename: 'big.txt',
+        loc: [0, 1000],
+        totalCharCount: 3_000_000,
+        totalLineCount: 2545,
+        truncated: true,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/big.txt' });
+
+    expect(output.content).toContain('(lines 0-1000 of 2545)');
+    expect(output.content).not.toContain('to continue reading');
+    expect(output.state?.truncated).toBe(true);
+  });
+
+  // The cloud sandbox manifest exposes 1-based startLine/endLine and its
+  // reader ignores `loc`; a loc-style hint there re-reads the whole file.
+  // Runtimes override the continuation syntax — mirror that override here.
+  it('uses the runtime-specific continuation syntax when overridden', async () => {
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content: 'some lines',
+        fileType: 'txt',
+        filename: 'big.txt',
+        totalCharCount: 148_370,
+        totalLineCount: 2545,
+      }),
+    });
+    class CloudStyleRuntime extends LocalSystemExecutionRuntime {
+      protected override formatReadFileContinuation(nextRange: [number, number]): string {
+        return `startLine=${nextRange[0] + 1}, endLine=${nextRange[1]}`;
+      }
+    }
+    const runtime = new CloudStyleRuntime(service);
+
+    const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt', startLine: 1 });
+
+    expect(output.content).toContain('startLine=201, endLine=399');
+    expect(output.content).not.toContain('loc=');
+    // No loc from the service: the 1-based startLine arg numbers the gutter.
+    expect(output.content).toContain('1→some lines');
+  });
 });
 
 describe('LocalSystemExecutionRuntime.executeToolCall — working directory anchoring', () => {

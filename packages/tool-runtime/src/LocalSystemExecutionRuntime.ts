@@ -172,6 +172,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
         return this.readFile({
           cwd,
           endLine: args.loc?.[1],
+          loc: args.loc,
           path: args.path,
           startLine: args.loc?.[0],
         });
@@ -341,9 +342,10 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'readLocalFile': {
         const loc: [number, number] | undefined =
-          params.startLine !== undefined || params.endLine !== undefined
-            ? [params.startLine ?? 0, params.endLine ?? 200]
-            : undefined;
+          params.loc ??
+          (params.startLine !== undefined || params.endLine !== undefined
+            ? [params.startLine ?? 0, params.endLine ?? (params.startLine ?? 0) + 1_000]
+            : undefined);
         return { cwd: params.cwd, fullContent: params.fullContent, loc, path: params.path };
       }
 
@@ -524,6 +526,10 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             loc: raw.loc,
             totalCharCount: raw.totalCharCount,
             totalLineCount: raw.totalLineCount,
+            // The char-cap flag — ComputerRuntime suppresses the continuation
+            // hint on truncated reads so it never points past undelivered
+            // content.
+            truncated: raw.truncated,
           },
           success: true,
         };

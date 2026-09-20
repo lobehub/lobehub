@@ -27,7 +27,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         properties: {
           loc: {
             description:
-              "Optional range of lines to read [startLine, endLine], 0-based and end-exclusive (e.g. [0, 200] reads the first 200 lines). Defaults to [0, 200] if not specified. The response header reports the returned window and the file's total line count.",
+              "Optional range of lines to read [startLine, endLine], 0-based and end-exclusive (e.g. [0, 1000] reads the first 1000 lines). Defaults to [0, 1000] if not specified; request a wider window to read more at once — output is capped at 500K chars. The response header reports the returned window and the file's total line count, and each line is prefixed with its 1-based line number.",
             items: {
               type: 'number',
             },
