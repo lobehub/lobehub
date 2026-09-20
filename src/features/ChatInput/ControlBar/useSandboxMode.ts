@@ -1,9 +1,10 @@
-import { useCallback, useReducer } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import {
   getPendingSandboxSelection,
   setPendingSandboxSelection,
+  subscribePendingSandboxSelection,
 } from '@/store/chat/pendingSandboxSelection';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -12,7 +13,12 @@ export type SandboxMode = 'ephemeral' | 'persistent';
 export interface SandboxSelection {
   /** Only meaningful with `persistent`; absent means the workspace root. */
   instanceId?: string;
-  mode: SandboxMode;
+  /**
+   * Absent means nothing has been chosen — which the server runs as ephemeral,
+   * but which the picker must not show as the temporary directory being
+   * PICKED. A choice is something the user made; the default is not one.
+   */
+  mode?: SandboxMode;
 }
 
 /**
@@ -34,19 +40,22 @@ export const useSandboxMode = (agentId: string) => {
   );
   const topicMode = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.sandboxMode);
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
-  // The pending value lives outside React, so a write to it has to ask for the
-  // re-render that a store write would have given us.
-  const [, rerender] = useReducer((tick: number) => tick + 1, 0);
+  // The pending value lives outside React, so this subscribes to it the way a
+  // store would be subscribed to. Every component using this hook re-renders
+  // on a write, not just the one that wrote — a local force-update here left
+  // the other reader showing the old value.
+  const pending = useSyncExternalStore(subscribePendingSandboxSelection, () =>
+    getPendingSandboxSelection(agentId),
+  );
 
   const selection: SandboxSelection = topicId
-    ? { instanceId: topicInstanceId, mode: topicMode === 'persistent' ? 'persistent' : 'ephemeral' }
-    : (getPendingSandboxSelection(agentId) ?? { mode: 'ephemeral' });
+    ? { instanceId: topicInstanceId, mode: topicMode }
+    : (pending ?? {});
 
   const setSelection = useCallback(
     async (next: SandboxSelection) => {
       if (!topicId) {
         setPendingSandboxSelection(agentId, next);
-        rerender();
         return;
       }
 

@@ -24,10 +24,30 @@ import type { SandboxSelection } from '@/features/ChatInput/ControlBar/SandboxIn
 
 const map = new Map<string, SandboxSelection>();
 
+// More than one component reads this — the execution-device switch and the
+// working-directory chip — and a Map cannot tell React that it changed. A
+// write notifies every subscriber, so a flip in one place moves the other;
+// without this, whichever component did not do the writing kept rendering the
+// old value until something unrelated re-rendered it.
+const listeners = new Set<() => void>();
+
+const emit = () => {
+  for (const listener of listeners) listener();
+};
+
+/** Subscribe to writes; returns the unsubscribe. Shaped for `useSyncExternalStore`. */
+export const subscribePendingSandboxSelection = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
+
 /** Record the pending selection for an agent; `undefined` clears it. */
 export const setPendingSandboxSelection = (agentId: string, selection?: SandboxSelection): void => {
   if (selection) map.set(agentId, selection);
   else map.delete(agentId);
+  emit();
 };
 
 /** Read without consuming — what the closed chip names itself after. */
@@ -43,5 +63,6 @@ export const getPendingSandboxSelection = (agentId: string): SandboxSelection | 
 export const consumePendingSandboxSelection = (agentId: string): SandboxSelection | undefined => {
   const selection = map.get(agentId);
   map.delete(agentId);
+  emit();
   return selection;
 };
