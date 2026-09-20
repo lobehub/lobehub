@@ -286,11 +286,6 @@ If a Vercel build fails because it runs out of memory or exceeds the build time 
     push:
       branches:
         - main
-    workflow_run:
-      workflows:
-        - Upstream Sync
-      types:
-        - completed
     workflow_dispatch:
 
   permissions:
@@ -309,7 +304,6 @@ If a Vercel build fails because it runs out of memory or exceeds the build time 
 
   jobs:
     deploy:
-      if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
       runs-on: ubuntu-latest
       timeout-minutes: 90
 
@@ -339,7 +333,9 @@ If a Vercel build fails because it runs out of memory or exceeds the build time 
           run: vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
   ```
 
-  The workflow builds and deploys whenever `main` is updated. It also deploys after the repository's built-in **Upstream Sync** workflow completes successfully. This extra trigger is required because [pushes made with `GITHUB_TOKEN` do not start another workflow run](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow). You can also trigger it manually from **Actions → Vercel Prebuilt Deploy → Run workflow**.
+  The workflow builds and deploys whenever you push to `main`. You can also trigger it manually from **Actions → Vercel Prebuilt Deploy → Run workflow**.
+
+  The repository's built-in **Upstream Sync** workflow pushes with `GITHUB_TOKEN`, which [does not start another workflow run](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow). After Upstream Sync updates your fork, run **Vercel Prebuilt Deploy** manually to deploy the new version.
 
   ### Disable Vercel's native Git deployment
 
