@@ -366,9 +366,14 @@ export interface BuiltinRestrictedManifestResolveContext {
 }
 
 /** Resolve a builtin-owned manifest for a known restricted API surface. */
+export type BuiltinRestrictedToolManifest = Omit<BuiltinToolManifest, 'systemRole'> & {
+  /** Omit the role when it describes APIs outside the restricted surface. */
+  systemRole?: string;
+};
+
 export type BuiltinRestrictedManifestResolver = (
   context: BuiltinRestrictedManifestResolveContext,
-) => BuiltinToolManifest | undefined;
+) => BuiltinRestrictedToolManifest | undefined;
 
 export interface LobeBuiltinTool {
   /** Identity (hoisted from `manifest.meta`): icon shown in UI lists. */

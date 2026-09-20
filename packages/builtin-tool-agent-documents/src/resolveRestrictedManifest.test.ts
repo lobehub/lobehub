@@ -21,10 +21,37 @@ describe('resolveAgentDocumentsRestrictedManifest', () => {
     expect(manifest?.systemRole).toBe(agentShareSystemPrompt);
   });
 
-  it('fails closed for unknown subsets and non-Share restrictions', () => {
+  it('supports safe subsets without advertising APIs outside the grant', () => {
+    const manifest = resolveAgentDocumentsRestrictedManifest({
+      allowedApiNames: [AgentDocumentsApiName.createDocument, AgentDocumentsApiName.listDocuments],
+      restriction: 'agentShare',
+    });
+
+    expect(manifest?.api.map((api) => api.name)).toEqual([
+      AgentDocumentsApiName.createDocument,
+      AgentDocumentsApiName.listDocuments,
+    ]);
+    expect(manifest?.meta.description).toBe(
+      'Use documents isolated to the current shared-agent topic.',
+    );
+    expect(manifest?.systemRole).toBeUndefined();
+    expect(Object.keys(manifest!.api[0].parameters.properties).sort()).toEqual([
+      'content',
+      'title',
+    ]);
+    expect(Object.keys(manifest!.api[1].parameters.properties)).toEqual([]);
+  });
+
+  it('fails closed for unknown APIs, empty grants, and non-Share restrictions', () => {
     expect(
       resolveAgentDocumentsRestrictedManifest({
-        allowedApiNames: [AgentDocumentsApiName.readDocument],
+        allowedApiNames: ['unknownApi'],
+        restriction: 'agentShare',
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveAgentDocumentsRestrictedManifest({
+        allowedApiNames: [],
         restriction: 'agentShare',
       }),
     ).toBeUndefined();

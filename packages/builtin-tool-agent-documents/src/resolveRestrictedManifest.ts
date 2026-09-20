@@ -10,6 +10,9 @@ const matchesExactApiSet = (apiNames: readonly string[], expected: ReadonlySet<s
   return actual.size === expected.size && [...actual].every((apiName) => expected.has(apiName));
 };
 
+const isSupportedAgentShareApiSet = (apiNames: readonly string[]) =>
+  apiNames.length > 0 && apiNames.every((apiName) => AGENT_SHARE_DOCUMENT_API_NAMES.has(apiName));
+
 const getApi = (name: string): LobeChatPluginApi => {
   const api = AgentDocumentsManifest.api.find((item) => item.name === name);
 
@@ -57,23 +60,27 @@ export const resolveAgentDocumentsRestrictedManifest: BuiltinRestrictedManifestR
   allowedApiNames,
   restriction,
 }) => {
-  if (
-    restriction !== 'agentShare' ||
-    !matchesExactApiSet(allowedApiNames, AGENT_SHARE_DOCUMENT_API_NAMES)
-  ) {
+  if (restriction !== 'agentShare' || !isSupportedAgentShareApiSet(allowedApiNames)) {
     return undefined;
   }
+
+  const allowedApiNameSet = new Set(allowedApiNames);
+  const hasFullAgentShareApiSet = matchesExactApiSet(
+    allowedApiNames,
+    AGENT_SHARE_DOCUMENT_API_NAMES,
+  );
 
   return {
     ...AgentDocumentsManifest,
     api: AgentDocumentsManifest.api
-      .filter((api) => AGENT_SHARE_DOCUMENT_API_NAMES.has(api.name))
+      .filter((api) => allowedApiNameSet.has(api.name))
       .map((api) => agentShareApiOverrides.get(api.name) ?? api),
     meta: {
       ...AgentDocumentsManifest.meta,
-      description:
-        'Create, list, read, edit, and rename documents isolated to the current shared-agent topic.',
+      description: hasFullAgentShareApiSet
+        ? 'Create, list, read, edit, and rename documents isolated to the current shared-agent topic.'
+        : 'Use documents isolated to the current shared-agent topic.',
     },
-    systemRole: agentShareSystemPrompt,
+    systemRole: hasFullAgentShareApiSet ? agentShareSystemPrompt : undefined,
   };
 };

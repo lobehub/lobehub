@@ -167,7 +167,7 @@ export class AgentDocumentsService {
       callerAgentVisibility,
       documentAccessScope,
     );
-    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
+    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
   }
 
   private async projectDocumentContent<T extends ProjectableAgentDocument>(doc: T): Promise<T>;

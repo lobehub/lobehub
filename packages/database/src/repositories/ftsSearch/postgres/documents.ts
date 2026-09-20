@@ -226,14 +226,15 @@ export async function searchKnowledgeBaseDocuments(
   const folderClause = ne(documents.fileType, DOCUMENT_FOLDER_TYPE);
   const userClause = buildWorkspaceWhere(context.scope, documents);
 
-  const inlineRowsPromise = db
+  const inlineHits = db
     .select({
       content: documents.content,
       fileId: documents.fileId,
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: documents.knowledgeBaseId,
-      score,
+      metadata: documents.metadata,
+      score: score.as('score'),
       title: documents.title,
       updatedAt: documents.updatedAt,
     })
@@ -243,22 +244,39 @@ export async function searchKnowledgeBaseDocuments(
         userClause,
         folderClause,
         inArray(documents.knowledgeBaseId, knowledgeBaseIds),
-        notAgentShareDocument(documents.metadata),
         notAgentShareFileReference(db, documents.fileId),
         matchClause,
       ),
     )
     .orderBy(sql`${score} DESC`)
+    .limit(context.scanCandidateLimit(limit))
+    .as('inline_hits');
+
+  const inlineRowsPromise = db
+    .select({
+      content: inlineHits.content,
+      fileId: inlineHits.fileId,
+      filename: inlineHits.filename,
+      id: inlineHits.id,
+      knowledgeBaseId: inlineHits.knowledgeBaseId,
+      score: inlineHits.score,
+      title: inlineHits.title,
+      updatedAt: inlineHits.updatedAt,
+    })
+    .from(inlineHits)
+    .where(notAgentShareDocument(inlineHits.metadata))
+    .orderBy(desc(inlineHits.score))
     .limit(limit);
 
-  const fileBackedRowsPromise = db
+  const fileBackedHits = db
     .select({
       content: documents.content,
       fileId: documents.fileId,
       filename: documents.filename,
       id: documents.id,
       knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
-      score,
+      metadata: documents.metadata,
+      score: score.as('score'),
       title: documents.title,
       updatedAt: documents.updatedAt,
     })
@@ -272,15 +290,26 @@ export async function searchKnowledgeBaseDocuments(
       ),
     )
     .where(
-      and(
-        userClause,
-        folderClause,
-        notAgentShareDocument(documents.metadata),
-        notAgentShareFileReference(db, documents.fileId),
-        matchClause,
-      ),
+      and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), matchClause),
     )
     .orderBy(sql`${score} DESC`)
+    .limit(context.scanCandidateLimit(limit))
+    .as('file_backed_hits');
+
+  const fileBackedRowsPromise = db
+    .select({
+      content: fileBackedHits.content,
+      fileId: fileBackedHits.fileId,
+      filename: fileBackedHits.filename,
+      id: fileBackedHits.id,
+      knowledgeBaseId: fileBackedHits.knowledgeBaseId,
+      score: fileBackedHits.score,
+      title: fileBackedHits.title,
+      updatedAt: fileBackedHits.updatedAt,
+    })
+    .from(fileBackedHits)
+    .where(notAgentShareDocument(fileBackedHits.metadata))
+    .orderBy(desc(fileBackedHits.score))
     .limit(limit);
 
   const [inlineRows, fileBackedRows] = await Promise.all([

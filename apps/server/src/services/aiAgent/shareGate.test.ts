@@ -566,6 +566,42 @@ describe('applyShareGateToToolSet', () => {
     expect(Object.keys(listDocumentsTool!.function.parameters.properties)).toEqual([]);
   });
 
+  it('preserves the restricted Agent Documents schema for a per-API grant', () => {
+    const toolSet = buildToolSet([
+      {
+        apis: Object.values(AgentDocumentsApiName).map((name) => ({ name })),
+        identifier: AgentDocumentsIdentifier,
+      },
+    ]);
+    toolSet.manifestMap[AgentDocumentsIdentifier] = AgentDocumentsManifest;
+    toolSet.tools = generateToolsFromManifest(AgentDocumentsManifest);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [
+          {
+            apis: [AgentDocumentsApiName.createDocument],
+            identifier: AgentDocumentsIdentifier,
+          },
+        ],
+      }),
+    );
+
+    const manifest = toolSet.manifestMap[AgentDocumentsIdentifier];
+    expect(manifest.api.map((api) => api.name)).toEqual([AgentDocumentsApiName.createDocument]);
+    expect(manifest.meta?.description).toBe(
+      'Use documents isolated to the current shared-agent topic.',
+    );
+    expect(manifest.systemRole).toBeUndefined();
+    expect(Object.keys(manifest.api[0].parameters.properties).sort()).toEqual(['content', 'title']);
+    expect(toolSet.tools).toHaveLength(1);
+    expect(Object.keys(toolSet.tools![0].function.parameters.properties).sort()).toEqual([
+      'content',
+      'title',
+    ]);
+  });
+
   it('strips apis whose humanIntervention can never resolve under reject mode', () => {
     const toolSet = buildToolSet([
       {
