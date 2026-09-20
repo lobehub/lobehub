@@ -26,12 +26,14 @@ import {
   deriveAgentDocumentFields,
   extractMarkdownH1Title,
 } from '@/database/models/agentDocuments';
+import { FileModel } from '@/database/models/file';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { isUuid } from '@/database/utils/uuid';
 
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { DocumentService } from '../document';
+import { FileService } from '../file';
 import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
 import { isRawTextAgentDocument } from './contentFormat';
 import {
@@ -42,6 +44,16 @@ import {
 } from './headlessEditor';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
+const TEXT_LIKE_EXTENSIONS = new Set([
+  '.csv',
+  '.json',
+  '.markdown',
+  '.md',
+  '.txt',
+  '.yaml',
+  '.yml',
+]);
+const TEXT_LIKE_MIME_TYPES = new Set(['application/json', 'application/xml', 'application/x-yaml']);
 
 const appendFilenameSuffix = (filename: string, suffix: number): string => {
   const dotIndex = filename.lastIndexOf('.');
@@ -49,6 +61,24 @@ const appendFilenameSuffix = (filename: string, suffix: number): string => {
   if (dotIndex <= 0) return `${filename}-${suffix}`;
 
   return `${filename.slice(0, dotIndex)}-${suffix}${filename.slice(dotIndex)}`;
+};
+
+const appendSpacedFilenameSuffix = (filename: string, suffix: number): string => {
+  const dotIndex = filename.lastIndexOf('.');
+
+  if (dotIndex <= 0) return `${filename} ${suffix}`;
+
+  return `${filename.slice(0, dotIndex)} ${suffix}${filename.slice(dotIndex)}`;
+};
+
+const isTextLikeFile = (mime: string, name: string): boolean => {
+  const type = mime.toLowerCase();
+  if (type.startsWith('text/')) return true;
+  if (TEXT_LIKE_MIME_TYPES.has(type)) return true;
+
+  const dotIndex = name.lastIndexOf('.');
+  const ext = dotIndex >= 0 ? name.slice(dotIndex).toLowerCase() : '';
+  return TEXT_LIKE_EXTENSIONS.has(ext);
 };
 
 interface UpsertDocumentParams {
@@ -147,6 +177,8 @@ const toAgentDocumentContextPayload = (
 export class AgentDocumentsService {
   private agentDocumentModel: AgentDocumentModel;
   private documentService: DocumentService;
+  private fileModel: FileModel;
+  private fileService: FileService;
   private topicDocumentModel: TopicDocumentModel;
 
   constructor(
@@ -167,6 +199,8 @@ export class AgentDocumentsService {
       callerAgentVisibility,
       documentAccessScope,
     );
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.fileService = new FileService(db, userId, workspaceId);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
   }
 
@@ -525,6 +559,65 @@ export class AgentDocumentsService {
 
   async associateDocument(agentId: string, documentId: string): Promise<{ id: string }> {
     return this.agentDocumentModel.associate({ agentId, documentId });
+  }
+
+  async importFile(agentId: string, fileId: string, parentId?: string | null) {
+    const file = await this.fileModel.findById(fileId);
+    if (!file) throw new Error(`File not found: ${fileId}`);
+
+    if (parentId) {
+      const parent = await this.agentDocumentModel.findByDocumentId(agentId, parentId);
+      if (!parent) throw new Error(`Parent folder not found: ${parentId}`);
+      if (parent.fileType !== DOCUMENT_FOLDER_TYPE) {
+        throw new Error(`Parent document is not a folder: ${parentId}`);
+      }
+    }
+
+    const resolvedParentId = parentId ?? null;
+    const baseFilename = buildDocumentFilename(file.name);
+    let filename = baseFilename;
+    let suffix = 2;
+
+    while (
+      await this.agentDocumentModel.findByParentAndFilename(agentId, resolvedParentId, filename)
+    ) {
+      if (suffix > MAX_UNIQUE_FILENAME_ATTEMPTS) {
+        throw new Error(
+          `Unable to generate a unique filename for "${file.name}" after ${MAX_UNIQUE_FILENAME_ATTEMPTS} attempts.`,
+        );
+      }
+
+      filename = appendSpacedFilenameSuffix(baseFilename, suffix);
+      suffix += 1;
+    }
+
+    let content = '';
+    if (isTextLikeFile(file.fileType, file.name)) {
+      try {
+        content = await this.fileService.getFileContent(file.url);
+      } catch (error) {
+        console.error('[agentDocument:importFile] Failed to read text content:', error);
+      }
+    }
+
+    const createParams = {
+      fileId: file.id,
+      fileType: file.fileType || 'application/octet-stream',
+      ...(resolvedParentId ? { parentId: resolvedParentId } : {}),
+      source: file.url,
+      sourceType: 'file' as const,
+      title: file.name,
+    };
+
+    if (!content) {
+      return this.agentDocumentModel.create(agentId, filename, '', createParams);
+    }
+
+    const snapshot = await createMarkdownEditorSnapshot(content);
+    return this.agentDocumentModel.create(agentId, filename, snapshot.content, {
+      ...createParams,
+      editorData: snapshot.editorData,
+    });
   }
 
   async createDocument(

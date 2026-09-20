@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agentDocuments, agents, documents, users } from '../../../schemas';
+import { agentDocuments, agents, documents, files, users } from '../../../schemas';
 import {
   AGENT_SKILL_TEMPLATE_ID,
   DOCUMENT_FOLDER_TYPE,
@@ -200,6 +200,34 @@ describe('AgentDocumentModel', () => {
 
       expect(created.sourceType).toBe(AGENT_DOCUMENT_SOURCE_TYPE);
       expect(created.source).toBe(`agent-document://${agentId}/brief`);
+    });
+
+    it('persists fileId on a file-backed document', async () => {
+      const [file] = await serverDB
+        .insert(files)
+        .values({
+          fileType: 'application/pdf',
+          name: 'brief.pdf',
+          size: 12,
+          url: 's3://brief.pdf',
+          userId,
+        })
+        .returning();
+
+      const created = await agentDocumentModel.create(agentId, 'brief.pdf', '', {
+        fileId: file!.id,
+        fileType: 'application/pdf',
+        sourceType: 'file',
+      });
+
+      const [doc] = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.id, created.documentId));
+
+      expect(doc?.fileId).toBe(file!.id);
+      expect(doc?.sourceType).toBe('file');
+      expect(doc?.filename).toBe('brief.pdf');
     });
 
     it('allows trusted callers to set document source attribution', async () => {

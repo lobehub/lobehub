@@ -2672,6 +2672,8 @@
   "workingPanel.resources.tree.rename": "重命名",
   "workingPanel.resources.tree.untitledDocument": "未命名文档",
   "workingPanel.resources.tree.untitledFolder": "未命名文件夹",
+  "workingPanel.resources.tree.uploadError": "上传失败",
+  "workingPanel.resources.tree.uploadFile": "上传文件",
   "workingPanel.resources.updatedAt": "更新于 {{time}}",
   "workingPanel.resources.viewMode.list": "列表视图",
   "workingPanel.resources.viewMode.tree": "树状视图",

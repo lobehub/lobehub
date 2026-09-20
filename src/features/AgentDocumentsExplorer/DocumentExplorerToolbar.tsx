@@ -1,17 +1,13 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { FilePlusIcon, FolderPlusIcon, PlusIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { FilePlusIcon, FileUp, FolderPlusIcon, PlusIcon } from 'lucide-react';
+import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   toolbar: css`
-    /* padding-inline start matches a tree row's content edge:
-       --trees-padding-inline (4) - --trees-item-margin-x (4), clamped at 0,
-       plus the row's own margin (4) and padding (8). */
-    padding-block: 8px 4px;
-    padding-inline: 12px 8px;
+    margin-inline: 6px;
     color: ${cssVar.colorTextSecondary};
   `,
   title: css`
@@ -25,43 +21,71 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface Props {
   onCreateDocument: () => void;
   onCreateFolder: () => void;
+  onUploadFiles: (files: File[]) => void;
 }
 
-const DocumentExplorerToolbar = memo<Props>(({ onCreateDocument, onCreateFolder }) => {
-  const { t } = useTranslation('chat');
-  const createMenuItems = useMemo<DropdownItem[]>(
-    () => [
-      {
-        icon: <Icon icon={FilePlusIcon} />,
-        key: 'new-document',
-        label: t('workingPanel.resources.tree.newDocument'),
-        onClick: onCreateDocument,
-      },
-      {
-        icon: <Icon icon={FolderPlusIcon} />,
-        key: 'new-folder',
-        label: t('workingPanel.resources.tree.newFolder'),
-        onClick: onCreateFolder,
-      },
-    ],
-    [onCreateDocument, onCreateFolder, t],
-  );
+const DocumentExplorerToolbar = memo<Props>(
+  ({ onCreateDocument, onCreateFolder, onUploadFiles }) => {
+    const { t } = useTranslation('chat');
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const createMenuItems = useMemo<DropdownItem[]>(
+      () => [
+        {
+          icon: <Icon icon={FilePlusIcon} />,
+          key: 'new-document',
+          label: t('workingPanel.resources.tree.newDocument'),
+          onClick: onCreateDocument,
+        },
+        {
+          icon: <Icon icon={FolderPlusIcon} />,
+          key: 'new-folder',
+          label: t('workingPanel.resources.tree.newFolder'),
+          onClick: onCreateFolder,
+        },
+        { type: 'divider' as const },
+        {
+          icon: <Icon icon={FileUp} />,
+          key: 'upload-file',
+          label: t('workingPanel.resources.tree.uploadFile'),
+          onClick: () => fileInputRef.current?.click(),
+        },
+      ],
+      [onCreateDocument, onCreateFolder, t],
+    );
 
-  return (
-    <Flexbox horizontal align={'center'} className={styles.toolbar} distribution={'space-between'}>
-      <Text className={styles.title} type={'secondary'}>
-        {t('workingPanel.resources.filter.documents')}
-      </Text>
-      <DropdownMenu items={createMenuItems} placement={'bottomRight'}>
-        <ActionIcon
-          icon={PlusIcon}
-          size={'small'}
-          title={t('workingPanel.resources.tree.create')}
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.toolbar}
+        distribution={'space-between'}
+      >
+        <Text className={styles.title} type={'secondary'}>
+          {t('workingPanel.resources.filter.documents')}
+        </Text>
+        <DropdownMenu items={createMenuItems} placement={'bottomRight'}>
+          <ActionIcon
+            icon={PlusIcon}
+            size={'small'}
+            title={t('workingPanel.resources.tree.create')}
+          />
+        </DropdownMenu>
+        <input
+          hidden
+          multiple
+          ref={fileInputRef}
+          type={'file'}
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            event.target.value = '';
+            if (files.length === 0) return;
+            onUploadFiles(files);
+          }}
         />
-      </DropdownMenu>
-    </Flexbox>
-  );
-});
+      </Flexbox>
+    );
+  },
+);
 
 DocumentExplorerToolbar.displayName = 'DocumentExplorerToolbar';
 

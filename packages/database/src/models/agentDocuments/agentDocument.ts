@@ -62,6 +62,7 @@ interface AgentDocumentQueryOptions {
 interface AgentDocumentCreateParams {
   createdAt?: Date;
   editorData?: Record<string, any>;
+  fileId?: string;
   fileType?: string;
   loadPosition?: DocumentLoadPosition;
   loadRules?: DocumentLoadRules;
@@ -418,6 +419,7 @@ export class AgentDocumentModel {
     const {
       createdAt,
       editorData,
+      fileId,
       fileType = AGENT_DOCUMENT_FILE_TYPE,
       loadPosition,
       loadRules,
@@ -453,6 +455,7 @@ export class AgentDocumentModel {
       filename,
       parentId,
       metadata: scopedMetadata,
+      ...(fileId ? { fileId } : {}),
       source: source ?? `agent-document://${agentId}/${encodeURIComponent(filename)}`,
       sourceType,
       title,

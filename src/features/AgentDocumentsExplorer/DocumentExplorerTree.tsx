@@ -3,7 +3,7 @@ import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import type { ChangeEvent, CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
@@ -107,6 +107,8 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
   const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const folderUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const folderUploadParentIdRef = useRef<string | null>(null);
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
@@ -210,6 +212,20 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     (parentId: string | null) =>
       ops.createDocument(parentId, { onPendingInserted: focusNewRowForRename }),
     [focusNewRowForRename, ops],
+  );
+  const openFolderFilePicker = useCallback((parentId: string | null) => {
+    folderUploadParentIdRef.current = parentId;
+    folderUploadInputRef.current?.click();
+  }, []);
+  const handleFolderUploadChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      const parentId = folderUploadParentIdRef.current;
+      event.target.value = '';
+      if (files.length === 0) return;
+      void ops.uploadFiles(parentId, files);
+    },
+    [ops],
   );
 
   const handleConvertToSkill = useCallback(
@@ -346,6 +362,12 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
             onClick: () => handleCreateDocument(targetParentId),
             sfSymbol: 'doc.badge.plus',
           },
+          {
+            key: 'upload-file',
+            label: t('workingPanel.resources.tree.uploadFile'),
+            onClick: () => openFolderFilePicker(targetParentId),
+            sfSymbol: 'square.and.arrow.up',
+          },
           { key: 'div-1', type: 'divider' },
         );
       }
@@ -405,6 +427,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       handleCreateDocument,
       handleCreateFolder,
       isRecoverableSkillBundle,
+      openFolderFilePicker,
       navigate,
       ops,
       startInlineRename,
@@ -416,11 +439,19 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     <DocumentExplorerToolbar
       onCreateDocument={() => handleCreateDocument(null)}
       onCreateFolder={() => handleCreateFolder(null)}
+      onUploadFiles={(files) => void ops.uploadFiles(null, files)}
     />
   );
 
   return (
     <div className={styles.tree} ref={containerRef} style={treeStyle}>
+      <input
+        hidden
+        multiple
+        ref={folderUploadInputRef}
+        type={'file'}
+        onChange={handleFolderUploadChange}
+      />
       {nodes.length === 0 ? (
         // Keep the toolbar reachable (new folder / new doc) above the placeholder.
         <Flexbox height={'100%'}>

@@ -2720,6 +2720,8 @@ export default {
   'workingPanel.resources.tree.rename': 'Rename',
   'workingPanel.resources.tree.untitledDocument': 'Untitled document',
   'workingPanel.resources.tree.untitledFolder': 'Untitled folder',
+  'workingPanel.resources.tree.uploadError': 'Failed to upload',
+  'workingPanel.resources.tree.uploadFile': 'Upload file',
   'workingPanel.resources.updatedAt': 'Updated {{time}}',
   'workingPanel.resources.viewMode.list': 'List view',
   'workingPanel.resources.viewMode.tree': 'Tree view',
