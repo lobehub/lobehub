@@ -285,6 +285,15 @@ const runtime = new AgentDocumentsExecutionRuntime(
       if (!agentId) return;
       await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
     },
+    onDocumentWritten: async ({ documentId, content, editorData, title, updatedAt }) => {
+      const { getDocumentStoreState } = await import('@/store/document');
+      getDocumentStoreState().applyServerSnapshot(documentId, {
+        content,
+        editorData,
+        title,
+        updatedAt,
+      });
+    },
   },
 );
 

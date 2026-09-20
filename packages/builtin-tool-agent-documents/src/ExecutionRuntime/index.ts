@@ -30,6 +30,7 @@ interface AgentDocumentRecord {
    * `agentDocuments` association row id.
    */
   documentId?: string;
+  editorData?: Record<string, unknown> | null;
   filename?: string;
   /**
    * The `agentDocuments` association row id. This is what the LLM receives
@@ -38,6 +39,7 @@ interface AgentDocumentRecord {
   id: string;
   litexml?: string;
   title?: string;
+  updatedAt?: Date | string;
 }
 
 interface AgentDocumentOperationContext {
@@ -179,6 +181,18 @@ export interface AgentDocumentsRuntimeOptions {
    * never runs. Invoked from the executor's `onAfterCall` lifecycle hook.
    */
   onDocumentsMutated?: () => MaybePromise<void>;
+  /**
+   * Fired when a tool wrote a document body the host may have open in an editor.
+   * The host should adopt the snapshot through DocumentStore.applyServerSnapshot
+   * so a pending autosave cannot overwrite the server write.
+   */
+  onDocumentWritten?: (snapshot: {
+    content?: string;
+    documentId: string;
+    editorData?: Record<string, unknown> | null;
+    title?: string;
+    updatedAt?: Date | string;
+  }) => MaybePromise<void>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -196,6 +210,16 @@ export class AgentDocumentsExecutionRuntime {
    */
   notifyMutated(): Promise<void> {
     return Promise.resolve(this.options.onDocumentsMutated?.());
+  }
+
+  notifyDocumentWritten(snapshot: {
+    content?: string;
+    documentId: string;
+    editorData?: Record<string, unknown> | null;
+    title?: string;
+    updatedAt?: Date | string;
+  }): Promise<void> {
+    return Promise.resolve(this.options.onDocumentWritten?.(snapshot));
   }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
@@ -484,9 +508,16 @@ export class AgentDocumentsExecutionRuntime {
       state: {
         agentDocumentId: args.id,
         agentId,
+        documentContent: typeof doc.content === 'string' ? doc.content : args.content,
+        documentEditorData:
+          doc.editorData && typeof doc.editorData === 'object'
+            ? (doc.editorData as Record<string, unknown>)
+            : undefined,
         documentId: doc.documentId ?? existing.documentId,
+        documentTitle: doc.title ?? existing.title,
         id: args.id,
         updated: true,
+        updatedAt: doc.updatedAt,
       },
       success: true,
     };

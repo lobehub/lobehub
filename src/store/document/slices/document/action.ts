@@ -33,9 +33,9 @@ export interface InitDocumentParams {
   documentId: string;
   editor: IEditor;
   editorData?: unknown;
-
   sourceType: DocumentSourceType;
   topicId?: string;
+  updatedAt?: Date | string | null;
 }
 
 /**
@@ -68,6 +68,7 @@ export class DocumentActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
   readonly #debouncedSaves = new Map<string, ReturnType<typeof debounce>>();
+  readonly #saveEpoch = new Map<string, number>();
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
@@ -75,12 +76,28 @@ export class DocumentActionImpl {
     this.#get = get;
   }
 
+  getSaveEpoch = (documentId: string): number => this.#saveEpoch.get(documentId) ?? 0;
+
+  discardPendingSaves = (documentId?: string): void => {
+    const ids = documentId
+      ? [documentId]
+      : [...this.#debouncedSaves.keys(), ...this.#saveEpoch.keys()];
+    for (const id of new Set(ids)) {
+      this.#saveEpoch.set(id, this.getSaveEpoch(id) + 1);
+      this.#debouncedSaves.get(id)?.cancel();
+    }
+  };
+
   #getOrCreateDebouncedSave = (documentId: string) => {
     if (!this.#debouncedSaves.has(documentId)) {
       const debouncedFn = debounce(
         async () => {
           try {
-            await this.#get().performSave(documentId, undefined, { saveSource: 'autosave' });
+            const saveEpoch = this.getSaveEpoch(documentId);
+            await this.#get().performSave(documentId, undefined, {
+              saveEpoch,
+              saveSource: 'autosave',
+            });
           } catch (error) {
             console.error('[DocumentStore] Failed to auto-save:', error);
           }
@@ -99,6 +116,7 @@ export class DocumentActionImpl {
       fn.cancel();
       this.#debouncedSaves.delete(documentId);
     }
+    this.#saveEpoch.delete(documentId);
   };
 
   /**
@@ -148,6 +166,7 @@ export class DocumentActionImpl {
       editorData,
       sourceType,
       topicId,
+      updatedAt,
     } = params;
 
     const { internal_dispatchDocument } = this.#get();
@@ -171,6 +190,11 @@ export class DocumentActionImpl {
         sourceType,
         skillFrontmatter,
         topicId,
+        ...(updatedAt
+          ? {
+              lastUpdatedTime: updatedAt instanceof Date ? updatedAt : new Date(updatedAt),
+            }
+          : {}),
       },
     });
 
@@ -238,7 +262,22 @@ export class DocumentActionImpl {
             return;
           }
 
-          // Initialize document with editor
+          const existing = this.#get().documents[documentId];
+          if (existing && !existing.isDirty) {
+            this.#get().applyServerSnapshot(documentId, {
+              content: document.content ?? undefined,
+              editorData:
+                (document.editorData as Record<string, unknown> | null | undefined) ?? null,
+              updatedAt: document.updatedAt,
+            });
+            if (sourceType === 'page') {
+              usePageStore.getState().upsertDocument(document);
+            }
+            return;
+          }
+
+          if (existing?.isDirty) return;
+
           this.#get().initDocumentWithEditor({
             autoSave,
             content: document.content,
@@ -246,9 +285,9 @@ export class DocumentActionImpl {
             documentId,
             editor,
             editorData: document.editorData,
-
             sourceType,
             topicId: topicId ?? undefined,
+            updatedAt: document.updatedAt,
           });
 
           // Mirror page metadata (title/emoji) into pageStore so PageExplorer

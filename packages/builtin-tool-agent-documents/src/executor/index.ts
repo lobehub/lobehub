@@ -47,7 +47,42 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
   // server-runtime path never touches the client store otherwise, so a created
   // doc wouldn't appear until a manual refresh.
   onAfterCall = async ({ apiName, result }: ToolAfterCallContext): Promise<void> => {
-    if (!LIST_MUTATING_APIS.has(apiName) || !result.success) return;
+    if (!result.success) return;
+
+    const state = result.state as
+      | {
+          documentContent?: unknown;
+          documentEditorData?: unknown;
+          documentId?: unknown;
+          documentTitle?: unknown;
+          updatedAt?: unknown;
+        }
+      | undefined;
+    const documentId = typeof state?.documentId === 'string' ? state.documentId : undefined;
+    if (documentId) {
+      const content =
+        typeof state?.documentContent === 'string' ? state.documentContent : undefined;
+      const title = typeof state?.documentTitle === 'string' ? state.documentTitle : undefined;
+      const editorData =
+        state?.documentEditorData && typeof state.documentEditorData === 'object'
+          ? (state.documentEditorData as Record<string, unknown>)
+          : state?.documentEditorData === null
+            ? null
+            : undefined;
+      const updatedAt =
+        state?.updatedAt instanceof Date || typeof state?.updatedAt === 'string'
+          ? state.updatedAt
+          : undefined;
+      await this.runtime.notifyDocumentWritten({
+        content,
+        documentId,
+        editorData,
+        title,
+        updatedAt,
+      });
+    }
+
+    if (!LIST_MUTATING_APIS.has(apiName)) return;
     await this.runtime.notifyMutated();
   };
 

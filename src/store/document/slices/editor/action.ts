@@ -29,6 +29,7 @@ export interface SaveMetadata {
 
 export interface SaveExecutionOptions {
   restoreFromHistoryId?: string;
+  saveEpoch?: number;
   saveSource?: 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
 }
 
@@ -39,6 +40,7 @@ export const createEditorSlice = (set: Setter, get: () => DocumentStore, _api?: 
 export class EditorActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
+  readonly #applyingRemoteIds = new Set<string>();
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
@@ -100,7 +102,12 @@ export class EditorActionImpl {
       );
 
       // Only trigger auto-save if content actually changed AND autoSave is enabled
-      if (options.triggerAutoSave !== false && contentChanged && doc.autoSave !== false) {
+      if (
+        options.triggerAutoSave !== false &&
+        contentChanged &&
+        doc.autoSave !== false &&
+        !this.#applyingRemoteIds.has(id)
+      ) {
         this.#get().triggerDebouncedSave(id);
       }
 
@@ -185,27 +192,36 @@ export class EditorActionImpl {
   };
 
   /**
-   * Apply a snapshot returned by the server-side page-agent tool executor.
-   * The server has already written `documents.content` / `documents.editorData`,
-   * so this only updates in-memory store state to match: clears the dirty flag,
-   * advances `lastSaved*` and refreshes `lastUpdatedTime`. Editor-level Lexical
-   * application is handled by `EditorRuntime.applyServerSnapshot` upstream.
+   * Adopt a snapshot the server already persisted (agent tools, collaborators).
+   * Drops pending autosaves for this document so they cannot overwrite the
+   * remote write, then mirrors the snapshot into store + the mounted editor.
    */
   applyServerSnapshot = (
     documentId: string,
     snapshot: {
       content?: string;
-      editorData?: Record<string, unknown>;
+      editorData?: Record<string, unknown> | null;
       title?: string;
+      updatedAt?: Date | string;
     },
   ): void => {
-    const { documents, internal_dispatchDocument } = this.#get();
+    const { documents, internal_dispatchDocument, editor, activeDocumentId } = this.#get();
     const doc = documents[documentId];
     if (!doc) return;
 
+    this.#get().discardPendingSaves(documentId);
+    this.#applyingRemoteIds.add(documentId);
+
+    const updatedAt =
+      snapshot.updatedAt instanceof Date
+        ? snapshot.updatedAt
+        : snapshot.updatedAt
+          ? new Date(snapshot.updatedAt)
+          : new Date();
+
     const value: Record<string, unknown> = {
       isDirty: false,
-      lastUpdatedTime: new Date(),
+      lastUpdatedTime: updatedAt,
       saveStatus: 'saved',
     };
 
@@ -213,7 +229,10 @@ export class EditorActionImpl {
       value.content = snapshot.content;
       value.lastSavedContent = snapshot.content;
     }
-    if (snapshot.editorData && isValidEditorData(snapshot.editorData)) {
+    if (snapshot.editorData === null) {
+      value.editorData = null;
+      value.lastSavedEditorData = null;
+    } else if (snapshot.editorData && isValidEditorData(snapshot.editorData)) {
       value.editorData = structuredClone(snapshot.editorData);
       value.lastSavedEditorData = structuredClone(snapshot.editorData);
     }
@@ -225,6 +244,14 @@ export class EditorActionImpl {
       { id: documentId, type: 'updateDocument', value: value as Partial<typeof doc> },
       n('applyServerSnapshot'),
     );
+
+    if (editor && activeDocumentId === documentId) {
+      void this.onEditorInit(editor);
+    }
+
+    queueMicrotask(() => {
+      this.#applyingRemoteIds.delete(documentId);
+    });
   };
 
   onEditorInit = async (editor: IEditor): Promise<void> => {
@@ -303,6 +330,9 @@ export class EditorActionImpl {
     const doc = documents[id];
     if (!doc || !editor) return;
 
+    const epochAtStart = this.#get().getSaveEpoch(id);
+    if (options?.saveEpoch !== undefined && options.saveEpoch !== epochAtStart) return;
+
     const hasMetadataChanges = metadata?.emoji !== undefined || metadata?.title !== undefined;
 
     // Skip save if neither document content nor metadata changed
@@ -312,6 +342,8 @@ export class EditorActionImpl {
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
 
     try {
+      if (this.#get().getSaveEpoch(id) !== epochAtStart) return;
+
       const currentEditorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
       const currentContent = this.getPersistedMarkdown(id, currentEditorMarkdown);
       const currentEditorData = editor.getDocument('json');
@@ -340,7 +372,7 @@ export class EditorActionImpl {
 
       let result: Awaited<ReturnType<typeof requestSave>>;
       try {
-        result = await requestSave();
+        result = await requestSave(doc.lastUpdatedTime ?? undefined);
       } catch (error) {
         // Self-heal only plain content saves: a save carrying title/emoji or a
         // history restore replays fields the recovery's content+editorData
