@@ -22,6 +22,11 @@ class AgentShareService {
     return lambdaClient.agentShare.getShareStatus.query({ agentId });
   }
 
+  /** Workspace administrator inventory; intentionally excludes private Agent configuration. */
+  async getWorkspaceShareAudit(input: { limit?: number; offset?: number } = {}) {
+    return lambdaClient.agentShare.getWorkspaceShareAudit.query(input);
+  }
+
   /** Resolve a share's visitor-facing metadata, by its custom slug or its raw share id. */
   async getSharedAgent(slugOrId: string) {
     // The visitor page renders its own login prompt on UNAUTHORIZED; opt out of
@@ -46,6 +51,10 @@ class AgentShareService {
 
   async updateVisibility(agentId: string, visibility: 'link' | 'private') {
     return lambdaClient.agentShare.updateVisibility.mutate({ agentId, visibility });
+  }
+
+  async forceDisableWorkspaceShare(shareId: string) {
+    return lambdaClient.agentShare.forceDisableWorkspaceShare.mutate({ shareId });
   }
 }
 

@@ -3,6 +3,7 @@ import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle
 
 import { timestamps } from './_helpers';
 import { agents } from './agent';
+import { workspaces } from './workspace';
 
 export interface AgentShareConfig {
   /**
@@ -17,8 +18,8 @@ export interface AgentShareConfig {
    */
   allowReadMemory?: boolean;
   /**
-   * Total bytes this share's visitor uploads may occupy on the creator's
-   * account (settled files plus in-flight reservations). Mandatory like
+   * Total bytes this share's visitor uploads may occupy in the Agent's owning
+   * scope (settled files plus in-flight reservations). Mandatory like
    * `monthlySpendLimit` — normalized to a default, never cleared; `0` turns
    * visitor attachments off entirely. Enforced by `shareChat.createUploadUrl`.
    */
@@ -28,11 +29,11 @@ export interface AgentShareConfig {
   /** Maximum number of message turns allowed in each shared topic. */
   maxTurnsPerTopic?: number;
   /**
-   * Creator's monthly spend cap for this shared agent, in USD credits.
+   * Per-Agent monthly spend cap for this share, in USD credits.
    *
    * Mandatory: `normalizeAgentShareConfig` fills a default for any row that
    * lacks one, so every read path through `AgentShareModel` sees a number —
-   * see {@link NormalizedAgentShareConfig}. The creator can move the number
+   * see {@link NormalizedAgentShareConfig}. A share manager can move the number
    * but can never clear it. A cap of `0` is a real lower bound meaning "stop
    * all visitor runs", never "unlimited".
    *
@@ -93,6 +94,7 @@ export const agentShares = pgTable(
     agentId: text('agent_id')
       .notNull()
       .references(() => agents.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
 
@@ -112,6 +114,7 @@ export const agentShares = pgTable(
   (t) => [
     uniqueIndex('agent_shares_agent_id_unique').on(t.agentId),
     index('agent_shares_visibility_idx').on(t.visibility),
+    index('agent_shares_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

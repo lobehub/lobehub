@@ -220,10 +220,12 @@ const share = {
   },
   shareId: 'share-1',
   visibility: 'link',
+  workspaceId: null,
 };
 
 const visitorTopic = {
   agentId: share.agentId,
+  agentShareId: share.shareId,
   id: 'tpc_visitor',
   metadata: { runningOperation: { operationId: 'op-1' } },
   senderId: VISITOR,
@@ -392,7 +394,7 @@ describe('shareChatRouter', () => {
 
         await caller.execAgent({ fileIds, prompt: 'look', shareId: 'share-1' });
 
-        expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+        expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
         expect(mockFileFindByIds).toHaveBeenCalledWith(fileIds, {
           shareId: share.shareId,
           type: 'agentShare',
@@ -670,11 +672,11 @@ describe('shareChatRouter', () => {
       expect(result.pathname.endsWith('/cat.png')).toBe(true);
       expect(result.url).toBe('https://s3/put');
       // The quota that pays is the one reserved: creator, never the visitor.
-      expect(FileUploadModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileUploadModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockReserveUpload).toHaveBeenCalledWith(
         expect.objectContaining({ pathname: result.pathname, size: 10, userId: OWNER }),
       );
-      expect(mockReserveUpload.mock.calls[0][0].workspaceId).toBeUndefined();
+      expect(mockReserveUpload.mock.calls[0][0].workspaceId).toBeNull();
       expect(mockCreatePreSignedUrl).toHaveBeenCalledWith(result.pathname, 10);
     });
 
@@ -774,7 +776,7 @@ describe('shareChatRouter', () => {
       const result = await caller.createFile(input);
 
       expect(result).toEqual({ id: 'file-new', url: 'https://s3/get' });
-      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockFileCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           fileType: 'image/png',
@@ -872,7 +874,7 @@ describe('shareChatRouter', () => {
 
       await caller.abortUpload({ pathname, shareId: 'share-1' });
 
-      expect(FileUploadServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileUploadServiceMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockUploadRelease).toHaveBeenCalledWith(pathname);
     });
 
@@ -897,7 +899,7 @@ describe('shareChatRouter', () => {
 
       await caller.removeFile({ fileId: 'file-a', shareId: 'share-1' });
 
-      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER);
+      expect(FileModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined);
       expect(mockFileFindById).toHaveBeenCalledWith('file-a', {
         accessScope: {
           shareId: share.shareId,
@@ -1061,20 +1063,19 @@ describe('shareChatRouter', () => {
   });
 
   describe('getTopics', () => {
-    it("returns only the visitor's own topics via agentId + senderId scoping", async () => {
+    it("returns only the visitor's own topics via shareId + senderId scoping", async () => {
       const caller = await createCaller();
       await caller.getTopics({ shareId: 'share-1' });
 
       // Topic model is creator-scoped; the query narrows to this visitor's own
-      // topics on this agent. `agent_shares` is 1:1 per agent, so `(agentId,
-      // senderId)` unambiguously identifies the share conversation without a
-      // share-instance column on `topics`.
+      // topics on this exact share instance. A hard revoke and later re-share
+      // must not expose the retired share's visitor namespace.
       expect(TopicModelMock).toHaveBeenCalledWith(expect.anything(), OWNER, undefined, undefined, {
         includeShareVisitor: true,
       });
       expect(mockQueryBySender).toHaveBeenCalledWith({
-        agentId: share.agentId,
         senderId: VISITOR,
+        shareId: share.shareId,
       });
     });
 
@@ -1090,15 +1091,15 @@ describe('shareChatRouter', () => {
       await caller.getTopics({ shareId: 'share-1' });
 
       expect(mockQueryBySender).toHaveBeenCalledWith({
-        agentId: share.agentId,
         senderId: VISITOR,
+        shareId: share.shareId,
       });
     });
   });
 
   describe('getMessages', () => {
-    it('rejects a topic on a different agent of the same creator', async () => {
-      mockFindById.mockResolvedValue({ ...visitorTopic, agentId: 'agt_other' });
+    it('rejects a topic from a retired share instance of the same agent', async () => {
+      mockFindById.mockResolvedValue({ ...visitorTopic, agentShareId: 'share-old' });
       const caller = await createCaller();
 
       await expect(

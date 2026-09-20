@@ -35,7 +35,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { AGENT_OWNERSHIP_STALE, AGENT_SHARED_TRANSFER_BLOCKED, AgentModel } from '../agent';
+import { AGENT_OWNERSHIP_STALE, AgentModel } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -71,23 +71,51 @@ afterEach(async () => {
 });
 
 describe('AgentModel.transferAgentOwnership', () => {
-  it('rejects the handover while the agent still carries a share row', async () => {
-    const agent = await ownerModel.create({ slug: 'shared-handover', title: 'Shared Handover' });
-    await serverDB
+  it('keeps a public share during a same-workspace ownership handover', async () => {
+    const agent = await ownerModel.create({
+      slug: 'shared-handover',
+      title: 'Shared Handover',
+      visibility: 'public',
+    });
+    const [share] = await serverDB
       .insert(agentShares)
-      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
+      .values({
+        agentId: agent.id,
+        shareConfig: { monthlySpendLimit: 5 },
+        visibility: 'link',
+        workspaceId: wsId,
+      })
+      .returning();
 
     await expect(
       handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId }),
-    ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
+    ).resolves.toBeUndefined();
 
-    // Guard fires before any mutation: the agent stays with the previous
-    // owner and the share row is untouched. The block lifts only once the
-    // share row itself is removed (no product entry point yet).
     const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
-    expect(row.userId).toBe(ownerId);
+    expect(row.userId).toBe(recipientId);
     const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
     expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: share.id, visibility: 'link', workspaceId: wsId });
+  });
+
+  it('pauses a private share during a same-workspace ownership handover', async () => {
+    const agent = await ownerModel.create({
+      title: 'Private Shared Handover',
+      visibility: 'private',
+    });
+    await serverDB.insert(agentShares).values({
+      agentId: agent.id,
+      visibility: 'link',
+      workspaceId: wsId,
+    });
+
+    await handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId });
+
+    const [share] = await serverDB
+      .select()
+      .from(agentShares)
+      .where(eq(agentShares.agentId, agent.id));
+    expect(share.visibility).toBe('private');
   });
 
   it('flips only the agent owner; scope, slug and visibility stay put', async () => {

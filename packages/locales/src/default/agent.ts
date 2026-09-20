@@ -399,6 +399,8 @@ export default {
   'share.settings.limits.maxFileStorage': 'File storage limit (MB)',
   'share.settings.limits.maxFileStorageHint':
     'Files visitors attach are stored on your account. Uploads stop once they reach this total; set 0 to turn attachments off.',
+  'share.settings.limits.maxFileStorageWorkspaceHint':
+    'Files visitors attach are stored in the Workspace. Uploads stop once they reach this total; set 0 to turn attachments off.',
   'share.settings.limits.maxTopicsPerVisitor': 'Conversations per visitor',
   'share.settings.limits.maxTopicsPerVisitorHint':
     'How many separate conversations each signed-in visitor can start.',
@@ -409,6 +411,8 @@ export default {
   'share.settings.limits.monthlySpendLimitHint':
     'Visitor runs stop once this month’s spend on this Agent reaches the cap.',
   'share.settings.limits.title': 'Limits',
+  'share.settings.limits.workspaceDesc':
+    'Every visitor run is billed to the Workspace budget, not to the visitor or any member quota. These per-Agent caps always apply — you can change the numbers, but not turn them off.',
   'share.settings.link.copied': 'Link copied',
   'share.settings.link.copy': 'Copy link',
   'share.settings.link.desc':
@@ -432,9 +436,14 @@ export default {
   'share.settings.link.slugSaved': 'Custom link updated',
   'share.settings.link.title': 'Share link',
   'share.settings.link.viewCount': '{{views}} views',
+  'share.settings.link.workspaceDesc':
+    'Anyone signed in who has the link can chat with this Agent. Runs execute in the Workspace and are charged to its budget.',
   'share.settings.notice.desc':
     'Visitors don’t just read this Agent — they run it. Every reply is generated on your account and charged to your balance, and the Agent acts with whatever access you grant below.',
   'share.settings.notice.title': 'Visitors run this Agent on your account',
+  'share.settings.notice.workspaceDesc':
+    'Visitors don’t just read this Agent — they run it. Every reply is generated in the Workspace and charged to its shared budget, without consuming the creator’s or another member’s quota. The Agent only acts with the visitor access you grant below.',
+  'share.settings.notice.workspaceTitle': 'Visitors run this Agent on the Workspace budget',
   'share.settings.permissions.allowCreatorViewSessions': 'Let me read visitor conversations',
   'share.settings.permissions.allowCreatorViewSessionsHint':
     'Off by default: visitor conversations stay private to the visitor.',
@@ -517,11 +526,14 @@ export default {
   'share.visitor.input.stop': 'Stop',
   'share.visitor.privacyNotice':
     'This conversation runs on the owner’s account and may be visible to them. Avoid sharing sensitive information.',
+  'share.visitor.privacyNoticeWorkspace':
+    'This conversation is paid for by the Workspace and may be visible to the Agent creator. Avoid sharing sensitive information.',
   'share.visitor.profile.about': 'About',
   'share.visitor.profile.createdBy': 'Created by {{creator}}',
   'share.visitor.profile.cta': 'Start a conversation',
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
+  'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
   'share.visitor.profile.metrics.conversations': 'Conversations',
   'share.visitor.profile.metrics.conversationsCaption': 'started so far',
   'share.visitor.profile.metrics.tools': 'Open tools',
@@ -536,6 +548,8 @@ export default {
   'share.visitor.profile.starters.title': 'Not sure where to start?',
   'share.visitor.profile.terms.account':
     'It runs on the creator’s account, and every reply is paid for by them.',
+  'share.visitor.profile.terms.accountWorkspace':
+    'It runs in the owner Workspace, and every reply is paid from the Workspace budget.',
   'share.visitor.profile.terms.desc':
     'Today these rules only show up as errors once you hit them. Here they are up front.',
   'share.visitor.profile.terms.title': 'Before you start',

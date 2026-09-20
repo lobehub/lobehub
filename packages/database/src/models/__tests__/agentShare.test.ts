@@ -16,21 +16,32 @@ const agentId = 'agent-share-test-agent';
 const otherAgentId = 'agent-share-test-other-agent';
 const workspaceAgentId = 'agent-share-test-workspace-agent';
 const workspaceId = 'agent-share-test-workspace';
+const otherWorkspaceId = 'agent-share-test-other-workspace';
 
 const agentShareModel = new AgentShareModel(serverDB, userId);
 const otherAgentShareModel = new AgentShareModel(serverDB, otherUserId);
+const workspaceAgentShareModel = new AgentShareModel(serverDB, userId, workspaceId);
+const otherWorkspaceAgentShareModel = new AgentShareModel(serverDB, userId, otherWorkspaceId);
 
 describe('AgentShareModel', () => {
   beforeEach(async () => {
     await serverDB.delete(users);
     await serverDB.transaction(async (tx) => {
       await tx.insert(users).values([{ id: userId }, { id: otherUserId }]);
-      await tx.insert(workspaces).values({
-        id: workspaceId,
-        name: 'Agent Share Test Workspace',
-        primaryOwnerId: userId,
-        slug: 'agent-share-test-workspace',
-      });
+      await tx.insert(workspaces).values([
+        {
+          id: workspaceId,
+          name: 'Agent Share Test Workspace',
+          primaryOwnerId: userId,
+          slug: 'agent-share-test-workspace',
+        },
+        {
+          id: otherWorkspaceId,
+          name: 'Other Agent Share Test Workspace',
+          primaryOwnerId: userId,
+          slug: 'agent-share-test-other-workspace',
+        },
+      ]);
       await tx.insert(agents).values([
         {
           avatar: '🤯',
@@ -151,7 +162,7 @@ describe('AgentShareModel', () => {
       });
     });
 
-    it('rejects missing, foreign, and workspace agents', async () => {
+    it('rejects missing, foreign, and workspace agents from personal scope', async () => {
       await expect(agentShareModel.create('missing-agent')).rejects.toMatchObject({
         code: 'FORBIDDEN',
       });
@@ -160,6 +171,60 @@ describe('AgentShareModel', () => {
       });
       await expect(agentShareModel.create(workspaceAgentId)).rejects.toMatchObject({
         code: 'FORBIDDEN',
+      });
+    });
+
+    it('creates a share scoped to the workspace', async () => {
+      const share = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+
+      expect(share).toMatchObject({
+        agentId: workspaceAgentId,
+        visibility: 'link',
+        workspaceId,
+      });
+      await expect(
+        otherWorkspaceAgentShareModel.getByAgentId(workspaceAgentId),
+      ).resolves.toBeNull();
+    });
+  });
+
+  describe('workspace administrator operations', () => {
+    it('lists only minimal audit metadata and force-disables within the workspace', async () => {
+      const workspaceShare = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+      await workspaceAgentShareModel.updateConfig(workspaceAgentId, {
+        allowCreatorViewSessions: true,
+        toolGrants: [{ identifier: 'private-tool' }],
+      });
+      await agentShareModel.create(agentId, 'link');
+
+      const auditRows = await AgentShareModel.listWorkspaceSharesForAudit(serverDB, workspaceId, {
+        limit: 50,
+        offset: 0,
+      });
+
+      expect(auditRows).toHaveLength(1);
+      expect(auditRows[0]).toMatchObject({
+        agentId: workspaceAgentId,
+        ownerId: userId,
+        shareId: workspaceShare.id,
+        shareVisibility: 'link',
+        userViewCount: 0,
+      });
+      expect(auditRows[0]).not.toHaveProperty('shareConfig');
+      expect(auditRows[0]).not.toHaveProperty('agentTitle');
+
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, otherWorkspaceId, workspaceShare.id),
+      ).resolves.toBeNull();
+      await expect(
+        AgentShareModel.forceDisableWorkspaceShare(serverDB, workspaceId, workspaceShare.id),
+      ).resolves.toMatchObject({
+        agentId: workspaceAgentId,
+        shareId: workspaceShare.id,
+        visibility: 'private',
+      });
+      await expect(workspaceAgentShareModel.getByAgentId(workspaceAgentId)).resolves.toMatchObject({
+        visibility: 'private',
       });
     });
   });
@@ -448,17 +513,25 @@ describe('AgentShareModel', () => {
       });
     });
 
-    it('does not expose a workspace agent even if a share row exists', async () => {
-      const [share] = await serverDB
-        .insert(agentShares)
-        .values({
-          agentId: workspaceAgentId,
-          shareConfig: { maxTopicsPerVisitor: 5, maxTurnsPerTopic: 20 },
-          visibility: 'link',
-        })
-        .returning();
+    it('resolves a workspace share with its billing scope', async () => {
+      const created = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
 
-      expect(await AgentShareModel.findByShareId(serverDB, share.id)).toBeNull();
+      expect(await AgentShareModel.findByShareId(serverDB, created.id)).toMatchObject({
+        agentId: workspaceAgentId,
+        ownerId: userId,
+        shareId: created.id,
+        workspaceId,
+      });
+    });
+
+    it('invalidates a share when the agent moves to another workspace', async () => {
+      const created = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+      await serverDB
+        .update(agents)
+        .set({ workspaceId: otherWorkspaceId })
+        .where(eq(agents.id, workspaceAgentId));
+
+      expect(await AgentShareModel.findByShareId(serverDB, created.id)).toBeNull();
     });
 
     it('returns null for an unknown UUID', async () => {
@@ -530,6 +603,17 @@ describe('AgentShareModel', () => {
       ).toBe(true);
     });
 
+    it('authorizes a live link share on a workspace agent', async () => {
+      const created = await workspaceAgentShareModel.create(workspaceAgentId, 'link');
+
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, {
+          agentId: workspaceAgentId,
+          shareId: created.id,
+        }),
+      ).toBe(true);
+    });
+
     it('revokes once the share is paused or replaced', async () => {
       const created = await agentShareModel.create(agentId, 'link');
 
@@ -573,6 +657,7 @@ describe('AgentShareModel', () => {
         maxTurnsPerTopic: 8,
         monthlySpendLimit: 2.5,
         shareId: created!.id,
+        workspaceId: null,
       });
     });
 
@@ -582,6 +667,7 @@ describe('AgentShareModel', () => {
         maxTurnsPerTopic: 20,
         monthlySpendLimit: 10,
         shareId: null,
+        workspaceId: null,
       });
     });
   });

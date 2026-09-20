@@ -131,6 +131,7 @@ describe('shareRouter', () => {
       shareId: 'agent-share-1',
       userViewCount: 42,
       visibility: 'link',
+      workspaceId: null,
     };
 
     beforeEach(() => {
@@ -178,6 +179,7 @@ describe('shareRouter', () => {
           tags: ['research'],
           title: 'Research Assistant',
         },
+        billingScope: 'personal',
         creator: { avatar: 'owner.png', name: 'Owner Person' },
         isOwner: false,
         shareId: 'agent-share-1',
@@ -202,7 +204,12 @@ describe('shareRouter', () => {
       expect(result).not.toHaveProperty('userViewCount');
       // Visitor topics live under the creator's account, so the counter has to
       // run as the owner rather than the caller.
-      expect(topicModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+      expect(topicModelConstructor).toHaveBeenCalledWith(
+        expect.anything(),
+        'owner-user',
+        undefined,
+      );
+      expect(countShareVisitors).toHaveBeenCalledWith({ shareId: 'agent-share-1' });
       expect(AgentShareModel.findBySlugOrId).toHaveBeenCalledWith(
         expect.anything(),
         'shared-agent',
@@ -211,6 +218,24 @@ describe('shareRouter', () => {
       expect(AgentShareModel.incrementUserViewCount).toHaveBeenCalledWith(
         expect.anything(),
         'agent-share-1',
+      );
+    });
+
+    it('identifies a Workspace-funded share without exposing its Workspace id', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        workspaceId: 'workspace-1',
+      } as any);
+      const caller = shareRouter.createCaller(await createContextInner({ userId: 'visitor-user' }));
+
+      const result = await caller.getSharedAgent({ slugOrId: 'shared-agent' });
+
+      expect(result.billingScope).toBe('workspace');
+      expect(result).not.toHaveProperty('workspaceId');
+      expect(topicModelConstructor).toHaveBeenCalledWith(
+        expect.anything(),
+        'owner-user',
+        'workspace-1',
       );
     });
 
@@ -225,12 +250,20 @@ describe('shareRouter', () => {
       it('looks the model up as the OWNER, whose overrides the run itself honours', async () => {
         await resolve();
 
-        expect(agentServiceConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+        expect(agentServiceConstructor).toHaveBeenCalledWith(
+          expect.anything(),
+          'owner-user',
+          undefined,
+        );
         expect(resolveModelSelectionMock).toHaveBeenCalledWith({
           model: 'gpt-4o',
           provider: 'openai',
         });
-        expect(aiModelModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner-user');
+        expect(aiModelModelConstructor).toHaveBeenCalledWith(
+          expect.anything(),
+          'owner-user',
+          undefined,
+        );
         expect(findByIdAndProviderMock).toHaveBeenCalledWith('gpt-4o', 'openai');
       });
 

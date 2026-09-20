@@ -188,6 +188,8 @@ const pickVisitorRunningOperation = (
 
 export interface CreateTopicParams {
   agentId?: string | null;
+  /** Share instance that owns a visitor topic. Null for ordinary conversations. */
+  agentShareId?: string | null;
   favorite?: boolean;
   groupId?: string | null;
   messages?: string[];
@@ -1324,15 +1326,9 @@ export class TopicModel {
    * Share-visitor topic list for one visitor on one shared agent. The model is
    * constructed with the CREATOR's userId (visitor topics carry it), so the
    * caller — the shareChat router — must have already authorized the visitor
-   * via the share access check; `agentId` + `senderId` together are the
-   * per-visitor boundary.
-   *
-   * `agent_shares` is 1:1 per agent (`agent_shares_agent_id_unique`), so
-   * `agentId` alone identifies which share a visitor topic belongs to — there
-   * is no `topics.share_id` column to scope by. Turning sharing off and back
-   * on keeps the same row and the same `agentId`, so a returning visitor's
-   * older conversations DO resurface under the republished share. That is the
-   * accepted trade-off of not carrying a share id on the row.
+   * via the share access check; `shareId` + `senderId` are the per-visitor
+   * boundary. A manual disable keeps the share row and therefore its topics;
+   * a hard revoke deletes the share row and cascades its visitor topics.
    *
    * Selects a visitor-facing DTO instead of the full row: the visitor surface
    * only renders id/title/runningOperation, and the row also carries
@@ -1343,7 +1339,7 @@ export class TopicModel {
    * column — leaves this method; see {@link VisitorRunningOperation}.
    */
   queryBySender = async (
-    { agentId, senderId }: { agentId: string; senderId: string },
+    { senderId, shareId }: { senderId: string; shareId: string },
     { pageSize = VISITOR_TOPIC_PAGE_SIZE }: { pageSize?: number } = {},
   ): Promise<VisitorTopicItem[]> => {
     const rows = await this.db
@@ -1355,7 +1351,7 @@ export class TopicModel {
         updatedAt: topics.updatedAt,
       })
       .from(topics)
-      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)))
+      .where(and(this.mine(), eq(topics.agentShareId, shareId), eq(topics.senderId, senderId)))
       .orderBy(desc(topics.updatedAt))
       .limit(pageSize);
 
@@ -1367,20 +1363,19 @@ export class TopicModel {
 
   /**
    * Per-visitor topic count on a shared agent — drives `maxTopicsPerVisitor`.
-   * Same `(agentId, senderId)` scoping as {@link queryBySender}; see that
-   * method's JSDoc for why there is no share-id dimension.
+   * Same `(shareId, senderId)` scoping as {@link queryBySender}.
    */
   countBySender = async ({
-    agentId,
     senderId,
+    shareId,
   }: {
-    agentId: string;
     senderId: string;
+    shareId: string;
   }): Promise<number> => {
     const result = await this.db
       .select({ count: count(topics.id) })
       .from(topics)
-      .where(and(this.mine(), eq(topics.agentId, agentId), eq(topics.senderId, senderId)));
+      .where(and(this.mine(), eq(topics.agentShareId, shareId), eq(topics.senderId, senderId)));
 
     return result[0].count;
   };
@@ -1395,14 +1390,14 @@ export class TopicModel {
    * `this.mine()` like every other read here, so the numbers can only ever
    * describe rows the caller owns.
    *
-   * `agentShares` is 1:1 per agent, so `agentId` alone is the share dimension
-   * — see {@link queryBySender} for why a disable → re-enable cycle keeps
-   * counting the earlier conversations.
+   * `shareId` is the durable share dimension: a disable → re-enable cycle keeps
+   * counting earlier conversations because the row is preserved, while a hard
+   * revoke removes both the share and its visitor topics.
    */
   countShareVisitors = async ({
-    agentId,
+    shareId,
   }: {
-    agentId: string;
+    shareId: string;
   }): Promise<{ topicCount: number; visitorCount: number }> => {
     const [result] = await this.db
       .select({
@@ -1410,7 +1405,7 @@ export class TopicModel {
         visitorCount: countDistinct(topics.senderId),
       })
       .from(topics)
-      .where(and(this.mine(), eq(topics.agentId, agentId), isNotNull(topics.senderId)));
+      .where(and(this.mine(), eq(topics.agentShareId, shareId), isNotNull(topics.senderId)));
 
     return {
       topicCount: Number(result?.topicCount ?? 0),

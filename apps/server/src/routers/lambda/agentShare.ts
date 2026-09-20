@@ -6,11 +6,15 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { getAgentShareMonthlySpend } from '@/business/server/agent-share/spendGate';
+import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { FileModel } from '@/database/models/file';
 import { TopicModel } from '@/database/models/topic';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import type { LobeChatDatabase } from '@/database/type';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { assertAgentShareCreationEnabled } from './_helpers/agentShareFeatureGate';
 
@@ -79,15 +83,54 @@ export const agentShareConfigPatchSchema = agentShareConfigSchema.refine(
   'Config patch cannot be empty',
 );
 
-const agentShareProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const agentShareProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
   return opts.next({
     ctx: {
-      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId),
+      agentShareModel: new AgentShareModel(ctx.serverDB, ctx.userId, ctx.workspaceId),
     },
   });
 });
+
+const workspaceAgentShareAdminProcedure = agentShareProcedure
+  .use(withRbacPermission('agent:update:all'))
+  .use(async (opts) => {
+    if (!opts.ctx.workspaceId) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Workspace context required' });
+    }
+
+    return opts.next({ ctx: { workspaceId: opts.ctx.workspaceId } });
+  });
+
+interface AgentSharePermissionContext {
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string;
+  workspacePermissionCodes?: string[];
+}
+
+/**
+ * Workspace shares are authority over an Agent, not another General Access
+ * grade: private Agents stay creator-only, while public Agents are manageable
+ * by their creator or a Workspace admin with `agent:update:all`.
+ */
+const assertCanManageAgentShare = async (
+  ctx: AgentSharePermissionContext,
+  agentId: string,
+): Promise<void> => {
+  if (!ctx.workspaceId) return;
+
+  await assertCanPerformResourceAction({
+    action: 'manage',
+    db: ctx.serverDB,
+    grantedPermissions: ctx.workspacePermissionCodes,
+    resourceId: agentId,
+    resourceType: 'agent',
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+};
 
 /** `updateConfig` / `updateVisibility` / `updateSlug` all return `null` when the share (or its owning agent) does not resolve for this caller. */
 const requireShare = <T>(share: T | null): T => {
@@ -106,19 +149,37 @@ export const agentShareRouter = router({
    * locked out in the meantime — `getSharedAgent` and the runtime's
    * `isRunStillAuthorized` both require `link`.
    */
-  disableShare: agentShareProcedure
-    .input(agentIdInput)
-    .mutation(async ({ input, ctx }) =>
-      requireShare(await ctx.agentShareModel.updateVisibility(input.agentId, 'private')),
-    ),
+  disableShare: agentShareProcedure.input(agentIdInput).mutation(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    return requireShare(await ctx.agentShareModel.updateVisibility(input.agentId, 'private'));
+  }),
 
   enableShare: agentShareProcedure
     .input(agentIdInput.extend({ visibility: z.enum(['private', 'link']).optional() }).strict())
     .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
       await assertAgentShareCreationEnabled(ctx.userId);
 
       return ctx.agentShareModel.create(input.agentId, input.visibility);
     }),
+
+  /**
+   * Minimal Workspace-wide audit inventory. `agent:update:all` is held by
+   * administrators, while the model projection intentionally omits private
+   * Agent configuration and visitor conversation content.
+   */
+  getWorkspaceShareAudit: workspaceAgentShareAdminProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().int().min(1).max(100).default(50),
+          offset: z.number().int().nonnegative().default(0),
+        })
+        .strict(),
+    )
+    .query(({ input, ctx }) =>
+      AgentShareModel.listWorkspaceSharesForAudit(ctx.serverDB, ctx.workspaceId, input),
+    ),
 
   /**
    * Aggregate usage of one share, for its owner only — `getByAgentId` is
@@ -134,13 +195,28 @@ export const agentShareRouter = router({
    * close the share is to its cap, including drafts visitors never sent.
    */
   getShareStats: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
     const share = requireShare(await ctx.agentShareModel.getByAgentId(input.agentId));
+    const resolvedShare = requireShare(await AgentShareModel.findByShareId(ctx.serverDB, share.id));
 
-    const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
-    const fileModel = new FileModel(ctx.serverDB, ctx.userId);
+    const topicModel = new TopicModel(
+      ctx.serverDB,
+      resolvedShare.ownerId,
+      resolvedShare.workspaceId ?? undefined,
+    );
+    const fileModel = new FileModel(
+      ctx.serverDB,
+      resolvedShare.ownerId,
+      resolvedShare.workspaceId ?? undefined,
+    );
     const [visitors, monthlySpend, fileStorageUsed] = await Promise.all([
-      topicModel.countShareVisitors({ agentId: input.agentId }),
-      getAgentShareMonthlySpend({ agentId: input.agentId, ownerUserId: ctx.userId }),
+      topicModel.countShareVisitors({ shareId: share.id }),
+      getAgentShareMonthlySpend({
+        agentId: input.agentId,
+        ownerUserId: resolvedShare.ownerId,
+        shareId: share.id,
+        workspaceId: resolvedShare.workspaceId ?? undefined,
+      }),
       fileModel.countAgentShareUsage(share.id),
     ]);
 
@@ -159,9 +235,26 @@ export const agentShareRouter = router({
     };
   }),
 
-  getShareStatus: agentShareProcedure
-    .input(agentIdInput)
-    .query(async ({ input, ctx }) => ctx.agentShareModel.getByAgentId(input.agentId)),
+  getShareStatus: agentShareProcedure.input(agentIdInput).query(async ({ input, ctx }) => {
+    await assertCanManageAgentShare(ctx, input.agentId);
+    return ctx.agentShareModel.getByAgentId(input.agentId);
+  }),
+
+  /**
+   * Administrator emergency stop for any share in the active Workspace,
+   * including private Agents the administrator cannot otherwise configure.
+   */
+  forceDisableWorkspaceShare: workspaceAgentShareAdminProcedure
+    .input(z.object({ shareId: z.string().uuid() }).strict())
+    .mutation(async ({ input, ctx }) =>
+      requireShare(
+        await AgentShareModel.forceDisableWorkspaceShare(
+          ctx.serverDB,
+          ctx.workspaceId,
+          input.shareId,
+        ),
+      ),
+    ),
 
   updateShareConfig: agentShareProcedure
     .input(
@@ -172,9 +265,10 @@ export const agentShareRouter = router({
         })
         .strict(),
     )
-    .mutation(async ({ input, ctx }) =>
-      requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config)),
-    ),
+    .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      return requireShare(await ctx.agentShareModel.updateConfig(input.agentId, input.config));
+    }),
 
   /**
    * Custom URL slug for this share's public link. Pattern/reserved-word
@@ -192,9 +286,10 @@ export const agentShareRouter = router({
         })
         .strict(),
     )
-    .mutation(async ({ input, ctx }) =>
-      requireShare(await ctx.agentShareModel.updateSlug(input.agentId, input.slug)),
-    ),
+    .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
+      return requireShare(await ctx.agentShareModel.updateSlug(input.agentId, input.slug));
+    }),
 
   updateVisibility: agentShareProcedure
     .input(
@@ -206,6 +301,7 @@ export const agentShareRouter = router({
         .strict(),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertCanManageAgentShare(ctx, input.agentId);
       // Flipping to `link` publishes the share, so it is the same capability
       // as `enableShare`; going back to `private` unpublishes and stays open.
       if (input.visibility === 'link') await assertAgentShareCreationEnabled(ctx.userId);

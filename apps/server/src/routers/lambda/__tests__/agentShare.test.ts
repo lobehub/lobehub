@@ -39,21 +39,31 @@ vi.mock('@lobechat/business-const', async () => {
 });
 
 const mockCreate = vi.fn();
+const mockFindByShareId = vi.fn();
+const mockForceDisableWorkspaceShare = vi.fn();
 const mockGetByAgentId = vi.fn();
+const mockListWorkspaceSharesForAudit = vi.fn();
 const mockUpdateConfig = vi.fn();
 const mockUpdateSlug = vi.fn();
 const mockUpdateVisibility = vi.fn();
 
 vi.mock('@/database/models/agentShare', () => ({
-  AgentShareModel: vi.fn(function () {
-    return {
-      create: mockCreate,
-      getByAgentId: mockGetByAgentId,
-      updateConfig: mockUpdateConfig,
-      updateSlug: mockUpdateSlug,
-      updateVisibility: mockUpdateVisibility,
-    };
-  }),
+  AgentShareModel: Object.assign(
+    vi.fn(function () {
+      return {
+        create: mockCreate,
+        getByAgentId: mockGetByAgentId,
+        updateConfig: mockUpdateConfig,
+        updateSlug: mockUpdateSlug,
+        updateVisibility: mockUpdateVisibility,
+      };
+    }),
+    {
+      findByShareId: mockFindByShareId,
+      forceDisableWorkspaceShare: mockForceDisableWorkspaceShare,
+      listWorkspaceSharesForAudit: mockListWorkspaceSharesForAudit,
+    },
+  ),
 }));
 
 const mockCountShareVisitors = vi.fn();
@@ -96,7 +106,18 @@ describe('agentShareRouter', () => {
     vi.clearAllMocks();
     mocks.businessConst.ENABLE_BUSINESS_FEATURES = true;
     mockCreate.mockResolvedValue(share);
+    mockFindByShareId.mockResolvedValue({
+      ...share,
+      ownerId: 'user-1',
+      workspaceId: null,
+    });
+    mockForceDisableWorkspaceShare.mockResolvedValue({
+      agentId: 'agent-1',
+      shareId: '00000000-0000-4000-8000-000000000001',
+      visibility: 'private',
+    });
     mockGetByAgentId.mockResolvedValue(share);
+    mockListWorkspaceSharesForAudit.mockResolvedValue([]);
     mockUpdateConfig.mockResolvedValue(share);
     mockUpdateSlug.mockResolvedValue({
       ...share,
@@ -137,6 +158,35 @@ describe('agentShareRouter', () => {
     const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'user-1' }));
 
     await expect(caller.getShareStatus({ agentId: 'agent-1' })).resolves.toBeNull();
+  });
+
+  it('requires Workspace context for administrator audit operations', async () => {
+    const caller = agentShareRouter.createCaller(await createContextInner({ userId: 'admin-1' }));
+
+    await expect(caller.getWorkspaceShareAudit({})).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(mockListWorkspaceSharesForAudit).not.toHaveBeenCalled();
+  });
+
+  it('returns the Workspace share audit projection and force-disables by share id', async () => {
+    const caller = agentShareRouter.createCaller(
+      await createContextInner({ userId: 'admin-1', workspaceId: 'workspace-1' }),
+    );
+    const shareId = '00000000-0000-4000-8000-000000000001';
+
+    await caller.getWorkspaceShareAudit({ limit: 25, offset: 50 });
+    await caller.forceDisableWorkspaceShare({ shareId });
+
+    expect(mockListWorkspaceSharesForAudit).toHaveBeenCalledWith(expect.anything(), 'workspace-1', {
+      limit: 25,
+      offset: 50,
+    });
+    expect(mockForceDisableWorkspaceShare).toHaveBeenCalledWith(
+      expect.anything(),
+      'workspace-1',
+      shareId,
+    );
   });
 
   it('forwards an atomic share configuration patch', async () => {
@@ -423,13 +473,15 @@ describe('agentShareRouter', () => {
         userViewCount: 42,
         visitorCount: 3,
       });
-      expect(mockCountShareVisitors).toHaveBeenCalledWith({ agentId: 'agent-1' });
+      expect(mockCountShareVisitors).toHaveBeenCalledWith({ shareId: 'share-1' });
       // Keyed by the share INSTANCE, not the agent: a share that was turned
       // off and re-created must not inherit the old instance's bytes.
       expect(mockCountAgentShareUsage).toHaveBeenCalledWith('share-1');
       expect(mockGetAgentShareMonthlySpend).toHaveBeenCalledWith({
         agentId: 'agent-1',
         ownerUserId: 'user-1',
+        shareId: 'share-1',
+        workspaceId: undefined,
       });
     });
 

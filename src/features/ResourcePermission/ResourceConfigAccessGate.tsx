@@ -15,21 +15,31 @@ interface ResourceConfigAccessGateProps {
   children: ReactNode;
   loading?: ReactNode;
   redirectPath: string;
+  requiredAccess?: 'edit' | 'manage';
   resourceId?: string;
   resourceType: 'agent' | 'agentGroup';
 }
 
 const ResourceConfigAccessGate = memo<ResourceConfigAccessGateProps>(
-  ({ children, loading, redirectPath, resourceId, resourceType }) => {
+  ({ children, loading, redirectPath, requiredAccess = 'edit', resourceId, resourceType }) => {
     const { t } = useTranslation('chat');
     const navigate = useWorkspaceAwareNavigate();
     const hasRedirected = useRef(false);
     const { allowed: canEditContent } = usePermission('edit_own_content');
-    const { accessError, canEditResource, isAccessResolved, isLoading, retryAccess } =
-      useResourceAccess(resourceType, resourceId);
+    const {
+      accessError,
+      canEditResource,
+      canManageResource,
+      isAccessResolved,
+      isLoading,
+      retryAccess,
+    } = useResourceAccess(resourceType, resourceId);
 
     const accessReady = !!resourceId && isAccessResolved && !isLoading;
-    const canConfigure = accessReady && canEditContent && canEditResource;
+    const canConfigure =
+      accessReady &&
+      canEditContent &&
+      (requiredAccess === 'manage' ? canManageResource : canEditResource);
 
     useEffect(() => {
       if (!accessReady || accessError || canConfigure || hasRedirected.current) return;

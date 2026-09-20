@@ -2,7 +2,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type { CreateMessageParams, DBMessageItem } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { AgentShareModel } from '@/database/models/agentShare';
 import { MessageModel } from '@/database/models/message';
@@ -14,7 +14,7 @@ import { agentShares } from '@/database/schemas';
 /**
  * Re-validate the share is still the SAME live `link` share this request was
  * authorized against, from INSIDE the same `agents.id FOR UPDATE` transaction
- * `AgentShareModel.lockOwnedAgentRow` just took.
+ * `AgentShareModel.lockScopedAgentRow` just took.
  *
  * WHY this must run BEFORE the topic/message INSERT the two guard functions
  * below perform, not only later: an owner who makes the link private while a
@@ -32,11 +32,18 @@ const assertShareStillAuthorized = async (
   tx: LobeChatDatabase,
   agentId: string,
   expectedShareId: string,
+  workspaceId?: string,
 ): Promise<void> => {
   const [share] = await tx
     .select({ id: agentShares.id, visibility: agentShares.visibility })
     .from(agentShares)
-    .where(eq(agentShares.agentId, agentId));
+    .where(
+      and(
+        eq(agentShares.agentId, agentId),
+        eq(agentShares.id, expectedShareId),
+        workspaceId ? eq(agentShares.workspaceId, workspaceId) : isNull(agentShares.workspaceId),
+      ),
+    );
 
   if (!share || share.visibility !== 'link' || share.id !== expectedShareId) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
@@ -55,7 +62,7 @@ const assertShareStillAuthorized = async (
  * serializing them. Concurrent new-topic requests from the same visitor can
  * all observe the same pre-insert count and all insert.
  *
- * `AgentShareModel.lockOwnedAgentRow` takes `FOR UPDATE` on the SAME
+ * `AgentShareModel.lockScopedAgentRow` takes `FOR UPDATE` on the SAME
  * `agents.id` row every other share-mutation path locks (`create`,
  * `updateConfig`, `updateVisibility`, `deleteByAgentId`). The recount and the
  * INSERT both run inside that one locked transaction, so whichever of two
@@ -93,14 +100,17 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
 
     // Fail closed: a deleted/transferred/no-longer-owned agent never gets a
     // new visitor topic, same as every other share-mutation path locking this
-    // row — see `lockOwnedAgentRow`'s JSDoc.
-    const locked = await AgentShareModel.lockOwnedAgentRow(tx, agentId, ownerId);
+    // row — see `lockScopedAgentRow`'s JSDoc.
+    const locked = await AgentShareModel.lockScopedAgentRow(tx, agentId, {
+      userId: ownerId,
+      workspaceId,
+    });
     if (!locked) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
     }
 
     // Fail closed BEFORE any row is written.
-    await assertShareStillAuthorized(tx, agentId, expectedShareId);
+    await assertShareStillAuthorized(tx, agentId, expectedShareId, workspaceId);
 
     // Fresh read under the lock, not a caller-supplied value — see this
     // function's JSDoc for the stale-cap flood this closes.
@@ -112,7 +122,10 @@ export const reserveShareVisitorTopicOrThrow = async (params: {
     const txTopicModel = new TopicModel(tx, ownerId, workspaceId, undefined, {
       includeShareVisitor: true,
     });
-    const currentCount = await txTopicModel.countBySender({ agentId, senderId: visitorUserId });
+    const currentCount = await txTopicModel.countBySender({
+      senderId: visitorUserId,
+      shareId: expectedShareId,
+    });
 
     // Fail closed: a visitor already at (or somehow past) the cap never gets
     // another topic, even if `create`'s own params disagree with `agentId`.
@@ -156,7 +169,7 @@ export const reserveShareVisitorTopic = (
  * burst of concurrent sends to the SAME topic can all pass the pre-check and
  * all insert.
  *
- * Locked via `AgentShareModel.lockOwnedAgentRow` — the SAME `agents.id FOR
+ * Locked via `AgentShareModel.lockScopedAgentRow` — the SAME `agents.id FOR
  * UPDATE` row {@link reserveShareVisitorTopicOrThrow} and every other
  * share-mutation path lock, not a topic-scoped lock, so the cap read below
  * also conflicts with a concurrent `updateConfig`. The trade-off is coarser
@@ -180,13 +193,16 @@ export const reserveShareVisitorTurnOrThrow = async (params: {
     const tx = trx as unknown as LobeChatDatabase;
 
     // Fail closed: same ownership/existence check as the topic guard.
-    const locked = await AgentShareModel.lockOwnedAgentRow(tx, agentId, ownerId);
+    const locked = await AgentShareModel.lockScopedAgentRow(tx, agentId, {
+      userId: ownerId,
+      workspaceId,
+    });
     if (!locked) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });
     }
 
     // Fail closed BEFORE any row is written.
-    await assertShareStillAuthorized(tx, agentId, expectedShareId);
+    await assertShareStillAuthorized(tx, agentId, expectedShareId, workspaceId);
 
     // Fresh read under the lock, not a caller-supplied value.
     const { maxTurnsPerTopic } = await AgentShareModel.readCurrentVisitorCaps(tx, agentId);

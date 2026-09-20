@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { createNanoId, idGenerator } from '../utils/idGenerator';
 import { amountNumeric, createdAt, softDeleteColumns, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
+import { agentShares } from './agentShare';
 import { chatGroups } from './chatGroup';
 import { documents } from './file';
 import { projects, projectWorkingDirectories } from './project';
@@ -36,6 +37,7 @@ export const topics = pgTable(
     content: text('content'),
     editorData: jsonb('editor_data'),
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
+    agentShareId: uuid('agent_share_id').references(() => agentShares.id, { onDelete: 'cascade' }),
     groupId: text('group_id').references(() => chatGroups.id, { onDelete: 'cascade' }),
     /** Business project this conversation belongs to, independent of its execution directory. */
     projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
@@ -102,6 +104,9 @@ export const topics = pgTable(
     index('topics_session_id_idx').on(t.sessionId),
     index('topics_group_id_idx').on(t.groupId),
     index('topics_agent_id_idx').on(t.agentId),
+    index('topics_agent_share_sender_id_idx')
+      .on(t.agentShareId, t.senderId)
+      .where(isNotNull(t.agentShareId)),
     index('topics_project_id_idx').on(t.projectId).where(isNotNull(t.projectId)),
     index('topics_project_working_directory_id_idx')
       .on(t.projectWorkingDirectoryId)

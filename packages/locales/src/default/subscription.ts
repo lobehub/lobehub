@@ -144,6 +144,27 @@ export default {
   'credits.autoTopUp.upgradeHint': 'Subscribe to a paid plan to enable auto top-up',
   'credits.autoTopUp.validation.targetMustExceedThreshold':
     'Target balance must be greater than threshold',
+  'credits.agentShareBudget.desc':
+    'Set one monthly safety cap across all externally shared Workspace Agents',
+  'credits.agentShareBudget.audit.agent': 'Agent {{id}}',
+  'credits.agentShareBudget.audit.desc':
+    'Admins can audit and pause external links without opening private Agent configuration or visitor conversations.',
+  'credits.agentShareBudget.audit.disable': 'Pause link',
+  'credits.agentShareBudget.audit.disableError': 'Failed to pause the share link',
+  'credits.agentShareBudget.audit.disableSuccess': 'Share link paused',
+  'credits.agentShareBudget.audit.empty': 'No Workspace Agent has been shared externally.',
+  'credits.agentShareBudget.audit.meta': 'Owner {{ownerId}} · {{views}} views',
+  'credits.agentShareBudget.audit.statusActive': 'Active',
+  'credits.agentShareBudget.audit.statusPaused': 'Paused',
+  'credits.agentShareBudget.audit.title': 'Workspace share audit',
+  'credits.agentShareBudget.limit': 'Workspace monthly cap',
+  'credits.agentShareBudget.limitHint':
+    'Leave blank for no Workspace-wide cap. Set 0 to pause all visitor runs. These charges use Workspace credits and never consume a member quota.',
+  'credits.agentShareBudget.save': 'Save',
+  'credits.agentShareBudget.saveError': 'Failed to save the Agent Share budget policy',
+  'credits.agentShareBudget.saveSuccess': 'Agent Share budget policy saved',
+  'credits.agentShareBudget.title': 'External Agent sharing',
+  'credits.agentShareBudget.unlimited': 'No Workspace-wide cap',
   'credits.dedicatedBudget.actions.add': 'Dedicated budget',
   'credits.dedicatedBudget.actions.create': 'Create',
   'credits.dedicatedBudget.actions.edit': 'Edit dedicated budget',

@@ -42,7 +42,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { AGENT_SHARED_TRANSFER_BLOCKED, AgentModel } from '../agent';
+import { AgentModel } from '../agent';
 import { ExpertiseModel } from '../expertise';
 import {
   TOPIC_COMMENT_TOPIC_NOT_FOUND,
@@ -1068,36 +1068,39 @@ describe('AgentModel.transferAgent', () => {
     );
   });
 
-  // Regression: a share carries the previous owner's tool grants, custom
-  // slug, and (in Cloud) monthly spend cap, and its visitor conversations are
-  // stored under (agentId, senderId) within that owner's scope — an ownership
-  // transfer must be REFUSED while the share row exists. See
-  // `AgentModel.transferAgents` step 1d and the `isRunStillAuthorized` doc in
-  // `agentShare.ts`.
-  it('should reject the transfer when the agent still carries a share row', async () => {
+  it('hard-revokes the old share principal when a personal agent changes owner', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Shared Agent', slug: 'shared-agent' });
 
-    await serverDB
+    const [share] = await serverDB
       .insert(agentShares)
-      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
+      .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' })
+      .returning();
+    await serverDB.insert(topics).values({
+      agentId: agent.id,
+      agentShareId: share.id,
+      id: 'shared-agent-visitor-topic',
+      senderId: targetUserId,
+      userId,
+    });
 
-    await expect(model.transferAgent(agent.id, null, targetUserId)).rejects.toThrow(
-      AGENT_SHARED_TRANSFER_BLOCKED,
-    );
+    await expect(model.transferAgent(agent.id, null, targetUserId)).resolves.toMatchObject({
+      agentId: agent.id,
+    });
 
-    // Agent stays with the original owner: batch guard fires before any
-    // mutation, so neither `agents.userId` nor the share row change.
     const [row] = await serverDB.select().from(agents).where(eq(agents.id, agent.id));
-    expect(row.userId).toBe(userId);
+    expect(row.userId).toBe(targetUserId);
     const remaining = await serverDB
       .select()
       .from(agentShares)
       .where(eq(agentShares.agentId, agent.id));
-    expect(remaining).toHaveLength(1);
+    expect(remaining).toHaveLength(0);
+    expect(
+      await serverDB.select().from(topics).where(eq(topics.id, 'shared-agent-visitor-topic')),
+    ).toHaveLength(0);
   });
 
-  it('should keep the share row on a same-owner personal ↔ workspace round-trip', async () => {
+  it('hard-revokes the old share when an agent crosses a workspace boundary', async () => {
     const model = new AgentModel(serverDB, userId);
     const agent = await model.create({ title: 'Roundtrip Agent', slug: 'roundtrip-agent' });
 
@@ -1105,17 +1108,29 @@ describe('AgentModel.transferAgent', () => {
       .insert(agentShares)
       .values({ agentId: agent.id, shareConfig: { monthlySpendLimit: 5 }, visibility: 'link' });
 
-    // Personal → workspace (owner unchanged, share paused via workspaceId join).
     await model.transferAgent(agent.id, wsId1, userId);
-    let rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
-    expect(rows).toHaveLength(1);
+    const rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
+    expect(rows).toHaveLength(0);
+  });
 
-    // Workspace → personal, same owner: share resumes.
-    const wsModel = new AgentModel(serverDB, userId, wsId1);
-    await wsModel.transferAgent(agent.id, null, userId);
-    rows = await serverDB.select().from(agentShares).where(eq(agentShares.agentId, agent.id));
-    expect(rows).toHaveLength(1);
-    expect(rows[0].visibility).toBe('link');
+  it('keeps a public share and pauses a private share on same-workspace owner changes', async () => {
+    const model = new AgentModel(serverDB, userId, wsId1);
+    const publicAgent = await model.create({ title: 'Public Agent', visibility: 'public' });
+    const privateAgent = await model.create({ title: 'Private Agent', visibility: 'private' });
+
+    await serverDB.insert(agentShares).values([
+      { agentId: publicAgent.id, visibility: 'link', workspaceId: wsId1 },
+      { agentId: privateAgent.id, visibility: 'link', workspaceId: wsId1 },
+    ]);
+
+    await model.transferAgents([publicAgent.id, privateAgent.id], wsId1, targetUserId);
+
+    const shares = await serverDB
+      .select()
+      .from(agentShares)
+      .where(inArray(agentShares.agentId, [publicAgent.id, privateAgent.id]));
+    expect(shares.find((share) => share.agentId === publicAgent.id)?.visibility).toBe('link');
+    expect(shares.find((share) => share.agentId === privateAgent.id)?.visibility).toBe('private');
   });
 });
 

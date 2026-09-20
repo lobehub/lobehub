@@ -47,21 +47,27 @@ const log = debug('lobe-server:router:share');
  */
 const resolveVisitorUploadAbility = async (
   db: LobeChatDatabase,
-  share: { agentModel: string | null; agentProvider: string | null; ownerId: string },
+  share: {
+    agentModel: string | null;
+    agentProvider: string | null;
+    ownerId: string;
+    workspaceId: string | null;
+  },
 ): Promise<SharedAgentUploadAbility> => {
   try {
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const [builtinModels, { model, provider }] = await Promise.all([
       loadModels(),
-      new AgentService(db, share.ownerId).resolveModelSelection({
+      new AgentService(db, share.ownerId, share.workspaceId ?? undefined).resolveModelSelection({
         model: share.agentModel,
         provider: share.agentProvider,
       }),
     ]);
-    const ownerModel = await new AiModelModel(db, share.ownerId).findByIdAndProvider(
-      model,
-      provider,
-    );
+    const ownerModel = await new AiModelModel(
+      db,
+      share.ownerId,
+      share.workspaceId ?? undefined,
+    ).findByIdAndProvider(model, provider);
     const abilities = resolveModelMediaCapabilities({
       builtinModels,
       model,
@@ -136,8 +142,12 @@ export const shareRouter = router({
         resolveVisitorUploadAbility(ctx.serverDB, share),
         (async () => {
           try {
-            const topicModel = new TopicModel(ctx.serverDB, share.ownerId);
-            const counts = await topicModel.countShareVisitors({ agentId: share.agentId });
+            const topicModel = new TopicModel(
+              ctx.serverDB,
+              share.ownerId,
+              share.workspaceId ?? undefined,
+            );
+            const counts = await topicModel.countShareVisitors({ shareId: share.shareId });
             stats = { conversations: counts.topicCount, visitors: counts.visitorCount };
           } catch (error) {
             log('failed to count share visitors for %s: %O', share.shareId, error);
@@ -156,6 +166,7 @@ export const shareRouter = router({
           tags: share.agentTags ?? [],
           title: share.agentTitle,
         },
+        billingScope: share.workspaceId ? 'workspace' : 'personal',
         creator: {
           avatar: share.ownerAvatar ?? null,
           name: share.ownerFullName ?? share.ownerUsername ?? null,

@@ -868,6 +868,7 @@ table agent_quota_windows {
 table agent_shares {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]
+  workspace_id text
   visibility text [not null, default: 'private']
   share_config jsonb
   user_view_count integer [not null, default: 0]
@@ -878,6 +879,7 @@ table agent_shares {
   indexes {
     agent_id [name: 'agent_shares_agent_id_unique', unique]
     visibility [name: 'agent_shares_visibility_idx']
+    workspace_id [name: 'agent_shares_workspace_id_idx']
   }
 }
 
@@ -3706,6 +3708,7 @@ table topics {
   content text
   editor_data jsonb
   agent_id text
+  agent_share_id uuid
   group_id text
   project_id text
   project_working_directory_id uuid
@@ -3742,6 +3745,7 @@ table topics {
     session_id [name: 'topics_session_id_idx']
     group_id [name: 'topics_group_id_idx']
     agent_id [name: 'topics_agent_id_idx']
+    (agent_share_id, sender_id) [name: 'topics_agent_share_sender_id_idx']
     project_id [name: 'topics_project_id_idx']
     project_working_directory_id [name: 'topics_project_working_directory_id_idx']
     trigger [name: 'topics_trigger_idx']

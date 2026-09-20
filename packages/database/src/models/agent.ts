@@ -208,21 +208,12 @@ export const AGENT_OWNED_BY_GROUP = 'AGENT_OWNED_BY_GROUP';
 export const AGENT_OWNERSHIP_STALE = 'AGENT_OWNERSHIP_STALE';
 
 /**
- * Ownership transfer refused: the agent still carries an `agent_shares` row.
+ * Legacy transfer error code retained for API/UI compatibility.
  *
- * The share row is bound to the ORIGINAL owner — it carries their grants and
- * (in Cloud) their spend cap linked to their budget, and every visitor
- * conversation reached through the link is stored under (agentId, senderId)
- * within THAT owner's scope. Handing the agent to someone else would either
- * silently republish the previous owner's grants under a new identity, or
- * strand the visitor conversations under a user that no longer owns the
- * agent. Neither is a valid product state, so ownership transfer of a shared
- * agent is refused until the owner disables sharing AND deletes the share
- * row (`AgentShareModel.deleteByAgentId`).
- *
- * Same-owner personal ↔ workspace moves are unaffected: the share row is
- * paused via `isRunStillAuthorized`'s `agents.workspaceId IS NULL` join and
- * resumes on the round-trip. Only a change of `agents.userId` is blocked.
+ * Current transfer paths reconcile the share lifecycle instead: crossing a
+ * tenancy boundary hard-revokes the old share, while same-Workspace ownership
+ * handover keeps public links and pauses private ones. Older callers may still
+ * map this code when talking to a server predating that lifecycle.
  */
 export const AGENT_SHARED_TRANSFER_BLOCKED = 'AGENT_SHARED_TRANSFER_BLOCKED';
 
@@ -2138,29 +2129,41 @@ export class AgentModel {
       const ownedGroups = await this.findOwnedGroupMemberships(trx, agentIds);
       if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
 
-      // 1d. Refuse to change the owner of an agent that still carries an
-      // `agent_shares` row. The share is bound to the previous owner: it
-      // holds their tool grants and spend cap, and every visitor conversation
-      // opened through the link is stored under (agentId, senderId) within
-      // THAT owner's scope. Handing the agent over would either silently
-      // republish the previous owner's grants under a new identity, or leave
-      // the visitor threads dangling under a user that no longer owns them.
-      // Disabling sharing keeps the row as `private`, so this is a hard stop
-      // until the row is removed (`AgentShareModel.deleteByAgentId`, which has
-      // no product entry point yet — a deliberate follow-up). A same-owner
-      // personal ↔ workspace move keeps the row (it is paused via the
-      // workspaceId join in `isRunStillAuthorized`). Fail the whole batch,
-      // consistent with the guards above.
-      const sharedAgentIds = foundAgents
-        .filter((agent) => agent.userId !== targetUserId)
+      // 1d. Reconcile public-share identity before moving the Agent. A share
+      // belongs to one durable tenancy principal, not just an agent id:
+      // crossing a personal/workspace boundary or changing workspaces must
+      // hard-revoke the old URL. The FK cascade removes its visitor topics so
+      // creating a new share later cannot resurrect the old audience's data.
+      //
+      // A same-workspace owner handover keeps that tenancy principal. Public
+      // Agents keep the link; private Agents pause it until the recipient
+      // explicitly republishes. This deliberately does not follow General
+      // Access edit grants: share management remains creator/admin authority.
+      const hardRevokeAgentIds = foundAgents
+        .filter(
+          (agent) =>
+            agent.workspaceId !== targetWorkspaceId ||
+            (agent.workspaceId === null && agent.userId !== targetUserId),
+        )
         .map((agent) => agent.id);
-      if (sharedAgentIds.length > 0) {
-        const sharedRows = await trx
-          .select({ agentId: agentShares.agentId })
-          .from(agentShares)
-          .where(inArray(agentShares.agentId, sharedAgentIds))
-          .limit(1);
-        if (sharedRows.length > 0) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
+      if (hardRevokeAgentIds.length > 0) {
+        await trx.delete(agentShares).where(inArray(agentShares.agentId, hardRevokeAgentIds));
+      }
+
+      const pauseShareAgentIds = foundAgents
+        .filter(
+          (agent) =>
+            agent.workspaceId !== null &&
+            agent.workspaceId === targetWorkspaceId &&
+            agent.userId !== targetUserId &&
+            (targetVisibility ?? agent.visibility) === 'private',
+        )
+        .map((agent) => agent.id);
+      if (pauseShareAgentIds.length > 0) {
+        await trx
+          .update(agentShares)
+          .set({ updatedAt: new Date(), visibility: 'private' })
+          .where(inArray(agentShares.agentId, pauseShareAgentIds));
       }
 
       // 2. Resolve slug conflicts in the target scope with a single query:
@@ -2639,19 +2642,18 @@ export class AgentModel {
     const ownedGroups = await this.findOwnedGroupMemberships(trx, [agentId]);
     if (ownedGroups.length > 0) throw new AgentOwnedByGroupError(ownedGroups);
 
-    // Mirror of transferAgents step 1d: refuse the handover if the agent
-    // still carries an `agent_shares` row. The share is bound to the previous
-    // owner's grants / spend cap, and every visitor conversation reached
-    // through the link is stored under (agentId, senderId) within THAT
-    // owner's scope. The previous owner must turn sharing off and delete the
-    // share row before their agent can change hands. Checked BEFORE any
-    // mutation below so the refusal leaves the agent untouched.
-    const [existingShare] = await trx
-      .select({ id: agentShares.id })
-      .from(agentShares)
-      .where(eq(agentShares.agentId, agentId))
-      .limit(1);
-    if (existingShare) throw new Error(AGENT_SHARED_TRANSFER_BLOCKED);
+    // The workspace remains the billing/data principal across this handover.
+    // Public Agents keep their link. A private Agent's link is paused until
+    // the recipient explicitly republishes it, preventing an inherited share
+    // from becoming an invisible ongoing exposure.
+    if (agent.visibility === 'private') {
+      await trx
+        .update(agentShares)
+        .set({ updatedAt: new Date(), visibility: 'private' })
+        .where(
+          and(eq(agentShares.agentId, agentId), eq(agentShares.workspaceId, this.workspaceId)),
+        );
+    }
 
     // A PRIVATE agent stops resolving for everyone but the recipient. Groups
     // that reference it and are NOT the recipient's would render a silent hole

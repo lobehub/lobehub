@@ -6,6 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import {
   agentOperations,
   agents,
+  agentShares,
   chatGroups,
   messages,
   sessions,
@@ -377,10 +378,15 @@ describe('TopicModel', () => {
       // own topic sidebar (`query({ agentId })`) must never surface them —
       // only the visitor-scoped `queryBySender` should.
       await serverDB.insert(agents).values({ id: 'agent-share', userId });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({ agentId: 'agent-share', visibility: 'link' })
+        .returning();
       await serverDB.insert(topics).values([
         { agentId: 'agent-share', id: 't-creator', title: 'creator', userId },
         {
           agentId: 'agent-share',
+          agentShareId: share.id,
           id: 't-visitor',
           senderId: 'visitor-user-x',
           title: 'visitor',
@@ -393,8 +399,8 @@ describe('TopicModel', () => {
       expect(total).toBe(1);
 
       const visitorItems = await topicModel.queryBySender({
-        agentId: 'agent-share',
         senderId: 'visitor-user-x',
+        shareId: share.id,
       });
       expect(visitorItems.map((t) => t.id)).toEqual(['t-visitor']);
     });
@@ -577,8 +583,13 @@ describe('TopicModel', () => {
   describe('queryBySender', () => {
     it('projects only the visitor-safe runningOperation fields, stripping the rest of metadata', async () => {
       await serverDB.insert(agents).values({ id: 'agent-share-running', userId });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({ agentId: 'agent-share-running', visibility: 'link' })
+        .returning();
       await serverDB.insert(topics).values({
         agentId: 'agent-share-running',
+        agentShareId: share.id,
         id: 't-visitor-running',
         metadata: {
           // Creator-only fields that must never reach a visitor.
@@ -600,8 +611,8 @@ describe('TopicModel', () => {
       });
 
       const [item] = await topicModel.queryBySender({
-        agentId: 'agent-share-running',
         senderId: 'visitor-user-running',
+        shareId: share.id,
       });
 
       expect(item.runningOperation).toEqual({
@@ -619,8 +630,13 @@ describe('TopicModel', () => {
 
     it('returns a null runningOperation when the topic has no active run', async () => {
       await serverDB.insert(agents).values({ id: 'agent-share-idle', userId });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({ agentId: 'agent-share-idle', visibility: 'link' })
+        .returning();
       await serverDB.insert(topics).values({
         agentId: 'agent-share-idle',
+        agentShareId: share.id,
         id: 't-visitor-idle',
         senderId: 'visitor-user-idle',
         title: 'idle',
@@ -628,8 +644,8 @@ describe('TopicModel', () => {
       });
 
       const [item] = await topicModel.queryBySender({
-        agentId: 'agent-share-idle',
         senderId: 'visitor-user-idle',
+        shareId: share.id,
       });
 
       expect(item.runningOperation).toBeNull();

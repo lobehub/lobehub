@@ -54,6 +54,8 @@ export interface SharedAgentData {
     tags: string[];
     title: string | null;
   };
+  /** Who funds visitor execution, without exposing the owning Workspace id. */
+  billingScope: 'personal' | 'workspace';
   /**
    * Who published this share. In a market of user-made agents the creator is
    * the quality signal a visitor has before any usage number exists.
