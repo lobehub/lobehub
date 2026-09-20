@@ -1,7 +1,10 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { hydrateProjectedToolMessages } from '../hydrateProjectedTools';
+import {
+  hydrateProjectedToolMessages,
+  mergeStoredToolPayloads,
+} from '../hydrateProjectedTools';
 
 const msg = (over: Partial<UIChatMessage>): UIChatMessage =>
   ({ content: '', createdAt: 1_780_000_000_000, id: 'm', role: 'user', ...over }) as UIChatMessage;
@@ -88,5 +91,25 @@ describe('hydrateProjectedToolMessages', () => {
     const { messages } = await hydrateProjectedToolMessages([user, projectedTool()], fetchStored);
 
     expect(messages[0]).toBe(user);
+  });
+});
+
+describe('mergeStoredToolPayloads', () => {
+  it('merges into the messages given NOW, not the ones the fetch saw', () => {
+    // The export modal caches the payload map by row id; a turn arriving while
+    // it is open must still make it into the file.
+    const payloads = { t1: { content: 'restored' } };
+    const later = [projectedTool(), msg({ content: 'a new turn', id: 'u2', role: 'user' })];
+
+    const { messages, missing } = mergeStoredToolPayloads(later, payloads);
+
+    expect(messages.map((m) => m.content)).toEqual(['restored', 'a new turn']);
+    expect(missing).toEqual([]);
+  });
+
+  it('reports every projected row while the map is still absent', () => {
+    const { missing } = mergeStoredToolPayloads([projectedTool()], undefined);
+
+    expect(missing).toEqual(['t1']);
   });
 });

@@ -211,6 +211,10 @@ const SKIP_BATCH_PROCEDURES = new Set([...initialLoadProcedures, ...slowProcedur
 const LARGE_INPUT_QUERY_PROCEDURES = new Set([
   'agent.getTransferJobStatus',
   'group.getTransferJobStatus',
+  // Takes every projected tool row of a topic at once; ~60 ids already exceed
+  // the batched GET's 2083-char budget, and a tool-heavy topic is exactly when
+  // it is called.
+  'message.getToolResultPayloads',
 ]);
 
 // 3. splitLink to conditionally disable batching

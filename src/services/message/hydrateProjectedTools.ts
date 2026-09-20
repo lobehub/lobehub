@@ -24,30 +24,26 @@ export interface HydratedToolMessages {
  * degraded transcript than lose the user's prompt, while an export must refuse
  * to serialize. `missing` lets each caller pick.
  */
-export const hydrateProjectedToolMessages = async (
-  messages: UIChatMessage[] | undefined,
-  fetchStoredPayloads: (messageIds: string[]) => Promise<Record<string, StoredToolPayload>>,
-): Promise<HydratedToolMessages> => {
-  if (!messages?.length) return { messages: messages ?? [], missing: [] };
+/** Ids of the rows whose stored payload has to be fetched back. */
+export const selectProjectedToolIds = (messages: UIChatMessage[] | undefined): string[] =>
+  (messages ?? []).filter((m) => m.role === 'tool' && !!m.payloadOmitted).map((m) => m.id);
 
-  const projected = messages.filter((m) => m.role === 'tool' && !!m.payloadOmitted);
-  if (projected.length === 0) return { messages, missing: [] };
+/**
+ * Merge a fetched payload map into the CURRENT messages.
+ *
+ * Kept separate from the fetch so a caller can cache the map — keyed by row id,
+ * and therefore still valid as the conversation grows — while merging against
+ * whatever the list looks like now. Caching merged messages instead would pin
+ * the whole conversation at the moment of the fetch.
+ */
+export const mergeStoredToolPayloads = (
+  messages: UIChatMessage[],
+  payloads: Record<string, StoredToolPayload> | undefined,
+): HydratedToolMessages => {
+  const ids = selectProjectedToolIds(messages);
+  if (ids.length === 0) return { messages, missing: [] };
 
-  const ids = projected.map((m) => m.id);
-
-  let restored: Record<string, StoredToolPayload> = {};
-  try {
-    restored = await fetchStoredPayloads(ids);
-  } catch (error) {
-    console.error(
-      '[hydrateProjectedTools] failed to restore %d tool payloads: %O',
-      ids.length,
-      error,
-    );
-    return { messages, missing: ids };
-  }
-
-  const missing = ids.filter((id) => typeof restored[id]?.content !== 'string');
+  const restored = payloads ?? {};
 
   return {
     messages: messages.map((m) => {
@@ -60,6 +56,27 @@ export const hydrateProjectedToolMessages = async (
         ...(payload.pluginState !== undefined && { pluginState: payload.pluginState }),
       };
     }),
-    missing,
+    missing: ids.filter((id) => typeof restored[id]?.content !== 'string'),
   };
+};
+
+export const hydrateProjectedToolMessages = async (
+  messages: UIChatMessage[] | undefined,
+  fetchStoredPayloads: (messageIds: string[]) => Promise<Record<string, StoredToolPayload>>,
+): Promise<HydratedToolMessages> => {
+  if (!messages?.length) return { messages: messages ?? [], missing: [] };
+
+  const ids = selectProjectedToolIds(messages);
+  if (ids.length === 0) return { messages, missing: [] };
+
+  try {
+    return mergeStoredToolPayloads(messages, await fetchStoredPayloads(ids));
+  } catch (error) {
+    console.error(
+      '[hydrateProjectedTools] failed to restore %d tool payloads: %O',
+      ids.length,
+      error,
+    );
+    return { messages, missing: ids };
+  }
 };
