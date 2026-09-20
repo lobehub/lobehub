@@ -756,6 +756,9 @@ export class GeneralChatAgent implements Agent {
             if (state.userInterventionConfig?.approvalMode === 'headless') {
               instructions.push({
                 payload: {
+                  blockedContent:
+                    'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+                  blockedReason: 'human_intervention_unavailable',
                   parentMessageId,
                   toolsCalling: toolsNeedingIntervention,
                 },

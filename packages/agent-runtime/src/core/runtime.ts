@@ -640,7 +640,8 @@ export class AgentRuntime {
 
       for (const toolCalling of payload.toolsCalling) {
         const result = {
-          content: 'Blocked by security/privacy.',
+          content: payload.blockedContent ?? 'Blocked by security/privacy.',
+          ...(payload.blockedReason && { error: payload.blockedReason }),
           success: false,
         };
 

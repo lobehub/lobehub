@@ -3469,6 +3469,9 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [blockedTool],
           },
@@ -3762,6 +3765,51 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('headless mode (for async tasks)', () => {
+    it.each(['manual', 'auto-run', 'allow-list'] as const)(
+      'parks creator questions in %s mode instead of blocking them',
+      async (approvalMode) => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'creator-wakeup',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+        const question: ChatToolPayload = {
+          id: 'question-1',
+          identifier: 'lobe-user-interaction',
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          type: 'builtin',
+        };
+        const result = await agent.runner(
+          createMockContext('llm_result', {
+            hasToolsCalling: true,
+            toolsCalling: [question],
+            parentMessageId: 'creator-message',
+          }),
+          createMockState({
+            toolManifestMap: {
+              'lobe-user-interaction': {
+                identifier: 'lobe-user-interaction',
+                api: [{ name: 'askUserQuestion', humanIntervention: 'always' }],
+              },
+            },
+            userInterventionConfig: {
+              approvalMode,
+              allowList: ['lobe-user-interaction/askUserQuestion'],
+            },
+          }),
+        );
+        expect(result).toEqual([
+          {
+            parentMessageId: 'creator-message',
+            pendingToolsCalling: [question],
+            reason: 'human_intervention_required',
+            type: 'request_human_approve',
+          },
+        ]);
+      },
+    );
+
     it('should execute tool-level required tools in headless mode', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -3897,6 +3945,9 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [alwaysTool],
           },
@@ -3945,6 +3996,9 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual([
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [blacklistedTool],
           },
@@ -4024,6 +4078,9 @@ describe('GeneralChatAgent', () => {
         },
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [blacklistedTool, alwaysTool],
           },
@@ -4081,6 +4138,9 @@ describe('GeneralChatAgent', () => {
         },
         {
           payload: {
+            blockedContent:
+              'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+            blockedReason: 'human_intervention_unavailable',
             parentMessageId: 'msg-1',
             toolsCalling: [tool2],
           },
