@@ -779,8 +779,8 @@ export const createRouterRuntime = ({
               ? ('imageDecode' as const)
               : undefined;
           reportReturnedAttempt(attempt, {
-            // observeChatAttempt reports the terminal failed outcome before rethrowing.
-            completionPending: false,
+            // Defer cancellation health handling to the terminal outcome, which intentionally ignores it.
+            completionPending: options?.signal?.aborted ?? false,
             durationMs: Date.now() - attempt.startedAt,
             error,
             nonRetryable,

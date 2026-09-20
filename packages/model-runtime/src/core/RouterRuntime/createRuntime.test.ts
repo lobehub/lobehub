@@ -1033,6 +1033,51 @@ describe('createRouterRuntime', () => {
       );
     });
 
+    it('keeps a pre-response abort pending for terminal cancellation handling', async () => {
+      const controller = new AbortController();
+      const finished = vi.fn();
+      const returned = vi.fn().mockResolvedValue(undefined);
+      let calls = 0;
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) => {
+          calls += 1;
+          await new Promise<void>((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('The user aborted a request.', 'AbortError')),
+              { once: true },
+            );
+          });
+          return new Response();
+        };
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt: returned,
+        onRouteAttemptFinished: finished,
+        routers: [
+          { apiType: 'openai', models: ['gpt-4'], options: [{}, {}], runtime: MockRuntime },
+        ],
+        shouldFallbackChatAttempt: () => true,
+      });
+      const response = new Runtime().chat(
+        { messages: [], model: 'gpt-4' },
+        { signal: controller.signal },
+      );
+      await vi.waitFor(() => expect(calls).toBe(1));
+
+      controller.abort();
+
+      await expect(response).rejects.toMatchObject({ name: 'AbortError' });
+      expect(calls).toBe(1);
+      expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'cancelled' }));
+      expect(returned).toHaveBeenCalledWith(
+        expect.objectContaining({ completionPending: true, success: false }),
+      );
+    });
+
     it('surfaces one terminal empty error after all routes return empty completions', async () => {
       const final = vi.fn();
       const finished = vi.fn();
