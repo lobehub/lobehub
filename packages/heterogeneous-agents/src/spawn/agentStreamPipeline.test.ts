@@ -205,8 +205,10 @@ describe('AgentStreamPipeline', () => {
       await writeFile(
         path.join(wireDir, 'wire.jsonl'),
         `${JSON.stringify({
-          content: 'Done.',
-          role: 'assistant',
+          agentId: 'main',
+          model: 'kimi-code/k3',
+          time: 1_700_000_000_000,
+          type: 'usage.record',
           usage: { inputCacheRead: 1000, inputOther: 200, output: 50 },
         })}\n`,
       );
@@ -224,6 +226,7 @@ describe('AgentStreamPipeline', () => {
       expect(events).toEqual([
         expect.objectContaining({
           data: {
+            model: 'kimi-code/k3',
             phase: 'turn_metadata',
             provider: 'kimi-code',
             usage: {

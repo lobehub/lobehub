@@ -18,6 +18,22 @@ export interface KimiCodeWireUsage {
   output?: number;
 }
 
+/**
+ * One usage-bearing wire-log line. Current CLI versions tag these with
+ * `type: 'usage.record'` and carry the request's `model` alongside `usage`;
+ * older/untyped lines that just have a top-level `usage` are tolerated.
+ */
+export interface KimiCodeWireUsageRecord {
+  model?: string;
+  usage: KimiCodeWireUsage;
+}
+
+/** Aggregated session usage plus the model the usage was consumed with. */
+export interface KimiCodeSessionUsage {
+  model?: string;
+  usage: UsageData;
+}
+
 export interface ReadKimiCodeSessionUsageOptions {
   env?: KimiCodeEnv;
   homeDir?: string;
@@ -69,19 +85,24 @@ export const toKimiCodeUsageData = (
 
 /**
  * Sum multiple per-request wire-log usage records into a single grand total,
- * matching the semantic of Claude Code's `result` event usage.
+ * matching the semantic of Claude Code's `result` event usage. The model is
+ * taken from the LAST usage-bearing record — all records in one session agree.
  */
-export const aggregateKimiCodeUsage = (records: KimiCodeWireUsage[]): UsageData | undefined => {
+export const aggregateKimiCodeUsage = (
+  records: KimiCodeWireUsageRecord[],
+): KimiCodeSessionUsage | undefined => {
   let inputCacheMissTokens = 0;
   let inputCachedTokens = 0;
   let inputWriteCacheTokens = 0;
   let totalOutputTokens = 0;
+  let model: string | undefined;
   let seen = false;
 
   for (const record of records) {
-    const usage = toKimiCodeUsageData(record);
+    const usage = toKimiCodeUsageData(record.usage);
     if (!usage) continue;
     seen = true;
+    if (record.model) model = record.model;
     inputCacheMissTokens += usage.inputCacheMissTokens;
     inputCachedTokens += usage.inputCachedTokens || 0;
     inputWriteCacheTokens += usage.inputWriteCacheTokens || 0;
@@ -91,12 +112,15 @@ export const aggregateKimiCodeUsage = (records: KimiCodeWireUsage[]): UsageData 
   if (!seen) return undefined;
   const totalInputTokens = inputCacheMissTokens + inputCachedTokens + inputWriteCacheTokens;
   return {
-    inputCacheMissTokens,
-    inputCachedTokens: inputCachedTokens || undefined,
-    inputWriteCacheTokens: inputWriteCacheTokens || undefined,
-    totalInputTokens,
-    totalOutputTokens,
-    totalTokens: totalInputTokens + totalOutputTokens,
+    model,
+    usage: {
+      inputCacheMissTokens,
+      inputCachedTokens: inputCachedTokens || undefined,
+      inputWriteCacheTokens: inputWriteCacheTokens || undefined,
+      totalInputTokens,
+      totalOutputTokens,
+      totalTokens: totalInputTokens + totalOutputTokens,
+    },
   };
 };
 
@@ -105,15 +129,23 @@ const hasUsageShape = (value: unknown): value is KimiCodeWireUsage =>
   typeof value === 'object' &&
   ('inputOther' in value || 'inputCacheRead' in value || 'output' in value);
 
+const getNonEmptyString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value : undefined;
+
 /** Extract every usage record from wire.jsonl content, skipping malformed lines. */
-export const parseKimiCodeWireUsage = (content: string): KimiCodeWireUsage[] => {
-  const records: KimiCodeWireUsage[] = [];
+export const parseKimiCodeWireUsage = (content: string): KimiCodeWireUsageRecord[] => {
+  const records: KimiCodeWireUsageRecord[] = [];
   for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || !trimmed.includes('"usage"')) continue;
     try {
       const record = JSON.parse(trimmed);
-      if (hasUsageShape(record?.usage)) records.push(record.usage);
+      // Typed lines must be usage records; untyped legacy lines with a
+      // top-level `usage` are tolerated.
+      if (record?.type !== undefined && record.type !== 'usage.record') continue;
+      if (hasUsageShape(record?.usage)) {
+        records.push({ model: getNonEmptyString(record.model), usage: record.usage });
+      }
     } catch {
       continue;
     }
@@ -165,9 +197,10 @@ const findWireLog = async (kimiHome: string, sessionId: string): Promise<string 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Read the aggregated token usage for a finished Kimi Code run from its
- * session wire log. Best-effort by contract: any failure (no session id,
- * missing home/log, parse errors) resolves to `undefined` and never throws.
+ * Read the aggregated token usage (and the model it was consumed with) for a
+ * finished Kimi Code run from its session wire log. Best-effort by contract:
+ * any failure (no session id, missing home/log, parse errors) resolves to
+ * `undefined` and never throws.
  */
 export const readKimiCodeSessionUsage = async (
   sessionId: string | undefined,
@@ -177,7 +210,7 @@ export const readKimiCodeSessionUsage = async (
     maxAttempts = 3,
     retryDelayMs = 400,
   }: ReadKimiCodeSessionUsageOptions = {},
-): Promise<UsageData | undefined> => {
+): Promise<KimiCodeSessionUsage | undefined> => {
   if (!sessionId) return;
 
   const kimiHome = getKimiCodeHome(env, homeDir);
@@ -187,8 +220,8 @@ export const readKimiCodeSessionUsage = async (
     const wireLog = await findWireLog(kimiHome, sessionId);
     if (wireLog) {
       const content = await readFile(wireLog, 'utf8').catch(() => undefined);
-      const usage = content ? aggregateKimiCodeUsage(parseKimiCodeWireUsage(content)) : undefined;
-      if (usage) return usage;
+      const result = content ? aggregateKimiCodeUsage(parseKimiCodeWireUsage(content)) : undefined;
+      if (result) return result;
     }
     if (attempt < attempts - 1) await sleep(retryDelayMs);
   }

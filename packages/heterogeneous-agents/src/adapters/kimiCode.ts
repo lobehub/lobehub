@@ -110,13 +110,16 @@ export class KimiCodeAdapter implements AgentEventAdapter {
    */
   async collectPostRunUsage(options?: PostRunUsageOptions): Promise<HeterogeneousAgentEvent[]> {
     try {
-      const usage = await readKimiCodeSessionUsage(this.sessionId, { env: options?.env });
-      if (!usage) return [];
+      const result = await readKimiCodeSessionUsage(this.sessionId, { env: options?.env });
+      if (!result) return [];
       return [
         this.makeEvent('step_complete', {
+          // `model` lets the per-message Usage footer render (it requires a
+          // model for local heterogeneous types); `usage` carries the totals.
+          ...(result.model ? { model: result.model } : {}),
           phase: 'turn_metadata',
           provider: KIMI_CODE_IDENTIFIER,
-          usage,
+          usage: result.usage,
         }),
       ];
     } catch {

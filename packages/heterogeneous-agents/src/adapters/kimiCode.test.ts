@@ -17,14 +17,16 @@ const makeTempKimiHome = async () => {
 const writeWireLog = async (
   kimiHome: string,
   sessionId: string,
-  usageRecords: Record<string, number>[],
+  usageRecords: { model?: string; usage: Record<string, number> }[],
 ) => {
   const dir = path.join(kimiHome, 'sessions', 'wd_test', sessionId, 'agents', 'main');
   await mkdir(dir, { recursive: true });
   await writeFile(
     path.join(dir, 'wire.jsonl'),
     usageRecords
-      .map((usage) => JSON.stringify({ content: 'Working.', role: 'assistant', usage }))
+      .map(({ model, usage }) =>
+        JSON.stringify({ agentId: 'main', model, type: 'usage.record', usage }),
+      )
       .join('\n'),
   );
 };
@@ -216,14 +218,15 @@ describe('KimiCodeAdapter', () => {
       adapter.adapt({ content: 'contents', role: 'tool', tool_call_id: 'call-1' });
       adapter.adapt({ content: 'Done.', role: 'assistant' });
       await writeWireLog(kimiHome, 'session-1', [
-        { inputCacheRead: 22_784, inputOther: 225, output: 27 },
-        { inputCacheCreation: 10, inputOther: 100, output: 53 },
+        { model: 'kimi-code/k3', usage: { inputCacheRead: 22_784, inputOther: 225, output: 27 } },
+        { model: 'kimi-code/k3', usage: { inputCacheCreation: 10, inputOther: 100, output: 53 } },
       ]);
 
       const events = await adapter.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } });
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
         data: {
+          model: 'kimi-code/k3',
           phase: 'turn_metadata',
           provider: 'kimi-code',
           usage: {
@@ -236,6 +239,21 @@ describe('KimiCodeAdapter', () => {
           },
         },
         stepIndex: 1,
+        type: 'step_complete',
+      });
+    });
+
+    it('omits the model from the event when the wire log does not record one', async () => {
+      const kimiHome = await makeTempKimiHome();
+      const adapter = new KimiCodeAdapter();
+      adapter.adapt({ role: 'meta', session_id: 'session-2', type: 'session.resume_hint' });
+      await writeWireLog(kimiHome, 'session-2', [{ usage: { inputOther: 7, output: 3 } }]);
+
+      const events = await adapter.collectPostRunUsage({ env: { KIMI_CODE_HOME: kimiHome } });
+      expect(events).toHaveLength(1);
+      expect(events[0].data).not.toHaveProperty('model');
+      expect(events[0]).toMatchObject({
+        data: { phase: 'turn_metadata', usage: { totalTokens: 10 } },
         type: 'step_complete',
       });
     });
