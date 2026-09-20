@@ -49,14 +49,15 @@ const FooterActions = memo<FooterActionsProps>(({ agentId, documentId, title }) 
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
 
   // The editor canvas keeps the live buffer in the document store; the SWR
-  // meta reflects the last persisted markdown. Prefer the store (fresher),
-  // fall back to the SWR copy.
+  // meta reflects the last persisted markdown. Prefer the store (fresher) —
+  // including an intentionally emptied buffer — and fall back to the SWR copy
+  // only while the editor has not produced a buffer for this document.
   const storeContent = useDocumentStore((s) => s.documents[documentId]?.content);
   const { data: documentMeta } = useClientDataSWR(
     documentId ? portalKeys.documentHeader(documentId) : null,
     () => documentService.getDocumentById(documentId!),
   );
-  const markdown = storeContent || documentMeta?.content || '';
+  const markdown = storeContent ?? documentMeta?.content ?? '';
 
   const handleChatToEdit = useCallback(async () => {
     try {

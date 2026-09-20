@@ -1,32 +1,15 @@
 'use client';
 
-import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
 import { Flexbox, Icon } from '@lobehub/ui';
-import {
-  ActionIcon,
-  type DropdownItem,
-  DropdownMenu,
-  Skeleton,
-  Text,
-  toast,
-} from '@lobehub/ui/base-ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, Link2, MoreHorizontal, Pencil } from 'lucide-react';
-import { type ChangeEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, MoreHorizontal, Pencil } from 'lucide-react';
+import { type ChangeEvent, memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
-import { useAgentStore } from '@/store/agent';
-import { getDocumentRenderMode } from '@/utils/documentRenderMode';
-
 import AutoSaveHint from './AutoSaveHint';
-import { useResolvedDocumentId } from './documentViewContext';
-
-const TITLE_MAX_LENGTH = 100;
+import CopyLinkMenuItem from './CopyLinkMenuItem';
+import { TITLE_MAX_LENGTH, usePortalDocumentTitle } from './usePortalDocumentHeader';
 
 const styles = createStaticStyles(({ css }) => ({
   crumb: css`
@@ -76,67 +59,31 @@ interface HeaderProps {
 
 const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
   const { t } = useTranslation(['chat', 'file', 'common']);
-  const documentId = useResolvedDocumentId();
-  // The doc-anchored chat topic binds (agentId, documentId); the standalone
-  // route for "copy link" needs the owning agent id, which equals the store's
-  // activeAgentId inside this portal (see Body's panelEligible gate).
-  const agentId = useAgentStore((s) => s.activeAgentId);
-  const appOrigin = useAppOrigin();
-  const activeWorkspaceSlug = useActiveWorkspaceSlug();
-
   const {
-    data: document,
+    commitEdit,
+    draft,
+    editing,
     isLoading,
-    mutate: mutateDocument,
-  } = useClientDataSWR(documentId ? portalKeys.documentHeader(documentId) : null, () =>
-    documentService.getDocumentById(documentId!),
-  );
+    metaLocked,
+    savedTitle,
+    setDraft,
+    startEdit,
+    syncIdleDraft,
+    titleFallback,
+  } = usePortalDocumentTitle();
 
-  const savedTitle = useMemo(
-    () => document?.title || document?.filename || '',
-    [document?.title, document?.filename],
-  );
-  const isReadonly = !!document && getDocumentRenderMode(document).mode !== 'editor';
-
-  const [draft, setDraft] = useState(savedTitle);
-  const [editing, setEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Follow the SWR source while idle; never clobber a draft mid-typing.
   useEffect(() => {
-    if (!editing) setDraft(savedTitle);
-  }, [editing, savedTitle]);
+    syncIdleDraft(editing);
+  }, [editing, syncIdleDraft]);
 
-  const startEdit = useCallback(() => {
-    if (isReadonly) return;
-    setDraft(savedTitle);
-    setEditing(true);
+  const beginEdit = useCallback(() => {
+    startEdit();
     // The input mounts during this render; focus once it exists.
     requestAnimationFrame(() => inputRef.current?.focus());
-  }, [isReadonly, savedTitle]);
-
-  const commitEdit = useCallback(async () => {
-    setEditing(false);
-    const nextTitle = draft.trim();
-    // Empty or unchanged drafts fall back to the saved title — no write.
-    if (!nextTitle || nextTitle === savedTitle || !documentId) {
-      setDraft(savedTitle);
-      return;
-    }
-
-    // Optimistic update, then reconcile with the server response.
-    setDraft(nextTitle);
-    mutateDocument((prev) => (prev ? { ...prev, title: nextTitle } : prev), { revalidate: false });
-    try {
-      await documentService.updateDocument({ id: documentId, title: nextTitle });
-    } catch {
-      toast.error(t('operationFailed', { ns: 'common' }));
-      setDraft(savedTitle);
-      mutateDocument((prev) => (prev ? { ...prev, title: savedTitle } : prev), {
-        revalidate: false,
-      });
-    }
-  }, [draft, documentId, mutateDocument, savedTitle, t]);
+  }, [startEdit]);
 
   const handleTitleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -146,48 +93,27 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
         inputRef.current?.blur();
       } else if (event.key === 'Escape') {
         setDraft(savedTitle);
-        setEditing(false);
       }
     },
-    [savedTitle],
+    [savedTitle, setDraft],
   );
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     const items: DropdownItem[] = [];
 
-    if (documentId && !isReadonly) {
+    if (!metaLocked) {
       items.push({
         icon: <Icon icon={Pencil} />,
         key: 'rename',
         label: t('rename', { ns: 'common' }),
-        onClick: startEdit,
-      });
-    }
-
-    if (documentId && agentId) {
-      items.push({
-        icon: <Icon icon={Link2} />,
-        key: 'copy-link',
-        label: t('pageEditor.menu.copyLink', { ns: 'file' }),
-        onClick: async () => {
-          const url = buildAgentDocumentUrl(appOrigin, agentId, documentId, {
-            workspaceSlug: activeWorkspaceSlug,
-          });
-          if (!url) return;
-          await navigator.clipboard.writeText(url);
-          toast.success(t('agentDocument.linkCopied', { ns: 'chat' }));
-        },
+        onClick: beginEdit,
       });
     }
 
     return items;
-  }, [activeWorkspaceSlug, agentId, appOrigin, documentId, isReadonly, startEdit, t]);
+  }, [beginEdit, metaLocked, t]);
 
-  const titleFallback = t('agentDocument.portal.titlePlaceholder', { ns: 'chat' });
-
-  if (!documentId) return null;
-
-  if (isLoading || (!savedTitle && !editing)) {
+  if (isLoading) {
     return (
       <Flexbox
         horizontal
@@ -238,14 +164,15 @@ const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
             className={styles.title}
             ellipsis={{ tooltip: draft || titleFallback }}
             style={{ minWidth: 0 }}
-            onClick={isReadonly ? undefined : startEdit}
+            onClick={metaLocked ? undefined : beginEdit}
           >
             {draft || titleFallback}
           </Text>
         )}
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={8}>
-        {!isReadonly && <AutoSaveHint />}
+        {!metaLocked && <AutoSaveHint />}
+        <CopyLinkMenuItem />
         {menuItems.length > 0 && (
           <DropdownMenu
             iconSpaceMode={'group'}

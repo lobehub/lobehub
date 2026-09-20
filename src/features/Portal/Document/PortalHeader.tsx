@@ -15,7 +15,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
-import { useResolvedDocumentId } from './documentViewContext';
+import { useResolvedAgentDocumentId, useResolvedDocumentId } from './documentViewContext';
 import DocumentTitle from './Header';
 
 /**
@@ -46,11 +46,16 @@ const OpenAsPageAction = memo(() => {
 
 const PortalHeader = () => {
   const agentId = useAgentStore((s) => s.activeAgentId);
+  // Discriminate on the resolved agent-documents binding, not `agentId` alone:
+  // a plain notebook document can be open while an agent happens to be active,
+  // and that agent's index is not this document's home.
+  const agentDocumentId = useResolvedAgentDocumentId();
   const navigate = useWorkspaceAwareNavigate();
 
   // Agent documents have a documents index to land on; plain notebook
-  // documents (no owning agent context) keep a non-navigating crumb label.
-  const openDocumentsIndex = agentId ? () => navigate(buildAgentDocumentsPath(agentId)) : undefined;
+  // documents keep a non-navigating crumb label.
+  const openDocumentsIndex =
+    agentId && agentDocumentId ? () => navigate(buildAgentDocumentsPath(agentId)) : undefined;
 
   return (
     <PortalChromeHeader
