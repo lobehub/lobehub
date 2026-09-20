@@ -83,9 +83,12 @@ export interface AgentDocumentWithRules extends AgentDocument, AgentDocumentDeri
   loadRules: DocumentLoadRules;
 }
 
+/** A document-tree entry with its optional original uploaded file. */
 export interface AgentDocumentListItem extends AgentDocumentDerivedFields {
   description: string | null;
   documentId: string;
+  /** Original file to preview; absent for editable agent documents. */
+  fileId?: string | null;
   filename: string;
   fileType: string;
   id: string;

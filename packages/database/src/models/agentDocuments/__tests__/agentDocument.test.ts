@@ -226,6 +226,11 @@ describe('AgentDocumentModel', () => {
         .where(eq(documents.id, created.documentId));
 
       expect(doc?.fileId).toBe(file!.id);
+      /** @example Both tree and topic-scoped lists retain the original-file preview target. */
+      expect((await agentDocumentModel.listByAgent(agentId))[0].fileId).toBe(file!.id);
+      expect(
+        (await agentDocumentModel.listByDocumentIds(agentId, [created.documentId]))[0].fileId,
+      ).toBe(file!.id);
       expect(doc?.sourceType).toBe('file');
       expect(doc?.filename).toBe('brief.pdf');
     });

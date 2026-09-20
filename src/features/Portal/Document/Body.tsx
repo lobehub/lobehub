@@ -10,7 +10,11 @@ import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import CodeEditorPane from '@/components/CodeEditorPane';
+import Loading from '@/components/Loading/CircleLoading';
+import FileNotFound from '@/features/FileNotFound';
+import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
 import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -339,9 +343,13 @@ const DocumentBody = memo(() => {
   );
   const isSkillMarkdown = contentFormat === 'skillMarkdown';
 
-  const { data: documentMeta, mutate: mutateDocumentMeta } = useClientDataSWR(
-    documentId ? portalKeys.documentHeader(documentId) : null,
-    () => documentService.getDocumentById(documentId!),
+  const {
+    data: documentMeta,
+    error: documentError,
+    isLoading: documentLoading,
+    mutate: mutateDocumentMeta,
+  } = useClientDataSWR(documentId ? portalKeys.documentHeader(documentId) : null, () =>
+    documentService.getDocumentById(documentId!),
   );
   const renderMode = documentMeta
     ? getDocumentRenderMode(documentMeta)
@@ -358,10 +366,12 @@ const DocumentBody = memo(() => {
 
   const editorContent = (
     <>
-      {documentId && isSkillMarkdown && (
+      {renderMode.mode !== 'file' && documentId && isSkillMarkdown && (
         <SkillFrontmatterBlock documentId={documentId} frontmatter={skillFrontmatter} />
       )}
-      {renderMode.mode === 'highlight' && documentId ? (
+      {renderMode.mode === 'file' ? (
+        <FileDocumentPreview fileId={documentMeta?.fileId} />
+      ) : renderMode.mode === 'highlight' && documentId ? (
         <HighlightEditor
           content={documentMeta?.content ?? ''}
           documentId={documentId}
@@ -375,12 +385,27 @@ const DocumentBody = memo(() => {
     </>
   );
 
+  if (documentLoading) return <Loading />;
+  if (documentError)
+    return (
+      <AsyncError
+        error={documentError}
+        variant={'block'}
+        onRetry={() => void mutateDocumentMeta()}
+      />
+    );
+  if (!documentMeta) return <FileNotFound />;
+
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
       <div className={fullPage ? styles.contentFull : styles.content}>
-        {fullPage ? <WideScreenContainer>{editorContent}</WideScreenContainer> : editorContent}
+        {fullPage && renderMode.mode !== 'file' ? (
+          <WideScreenContainer>{editorContent}</WideScreenContainer>
+        ) : (
+          editorContent
+        )}
       </div>
-      <TodoList />
+      {renderMode.mode !== 'file' && <TodoList />}
       {/* The full-page route hosts its own panel through `AgentDocumentPage`, so
           the in-portal panel only renders for the compact view. Both call sites
           drive a doc-anchored chat topic via `useDocumentChatTopic`, so the panel

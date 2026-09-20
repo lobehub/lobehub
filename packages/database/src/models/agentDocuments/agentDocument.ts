@@ -92,6 +92,7 @@ interface ConvertAgentDocumentToSkillIndexParams {
 interface AgentDocumentListQueryRow {
   description: string | null;
   documentId: string;
+  fileId: string | null;
   filename: string | null;
   fileType: string;
   id: string;
@@ -237,6 +238,7 @@ export class AgentDocumentModel {
     const item = {
       description: row.description ?? null,
       documentId: row.documentId,
+      fileId: row.fileId,
       fileType: row.fileType,
       filename,
       id: row.id,
@@ -1044,6 +1046,7 @@ export class AgentDocumentModel {
       .select({
         description: documents.description,
         documentId: agentDocuments.documentId,
+        fileId: documents.fileId,
         fileType: documents.fileType,
         filename: documents.filename,
         id: agentDocuments.id,
@@ -1226,6 +1229,7 @@ export class AgentDocumentModel {
       .select({
         description: documents.description,
         documentId: agentDocuments.documentId,
+        fileId: documents.fileId,
         fileType: documents.fileType,
         filename: documents.filename,
         id: agentDocuments.id,

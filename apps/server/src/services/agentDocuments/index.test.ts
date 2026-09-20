@@ -1199,7 +1199,7 @@ lossless tool result
       );
     });
 
-    it('fills content for a text-like file', async () => {
+    it('keeps text uploads file-backed without converting their contents', async () => {
       mockFileModel.findById.mockResolvedValue({
         fileType: 'text/markdown',
         id: 'file-2',
@@ -1213,13 +1213,16 @@ lossless tool result
       const service = new AgentDocumentsService(db, userId);
       await service.importFile('agent-1', 'file-2');
 
-      expect(mockFileService.getFileContent).toHaveBeenCalledWith('s3://notes.md');
+      // ROOT CAUSE:
+      // Import converted selected text formats into a second editable Markdown copy.
+      // The file preview must read the original bytes, regardless of filename or MIME.
+      /** @example Importing text keeps its file association without a Markdown snapshot. */
+      expect(mockFileService.getFileContent).not.toHaveBeenCalled();
       expect(mockModel.create).toHaveBeenCalledWith(
         'agent-1',
         'notes.md',
-        '# Hello',
+        '',
         expect.objectContaining({
-          editorData: { root: { children: [] } },
           fileId: 'file-2',
           sourceType: 'file',
         }),
@@ -1257,7 +1260,7 @@ lossless tool result
       expect(mockModel.create).toHaveBeenCalledWith(
         'agent-1',
         'notes 2.md',
-        'body',
+        '',
         expect.objectContaining({ fileId: 'file-3' }),
       );
     });

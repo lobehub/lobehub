@@ -397,7 +397,11 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       // Only plain agent documents (not folders, web sources, or existing
       // skills) can be migrated into a managed skill.
       const isConvertibleToSkill =
-        !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
+        !isFolder &&
+        !isSkill &&
+        !node.data?.fileId &&
+        node.data?.sourceType !== 'file' &&
+        node.data?.category === AGENT_DOCUMENT_CATEGORY;
       if (isConvertibleToSkill && !isMulti) {
         items.push({
           icon: <Icon icon={SkillsIcon} size={14} />,

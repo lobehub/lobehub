@@ -33,7 +33,6 @@ import { isUuid } from '@/database/utils/uuid';
 import { AgentDocumentVfsError } from '../agentDocumentVfs/errors';
 import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/providers/providerSkillsAgentDocumentUtils';
 import { DocumentService } from '../document';
-import { FileService } from '../file';
 import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
 import { isRawTextAgentDocument } from './contentFormat';
 import {
@@ -44,17 +43,6 @@ import {
 } from './headlessEditor';
 
 const MAX_UNIQUE_FILENAME_ATTEMPTS = 1000;
-const TEXT_LIKE_EXTENSIONS = new Set([
-  '.csv',
-  '.json',
-  '.markdown',
-  '.md',
-  '.txt',
-  '.yaml',
-  '.yml',
-]);
-const TEXT_LIKE_MIME_TYPES = new Set(['application/json', 'application/xml', 'application/x-yaml']);
-
 const appendFilenameSuffix = (filename: string, suffix: number): string => {
   const dotIndex = filename.lastIndexOf('.');
 
@@ -69,16 +57,6 @@ const appendSpacedFilenameSuffix = (filename: string, suffix: number): string =>
   if (dotIndex <= 0) return `${filename} ${suffix}`;
 
   return `${filename.slice(0, dotIndex)} ${suffix}${filename.slice(dotIndex)}`;
-};
-
-const isTextLikeFile = (mime: string, name: string): boolean => {
-  const type = mime.toLowerCase();
-  if (type.startsWith('text/')) return true;
-  if (TEXT_LIKE_MIME_TYPES.has(type)) return true;
-
-  const dotIndex = name.lastIndexOf('.');
-  const ext = dotIndex >= 0 ? name.slice(dotIndex).toLowerCase() : '';
-  return TEXT_LIKE_EXTENSIONS.has(ext);
 };
 
 interface UpsertDocumentParams {
@@ -178,7 +156,6 @@ export class AgentDocumentsService {
   private agentDocumentModel: AgentDocumentModel;
   private documentService: DocumentService;
   private fileModel: FileModel;
-  private fileService: FileService;
   private topicDocumentModel: TopicDocumentModel;
 
   constructor(
@@ -200,7 +177,6 @@ export class AgentDocumentsService {
       documentAccessScope,
     );
     this.fileModel = new FileModel(db, userId, workspaceId);
-    this.fileService = new FileService(db, userId, workspaceId);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
   }
 
@@ -561,6 +537,18 @@ export class AgentDocumentsService {
     return this.agentDocumentModel.associate({ agentId, documentId });
   }
 
+  /**
+   * Attach an uploaded file to the agent's document tree without converting its bytes.
+   *
+   * Use when:
+   * - An upload has completed and needs an entry in the agent's space.
+   *
+   * Expects:
+   * - An accessible file and, when supplied, a folder belonging to this agent.
+   *
+   * Returns:
+   * - A new file-backed document binding with a unique filename in its parent.
+   */
   async importFile(agentId: string, fileId: string, parentId?: string | null) {
     const file = await this.fileModel.findById(fileId);
     if (!file) throw new Error(`File not found: ${fileId}`);
@@ -591,15 +579,6 @@ export class AgentDocumentsService {
       suffix += 1;
     }
 
-    let content = '';
-    if (isTextLikeFile(file.fileType, file.name)) {
-      try {
-        content = await this.fileService.getFileContent(file.url);
-      } catch (error) {
-        console.error('[agentDocument:importFile] Failed to read text content:', error);
-      }
-    }
-
     const createParams = {
       fileId: file.id,
       fileType: file.fileType || 'application/octet-stream',
@@ -609,15 +588,8 @@ export class AgentDocumentsService {
       title: file.name,
     };
 
-    if (!content) {
-      return this.agentDocumentModel.create(agentId, filename, '', createParams);
-    }
-
-    const snapshot = await createMarkdownEditorSnapshot(content);
-    return this.agentDocumentModel.create(agentId, filename, snapshot.content, {
-      ...createParams,
-      editorData: snapshot.editorData,
-    });
+    // Imported bytes stay in files; preview reads the original rather than an editable copy.
+    return this.agentDocumentModel.create(agentId, filename, '', createParams);
   }
 
   async createDocument(
