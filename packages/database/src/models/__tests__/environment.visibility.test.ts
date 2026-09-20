@@ -57,6 +57,34 @@ beforeEach(async () => {
 
 afterEach(reset);
 
+describe('environment creator', () => {
+  it('keeps the creator of a row whose author has no avatar', async () => {
+    // Regression: the creator was selected as a nested object across the join,
+    // and drizzle nullifies such an object when its FIRST field is null. Sorted
+    // alphabetically that field was `avatar`, so every author without one
+    // vanished from the listing and their rows rendered as "Unknown".
+    await serverDB
+      .update(users)
+      .set({ avatar: null, fullName: 'No Avatar Owner' })
+      .where(eq(users.id, ownerId));
+    await owner.create({ name: 'Analysis' });
+
+    const [row] = await owner.query();
+    expect(row.creator).toMatchObject({ avatar: null, fullName: 'No Avatar Owner', id: ownerId });
+  });
+
+  it('carries the avatar through when the author has one', async () => {
+    await serverDB
+      .update(users)
+      .set({ avatar: 'https://example.com/a.png' })
+      .where(eq(users.id, ownerId));
+    await owner.create({ name: 'Analysis' });
+
+    const [row] = await owner.query();
+    expect(row.creator).toMatchObject({ avatar: 'https://example.com/a.png', id: ownerId });
+  });
+});
+
 describe('environment visibility', () => {
   it('keeps a new environment private, so nothing is shared by being created', async () => {
     const created = await owner.create({ name: 'Analysis' });
