@@ -43,6 +43,7 @@ import { authSelectors } from '@/store/user/selectors';
 import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
+import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
 // Show the in-place search box only once the list is long enough that scanning
 // gets tedious — a short list doesn't need the extra chrome.
@@ -60,34 +61,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
 
     background: ${cssVar.colorFillSecondary};
-  `,
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: background 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  buttonLabel: css`
-    overflow: hidden;
-    max-width: 140px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   `,
   chooseFolderItem: css`
     cursor: pointer;
@@ -548,13 +521,13 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     : t('workingDirectory.title');
 
   const trigger = (
-    <div className={styles.button}>
+    <div className={workingDirectoryChipStyles.chip}>
       {selectedDir ? (
         <DirIcon repoType={recents.find((r) => r.path === selectedDir)?.repoType} />
       ) : (
         <Icon icon={FolderIcon} size={14} />
       )}
-      <span className={styles.buttonLabel}>{displayName}</span>
+      <span className={workingDirectoryChipStyles.label}>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
