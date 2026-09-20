@@ -990,6 +990,48 @@ describe('AgentRuntimeService', () => {
       },
     );
 
+    // The executors read the device id through the same gate, so binding one for
+    // a run that may not touch a device buys nothing — and its working directory
+    // and system info would ride into the prompt variables.
+    it.each([
+      { policy: { deviceAccess: { canUseDevice: false, reason: 'external-bot' } }, why: 'policy' },
+      { plan: { execution: { kind: 'sandbox', target: 'sandbox' } }, why: 'plan' },
+    ])('does not adopt a device the run may not use ($why)', async ({ plan, policy }) => {
+      const state = {
+        ...mockState,
+        messages: [],
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        ...(plan && { plan }),
+        ...(policy && { principal: { policy } }),
+      };
+      mockCoordinator.loadAgentState.mockResolvedValue(state);
+      const dbMessages = buildPersistedToolChain('answer');
+      dbMessages[0] = {
+        ...dbMessages[0],
+        pluginState: {
+          metadata: {
+            activeDeviceId: 'device-1',
+            devicePlatform: 'darwin',
+            deviceSystemInfo: { workingDirectory: '/Users/someone/secret' },
+          },
+        },
+        role: 'tool',
+      };
+      (service as any).messageModel.query.mockResolvedValue(dbMessages);
+      vi.spyOn((service as any).messageService, 'prepareUiMessages').mockResolvedValue([]);
+      const step = vi.fn().mockImplementation(async (input) => ({
+        events: [],
+        newState: { ...input, stepCount: 2 },
+        nextContext: mockParams.context,
+      }));
+      vi.spyOn(service as any, 'createAgentRuntime').mockResolvedValue({ runtime: { step } });
+
+      const result = await service.executeStep(mockParams);
+
+      expect(result.success).toBe(true);
+      expect(step.mock.calls[0][0].binding?.device).toBeUndefined();
+    });
+
     it('shares one DB read while UI preparation is still pending', async () => {
       const state = {
         ...mockState,
