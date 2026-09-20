@@ -30,7 +30,7 @@ const fixtureFiles = (
     ruleDirs.map(async (rule) =>
       (await readdir(path.join(fixturesDir, rule)))
         .sort()
-        .map((file) => path.join('.agents/alint/fixtures', rule, file)),
+        .map((file) => path.join('packages/alint/fixtures', rule, file)),
     ),
   )
 ).flat();

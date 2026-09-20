@@ -3,7 +3,7 @@
  * finding shows up on its line in the PR's Files changed tab, plus a short
  * table in the job summary. Findings are advisory: this always exits 0.
  *
- *   bun .agents/alint/annotate.ts alint-output.json
+ *   bun packages/alint/annotate.ts alint-output.json
  */
 import { appendFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -53,7 +53,7 @@ export const toSummary = (output: AlintOutput, rootDir: string): string => {
 const main = async () => {
   const [inputPath] = process.argv.slice(2);
   if (!inputPath) {
-    console.error('usage: bun .agents/alint/annotate.ts <alint-output.json>');
+    console.error('usage: bun packages/alint/annotate.ts <alint-output.json>');
     process.exit(2);
   }
   const rootDir = process.cwd();

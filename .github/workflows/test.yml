@@ -253,7 +253,7 @@ jobs:
   test-desktop:
     needs: check-duplicate-run
     if: needs.check-duplicate-run.outputs.should_skip != 'true'
-    name: alint & Test Desktop App
+    name: ALint & Test Desktop App
 
     runs-on: ubuntu-latest
     env:
@@ -302,7 +302,7 @@ jobs:
           files: ./apps/desktop/coverage/lcov.info
           flags: desktop
 
-      # ---- alint: model-backed lint rules (.agents/alint) on this push's diff ----
+      # ---- alint: model-backed lint rules (packages/alint) on this push's diff ----
       # Advisory: findings land as inline warning annotations and a job summary,
       # never as a failure. Skipped when the provider secret is unavailable (forks).
       # Runs here to reuse the root install instead of paying for another job.
@@ -329,9 +329,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .alintcache
-          key: alint-${{ hashFiles('alint.config.toml', '.agents/alint/rules/**') }}-${{ github.sha }}
+          key: alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**') }}-${{ github.sha }}
           restore-keys: |
-            alint-${{ hashFiles('alint.config.toml', '.agents/alint/rules/**') }}-
+            alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**') }}-
 
       - name: alint · lint changed files
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
@@ -343,14 +343,14 @@ jobs:
           # 1 = findings at error level (none of ours yet), 2 = alint could not run
           if [ "${status:-0}" = "2" ]; then cat alint-output.json; exit 2; fi
           if [ ! -s alint-output.json ]; then echo "nothing to lint"; exit 0; fi
-          bun .agents/alint/annotate.ts alint-output.json
+          bun packages/alint/annotate.ts alint-output.json
 
       - name: alint · calibrate rule fixtures (when rules or fixtures changed)
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
         continue-on-error: true
         run: |
-          if git status --porcelain -- alint.config.toml .agents/alint | grep -q .; then
-            cd .agents/alint && bunx vitest run fixtures.test.ts
+          if git status --porcelain -- alint.config.toml packages/alint | grep -q .; then
+            cd packages/alint && bunx vitest run fixtures.test.ts
           else
             echo "rules and fixtures unchanged; skipping calibration"
           fi

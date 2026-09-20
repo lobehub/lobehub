@@ -1,7 +1,7 @@
 # alint: model-backed rules that eslint cannot express.
-# Rules live in .agents/alint/rules; each has calibration fixtures under
-# .agents/alint/fixtures. Set up a provider with `bun run alint:setup`, then
-# `bun run check --alint` or `bun run alint --dirty`. See .agents/alint/README.md.
+# Rules live in packages/alint/rules; each has calibration fixtures under
+# packages/alint/fixtures. Set up a provider with `bun run alint:setup`, then
+# `bun run check --alint` or `bun run alint --dirty`. See packages/alint/README.md.
 #
 # Scope rules with group `files`; never with `includeFiles` inside a rule
 # (it only filters reports, doubles the jobs, and disables the cache).
@@ -25,7 +25,7 @@ files = [ "apps/server/src/**/*.ts", "packages/database/src/**/*.ts" ]
 ignores = [ "**/*.test.ts", "**/__tests__/**", "**/migrations/**" ]
 
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 
 [config.group.rules]
 "lobehub/pmap-over-promise-all" = "warn"
@@ -37,7 +37,7 @@ files = [ "src/**/*.tsx" ]
 ignores = [ "**/*.test.tsx" ]
 
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 
 [config.group.rules]
 "lobehub/no-effect-fetching" = "warn"
@@ -54,43 +54,43 @@ files = [
 ]
 
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 
 [config.group.rules]
 "lobehub/test-the-exit-not-the-entry" = "warn"
 
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
 [[config.group]]
-files = [ ".agents/alint/fixtures/pmap-over-promise-all/**" ]
+files = [ "packages/alint/fixtures/pmap-over-promise-all/**" ]
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/pmap-over-promise-all" = "warn"
 
 [[config.group]]
-files = [ ".agents/alint/fixtures/no-dynamic-import-in-server/**" ]
+files = [ "packages/alint/fixtures/no-dynamic-import-in-server/**" ]
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-dynamic-import-in-server" = "warn"
 
 [[config.group]]
-files = [ ".agents/alint/fixtures/no-effect-fetching/**" ]
+files = [ "packages/alint/fixtures/no-effect-fetching/**" ]
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-effect-fetching" = "warn"
 
 [[config.group]]
-files = [ ".agents/alint/fixtures/no-mode-flags/**" ]
+files = [ "packages/alint/fixtures/no-mode-flags/**" ]
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-mode-flags" = "warn"
 
 [[config.group]]
-files = [ ".agents/alint/fixtures/test-the-exit-not-the-entry/**" ]
+files = [ "packages/alint/fixtures/test-the-exit-not-the-entry/**" ]
 [config.group.plugins]
-lobehub = "./.agents/alint/rules"
+lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/test-the-exit-not-the-entry" = "warn"

@@ -5,8 +5,8 @@ import { exists, rootDir } from './paths';
 import type { LintOutcome, LintProblem } from './types';
 
 /**
- * Opt-in `--alint` selector: model-backed rules from `.agents/alint/rules`
- * (see `.agents/alint/README.md`). Files outside every config group are
+ * Opt-in `--alint` selector: model-backed rules from `packages/alint/rules`
+ * (see `packages/alint/README.md`). Files outside every config group are
  * skipped by alint itself, so the whole changed set can be passed through.
  */
 

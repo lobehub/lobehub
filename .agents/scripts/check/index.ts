@@ -39,7 +39,7 @@ const USAGE = `Usage: bun run check [files...] [--lint] [--test] [--type] [--ali
   --lint    lint pipelines (with autofix)
   --test    related tests
   --type    full type-check; alone, file collection is skipped
-  --alint   model-backed rules (.agents/alint); opt-in, needs \`bun run alint:setup\``;
+  --alint   model-backed rules (packages/alint); opt-in, needs \`bun run alint:setup\``;
 
 const KNOWN_FLAGS = new Set(['--lint', '--test', '--type', '--alint', '--staged']);
 
