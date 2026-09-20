@@ -60,6 +60,39 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
  * and finalizing into the same `ExecutionSnapshot` S3 layout the built-in path
  * uses. Context-engine fields are intentionally never set (hetero has no CE).
  */
+/**
+ * The partial each warm instance last wrote, with the token that write returned.
+ * Ingest batches arrive as separate requests, so this has to outlive the service
+ * instance to be worth anything — without it every batch re-reads the whole
+ * partial from the store before it can append to it (~350ms of the ~1s the
+ * device waits for its ack).
+ *
+ * Keeping a copy is only safe because the write that follows is fenced on the
+ * token: a batch routed to another instance writes a newer object, and this
+ * instance's next write is refused instead of rolling that one back.
+ */
+const partialCache = new Map<string, { partial: Partial<ExecutionSnapshot>; token: string }>();
+
+/** Bounded so a long-lived instance cannot accumulate finished operations. */
+const PARTIAL_CACHE_MAX = 32;
+
+const rememberPartial = (
+  operationId: string,
+  partial: Partial<ExecutionSnapshot>,
+  token?: string,
+) => {
+  // Without a token the next write could not be fenced, so there is nothing
+  // safe to remember.
+  if (!token) return partialCache.delete(operationId);
+
+  partialCache.delete(operationId);
+  partialCache.set(operationId, { partial, token });
+  if (partialCache.size > PARTIAL_CACHE_MAX) {
+    const oldest = partialCache.keys().next().value;
+    if (oldest !== undefined) partialCache.delete(oldest);
+  }
+};
+
 export class HeteroTraceRecorder {
   constructor(private readonly store: ISnapshotStore | null) {}
 
@@ -73,17 +106,35 @@ export class HeteroTraceRecorder {
     if (!this.store || events.length === 0) return;
 
     try {
-      const partial = (await this.store.loadPartial(operationId)) ?? {};
-      if (!partial.steps) partial.steps = [];
-      if (!partial.startedAt) partial.startedAt = events[0].timestamp;
+      const cached = partialCache.get(operationId);
+      const fold = (partial: Partial<ExecutionSnapshot>) => {
+        if (!partial.steps) partial.steps = [];
+        if (!partial.startedAt) partial.startedAt = events[0].timestamp;
 
-      const byIndex = new Map<number, StepSnapshot>();
-      for (const s of partial.steps) byIndex.set(s.stepIndex, s);
+        const byIndex = new Map<number, StepSnapshot>();
+        for (const s of partial.steps) byIndex.set(s.stepIndex, s);
+        for (const event of events) this.applyEvent(partial, byIndex, event);
+        return partial;
+      };
 
-      for (const event of events) this.applyEvent(partial, byIndex, event);
+      const partial = fold(cached?.partial ?? (await this.store.loadPartial(operationId)) ?? {});
+      const result = await this.store.savePartial(operationId, partial, {
+        expected: cached?.token,
+      });
 
-      await this.store.savePartial(operationId, partial);
+      if (result?.conflict) {
+        // Another instance wrote this partial while we held a copy. Drop ours,
+        // read theirs, and fold this batch's events into it instead.
+        partialCache.delete(operationId);
+        const fresh = fold((await this.store.loadPartial(operationId)) ?? {});
+        const retry = await this.store.savePartial(operationId, fresh);
+        rememberPartial(operationId, fresh, retry?.token);
+        return;
+      }
+
+      rememberPartial(operationId, partial, result?.token);
     } catch (e) {
+      partialCache.delete(operationId);
       log('[%s] appendBatch failed (non-fatal): %O', operationId, e);
     }
   }
@@ -97,7 +148,11 @@ export class HeteroTraceRecorder {
     if (!this.store) return null;
 
     try {
-      const partial = await this.store.loadPartial(operationId);
+      // The run's last batch usually landed here, so the copy it left behind
+      // saves the finalizing read as well.
+      const cached = partialCache.get(operationId)?.partial;
+      partialCache.delete(operationId);
+      const partial = cached ?? (await this.store.loadPartial(operationId));
       if (!partial) return null;
 
       const steps = (partial.steps ?? []).slice().sort((a, b) => a.stepIndex - b.stepIndex);

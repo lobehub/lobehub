@@ -5,6 +5,8 @@ import {
   type ExecutionSnapshot,
   type ISnapshotStore,
   parseOperationId,
+  type PartialSaveOptions,
+  type PartialSaveResult,
   type SnapshotSummary,
 } from '@lobechat/agent-tracing';
 import debug from 'debug';
@@ -15,6 +17,12 @@ const compressZstd = promisify(zstdCompress);
 const decompressZstd = promisify(zstdDecompress);
 
 const log = debug('lobe-server:agent-tracing:s3');
+
+/** A conditional write the store refused because the object changed underneath. */
+const isPreconditionFailed = (error: unknown): boolean => {
+  const status = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+  return status === 412 || (error as { name?: string })?.name === 'PreconditionFailed';
+};
 
 const TRACE_PREFIX = 'agent-traces';
 const SNAPSHOT_SUFFIX = '.json.zst';
@@ -132,16 +140,24 @@ export class S3SnapshotStore implements ISnapshotStore {
   async savePartial(
     operationId: string,
     partial: Partial<ExecutionSnapshot>,
-    options?: { signal?: AbortSignal },
-  ): Promise<void> {
+    options?: PartialSaveOptions,
+  ): Promise<PartialSaveResult> {
     const compressed = await this.encodeSnapshot(partial);
-    await this.s3.uploadBuffer(
-      this.partialKey(operationId),
-      compressed,
-      ZSTD_CONTENT_TYPE,
-      undefined,
-      { abortSignal: options?.signal },
-    );
+    try {
+      const result = await this.s3.uploadBuffer(
+        this.partialKey(operationId),
+        compressed,
+        ZSTD_CONTENT_TYPE,
+        undefined,
+        { abortSignal: options?.signal, ifMatch: options?.expected },
+      );
+      return { token: result?.ETag };
+    } catch (error) {
+      // A refused conditional write is an answer, not a failure: the caller's
+      // cached copy is behind and it has to re-read before writing again.
+      if (options?.expected && isPreconditionFailed(error)) return { conflict: true };
+      throw error;
+    }
   }
 
   async removePartial(operationId: string): Promise<void> {

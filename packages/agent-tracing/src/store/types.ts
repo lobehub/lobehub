@@ -1,5 +1,24 @@
 import type { ExecutionSnapshot, SnapshotSummary } from '../types';
 
+export interface PartialSaveOptions {
+  /**
+   * Write only while the stored object still carries this token, which came
+   * from an earlier read or write of the same partial. A store that can fence
+   * answers `{ conflict: true }` instead of overwriting a newer copy; one that
+   * cannot ignores it.
+   */
+  expected?: string;
+  /** Cancels an upload whose result the caller no longer wants written. */
+  signal?: AbortSignal;
+}
+
+export interface PartialSaveResult {
+  /** The write was refused: someone else has written this partial since. */
+  conflict?: boolean;
+  /** Identifies what is stored now, to fence the caller's next write. */
+  token?: string;
+}
+
 export interface ISnapshotStore {
   get: (traceId: string) => Promise<ExecutionSnapshot | null>;
   getLatest: () => Promise<ExecutionSnapshot | null>;
@@ -20,6 +39,6 @@ export interface ISnapshotStore {
   savePartial: (
     operationId: string,
     partial: Partial<ExecutionSnapshot>,
-    options?: { signal?: AbortSignal },
-  ) => Promise<void>;
+    options?: PartialSaveOptions,
+  ) => Promise<PartialSaveResult | void>;
 }
