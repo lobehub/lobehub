@@ -51,7 +51,7 @@
   "overview.status.notConnected": "未连接",
   "overview.title": "集成",
   "upcoming.figma.tagline": "把设计稿交给智能体，拿回实现",
-  "upcoming.notion.tagline": "读写页面、数据库和需求文档",
+  "upcoming.notion.tagline": "自动同步 Notion 文档",
   "upcoming.vercel.tagline": "在会话里看预览部署和构建结果",
   "upcoming.zapier.tagline": "从上千个应用触发智能体"
 }

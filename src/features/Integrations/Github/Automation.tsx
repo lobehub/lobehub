@@ -1,9 +1,17 @@
 'use client';
 
 import type { GithubIntegrationPreference } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { Switch, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+import {
+  CircleXIcon,
+  GitMergeIcon,
+  GlobeIcon,
+  LockIcon,
+  type LucideIcon,
+  MessageSquareTextIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +24,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 16px;
     border-radius: ${cssVar.borderRadiusLG};
   `,
+  icon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 32px;
+    height: 32px;
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
   row: css`
     padding-block: 12px;
 
@@ -26,6 +48,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 type SwitchKey = keyof GithubIntegrationPreference;
+
+/** One glyph per switch, so a row reads at a glance before the title does. */
+const ICONS: Record<SwitchKey, LucideIcon> = {
+  acceptOnMerge: GitMergeIcon,
+  commentOnPrivateRepositories: LockIcon,
+  commentOnPublicRepositories: GlobeIcon,
+  wakeOnCiFailure: CircleXIcon,
+  wakeOnReview: MessageSquareTextIcon,
+};
 
 interface SwitchGroup {
   /** Switches whose absent value means on; the rest default to off. */
@@ -79,8 +110,11 @@ const Automation = memo(() => {
                 ? preference?.[key] !== false
                 : preference?.[key] === true;
               return (
-                <Flexbox horizontal align="center" className={styles.row} gap={24} key={key}>
-                  <Flexbox flex={1} gap={2}>
+                <Flexbox horizontal align="center" className={styles.row} gap={14} key={key}>
+                  <span className={styles.icon}>
+                    <Icon icon={ICONS[key]} size={16} />
+                  </span>
+                  <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
                     <Text strong>{t(`github.${group.id}.${key}.title` as any)}</Text>
                     <Text style={{ fontSize: 13 }} type="secondary">
                       {t(`github.${group.id}.${key}.description` as any)}
@@ -89,6 +123,7 @@ const Automation = memo(() => {
                   <Switch
                     checked={checked}
                     loading={!isPreferenceInit}
+                    style={{ flex: 'none', marginInlineStart: 10 }}
                     onChange={(next: boolean) => toggle(key, next)}
                   />
                 </Flexbox>

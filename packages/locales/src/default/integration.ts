@@ -61,7 +61,7 @@ export default {
   'overview.status.notConnected': 'Not connected',
   'overview.title': 'Integrations',
   'upcoming.figma.tagline': 'Hand design files to agents and get implementation back',
-  'upcoming.notion.tagline': 'Read and write pages, databases and specs',
+  'upcoming.notion.tagline': 'Sync Notion documents automatically',
   'upcoming.vercel.tagline': 'Preview deployments and build results in the conversation',
   'upcoming.zapier.tagline': 'Trigger agents from thousands of apps',
 };
