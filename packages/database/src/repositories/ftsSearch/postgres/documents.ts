@@ -1,5 +1,5 @@
 import type { SQLWrapper } from 'drizzle-orm';
-import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, min, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../schemas';
 import { notAgentShareFileReference } from '../../../utils/fileVisibility';
@@ -245,26 +245,34 @@ export async function searchKnowledgeBaseDocuments(
     .orderBy(sql`${score} DESC`)
     .limit(limit);
 
+  const fileMemberships = db
+    .select({
+      fileId: knowledgeBaseFiles.fileId,
+      knowledgeBaseId: min(knowledgeBaseFiles.knowledgeBaseId).as('membership_knowledge_base_id'),
+    })
+    .from(knowledgeBaseFiles)
+    .where(
+      and(
+        buildWorkspaceWhere(context.scope, knowledgeBaseFiles),
+        inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+      ),
+    )
+    .groupBy(knowledgeBaseFiles.fileId)
+    .as('file_memberships');
+
   const fileBackedRowsPromise = db
     .select({
       content: documents.content,
       fileId: documents.fileId,
       filename: documents.filename,
       id: documents.id,
-      knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+      knowledgeBaseId: fileMemberships.knowledgeBaseId,
       score,
       title: documents.title,
       updatedAt: documents.updatedAt,
     })
     .from(documents)
-    .innerJoin(
-      knowledgeBaseFiles,
-      and(
-        eq(knowledgeBaseFiles.fileId, documents.fileId),
-        buildWorkspaceWhere(context.scope, knowledgeBaseFiles),
-        inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
-      ),
-    )
+    .innerJoin(fileMemberships, eq(fileMemberships.fileId, documents.fileId))
     .where(
       and(userClause, folderClause, notAgentShareFileReference(db, documents.fileId), matchClause),
     )
