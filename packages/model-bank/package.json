@@ -35,6 +35,7 @@
     "./fal": "./src/aiModels/fal.ts",
     "./fireworksai": "./src/aiModels/fireworksai.ts",
     "./giteeai": "./src/aiModels/giteeai.ts",
+    "./gitgot": "./src/aiModels/gitgot.ts",
     "./github": "./src/aiModels/github.ts",
     "./githubCopilot": "./src/aiModels/githubCopilot.ts",
     "./google": "./src/aiModels/google.ts",

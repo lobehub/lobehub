@@ -236,6 +236,9 @@ export const getLLMConfig = () => {
       ENABLED_CEREBRAS: z.boolean(),
       CEREBRAS_API_KEY: z.string().optional(),
 
+      ENABLED_GITGOT: z.boolean(),
+      GITGOT_API_KEY: z.string().optional(),
+
       ENABLED_ZENMUX: z.boolean(),
       ZENMUX_API_KEY: z.string().optional(),
 
@@ -495,6 +498,9 @@ export const getLLMConfig = () => {
 
       ENABLED_CEREBRAS: !!process.env.CEREBRAS_API_KEY,
       CEREBRAS_API_KEY: process.env.CEREBRAS_API_KEY,
+
+      ENABLED_GITGOT: !!process.env.GITGOT_API_KEY,
+      GITGOT_API_KEY: process.env.GITGOT_API_KEY,
 
       ENABLED_ZENMUX: !!process.env.ZENMUX_API_KEY,
       ZENMUX_API_KEY: process.env.ZENMUX_API_KEY,
