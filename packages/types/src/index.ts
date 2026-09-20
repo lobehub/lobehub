@@ -70,6 +70,7 @@ export * from './agentRuntime';
 export * from './oauthApp';
 export * from './openai/chat';
 export * from './openai/plugin';
+export * from './quickNote';
 export * from './subscription';
 export * from './trace';
 export * from './understanding';
