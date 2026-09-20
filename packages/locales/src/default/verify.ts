@@ -16,6 +16,8 @@ export default {
   'acceptance.review.writeFeedback': 'Write feedback',
   'acceptance.review.mobileDrawHint': 'Drag to mark an issue',
   'acceptance.review.mobileBrowseHint': 'Swipe to switch · scroll to read',
+  'acceptance.review.mobileRegionCommentsEmpty':
+    'Drag on the image above to mark a region; its comment lands here.',
   'acceptance.review.mobileDrawnHint':
     '{{count}} region(s) marked · drag to move, corner dot to resize',
   'acceptance.review.draftSaved': 'Your draft is saved on this device.',
@@ -374,6 +376,7 @@ export default {
   'acceptance.review.attachFailed': 'Screenshot upload failed — please try again.',
   'acceptance.review.attachLimit': 'Up to {{count}} screenshots.',
   'acceptance.review.attachTooLarge': 'The image is too large (10MB max).',
+  'acceptance.review.confirmRegions': 'Done',
   'acceptance.review.confirmReject': 'Submit feedback',
   'acceptance.review.detailPlaceholder':
     'Leave a comment for this check. It will be submitted with your decision…',

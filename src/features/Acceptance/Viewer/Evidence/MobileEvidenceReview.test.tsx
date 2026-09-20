@@ -29,6 +29,7 @@ vi.mock('./EvidenceStage', () => ({
 afterEach(cleanup);
 
 const evidenceItem = { fileUrl: 'https://example.com/shot.png', id: 'e1' };
+const region = { comment: '', evidenceId: 'e1', key: 1, rect: { x: 1, y: 2, width: 3, height: 4 } };
 
 const buildModel = (overrides: Partial<RejectReviewModel> = {}): RejectReviewModel =>
   ({
@@ -62,11 +63,23 @@ const buildModel = (overrides: Partial<RejectReviewModel> = {}): RejectReviewMod
     ...overrides,
   }) as RejectReviewModel;
 
+const withImage = (overrides: Partial<RejectReviewModel> = {}) =>
+  buildModel({
+    activeEvidence: evidenceItem,
+    activeIndex: 0,
+    evidence: [evidenceItem],
+    hasEvidence: true,
+    ...overrides,
+  });
+
 const supplementButton = () =>
-  screen.getByRole('button', { name: /acceptance\.review\.supplementButton/ });
+  screen.queryByRole('button', { name: /acceptance\.review\.supplementButton/ });
 const supplementField = () =>
   screen.queryByRole('textbox', { name: 'acceptance.review.supplement' });
 const drawButton = () => screen.queryByRole('button', { name: 'acceptance.review.drawRegion' });
+const doneButton = () => screen.queryByRole('button', { name: 'acceptance.review.confirmRegions' });
+const submitButton = () =>
+  screen.queryByRole('button', { name: 'acceptance.review.confirmReject' });
 
 describe('MobileEvidenceReview notes button', () => {
   it('keeps the notes closed by default and opens them on tap', () => {
@@ -78,7 +91,7 @@ describe('MobileEvidenceReview notes button', () => {
     expect(supplementField()).not.toBeInTheDocument();
 
     // Tapping the button opens the field in place.
-    fireEvent.click(supplementButton());
+    fireEvent.click(supplementButton()!);
     expect(supplementButton()).toHaveAttribute('aria-expanded', 'true');
     expect(supplementField()).toBeInTheDocument();
     expect(screen.getByText('upload-stub')).toBeInTheDocument();
@@ -88,7 +101,7 @@ describe('MobileEvidenceReview notes button', () => {
     const setComment = vi.fn();
     render(<MobileEvidenceReview model={buildModel({ setComment })} />);
 
-    fireEvent.click(supplementButton());
+    fireEvent.click(supplementButton()!);
     fireEvent.change(supplementField()!, { target: { value: 'wrong color here' } });
 
     expect(setComment).toHaveBeenCalledWith('wrong color here');
@@ -100,7 +113,7 @@ describe('MobileEvidenceReview notes button', () => {
     // A restored draft opens itself — never hide words the user wrote.
     expect(supplementField()).toBeInTheDocument();
 
-    fireEvent.click(supplementButton());
+    fireEvent.click(supplementButton()!);
     expect(supplementField()).not.toBeInTheDocument();
     // The closed button names the draft instead of the plain label.
     expect(supplementButton()).toHaveTextContent('acceptance.review.supplementButtonDraft');
@@ -119,15 +132,7 @@ describe('MobileEvidenceReview notes button', () => {
   });
 
   it('keeps marked regions visible without auto-opening the notes', () => {
-    render(
-      <MobileEvidenceReview
-        model={buildModel({
-          annotations: [
-            { comment: '', evidenceId: 'e1', key: 1, rect: { x: 1, y: 2, width: 3, height: 4 } },
-          ],
-        })}
-      />,
-    );
+    render(<MobileEvidenceReview model={buildModel({ annotations: [region] })} />);
 
     // Regions have their own always-visible section; the notes stay closed.
     expect(screen.getByText('acceptance.review.regionComments')).toBeInTheDocument();
@@ -136,49 +141,56 @@ describe('MobileEvidenceReview notes button', () => {
   });
 });
 
-describe('MobileEvidenceReview draw button', () => {
-  it('sits beside the notes button and switches drawing on', () => {
+describe('MobileEvidenceReview marking mode', () => {
+  it('enters marking mode from the button beside the notes button', () => {
     const advance = vi.fn();
-    render(
-      <MobileEvidenceReview
-        model={buildModel({
-          activeEvidence: evidenceItem,
-          activeIndex: 0,
-          advance,
-          evidence: [evidenceItem],
-          hasEvidence: true,
-        })}
-      />,
-    );
+    render(<MobileEvidenceReview model={withImage({ advance })} />);
 
-    // Not pressed while drags pan the image.
-    expect(drawButton()).toHaveAttribute('aria-pressed', 'false');
+    expect(drawButton()).toBeInTheDocument();
+    expect(supplementButton()).toBeInTheDocument();
 
     fireEvent.click(drawButton()!);
     expect(advance).toHaveBeenCalledWith('toggle-draw');
   });
 
-  it('shows as pressed while drags mark regions', () => {
+  it('swaps everything under the image for the region comments and a Done button', () => {
+    const advance = vi.fn();
+    render(<MobileEvidenceReview model={withImage({ advance, drawing: true })} />);
+
+    // The two-button row, the note and the submit all step aside.
+    expect(drawButton()).not.toBeInTheDocument();
+    expect(supplementButton()).not.toBeInTheDocument();
+    expect(submitButton()).not.toBeInTheDocument();
+
+    // What is left is about the regions: the list (empty so far) and the hint.
+    expect(screen.getByText('acceptance.review.regionComments')).toBeInTheDocument();
+    expect(screen.getByText('acceptance.review.mobileRegionCommentsEmpty')).toBeInTheDocument();
+    expect(screen.getByText('acceptance.review.mobileDrawHint')).toBeInTheDocument();
+
+    // Done leaves the mode; the regions themselves are the model's to keep.
+    fireEvent.click(doneButton()!);
+    expect(advance).toHaveBeenCalledWith('toggle-draw');
+  });
+
+  it('lists the circled regions for their notes while marking', () => {
     render(
       <MobileEvidenceReview
-        model={buildModel({
-          activeEvidence: evidenceItem,
-          activeIndex: 0,
-          drawing: true,
-          evidence: [evidenceItem],
-          hasEvidence: true,
-        })}
+        model={withImage({ activeAnnotations: [region], annotations: [region], drawing: true })}
       />,
     );
 
-    expect(drawButton()).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('acceptance.review.mobileDrawHint')).toBeInTheDocument();
+    expect(screen.queryByText('acceptance.review.mobileRegionCommentsEmpty')).toBeNull();
+    expect(
+      screen.getByRole('textbox', { name: 'acceptance.review.annotationPlaceholder' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('acceptance.review.mobileDrawnHint')).toBeInTheDocument();
   });
 
-  it('is absent when there is no image to draw on', () => {
+  it('has no marking entry when there is no image to draw on', () => {
     render(<MobileEvidenceReview model={buildModel()} />);
 
     expect(drawButton()).not.toBeInTheDocument();
     expect(supplementButton()).toBeInTheDocument();
+    expect(submitButton()).toBeInTheDocument();
   });
 });

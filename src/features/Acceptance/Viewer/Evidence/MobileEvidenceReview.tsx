@@ -43,7 +43,7 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 40dvh;
   `,
   /** Two equal thumb-sized buttons: what to do next with the image, and where
-      the written note goes. Each carries its own on/off state. */
+      the written note goes. */
   actions: css`
     display: flex;
     flex: none;
@@ -84,6 +84,11 @@ const styles = createStaticStyles(({ css }) => ({
 /**
  * Phone review on one page: look at the image, circle what is wrong, and write
  * the note right where the circle landed.
+ *
+ * Marking is a mode of its own. While it is on, everything under the image is
+ * about the regions — the list of circled comments and a Done button — so the
+ * reviewer is never asked to type a general note or submit halfway through a
+ * drag. Leaving the mode brings back the two-button row and the submit.
  */
 export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model }) => {
   const { t } = useTranslation('verify');
@@ -116,6 +121,25 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
   );
   const hasSupplementContent = comment.trim().length > 0 || attachments.length > 0;
   const hasRegionContent = annotations.length > 0;
+
+  const regionNotes = (
+    <>
+      <Text strong>{t('acceptance.review.regionComments')}</Text>
+      {hasRegionContent ? (
+        <MobileRegionNotes
+          annotations={annotations}
+          evidence={evidence}
+          onChange={model.editAnnotation}
+          onJump={model.jumpToRegion}
+          onRemove={model.removeAnnotation}
+        />
+      ) : (
+        <Text fontSize={13} type={'secondary'}>
+          {t('acceptance.review.mobileRegionCommentsEmpty')}
+        </Text>
+      )}
+    </>
+  );
 
   return (
     <div className={styles.body}>
@@ -188,88 +212,89 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
             </Flexbox>
           </>
         )}
-        {/* Two buttons side by side, each a switch the reviewer can read the
-            state of: "draw region" is pressed while drags mark regions instead
-            of panning; "notes" is expanded while the written note is open
-            below. A folded header row read as a heading, not as something to
-            tap — a button says what it is. */}
-        <div className={styles.actions}>
-          {activeEvidence && (
-            <Button
-              aria-pressed={drawing}
-              icon={PencilLine}
-              type={drawing ? 'primary' : 'default'}
-              onClick={() => model.advance('toggle-draw')}
-            >
-              {t('acceptance.review.drawRegion')}
-            </Button>
-          )}
-          <Button
-            aria-expanded={supplementExpanded}
-            icon={NotebookPen}
-            type={supplementExpanded ? 'primary' : 'default'}
-            onClick={() => setSupplementExpanded((open) => !open)}
-          >
-            {hasSupplementContent && !supplementExpanded
-              ? t('acceptance.review.supplementButtonDraft')
-              : t('acceptance.review.supplementButton')}
-          </Button>
-        </div>
-        {(hasRegionContent || supplementExpanded) && (
-          <div className={styles.editor}>
-            {hasRegionContent && (
-              <>
-                <Text strong>{t('acceptance.review.regionComments')}</Text>
-                <MobileRegionNotes
-                  annotations={annotations}
-                  evidence={evidence}
-                  onChange={model.editAnnotation}
-                  onJump={model.jumpToRegion}
-                  onRemove={model.removeAnnotation}
-                />
-              </>
+        {drawing ? (
+          // Marking mode: the circled comments are the whole story below the
+          // image — each new box lands here, ready for its note.
+          <div className={styles.editor}>{regionNotes}</div>
+        ) : (
+          <>
+            {/* Two buttons side by side: one enters marking mode, the other
+                discloses the written note below. The open state is a light
+                fill, not the primary slab — it marks which panel is open, it
+                is not the page's action. */}
+            <div className={styles.actions}>
+              {activeEvidence && (
+                <Button icon={PencilLine} onClick={() => model.advance('toggle-draw')}>
+                  {t('acceptance.review.drawRegion')}
+                </Button>
+              )}
+              <Button
+                aria-expanded={supplementExpanded}
+                icon={NotebookPen}
+                type={supplementExpanded ? 'fill' : 'default'}
+                onClick={() => setSupplementExpanded((open) => !open)}
+              >
+                {hasSupplementContent && !supplementExpanded
+                  ? t('acceptance.review.supplementButtonDraft')
+                  : t('acceptance.review.supplementButton')}
+              </Button>
+            </div>
+            {(hasRegionContent || supplementExpanded) && (
+              <div className={styles.editor}>
+                {hasRegionContent && regionNotes}
+                {supplementExpanded && (
+                  <>
+                    <Text strong>{t('acceptance.review.supplement')}</Text>
+                    <TextArea
+                      aria-label={t('acceptance.review.supplement')}
+                      autoSize={{ maxRows: 10, minRows: 4 }}
+                      placeholder={t('acceptance.review.rejectPlaceholder')}
+                      style={{ fontSize: 16 }}
+                      value={comment}
+                      onChange={(event) => model.setComment(event.target.value)}
+                      onPaste={handlePaste}
+                    />
+                    <AttachmentUploadButton disabled={loading} onFiles={model.uploadFiles} />
+                    <AttachmentStrip
+                      attachments={attachments}
+                      disabled={loading}
+                      uploading={uploading}
+                      onRemove={model.removeAttachment}
+                    />
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('acceptance.review.draftSaved')}
+                    </Text>
+                  </>
+                )}
+              </div>
             )}
-            {supplementExpanded && (
-              <>
-                <Text strong>{t('acceptance.review.supplement')}</Text>
-                <TextArea
-                  aria-label={t('acceptance.review.supplement')}
-                  autoSize={{ maxRows: 10, minRows: 4 }}
-                  placeholder={t('acceptance.review.rejectPlaceholder')}
-                  style={{ fontSize: 16 }}
-                  value={comment}
-                  onChange={(event) => model.setComment(event.target.value)}
-                  onPaste={handlePaste}
-                />
-                <AttachmentUploadButton disabled={loading} onFiles={model.uploadFiles} />
-                <AttachmentStrip
-                  attachments={attachments}
-                  disabled={loading}
-                  uploading={uploading}
-                  onRemove={model.removeAttachment}
-                />
-                <Text fontSize={12} type={'secondary'}>
-                  {t('acceptance.review.draftSaved')}
-                </Text>
-              </>
-            )}
-          </div>
+          </>
         )}
       </div>
       <div className={styles.footer}>
-        {failed && (
-          <Text role={'alert'} type={'danger'}>
-            {t('acceptance.review.submitFailed')}
-          </Text>
+        {drawing ? (
+          // Done closes marking mode; the boxes and their notes stay. The
+          // submit only comes back once the reviewer is out of the mode.
+          <Button type={'primary'} onClick={() => model.advance('toggle-draw')}>
+            {t('acceptance.review.confirmRegions')}
+          </Button>
+        ) : (
+          <>
+            {failed && (
+              <Text role={'alert'} type={'danger'}>
+                {t('acceptance.review.submitFailed')}
+              </Text>
+            )}
+            <Button
+              disabled={!canSubmit}
+              loading={loading}
+              type={'primary'}
+              onClick={model.submitReject}
+            >
+              {t('acceptance.review.confirmReject')}
+            </Button>
+          </>
         )}
-        <Button
-          disabled={!canSubmit}
-          loading={loading}
-          type={'primary'}
-          onClick={model.submitReject}
-        >
-          {t('acceptance.review.confirmReject')}
-        </Button>
       </div>
     </div>
   );
