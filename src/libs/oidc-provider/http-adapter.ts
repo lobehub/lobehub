@@ -27,6 +27,9 @@ export const convertHeadersToNodeHeaders = (nextHeaders: Headers): Record<string
  * Create a Node.js HTTP request object for OIDC Provider
  * @param req Next.js request object
  */
+const DISCOVERY_PUBLIC_PATH = '/oidc/.well-known/openid-configuration';
+const DISCOVERY_PROVIDER_PATH = '/.well-known/openid-configuration';
+
 export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessage> => {
   // Build URL object
   const url = new URL(req.url);
@@ -37,6 +40,14 @@ export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessa
   // Ensure path always starts with /
   if (!providerPath.startsWith('/')) {
     providerPath = '/' + providerPath;
+  }
+
+  // Discovery is the one route oidc-provider hardcodes, so it cannot be moved
+  // under the `/oidc` prefix the way every other route is. The document lives
+  // where clients look for it (`/oidc/.well-known/openid-configuration`, the
+  // issuer plus the well-known suffix) and is translated back here.
+  if (providerPath === DISCOVERY_PUBLIC_PATH) {
+    providerPath = DISCOVERY_PROVIDER_PATH;
   }
 
   log('Creating Node.js request from Next.js request');
