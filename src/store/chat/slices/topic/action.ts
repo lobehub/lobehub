@@ -109,6 +109,31 @@ export interface SwitchTopicOptions {
    */
   clearNewKey?: boolean;
   /**
+   * The conversation whose `_new` bucket the cleanup should target. Send
+   * flows pass the conversation the send started from: when the navigation
+   * guard drops the switch, the user may be viewing a different agent/group,
+   * and cleaning up by current view would wipe that view's blank bucket
+   * instead of the send's own. Omit to clean by the current view (legacy).
+   */
+  clearNewKeyContext?: {
+    agentId: string;
+    groupId?: string | null;
+    scope?: MessageMapScope;
+  };
+  /**
+   * Only apply the switch while the active agent still matches. Send flows
+   * pin the agent they started from: the topic guard cannot tell two blank
+   * views apart (both have `activeTopicId === null`), so without this a send
+   * from agent A's blank view would adopt its minted topic while the user is
+   * on agent B's blank view. Omit the option to skip the check.
+   */
+  onlyIfActiveAgentId?: string | null;
+  /**
+   * Only apply the switch while the active group still matches — the
+   * group-scope counterpart of `onlyIfActiveAgentId`.
+   */
+  onlyIfActiveGroupId?: string | null;
+  /**
    * Only apply the switch while the user is still on one of these conversation
    * buckets. Send flows pass every bucket their conversation can currently live
    * under — the client-minted topic id before the server confirms it, the
@@ -1609,14 +1634,55 @@ export class ChatTopicActionImpl {
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
 
+    const { activeAgentId, activeGroupId } = this.#get();
+
+    // Clear the _new key data in the following cases:
+    // 1. When id is null or undefined (switching to empty topic state)
+    // 2. When clearNewKey option is explicitly true
+    // This prevents stale data from previous conversations showing up
+    // Note: Use == null to match both null and undefined
+    //
+    // Housekeeping runs BEFORE the navigation guard below: a send whose
+    // continuation is dropped because the user navigated away is still done
+    // with the blank conversation it came from — the cleanup targets that
+    // origin bucket (opts.clearNewKeyContext), never the view the user moved
+    // to. In the normal (unguarded) case origin and current view are the same
+    // conversation, so this is identical to cleaning up after the guard.
+    const shouldClearNewKey = !id || opts.clearNewKey;
+
+    if (shouldClearNewKey) {
+      this.#get().clearPortalStack();
+    }
+
+    const cleanupAgentId = opts.clearNewKeyContext?.agentId ?? activeAgentId;
+    const cleanupGroupId = opts.clearNewKeyContext?.groupId ?? activeGroupId;
+
+    if (shouldClearNewKey && cleanupAgentId) {
+      // Determine scope: use explicit scope, or infer from the cleanup group
+      const scope =
+        opts.clearNewKeyContext?.scope ?? opts.scope ?? (cleanupGroupId ? 'group' : 'main');
+
+      this.#get().replaceMessages([], {
+        context: {
+          agentId: cleanupAgentId,
+          groupId: cleanupGroupId,
+          scope,
+          topicId: null,
+        },
+        action: n('clearNewKeyData'),
+      });
+    }
+
     // Send-flow continuation guard: if the caller requires the user to still
-    // be on a specific topic and they've navigated elsewhere while the send's
-    // awaits were in flight, drop the switch instead of yanking the UI (and
-    // the URL, via ChatHydration's route sync) back to the sent topic. The
-    // epoch token below cannot catch this — the user's switch happened in
-    // between, but this call is still the newest one. Runs before the epoch
-    // bump: a skipped switch must not invalidate a concurrent switch's
-    // pending revalidation.
+    // be on a specific conversation and they've navigated elsewhere while the
+    // send's awaits were in flight, drop the switch instead of yanking the UI
+    // (and the URL, via ChatHydration's route sync) back to the sent topic.
+    // The topic id alone cannot tell two blank views apart — a null origin and
+    // a null destination look identical — so send flows also pin the agent and
+    // group they started from. The epoch token below cannot catch any of this
+    // — the user's switch happened in between, but this call is still the
+    // newest one. Runs before the epoch bump: a skipped switch must not
+    // invalidate a concurrent switch's pending revalidation.
     if (opts.onlyIfActiveTopicIn) {
       // `activeTopicId` uses `null` for "no topic" but is typed `string` and can
       // hold `undefined`/`''` from callers that never went through switchTopic,
@@ -1625,36 +1691,18 @@ export class ChatTopicActionImpl {
       const activeTopicId = this.#get().activeTopicId || null;
       if (!opts.onlyIfActiveTopicIn.includes(activeTopicId)) return;
     }
+    if (
+      opts.onlyIfActiveAgentId !== undefined &&
+      (activeAgentId ?? null) !== opts.onlyIfActiveAgentId
+    )
+      return;
+    if (
+      opts.onlyIfActiveGroupId !== undefined &&
+      (activeGroupId ?? null) !== opts.onlyIfActiveGroupId
+    )
+      return;
 
     const epoch = ++this.#switchTopicEpoch;
-
-    const { activeAgentId, activeGroupId } = this.#get();
-
-    // Clear the _new key data in the following cases:
-    // 1. When id is null or undefined (switching to empty topic state)
-    // 2. When clearNewKey option is explicitly true
-    // This prevents stale data from previous conversations showing up
-    // Note: Use == null to match both null and undefined
-    const shouldClearNewKey = !id || opts.clearNewKey;
-
-    if (shouldClearNewKey) {
-      this.#get().clearPortalStack();
-    }
-
-    if (shouldClearNewKey && activeAgentId) {
-      // Determine scope: use explicit scope from options, or infer from activeGroupId
-      const scope = opts.scope ?? (activeGroupId ? 'group' : 'main');
-
-      this.#get().replaceMessages([], {
-        context: {
-          agentId: activeAgentId,
-          groupId: activeGroupId,
-          scope,
-          topicId: null,
-        },
-        action: n('clearNewKeyData'),
-      });
-    }
 
     this.#set(
       { activeTopicId: id || (null as any), activeThreadId: undefined },

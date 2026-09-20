@@ -1880,6 +1880,108 @@ describe('topic action', () => {
         expect(useChatStore.getState().activeTopicId).toBe('real-topic');
         expect(revalidateSpy).toHaveBeenCalledTimes(1);
       });
+
+      it('skips the switch when the active agent changed between two blank views', async () => {
+        // Regression (Codex P1): the topic guard alone cannot tell two blank
+        // views apart — both have `activeTopicId` unset. A send from agent A's
+        // blank view whose preflight outlasts the user's navigation to agent
+        // B's blank view must NOT adopt A's minted topic in B's UI.
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeAgentId: 'agent-b', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveAgentId: 'agent-a',
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+        expect(revalidateSpy).not.toHaveBeenCalled();
+      });
+
+      it('applies the switch when the agent and topic both still match', async () => {
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeAgentId: 'agent-a', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveAgentId: 'agent-a',
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('topic-minted-by-send');
+      });
+
+      it('skips the switch when the active group changed between two blank views', async () => {
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeGroupId: 'group-b', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveGroupId: null,
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+      });
+
+      it('still clears the origin _new bucket when the guard drops the switch', async () => {
+        // Regression (Codex P1): a dropped switch used to suppress the
+        // clearNewKey cleanup too, leaving the send's origin blank bucket
+        // stale — and cleaning by the current view would wipe the WRONG
+        // conversation's bucket. The cleanup must target the origin.
+        const { result } = renderHook(() => useChatStore());
+        const replaceSpy = vi.spyOn(result.current, 'replaceMessages');
+        const clearPortalSpy = vi.spyOn(result.current, 'clearPortalStack');
+
+        await act(async () => {
+          useChatStore.setState({
+            activeAgentId: 'agent-b',
+            activeGroupId: undefined,
+            activeTopicId: 'topic-user-moved-to',
+          });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            clearNewKeyContext: { agentId: 'agent-a', groupId: null },
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        // Navigation dropped…
+        expect(useChatStore.getState().activeTopicId).toBe('topic-user-moved-to');
+        // …but the origin conversation's _new bucket was still cleared.
+        expect(clearPortalSpy).toHaveBeenCalled();
+        expect(replaceSpy).toHaveBeenCalledWith(
+          [],
+          expect.objectContaining({
+            context: expect.objectContaining({ agentId: 'agent-a', topicId: null }),
+          }),
+        );
+      });
     });
   });
   describe('removeSessionTopics', () => {
