@@ -31,15 +31,21 @@ export type ProjectorResolver = (
 const BODY_ONLY_PROJECTION: ToolProjection = { content: null, storedPayloadNeededBy: 'render' };
 
 const projectToolMessage = (message: UIChatMessage, resolve: ProjectorResolver): UIChatMessage => {
+  // Nothing is projected while the row is still running. The streaming sentinel
+  // in `content` is how it is known to be running (`hasToolResultBody`), and
+  // projecting it away would leave an empty body behind a non-zero
+  // `contentLength` — a row that reads as finished and whose result never
+  // arrives. This guards the projectors too: a projector is written against a
+  // settled payload and has no reason to see a half-finished one.
+  if (message.content === LOADING_FLAT) return message;
+
   const projector = resolve(message.plugin?.identifier, message.plugin?.apiName);
 
   // No projector: keep the state whole and drop just the body — and only when
-  // there is a settled body. An empty result would be flagged for a fetch that
-  // returns nothing, and the streaming sentinel is the one string whose
-  // presence in `content` is how the row is known to be still running.
+  // there is a body. An empty result would be flagged for a fetch that returns
+  // nothing.
   if (!projector) {
-    const hasSettledBody = !!message.content && message.content !== LOADING_FLAT;
-    return hasSettledBody ? applyProjection(message, BODY_ONLY_PROJECTION) : message;
+    return message.content ? applyProjection(message, BODY_ONLY_PROJECTION) : message;
   }
 
   let projection;

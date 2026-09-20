@@ -253,3 +253,42 @@ describe('grepContentProjector', () => {
     expect(projected.pluginState).toEqual({ pattern: 'nothing', totalMatches: 0 });
   });
 });
+
+describe('a row that is still running', () => {
+  // `hasToolResultBody` reads the sentinel to mean "no result yet". Projecting
+  // it would leave content '' behind contentLength 3, which reads as finished.
+  it.each([
+    ['with a projector', 'lobe-local-system', 'grepContent'],
+    ['with a projector that takes the no-state branch', 'lobe-local-system', 'readFile'],
+    ['without one', 'some-mcp-plugin', 'doThing'],
+  ])('is untouched %s', (_label, identifier, apiName) => {
+    const running = toolMessage({
+      content: LOADING_FLAT,
+      plugin: { apiName, arguments: '{}', identifier },
+      pluginState: undefined,
+    } as Partial<UIChatMessage>);
+
+    const [projected] = projectToolViewModels([running], getToolProjector);
+
+    expect(projected).toEqual(running);
+    expect(projected.content).toBe(LOADING_FLAT);
+    expect(projected.contentLength).toBeUndefined();
+    expect(projected.payloadOmitted).toBeUndefined();
+  });
+
+  it('still projects once the real body lands', () => {
+    const [projected] = projectToolViewModels(
+      [
+        toolMessage({
+          content: 'RAW BODY',
+          plugin: { apiName: 'grepContent', arguments: '{}', identifier: 'lobe-local-system' },
+          pluginState: { matches: ['/a.ts'], pattern: 'x', totalMatches: 1 },
+        } as Partial<UIChatMessage>),
+      ],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({ pattern: 'x', totalMatches: 1 });
+    expect(projected.payloadOmitted).toBe('render');
+  });
+});
