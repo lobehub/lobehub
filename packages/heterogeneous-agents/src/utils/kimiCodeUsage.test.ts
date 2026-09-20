@@ -107,13 +107,19 @@ describe('kimiCodeUsage', () => {
       });
     });
 
-    it('takes the model from the last usage-bearing record', () => {
+    it('takes the model from the last usage-bearing record, without the provider prefix', () => {
       expect(
         aggregateKimiCodeUsage([
           { model: 'kimi-code/k2', usage: { inputOther: 10, output: 5 } },
           { model: 'kimi-code/k3', usage: { inputOther: 20, output: 6 } },
         ]),
-      ).toMatchObject({ model: 'kimi-code/k3' });
+      ).toMatchObject({ model: 'k3' });
+    });
+
+    it('passes a model without the kimi-code/ prefix through unchanged', () => {
+      expect(
+        aggregateKimiCodeUsage([{ model: 'k3', usage: { inputOther: 10, output: 5 } }]),
+      ).toMatchObject({ model: 'k3' });
     });
 
     it('returns undefined when no record carries tokens', () => {
@@ -180,7 +186,7 @@ describe('kimiCodeUsage', () => {
       await expect(
         readKimiCodeSessionUsage('session-1', { env: { KIMI_CODE_HOME: kimiHome } }),
       ).resolves.toEqual({
-        model: 'kimi-code/k3',
+        model: 'k3',
         usage: {
           inputCacheMissTokens: 325,
           inputCachedTokens: 45_784,

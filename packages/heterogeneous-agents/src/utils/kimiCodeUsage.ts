@@ -83,6 +83,16 @@ export const toKimiCodeUsageData = (
   };
 };
 
+const KIMI_CODE_MODEL_PREFIX = 'kimi-code/';
+
+/**
+ * The wire log names models with the provider namespace (`kimi-code/k3`).
+ * The provider is persisted separately as `kimi-code`, so the stored model is
+ * just the bare name — a value without the prefix passes through unchanged.
+ */
+const stripKimiCodeModelPrefix = (model: string): string =>
+  model.startsWith(KIMI_CODE_MODEL_PREFIX) ? model.slice(KIMI_CODE_MODEL_PREFIX.length) : model;
+
 /**
  * Sum multiple per-request wire-log usage records into a single grand total,
  * matching the semantic of Claude Code's `result` event usage. The model is
@@ -102,7 +112,7 @@ export const aggregateKimiCodeUsage = (
     const usage = toKimiCodeUsageData(record.usage);
     if (!usage) continue;
     seen = true;
-    if (record.model) model = record.model;
+    if (record.model) model = stripKimiCodeModelPrefix(record.model);
     inputCacheMissTokens += usage.inputCacheMissTokens;
     inputCachedTokens += usage.inputCachedTokens || 0;
     inputWriteCacheTokens += usage.inputWriteCacheTokens || 0;

@@ -226,7 +226,7 @@ describe('AgentStreamPipeline', () => {
       expect(events).toEqual([
         expect.objectContaining({
           data: {
-            model: 'kimi-code/k3',
+            model: 'k3',
             phase: 'turn_metadata',
             provider: 'kimi-code',
             usage: {
