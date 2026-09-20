@@ -43,9 +43,15 @@ lobehub = "./.agents/alint/rules"
 "lobehub/no-effect-fetching" = "warn"
 "lobehub/no-mode-flags" = "warn"
 
-# Vitest files.
+# Vitest files, wherever they live: the SPA, every app, and every package.
+# Naming only `apps/server` here silently skipped the ~230 tests under
+# `apps/cli` and `apps/desktop`, which is where this rule earns its keep.
 [[config.group]]
-files = [ "src/**/*.test.{ts,tsx}", "apps/server/src/**/*.test.ts", "packages/*/src/**/*.test.ts" ]
+files = [
+  "src/**/*.test.{ts,tsx}",
+  "apps/*/src/**/*.test.{ts,tsx}",
+  "packages/*/src/**/*.test.{ts,tsx}",
+]
 
 [config.group.plugins]
 lobehub = "./.agents/alint/rules"
