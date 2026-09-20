@@ -25,19 +25,55 @@ import type { IStreamEventManager, PublishAgentRuntimeEndParams } from './types'
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
 
 /**
+ * The only `stream_end` fields anything on this wire reads.
+ *
+ * `finalContent` is the one the gateway client applies (a reasoning-only answer
+ * arrives as chunks and gets promoted into it, so the bubble would be empty
+ * without it). `stepLabel` is a short display label carried alongside.
+ *
+ * Everything else the event publishes — `reasoning`, `toolsCalling`, `usage`,
+ * `grounding`, `imageList` — already reached this client token by token as
+ * `stream_chunk`, and lands again, canonically, with the message. No gateway
+ * consumer reads them here: the store's `stream_end` case touches
+ * `finalContent` alone, and the CLI's renders nothing from the payload. On a
+ * sampled run they were 12 kB of a 14 kB event.
+ *
+ * An allowlist rather than a denylist, so a new field on the publish site has
+ * to be looked at before it rides along.
+ */
+const STREAM_END_WIRE_FIELDS = ['finalContent', 'stepLabel'] as const;
+
+const projectStreamEndData = (data: unknown): unknown => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+
+  const record = data as Record<string, unknown>;
+  const projected: Record<string, unknown> = {};
+  for (const field of STREAM_END_WIRE_FIELDS) {
+    if (field in record) projected[field] = record[field];
+  }
+
+  return projected;
+};
+
+/**
  * Reduce an event to what the gateway wire actually needs.
  *
- * Today that means `tool_end`: the body of a tool result reaches the screen
- * through the read path, which already projects it, so shipping the raw body
- * here is a second copy of the largest payload on the connection. See
- * `projectToolEndResult` for what survives and why.
+ * Both cuts here rest on the same fact: this socket is not how a result reaches
+ * the screen. The message is, through a read path that already projects it, so
+ * an event repeating the payload is a second copy of it. `tool_end` carries a
+ * tool's body and state (see `projectToolEndResult`); `stream_end` carries the
+ * assistant's reasoning and tool calls, which also arrived as chunks.
  *
  * This is the transport seam on purpose. The shared stream-manager chokepoint
  * would also catch the Responses API and the CLI's `--verbose`, both of which
- * print the body.
+ * print what is dropped here.
  */
-const projectGatewayEventData = (data: unknown, eventType: unknown): unknown =>
-  eventType === 'tool_end' ? projectToolEndResult(data) : data;
+const projectGatewayEventData = (data: unknown, eventType: unknown): unknown => {
+  if (eventType === 'tool_end') return projectToolEndResult(data);
+  if (eventType === 'stream_end') return projectStreamEndData(data);
+
+  return data;
+};
 
 const POST_TIMEOUT = 5000; // 5s per request
 const MAX_INFLIGHT = 20; // bounded concurrency

@@ -48,7 +48,14 @@ export const UserMemoryApiName = MemoryApiName;
 // Search
 
 // SearchUserMemoryState is the same as SearchMemoryResult (executor returns result directly as state)
-export type SearchUserMemoryState = SearchMemoryResult;
+export type SearchUserMemoryState = SearchMemoryResult & {
+  /**
+   * Total across the five buckets, pinned by the read-path projector before it
+   * drops them. The collapsed chip shows only this number; the card itself
+   * hydrates the real buckets when the row is expanded.
+   */
+  resultCount?: number;
+};
 export type QueryTaxonomyOptionsState = QueryTaxonomyOptionsResult;
 
 // Add Context

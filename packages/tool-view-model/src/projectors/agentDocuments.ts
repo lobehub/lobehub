@@ -21,3 +21,33 @@ export const readDocumentProjector: ToolProjector = ({ pluginState }) => {
 
   return { content: null, pluginState: rest, storedPayloadNeededBy: 'render' };
 };
+
+/**
+ * `listDocuments`.
+ *
+ * No render is registered for it, so the only surface is the inspector chip,
+ * which prints one number: how many documents came back. The list itself —
+ * ids, filenames, titles — has no reader on screen, and it is the whole state.
+ *
+ * The count is pinned as `documentCount` rather than left implicit in an array
+ * length, so the chip keeps a number to read once the rows are gone.
+ */
+export const listDocumentsProjector: ToolProjector = ({ pluginState }) => {
+  if (!isRecord(pluginState)) return { content: null, storedPayloadNeededBy: 'render' };
+
+  const { documents: _documents, ...rest } = pluginState;
+  const documents = pluginState.documents;
+
+  return {
+    content: null,
+    pluginState: {
+      ...rest,
+      documentCount: Array.isArray(documents)
+        ? documents.length
+        : typeof pluginState.documentCount === 'number'
+          ? pluginState.documentCount
+          : undefined,
+    },
+    storedPayloadNeededBy: 'render',
+  };
+};

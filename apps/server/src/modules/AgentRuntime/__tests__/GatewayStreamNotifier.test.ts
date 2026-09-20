@@ -158,6 +158,33 @@ describe('GatewayStreamNotifier', () => {
       expect(pushed.result.state.exitCode).toBe(0);
     });
 
+    it('ships stream_end with only what the wire reads', async () => {
+      const data = {
+        finalContent: 'the answer',
+        grounding: { citations: [1, 2] },
+        imageList: [{ id: 'img-1' }],
+        reasoning: 'x'.repeat(9000),
+        stepLabel: 'Step 2',
+        toolsCalling: [{ id: 'call-1' }],
+        usage: { total_tokens: 500 },
+      };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+
+      const pushed = JSON.parse(mockFetch.mock.calls[0][1].body).event.data;
+      expect(pushed).toEqual({ finalContent: 'the answer', stepLabel: 'Step 2' });
+      // In-process consumers (Responses API, the CLI) keep the whole payload.
+      expect(inner.calls.publishStreamEvent[0][1].data).toBe(data);
+    });
+
+    it('keeps an absent finalContent absent rather than inventing one', async () => {
+      const data = { reasoning: 'dropped', toolsCalling: [] };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body).event.data).toEqual({});
+    });
+
     it('leaves other event types carrying their result body', async () => {
       const data = { result: { content: 'kept' } };
 

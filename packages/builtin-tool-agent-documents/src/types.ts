@@ -203,5 +203,11 @@ export interface ListDocumentsArgs {
 }
 
 export interface ListDocumentsState {
+  /**
+   * How many rows `documents` held, pinned by the read-path projector before it
+   * drops them. The inspector chip is the only surface that reads this state,
+   * and a count is all it shows.
+   */
+  documentCount?: number;
   documents: { documentId?: string; filename: string; id: string; title?: string }[];
 }

@@ -334,6 +334,48 @@ describe('GatewayMuxClient', () => {
     });
   });
 
+  describe('operation id on the envelope', () => {
+    it('fills an omitted event.operationId from the envelope', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const seen: (string | undefined)[] = [];
+      sub.on('agent_event', (e) => seen.push(e.operationId));
+
+      const { event, ...envelope } = agentEvent('op-1', '1') as any;
+      const { operationId: _omitted, ...eventWithoutOp } = event;
+      ws.simulateMessage({ ...envelope, event: eventWithoutOp });
+
+      expect(seen).toEqual(['op-1']);
+    });
+
+    it('leaves a mirrored member event pointing at its own operation', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const seen: (string | undefined)[] = [];
+      sub.on('agent_event', (e) => seen.push(e.operationId));
+
+      ws.simulateMessage(agentEvent('op-1', '1', 'stream_chunk', 'op-member'));
+
+      expect(seen).toEqual(['op-member']);
+    });
+
+    it('does not treat an omitted id as a foreign terminal', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      const { event, ...envelope } = agentEvent('op-1', '1', 'agent_runtime_end') as any;
+      const { operationId: _omitted, ...eventWithoutOp } = event;
+      ws.simulateMessage({ ...envelope, event: eventWithoutOp });
+
+      expect(onComplete).toHaveBeenCalled();
+    });
+  });
+
   describe('routing and dedup', () => {
     it('emits replay then live events in arrival order and drops ids ≤ lastSeq', async () => {
       const { mux } = createMux();

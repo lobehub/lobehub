@@ -200,7 +200,15 @@ class OperationSubscriptionImpl implements OperationSubscription {
 
     switch (message.type) {
       case 'agent_event': {
-        const agentEvent: AgentStreamEvent = message.event;
+        // The envelope already names the channel this event came down, so the
+        // hub omits `event.operationId` whenever it would repeat it — on a busy
+        // run that id is the single most repeated string on the wire. Restore
+        // it here, once, so every reader downstream keeps seeing the field it
+        // has always seen. A mirrored member event still carries its own id,
+        // which differs from the envelope's and is therefore never omitted.
+        const agentEvent: AgentStreamEvent = message.event.operationId
+          ? message.event
+          : { ...message.event, operationId: message.operationId };
         // A member's mirrored terminal must not end the supervisor's
         // subscription — only THIS op's terminal (or one with no operationId,
         // legacy gateway) is terminal here. Mirrors v1 exactly.

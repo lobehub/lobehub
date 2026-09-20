@@ -3,7 +3,7 @@ import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { projectToolViewModels } from './project';
-import { listProjectedTools } from './registry';
+import { getToolProjector, listProjectedTools } from './registry';
 import type { ToolProjector } from './types';
 
 const toolMessage = (partial: Partial<UIChatMessage> = {}): UIChatMessage =>
@@ -142,13 +142,77 @@ describe('registry', () => {
     expect(listProjectedTools().sort()).toEqual([
       'claude-code/Bash',
       'codex/command_execution',
+      'lobe-agent-documents/listDocuments',
       'lobe-agent-documents/readDocument',
       'lobe-local-system/readFile',
       'lobe-local-system/runCommand',
+      'lobe-user-memory/searchUserMemory',
       'lobe-web-browsing/crawlMultiPages',
       'lobe-web-browsing/crawlSinglePage',
       'opencode/bash',
       'pi/bash',
     ]);
+  });
+});
+
+describe('listDocumentsProjector', () => {
+  const listMessage = (pluginState: unknown) =>
+    toolMessage({
+      content: 'RAW BODY',
+      plugin: { apiName: 'listDocuments', arguments: '{}', identifier: 'lobe-agent-documents' },
+      pluginState,
+    } as Partial<UIChatMessage>);
+
+  it('keeps the row count the inspector chip prints and drops the rows', () => {
+    const documents = Array.from({ length: 12 }, (_, index) => ({
+      filename: `doc-${index}.md`,
+      id: `d${index}`,
+      title: 'x'.repeat(200),
+    }));
+
+    const [projected] = projectToolViewModels([listMessage({ documents })], getToolProjector);
+
+    expect(projected.pluginState).toEqual({ documentCount: 12 });
+    expect(projected.content).toBe('');
+    expect(projected.payloadOmitted).toBe('render');
+  });
+
+  it('survives a state that never held a list', () => {
+    const [projected] = projectToolViewModels([listMessage({ scope: 'agent' })], getToolProjector);
+
+    expect(projected.pluginState).toEqual({ documentCount: undefined, scope: 'agent' });
+  });
+});
+
+describe('searchUserMemoryProjector', () => {
+  const memoryMessage = (pluginState: unknown) =>
+    toolMessage({
+      content: 'RAW BODY',
+      plugin: { apiName: 'searchUserMemory', arguments: '{}', identifier: 'lobe-user-memory' },
+      pluginState,
+    } as Partial<UIChatMessage>);
+
+  it('reduces the five buckets to the one number the chip shows', () => {
+    const [projected] = projectToolViewModels(
+      [
+        memoryMessage({
+          activities: [{ content: 'x'.repeat(400) }, { content: 'y' }],
+          contexts: [{ content: 'z' }],
+          experiences: [],
+          identities: [{ content: 'a' }],
+          preferences: [],
+        }),
+      ],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({ resultCount: 4 });
+    expect(projected.payloadOmitted).toBe('render');
+  });
+
+  it('reports zero for an empty search rather than dropping the state', () => {
+    const [projected] = projectToolViewModels([memoryMessage({})], getToolProjector);
+
+    expect(projected.pluginState).toEqual({ resultCount: 0 });
   });
 });

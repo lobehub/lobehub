@@ -1,6 +1,7 @@
-import { readDocumentProjector } from './projectors/agentDocuments';
+import { listDocumentsProjector, readDocumentProjector } from './projectors/agentDocuments';
 import { runCommandProjector } from './projectors/localSystem';
 import { readFileProjector } from './projectors/readFile';
+import { searchUserMemoryProjector } from './projectors/userMemory';
 import { crawlProjector } from './projectors/webBrowsing';
 import type { ToolProjector } from './types';
 
@@ -29,11 +30,15 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
     command_execution: runCommandProjector,
   },
   'lobe-agent-documents': {
+    listDocuments: listDocumentsProjector,
     readDocument: readDocumentProjector,
   },
   'lobe-local-system': {
     readFile: readFileProjector,
     runCommand: runCommandProjector,
+  },
+  'lobe-user-memory': {
+    searchUserMemory: searchUserMemoryProjector,
   },
   'lobe-web-browsing': {
     crawlMultiPages: crawlProjector,

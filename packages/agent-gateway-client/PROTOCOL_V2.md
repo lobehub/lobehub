@@ -33,6 +33,23 @@ omit reconstructible message history and tool-set fields; share-visitor redactio
 always takes precedence. Internal state persistence and local done events are
 unaffected. This option does not change terminal message-patch reconciliation.
 
+### 0.1 Native runtime message reconciliation
+
+For the server-owned native agent harness, protocol v2 avoids repeating the complete
+canonical conversation at every step boundary:
+
+- `step_start.data` carries `{ messageRevision }` instead of `uiMessages`.
+- After the step is durable, an `agent_event` with `event.type: 'message_patch'` carries
+  `{ revision, deletes, upserts }`. Each upsert contains the canonical top-level
+  `UIChatMessage` plus its immediate predecessor as `afterId` (`null` for the first row).
+- `agent_runtime_end.data` carries `{ messagePatchMode: true, messageRevision }` and omits
+  both `uiMessages` and `finalState`. The client settles only after it has that revision.
+- A missing revision or insertion anchor falls back to the existing authorized full-message
+  query; patches are an optimization, not a second source of truth.
+
+This extension is intentionally limited to mux (`/v2/ws`) and the native harness. V1,
+heterogeneous CLI ingest, and share visitors keep their existing snapshot behavior.
+
 ### 0.2 Projected `tool_end` results
 
 `tool_end` announces that a tool finished; it is not how the result reaches the
@@ -51,22 +68,28 @@ This is applied in `GatewayStreamNotifier`, the WS transport seam. In-process
 consumers — the OpenAI-compatible Responses endpoint, recorded step events — install
 their own stream manager, never reach this path, and keep the real body.
 
-### 0.1 Native runtime message reconciliation
+### 0.3 Projected `stream_end`
 
-For the server-owned native agent harness, protocol v2 avoids repeating the complete
-canonical conversation at every step boundary:
+`stream_end` publishes `finalContent`, `reasoning`, `toolsCalling`, `usage`,
+`grounding` and `imageList`. On this wire the store reads `finalContent` alone —
+a reasoning-only answer arrives as chunks and is promoted into it — and the CLI
+renders nothing from the payload. The rest already arrived token by token as
+`stream_chunk`, and lands again, canonically, with the message.
 
-- `step_start.data` carries `{ messageRevision }` instead of `uiMessages`.
-- After the step is durable, an `agent_event` with `event.type: 'message_patch'` carries
-  `{ revision, deletes, upserts }`. Each upsert contains the canonical top-level
-  `UIChatMessage` plus its immediate predecessor as `afterId` (`null` for the first row).
-- `agent_runtime_end.data` carries `{ messagePatchMode: true, messageRevision }` and omits
-  both `uiMessages` and `finalState`. The client settles only after it has that revision.
-- A missing revision or insertion anchor falls back to the existing authorized full-message
-  query; patches are an optimization, not a second source of truth.
+So the gateway push keeps `finalContent` and `stepLabel` and drops the rest;
+on a sampled run that was 12 kB of a 14 kB event. Same seam as `tool_end`:
+in-process consumers install their own stream manager and keep the full payload.
 
-This extension is intentionally limited to mux (`/v2/ws`) and the native harness. V1,
-heterogeneous CLI ingest, and share visitors keep their existing snapshot behavior.
+### 0.4 The operation id is sent once per frame
+
+The envelope names the channel an event came down, so the hub omits
+`event.operationId` whenever it would repeat it. At 59 characters carried twice
+it was the most repeated string on the wire — 5% of a sampled session.
+
+A mirrored member event still carries its own id, which differs from the
+envelope's and is therefore never omitted, and `GatewayMuxClient` fills the
+field back in from the envelope before emitting. Readers downstream are
+unchanged. The client tolerating the gap must ship before the hub opens it.
 
 ## 1. Topology
 
@@ -219,7 +242,7 @@ Hub → client messages:
 
 ```ts
 | { type:'ready'; userId; connectionId; protocol: 2 }
-| { type:'agent_event'; operationId; id; event }          // event.operationId may differ (mirrored member)
+| { type:'agent_event'; operationId; id; event }          // event.operationId is omitted when equal, and may differ (mirrored member)
 | { type:'session_complete'; operationId; id; summary? }
 | { type:'status_change'; operationId; id; status }
 | { type:'tool_confirmation_request'; operationId; id; toolCallId; tool }
