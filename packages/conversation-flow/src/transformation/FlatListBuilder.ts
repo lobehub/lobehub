@@ -30,10 +30,9 @@ export class FlatListBuilder {
     private branchResolver: BranchResolver,
     private messageCollector: MessageCollector,
     private messageTransformer: MessageTransformer,
+    /** See `HelperMaps.mainFlowOnly`. Threaded messages are out of scope when it is set. */
+    private mainFlowOnly: boolean = false,
   ) {}
-
-  /** Set per `flatten` call: false when the caller passed a thread's messages on their own. */
-  private mainFlowOnly = false;
 
   /**
    * Children of `parentId` that belong to the main conversation flow.
@@ -59,10 +58,6 @@ export class FlatListBuilder {
     const flatList: Message[] = [];
     const processedIds = new Set<string>();
 
-    // A thread is a side conversation, in scope only when it is all the caller passed (the
-    // thread view renders one thread on its own). Mixed in with the main chain it must not
-    // be walked — see `childIdsInScope`.
-    this.mainFlowOnly = messages.some((message) => !message.threadId);
     const scopedMessages = this.mainFlowOnly
       ? messages.filter((message) => !message.threadId)
       : messages;

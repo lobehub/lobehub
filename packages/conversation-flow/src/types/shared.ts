@@ -54,6 +54,13 @@ export interface ParseResult {
 export interface HelperMaps {
   /** Maps parent ID to array of child IDs */
   childrenMap: Map<string | null, string[]>;
+  /**
+   * True when the input mixes main-flow and threaded messages, so the threaded ones are a
+   * side conversation to be left out of the transcript. False when a thread's messages are
+   * all the caller passed (the thread view) — there is no main flow to separate, and every
+   * message stays in scope.
+   */
+  mainFlowOnly: boolean;
   /** Maps message group ID to its metadata */
   messageGroupMap: Map<string, MessageGroupMetadata>;
   /** Maps message ID to message */

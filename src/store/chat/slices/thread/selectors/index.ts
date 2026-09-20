@@ -86,6 +86,20 @@ const getMainScopeMessages = (s: ChatStoreState): UIChatMessage[] => {
 };
 
 /**
+ * Raw main-scope rows, the same key as `getMainScopeMessages` but before conversation-flow
+ * grouped them for display.
+ */
+const getMainScopeDbMessages = (s: ChatStoreState): UIChatMessage[] => {
+  if (!s.activeAgentId) return [];
+  const mainKey = messageMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    topicId: s.activeTopicId,
+  });
+  return (s.dbMessagesMap?.[mainKey] || []) as UIChatMessage[];
+};
+
+/**
  * Internal helper to get parent messages for a thread
  */
 const getThreadParentMessages = (s: ChatStoreState, data: UIChatMessage[]) => {
@@ -103,11 +117,15 @@ const getThreadParentMessages = (s: ChatStoreState, data: UIChatMessage[]) => {
 
 /**
  * Get thread child messages by thread ID
+ *
+ * Reads the raw main-scope rows rather than `messagesMap`: the rendered shape is the main
+ * transcript, which deliberately leaves threads out, so a thread's replies only exist here
+ * in `dbMessagesMap`.
  */
 const getThreadChildMessages =
   (id?: string) =>
   (s: ChatStoreState): UIChatMessage[] => {
-    const data = getMainScopeMessages(s);
+    const data = getMainScopeDbMessages(s);
     return data.filter((m) => !!id && m.threadId === id);
   };
 

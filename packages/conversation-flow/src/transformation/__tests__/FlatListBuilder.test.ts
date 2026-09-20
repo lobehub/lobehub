@@ -24,8 +24,16 @@ describe('FlatListBuilder', () => {
       childrenMap.get(parentId)!.push(msg.id);
     });
 
+    // Mirrors `buildHelperMaps`, so the builder is scoped the way production scopes it.
+    const mainFlowOnly = messages.some((msg) => !msg.threadId);
+
     const branchResolver = new BranchResolver();
-    const messageCollector = new MessageCollector(messageMap, childrenMap);
+    const messageCollector = new MessageCollector(
+      messageMap,
+      childrenMap,
+      branchResolver,
+      mainFlowOnly,
+    );
     const messageTransformer = new MessageTransformer();
 
     return new FlatListBuilder(
@@ -35,6 +43,7 @@ describe('FlatListBuilder', () => {
       branchResolver,
       messageCollector,
       messageTransformer,
+      mainFlowOnly,
     );
   };
 
@@ -1071,6 +1080,38 @@ describe('FlatListBuilder', () => {
           .flatten(messages)
           .map((m) => m.id),
       ).toEqual(['user-1', 'asst-1']);
+    });
+
+    it('should not classify an assistant as a tool-chain head via a threaded reply', () => {
+      // The only continuation carrying tools is threaded, so it is out of scope. Classifying
+      // on it would open an AssistantGroup that collection cannot fill, replacing the
+      // assistant's own bubble with an empty group.
+      const messages: Message[] = [
+        { ...base, content: 'Question', id: 'user-1', role: 'user' },
+        {
+          ...base,
+          agentId: 'a1',
+          content: 'Answer',
+          createdAt: 2,
+          id: 'asst-1',
+          parentId: 'user-1',
+        },
+        {
+          ...base,
+          agentId: 'a1',
+          content: 'Background run',
+          createdAt: 3,
+          id: 'thr-1',
+          parentId: 'asst-1',
+          threadId: 'thd-1',
+          tools: [{ apiName: 'search', arguments: '{}', id: 'call-1', identifier: 'search' }],
+        },
+      ];
+
+      const result = createBuilder(messages).flatten(messages);
+
+      expect(result.map((m) => m.id)).toEqual(['user-1', 'asst-1']);
+      expect(result[1].role).toBe('assistant');
     });
 
     it('should still render a thread when it is all the caller passed', () => {
