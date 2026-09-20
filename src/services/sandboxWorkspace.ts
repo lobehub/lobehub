@@ -1,4 +1,4 @@
-import type { EnvironmentSource } from '@lobechat/types';
+import type { EnvironmentSource, EnvironmentVisibility } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -38,12 +38,14 @@ class SandboxWorkspaceService {
    * Environment specifications: what an environment should contain. Answered
    * from the database alone, so this returns immediately.
    */
-  listEnvironments = async () => lambdaClient.sandboxWorkspace.listEnvironments.query();
+  listEnvironments = async (params?: { visibility?: EnvironmentVisibility }) =>
+    lambdaClient.sandboxWorkspace.listEnvironments.query(params);
 
   createEnvironment = async (params: {
     configuration?: SandboxEnvironmentSpecification;
     description?: string;
     name: string;
+    visibility?: EnvironmentVisibility;
   }) => lambdaClient.sandboxWorkspace.createEnvironment.mutate(params);
 
   /**
@@ -57,6 +59,15 @@ class SandboxWorkspaceService {
     id: string;
     name?: string;
   }) => lambdaClient.sandboxWorkspace.updateEnvironment.mutate(params);
+
+  /**
+   * Publishes an environment to the workspace, or takes it back.
+   *
+   * Separate from {@link updateEnvironment} because it changes who else can run
+   * in what this environment built, not what the environment is.
+   */
+  setEnvironmentVisibility = async (params: { id: string; visibility: EnvironmentVisibility }) =>
+    lambdaClient.sandboxWorkspace.setEnvironmentVisibility.mutate(params);
 
   /** Refused while instances still reference it — those go first. */
   removeEnvironment = async (params: { id: string }) =>

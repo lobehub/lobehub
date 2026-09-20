@@ -130,6 +130,13 @@ const nameSchema = z.string().trim().min(1).max(255);
  */
 const idSchema = z.string().uuid();
 
+/**
+ * Who an environment resolves for inside a workspace. Personal environments
+ * have no pool to join, so the server stores `private` for them whatever a
+ * client sends.
+ */
+const visibilitySchema = z.enum(['private', 'public']);
+
 /** The indexes that make a name identify one environment for one member. */
 const ENVIRONMENT_NAME_CONSTRAINTS = new Set([
   'environments_user_name_unique',
@@ -368,7 +375,7 @@ export const sandboxWorkspaceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const source = await ctx.instanceModel.findById(input.id);
+      const source = await ctx.instanceModel.findOwnedById(input.id);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
       // Row first: a copy whose snapshot succeeded but whose row is missing
@@ -413,7 +420,9 @@ export const sandboxWorkspaceRouter = router({
   createInstanceForEnvironment: instanceProcedure
     .input(z.object({ environmentId: idSchema }))
     .mutation(async ({ ctx, input }) => {
-      const environment = await ctx.environmentModel.findById(input.environmentId);
+      // Owner-scoped: an environment a colleague published is one you can run
+      // in, not one you can add copies to.
+      const environment = await ctx.environmentModel.findOwnedById(input.environmentId);
       if (!environment)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
@@ -483,6 +492,7 @@ export const sandboxWorkspaceRouter = router({
         configuration: configurationSchema.optional(),
         description: z.string().max(2000).optional(),
         name: nameSchema,
+        visibility: visibilitySchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -504,9 +514,11 @@ export const sandboxWorkspaceRouter = router({
   ),
 
   /** Specifications only. Nothing here needs a sandbox session to answer. */
-  listEnvironments: environmentProcedure.query(async ({ ctx }) => ({
-    environments: await ctx.environmentModel.query(),
-  })),
+  listEnvironments: environmentProcedure
+    .input(z.object({ visibility: visibilitySchema.optional() }).optional())
+    .query(async ({ ctx, input }) => ({
+      environments: await ctx.environmentModel.query(input?.visibility),
+    })),
 
   /**
    * Instances, each joined with the state the execution plane actually
@@ -588,7 +600,7 @@ export const sandboxWorkspaceRouter = router({
   removeInstance: instanceProcedure
     .input(z.object({ id: idSchema, topicId: topicIdSchema }))
     .mutation(async ({ ctx, input }) => {
-      const instance = await ctx.instanceModel.findById(input.id);
+      const instance = await ctx.instanceModel.findOwnedById(input.id);
       if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
       // Snapshot first, and only drop the row once it is gone: a row removed
@@ -677,6 +689,23 @@ export const sandboxWorkspaceRouter = router({
    * Only the label. The directory does not move: the built state sits in it,
    * and the execution plane has no rename that carries one to the other.
    */
+  /**
+   * Publishing an environment to the workspace, or taking it back.
+   *
+   * Its own mutation rather than a field on `updateEnvironment`, because the
+   * two are not the same kind of edit: renaming is between you and your own
+   * row, while this one decides who else can run in what this environment
+   * built — and the client asks for confirmation before sending it.
+   */
+  setEnvironmentVisibility: environmentProcedure
+    .input(z.object({ id: idSchema, visibility: visibilitySchema }))
+    .mutation(async ({ ctx, input }) => {
+      const updated = await ctx.environmentModel.setVisibility(input.id, input.visibility);
+      if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+
+      return updated;
+    }),
+
   renameInstance: instanceProcedure
     .input(z.object({ id: idSchema, name: nameSchema }))
     .mutation(async ({ ctx, input }) => {

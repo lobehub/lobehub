@@ -8,6 +8,8 @@ import { useEnvironmentActions, useInstances } from './useEnvironmentData';
 
 interface InstanceSectionProps {
   adding: boolean;
+  /** Whether the caller owns the environment; a published one is read-only to everyone else. */
+  editable: boolean;
   environmentId: string;
   onAddingChange: (adding: boolean) => void;
 }
@@ -20,29 +22,32 @@ interface InstanceSectionProps {
  * specification are the whole context, and both stay on screen while a copy is
  * made or discarded.
  */
-const InstanceSection = memo<InstanceSectionProps>(({ adding, environmentId, onAddingChange }) => {
-  const { data } = useInstances();
-  const actions = useEnvironmentActions();
+const InstanceSection = memo<InstanceSectionProps>(
+  ({ adding, editable, environmentId, onAddingChange }) => {
+    const { data } = useInstances();
+    const actions = useEnvironmentActions();
 
-  const instances = (data?.instances ?? []).filter(
-    (instance) => instance.environmentId === environmentId,
-  );
+    const instances = (data?.instances ?? []).filter(
+      (instance) => instance.environmentId === environmentId,
+    );
 
-  return (
-    <Flexbox>
-      <InstanceList
-        adding={adding}
-        instances={instances}
-        snapshotsUnavailable={data?.snapshotsUnavailable ?? false}
-        onAddingChange={onAddingChange}
-        onRemove={actions.removeInstance}
-        onCreate={({ name, workingDirectory }) =>
-          actions.createInstance({ environmentId, name, workingDirectory })
-        }
-      />
-    </Flexbox>
-  );
-});
+    return (
+      <Flexbox>
+        <InstanceList
+          adding={adding}
+          editable={editable}
+          instances={instances}
+          snapshotsUnavailable={data?.snapshotsUnavailable ?? false}
+          onAddingChange={onAddingChange}
+          onRemove={actions.removeInstance}
+          onCreate={({ name, workingDirectory }) =>
+            actions.createInstance({ environmentId, name, workingDirectory })
+          }
+        />
+      </Flexbox>
+    );
+  },
+);
 
 InstanceSection.displayName = 'InstanceSection';
 
