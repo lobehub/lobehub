@@ -212,12 +212,16 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     // full pay no render cost while the fold is closed. Consumers pin the old
     // summary row with defaultWorkflowExpandLevel='collapsed'.
     const completionInitialLevel: WorkflowExpandLevel = completionDefault ?? 'full';
-    /** When a consumer opts any phase into `full`, treat the workflow as a
-     *  "fully expanded" experience — manual expands from collapsed go to
-     *  `full` instead of the legacy `semi` cap. Heterogeneous agents rely on
-     *  this so all 40+ tool calls stay visible after the user re-expands. */
+    /** Where a manual re-expand from collapsed lands. Derived from the
+     *  *effective* completion level rather than the raw prop: the production
+     *  caller always passes `{ streaming: <setting> }` and no completion phase,
+     *  so keying off `completionDefault` alone reopened at the legacy `semi`
+     *  cap while the same workflow had just rendered at `full`. Consumers that
+     *  pin completion below full keep that compact level; a `full` streaming
+     *  phase keeps the fully expanded experience heterogeneous agents need
+     *  (all 40+ tool calls visible after a re-expand). */
     const manualExpandLevel: WorkflowExpandLevel =
-      streamingDefault === 'full' || completionDefault === 'full' ? 'full' : 'semi';
+      streamingDefault === 'full' || completionInitialLevel === 'full' ? 'full' : 'semi';
 
     const [expandLevel, setExpandLevel] = useState<WorkflowExpandLevel>(() =>
       allComplete ? completionInitialLevel : streamingInitialLevel,
