@@ -135,4 +135,23 @@ describe('environment visibility', () => {
     expect(created.visibility).toBe('private');
     await expect(personal.setVisibility(created.id, 'public')).resolves.toBeUndefined();
   });
+
+  it('answers the published pool with nothing when there is no workspace to publish to', async () => {
+    const personal = new EnvironmentModel(serverDB, ownerId);
+    await personal.create({ name: 'Personal' });
+
+    // Not "every row", which is what an ignored filter would have returned —
+    // and what would make two tabs look like the same list.
+    await expect(personal.query('public')).resolves.toEqual([]);
+    await expect(personal.query('private')).resolves.toHaveLength(1);
+  });
+
+  it('keeps a workspace listing clear of your own personal environments', async () => {
+    const personal = new EnvironmentModel(serverDB, ownerId);
+    await personal.create({ name: 'Personal' });
+    const inWorkspace = await owner.create({ name: 'In workspace' });
+
+    const rows = await owner.query();
+    expect(rows.map((row) => row.id)).toEqual([inWorkspace.id]);
+  });
 });

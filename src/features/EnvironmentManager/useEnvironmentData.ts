@@ -1,6 +1,7 @@
 import type { EnvironmentVisibility } from '@lobechat/types';
-import useSWR, { useSWRConfig } from 'swr';
+import { useSWRConfig } from 'swr';
 
+import { useClientDataSWR } from '@/libs/swr';
 import {
   type SandboxEnvironmentSpecification,
   sandboxWorkspaceService,
@@ -17,10 +18,17 @@ const INSTANCES_KEY = 'sandbox-environment-instances';
  * cache — and so switching back to one shows what it held rather than a
  * skeleton. A mutation refreshes every pool, because publishing moves a row
  * from one to the other.
+ *
+ * `useClientDataSWR` rather than plain SWR, because it adds the active
+ * workspace to the key. Without that dimension a list fetched in one workspace
+ * keeps being served after switching to another — the same trap the device list
+ * documents, and a worse one here, where the answer is which environments exist
+ * for whom.
  */
 export const useEnvironments = (visibility?: EnvironmentVisibility) =>
-  useSWR([ENVIRONMENTS_KEY, visibility ?? 'all'], () =>
-    sandboxWorkspaceService.listEnvironments(visibility ? { visibility } : undefined),
+  useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listEnvironments>>>(
+    [ENVIRONMENTS_KEY, visibility ?? 'all'],
+    () => sandboxWorkspaceService.listEnvironments(visibility ? { visibility } : undefined),
   );
 
 /**
@@ -33,7 +41,10 @@ export const useEnvironments = (visibility?: EnvironmentVisibility) =>
  * not hold up the list of what exists.
  */
 export const useInstances = () =>
-  useSWR(INSTANCES_KEY, () => sandboxWorkspaceService.listInstances());
+  useClientDataSWR<Awaited<ReturnType<typeof sandboxWorkspaceService.listInstances>>>(
+    [INSTANCES_KEY],
+    () => sandboxWorkspaceService.listInstances(),
+  );
 
 export type SandboxInstance = NonNullable<
   ReturnType<typeof useInstances>['data']
@@ -52,9 +63,11 @@ export const useEnvironmentActions = () => {
   const { mutate: globalMutate } = useSWRConfig();
   const { mutate: refreshInstances } = useInstances();
 
-  // Every pool, not the one this caller happens to be looking at: publishing an
-  // environment takes it out of one tab and puts it in the other, so refreshing
-  // only the current key leaves the other tab showing a row that moved.
+  // Every pool and every workspace, not the one this caller happens to be
+  // looking at: publishing an environment takes it out of one tab and puts it
+  // in the other, so refreshing only the current key leaves the other tab
+  // showing a row that moved. The workspace id the key carries is part of what
+  // is matched loosely here, for the same reason.
   const refreshEnvironments = () =>
     globalMutate((key) => Array.isArray(key) && key[0] === ENVIRONMENTS_KEY);
 
