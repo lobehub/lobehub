@@ -1,3 +1,4 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -30,6 +31,14 @@ describe('projectToolViewModels', () => {
     // State drives the collapsed row and whole-list selectors, which never get
     // an "expand" to hydrate on.
     expect(projected.pluginState).toEqual(toolMessage().pluginState);
+  });
+
+  it('leaves a still-streaming row alone — the sentinel IS how it reads as running', () => {
+    // `hasToolResultBody` recognises the placeholder only while it sits in
+    // `content`; projecting it away would report a running tool as finished.
+    const streaming = toolMessage({ content: LOADING_FLAT });
+
+    expect(projectToolViewModels([streaming], () => undefined)[0]).toEqual(streaming);
   });
 
   it('does not flag an empty result, which has nothing to fetch back', () => {

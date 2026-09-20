@@ -1,3 +1,4 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import type { UIChatMessage } from '@lobechat/types';
 
 import { getToolProjector } from './registry';
@@ -33,9 +34,13 @@ const projectToolMessage = (message: UIChatMessage, resolve: ProjectorResolver):
   const projector = resolve(message.plugin?.identifier, message.plugin?.apiName);
 
   // No projector: keep the state whole and drop just the body — and only when
-  // there is a body, so an empty result is never flagged for a fetch that would
-  // return nothing.
-  if (!projector) return message.content ? applyProjection(message, BODY_ONLY_PROJECTION) : message;
+  // there is a settled body. An empty result would be flagged for a fetch that
+  // returns nothing, and the streaming sentinel is the one string whose
+  // presence in `content` is how the row is known to be still running.
+  if (!projector) {
+    const hasSettledBody = !!message.content && message.content !== LOADING_FLAT;
+    return hasSettledBody ? applyProjection(message, BODY_ONLY_PROJECTION) : message;
+  }
 
   let projection;
   try {
