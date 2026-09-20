@@ -721,15 +721,17 @@ export function registerAgentCommand(program: Command) {
           return;
         }
 
+        const view = readOperationStatus(r);
+
         console.log(pc.bold('Operation Status'));
         console.log(`  ID:     ${operationId}`);
-        console.log(`  Status: ${colorStatus(r.status || r.state || 'unknown')}`);
+        console.log(`  Status: ${colorStatus(view.status)}`);
 
-        if (r.stepCount !== undefined) console.log(`  Steps:  ${r.stepCount}`);
-        if (r.usage?.total_tokens) console.log(`  Tokens: ${r.usage.total_tokens}`);
-        if (r.cost?.total !== undefined) console.log(`  Cost:   $${r.cost.total.toFixed(4)}`);
-        if (r.error) console.log(`  Error:  ${pc.red(r.error)}`);
-        if (r.createdAt) console.log(`  Started: ${r.createdAt}`);
+        if (view.stepCount !== undefined) console.log(`  Steps:  ${view.stepCount}`);
+        if (view.totalTokens) console.log(`  Tokens: ${view.totalTokens}`);
+        if (view.cost !== undefined) console.log(`  Cost:   $${view.cost.toFixed(4)}`);
+        if (view.error) console.log(`  Error:  ${pc.red(view.error)}`);
+        if (view.startedAt) console.log(`  Started: ${view.startedAt}`);
         if (r.completedAt) console.log(`  Ended:   ${r.completedAt}`);
       },
     );
@@ -802,6 +804,52 @@ function colorStatus(status: string): string {
   }
 }
 
+/**
+ * Read a run's status out of whatever `aiAgent.getOperationStatus` answered.
+ *
+ * That endpoint returns an envelope, not a flat run record:
+ * `{ currentState: { status, stepCount, usage, cost, error }, stats, metadata,
+ * isCompleted, hasError, needsHumanInput, ... }`. This CLI read `r.status`,
+ * `r.state`, `r.stepCount`, `r.usage`, `r.cost` and `r.error` at the top level,
+ * where none of them exist, so every operation resolved to the literal status
+ * `'unknown'` with no steps, tokens or cost: `lh agent status` printed nothing
+ * but an id, and `pollAgentRunStatus` below never saw a terminal status and
+ * looped forever (#19543).
+ *
+ * The flat reads are kept as fallbacks so a server on an older build that does
+ * answer flat keeps working.
+ */
+interface OperationStatusView {
+  cost?: number;
+  error?: string;
+  startedAt?: string;
+  status: string;
+  stepCount?: number;
+  totalTokens?: number;
+}
+
+function readOperationStatus(r: any): OperationStatusView {
+  const state = r?.currentState;
+  const usage = state?.usage ?? r?.usage;
+  const cost = state?.cost ?? r?.cost;
+
+  return {
+    cost: cost?.total ?? r?.metadata?.totalCost,
+    error: state?.error ?? r?.error,
+    startedAt: r?.metadata?.createdAt ?? r?.createdAt,
+    // `hasError` / `isCompleted` are the envelope's own summary of the status
+    // string, so they still answer if a later build renames the state itself.
+    status:
+      state?.status ||
+      r?.status ||
+      r?.state ||
+      r?.metadata?.status ||
+      (r?.hasError ? 'error' : r?.isCompleted ? 'done' : 'unknown'),
+    stepCount: state?.stepCount ?? r?.stats?.totalSteps ?? r?.stepCount,
+    totalTokens: usage?.llm?.tokens?.total ?? usage?.total_tokens,
+  };
+}
+
 const TERMINAL_RUN_STATUSES = new Set([
   'completed',
   'done',
@@ -811,6 +859,10 @@ const TERMINAL_RUN_STATUSES = new Set([
   'cancelled',
   'canceled',
   'aborted',
+  // The runtime's own terminal state for an interrupted run (the `AgentState`
+  // status union). Without it, a run cancelled from the app never ends the
+  // poll below.
+  'interrupted',
 ]);
 
 /**
@@ -819,12 +871,36 @@ const TERMINAL_RUN_STATUSES = new Set([
  * until it reaches a terminal state (or is no longer tracked, which also means it
  * has finished). Avoids hard-exiting on a transient gateway disconnect.
  */
+/**
+ * Log a failure and exit.
+ *
+ * Declared as returning `void` rather than `never` so that each call site can
+ * `return` straight after it. In the poll below that return is what actually
+ * leaves the loop: `process.exit` is stubbed out under test, and a bound whose
+ * only exit is a stubbed `process.exit` is not a bound at all.
+ */
+function exitWithError(message: string): void {
+  log.error(message);
+  process.exit(1);
+}
+
 async function pollAgentRunStatus(
   client: Awaited<ReturnType<typeof getTrpcClient>>,
   operationId: string,
 ): Promise<void> {
   const POLL_MS = 10_000;
+  // This loop used to be an unbounded `for (;;)`: every exit was a status it
+  // recognised, so an answer it could not read kept it sleeping forever and
+  // `lh agent run` never returned at all. Both bounds below exist so that it
+  // always ends — loudly on a shape it cannot read, and at a deadline on a
+  // run that never reaches a terminal state.
+  const UNREADABLE_LIMIT = 3;
+  const DEADLINE_MS = 60 * 60_000;
+
+  const startedAt = Date.now();
   let lastStatus = '';
+  let unreadable = 0;
+
   for (let i = 0; ; i++) {
     if (i > 0) await new Promise((resolve) => setTimeout(resolve, POLL_MS));
 
@@ -832,8 +908,8 @@ async function pollAgentRunStatus(
     try {
       r = await client.aiAgent.getOperationStatus.query({ operationId } as any);
     } catch (error) {
-      log.error(`Status poll failed: ${(error as Error).message}`);
-      process.exit(1);
+      exitWithError(`Status poll failed: ${(error as Error).message}`);
+      return;
     }
 
     if (!r) {
@@ -841,15 +917,58 @@ async function pollAgentRunStatus(
       return;
     }
 
-    const status = r.status || r.state || 'unknown';
+    const { error, status, stepCount } = readOperationStatus(r);
+
+    if (status === 'unknown') {
+      unreadable += 1;
+      if (unreadable >= UNREADABLE_LIMIT) {
+        exitWithError(
+          `Could not read a run status from the server after ${UNREADABLE_LIMIT} polls ` +
+            `(answer keys: ${Object.keys(r).sort().join(', ') || 'none'}). ` +
+            `The run may still be going — check it with \`lh agent status ${operationId}\`.`,
+        );
+        return;
+      }
+    } else {
+      unreadable = 0;
+    }
+
     if (status !== lastStatus) {
       lastStatus = status;
-      const steps = r.stepCount !== undefined ? ` · ${r.stepCount} step(s)` : '';
+      const steps = stepCount !== undefined ? ` · ${stepCount} step(s)` : '';
       log.info(`Run status: ${colorStatus(status)}${steps}`);
     }
 
     if (TERMINAL_RUN_STATUSES.has(status)) {
-      if (r.error) log.error(`Run error: ${r.error}`);
+      if (error) log.error(`Run error: ${error}`);
+      return;
+    }
+
+    // A parked run is stream-terminal but not finished. The server ends this
+    // operation's stream at the park and the approved continuation runs under a
+    // NEW operation id (`STREAM_END_STATUSES` in the server's
+    // `AgentRuntimeCoordinator`), so polling on can never see this one complete
+    // — stopping is right. Reporting success was not: nothing on this path can
+    // supply the answer, so the command exited 0 on a run sitting unfinished on
+    // an unanswered approval.
+    //
+    // `waiting_for_async_tool` is the opposite — deferred tools resume THIS
+    // operation id — so it deliberately falls through and keeps polling.
+    if (status === 'waiting_for_human' || r.needsHumanInput) {
+      exitWithError(
+        `Run is waiting for human input and did not complete. Approve it in the app; the ` +
+          `approved run continues as a new operation. This one stays at ` +
+          `\`lh agent status ${operationId}\`.`,
+      );
+      return;
+    }
+
+    if (Date.now() - startedAt >= DEADLINE_MS) {
+      exitWithError(
+        `Run did not reach a terminal state within ${DEADLINE_MS / 60_000} minutes ` +
+          `(last status: ${status}). It may still be going — check it with ` +
+          `\`lh agent status ${operationId}\`.`,
+      );
       return;
     }
   }

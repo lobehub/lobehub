@@ -452,7 +452,7 @@ describe('streamAgentEventsViaWebSocket', () => {
     capturedWs!.onclose?.({ code: 1011, reason: 'gateway shutdown', type: 'close' });
 
     await expect(promise).rejects.toThrow(
-      'Agent gateway WebSocket closed before completion: [object Object]',
+      'Agent gateway WebSocket closed before completion (code 1011: gateway shutdown)',
     );
   });
 
@@ -636,5 +636,225 @@ describe('streamAgentEventsViaWebSocket', () => {
     expect(log.toolResult).toHaveBeenCalled();
     // Verify finish line
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Agent finished'));
+  });
+});
+
+/**
+ * The WebSocket transport must always finish (#19543).
+ *
+ * `streamAgentEventsViaWebSocket` settles only on `agent_runtime_end`,
+ * `session_complete`, `onerror` or `onclose`. A gateway that authenticates and
+ * then reports none of those leaves the promise pending forever, while the 30s
+ * heartbeat `setInterval` holds the event loop open, so `lh agent run` never
+ * exits and produces no exit code. `--sse` is unaffected: `streamAgentEvents`
+ * reads the response body to the end, so the server closing the response ends
+ * the call on its own. That asymmetry is the whole report.
+ */
+describe('streamAgentEventsViaWebSocket completion guarantee', () => {
+  const originalWebSocket = globalThis.WebSocket;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    capturedWs = undefined;
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    (globalThis as any).WebSocket = MockWebSocket;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    consoleSpy.mockRestore();
+    globalThis.WebSocket = originalWebSocket;
+  });
+
+  /** Connect and authenticate, leaving the stream waiting for progress. */
+  const authenticated = () => {
+    const promise = streamAgentEventsViaWebSocket({
+      gatewayUrl: 'https://gw.test.com',
+      operationId: 'op-1',
+      token: 'tok',
+      tokenType: 'jwt',
+    });
+    return promise;
+  };
+
+  it('gives up when the gateway reports no progress, instead of hanging forever', async () => {
+    const promise = authenticated();
+    const settled = expect(promise).rejects.toThrow(/no progress/);
+
+    await vi.advanceTimersByTimeAsync(0); // open + auth
+    await vi.advanceTimersByTimeAsync(300_000);
+
+    await settled;
+    // The socket is closed on the way out; a left-open one is the other half of
+    // what kept the process alive.
+    expect(capturedWs!.readyState).toBe(MockWebSocket.CLOSED);
+  });
+
+  it('names --sse in the failure, which is the transport that does finish', async () => {
+    const promise = authenticated();
+    const settled = expect(promise).rejects.toThrow(/--sse/);
+
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(300_000);
+
+    await settled;
+  });
+
+  it('does not count a heartbeat ack as progress', async () => {
+    // The crux. The reproduced failure is a gateway that keeps acking
+    // heartbeats while the run is already finished server-side, so a deadline
+    // reset by liveness would be pushed out every 30s and never fire.
+    const promise = authenticated();
+    const settled = expect(promise).rejects.toThrow(/no progress/);
+
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 20; i += 1) {
+      await vi.advanceTimersByTimeAsync(30_000);
+      capturedWs!.simulateMessage({ type: 'heartbeat_ack' });
+    }
+
+    await settled;
+  });
+
+  it('counts a real agent event as progress, so a slow run is not killed', async () => {
+    const promise = authenticated();
+    let outcome: string | undefined;
+    void promise.then(
+      () => (outcome = 'resolved'),
+      () => (outcome = 'rejected'),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    // Well past the deadline in total, but never 300s without an event.
+    for (let i = 0; i < 6; i += 1) {
+      await vi.advanceTimersByTimeAsync(299_000);
+      capturedWs!.simulateMessage({
+        event: { data: {}, type: 'step_start' },
+        type: 'agent_event',
+      });
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(outcome).toBeUndefined();
+
+    // And it still completes normally when the terminal event does arrive.
+    capturedWs!.simulateMessage({ type: 'session_complete' });
+    await promise;
+  });
+
+  it('leaves no pending timer behind when the socket closes', async () => {
+    // The deadline is deliberately NOT unref'd -- it is the handle that will
+    // settle the promise, so it has to keep the process alive. That makes
+    // clearing it on every exit path part of the fix rather than tidiness: a
+    // deadline that outlives its socket holds the loop open for another 300s,
+    // which is the same failure this change removes.
+    const promise = authenticated();
+    const settled = expect(promise).rejects.toThrow(/closed before completion/);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    capturedWs!.readyState = MockWebSocket.CLOSED;
+    capturedWs!.onclose?.({ code: 1011, reason: 'gateway shutdown', type: 'close' });
+
+    await settled;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('unrefs the heartbeat so a stray timer cannot hold the process open', async () => {
+    const unref = vi.fn();
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval').mockReturnValue({ unref } as any);
+
+    try {
+      void authenticated().catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+      expect(unref).toHaveBeenCalled();
+    } finally {
+      setIntervalSpy.mockRestore();
+    }
+  });
+
+  /**
+   * The same wait, one step earlier in the handshake.
+   *
+   * `armProgressTimeout` is reached from `auth_success`, so it covers nothing
+   * before the gateway authenticates. A gateway that completes the WebSocket
+   * upgrade and then answers neither `auth_success` nor `auth_failed` leaves a
+   * healthy socket behind — `onerror` and `onclose` need never fire on a live
+   * connection — so nothing at all was armed and the promise stayed pending
+   * exactly as it did after auth.
+   */
+  describe('before authentication', () => {
+    /** Upgrade the socket, then say nothing at all. */
+    const silentAfterUpgrade = () => {
+      (globalThis as any).WebSocket = class extends MockWebSocket {
+        constructor(url: string) {
+          super(url, false); // never answers the auth message
+          capturedWs = this; // eslint-disable-line @typescript-eslint/no-this-alias
+        }
+      };
+    };
+
+    const connect = () =>
+      streamAgentEventsViaWebSocket({
+        gatewayUrl: 'https://gw.test.com',
+        operationId: 'op-1',
+        token: 'tok',
+      });
+
+    /** Record how the promise settles without leaving a rejection unhandled. */
+    const watch = (promise: Promise<void>) => {
+      const seen: { outcome?: string } = {};
+      void promise.then(
+        () => (seen.outcome = 'resolved'),
+        (error: Error) => (seen.outcome = error.message),
+      );
+      return seen;
+    };
+
+    it('gives up when the gateway upgrades the socket but never answers the handshake', async () => {
+      silentAfterUpgrade();
+      const seen = watch(connect());
+
+      await vi.advanceTimersByTimeAsync(0); // upgrade + auth sent, no reply
+      expect(seen.outcome).toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(seen.outcome).toMatch(/did not complete the auth handshake/);
+      expect(capturedWs!.readyState).toBe(MockWebSocket.CLOSED);
+    });
+
+    it('arms the handshake deadline at connect time and drops it when the socket closes', async () => {
+      silentAfterUpgrade();
+      const promise = connect();
+      const settled = expect(promise).rejects.toThrow(/closed before completion/);
+
+      await vi.advanceTimersByTimeAsync(0);
+      // The whole point: something is counting before `auth_success`.
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      capturedWs!.readyState = MockWebSocket.CLOSED;
+      capturedWs!.onclose?.({ code: 1006, reason: '', type: 'close' });
+
+      await settled;
+      // And it does not outlive its socket — a deadline that did would hold the
+      // loop open for another 30s, which is the failure this whole file is about.
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('hands over to the progress deadline once the gateway authenticates', async () => {
+      const seen = watch(authenticated());
+
+      await vi.advanceTimersByTimeAsync(0); // upgrade + auth_success
+      // Well past the handshake budget, well inside the progress deadline.
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(seen.outcome).toBeUndefined();
+
+      capturedWs!.simulateMessage({ type: 'session_complete' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seen.outcome).toBe('resolved');
+    });
   });
 });
