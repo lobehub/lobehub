@@ -144,6 +144,20 @@ describe('GatewayStreamNotifier', () => {
       expect(data.result.content).toBe(result.content);
     });
 
+    it('keeps a shell result body, whose renderer-side hook parses it', async () => {
+      const data = {
+        isSuccess: true,
+        payload: { toolCalling: { apiName: 'runCommand', identifier: 'lobe-local-system' } },
+        result: { content: 'Switched to branch feat/x', state: { exitCode: 0 }, success: true },
+      };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'tool_end' });
+
+      const pushed = JSON.parse(mockFetch.mock.calls[0][1].body).event.data;
+      expect(pushed.result.content).toBe('Switched to branch feat/x');
+      expect(pushed.result.state.exitCode).toBe(0);
+    });
+
     it('leaves other event types carrying their result body', async () => {
       const data = { result: { content: 'kept' } };
 

@@ -36,12 +36,16 @@ unaffected. This option does not change terminal message-patch reconciliation.
 ### 0.2 Projected `tool_end` results
 
 `tool_end` announces that a tool finished; it is not how the result reaches the
-screen. On this wire the event drives an executor's `onAfterCall` hook and the
-Work-view refresh, both of which read `result.success` / `result.workRegistration`.
-So the gateway push drops `result.content` and runs `result.state` through the same
-per-tool projectors the read path uses, keeping mid-run and settled renders
-identical. The body arrives with the message (`message_patch` / `getMessages`),
-where it is already projected and hydrated on demand.
+screen. That arrives with the message, through a read path that already projects
+it, so the event carries a second copy of the largest payload on the connection.
+
+The gateway push runs `result.state` through the same per-tool projectors the read
+path uses, keeping mid-run and settled renders identical, and drops `result.content`
+for the tools vouched for by the `eventBodyUnused` allowlist in
+`@lobechat/tool-view-model`. The allowlist exists because several renderer-side
+`onAfterCall` hooks parse the body for invisible side effects — a shell result tells
+the topic which branch it switched to and which PR it opened — so shell and worktree
+tools keep their body, and any tool not on the list is unchanged.
 
 This is applied in `GatewayStreamNotifier`, the WS transport seam. In-process
 consumers — the OpenAI-compatible Responses endpoint, recorded step events — install

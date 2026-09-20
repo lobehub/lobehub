@@ -383,8 +383,9 @@ function renderEvent(event: AgentStreamEvent, ctx: RenderContext, options: Strea
       const time = event.data?.executionTime;
       const timeSuffix = time ? ` ${time}ms` : '';
       // Some transports drop the result body before it reaches us (the gateway
-      // WS projects `tool_end` — the body arrives with the message instead).
-      // Fall back to the timing so `--verbose` never prints `undefined`.
+      // WS projects `tool_end` for tools whose body no consumer reads — it
+      // arrives with the message instead). Fall back to the timing so
+      // `--verbose` never prints `undefined`.
       const body = options.verbose ? event.data?.result?.content : undefined;
       log.toolResult(id, success, body ?? timeSuffix);
       break;

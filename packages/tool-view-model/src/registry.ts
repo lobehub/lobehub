@@ -44,6 +44,38 @@ const toolProjectors: Record<string, Record<string, ToolProjector>> = {
   },
 };
 
+/**
+ * Tools whose result BODY no `tool_end` consumer reads, so the gateway can drop
+ * it from the event (the body still reaches the screen with the message).
+ *
+ * An allowlist, not a denylist, because getting this wrong is silent. Several
+ * renderer-side `onAfterCall` hooks parse the body for side effects the user
+ * never sees them do — every heterogeneous CLI's shell tool and its worktree
+ * enter/exit feed `recordGitCommandEffects` / `recordWorktreeEnter`, and
+ * `lobe-local-system/runCommand` does the same for native runs, which is how a
+ * topic learns the branch it switched to and the PR it opened. Dropping the
+ * body there would lose that binding with nothing on screen to show for it.
+ *
+ * So a tool earns a place here only after its hooks are checked. Anything
+ * absent keeps shipping its body, exactly as before.
+ */
+const eventBodyUnused: ReadonlySet<string> = new Set([
+  // `lobe-agent-documents`' hook only fires for list-mutating APIs and reads
+  // `result.success`; a read is neither.
+  'lobe-agent-documents/readDocument',
+  // `lobe-local-system`'s hook is scoped to `runCommand`.
+  'lobe-local-system/readFile',
+  // `lobe-web-browsing` registers no hook at all.
+  'lobe-web-browsing/crawlMultiPages',
+  'lobe-web-browsing/crawlSinglePage',
+]);
+
+/** Whether a `tool_end` for this tool can travel without its result body. */
+export const isToolEventBodyUnused = (
+  identifier?: string | null,
+  apiName?: string | null,
+): boolean => !!identifier && !!apiName && eventBodyUnused.has(`${identifier}/${apiName}`);
+
 export const getToolProjector = (
   identifier?: string | null,
   apiName?: string | null,
