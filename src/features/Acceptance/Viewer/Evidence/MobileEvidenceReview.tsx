@@ -3,10 +3,11 @@
 import { TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronLeft, ChevronRight, NotebookPen, PencilLine } from 'lucide-react';
+import { ChevronLeft, ChevronRight, NotebookPen, PencilLine, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ZOOM_STEPS } from '../Review/rejectDraft';
 import type { RejectReviewModel } from '../Review/useRejectReview';
 import { AttachmentStrip, AttachmentUploadButton } from './attachments';
 import { EvidenceStage } from './EvidenceStage';
@@ -41,8 +42,9 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1 1 auto;
     min-height: 40dvh;
   `,
-  /** The image switcher spans the full width, edge to edge, like the buttons
-      under it: the arrows sit where a thumb lands, the counter between them. */
+  /** One full-width control under the image: the image arrows at the two
+      edges where a thumb lands, the zoom (minus, percentage, plus) between
+      them. Two fingers set the zoom too; the buttons show where it landed. */
   switcher: css`
     display: flex;
     flex: none;
@@ -52,6 +54,13 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 44px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
+  `,
+  zoom: css`
+    display: flex;
+    flex: 1;
+    gap: 4px;
+    align-items: center;
+    justify-content: center;
   `,
   /** Two equal thumb-sized buttons: what to do next with the image, and where
       the written note goes. */
@@ -171,10 +180,10 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 onZoom={model.setZoom}
               />
             </div>
-            {/* The image switcher is one full-width block under the stage:
-                previous at the left edge, the counter in the middle, next at
-                the right edge. No hint text — the phone shows, it does not
-                explain — and no zoom controls: two fingers do that. */}
+            {/* One full-width block under the stage: previous / next at the
+                edges, the zoom in the middle. No hint text — the phone shows,
+                it does not explain. The percentage is what a pinch landed on;
+                the buttons step from there to the next notch. */}
             <div className={styles.switcher}>
               <ActionIcon
                 aria-label={t('acceptance.review.previousImage')}
@@ -183,12 +192,29 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 size={{ blockSize: 44, size: 20 }}
                 onClick={() => model.selectEvidence(activeIndex - 1)}
               />
-              <Text aria-live={'polite'} fontSize={13} style={{ flex: 1, textAlign: 'center' }}>
-                {t('acceptance.review.imageNumber', {
-                  current: activeIndex + 1,
-                  total: evidence.length,
-                })}
-              </Text>
+              <div className={styles.zoom}>
+                <ActionIcon
+                  aria-label={t('acceptance.review.zoomOut')}
+                  disabled={zoom <= ZOOM_STEPS[0]}
+                  icon={ZoomOut}
+                  size={{ blockSize: 44, size: 20 }}
+                  onClick={() => model.stepZoom(-1)}
+                />
+                <Text
+                  aria-live={'polite'}
+                  fontSize={13}
+                  style={{ minWidth: 44, textAlign: 'center' }}
+                >
+                  {Math.round(zoom * 100)}%
+                </Text>
+                <ActionIcon
+                  aria-label={t('acceptance.review.zoomIn')}
+                  disabled={zoom >= ZOOM_STEPS.at(-1)!}
+                  icon={ZoomIn}
+                  size={{ blockSize: 44, size: 20 }}
+                  onClick={() => model.stepZoom(1)}
+                />
+              </div>
               <ActionIcon
                 aria-label={t('acceptance.review.nextImage')}
                 disabled={activeIndex >= evidence.length - 1}

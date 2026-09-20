@@ -143,25 +143,40 @@ describe('MobileEvidenceReview notes button', () => {
 });
 
 describe('MobileEvidenceReview image switcher', () => {
-  it('keeps one full-width switcher under the image: no hint text, no zoom controls', () => {
-    render(<MobileEvidenceReview model={withImage()} />);
+  it('keeps one full-width control under the image: arrows at the edges, zoom in the middle', () => {
+    const stepZoom = vi.fn();
+    render(<MobileEvidenceReview model={withImage({ stepZoom, zoom: 1.5 })} />);
 
-    // The switcher follows the stage instead of sitting above it.
+    // The control follows the stage instead of sitting above it.
     const stage = screen.getByText('stage-stub');
     const next = screen.getByRole('button', { name: 'acceptance.review.nextImage' });
     expect(stage.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
       screen.getByRole('button', { name: 'acceptance.review.previousImage' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('acceptance.review.imageNumber')).toBeInTheDocument();
 
-    // No explanatory copy under the image, in either mode.
+    // The zoom sits between the arrows and reads the model's zoom, whether a
+    // pinch or a button set it; the buttons step from there.
+    expect(screen.getByText('150%')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'acceptance.review.zoomIn' }));
+    expect(stepZoom).toHaveBeenCalledWith(1);
+    fireEvent.click(screen.getByRole('button', { name: 'acceptance.review.zoomOut' }));
+    expect(stepZoom).toHaveBeenCalledWith(-1);
+
+    // No explanatory copy and no image counter — the arrows say where you are.
     expect(screen.queryByText('acceptance.review.mobileBrowseHint')).toBeNull();
+    expect(screen.queryByText('acceptance.review.imageNumber')).toBeNull();
+  });
 
-    // Zoom is two fingers only on a phone.
-    expect(screen.queryByRole('button', { name: 'acceptance.review.zoomIn' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'acceptance.review.zoomOut' })).toBeNull();
-    expect(screen.queryByText(/^\d+%$/)).toBeNull();
+  it('disables the zoom buttons at the ends of the range', () => {
+    const { unmount } = render(<MobileEvidenceReview model={withImage({ zoom: 0.5 })} />);
+    expect(screen.getByRole('button', { name: 'acceptance.review.zoomOut' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'acceptance.review.zoomIn' })).toBeEnabled();
+    unmount();
+
+    render(<MobileEvidenceReview model={withImage({ zoom: 4 })} />);
+    expect(screen.getByRole('button', { name: 'acceptance.review.zoomIn' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'acceptance.review.zoomOut' })).toBeEnabled();
   });
 });
 
