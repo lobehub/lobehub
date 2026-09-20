@@ -376,7 +376,7 @@ describe('0148 Goal Graph migration', () => {
   });
 });
 
-describe('0168 Workspace Agent Share tenancy migration', () => {
+describe('0169 Workspace Agent Share tenancy migration', () => {
   it('leaves historical topic reconciliation to the bounded backfill script', () => {
     expect(agentShareTenancyMigration.sql.join('\n')).not.toContain('UPDATE "topics"');
   });
