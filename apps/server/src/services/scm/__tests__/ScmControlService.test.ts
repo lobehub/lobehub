@@ -15,6 +15,7 @@ import {
 } from '@/database/schemas';
 
 import { SCM_MAX_WAKES, ScmControlService } from '../ScmControlService';
+import { parseTrackingMarker } from '../trackingComment';
 import type { ScmInboundEvent } from '../types';
 
 const serverDB = await getTestDB();
@@ -26,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   postComment: vi.fn(),
   redisSet: vi.fn(),
   reviewFeedback: vi.fn(),
+  updateComment: vi.fn(),
 }));
 
 vi.mock('@/server/services/aiAgent', () => ({
@@ -40,6 +42,7 @@ vi.mock('../github/app', () => ({
   fetchGitHubJobLogTail: mocks.jobLog,
   fetchGitHubReviewFeedback: mocks.reviewFeedback,
   postGitHubPullRequestComment: mocks.postComment,
+  updateGitHubPullRequestComment: mocks.updateComment,
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.test/' } }));
 vi.mock('@/server/workflows/expertiseRejection', () => ({
@@ -93,6 +96,7 @@ beforeEach(async () => {
   mocks.jobLog.mockResolvedValue('npm ERR! test failed\n');
   mocks.reviewFeedback.mockResolvedValue([]);
   mocks.postComment.mockResolvedValue('c-1');
+  mocks.updateComment.mockResolvedValue(true);
 });
 
 afterEach(async () => {
@@ -256,12 +260,14 @@ describe('ScmControlService — wake', () => {
       trigger: 'scm',
       userInterventionConfig: { approvalMode: 'headless' },
     });
-    expect(call.prompt).toContain('arvinxx/sandbox#5');
-    expect(call.prompt).toContain('- Test: failure');
+    expect(call.prompt).toContain('repo="arvinxx/sandbox"');
+    expect(call.prompt).toContain('<check conclusion="failure" name="Test"');
     expect(call.prompt).toContain('npm ERR! test failed');
-    expect(call.prompt).toContain('feat/x');
+    expect(call.prompt).toContain('branch="feat/x"');
 
-    expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(1);
+    const after = await ScmChangeRequestModel.findById(serverDB, row.id);
+    expect(after?.wakeCount).toBe(1);
+    expect(after?.metadata.lastWake?.reason).toBe('ci_failed');
   });
 
   it('steers instead of starting a new turn when the conversation is running', async () => {
@@ -401,7 +407,7 @@ describe('ScmControlService — wake', () => {
   });
 });
 
-describe('ScmControlService — comments in GitHub', () => {
+describe('ScmControlService — the tracking comment in GitHub', () => {
   const bindAndOpen = async (extra: Record<string, unknown>) => {
     const topic = await createTopic();
     const installation = await ScmInstallationModel.bind(serverDB, {
@@ -415,7 +421,7 @@ describe('ScmControlService — comments in GitHub', () => {
     });
     const [acceptance] = await serverDB
       .insert(acceptances)
-      .values({ subjectId: 's', subjectType: 'standalone', userId })
+      .values({ status: 'delivered', subjectId: 's', subjectType: 'standalone', userId })
       .returning();
     return ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
@@ -424,7 +430,7 @@ describe('ScmControlService — comments in GitHub', () => {
     });
   };
 
-  it('posts one comment with the acceptance and conversation links on a private repository', async () => {
+  it('posts one comment with a hidden marker and a status table, then rewrites it in place', async () => {
     const row = await bindAndOpen({ metadata: { repoPrivate: true } });
 
     const first = await control().handle({
@@ -432,31 +438,44 @@ describe('ScmControlService — comments in GitHub', () => {
       kind: 'opened',
       row,
     });
-    expect(first).toEqual({ commentId: 'c-1', outcome: 'commented' });
+    expect(first).toEqual({ commentId: 'c-1', outcome: 'commented', updated: false });
     expect(mocks.postComment).toHaveBeenCalledTimes(1);
     const body = mocks.postComment.mock.calls[0][0].body as string;
+    expect(parseTrackingMarker(body)).toEqual({
+      acceptanceId: row.acceptanceId,
+      changeRequestId: row.id,
+      provider: 'github',
+      topicId: row.topicId,
+      v: 1,
+    });
     expect(body).toContain(`https://app.test/acceptance/${row.acceptanceId}`);
     expect(body).toContain(`https://app.test/agent/agt_control?topic=${row.topicId}`);
+    expect(body).toContain('| 🟡 Delivered |');
+    expect(body).toContain('[PR topic ↗︎]');
 
     const stored = await ScmChangeRequestModel.findById(serverDB, row.id);
     expect(stored?.metadata.lobehubCommentId).toBe('c-1');
 
+    // The next event rewrites the same comment instead of posting again.
     const again = await control().handle({
       event: changeRequestEvent('opened'),
       kind: 'synchronized',
       row: stored!,
     });
-    expect(again).toMatchObject({ outcome: 'skipped', detail: 'already commented' });
+    expect(again).toEqual({ commentId: 'c-1', outcome: 'commented', updated: true });
     expect(mocks.postComment).toHaveBeenCalledTimes(1);
+    expect(mocks.updateComment).toHaveBeenCalledWith(
+      expect.objectContaining({ commentId: 'c-1', installationId: '90001' }),
+    );
 
-    // A concurrent handler still holding the pre-comment row is stopped by
-    // the fresh read even when its claim would have gone through.
+    // A concurrent handler still holding the pre-comment row is steered to
+    // the update path by the fresh read even when its claim goes through.
     const stale = await control().handle({
       event: changeRequestEvent('opened'),
       kind: 'synchronized',
       row,
     });
-    expect(stale).toMatchObject({ outcome: 'skipped', detail: 'already commented' });
+    expect(stale).toMatchObject({ outcome: 'commented', updated: true });
     expect(mocks.postComment).toHaveBeenCalledTimes(1);
 
     // And when the claim itself is lost, nothing is posted either.
@@ -476,6 +495,22 @@ describe('ScmControlService — comments in GitHub', () => {
       }),
     ).toMatchObject({ outcome: 'skipped', detail: 'comment already in flight' });
     expect(mocks.postComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('reflects the merge and the notifications in the comment', async () => {
+    const row = await bindAndOpen({ metadata: { repoPrivate: true } });
+    await control().handle({ event: changeRequestEvent('opened'), kind: 'opened', row });
+    const stored = (await ScmChangeRequestModel.findById(serverDB, row.id))!;
+
+    await control().handle({ event: checksEvent, kind: 'ci_failed', row: stored });
+    expect(mocks.updateComment).toHaveBeenCalledTimes(1);
+    expect(mocks.updateComment.mock.calls[0][0].body).toContain('| 1/3 · CI failed |');
+
+    // The ingest half lands the merge on the row before the control half runs.
+    const merged = await ScmChangeRequestModel.upsert(serverDB, { ...baseRow, state: 'merged' });
+    await control().handle({ event: changeRequestEvent('merged'), kind: 'merged', row: merged });
+    expect(mocks.updateComment).toHaveBeenCalledTimes(2);
+    expect(mocks.updateComment.mock.calls[1][0].body).toContain('| ✅ Accepted |');
   });
 
   it('stays quiet on public repositories unless opted in, and without links', async () => {

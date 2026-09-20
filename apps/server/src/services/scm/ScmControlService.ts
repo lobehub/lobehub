@@ -7,7 +7,7 @@ import { ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/s
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import type { ScmChangeRequestItem } from '@/database/schemas';
-import { works } from '@/database/schemas';
+import { acceptances, works } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
@@ -18,7 +18,9 @@ import {
   fetchGitHubJobLogTail,
   fetchGitHubReviewFeedback,
   postGitHubPullRequestComment,
+  updateGitHubPullRequestComment,
 } from './github/app';
+import { buildTrackingComment } from './trackingComment';
 import type { ScmInboundEvent } from './types';
 import { buildCiFailurePrompt, buildReviewPrompt, type ScmWakeReason } from './wakePrompt';
 
@@ -39,7 +41,7 @@ export interface ScmControlEvent {
 
 export type ScmControlOutcome =
   | { detail?: string; outcome: 'accepted'; acceptanceId: string }
-  | { commentId: string; outcome: 'commented' }
+  | { commentId: string; outcome: 'commented'; updated: boolean }
   | { detail?: string; outcome: 'skipped' }
   | { operationId: string; outcome: 'woken'; reason: ScmWakeReason };
 
@@ -47,6 +49,9 @@ export type ScmControlOutcome =
  * The control half of the closed loop, plugged into
  * `ScmIngestService.onChangeRequestEvent`. Two behaviours:
  *
+ * - **opened / synchronized / …** → one tracking comment on the pull request,
+ *   linking the acceptance and the conversation, rewritten in place as the
+ *   loop moves.
  * - **merged** → the linked acceptance is accepted (merging is the strongest
  *   signal a user can give) and the registered Work flips to merged. With
  *   stacked pull requests, every linked open PR must be merged or closed
@@ -66,19 +71,21 @@ export class ScmControlService {
       case 'ready_for_review':
       case 'reopened':
       case 'synchronized': {
-        return this.commentOnce(row);
+        return this.syncComment(row);
       }
       case 'merged': {
         if (!(await this.isEnabled(row, 'acceptOnMerge'))) {
           return { detail: 'acceptOnMerge is off', outcome: 'skipped' };
         }
-        return this.onMerged(row);
+        const outcome = await this.onMerged(row);
+        await this.refreshComment(row.id);
+        return outcome;
       }
       case 'ci_failed': {
         if (!(await this.isEnabled(row, 'wakeOnCiFailure'))) {
           return { detail: 'wakeOnCiFailure is off', outcome: 'skipped' };
         }
-        return this.wake(row, kind);
+        return this.wakeAndRefresh(row, kind);
       }
       case 'review_changes_requested':
       case 'review_commented': {
@@ -90,7 +97,7 @@ export class ScmControlService {
         if (!(await this.isEnabled(row, 'wakeOnReview'))) {
           return { detail: 'wakeOnReview is off', outcome: 'skipped' };
         }
-        return this.wake(row, kind);
+        return this.wakeAndRefresh(row, kind);
       }
       default: {
         return { detail: `${kind} needs no action`, outcome: 'skipped' };
@@ -113,28 +120,22 @@ export class ScmControlService {
   ): Promise<GithubIntegrationPreference | undefined> =>
     (await new UserModel(this.db, row.userId).getUserPreference())?.integration?.github;
 
-  // --------------- link comment ---------------
+  // --------------- tracking comment ---------------
 
   /**
-   * Once per pull request, leave a comment pointing at the LobeHub side of
-   * it: the acceptance it delivers and the conversation that opened it. Only
-   * when at least one link exists (a bare "tracked" comment says nothing),
-   * and only for the repository visibility the user allowed.
+   * One comment per pull request, kept current: it links the acceptance it
+   * delivers and the conversation that opened it, and its status table is
+   * rewritten as the acceptance moves and the agent gets notified. Posted
+   * only when at least one link exists (a bare "tracked" comment says
+   * nothing) and only for the repository visibility the user allowed; once
+   * posted, later events update it in place.
    */
-  private commentOnce = async (row: ScmChangeRequestItem): Promise<ScmControlOutcome> => {
-    if (row.metadata.lobehubCommentId) return { detail: 'already commented', outcome: 'skipped' };
+  private syncComment = async (row: ScmChangeRequestItem): Promise<ScmControlOutcome> => {
     if (!row.acceptanceId && !row.topicId)
       return { detail: 'no links to share', outcome: 'skipped' };
     if (!row.installationId) return { detail: 'no installation', outcome: 'skipped' };
-    // `opened` and the `synchronize` that follows the first push arrive a
-    // second apart and are handled concurrently; the row each handler holds
-    // predates the other's write, so a per-row claim decides who comments.
-    if (!(await this.claimOnce(`scm:comment:${row.id}`, 300))) {
-      return { detail: 'comment already in flight', outcome: 'skipped' };
-    }
-    const fresh = await ScmChangeRequestModel.findById(this.db, row.id);
-    if (fresh?.metadata.lobehubCommentId)
-      return { detail: 'already commented', outcome: 'skipped' };
+    if (row.metadata.lobehubCommentId)
+      return this.updateComment(row, row.metadata.lobehubCommentId);
 
     const isPrivate = row.metadata.repoPrivate;
     if (isPrivate === undefined)
@@ -144,28 +145,21 @@ export class ScmControlService {
     const allowed = isPrivate ? preference?.[key] !== false : preference?.[key] === true;
     if (!allowed) return { detail: `${key} is off`, outcome: 'skipped' };
 
+    // `opened` and the `synchronize` that follows the first push arrive a
+    // second apart and are handled concurrently; the row each handler holds
+    // predates the other's write, so a per-row claim decides who posts.
+    if (!(await this.claimOnce(`scm:comment:${row.id}`, 300))) {
+      return { detail: 'comment already in flight', outcome: 'skipped' };
+    }
+    const fresh = await ScmChangeRequestModel.findById(this.db, row.id);
+    if (fresh?.metadata.lobehubCommentId)
+      return this.updateComment(fresh, fresh.metadata.lobehubCommentId);
+
     const installationId = await this.providerInstallationId(row.installationId);
     if (!installationId) return { detail: 'installation not found', outcome: 'skipped' };
 
-    const origin = appEnv.APP_URL.replace(/\/$/, '');
-    const lines = ['**LobeHub** is tracking this pull request.', ''];
-    if (row.acceptanceId) lines.push(`- Acceptance: ${origin}/acceptance/${row.acceptanceId}`);
-    if (row.topicId) {
-      const topic = await new TopicModel(
-        this.db,
-        row.userId,
-        row.workspaceId ?? undefined,
-      ).findById(row.topicId);
-      if (topic?.agentId)
-        lines.push(`- Conversation: ${origin}/agent/${topic.agentId}?topic=${row.topicId}`);
-    }
-    lines.push(
-      '',
-      'Merging accepts the delivery; a failing check or review feedback reaches the agent that opened it.',
-    );
-
     const commentId = await postGitHubPullRequestComment({
-      body: lines.join('\n'),
+      body: await this.buildCommentBody(fresh ?? row),
       installationId,
       number: row.number,
       repoFullName: row.repoFullName,
@@ -183,7 +177,82 @@ export class ScmControlService {
       workspaceId: row.workspaceId,
     });
     log('commented on %s#%d (%s)', row.repoFullName, row.number, commentId);
-    return { commentId, outcome: 'commented' };
+    return { commentId, outcome: 'commented', updated: false };
+  };
+
+  private updateComment = async (
+    row: ScmChangeRequestItem,
+    commentId: string,
+  ): Promise<ScmControlOutcome> => {
+    if (!row.installationId) return { detail: 'no installation', outcome: 'skipped' };
+    const installationId = await this.providerInstallationId(row.installationId);
+    if (!installationId) return { detail: 'installation not found', outcome: 'skipped' };
+
+    const updated = await updateGitHubPullRequestComment({
+      body: await this.buildCommentBody(row),
+      commentId,
+      installationId,
+      repoFullName: row.repoFullName,
+    });
+    if (!updated) return { detail: 'comment update failed', outcome: 'skipped' };
+    log('updated comment %s on %s#%d', commentId, row.repoFullName, row.number);
+    return { commentId, outcome: 'commented', updated: true };
+  };
+
+  /** After a merge or a wake: re-read the row and rewrite the comment, if there is one. */
+  private refreshComment = async (rowId: string) => {
+    const fresh = await ScmChangeRequestModel.findById(this.db, rowId);
+    if (!fresh?.metadata.lobehubCommentId) return;
+    await this.updateComment(fresh, fresh.metadata.lobehubCommentId);
+  };
+
+  private buildCommentBody = async (row: ScmChangeRequestItem): Promise<string> => {
+    const origin = appEnv.APP_URL.replace(/\/$/, '');
+
+    let acceptance: {
+      id: string;
+      status: (typeof acceptances.$inferSelect)['status'];
+      url: string;
+    } | null = null;
+    if (row.acceptanceId) {
+      const [found] = await this.db
+        .select({ id: acceptances.id, status: acceptances.status })
+        .from(acceptances)
+        .where(eq(acceptances.id, row.acceptanceId));
+      if (found) acceptance = { ...found, url: `${origin}/acceptance/${found.id}` };
+    }
+
+    let conversation: { title?: string | null; url: string } | null = null;
+    if (row.topicId) {
+      const topic = await new TopicModel(
+        this.db,
+        row.userId,
+        row.workspaceId ?? undefined,
+      ).findById(row.topicId);
+      if (topic?.agentId) {
+        conversation = {
+          title: topic.title,
+          url: `${origin}/agent/${topic.agentId}?topic=${row.topicId}`,
+        };
+      }
+    }
+
+    return buildTrackingComment({
+      acceptance,
+      conversation,
+      marker: {
+        acceptanceId: row.acceptanceId ?? undefined,
+        changeRequestId: row.id,
+        provider: row.provider,
+        topicId: row.topicId ?? undefined,
+        v: 1,
+      },
+      notification:
+        row.wakeCount > 0
+          ? { count: row.wakeCount, max: SCM_MAX_WAKES, reason: row.metadata.lastWake?.reason }
+          : null,
+      updatedAt: new Date(),
+    });
   };
 
   // --------------- merge → accepted ---------------
@@ -217,6 +286,15 @@ export class ScmControlService {
   };
 
   // --------------- CI / review → wake ---------------
+
+  private wakeAndRefresh = async (
+    row: ScmChangeRequestItem,
+    reason: ScmWakeReason,
+  ): Promise<ScmControlOutcome> => {
+    const outcome = await this.wake(row, reason);
+    if (outcome.outcome === 'woken') await this.refreshComment(row.id);
+    return outcome;
+  };
 
   private wake = async (
     row: ScmChangeRequestItem,
@@ -271,7 +349,7 @@ export class ScmControlService {
       };
     }
 
-    const count = await ScmChangeRequestModel.recordWake(this.db, row.id);
+    const count = await ScmChangeRequestModel.recordWake(this.db, row.id, reason);
     log(
       'woke agent %s in topic %s for %s (%s#%d, wake %d/%d, op %s)',
       topic.agentId,
