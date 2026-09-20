@@ -1990,6 +1990,10 @@ export class AgentRuntimeService {
           currentState.pendingToolsCalling = [];
           currentState.status = 'running';
           currentState.interruption = undefined;
+          // Whatever ran while this operation was parked is invisible from
+          // here: a sub-agent that saved a credential cleared its own snapshot,
+          // not this one. Drop ours rather than render a list that predates it.
+          currentState.operationCredentials = undefined;
           currentState.lastModified = new Date().toISOString();
           currentContext = {
             payload: { parentMessageId: resumeParentMessageId },

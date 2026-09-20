@@ -153,9 +153,15 @@ export interface ToolDiscoveryResult {
   /**
    * Credentials listed once for the whole operation; see
    * {@link FrozenCredentialFacts}. Absent when the run cannot inject
-   * credentials, or when the Market API did not answer.
+   * credentials.
+   *
+   * Deliberately still a promise: awaiting it here would put a Market round
+   * trip between tool discovery and operation preparation, on the path to the
+   * first token. The caller awaits it once the preparation it overlaps with is
+   * done. Never rejects — a failed read resolves to `undefined` and the run
+   * reads the list live, as it did before the snapshot existed.
    */
-  credentialFacts?: FrozenCredentialFacts;
+  credentialFactsPromise?: Promise<FrozenCredentialFacts | undefined>;
   executionPlan?: ExecutionPlan;
   hasAgentDocuments: boolean;
   hasEnabledKnowledgeBases: boolean;
@@ -1042,7 +1048,7 @@ export const discoverTools = async (
     // read off here and await it at the end: it is one Market round trip, and
     // every step of the run reads the answer back off the operation instead of
     // asking again.
-    if (toolsResult.enabledToolIds.includes(CredsIdentifier)) {
+    if (toolsResult.enabledToolIds?.includes(CredsIdentifier)) {
       credentialFactsPromise = readCredentialFacts(deps);
     }
 
@@ -1185,7 +1191,7 @@ export const discoverTools = async (
     connectorOwnershipNote,
     executionPlan,
     hasAgentDocuments,
-    credentialFacts: await credentialFactsPromise,
+    credentialFactsPromise,
     hasEnabledKnowledgeBases,
     lobehubSkillManifests,
     modelFacts,

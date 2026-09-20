@@ -1,4 +1,6 @@
 import { CredsApiName, CredsIdentifier } from '@lobechat/builtin-tool-creds';
+import { GroupManagementIdentifier } from '@lobechat/builtin-tool-group-management';
+import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 
 /**
  * Creds APIs that change what the credential list contains.
@@ -10,6 +12,13 @@ const MUTATING_API_NAMES = new Set<string>([
   CredsApiName.initiateOAuthConnect,
   CredsApiName.saveCreds,
 ]);
+
+/**
+ * Tools that run another agent. Its steps are a separate operation with its own
+ * snapshot, so a credential it saves clears only its own — nothing tells this
+ * run what the nested one did. Assume the worst and read the list live again.
+ */
+const NESTED_RUN_IDENTIFIERS = new Set<string>([GroupManagementIdentifier, LobeAgentIdentifier]);
 
 interface ToolCallRef {
   apiName?: string;
@@ -41,6 +50,8 @@ export const stepChangedCredentials = (nextContext?: {
     : [payload.toolCall];
 
   return calls.some(
-    (call) => call?.identifier === CredsIdentifier && MUTATING_API_NAMES.has(call?.apiName ?? ''),
+    (call) =>
+      (call?.identifier === CredsIdentifier && MUTATING_API_NAMES.has(call?.apiName ?? '')) ||
+      NESTED_RUN_IDENTIFIERS.has(call?.identifier ?? ''),
   );
 };

@@ -283,8 +283,9 @@ export const startOperation = async (
       },
       hooks,
       // Listed once during discovery: every step renders {{CREDS_LIST}} from
-      // here instead of asking the Market API again.
-      operationCredentials: discovery.credentialFacts,
+      // here instead of asking the Market API again. Awaited only now, so the
+      // read overlapped with the operation preparation that ran in between.
+      operationCredentials: await discovery.credentialFactsPromise,
       operationId,
       parentOperationId,
       signal,

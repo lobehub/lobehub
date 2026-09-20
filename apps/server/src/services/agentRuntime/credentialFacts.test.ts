@@ -33,6 +33,13 @@ describe('stepChangedCredentials', () => {
     expect(stepChangedCredentials(singleCall('lobe-web-browsing', 'saveCreds'))).toBe(false);
   });
 
+  it.each(['lobe-agent', 'lobe-group-management'])(
+    'is true after %s, because a nested run may have saved one',
+    (identifier) => {
+      expect(stepChangedCredentials(singleCall(identifier, 'anything'))).toBe(true);
+    },
+  );
+
   it('finds a mutating call anywhere in a batch', () => {
     expect(
       stepChangedCredentials(

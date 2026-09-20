@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+
 import { AiAgentService } from '../../index';
 
 // The share-gate filter now runs at the top of `discoverTools`, before
@@ -232,6 +234,17 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
       systemRole: '',
     });
     service = new AiAgentService(mockDb, 'creator-1');
+  });
+
+  it('starts an operation even when the tools engine reports no enabled tool ids', async () => {
+    // `generateToolsDetailed` is not contractually obliged to return the field,
+    // and the credential-snapshot read used to assume it was always an array.
+    vi.mocked(createServerAgentToolsEngine).mockReturnValueOnce({
+      generateToolsDetailed: vi.fn().mockReturnValue({ tools: [] }),
+      getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
+    } as never);
+
+    await expect(service.execAgent({ agentId: 'agent-1', prompt: 'Hello' })).resolves.toBeDefined();
   });
 
   it('does not resolve or schedule refresh for a pinned connector missing from toolGrants', async () => {
