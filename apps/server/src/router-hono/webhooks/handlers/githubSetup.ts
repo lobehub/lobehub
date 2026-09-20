@@ -12,7 +12,7 @@ import { consumeScmInstallState } from '@/server/services/scm/oauth/stateStore';
 const log = debug('lobe-server:scm:github-setup');
 
 /** Where the user lands after connecting; the page reads `scm=github&installed=ok|error=…`. */
-const SETTINGS_PATH = '/settings';
+const SETTINGS_PATH = '/settings/integrations/github';
 
 const redirectToSettings = (origin: string, params: Record<string, string>, returnTo?: string) => {
   const target = new URL(returnTo ?? SETTINGS_PATH, origin);
@@ -71,24 +71,46 @@ export const githubSetup = async (c: Context): Promise<Response> => {
   }
   const returnTo = statePayload?.returnTo;
 
-  // 2. Refresh-only leg (Setup URL after a repository change).
+  // 2. No-code leg: the Setup URL after a repository change, or an install
+  // that skipped user authorization (an App without the OAuth-on-install
+  // option, or a re-install whose code already expired). A known row is
+  // refreshed in place; an unknown one is bound to the user we resolved,
+  // without an identity — the API tells us everything else.
   if (!code) {
+    let snapshot: Awaited<ReturnType<typeof fetchGitHubInstallation>>;
+    try {
+      snapshot = await fetchGitHubInstallation(installationId);
+    } catch (error) {
+      log('fetch installation %s failed: %O', installationId, error);
+      return redirectToSettings(url.origin, { error: 'installation_fetch_failed' }, returnTo);
+    }
+
     const existing = await ScmInstallationModel.findByProviderInstallationId(
       db,
       'github',
       installationId,
     );
-    if (!existing)
-      return redirectToSettings(url.origin, { error: 'unknown_installation' }, returnTo);
-
-    try {
-      const snapshot = await fetchGitHubInstallation(installationId);
+    if (existing) {
       await ScmInstallationModel.refreshSnapshot(db, existing.id, snapshot);
-    } catch (error) {
-      log('refresh %s failed: %O', installationId, error);
-      return redirectToSettings(url.origin, { error: 'refresh_failed' }, returnTo);
+      return redirectToSettings(url.origin, { installed: 'updated' }, returnTo);
     }
-    return redirectToSettings(url.origin, { installed: 'updated' }, returnTo);
+
+    const installation = await ScmInstallationModel.bind(db, {
+      ...snapshot,
+      userId,
+      workspaceId: statePayload?.workspaceId ?? null,
+    });
+    log(
+      'bound installation %s (%s) to user=%s without identity',
+      installation.id,
+      snapshot.accountLogin,
+      userId,
+    );
+    return redirectToSettings(
+      url.origin,
+      { account: snapshot.accountLogin, installed: 'ok' },
+      returnTo,
+    );
   }
 
   // 3. Install leg: identity first, then the installation bound to the user.

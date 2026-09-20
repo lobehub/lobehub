@@ -7,7 +7,7 @@ import type {
   ScmProvider,
   ScmReviewDecision,
 } from '@lobechat/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
 import { scmChangeRequests } from '../../schemas';
@@ -162,6 +162,24 @@ export class ScmChangeRequestModel {
       .from(scmChangeRequests)
       .where(eq(scmChangeRequests.acceptanceId, acceptanceId))
       .orderBy(desc(scmChangeRequests.updatedAt));
+
+  /** Change requests visible to a scope, newest activity first. */
+  static listByScope = async (
+    db: LobeChatDatabase,
+    scope: { userId: string; workspaceId?: string | null },
+    options: { limit?: number } = {},
+  ): Promise<ScmChangeRequestItem[]> => {
+    const scopeCondition = scope.workspaceId
+      ? eq(scmChangeRequests.workspaceId, scope.workspaceId)
+      : and(eq(scmChangeRequests.userId, scope.userId), isNull(scmChangeRequests.workspaceId));
+
+    return db
+      .select()
+      .from(scmChangeRequests)
+      .where(scopeCondition)
+      .orderBy(desc(scmChangeRequests.updatedAt))
+      .limit(options.limit ?? 50);
+  };
 
   static listByTopic = async (
     db: LobeChatDatabase,
