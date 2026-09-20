@@ -13,27 +13,35 @@ interface SandboxWorkspaceSectionProps {
 }
 
 /**
- * Which directory a persistent cloud-sandbox run keeps its files in — the
- * counterpart of `WorkingDirectorySection`, which covers runs on a machine.
+ * The working directory of a cloud-sandbox run — the counterpart of
+ * `WorkingDirectorySection`, which covers runs on a machine, and shaped the
+ * same way: one chip that always names the slot, whose menu holds every place
+ * the run could keep its files.
  *
- * Whether files are kept at all is decided one control to the left, in the
- * execution-device menu, the way "Local sandbox" is decided there for a local
- * run. So this only appears once that switch is on: a throwaway box has no
- * directory to choose, and a chip for it would name a choice that does not
- * exist. The upgrade prompt for a plan without persistence lives on that same
- * menu row, not here.
+ * Nothing chosen means a temporary directory, cleaned up with the sandbox. The
+ * persistent choices are an environment's instances: a folder plus everything
+ * installed into it, so two conversations that must not overwrite each other
+ * take two instances. A persistent run always lives in one, as in Codex — the
+ * server's root fallback exists for a deleted instance, not as a choice.
  *
- * What the topic stores is an INSTANCE: a folder plus everything installed into
- * it. Two conversations that must not overwrite each other take two instances
- * rather than two folders under one.
+ * A plan without persistence still gets the chip: the temporary directory is
+ * everyone's, and the way to a plan is a row in the same menu rather than a
+ * different control.
  */
 const SandboxWorkspaceSectionInner = memo<SandboxWorkspaceSectionProps>(({ agentId }) => {
   const { status } = useSandboxWorkspaceAccess(agentId);
   const { selection, setSelection, topicId } = useSandboxMode(agentId);
 
-  if (status !== 'ready' || selection.mode !== 'persistent') return null;
+  if (status === 'hidden') return null;
 
-  return <SandboxInstancePicker topicId={topicId} value={selection} onChange={setSelection} />;
+  return (
+    <SandboxInstancePicker
+      entitled={status === 'ready'}
+      topicId={topicId}
+      value={selection}
+      onChange={setSelection}
+    />
+  );
 });
 
 SandboxWorkspaceSectionInner.displayName = 'SandboxWorkspaceSectionInner';

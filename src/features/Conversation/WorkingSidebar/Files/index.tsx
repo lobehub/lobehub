@@ -11,6 +11,7 @@ import {
   EllipsisIcon,
   FileIcon,
   FilePlusIcon,
+  FileWarningIcon,
   FolderPlusIcon,
   FolderTreeIcon,
   FoldVerticalIcon,
@@ -201,7 +202,7 @@ const Files = memo<FilesProps>(({ deviceId, sandboxTopicId, workingDirectory }) 
   // sandbox both answer over the network, and neither can be handed to Electron
   // to reveal in a file manager.
   const isRemote = !!deviceId || !!sandboxTopicId;
-  const { data, isLoading } = useProjectFiles(deviceId, workingDirectory, sandboxTopicId);
+  const { data, error, isLoading } = useProjectFiles(deviceId, workingDirectory, sandboxTopicId);
   const { data: gitFiles } = useGitWorkingTreeFiles(
     deviceId,
     workingDirectory,
@@ -560,10 +561,19 @@ const Files = memo<FilesProps>(({ deviceId, sandboxTopicId, workingDirectory }) 
         </Center>
       ) : isEmpty && !actions.pendingCreate ? (
         <Center flex={1} gap={8} paddingBlock={24}>
+          {/* A failed read and an empty directory look identical once the tree
+              is empty, and they are not the same thing to act on: one is
+              "nothing here yet", the other is "we could not find out". Saying
+              the workspace is empty when the listing failed is the worse of the
+              two lies — it invites the user to conclude their files are gone. */}
           <Empty
-            icon={FileIcon}
+            icon={error ? FileWarningIcon : FileIcon}
             description={t(
-              hasDisplayFilter ? 'workingPanel.files.noSearchResults' : 'workingPanel.files.empty',
+              error
+                ? 'workingPanel.files.unreadable'
+                : hasDisplayFilter
+                  ? 'workingPanel.files.noSearchResults'
+                  : 'workingPanel.files.empty',
             )}
           />
         </Center>
