@@ -23,7 +23,6 @@ import {
 } from '../Contexts/message-action-context';
 import Actions from './Actions';
 import UserMessageContent from './components/MessageContent';
-import ExternalOriginTag from './ExternalOriginTag';
 import { UserMessageExtra } from './Extra';
 import { getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
@@ -109,6 +108,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       avatar={{ avatar, title }}
       belowMessage={<ScheduledRunFooter id={id} />}
       editing={editing}
+      headerAddon={metadata?.steer ? <Tag>{t('steer.tag')}</Tag> : undefined}
       id={id}
       message={content}
       messageExtra={<UserMessageExtra extra={extra} id={id} />}
@@ -120,16 +120,6 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       actionAddon={
         commentCount > 0 && commentTopicId ? (
           <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
-        ) : undefined
-      }
-      headerAddon={
-        metadata?.steer || metadata?.externalOrigin ? (
-          <>
-            {metadata?.externalOrigin ? (
-              <ExternalOriginTag origin={metadata.externalOrigin} />
-            ) : null}
-            {metadata?.steer ? <Tag>{t('steer.tag')}</Tag> : null}
-          </>
         ) : undefined
       }
       onDoubleClick={onDoubleClick}

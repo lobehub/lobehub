@@ -576,14 +576,26 @@ export class ScmChangeRequestModel {
   };
 
   /** Bump the wake counter; returns the new count so the caller can enforce its cap. */
-  static recordWake = async (db: LobeChatDatabase, id: string): Promise<number> => {
+  static recordWake = async (
+    db: LobeChatDatabase,
+    id: string,
+    reason?: string,
+  ): Promise<number> => {
     const existing = await ScmChangeRequestModel.findById(db, id);
     if (!existing) return 0;
 
+    const now = new Date();
     const wakeCount = existing.wakeCount + 1;
     await db
       .update(scmChangeRequests)
-      .set({ lastWakeAt: new Date(), updatedAt: new Date(), wakeCount })
+      .set({
+        lastWakeAt: now,
+        metadata: reason
+          ? { ...existing.metadata, lastWake: { at: now.toISOString(), reason } }
+          : existing.metadata,
+        updatedAt: now,
+        wakeCount,
+      })
       .where(eq(scmChangeRequests.id, id));
     return wakeCount;
   };
