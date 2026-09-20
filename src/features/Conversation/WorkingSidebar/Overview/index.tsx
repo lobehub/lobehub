@@ -30,7 +30,6 @@ import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
-import { electronSystemService } from '@/services/electron/system';
 import { gitService } from '@/services/git';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -43,6 +42,7 @@ import {
   useFetchGitWorktrees,
   useReviewPatches,
 } from '@/store/device';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
@@ -362,7 +362,7 @@ const Overview = memo<OverviewProps>(
                   prAvailable
                     ? () => onOpenTab('pr')
                     : pullRequest.url
-                      ? () => void electronSystemService.openExternalLink(pullRequest.url)
+                      ? () => openTrustedExternalUrl(pullRequest.url)
                       : undefined
                 }
               />
