@@ -41,5 +41,11 @@ export const parseFileLinkHref = (
   }
 
   const match = url.pathname.match(FILE_PROXY_PATH_REGEX);
-  return match ? { fileId: decodeURIComponent(match[1]) } : null;
+  if (!match) return null;
+
+  try {
+    return { fileId: decodeURIComponent(match[1]) };
+  } catch {
+    return null;
+  }
 };

@@ -1,11 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import type * as LobechatConstModule from '@lobechat/const';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useElectronStore } from '@/store/electron';
 
 import { LOBE_FILE_LINK_TAG } from './parse';
 import { rehypeFileLink } from './rehypePlugin';
 
+const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
+
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobechatConstModule>();
+  return {
+    ...actual,
+    get isDesktop() {
+      return mockConstEnv.isDesktop;
+    },
+  };
+});
+
 const run = (tree: any) => rehypeFileLink()(tree);
 
 const ORIGIN = () => window.location.origin;
+
+beforeEach(() => {
+  mockConstEnv.isDesktop = false;
+  useElectronStore.setState({ dataSyncConfig: { storageMode: 'cloud' } });
+});
 
 describe('rehypeFileLink', () => {
   it('retags an absolute, same-origin file proxy link', () => {
@@ -112,5 +132,81 @@ describe('rehypeFileLink', () => {
     run(tree);
 
     expect((tree as any).children[0].tagName).toBe('p');
+  });
+
+  describe('desktop', () => {
+    beforeEach(() => {
+      mockConstEnv.isDesktop = true;
+    });
+
+    it('classifies against the official cloud origin, not the renderer origin', () => {
+      useElectronStore.setState({ dataSyncConfig: { storageMode: 'cloud' } });
+
+      const tree = {
+        type: 'root',
+        children: [
+          {
+            type: 'element',
+            tagName: 'a',
+            properties: { href: 'https://app.lobehub.com/f/file_abc123' },
+            children: [{ type: 'text', value: 'bubble_sort.py' }],
+          },
+        ],
+      };
+
+      run(tree);
+
+      expect((tree as any).children[0].tagName).toBe(LOBE_FILE_LINK_TAG);
+    });
+
+    it('classifies against the configured self-hosted remote server origin', () => {
+      useElectronStore.setState({
+        dataSyncConfig: {
+          remoteServerUrl: 'https://my-server.example.com',
+          storageMode: 'selfHost',
+        },
+      });
+
+      const tree = {
+        type: 'root',
+        children: [
+          {
+            type: 'element',
+            tagName: 'a',
+            properties: { href: 'https://my-server.example.com/f/file_abc123' },
+            children: [{ type: 'text', value: 'bubble_sort.py' }],
+          },
+        ],
+      };
+
+      run(tree);
+
+      expect((tree as any).children[0].tagName).toBe(LOBE_FILE_LINK_TAG);
+    });
+
+    it('still rejects a link to a different origin than the configured remote server', () => {
+      useElectronStore.setState({
+        dataSyncConfig: {
+          remoteServerUrl: 'https://my-server.example.com',
+          storageMode: 'selfHost',
+        },
+      });
+
+      const tree = {
+        type: 'root',
+        children: [
+          {
+            type: 'element',
+            tagName: 'a',
+            properties: { href: 'https://example.com/f/not-ours' },
+            children: [{ type: 'text', value: 'not-ours' }],
+          },
+        ],
+      };
+
+      run(tree);
+
+      expect((tree as any).children[0].tagName).toBe('a');
+    });
   });
 });

@@ -22,6 +22,10 @@ describe('parseFileLinkHref', () => {
     });
   });
 
+  it('returns null instead of throwing on a malformed percent-encoded file id', () => {
+    expect(parseFileLinkHref('/f/%', ORIGIN)).toBeNull();
+  });
+
   it('does not match a cross-origin link sharing the same path shape', () => {
     expect(parseFileLinkHref('https://example.com/f/not-ours', ORIGIN)).toBeNull();
   });
