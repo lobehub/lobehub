@@ -246,7 +246,9 @@ docker compose run --rm fts-search-reindex \
 
 The command prints a run ID and an index such as `<namespace>-messages-v1-r<run-id>`. If interrupted,
 run the same command with `--run-id=<run-id>`. Continuous sync writes both the existing and rebuilding
-generations; do not pause application writes or the sync worker. After the backfill reports
+generations; do not pause application writes or the sync worker. Creating the checkpoint briefly
+fences only the PostgreSQL tables that can emit the selected entities; resuming the same checkpoint
+does not repeat that fence. After the backfill reports
 `ready_for_incremental_sync` and the `messages` Outbox is idle, promote the exact physical index:
 
 ```bash
@@ -255,9 +257,11 @@ docker compose run --rm fts-search-reindex \
 ```
 
 The alias and logical schema version remain unchanged. Keep the previous generation during an
-observation window so the alias can be promoted back to its exact name. Run
-`--retire --entity=messages --yes` and later `--purge --entity=messages --yes` only after rollback is
-no longer needed.
+observation window so the alias can be promoted back to its exact name. Once rollback is no longer
+needed, run `--purge --entity=messages --yes`. Purge installs an exact-name auto-create guard before
+deleting each detached old index. Self-managed clusters may run `--retire --entity=messages --yes`
+first to close old indexes; Elastic Cloud Serverless does not support index close, so skip retire and
+purge directly.
 
 Security boundary of this mode: `ES_ALLOW_INSECURE_HTTP=true` permits plaintext HTTP to a
 non-loopback host and lets `ES_API_KEY` be omitted. It never permits sending an API key over

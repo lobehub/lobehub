@@ -79,7 +79,7 @@ export interface FtsSearchReindexRunState {
 export interface FtsSearchReindexFileRepositoryOptions {
   readCaptureFingerprint: () => Promise<string>;
   readHighWaterRevision: () => Promise<number>;
-  reserveRevisionWithWriteFence: () => Promise<number>;
+  reserveRevisionWithWriteFence: (entities: readonly FtsSearchDocumentEntity[]) => Promise<number>;
   stateDirectory: string;
 }
 
@@ -550,7 +550,7 @@ export class FtsSearchReindexFileRepository {
     }
 
     /** Reserve outside the file lock so a slow database connection cannot stale the local lock. */
-    const baseRevision = await this.options.reserveRevisionWithWriteFence();
+    const baseRevision = await this.options.reserveRevisionWithWriteFence(entities);
     if (!Number.isSafeInteger(baseRevision) || baseRevision < 1) {
       throw new Error('Failed to reserve a valid search reindex base revision');
     }

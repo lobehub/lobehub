@@ -483,8 +483,8 @@ export const planRetiredGenerations = (
       close.push(candidate.index);
     } else {
       alreadyClosed.push(candidate.index);
-      purgeCandidates.push(candidate.index);
     }
+    purgeCandidates.push(candidate.index);
   }
   return { alreadyClosed, blockedBy, close, purgeCandidates };
 };
@@ -530,7 +530,7 @@ export interface FtsSearchPurgeRetiredGenerationsResult {
   kept: string;
 }
 
-/** Permanently deletes closed, detached generations after installing an exact-index write guard. */
+/** Permanently deletes detached generations after installing an exact-index write guard. */
 export const purgeRetiredGenerations = async ({
   client,
   entity,
@@ -549,10 +549,7 @@ export const purgeRetiredGenerations = async ({
 
   const plan = planRetiredGenerations(status);
   const backfilling = status.candidates.find(
-    (candidate) =>
-      isRetirementCandidate(status, candidate) &&
-      candidate.state === 'closed' &&
-      candidate.backfill === 'backfilling',
+    (candidate) => isRetirementCandidate(status, candidate) && candidate.backfill === 'backfilling',
   );
   if (backfilling) {
     throw new Error(`${backfilling.index} backfill is still running; it cannot be purged`);

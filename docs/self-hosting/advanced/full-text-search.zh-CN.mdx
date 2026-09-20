@@ -199,14 +199,14 @@ docker compose run --rm fts-search-reindex \
   --apply --rebuild-current --entity=messages --yes
 ```
 
-命令会输出 run ID，以及类似 `<namespace>-messages-v1-r<run-id>` 的索引名。若任务中断，使用相同命令并增加 `--run-id=<run-id>` 继续。持续同步会同时写入现有 generation 和重建 generation；不要暂停应用写入或同步 worker。回填显示 `ready_for_incremental_sync` 且 `messages` Outbox 空闲后，按精确物理索引名切换：
+命令会输出 run ID，以及类似 `<namespace>-messages-v1-r<run-id>` 的索引名。若任务中断，使用相同命令并增加 `--run-id=<run-id>` 继续。持续同步会同时写入现有 generation 和重建 generation；不要暂停应用写入或同步 worker。首次创建 checkpoint 时只会短暂阻挡能够生成所选实体更新的 PostgreSQL 表；续跑同一 checkpoint 不会再次执行这一步。回填显示 `ready_for_incremental_sync` 且 `messages` Outbox 空闲后，按精确物理索引名切换：
 
 ```bash
 docker compose run --rm fts-search-reindex \
   --promote --entity=messages --generation=<精确索引名> --yes
 ```
 
-alias 和逻辑 schema 版本保持不变。观察期内保留旧 generation，出现问题时可按其精确名称切回。确认无需回滚后，再依次执行 `--retire --entity=messages --yes` 和 `--purge --entity=messages --yes`。
+alias 和逻辑 schema 版本保持不变。观察期内保留旧 generation，出现问题时可按其精确名称切回。确认无需回滚后，执行 `--purge --entity=messages --yes`。Purge 会先安装精确索引名的防自动创建规则，再删除每个已脱离 alias 的旧索引。自建集群可以先用 `--retire --entity=messages --yes` 关闭旧索引；Elastic Cloud Serverless 不支持关闭索引，应跳过 retire，直接 purge。
 
 这一模式的安全边界：`ES_ALLOW_INSECURE_HTTP=true` 允许向非回环主机使用明文 HTTP，并允许省略
 `ES_API_KEY`；但它永远不允许通过明文 HTTP 发送 API 密钥，因此不要把它与 `ES_API_KEY` 和 `http://`

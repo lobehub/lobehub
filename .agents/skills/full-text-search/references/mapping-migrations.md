@@ -77,10 +77,10 @@ same-version generation eligible for ordinary `--retire` and later `--purge`.
 - Rollback is an optional recovery branch: select a retained, open older generation first, then
   redeploy matching older code. Older sync code rejects a live generation newer than it declares.
   Unlike forward promotion, rollback may accept an older stamped generation without its checkpoint.
-- Retire only while the declared generation is serving and rollback is no longer needed. `--retire`
-  only closes eligible old indexes. Explicit `--purge` installs and verifies an exact-index template
-  with `allow_auto_create: false` before deletion, requiring `manage_index_templates`. Keep these
-  protection templates; conflicts fail closed. An empty Outbox is not a fence against paused workers.
+- Retire or purge only while the declared generation is serving and rollback is no longer needed.
+  `--purge` protects each eligible open or closed index with an exact `allow_auto_create: false`
+  template before direct deletion. `--retire` is optional and only works where `_close` is supported;
+  skip it on Elastic Cloud Serverless. Keep protection templates; conflicts fail closed.
 - Mutating commands acquire a non-expiring lock in `<namespace>-fts-search-control`. Status reads
   `migrationLock` without acquiring one. Failed/interrupted commands may retain the lock; stop the
   old process and resolve uncertain requests before `--release-lock=<owner> --yes`. Never use timeout
@@ -119,6 +119,17 @@ indexed. Measure a representative payload and real resource limits; a fast small
 does not establish production duration. Use bounded `--batch-size`, `--bulk-max-bytes`, and concurrency
 options in `scripts/elasticsearchReindex/options.ts`. `--max-batches-per-entity` bounds a rehearsal or pause; exit
 code zero alone does not mean the backfill is complete.
+
+- Never use production to test or tune migration parameters.
+- Exercise migration-script changes through the real workflow in both Docker and Dev PostgreSQL plus
+  Dev Elastic Cloud before production.
+- Design Elasticsearch scripts for Docker and Elastic Cloud compatibility; verify every API and
+  setting used instead of assuming the two environments support the same capabilities.
+- For large production migrations, consider Vercel Sandbox as an isolated execution environment to
+  improve throughput.
+- Minimize production impact: scope work to selected entities and their source tables. Reserve and
+  fence the base revision only when creating a checkpoint; resume it without another table lock.
+  Never lock unrelated capture tables for a single-entity migration.
 
 For Docker self-hosting, startup migration is a blocking maintenance step, not an image-build step.
 The application and manual migration tool must share the same durable `ES_REINDEX_STATE_DIR`.

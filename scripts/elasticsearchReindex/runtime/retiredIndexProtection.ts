@@ -13,7 +13,7 @@ const indexTemplateSchema = z.object({
       composed_of: z.array(z.string()).optional(),
       data_stream: z.unknown().optional(),
       index_patterns: z.array(z.string()),
-      priority: z.number().int().optional(),
+      priority: z.number().optional(),
       template: z.record(z.string(), z.unknown()).optional(),
     })
     .passthrough(),

@@ -856,7 +856,7 @@ describe('retireGenerations', () => {
 });
 
 describe('purgeRetiredGenerations', () => {
-  it('deletes only closed, detached, managed generations after installing deletion protection', async () => {
+  it('deletes open and closed detached managed generations after installing deletion protection', async () => {
     setDeclaredVersion(ENTITY, 3);
     const unmanaged = buildGeneration(physicalIndex(0), { aliased: false, state: 'closed' });
     const client = createClient([
@@ -873,15 +873,22 @@ describe('purgeRetiredGenerations', () => {
         namespace: NAMESPACE,
         readCheckpoint: createCheckpointReader({ 3: createRunState(3, 'completed') }),
       }),
-    ).resolves.toEqual({ alias: ALIAS, deleted: [physicalIndex(2)], kept: physicalIndex(3) });
-    expect(client.ensureRetiredIndexProtection).toHaveBeenCalledExactlyOnceWith(physicalIndex(2));
-    expect(client.deleteIndex).toHaveBeenCalledExactlyOnceWith(physicalIndex(2));
+    ).resolves.toEqual({
+      alias: ALIAS,
+      deleted: [physicalIndex(1), physicalIndex(2)],
+      kept: physicalIndex(3),
+    });
+    expect(client.ensureRetiredIndexProtection.mock.calls).toEqual([
+      [physicalIndex(1)],
+      [physicalIndex(2)],
+    ]);
+    expect(client.deleteIndex.mock.calls).toEqual([[physicalIndex(1)], [physicalIndex(2)]]);
   });
 
   it('rejects deletion while the retired generation checkpoint is still backfilling', async () => {
     setDeclaredVersion(ENTITY, 2);
     const client = createClient([
-      buildManagedGeneration(1, { aliased: false, state: 'closed' }),
+      buildManagedGeneration(1, { aliased: false, state: 'open' }),
       buildManagedGeneration(2, { isWriteIndex: true }),
     ]);
 
@@ -926,7 +933,7 @@ describe('planRetiredGenerations', () => {
         `${physicalIndex(4)} is neither older than the live generation nor marked as superseded by it`,
       ],
       close: [physicalIndex(1)],
-      purgeCandidates: [physicalIndex(2)],
+      purgeCandidates: [physicalIndex(1), physicalIndex(2)],
     });
     expect(client.closeIndex).not.toHaveBeenCalled();
     expect(client.deleteIndex).not.toHaveBeenCalled();

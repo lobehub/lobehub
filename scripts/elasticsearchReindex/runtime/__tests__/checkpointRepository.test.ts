@@ -59,6 +59,22 @@ describe('FtsSearchReindexFileRepository', () => {
     });
   });
 
+  it('fences only selected entities once when creating a checkpoint, not when resuming it', async () => {
+    const reserveRevisionWithWriteFence = vi.fn(async () => ++revision);
+    const scopedRepository = new FtsSearchReindexFileRepository({
+      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
+      readHighWaterRevision: vi.fn(async () => revision),
+      reserveRevisionWithWriteFence,
+      stateDirectory,
+    });
+
+    const created = await scopedRepository.createOrResume('scoped-search', 1, ['messages']);
+    const resumed = await scopedRepository.createOrResume('scoped-search', 1, ['messages']);
+
+    expect(resumed.run.id).toBe(created.run.id);
+    expect(reserveRevisionWithWriteFence).toHaveBeenCalledExactlyOnceWith(['messages']);
+  });
+
   it('refuses to resume a checkpoint when capture definitions changed', async () => {
     const state = await repository.createOrResume('changed-capture-search', 1);
     await repository.completeEntity(state.run.id, 'agents');

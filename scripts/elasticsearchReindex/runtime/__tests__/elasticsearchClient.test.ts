@@ -891,6 +891,43 @@ describe('FtsSearchReindexHttpClient', () => {
     expect(beforeMutation).not.toHaveBeenCalled();
   });
 
+  it('accepts unsafe-integer priorities on unrelated Elastic Cloud templates', async () => {
+    const index = 'lobehub-messages-v1';
+    const templateName = getRetiredIndexProtectionTemplateName(index);
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        index_templates: [
+          {
+            index_template: {
+              _meta: { index, owner: 'lobehub-fts-search-retirement' },
+              allow_auto_create: false,
+              index_patterns: [index],
+              priority: 1_000_000,
+              template: {},
+            },
+            name: templateName,
+          },
+          {
+            index_template: {
+              index_patterns: ['.elastic-cloud-*'],
+              priority: Number.MAX_SAFE_INTEGER + 1,
+              template: {},
+            },
+            name: 'elastic-cloud-defaults',
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new FtsSearchReindexHttpClient({
+      apiKey: 'secret-key',
+      url: 'https://search.example.com',
+    });
+
+    await expect(client.ensureRetiredIndexProtection(index)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('refuses to shadow an external template matching the retired index', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       response({

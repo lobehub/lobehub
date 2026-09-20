@@ -265,7 +265,7 @@ const outbox = new FtsSearchSyncOutboxRepository(db);
 const repository = new FtsSearchReindexFileRepository({
   readCaptureFingerprint: () => outbox.readCaptureFingerprint(),
   readHighWaterRevision: () => outbox.readHighWaterRevision(),
-  reserveRevisionWithWriteFence: () => outbox.reserveRevisionWithWriteFence(),
+  reserveRevisionWithWriteFence: (entities) => outbox.reserveRevisionWithWriteFence(entities),
   stateDirectory,
 });
 
@@ -839,9 +839,6 @@ const applyGeneration = async ({
       );
     },
   });
-  if (existing && existing.run.status !== 'ready_for_incremental_sync') {
-    await outbox.fenceSourceWrites();
-  }
   auditLogger = new FtsSearchReindexFileLogger({
     runId: prepared.run.id,
     sessionId: randomUUID(),
