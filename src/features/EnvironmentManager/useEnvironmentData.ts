@@ -1,4 +1,5 @@
-import useSWR from 'swr';
+import type { EnvironmentVisibility } from '@lobechat/types';
+import useSWR, { useSWRConfig } from 'swr';
 
 import {
   type SandboxEnvironmentSpecification,
@@ -11,9 +12,16 @@ const INSTANCES_KEY = 'sandbox-environment-instances';
 /**
  * Specifications. Answered from the database alone, so this settles fast and is
  * safe to render the page on.
+ *
+ * Keyed by pool, so the workspace page's two tabs do not overwrite each other's
+ * cache — and so switching back to one shows what it held rather than a
+ * skeleton. A mutation refreshes every pool, because publishing moves a row
+ * from one to the other.
  */
-export const useEnvironments = () =>
-  useSWR(ENVIRONMENTS_KEY, () => sandboxWorkspaceService.listEnvironments());
+export const useEnvironments = (visibility?: EnvironmentVisibility) =>
+  useSWR([ENVIRONMENTS_KEY, visibility ?? 'all'], () =>
+    sandboxWorkspaceService.listEnvironments(visibility ? { visibility } : undefined),
+  );
 
 /**
  * Working copies, joined with the state the execution plane holds for each.
@@ -41,8 +49,14 @@ export type SandboxEnvironment = NonNullable<
  * is shown and every copy of an edited specification has just become stale.
  */
 export const useEnvironmentActions = () => {
-  const { mutate: refreshEnvironments } = useEnvironments();
+  const { mutate: globalMutate } = useSWRConfig();
   const { mutate: refreshInstances } = useInstances();
+
+  // Every pool, not the one this caller happens to be looking at: publishing an
+  // environment takes it out of one tab and puts it in the other, so refreshing
+  // only the current key leaves the other tab showing a row that moved.
+  const refreshEnvironments = () =>
+    globalMutate((key) => Array.isArray(key) && key[0] === ENVIRONMENTS_KEY);
 
   return {
     copyInstance: async (params: { id: string; name: string; workingDirectory: string }) => {
@@ -54,6 +68,7 @@ export const useEnvironmentActions = () => {
       configuration?: SandboxEnvironmentSpecification;
       description?: string;
       name: string;
+      visibility?: EnvironmentVisibility;
     }) => {
       await sandboxWorkspaceService.createEnvironment(params);
       await refreshEnvironments();
@@ -66,6 +81,11 @@ export const useEnvironmentActions = () => {
     }) => {
       await sandboxWorkspaceService.createInstance(params);
       await refreshInstances();
+    },
+
+    setEnvironmentVisibility: async (params: { id: string; visibility: EnvironmentVisibility }) => {
+      await sandboxWorkspaceService.setEnvironmentVisibility(params);
+      await refreshEnvironments();
     },
 
     removeEnvironment: async (id: string) => {

@@ -3874,4 +3874,14 @@ When I am ___, I need ___
   'environments.form.pending':
     'Recorded, not run yet: nothing clones these sources or executes this setup. An instance still keeps its own directory between sessions.',
   'environments.refresh': 'Refresh',
+  'environments.emptyPublished': 'Nothing published to this workspace yet',
+  'environments.visibility.tabs.workspace': 'Workspace',
+  'environments.visibility.tabs.private': 'Private',
+  'environments.visibility.publish': 'Publish to Workspace',
+  'environments.visibility.publishConfirmTitle': 'Publish this environment to the workspace?',
+  'environments.visibility.publicTag': 'Published',
+  'environments.visibility.sharedByTag': 'Shared by {{name}}',
+  'environments.visibility.changeFailed': "Could not change this environment's visibility",
+  'environments.visibility.readonlyHint':
+    'Shared with you: you can run in this environment, but only its creator can change what it builds.',
 };

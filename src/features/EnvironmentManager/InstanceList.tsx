@@ -15,6 +15,12 @@ interface InstanceListProps {
   /** Whether the create form is showing. Owned by the caller so the row's
    *  "new instance" action can open the fold straight into it. */
   adding: boolean;
+  /**
+   * Whether the caller owns the environment these belong to. A published
+   * environment is one a colleague can run in, not one they can add copies to
+   * or delete copies from, so the controls go away rather than fail.
+   */
+  editable: boolean;
   instances: SandboxInstance[];
   onAddingChange: (adding: boolean) => void;
   onCreate: (params: { name: string; workingDirectory: string }) => Promise<void>;
@@ -31,7 +37,7 @@ interface InstanceListProps {
  * have them overwrite each other's work.
  */
 const InstanceList = memo<InstanceListProps>(
-  ({ adding, instances, onAddingChange, onCreate, onRemove, snapshotsUnavailable }) => {
+  ({ adding, editable, instances, onAddingChange, onCreate, onRemove, snapshotsUnavailable }) => {
     const { t } = useTranslation('setting');
 
     const [name, setName] = useState('');
@@ -101,24 +107,26 @@ const InstanceList = memo<InstanceListProps>(
                   ? formatSize(instance.snapshot.bytes)
                   : t('environments.instances.unused')}
             </Text>
-            <ActionIcon
-              icon={Trash2Icon}
-              size={'small'}
-              title={t('environments.instances.remove')}
-              // A rejected promise here used to disappear: the row stayed, and
-              // a refused delete was indistinguishable from a click that did
-              // nothing. The execution plane refuses while a conversation is
-              // still using the instance, and that reason is the one worth
-              // showing.
-              onClick={() =>
-                onRemove(instance.id).catch((error: unknown) =>
-                  toast.error(
-                    (error as { message?: string })?.message ||
-                      t('environments.instances.removeFailed'),
-                  ),
-                )
-              }
-            />
+            {editable && (
+              <ActionIcon
+                icon={Trash2Icon}
+                size={'small'}
+                title={t('environments.instances.remove')}
+                // A rejected promise here used to disappear: the row stayed, and
+                // a refused delete was indistinguishable from a click that did
+                // nothing. The execution plane refuses while a conversation is
+                // still using the instance, and that reason is the one worth
+                // showing.
+                onClick={() =>
+                  onRemove(instance.id).catch((error: unknown) =>
+                    toast.error(
+                      (error as { message?: string })?.message ||
+                        t('environments.instances.removeFailed'),
+                    ),
+                  )
+                }
+              />
+            )}
           </Flexbox>
         ))}
 
@@ -128,7 +136,7 @@ const InstanceList = memo<InstanceListProps>(
           </Text>
         )}
 
-        {adding ? (
+        {!editable ? null : adding ? (
           <Flexbox gap={6}>
             <Flexbox horizontal align={'center'} gap={8}>
               <Input

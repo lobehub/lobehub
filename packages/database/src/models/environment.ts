@@ -1,10 +1,10 @@
-import type { EnvironmentConfiguration } from '@lobechat/types';
+import type { EnvironmentConfiguration, EnvironmentVisibility } from '@lobechat/types';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import type { EnvironmentItem, NewEnvironment } from '../schemas';
 import { environments, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
-import { buildWorkspacePayload } from '../utils/workspace';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface EnvironmentCreator {
   avatar: string | null;
@@ -22,17 +22,14 @@ export type EnvironmentWithCreator = Pick<
   | 'name'
   | 'updatedAt'
   | 'userId'
+  | 'visibility'
   | 'workspaceId'
 > & { creator: EnvironmentCreator | null };
 
 /**
- * Rows this member owns. Always both the member AND the workspace the
- * environment was made in: `buildWorkspaceWhere` is wrong here — without a
- * `visibility` column it resolves a workspace to "every row in it", which is
- * exactly the sharing this resource must not have (see {@link EnvironmentModel}).
- *
- * Exported because instances inherit their scope from the environment and have
- * no owner column of their own, so they have to reach ownership through here.
+ * Rows this member OWNS — the filter every write goes through. A public
+ * environment is usable by the workspace but editable only by the member who
+ * made it, the same split the device rows draw.
  */
 export const environmentOwnership = (userId: string, workspaceId?: string) =>
   and(
@@ -41,26 +38,42 @@ export const environmentOwnership = (userId: string, workspaceId?: string) =>
   );
 
 /**
+ * Rows this member may SEE: their own, plus whatever the workspace publishes.
+ *
+ * Exported because instances have no owner column and inherit their scope from
+ * the environment, so every instance read has to reach visibility through here.
+ * That inheritance is the whole reason publishing is a deliberate act: an
+ * instance carries what a session left in it, so a published environment hands
+ * over its captured state too — a bargain identical to sharing a device, and
+ * one the confirmation dialog spells out before anyone makes it.
+ */
+export const environmentVisibility = (userId: string, workspaceId?: string) =>
+  buildWorkspaceWhere({ userId, workspaceId }, environments);
+
+/**
  * The declarative half of an environment: what it should contain, not what it
  * currently does. `configuration` is the specification — the sources to check
  * out, what to run to make them usable, what the work needs to run on — and
  * every materialization of it (a sandbox snapshot, a folder on a device) is a
  * cache that can be rebuilt from this row and thrown away.
  *
- * Reads and writes are scoped to the MEMBER, including inside a workspace where
- * `user_id` merely records the creator. That is narrower than most workspace
- * resources and deliberately so, by one step of reasoning worth spelling out:
- * an instance has no owner column and inherits its scope from here, and an
- * instance's captured state carries whatever a session left in a home directory
- * — including the token a CLI logged in with. So an environment a colleague can
- * select is an identity a colleague can borrow, and the borrower would see
- * nothing unusual, only a CLI that happens to be signed in.
+ * Writes are scoped to the MEMBER, including inside a workspace where `user_id`
+ * merely records the creator. Reads follow `visibility`, which defaults to
+ * private and starts there for every row that predates the column — so nothing
+ * became visible to anyone by the act of adding it.
  *
- * Sharing an environment is therefore not a matter of widening this filter.
- * `project_environments` exists to reference a specification without handing
- * over anything built from it — but taking that path needs `environments`'
- * instances to carry an owner of their own first, or a shared specification
- * quietly becomes a shared snapshot again.
+ * Publishing one is a real decision, by one step of reasoning worth spelling
+ * out: an instance has no owner column and inherits its scope from here, and an
+ * instance's captured state carries whatever a session left in a home directory
+ * — including the token a CLI logged in with. So a published environment is an
+ * identity a colleague can borrow, and the borrower would see nothing unusual,
+ * only a CLI that happens to be signed in. That is the same bargain a shared
+ * device makes, which is why it is offered the same way: private by default,
+ * published only through a dialog that names the consequence.
+ *
+ * `project_environments` remains the path for referencing a specification
+ * WITHOUT handing over anything built from it. Taking it needs instances to
+ * carry an owner of their own first.
  */
 export class EnvironmentModel {
   private db: LobeChatDatabase;
@@ -75,6 +88,8 @@ export class EnvironmentModel {
 
   private ownership = () => environmentOwnership(this.userId, this.workspaceId);
 
+  private visible = () => environmentVisibility(this.userId, this.workspaceId);
+
   /**
    * Environments with the member who made them.
    *
@@ -82,8 +97,13 @@ export class EnvironmentModel {
    * own — so a list that shows only names cannot say whose is whose. The join
    * is left because a removed account must not take its environments out of
    * the listing with it.
+   *
+   * `visibility` narrows to one pool, which is how the workspace page's two
+   * tabs are served. Narrowing to `private` still means "mine": the visibility
+   * filter already excludes everyone else's private rows, so the tab shows the
+   * caller's own unpublished environments rather than every unpublished one.
    */
-  query = async (): Promise<EnvironmentWithCreator[]> =>
+  query = async (visibility?: EnvironmentVisibility): Promise<EnvironmentWithCreator[]> =>
     this.db
       .select({
         configuration: environments.configuration,
@@ -99,14 +119,39 @@ export class EnvironmentModel {
         name: environments.name,
         updatedAt: environments.updatedAt,
         userId: environments.userId,
+        visibility: environments.visibility,
         workspaceId: environments.workspaceId,
       })
       .from(environments)
       .leftJoin(users, eq(environments.userId, users.id))
-      .where(this.ownership())
+      .where(
+        and(
+          this.visible(),
+          // Personal environments have no pool to belong to, so a visibility
+          // filter there would answer for a distinction that does not exist.
+          visibility && this.workspaceId ? eq(environments.visibility, visibility) : undefined,
+        ),
+      )
       .orderBy(asc(environments.createdAt));
 
+  /** Readable, not necessarily writable — a published environment resolves here for every member. */
   findById = async (id: string): Promise<EnvironmentItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(environments)
+      .where(and(eq(environments.id, id), this.visible()))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
+   * The caller's own row, or nothing. Every write goes through this, so a
+   * member who can see a published environment still cannot rename, respecify
+   * or delete it — the request fails closed as NOT_FOUND, exactly like an id
+   * that does not exist.
+   */
+  findOwnedById = async (id: string): Promise<EnvironmentItem | undefined> => {
     const [row] = await this.db
       .select()
       .from(environments)
@@ -120,6 +165,7 @@ export class EnvironmentModel {
     configuration?: EnvironmentConfiguration;
     description?: string | null;
     name: string;
+    visibility?: EnvironmentVisibility;
   }): Promise<EnvironmentItem> => {
     const [row] = await this.db
       .insert(environments)
@@ -135,6 +181,9 @@ export class EnvironmentModel {
             configuration: params.configuration ?? {},
             description: params.description ?? null,
             name: params.name,
+            // Private unless the caller says otherwise, and a personal
+            // environment has no other state to be in.
+            visibility: this.workspaceId ? (params.visibility ?? 'private') : 'private',
           },
         ),
       )
@@ -150,6 +199,28 @@ export class EnvironmentModel {
     const [row] = await this.db
       .update(environments)
       .set({ ...params, updatedAt: new Date() })
+      .where(and(eq(environments.id, id), this.ownership()))
+      .returning();
+
+    return row;
+  };
+
+  /**
+   * Publishing to the workspace, or taking it back.
+   *
+   * Owner-only and workspace-only: a personal environment has nobody to be
+   * visible to, and a member who merely uses a published one must not be able
+   * to unpublish it out from under everyone.
+   */
+  setVisibility = async (
+    id: string,
+    visibility: EnvironmentVisibility,
+  ): Promise<EnvironmentItem | undefined> => {
+    if (!this.workspaceId) return undefined;
+
+    const [row] = await this.db
+      .update(environments)
+      .set({ updatedAt: new Date(), visibility })
       .where(and(eq(environments.id, id), this.ownership()))
       .returning();
 

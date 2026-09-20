@@ -33,12 +33,27 @@ export const environments = pgTable(
     description: text('description'),
     /** Registration availability, not the running/stopped state of an instance. */
     enabled: boolean('enabled').notNull().default(true),
+    // Workspace rows only:
+    //   - 'private' → only the creator (`user_id`) sees it; other members'
+    //     environment lists and instance pickers never surface it.
+    //   - 'public'  → every workspace member sees it and may run in its
+    //     instances, the same bargain a shared device makes. What an instance
+    //     captured comes with it, home directory included, so publishing is
+    //     the deliberate act and 'private' is the default.
+    // Ignored for personal rows (`workspace_id IS NULL` — implicitly private
+    // to their owner). Filtered via `buildWorkspaceWhere`.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('private')
+      .notNull(),
     configuration: jsonb('configuration').$type<EnvironmentConfiguration>().notNull(),
     ...timestamps,
   },
   (t) => [
     index('environments_user_id_idx').on(t.userId),
     index('environments_workspace_id_idx').on(t.workspaceId),
+    // The listing's own shape: one workspace, one visibility, then the creator
+    // — which is the order `buildWorkspaceWhere` narrows in.
+    index('environments_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     // The name is what a person picks an environment by, so it has to identify
     // one. Scoped to the MEMBER rather than the workspace: `user_id` records
     // the creator here, and two colleagues may each keep a "data analysis"
