@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildServerAgentMemberRunner } from '@/server/modules/AgentRuntime/executorHelpers';
+
 import type { ToolExecutionContext } from '../../types';
 import { groupManagementRuntime } from '../groupManagement';
 
@@ -108,7 +110,7 @@ describe('groupManagementRuntime', () => {
         makeCtx(),
       );
       expect(run).toHaveBeenCalledWith({
-        members: [{ agentId: 'agent-a', instruction: 'do work' }],
+        members: [{ agentId: 'agent-a', instruction: 'do work', title: 'work' }],
         mode: 'isolated',
         onComplete: 'resume',
         timeout: 60_000,
@@ -136,8 +138,8 @@ describe('groupManagementRuntime', () => {
       );
       expect(run).toHaveBeenCalledWith({
         members: [
-          { agentId: 'a', instruction: 'ta' },
-          { agentId: 'b', instruction: 'tb' },
+          { agentId: 'a', instruction: 'ta', title: 'A' },
+          { agentId: 'b', instruction: 'tb', title: 'B' },
         ],
         mode: 'isolated',
         onComplete: 'resume',
@@ -149,5 +151,36 @@ describe('groupManagementRuntime', () => {
       const result = await runtime().executeAgentTasks({ tasks: [] } as any, makeCtx());
       expect(result.error?.code).toBe('INVALID_ARGUMENTS');
     });
+  });
+
+  it('forwards an isolated member title to execGroupMember', async () => {
+    const execGroupMember = vi.fn().mockResolvedValue({ started: true });
+    const agentMember = buildServerAgentMemberRunner(
+      {
+        execGroupMember,
+        messageModel: { create: vi.fn().mockResolvedValue({ id: 'group-tool' }) },
+        operationId: 'parent-operation',
+        topicId: 'topic-1',
+      } as any,
+      {
+        metadata: { agentId: 'supervisor', groupId: 'group-1', topicId: 'topic-1' },
+      } as any,
+      { id: 'tool-call' } as any,
+      'supervisor-message',
+    );
+
+    await agentMember!.run({
+      members: [{ agentId: 'worker-1', instruction: 'Detailed instruction', title: 'Task title' }],
+      mode: 'isolated',
+      onComplete: 'resume',
+    });
+
+    expect(execGroupMember).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'worker-1',
+        anchorMessageId: 'group-tool',
+        title: 'Task title',
+      }),
+    );
   });
 });
