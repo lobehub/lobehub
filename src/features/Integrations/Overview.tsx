@@ -31,6 +31,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       grid-template-columns: 1fr;
     }
   `,
+  upcoming: css`
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+
+    @media (width <= 720px) {
+      grid-template-columns: 1fr;
+    }
+  `,
 }));
 
 interface OverviewProps {
@@ -79,7 +88,7 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
 
       <Flexbox gap={10}>
         <span className={styles.sectionLabel}>{t('overview.comingSoon')}</span>
-        <div className={styles.list}>
+        <div className={styles.upcoming}>
           {UPCOMING_INTEGRATIONS.map((item) => (
             <IntegrationCard upcoming integration={item} key={item.id} />
           ))}

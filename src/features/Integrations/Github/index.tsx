@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
+import { Avatar, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, BookOpenIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
@@ -11,6 +11,7 @@ import urlJoin from 'url-join';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { scmService } from '@/services/scm';
 
 import { useGithubIntegration } from '../useGithubIntegration';
 import Automation from './Automation';
@@ -76,6 +77,7 @@ const KNOWN_ERRORS = new Set([
   'identity_taken',
   'installation_fetch_failed',
   'missing_installation',
+  'workspace_forbidden',
 ]);
 
 interface GithubIntegrationProps {
@@ -101,7 +103,8 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
     const installed = url.searchParams.get('installed');
     const error = url.searchParams.get('error');
     const account = url.searchParams.get('account');
-    if (!installed && !error) return;
+    const pending = url.searchParams.get('pending');
+    if (!installed && !error && !pending) return;
 
     if (installed === 'ok') toast.success(t('github.installResult.success', { account }));
     else if (installed === 'updated') toast.success(t('github.installResult.updated'));
@@ -109,8 +112,33 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       toast.error(t(`github.installResult.error.${error}` as any));
     } else if (error) toast.error(t('github.installResult.error.unknown', { code: error }));
 
-    for (const key of ['installed', 'error', 'account']) url.searchParams.delete(key);
+    // An installation that reached the callback without our state (started
+    // on github.com) is not bound until the user confirms it here, in a
+    // signed-in request of their own.
+    if (pending) {
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('github.pending.content', { account: account ?? pending }),
+        okText: t('github.pending.confirm'),
+        onOk: async () => {
+          try {
+            const bound = await scmService.connectInstallation({
+              installationId: pending,
+              provider: 'github',
+            });
+            toast.success(t('github.installResult.success', { account: bound.accountLogin }));
+            data.mutate();
+          } catch {
+            toast.error(t('github.pending.failed'));
+          }
+        },
+        title: t('github.pending.title'),
+      });
+    }
+
+    for (const key of ['installed', 'error', 'account', 'pending']) url.searchParams.delete(key);
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, ready]);
 
   if (data.error && data.isInitialLoading) {
