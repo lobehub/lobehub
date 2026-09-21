@@ -121,6 +121,7 @@ export interface ChatTopicMetadata {
     summarizedAt: string;
     version: number;
   };
+
   bot?: ChatTopicBotContext;
   boundDeviceId?: string;
   cronJobId?: string;
@@ -657,6 +658,8 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
    * `metadata.model` (measured dominant model from the usage roll-up).
    */
   model?: string | null;
+  projectId?: string | null;
+  projectWorkingDirectoryId?: string | null;
   provider?: string | null;
   /**
    * Start time of the topic's current run — the latest top-level running

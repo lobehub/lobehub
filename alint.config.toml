@@ -31,6 +31,17 @@ lobehub = "./packages/alint/rules"
 "lobehub/pmap-over-promise-all" = "warn"
 "lobehub/no-dynamic-import-in-server" = "warn"
 
+# Database models layer: cross-table write transactions belong in repositories.
+[[config.group]]
+files = [ "packages/database/src/models/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-transactions-in-models" = "warn"
+
 # Web client components.
 [[config.group]]
 files = [ "src/**/*.tsx" ]
@@ -87,6 +98,13 @@ files = [ "packages/alint/fixtures/no-mode-flags/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-mode-flags" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-transactions-in-models/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-transactions-in-models" = "warn"
 
 [[config.group]]
 files = [ "packages/alint/fixtures/test-the-exit-not-the-entry/**" ]

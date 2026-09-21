@@ -12,6 +12,7 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-dynamic-import-in-server` | same                                   | backend code uses static top-level imports      |
 | `no-effect-fetching`          | `src/**/*.tsx`                         | `data-fetching-architecture` skill              |
 | `no-mode-flags`               | `src/**/*.tsx`                         | `compose-atoms` skill                           |
+| `no-transactions-in-models`   | `packages/database/src/models`         | cross-table write transactions use repositories |
 | `test-the-exit-not-the-entry` | Vitest files                           | tests assert outcomes, not only that a mock ran |
 
 Scopes are declared as `[[config.group]]` entries in the root `alint.config.toml`. Never scope a rule with `includeFiles` inside `rule.alint.toml`: it only filters reports, so every file still runs (double the jobs), and it marks the rule uncacheable.

@@ -194,6 +194,10 @@ export interface CreateTopicParams {
   metadata?: ChatTopicMetadata;
   /** Pinned model snapshot, persisted to the top-level `topics.model` column. */
   model?: string | null;
+  /** Owning business project, independent of the execution directory. */
+  projectId?: string | null;
+  /** Project directory this conversation is pinned to as its execution context. */
+  projectWorkingDirectoryId?: string | null;
   provider?: string | null;
   /**
    * Agent-share visitor topics carry the CREATOR's `userId` (billing/data
@@ -629,6 +633,8 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                projectId: topics.projectId,
+                projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
                 model: topics.model,
                 provider: topics.provider,
                 runStartedAt: runStartedAtColumn,
@@ -708,6 +714,8 @@ export class TopicModel {
                 historySummary: topics.historySummary,
                 id: topics.id,
                 metadata: topics.metadata,
+                projectId: topics.projectId,
+                projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
                 model: topics.model,
                 provider: topics.provider,
                 runStartedAt: runStartedAtColumn,
@@ -781,6 +789,8 @@ export class TopicModel {
               historySummary: topics.historySummary,
               id: topics.id,
               metadata: topics.metadata,
+              projectId: topics.projectId,
+              projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
               model: topics.model,
               provider: topics.provider,
               runStartedAt: runStartedAtColumn,
@@ -1846,7 +1856,12 @@ export class TopicModel {
   ) => {
     return this.db.transaction(async (tx) => {
       const [existing] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(and(eq(topics.id, id), this.ownership()))
         .for('update');
@@ -2833,7 +2848,12 @@ export class TopicModel {
   ): Promise<boolean> {
     return db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(eq(topics.id, id))
         .for('update');
@@ -2873,7 +2893,12 @@ export class TopicModel {
   ): Promise<void> {
     await db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(eq(topics.id, id))
         .for('update');
@@ -2911,7 +2936,12 @@ export class TopicModel {
   ): Promise<void> {
     await db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ metadata: topics.metadata, status: topics.status })
+        .select({
+          metadata: topics.metadata,
+          projectId: topics.projectId,
+          projectWorkingDirectoryId: topics.projectWorkingDirectoryId,
+          status: topics.status,
+        })
         .from(topics)
         .where(eq(topics.id, id))
         .for('update');

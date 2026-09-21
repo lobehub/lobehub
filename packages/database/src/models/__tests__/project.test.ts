@@ -1,11 +1,15 @@
+import { randomUUID } from 'node:crypto';
+
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
+  environments,
   knowledgeBases,
   projectCompletionReviews,
+  projectEnvironments,
   projects,
   projectWorks,
   tasks,
@@ -15,9 +19,11 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
+import { EnvironmentModel } from '../environment';
 import type { CreateProjectInput } from '../project';
 import { ProjectModel } from '../project';
 import { TaskModel } from '../task';
+import { TopicModel } from '../topic';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'project-model-user';
@@ -41,6 +47,8 @@ describe('ProjectModel', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    await serverDB.delete(projectEnvironments);
+    await serverDB.delete(environments);
     await serverDB.delete(users);
   });
 
@@ -480,5 +488,56 @@ describe('ProjectModel', () => {
       instruction: 'Standalone',
     });
     expect(await model.getEnabledKnowledgeBaseIdsForTask(standaloneTask.id)).toEqual([]);
+  });
+
+  it('attaches environments and lists them per project in the owner scope', async () => {
+    const project = await createProject(model, { name: 'Env host' });
+    const environmentModel = new EnvironmentModel(serverDB, userId);
+    const env = await environmentModel.save({
+      name: 'Shared GitHub',
+      repositoryUrl: 'https://github.com/lobehub/lobehub',
+    });
+    expect(await model.listEnvironments(project.id)).toEqual([]);
+    await model.attachEnvironment(project.id, env.id);
+    await model.attachEnvironment(project.id, env.id);
+    expect(await model.listEnvironments(project.id)).toEqual([
+      expect.objectContaining({ id: env.id }),
+    ]);
+    await expect(otherModel.attachEnvironment(project.id, env.id)).rejects.toThrow('access denied');
+    await expect(otherModel.listEnvironments(project.id)).rejects.toThrow('access denied');
+    await expect(model.attachEnvironment(project.id, randomUUID())).rejects.toThrow(
+      'access denied',
+    );
+  });
+
+  it('lists project conversations with or without directories, retaining each agent', async () => {
+    const project = await createProject(model, { name: 'Topics host' });
+    const topicModel = new TopicModel(serverDB, userId);
+    const plain = await topicModel.create({
+      agentId: project.coordinatorAgentId,
+      projectId: project.id,
+      title: 'Planning',
+    });
+    const work = await topicModel.create({
+      agentId: project.coordinatorAgentId,
+      favorite: true,
+      metadata: { workingDirectory: '/work/repo' },
+      projectId: project.id,
+      title: 'Implementation',
+    });
+    const list = await model.listTopics(project.id);
+    expect(list).toHaveLength(2);
+    expect(list.find((t) => t.id === plain.id)).toMatchObject({
+      agentId: project.coordinatorAgentId,
+      projectWorkingDirectoryId: null,
+    });
+    expect(list.find((t) => t.id === work.id)).toMatchObject({
+      agentId: project.coordinatorAgentId,
+      createdAt: expect.any(Date),
+      favorite: true,
+      metadata: expect.objectContaining({ workingDirectory: '/work/repo' }),
+      userId,
+    });
+    await expect(otherModel.listTopics(project.id)).rejects.toThrow('access denied');
   });
 });
