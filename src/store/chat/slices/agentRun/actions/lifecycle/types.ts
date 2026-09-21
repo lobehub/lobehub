@@ -124,8 +124,8 @@ export interface AgentRunLifecycle {
   beforeRunComplete: (event: RunCompleteEvent) => Promise<void>;
   /**
    * Core completion, in a fixed order across all three runtimes:
-   * afterCompletion callbacks → completeOperation → markUnread → normalized
-   * `client.runtime.complete` signal → queue drain (success terminal only).
+   * completeOperation → markUnread → afterCompletion callbacks → queue drain
+   * (success terminal only) → normalized `client.runtime.complete` signal.
    * Returns whether a queued follow-up was scheduled (see {@link RunCompleteResult}).
    */
   completeRun: (event: RunCompleteEvent) => Promise<RunCompleteResult>;
