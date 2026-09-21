@@ -70,6 +70,8 @@ const manageUrl = (item: ScmInstallationItem) =>
     : `https://github.com/settings/installations/${item.installationId}`;
 
 interface ConnectionsProps {
+  /** False when the deployment has no GitHub App configured; connecting is impossible. */
+  configured: boolean;
   installations: ScmInstallationItem[];
   installHref?: string;
   /** Workspace rows say who enabled them; personal rows belong to the viewer. */
@@ -81,7 +83,7 @@ interface ConnectionsProps {
  * Repository changes and uninstalls happen on GitHub, so each row hands off
  * there.
  */
-const Connections = memo<ConnectionsProps>(({ installHref, installations, scope }) => {
+const Connections = memo<ConnectionsProps>(({ configured, installHref, installations, scope }) => {
   const { t } = useTranslation('integration');
 
   return (
@@ -100,6 +102,13 @@ const Connections = memo<ConnectionsProps>(({ installHref, installations, scope 
           {t('github.connections.connect')}
         </Button>
       </Flexbox>
+
+      {/* A dead button with no reason beside it is the worst of both. */}
+      {configured ? null : (
+        <Text style={{ fontSize: 13 }} type="secondary">
+          {t('github.connections.notConfigured')}
+        </Text>
+      )}
 
       {installations.length === 0 ? (
         <div className={styles.emptyState}>{t('github.connections.empty')}</div>

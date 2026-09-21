@@ -26,6 +26,8 @@ export default {
     'No account connected yet. Install the LobeHub app on your GitHub account or organization to get started.',
   'github.connections.enabledBy': 'Enabled by {{login}} · {{date}}',
   'github.connections.manageOnGithub': 'Manage on GitHub',
+  'github.connections.notConfigured':
+    'This deployment has no GitHub App configured, so connecting is unavailable. Ask an administrator to set the GitHub App environment variables.',
   'github.connections.organization': 'Organization',
   'github.connections.personal': 'Personal account',
   'github.connections.selectedRepositories': '{{count}} repositories',

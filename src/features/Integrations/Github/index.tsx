@@ -147,9 +147,12 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const { config, identity, installations } = data;
   // Absolute on purpose: on desktop the renderer lives on app://renderer and a
   // relative link never reaches the server route.
+  // The callback sends the user back here; inside a workspace that has to be
+  // the mirrored path, or they land on the personal surface instead.
+  const returnTo = workspaceSlug ? `/${workspaceSlug}${RETURN_TO}` : RETURN_TO;
   const installHref =
     config?.enabled && appOrigin
-      ? `${urlJoin(appOrigin, config.installPath)}?returnTo=${encodeURIComponent(RETURN_TO)}`
+      ? `${urlJoin(appOrigin, config.installPath)}?returnTo=${encodeURIComponent(returnTo)}`
       : undefined;
 
   const first = installations.at(-1);
@@ -218,7 +221,12 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       {data.isInitialLoading ? (
         <Skeleton height={96} />
       ) : (
-        <Connections installHref={installHref} installations={installations} scope={scope} />
+        <Connections
+          configured={!!config?.enabled}
+          installHref={installHref}
+          installations={installations}
+          scope={scope}
+        />
       )}
 
       <Automation />

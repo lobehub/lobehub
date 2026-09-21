@@ -19,6 +19,7 @@
   "github.connections.empty": "还没有连接账号。把 LobeHub 应用安装到你的 GitHub 账号或组织即可开始。",
   "github.connections.enabledBy": "由 {{login}} 启用 · {{date}}",
   "github.connections.manageOnGithub": "在 GitHub 上管理",
+  "github.connections.notConfigured": "当前部署没有配置 GitHub App，无法连接。请让管理员补上 GitHub App 的环境变量。",
   "github.connections.organization": "组织",
   "github.connections.personal": "个人账号",
   "github.connections.selectedRepositories": "{{count}} 个仓库",
