@@ -2,6 +2,7 @@ import { sandboxEnv } from '@/envs/sandbox';
 
 import { MarketSandboxProvider } from './providers/market';
 import { OnlyboxesSandboxProvider } from './providers/onlyboxes';
+import { TencentSandboxProvider } from './providers/tencent';
 import { SandboxMiddlewareService } from './service';
 import type {
   SandboxProvider,
@@ -22,6 +23,10 @@ const createSandboxProvider = (options: SandboxServiceOptions): SandboxProvider 
 
     case 'market': {
       return new MarketSandboxProvider(options);
+    }
+
+    case 'tencent': {
+      return new TencentSandboxProvider(options);
     }
   }
 };
