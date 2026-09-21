@@ -53,6 +53,7 @@
   "overview.status.notConnected": "未连接",
   "overview.title": "集成",
   "scmEvent.details": "详情",
+  "scmEvent.failedChecks": "{{count}} 项检查未通过",
   "scmEvent.hideLog": "收起日志",
   "scmEvent.kind.ci_failed": "CI 失败",
   "scmEvent.kind.review_changes_requested": "要求修改",

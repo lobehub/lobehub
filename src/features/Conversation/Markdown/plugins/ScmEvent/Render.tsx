@@ -11,7 +11,7 @@ import {
   ExternalLinkIcon,
   MessageSquareTextIcon,
 } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type MarkdownElementProps } from '../type';
@@ -25,7 +25,7 @@ import {
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
-    padding-block: 4px;
+    padding-block: 2px;
     padding-inline: 12px;
   `,
   check: css`
@@ -93,11 +93,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     user-select: none;
 
     display: inline-flex;
+    flex: none;
     gap: 2px;
     align-items: center;
 
     font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
+    color: ${cssVar.colorTextSecondary};
 
     &:hover {
       color: ${cssVar.colorText};
@@ -185,48 +186,55 @@ const PILL_STYLE: Record<string, string> = {
 const isFailed = (check: ScmEventCheck) =>
   check.conclusion !== undefined && check.conclusion !== 'success';
 
-const CheckRow = memo<{ check: ScmEventCheck }>(({ check }) => {
+/**
+ * One line per check: what leads the line (the event pill when this is the
+ * only check, else a pass/fail glyph), the name and conclusion, then the
+ * details link and the log toggle on the same line. The log itself folds
+ * out underneath.
+ */
+const CheckRow = memo<{ check: ScmEventCheck; leading?: ReactNode }>(({ check, leading }) => {
   const { t } = useTranslation('integration');
   const [open, setOpen] = useState(false);
   const failed = isFailed(check);
 
   return (
-    <Flexbox className={styles.check} gap={2}>
+    <Flexbox className={styles.check} gap={4}>
       <Flexbox horizontal align="center" gap={8}>
-        <Icon
-          className={failed ? styles.checkFailed : styles.checkPassed}
-          icon={failed ? CircleXIcon : CircleCheckIcon}
-          size="small"
-        />
-        <Text style={{ flex: 1, minWidth: 0 }} weight={500}>
+        {leading ?? (
+          <Icon
+            className={failed ? styles.checkFailed : styles.checkPassed}
+            icon={failed ? CircleXIcon : CircleCheckIcon}
+            size="small"
+          />
+        )}
+        <Text ellipsis style={{ minWidth: 0 }} weight={500}>
           {check.name}
         </Text>
-        <Text style={{ fontSize: 12 }} type="secondary">
-          {check.conclusion ?? ''}
-        </Text>
+        {check.conclusion ? (
+          <Text style={{ flex: 'none', fontSize: 12 }} type="secondary">
+            {check.conclusion}
+          </Text>
+        ) : null}
+        <span style={{ flex: 1 }} />
         {check.url ? (
           <a className={styles.link} href={check.url} rel="noreferrer" target="_blank">
-            <Flexbox horizontal align="center" gap={2}>
-              <Text style={{ fontSize: 12 }} type="secondary">
-                {t('scmEvent.details')}
-              </Text>
-              <Icon icon={ExternalLinkIcon} size={12} />
-            </Flexbox>
+            <Text style={{ fontSize: 12 }} type="secondary">
+              {t('scmEvent.details')}
+            </Text>
+            <Icon icon={ExternalLinkIcon} size={12} />
           </a>
         ) : null}
-      </Flexbox>
-      {check.log ? (
-        <div style={{ paddingInlineStart: 24 }}>
+        {check.log ? (
           <span
             className={cx(styles.logToggle, open && styles.logToggleOpen)}
             onClick={() => setOpen((v) => !v)}
           >
-            <Icon icon={ChevronRightIcon} size={12} />
             {open ? t('scmEvent.hideLog') : t('scmEvent.showLog')}
+            <Icon icon={ChevronRightIcon} size={12} />
           </span>
-          {open ? <pre className={styles.log}>{check.log}</pre> : null}
-        </div>
-      ) : null}
+        ) : null}
+      </Flexbox>
+      {check.log && open ? <pre className={styles.log}>{check.log}</pre> : null}
     </Flexbox>
   );
 });
@@ -241,6 +249,7 @@ const ReviewRow = memo<{ review: ScmEventReview }>(({ review }) => {
   const author = review.url ? (
     <a className={styles.link} href={review.url} rel="noreferrer" target="_blank">
       @{review.author}
+      <Icon icon={ExternalLinkIcon} size={12} />
     </a>
   ) : (
     `@${review.author}`
@@ -268,9 +277,10 @@ ReviewRow.displayName = 'ScmEventReviewRow';
 
 /**
  * A GitHub-styled card for the wake-up message the SCM integration injects
- * into a conversation: the pull request in the header with the event as a
- * pill, then the failing checks (log tails fold out) or the review
- * feedback, and the instruction the agent was given as a footer.
+ * into a conversation: the pull request in the header, then one status
+ * line that carries the event (as a pill) together with what it is about —
+ * the failing check with its details link and log toggle, or the reviewers
+ * — and the instruction the agent was given as a footer.
  */
 const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node }) => {
   const { t } = useTranslation('integration');
@@ -283,6 +293,15 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
     : (attrs.url ?? '');
   const kindLabel = t(`scmEvent.kind.${attrs.kind}` as any, { defaultValue: attrs.kind });
   const subtitle = [attrs.branch, attrs.sha].filter(Boolean).join(' @ ');
+  const pill = (
+    <span className={cx(styles.pill, PILL_STYLE[attrs.kind] ?? styles.pillNeutral)}>
+      {kindLabel}
+    </span>
+  );
+
+  const single = parsed.checks.length === 1 ? parsed.checks[0] : null;
+  const many = parsed.checks.length > 1 ? parsed.checks : null;
+  const reviewers = [...new Set(parsed.reviews.map((review) => `@${review.author}`))];
 
   return (
     <div className={styles.root}>
@@ -307,21 +326,35 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
             </Text>
           ) : null}
         </Flexbox>
-        <span className={cx(styles.pill, PILL_STYLE[attrs.kind] ?? styles.pillNeutral)}>
-          {kindLabel}
-        </span>
       </Flexbox>
 
-      {parsed.checks.length > 0 || parsed.reviews.length > 0 ? (
-        <div className={styles.body}>
-          {parsed.checks.map((check, index) => (
-            <CheckRow check={check} key={`${check.name}-${index}`} />
-          ))}
-          {parsed.reviews.map((review, index) => (
-            <ReviewRow key={`${review.author}-${index}`} review={review} />
-          ))}
-        </div>
-      ) : null}
+      <div className={styles.body}>
+        {single ? <CheckRow check={single} leading={pill} /> : null}
+        {many ? (
+          <>
+            <Flexbox horizontal align="center" className={styles.check} gap={8}>
+              {pill}
+              <Text type="secondary">
+                {t('scmEvent.failedChecks', {
+                  count: many.filter((check) => isFailed(check)).length,
+                })}
+              </Text>
+            </Flexbox>
+            {many.map((check, index) => (
+              <CheckRow check={check} key={`${check.name}-${index}`} />
+            ))}
+          </>
+        ) : null}
+        {!single && !many ? (
+          <Flexbox horizontal align="center" className={styles.check} gap={8}>
+            {pill}
+            {reviewers.length > 0 ? <Text type="secondary">{reviewers.join(' · ')}</Text> : null}
+          </Flexbox>
+        ) : null}
+        {parsed.reviews.map((review, index) => (
+          <ReviewRow key={`${review.author}-${index}`} review={review} />
+        ))}
+      </div>
 
       {parsed.instruction ? <div className={styles.instruction}>{parsed.instruction}</div> : null}
     </div>

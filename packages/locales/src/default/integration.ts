@@ -67,6 +67,7 @@ export default {
   'overview.status.notConnected': 'Not connected',
   'overview.title': 'Integrations',
   'scmEvent.details': 'Details',
+  'scmEvent.failedChecks': '{{count}} checks failed',
   'scmEvent.hideLog': 'Hide log',
   'scmEvent.kind.ci_failed': 'CI failed',
   'scmEvent.kind.review_changes_requested': 'Changes requested',
