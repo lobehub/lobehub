@@ -97,6 +97,17 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
 
   const environments = data?.environments ?? [];
   const instances = instanceData?.instances ?? [];
+  /**
+   * With nothing to act on, the empty card below is the whole page: it carries
+   * the icon, the explanation and its own create button. A row above it would
+   * add a second create, a refresh with nothing to refresh, and a count of zero
+   * beside a heading that already says there are none.
+   *
+   * Tabs are the exception and the reason this is not simply "hide when empty":
+   * an empty pool still has another pool to switch back to, and that control
+   * lives here.
+   */
+  const showToolbar = !!tabs || !data || environments.length > 0;
   const selected = selectedId
     ? environments.find((environment) => environment.id === selectedId)
     : undefined;
@@ -122,40 +133,39 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   return (
     <Flexbox gap={16}>
       {/* Whatever narrows the list on the left, whatever acts on it on the
-          right. A page with one pool has no tabs, so the count takes that side
-          — it is the one fact about the list that the list itself does not
-          state, and it keeps the row from being two buttons against a blank. */}
-      <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        {/* Zero counts too, once the fetch has settled: "no environments" is an
-            answer, and withholding it left this side of the row blank in exactly
-            the case that needed filling. Before the first result the count is
-            unknown rather than zero, so the slot holds a placeholder the same
-            width — the row is never empty and nothing shifts when the real
-            count lands. */}
-        {tabs ??
-          (data ? (
-            <Text fontSize={12} type={'secondary'} weight={500}>
-              {t('environments.total', { count: environments.length })}
-            </Text>
-          ) : (
-            <Skeleton height={14} width={72} />
-          ))}
-        <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-          <Button
-            icon={<Icon icon={RefreshCwIcon} />}
-            loading={isValidating || instancesValidating}
-            title={t('environments.refresh')}
-            onClick={refresh}
-          />
-          <Button
-            icon={<Icon icon={PlusIcon} />}
-            type={'primary'}
-            onClick={() => openCreateEnvironmentModal(visibility)}
-          >
-            {t('environments.create')}
-          </Button>
+          right. */}
+      {showToolbar && (
+        <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+          {/* The count, which is the one fact about the list that the list does
+            not state about itself. It never reads zero: the row it sits in is
+            gone by then. Before the first result the number is unknown rather
+            than zero, so a placeholder of the same width holds the slot and
+            nothing shifts when the count lands. */}
+          {tabs ??
+            (data ? (
+              <Text fontSize={12} type={'secondary'} weight={500}>
+                {t('environments.total', { count: environments.length })}
+              </Text>
+            ) : (
+              <Skeleton height={14} width={72} />
+            ))}
+          <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+            <Button
+              icon={<Icon icon={RefreshCwIcon} />}
+              loading={isValidating || instancesValidating}
+              title={t('environments.refresh')}
+              onClick={refresh}
+            />
+            <Button
+              icon={<Icon icon={PlusIcon} />}
+              type={'primary'}
+              onClick={() => openCreateEnvironmentModal(visibility)}
+            >
+              {t('environments.create')}
+            </Button>
+          </Flexbox>
         </Flexbox>
-      </Flexbox>
+      )}
 
       <AsyncBoundary
         data={data}
