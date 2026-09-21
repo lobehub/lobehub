@@ -310,66 +310,282 @@ describe('ExpertiseModel', () => {
     expect(insights.map(({ id }) => id)).toEqual([workspaceOneInsightId]);
     expect(foreignInsight.status).toBe('active');
   });
-  it("lists the standards distilled into the owner's own domains", async () => {
-    const otherUserId = 'expertise-standards-other-user';
+  const seedRuleGroup = async () => {
+    const otherUserId = 'expertise-rules-other-user';
     await serverDB.insert(users).values({ id: otherUserId });
     await serverDB.insert(expertiseDomains).values([
       {
         anchorChosenAt: new Date(),
         domainFilter: '交付标准',
-        id: 'standards-domain',
-        slug: 'standards-domain',
-        title: '我的交付标准',
+        id: 'rules-domain',
+        slug: 'rules-domain',
+        title: '我的交付审美',
+        userId,
+      },
+      {
+        anchorChosenAt: new Date(),
+        domainFilter: '设计体系',
+        id: 'rules-domain-2',
+        slug: 'rules-domain-2',
+        title: 'LobeHub 设计体系',
         userId,
       },
       {
         anchorChosenAt: new Date(),
         domainFilter: '别人的标准',
-        id: 'standards-foreign-domain',
-        slug: 'standards-foreign-domain',
-        title: 'Foreign standards',
+        id: 'rules-foreign-domain',
+        slug: 'rules-foreign-domain',
+        title: 'Foreign rules',
         userId: otherUserId,
       },
     ]);
     await serverDB.insert(expertiseBindings).values([
-      { boundUserId: userId, domainId: 'standards-domain' },
-      { boundUserId: otherUserId, domainId: 'standards-foreign-domain' },
+      { boundUserId: userId, domainId: 'rules-domain', sortOrder: 0 },
+      { boundUserId: userId, domainId: 'rules-domain-2', sortOrder: 1 },
+      { boundUserId: otherUserId, domainId: 'rules-foreign-domain' },
     ]);
     await serverDB.insert(expertiseLessons).values([
       {
         code: 'P-01',
-        domainId: 'standards-domain',
+        domainId: 'rules-domain',
+        exampleCount: 1,
         hitCount: 2,
+        hitRunCount: 5,
         id: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b101',
         polarity: 'rule',
         sections: [{ body: '颜色取自设计系统变量', key: 'rule' }],
+        sortOrder: 1,
         title: '颜色取自设计系统变量',
       },
       {
         code: 'P-02',
-        domainId: 'standards-domain',
+        domainId: 'rules-domain',
+        exampleCount: 3,
         hitCount: 7,
+        hitRunCount: 9,
         id: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b102',
         polarity: 'rule',
         sections: [{ body: '证据要拍成功路径', key: 'rule' }],
+        sortOrder: 0,
         title: '证据要拍成功路径',
       },
       {
         code: 'P-01',
-        domainId: 'standards-foreign-domain',
+        domainId: 'rules-foreign-domain',
         id: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b103',
         polarity: 'rule',
-        sections: [{ body: 'Foreign standard', key: 'rule' }],
-        title: 'Foreign standard',
+        sections: [{ body: 'Foreign rule', key: 'rule' }],
+        title: 'Foreign rule',
       },
     ]);
+    return {
+      first: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b102',
+      second: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b101',
+    };
+  };
 
-    const groups = await new ExpertiseModel(serverDB, userId).listStandards();
+  it("lists the rules in the owner's own groups, in the owner's order", async () => {
+    await seedRuleGroup();
 
-    expect(groups).toHaveLength(1);
-    expect(groups[0].domain.title).toBe('我的交付标准');
-    // Most violated first — that is the reviewer's own measure of what keeps costing a round.
-    expect(groups[0].standards.map(({ code }) => code)).toEqual(['P-02', 'P-01']);
+    const groups = await new ExpertiseModel(serverDB, userId).listRules();
+
+    expect(groups.map((g) => g.domain.title)).toEqual(['我的交付审美', 'LobeHub 设计体系']);
+    // The reviewer's own order, not hit count: they said the order matters.
+    expect(groups[0].rules.map(({ code }) => code)).toEqual(['P-02', 'P-01']);
+    expect(groups[0].rules[0].enforcement).toBe('remind');
+    expect(groups[0].scopes).toEqual([{ id: userId, kind: 'user', title: null }]);
+  });
+
+  it('reads rules from before the columns existed as unplaced reminders', async () => {
+    const { first, second } = await seedRuleGroup();
+    await serverDB.insert(expertiseLessons).values({
+      code: 'P-03',
+      domainId: 'rules-domain',
+      enforcement: null,
+      id: '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b104',
+      polarity: 'rule',
+      sections: [{ body: '旧规矩', key: 'rule' }],
+      sortOrder: null,
+      title: '旧规矩',
+    });
+
+    const [group] = await new ExpertiseModel(serverDB, userId).listRules();
+
+    // Null sorts after every placed rule rather than jumping to the top.
+    expect(group.rules.map(({ id }) => id)).toEqual([
+      first,
+      second,
+      '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b104',
+    ]);
+    expect(group.rules[2].enforcement).toBe('remind');
+  });
+
+  it('files a hand-written rule at the top of its group with the next code', async () => {
+    await seedRuleGroup();
+    const model = new ExpertiseModel(serverDB, userId);
+
+    const created = await model.createRule({
+      body: '主行只留一个操作',
+      domainId: 'rules-domain',
+      enforcement: 'block',
+      title: '次要操作收进「…」',
+    });
+
+    expect(created?.code).toBe('P-03');
+    const [group] = await model.listRules();
+    expect(group.rules.map(({ code }) => code)).toEqual(['P-03', 'P-02', 'P-01']);
+    expect(group.rules[0]).toMatchObject({
+      createdByUserId: userId,
+      enforcement: 'block',
+      reasonKind: 'taste',
+      reasonSource: 'reviewer',
+      sections: [
+        { body: '次要操作收进「…」', key: 'rule' },
+        { body: '主行只留一个操作', key: 'why' },
+      ],
+    });
+    // A foreign group is not a place the caller can write into.
+    expect(await model.createRule({ domainId: 'rules-foreign-domain', title: 'x' })).toBeNull();
+  });
+
+  it('versions a rewording but not a switch flip', async () => {
+    const { first } = await seedRuleGroup();
+    const model = new ExpertiseModel(serverDB, userId);
+
+    await model.updateRule(first, { enforcement: 'block', reasonKind: 'mechanism' });
+    let lesson = await model.findLesson(first);
+    expect(lesson).toMatchObject({
+      currentRevision: 1,
+      enforcement: 'block',
+      reasonKind: 'mechanism',
+    });
+
+    await model.updateRule(first, {
+      sections: { limits: '被验的就是报错态本身时除外' },
+      title: '证据要拍成功路径本身',
+    });
+    lesson = await model.findLesson(first);
+    expect(lesson?.title).toBe('证据要拍成功路径本身');
+    expect(lesson?.currentRevision).toBe(2);
+    expect(lesson?.sections).toEqual([
+      { body: '证据要拍成功路径本身', key: 'rule' },
+      { body: '被验的就是报错态本身时除外', key: 'limits' },
+    ]);
+    const revisions = await model.listLessonRevisions(first);
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]).toMatchObject({ changedBy: 'user', kind: 'user-feedback', revision: 2 });
+  });
+
+  it('writes back a dragged order for one group only', async () => {
+    const { first, second } = await seedRuleGroup();
+    const model = new ExpertiseModel(serverDB, userId);
+
+    await model.reorderRules('rules-domain', [
+      second,
+      first,
+      '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b103',
+    ]);
+
+    const [group] = await model.listRules();
+    expect(group.rules.map(({ id }) => id)).toEqual([second, first]);
+    // The foreign rule named in the list was neither moved nor touched.
+    const [foreign] = await serverDB
+      .select({ domainId: expertiseLessons.domainId, sortOrder: expertiseLessons.sortOrder })
+      .from(expertiseLessons)
+      .where(eq(expertiseLessons.id, '0d3e1a5c-6f52-4c2e-8f2a-9f2d3f26b103'));
+    expect(foreign).toEqual({ domainId: 'rules-foreign-domain', sortOrder: 0 });
+  });
+
+  const seedHitOn = async (lessonId: string) => {
+    await serverDB.insert(expertiseRuns).values({
+      actorId: 'agent-1',
+      actorType: 'agent',
+      domainId: 'rules-domain',
+      id: runId,
+      runIndex: 1,
+      subjectId: 'x',
+      subjectType: 'standalone',
+      userId,
+    });
+    await serverDB.insert(expertiseHits).values({
+      domainId: 'rules-domain',
+      example: '你应该用 cssVar 的吧',
+      id: hitId,
+      lessonId,
+      outcome: 'violation',
+      runId,
+    });
+  };
+
+  it('moves an unencumbered rule in place with a fresh code', async () => {
+    const { first } = await seedRuleGroup();
+    const model = new ExpertiseModel(serverDB, userId);
+
+    expect(await model.moveRule(first, 'rules-domain-2')).toEqual({
+      domainId: 'rules-domain-2',
+      id: first,
+    });
+
+    const groups = await model.listRules();
+    expect(groups[0].rules.map(({ id }) => id)).not.toContain(first);
+    expect(groups[1].rules.map(({ code, id }) => ({ code, id }))).toEqual([
+      { code: 'P-01', id: first },
+    ]);
+  });
+
+  it('re-files a rule with evidence as a copy that still reads its sources', async () => {
+    const { first } = await seedRuleGroup();
+    await seedHitOn(first);
+    const model = new ExpertiseModel(serverDB, userId);
+
+    const moved = await model.moveRule(first, 'rules-domain-2');
+    expect(moved?.id).not.toBe(first);
+
+    const groups = await model.listRules();
+    // The original is hidden, not archived: it moved, it did not stop applying.
+    expect(groups.flatMap((g) => g.rules.map(({ id }) => id))).not.toContain(first);
+    expect(groups[1].rules[0]).toMatchObject({
+      code: 'P-01',
+      hitCount: 7,
+      id: moved!.id,
+      title: '证据要拍成功路径',
+    });
+    expect((await model.listLessonSources(moved!.id)).map(({ example }) => example)).toEqual([
+      '你应该用 cssVar 的吧',
+    ]);
+    expect(await model.findLesson(first)).toMatchObject({
+      rejectedReason: `moved-to:${moved!.id}`,
+      status: 'rejected',
+    });
+  });
+
+  it('folds one rule into another and archives the source with a pointer back', async () => {
+    const { first, second } = await seedRuleGroup();
+    const model = new ExpertiseModel(serverDB, userId);
+
+    await seedHitOn(second);
+    await model.mergeRules(second, first);
+
+    const target = await model.findLesson(first);
+    expect(target).toMatchObject({
+      currentRevision: 2,
+      exampleCount: 4,
+      generalizedFromIds: [second],
+      hitCount: 9,
+      hitRunCount: 14,
+    });
+    const source = await model.findLesson(second);
+    expect(source).toMatchObject({ rejectedReason: `merged-into:${first}`, status: 'retired' });
+    expect(source?.retiredAt).not.toBeNull();
+    const revisions = await model.listLessonRevisions(first);
+    expect(revisions[0]).toMatchObject({ feedback: '颜色取自设计系统变量', kind: 'generalize' });
+    // The target reads the source's evidence through its lineage; the hit itself did not move.
+    expect((await model.listLessonSources(first)).map(({ example }) => example)).toEqual([
+      '你应该用 cssVar 的吧',
+    ]);
+    // Both still come back: the archive is part of the list.
+    const [group] = await model.listRules();
+    expect(group.rules.map(({ status }) => status)).toEqual(['active', 'retired']);
   });
 
   it('counts only the rejected rounds no distillation run has read', async () => {

@@ -207,6 +207,11 @@ export const UserLabSchema = z.object({
    */
   enableProjects: z.boolean().optional(),
   /**
+   * show the "my rules" page under memory: the delivery rules distilled from rejected
+   * acceptance rounds, with ordering, grouping and enforcement controls
+   */
+  enableMemoryRules: z.boolean().optional(),
+  /**
    * show the per-agent self-learning (expertise) page and its sidebar entry
    */
   enableSelfLearning: z.boolean().optional(),

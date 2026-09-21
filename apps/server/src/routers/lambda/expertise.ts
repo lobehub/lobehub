@@ -1,3 +1,4 @@
+import { EXPERTISE_ENFORCEMENTS } from '@lobechat/types';
 import { z } from 'zod';
 
 import {
@@ -222,32 +223,107 @@ export const expertiseRouter = router({
     }),
 
   /**
-   * The reviewer's own delivery standards, plus how many rejected rounds are still waiting to be
+   * The reviewer's own rules, grouped, plus how many rejected rounds are still waiting to be
    * read. The backlog travels with the list because an empty page has to say *why* it is empty —
    * distillation only fires when a later round lands, so old rejections never arrive on their own.
    */
-  listStandards: expertiseProcedure.query(async ({ ctx }) => {
+  listRules: expertiseProcedure.query(async ({ ctx }) => {
     const [groups, backlogRounds] = await Promise.all([
-      ctx.expertiseModel.listStandards(),
+      ctx.expertiseModel.listRules(),
       ctx.expertiseModel.countUndistilledRejectionRounds(),
     ]);
     return { backlogRounds, groups };
   }),
 
-  /** The rejections one standard was distilled from, linked back to the acceptance round. */
-  standardSources: expertiseProcedure
+  /** The rejections one rule was distilled from, linked back to the acceptance round. */
+  ruleSources: expertiseProcedure
     .input(z.object({ lessonId: z.string() }))
     .query(async ({ ctx, input }) => ctx.expertiseModel.listLessonSources(input.lessonId)),
 
-  /** The edits one standard has been through, so a reader can see who narrowed it and when. */
-  standardRevisions: expertiseProcedure
+  /** The edits one rule has been through, so a reader can see who narrowed it and when. */
+  ruleRevisions: expertiseProcedure
     .input(z.object({ lessonId: z.string() }))
     .query(async ({ ctx, input }) => ctx.expertiseModel.listLessonRevisions(input.lessonId)),
 
-  /** Puts an archived standard back into practice. */
+  /** A rule the reviewer writes down by hand. */
+  createRule: expertiseWriteProcedure
+    .input(
+      z.object({
+        body: z.string().max(4000).optional(),
+        compilability: z.enum(['compiled', 'compilable', 'not-compilable']).optional(),
+        domainId: z.string(),
+        enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
+        title: z.string().min(1).max(500),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ctx.expertiseModel.createRule(input)),
+
+  /** Field-level edits from the rule document; wording edits are versioned. */
+  updateRule: expertiseWriteProcedure
+    .input(
+      z.object({
+        compilability: z.enum(['compiled', 'compilable', 'not-compilable']).optional(),
+        enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
+        lessonId: z.string(),
+        reasonKind: z.enum(['mechanism', 'taste']).optional(),
+        sections: z
+          .object({
+            how: z.string().max(8000).nullable().optional(),
+            limits: z.string().max(4000).nullable().optional(),
+            rule: z.string().max(4000).nullable().optional(),
+            why: z.string().max(4000).nullable().optional(),
+          })
+          .optional(),
+        title: z.string().min(1).max(500).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { lessonId, ...patch } = input;
+      return ctx.expertiseModel.updateRule(lessonId, patch);
+    }),
+
+  /** The order the reviewer dragged one group into. */
+  reorderRules: expertiseWriteProcedure
+    .input(z.object({ domainId: z.string(), lessonIds: z.array(z.string()).max(500) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseModel.reorderRules(input.domainId, input.lessonIds),
+    ),
+
+  /** Files a rule under another group. */
+  moveRule: expertiseWriteProcedure
+    .input(z.object({ domainId: z.string(), lessonId: z.string() }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseModel.moveRule(input.lessonId, input.domainId),
+    ),
+
+  /** Folds one rule into another; the source is archived with a pointer to where it went. */
+  mergeRules: expertiseWriteProcedure
+    .input(z.object({ fromId: z.string(), intoId: z.string() }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseModel.mergeRules(input.fromId, input.intoId)),
+
+  /** Puts an archived rule back into practice. */
   restoreLesson: expertiseWriteProcedure
     .input(z.object({ lessonId: z.string() }))
     .mutation(async ({ ctx, input }) => ctx.expertiseModel.restoreLesson(input.lessonId)),
+
+  /** A group the reviewer opens by hand; it mounts on them, so every acceptance can add to it. */
+  createRuleGroup: expertiseWriteProcedure
+    .input(z.object({ gate: z.string().min(1).max(1000), title: z.string().min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => ctx.expertiseModel.createRuleGroup(input)),
+
+  /** Renames a group or rewrites its gate question. */
+  updateRuleGroup: expertiseWriteProcedure
+    .input(
+      z.object({
+        domainId: z.string(),
+        gate: z.string().min(1).max(1000).optional(),
+        title: z.string().min(1).max(200).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { domainId, ...patch } = input;
+      return ctx.expertiseModel.updateRuleGroup(domainId, patch);
+    }),
 
   /** Step 1 of creation: interpret the brief into an editable draft. Nothing is persisted. */
   draftDomain: expertiseWriteProcedure

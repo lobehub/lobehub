@@ -1,1 +1,1 @@
-export { default } from '@/features/Standards';
+export { default } from '@/features/MemoryRules';

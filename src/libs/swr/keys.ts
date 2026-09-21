@@ -1133,15 +1133,15 @@ export const expertiseKeys = {
   ]),
   lesson: def('expertise:lesson', (lessonId: string) => ['expertise:lesson', lessonId]),
   overview: def('expertise:overview', (agentId: string) => ['expertise:overview', agentId]),
-  standardRevisions: def('expertise:standardRevisions', (lessonId: string) => [
-    'expertise:standardRevisions',
+  ruleRevisions: def('expertise:ruleRevisions', (lessonId: string) => [
+    'expertise:ruleRevisions',
     lessonId,
   ]),
-  standardSources: def('expertise:standardSources', (lessonId: string) => [
-    'expertise:standardSources',
+  ruleSources: def('expertise:ruleSources', (lessonId: string) => [
+    'expertise:ruleSources',
     lessonId,
   ]),
-  standards: def('expertise:standards', () => ['expertise:standards']),
+  rules: def('expertise:rules', () => ['expertise:rules']),
 };
 
 export const verifyKeys = {

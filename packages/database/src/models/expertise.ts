@@ -1,8 +1,10 @@
 import type {
   ExpertiseAnchorCandidate,
   ExpertiseCanonEntry,
+  ExpertiseEnforcement,
   ExpertiseLayerDefinition,
   ExpertiseLessonSection,
+  ExpertiseReasonKind,
 } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
@@ -16,6 +18,7 @@ import {
   expertiseLessonRevisions,
   expertiseLessons,
   expertiseRuns,
+  projects,
   topics,
   verifyCheckResults,
   verifyRuns,
@@ -185,46 +188,80 @@ export class ExpertiseModel {
   };
 
   /**
-   * The reviewer's delivery standards — every always-on domain with the standards distilled into
-   * it, newest evidence first.
+   * The reviewer's rules — every always-on domain as a group, with the rules filed in it and
+   * where the group takes effect.
    *
    * Reads the same binding arm the distillation writes through, so what this returns is exactly
-   * what an acceptance without a project would add to. Ordered by how often the standard has been
-   * violated, because that is the reviewer's own measure of what keeps costing them a round.
+   * what an acceptance without a project would add to. Rules come back in the reviewer's own
+   * order (`sortOrder`, then creation) because they told us the order matters; the page does not
+   * re-rank them by hit count.
    */
-  listStandards = async () => {
+  listRules = async () => {
     const bound = await this.listDomainsForOwner();
     const domainIds = bound.map(({ domain }) => domain.id);
     if (domainIds.length === 0) return [];
 
-    const lessons = await this.db
-      .select({
-        code: expertiseLessons.code,
-        compilability: expertiseLessons.compilability,
-        createdAt: expertiseLessons.createdAt,
-        domainId: expertiseLessons.domainId,
-        exampleCount: expertiseLessons.exampleCount,
-        hitCount: expertiseLessons.hitCount,
-        hitRunCount: expertiseLessons.hitRunCount,
-        id: expertiseLessons.id,
-        lastHitAt: expertiseLessons.lastHitAt,
-        reasonKind: expertiseLessons.reasonKind,
-        reasonSource: expertiseLessons.reasonSource,
-        retiredAt: expertiseLessons.retiredAt,
-        sections: expertiseLessons.sections,
-        status: expertiseLessons.status,
-        title: expertiseLessons.title,
-      })
-      .from(expertiseLessons)
-      .where(
-        and(
-          inArray(expertiseLessons.domainId, domainIds),
-          // Retired ones are kept and returned: the page files them under an archive the reader
-          // can reopen, because "I already told it to stop using this" is itself worth seeing.
-          inArray(expertiseLessons.status, ['active', 'retired']),
+    const [lessons, bindings] = await Promise.all([
+      this.db
+        .select({
+          code: expertiseLessons.code,
+          compilability: expertiseLessons.compilability,
+          createdAt: expertiseLessons.createdAt,
+          createdByUserId: expertiseLessons.createdByUserId,
+          domainId: expertiseLessons.domainId,
+          // Rows that predate the column hold null; they have only ever been reminders.
+          enforcement: sql<ExpertiseEnforcement>`coalesce(${expertiseLessons.enforcement}, 'remind')`,
+          exampleCount: expertiseLessons.exampleCount,
+          falsePositiveCount: expertiseLessons.falsePositiveCount,
+          generalizedFromIds: expertiseLessons.generalizedFromIds,
+          hitCount: expertiseLessons.hitCount,
+          hitRunCount: expertiseLessons.hitRunCount,
+          id: expertiseLessons.id,
+          lastHitAt: expertiseLessons.lastHitAt,
+          reasonKind: expertiseLessons.reasonKind,
+          reasonSource: expertiseLessons.reasonSource,
+          rejectedReason: expertiseLessons.rejectedReason,
+          retiredAt: expertiseLessons.retiredAt,
+          sections: expertiseLessons.sections,
+          sortOrder: expertiseLessons.sortOrder,
+          specificity: expertiseLessons.specificity,
+          status: expertiseLessons.status,
+          tags: expertiseLessons.tags,
+          title: expertiseLessons.title,
+        })
+        .from(expertiseLessons)
+        .where(
+          and(
+            inArray(expertiseLessons.domainId, domainIds),
+            // Retired ones are kept and returned: the page files them under an archive the reader
+            // can reopen, because "I already told it to stop using this" is itself worth seeing.
+            inArray(expertiseLessons.status, ['active', 'retired']),
+          ),
+        )
+        // Unplaced rows (null, from before the column existed) come after the ones the
+        // reviewer ordered, oldest first, until a drag writes them an explicit position.
+        .orderBy(
+          sql`${expertiseLessons.sortOrder} asc nulls last`,
+          asc(expertiseLessons.createdAt),
         ),
-      )
-      .orderBy(desc(expertiseLessons.hitCount), asc(expertiseLessons.code));
+      this.db
+        .select({
+          agentId: expertiseBindings.agentId,
+          agentTitle: agents.title,
+          boundUserId: expertiseBindings.boundUserId,
+          boundWorkspaceId: expertiseBindings.boundWorkspaceId,
+          domainId: expertiseBindings.domainId,
+          projectId: expertiseBindings.projectId,
+          projectName: projects.name,
+        })
+        .from(expertiseBindings)
+        .leftJoin(projects, eq(projects.id, expertiseBindings.projectId))
+        .leftJoin(agents, eq(agents.id, expertiseBindings.agentId))
+        .where(
+          and(inArray(expertiseBindings.domainId, domainIds), eq(expertiseBindings.enabled, true)),
+        )
+        .orderBy(asc(expertiseBindings.sortOrder)),
+    ]);
 
     return bound.map(({ domain }) => ({
       domain: {
@@ -233,20 +270,45 @@ export class ExpertiseModel {
         outOfScope: domain.outOfScope,
         title: domain.title,
       },
-      standards: lessons.filter((lesson) => lesson.domainId === domain.id),
+      rules: lessons.filter((lesson) => lesson.domainId === domain.id),
+      scopes: bindings
+        .filter((binding) => binding.domainId === domain.id)
+        .map((binding) => {
+          if (binding.projectId) {
+            return { id: binding.projectId, kind: 'project' as const, title: binding.projectName };
+          }
+          if (binding.agentId) {
+            return { id: binding.agentId, kind: 'agent' as const, title: binding.agentTitle };
+          }
+          return binding.boundWorkspaceId
+            ? { id: binding.boundWorkspaceId, kind: 'workspace' as const, title: null }
+            : { id: binding.boundUserId!, kind: 'user' as const, title: null };
+        }),
     }));
   };
 
   /**
-   * The rejections one standard was distilled from, resolved back to the acceptance they were
+   * The rejections one rule was distilled from, resolved back to the acceptance they were
    * written in so the reader can reopen the round and see the frame they circled.
    *
-   * `sourceCheckResultId` is nullable by design — a deleted acceptance leaves the standard
-   * standing and only breaks the trail — so the joins are left joins and the caller renders an
-   * unlinked row rather than dropping the evidence.
+   * Evidence never changes hands: a hit stays on the lesson and the run that produced it, because
+   * both are pinned to their domain by composite keys. So a rule that absorbed others
+   * (`generalizedFromIds`) or was re-filed into another group (`salvagedFromId`) reads its sources
+   * through that lineage instead of owning them.
+   *
+   * `sourceCheckResultId` is nullable by design — a deleted acceptance leaves the rule standing
+   * and only breaks the trail — so the joins are left joins and the caller renders an unlinked
+   * row rather than dropping the evidence.
    */
-  listLessonSources = async (lessonId: string, limit = 20) =>
-    this.db
+  listLessonSources = async (lessonId: string, limit = 20) => {
+    const lesson = await this.findLesson(lessonId);
+    if (!lesson) return [];
+    const lineage = [
+      lessonId,
+      ...(lesson.generalizedFromIds ?? []),
+      ...(lesson.salvagedFromId ? [lesson.salvagedFromId] : []),
+    ];
+    return this.db
       .select({
         acceptanceId: verifyRuns.acceptanceId,
         checkTitle: verifyCheckResults.checkItemTitle,
@@ -255,14 +317,18 @@ export class ExpertiseModel {
         id: expertiseHits.id,
         reviewerComment: sql<string | null>`${verifyCheckResults.userDecisionDetail} ->> 'comment'`,
         roundIndex: verifyRuns.roundIndex,
+        severity: expertiseHits.severity,
+        userDecision: expertiseHits.userDecision,
+        where: expertiseHits.where,
       })
       .from(expertiseHits)
       .innerJoin(expertiseDomains, eq(expertiseDomains.id, expertiseHits.domainId))
       .leftJoin(verifyCheckResults, eq(verifyCheckResults.id, expertiseHits.sourceCheckResultId))
       .leftJoin(verifyRuns, eq(verifyRuns.id, verifyCheckResults.verifyRunId))
-      .where(and(eq(expertiseHits.lessonId, lessonId), this.scopeWhere()))
+      .where(and(inArray(expertiseHits.lessonId, lineage), this.scopeWhere()))
       .orderBy(desc(expertiseHits.createdAt))
       .limit(limit);
+  };
 
   /**
    * Rejected rounds no standard has been distilled from yet.
@@ -704,6 +770,7 @@ export class ExpertiseModel {
         feedback: expertiseLessonRevisions.feedback,
         id: expertiseLessonRevisions.id,
         kind: expertiseLessonRevisions.kind,
+        prevTitle: expertiseLessonRevisions.prevTitle,
         revision: expertiseLessonRevisions.revision,
       })
       .from(expertiseLessonRevisions)
@@ -722,6 +789,300 @@ export class ExpertiseModel {
       .set({ retiredAt: null, status: 'active', updatedAt: new Date() })
       .where(eq(expertiseLessons.id, lessonId));
     return { id: lessonId };
+  };
+
+  /** The next free `P-nn` code inside one domain; codes are unique per domain, not globally. */
+  private nextLessonCode = async (
+    tx: Pick<LobeChatDatabase, 'select'>,
+    domainId: string,
+  ): Promise<string> => {
+    const codes = await tx
+      .select({ code: expertiseLessons.code })
+      .from(expertiseLessons)
+      .where(eq(expertiseLessons.domainId, domainId));
+    const next =
+      Math.max(0, ...codes.map(({ code }) => Number(/^P-(\d+)$/.exec(code)?.[1] ?? 0))) + 1;
+    return `P-${String(next).padStart(2, '0')}`;
+  };
+
+  /**
+   * A rule the reviewer writes down themselves, filed at the top of its group so they see it
+   * where they just put it. Hand-written rules start as `taste` from the reviewer: nothing has
+   * been distilled, so there is no mechanism to claim yet.
+   */
+  createRule = async (params: {
+    body?: string;
+    compilability?: 'compiled' | 'compilable' | 'not-compilable';
+    domainId: string;
+    enforcement?: ExpertiseEnforcement;
+    title: string;
+  }) => {
+    const domain = await this.findDomain(params.domainId);
+    if (!domain) return null;
+    const title = params.title.trim();
+    const body = params.body?.trim();
+    const sections: ExpertiseLessonSection[] = [{ body: title, key: 'rule' }];
+    if (body) sections.push({ body, key: 'why' });
+
+    return this.db.transaction(async (tx) => {
+      const code = await this.nextLessonCode(tx, params.domainId);
+      const [first] = await tx
+        .select({ sortOrder: sql<number>`min(${expertiseLessons.sortOrder})` })
+        .from(expertiseLessons)
+        .where(eq(expertiseLessons.domainId, params.domainId));
+      const [row] = await tx
+        .insert(expertiseLessons)
+        .values({
+          code,
+          compilability: params.compilability ?? 'not-compilable',
+          createdByUserId: this.userId,
+          domainId: params.domainId,
+          enforcement: params.enforcement ?? 'remind',
+          polarity: 'rule',
+          reasonKind: 'taste',
+          reasonSource: 'reviewer',
+          sections,
+          sortOrder: (first?.sortOrder ?? 1) - 1,
+          title,
+        })
+        .returning({ code: expertiseLessons.code, id: expertiseLessons.id });
+      return row;
+    });
+  };
+
+  /**
+   * Field-level edits from the rule document. Wording and body edits are versioned like a
+   * conversational correction — same table, same `user-feedback` kind — so the history reads as
+   * one list whether the reviewer typed a sentence or rewrote a paragraph. Switches (enforcement,
+   * compilability, reason kind) are not versioned: they are settings, not judgments.
+   */
+  updateRule = async (
+    lessonId: string,
+    patch: {
+      compilability?: 'compiled' | 'compilable' | 'not-compilable';
+      enforcement?: ExpertiseEnforcement;
+      reasonKind?: ExpertiseReasonKind;
+      sections?: Partial<Record<'rule' | 'why' | 'how' | 'limits', string | null>>;
+      title?: string;
+    },
+  ) => {
+    const lesson = await this.findLesson(lessonId);
+    if (!lesson) return null;
+
+    const title = patch.title?.trim();
+    const titleChanged = Boolean(title) && title !== lesson.title;
+
+    let sections = lesson.sections;
+    let sectionsChanged = false;
+    if (patch.sections) {
+      sections = lesson.sections.filter((section) => !(section.key in patch.sections!));
+      for (const [key, body] of Object.entries(patch.sections)) {
+        const text = body?.trim();
+        if (text) sections.push({ body: text, key: key as ExpertiseLessonSection['key'] });
+      }
+      sectionsChanged = true;
+    }
+    // The rule sentence and the title are the same words seen from two places.
+    if (titleChanged && !patch.sections?.rule) {
+      sections = [
+        { body: title!, key: 'rule' as const },
+        ...sections.filter((section) => section.key !== 'rule'),
+      ];
+      sectionsChanged = true;
+    }
+
+    const versioned = titleChanged || sectionsChanged;
+    const revision = versioned ? lesson.currentRevision + 1 : lesson.currentRevision;
+    const feedback = titleChanged
+      ? title!
+      : (Object.values(patch.sections ?? {})
+          .find(Boolean)
+          ?.trim() ?? null);
+
+    await this.db.transaction(async (tx) => {
+      if (versioned) {
+        await tx.insert(expertiseLessonRevisions).values({
+          changedBy: 'user',
+          changedByUserId: this.userId,
+          feedback,
+          kind: 'user-feedback',
+          lessonId,
+          prevTitle: titleChanged ? lesson.title : null,
+          revision,
+          sections,
+        });
+      }
+      await tx
+        .update(expertiseLessons)
+        .set({
+          ...(patch.compilability && { compilability: patch.compilability }),
+          ...(patch.enforcement && { enforcement: patch.enforcement }),
+          ...(patch.reasonKind && { reasonKind: patch.reasonKind }),
+          ...(titleChanged && { title }),
+          ...(sectionsChanged && { sections }),
+          currentRevision: revision,
+          updatedAt: new Date(),
+        })
+        .where(eq(expertiseLessons.id, lessonId));
+    });
+    return { id: lessonId, revision };
+  };
+
+  /**
+   * Writes back the order the reviewer dragged one group into. Only rules of that group are
+   * touched; an id from elsewhere is ignored rather than pulled across, because moving between
+   * groups changes the code and goes through `moveRule`.
+   */
+  reorderRules = async (domainId: string, lessonIds: string[]) => {
+    const domain = await this.findDomain(domainId);
+    if (!domain) return null;
+    await this.db.transaction(async (tx) => {
+      for (const [index, lessonId] of lessonIds.entries()) {
+        await tx
+          .update(expertiseLessons)
+          .set({ sortOrder: index, updatedAt: new Date() })
+          .where(and(eq(expertiseLessons.id, lessonId), eq(expertiseLessons.domainId, domainId)));
+      }
+    });
+    return { count: lessonIds.length, domainId };
+  };
+
+  /**
+   * Files a rule under another of the reviewer's groups, at the end, with a fresh code there.
+   *
+   * A rule with no evidence simply changes domain. One with evidence cannot: its hits are pinned
+   * to the run and domain that produced them, so the rule is re-created in the target group with
+   * `salvagedFromId` pointing at the original, and the original is hidden (`rejected`, not
+   * archived — it did not stop applying, it moved). The caller gets the id that is now live.
+   */
+  moveRule = async (lessonId: string, domainId: string) => {
+    const [lesson, domain] = await Promise.all([
+      this.findLesson(lessonId),
+      this.findDomain(domainId),
+    ]);
+    if (!lesson || !domain) return null;
+    if (lesson.domainId === domainId) return { domainId, id: lessonId };
+
+    return this.db.transaction(async (tx) => {
+      const code = await this.nextLessonCode(tx, domainId);
+      const [last] = await tx
+        .select({ sortOrder: sql<number>`max(${expertiseLessons.sortOrder})` })
+        .from(expertiseLessons)
+        .where(eq(expertiseLessons.domainId, domainId));
+      const sortOrder = (last?.sortOrder ?? -1) + 1;
+      const [{ hits }] = await tx
+        .select({ hits: sql<number>`count(*)::int` })
+        .from(expertiseHits)
+        .where(eq(expertiseHits.lessonId, lessonId));
+
+      if (hits === 0) {
+        await tx
+          .update(expertiseLessons)
+          .set({ code, domainId, sortOrder, updatedAt: new Date() })
+          .where(eq(expertiseLessons.id, lessonId));
+        return { domainId, id: lessonId };
+      }
+
+      const {
+        createdAt: _createdAt,
+        id: _id,
+        updatedAt: _updatedAt,
+        accessedAt: _accessedAt,
+        ...carried
+      } = lesson;
+      const [copy] = await tx
+        .insert(expertiseLessons)
+        .values({ ...carried, code, domainId, salvagedFromId: lessonId, sortOrder })
+        .returning({ id: expertiseLessons.id });
+      await tx
+        .update(expertiseLessons)
+        .set({ rejectedReason: `moved-to:${copy.id}`, status: 'rejected', updatedAt: new Date() })
+        .where(eq(expertiseLessons.id, lessonId));
+      return { domainId, id: copy.id };
+    });
+  };
+
+  /**
+   * Folds one rule into another: the counts move to the target, the target gets a `generalize`
+   * revision naming what it absorbed and a lineage pointer to read the source's evidence, and the
+   * source is retired with a pointer back. Nothing is deleted — the archived source still opens
+   * and still says where it went.
+   */
+  mergeRules = async (fromId: string, intoId: string) => {
+    if (fromId === intoId) return null;
+    const [from, into] = await Promise.all([this.findLesson(fromId), this.findLesson(intoId)]);
+    if (!from || !into) return null;
+
+    const revision = into.currentRevision + 1;
+    await this.db.transaction(async (tx) => {
+      // The evidence stays where it is; `generalizedFromIds` is how the target reads it.
+      await tx.insert(expertiseLessonRevisions).values({
+        changedBy: 'user',
+        changedByUserId: this.userId,
+        feedback: from.title,
+        kind: 'generalize',
+        lessonId: intoId,
+        prevTitle: null,
+        revision,
+        sections: into.sections,
+      });
+      await tx
+        .update(expertiseLessons)
+        .set({
+          currentRevision: revision,
+          exampleCount: into.exampleCount + from.exampleCount,
+          falsePositiveCount: into.falsePositiveCount + from.falsePositiveCount,
+          generalizedFromIds: [...(into.generalizedFromIds ?? []), fromId],
+          hitCount: into.hitCount + from.hitCount,
+          hitRunCount: into.hitRunCount + from.hitRunCount,
+          lastHitAt:
+            from.lastHitAt && (!into.lastHitAt || from.lastHitAt > into.lastHitAt)
+              ? from.lastHitAt
+              : into.lastHitAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(expertiseLessons.id, intoId));
+      await tx
+        .update(expertiseLessons)
+        .set({
+          rejectedReason: `merged-into:${intoId}`,
+          retiredAt: new Date(),
+          status: 'retired',
+          updatedAt: new Date(),
+        })
+        .where(eq(expertiseLessons.id, fromId));
+    });
+    return { fromId, intoId, revision };
+  };
+
+  /**
+   * A group the reviewer opens by hand. It is a plain always-on domain: the gate question is the
+   * domain filter, and it mounts on the reviewer themselves so every acceptance without a project
+   * can add to it.
+   */
+  createRuleGroup = async (params: { gate: string; title: string }) =>
+    this.createDomain({
+      brief: params.title,
+      carrier: { type: 'user' },
+      domainFilter: params.gate,
+      title: params.title,
+    });
+
+  /** Renames a group; the gate question can be changed the same way. */
+  updateRuleGroup = async (domainId: string, patch: { gate?: string; title?: string }) => {
+    const domain = await this.findDomain(domainId);
+    if (!domain) return null;
+    const title = patch.title?.trim();
+    const gate = patch.gate?.trim();
+    await this.db
+      .update(expertiseDomains)
+      .set({
+        ...(title && { title }),
+        ...(gate && { domainFilter: gate }),
+        updatedAt: new Date(),
+      })
+      .where(eq(expertiseDomains.id, domainId));
+    return { id: domainId };
   };
 
   /** Retires a lesson so it stops being practiced; the record and its evidence are kept. */
