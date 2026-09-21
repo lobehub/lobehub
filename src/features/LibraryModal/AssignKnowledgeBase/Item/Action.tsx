@@ -4,6 +4,8 @@ import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { KnowledgeType } from '@/types/knowledgeBase';
@@ -18,6 +20,7 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   const { t } = useTranslation('chat');
 
   const mobile = useServerConfigStore((s) => s.isMobile);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const [
     addFilesToAgent,
     addKnowledgeBasesToAgent,
@@ -63,12 +66,11 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
               key: 'detail',
               label: t('knowledgeBase.library.action.detail'),
               onClick: () => {
-                if (type === KnowledgeType.KnowledgeBase) {
-                  window.open(`/resource/library/${id}`);
-                  return;
-                }
-
-                window.open(`/resource?file=${id}`);
+                const routePath =
+                  type === KnowledgeType.KnowledgeBase
+                    ? `/resource/library/${id}`
+                    : `/resource?file=${id}`;
+                window.open(buildWorkspaceAwarePath(routePath, activeWorkspaceSlug));
               },
             },
             {
