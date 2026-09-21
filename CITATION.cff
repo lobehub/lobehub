@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use LobeHub in your research, please cite it as below."
+type: software
+title: "LobeHub"
+abstract: "LobeHub is an AI agent platform for organizing, deploying, and operating AI agents."
+authors:
+  - name: "LobeHub"
+version: "2.2.14"
+date-released: 2026-09-08
+repository-code: "https://github.com/lobehub/lobehub"
+url: "https://lobehub.com"
+license: "MIT"
