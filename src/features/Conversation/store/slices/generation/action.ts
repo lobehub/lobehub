@@ -295,7 +295,11 @@ export const runHeterogeneousFromExistingMessage = async (
 
   // Pull the new row into the store so the loading bubble is visible while
   // the executor runs (the executor only dispatches updates, not creates).
-  await chatStore.refreshMessages();
+  // Scoped to THIS context: restart recovery runs this for a topic the user
+  // may not be looking at, and an unscoped refresh would hit the active topic
+  // instead — leaving the new row out of the store, so every step the executor
+  // chains under it renders as an orphan group.
+  await chatStore.refreshMessages(context);
 
   const { operationId: heteroOpId } = chatStore.startOperation({
     context,
