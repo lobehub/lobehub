@@ -1,0 +1,202 @@
+import { HETERO_RESTART_CONTINUE_PROMPT } from '@lobechat/const';
+import type { ChatTopic, ConversationContext, UIChatMessage } from '@lobechat/types';
+
+import {
+  ensureEffectiveAgencyAccess,
+  getEffectiveAgencyConfig,
+  runHeterogeneousFromExistingMessage,
+} from '@/features/Conversation/store/slices/generation/action';
+import { agentService } from '@/services/agent';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
+import { useAgentStore } from '@/store/agent';
+import { useChatStore } from '@/store/chat';
+
+/**
+ * Pick local Claude Code runs back up after the desktop app restarted.
+ *
+ * What a restart leaves behind: the topic still `running`, whatever rows the
+ * renderer flushed before it died, and — on disk — the CLI's own transcript
+ * holding everything the run produced, possibly including a finished answer
+ * the app never saw. Desktop main also keeps a ledger of the runs it spawned
+ * (`listInterruptedRuns`), which is how a run killed HERE is told apart from
+ * one still running on another device.
+ *
+ * Per run: drop the half-persisted assistant rows of the interrupted turn,
+ * replay that turn from the transcript into a fresh row (same pipeline as a
+ * live run, so tools / thinking / usage land as if the app had been watching),
+ * then — only if the transcript shows the turn was cut off — `--resume` the
+ * session with a continuation prompt so the agent finishes the job.
+ */
+
+export type RestartRecoveryOutcome = 'replayed' | 'resumed' | 'skipped' | 'failed';
+
+export interface RestartRecoveryResult {
+  outcome: RestartRecoveryOutcome;
+  reason?: string;
+  topicId?: string;
+}
+
+interface InterruptedRun {
+  agentId?: string;
+  agentType: string;
+  ipcSessionId: string;
+  topicId?: string;
+}
+
+const toTime = (value: UIChatMessage['createdAt']): number => {
+  const time = typeof value === 'number' ? value : new Date(value as any).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
+/** Rows on the topic's main chain, oldest first. Subagent threads are left alone. */
+const mainChainOf = (messages: UIChatMessage[]): UIChatMessage[] =>
+  messages
+    .filter((message) => !message.threadId)
+    .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt));
+
+/**
+ * The agent store is filled by SWR hooks as screens mount; at boot the agent
+ * of a background topic is usually not there yet, and the agency config
+ * (which CLI, which auth) lives on it.
+ */
+const ensureAgentLoaded = async (agentId: string): Promise<void> => {
+  if (useAgentStore.getState().agentMap[agentId]?.agencyConfig) return;
+  const config = await agentService.getAgentConfigById(agentId);
+  if (!config) throw new Error(`Agent ${agentId} not found`);
+  useAgentStore.setState(
+    (state) => ({ agentMap: { ...state.agentMap, [agentId]: config } }),
+    false,
+    'restartRecovery/ensureAgentLoaded',
+  );
+};
+
+const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> => {
+  const { agentId, topicId } = run;
+  if (!agentId || !topicId) return { outcome: 'skipped', reason: 'missing-context', topicId };
+
+  const topic = await topicService.getTopicDetail(topicId);
+  if (!topic) return { outcome: 'skipped', reason: 'topic-missing', topicId };
+  // Settled elsewhere already (another device, the stale-run watchdog, the user).
+  if (topic.status !== 'running') return { outcome: 'skipped', reason: 'not-running', topicId };
+
+  const chatStore = useChatStore.getState();
+  const settle = () => chatStore.updateTopicStatus({ agentId, status: 'active', topicId });
+
+  if (run.agentType !== 'claude-code') {
+    await settle();
+    return { outcome: 'skipped', reason: 'unsupported-run', topicId };
+  }
+
+  await ensureAgentLoaded(agentId);
+  await ensureEffectiveAgencyAccess(agentId);
+  const heterogeneousProvider =
+    getEffectiveAgencyConfig(agentId).agencyConfig?.heterogeneousProvider;
+  if (heterogeneousProvider?.type !== 'claude-code') {
+    await settle();
+    return { outcome: 'skipped', reason: 'provider-mismatch', topicId };
+  }
+
+  const context: ConversationContext = { agentId, topicId };
+  const mainChain = mainChainOf(await messageService.getMessages(context));
+  const userTurn = mainChain.findLast((message) => message.role === 'user');
+  if (!userTurn) {
+    await settle();
+    return { outcome: 'skipped', reason: 'no-user-turn', topicId };
+  }
+
+  // Everything the interrupted turn persisted is a partial view of what the
+  // transcript holds in full — replace it rather than try to stitch.
+  const userAt = toTime(userTurn.createdAt);
+  const staleIds = mainChain
+    .filter(
+      (message) =>
+        message.id !== userTurn.id &&
+        message.role !== 'user' &&
+        toTime(message.createdAt) >= userAt,
+    )
+    .map((message) => message.id);
+  if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
+
+  const { operationId } = chatStore.startOperation({
+    context: { ...context, messageId: userTurn.id },
+    type: 'regenerate',
+  });
+
+  try {
+    const { replayComplete } = await runHeterogeneousFromExistingMessage(chatStore, {
+      context,
+      heterogeneousProvider,
+      parentMessageId: userTurn.id,
+      parentOperationId: operationId,
+      prompt: userTurn.content,
+      replayTranscript: true,
+      topic: topic as ChatTopic,
+    });
+
+    if (replayComplete) {
+      chatStore.completeOperation(operationId);
+      return { outcome: 'replayed', topicId };
+    }
+
+    // Chain the continuation onto the replayed tail so it grows the same
+    // assistant group instead of opening a new bubble.
+    const tail = mainChainOf(await messageService.getMessages(context)).findLast(
+      (message) => message.role === 'assistant',
+    );
+    await runHeterogeneousFromExistingMessage(chatStore, {
+      context,
+      heterogeneousProvider,
+      parentMessageId: tail?.id ?? userTurn.id,
+      parentOperationId: operationId,
+      prompt: HETERO_RESTART_CONTINUE_PROMPT,
+      topic: topic as ChatTopic,
+    });
+    chatStore.completeOperation(operationId);
+    return { outcome: 'resumed', topicId };
+  } catch (error) {
+    chatStore.failOperation(operationId, {
+      message: error instanceof Error ? error.message : String(error),
+      type: 'RestartRecoveryError',
+    });
+    return {
+      outcome: 'failed',
+      reason: error instanceof Error ? error.message : String(error),
+      topicId,
+    };
+  }
+};
+
+/**
+ * Recover every run the previous desktop process left in flight. Runs are
+ * handled one after another: each replay + resume is a full CLI turn, and the
+ * ledger rarely holds more than one or two.
+ */
+export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryResult[]> => {
+  const runs = (await heterogeneousAgentService.listInterruptedRuns()) as InterruptedRun[];
+  if (!runs?.length) return [];
+
+  // One recovery per topic; a later entry supersedes an earlier one.
+  const byTopic = new Map<string, InterruptedRun>();
+  const unkeyed: InterruptedRun[] = [];
+  for (const run of runs) {
+    if (run.topicId) byTopic.set(run.topicId, run);
+    else unkeyed.push(run);
+  }
+
+  const results: RestartRecoveryResult[] = [];
+  for (const run of [...byTopic.values(), ...unkeyed]) {
+    try {
+      results.push(await recoverRun(run));
+    } catch (error) {
+      console.error('[restartRecovery] recovery failed:', run.topicId, error);
+      results.push({
+        outcome: 'failed',
+        reason: error instanceof Error ? error.message : String(error),
+        topicId: run.topicId,
+      });
+    }
+  }
+  return results;
+};

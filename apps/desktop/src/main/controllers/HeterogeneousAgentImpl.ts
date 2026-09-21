@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, unlinkSync } from 'node:fs';
-import { access, appendFile, mkdir, unlink, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
@@ -93,11 +93,15 @@ import {
   isDroidAcpSessionNotFoundError,
   normalizeImage,
   readCodexSessionModel,
+  resolveClaudeCodeTranscriptPath,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
-import { truncateTitle } from '@lobechat/heterogeneous-agents/transcript';
+import {
+  buildClaudeCodeReplayTurn,
+  truncateTitle,
+} from '@lobechat/heterogeneous-agents/transcript';
 import {
   describeUnusableWorkingDirectory,
   isSpawnableDirectory,
@@ -127,6 +131,10 @@ import {
   createLambdaFileStorePort,
   type RemoteServerAuth,
 } from '@/modules/heterogeneousAgent/fileStorePort';
+import {
+  type HeteroInflightRun,
+  HeteroInflightRunRegistry,
+} from '@/modules/heterogeneousAgent/inflightRunRegistry';
 import { fetchKimiCodeQuota } from '@/modules/heterogeneousAgent/kimiCodeQuota';
 import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
@@ -147,6 +155,7 @@ import type {
   HeterogeneousAgentImageAttachment,
 } from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
+import { commandLineLooksLikeHeteroCli, readProcessCommandLine } from '@/utils/heteroCliProcess';
 import { createLogger } from '@/utils/logger';
 
 import BrowserControlCtr from './BrowserControlCtr';
@@ -286,6 +295,15 @@ export interface StartSessionResult {
   sessionId: string;
 }
 
+/** Result of a `replayTranscript` prompt — see `SendPromptParams.replayTranscript`. */
+export interface HeteroTranscriptReplayOutcome {
+  replay: {
+    /** False when the replayed turn was cut off and still needs a continuation. */
+    complete: boolean;
+    recordCount: number;
+  };
+}
+
 /** Run identity the browser MCP tools need to reach the right in-app page. */
 interface BrowserRunBinding {
   agentId?: string;
@@ -308,6 +326,15 @@ interface SendPromptParams {
    */
   operationId: string;
   prompt: string;
+  /**
+   * Do not spawn the CLI. Instead, read the last turn of the session's on-disk
+   * transcript (Claude Code only) and stream it through the same pipeline a
+   * live process feeds, so a turn that finished or died while the app was
+   * down lands in the topic exactly as it would have live. Resolves with the
+   * replay outcome so the caller knows whether a `--resume` continuation is
+   * still owed.
+   */
+  replayTranscript?: boolean;
   /**
    * Prior conversation turns used to rebuild a Claude Code transcript that the
    * CLI garbage-collected (`cleanupPeriodDays`, default 30 days). Only consumed
@@ -531,6 +558,26 @@ export default class HeterogeneousAgentCtr {
   }
 
   private sessions = new Map<string, AgentSession>();
+
+  private inflightRunRegistry?: HeteroInflightRunRegistry;
+
+  /**
+   * Crash-safe ledger of the CLI runs this process has spawned and not seen
+   * exit. Read back by `listInterruptedRuns` after a restart. Lazy: the
+   * storage path is not available until the app store is ready, and a
+   * missing path must never break a run — the ledger is best-effort.
+   */
+  private getInflightRuns(): HeteroInflightRunRegistry | undefined {
+    if (this.inflightRunRegistry) return this.inflightRunRegistry;
+    try {
+      this.inflightRunRegistry = new HeteroInflightRunRegistry(
+        path.join(this.app.appStoragePath, 'heteroAgent', 'inflight-runs.json'),
+      );
+    } catch (error) {
+      logger.warn('Inflight-run registry unavailable:', error);
+    }
+    return this.inflightRunRegistry;
+  }
 
   /**
    * Runtime selection registry — the heterogeneous-agent counterpart of the
@@ -1619,9 +1666,14 @@ export default class HeterogeneousAgentCtr {
    * the shared `AgentStreamPipeline` (JSONL → adapter → toStreamEvent) and
    * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
    */
-  async sendPrompt(params: SendPromptParams): Promise<ServerDefaultOperationSettlement | void> {
+  async sendPrompt(
+    params: SendPromptParams,
+  ): Promise<ServerDefaultOperationSettlement | HeteroTranscriptReplayOutcome | void> {
     const session = this.sessions.get(params.sessionId);
     if (session) session.cancelledByUs = false;
+    // A replay reads a file and calls no model, so it bypasses server-default
+    // operation accounting entirely.
+    if (params.replayTranscript) return this.replayTranscript(params);
     const serverDefaultApiConfig = session?.serverDefaultApiConfig;
     if (!session || !serverDefaultApiConfig) return this.sendPromptImpl(params);
     if (!params.topicId) throw new Error('Server-default execution requires a topic');
@@ -3014,6 +3066,19 @@ export default class HeterogeneousAgentCtr {
     }
 
     session.process = proc;
+    this.getInflightRuns()?.upsert({
+      agentId: params.agentId,
+      agentSessionId: session.agentSessionId,
+      agentType: session.agentType,
+      command: path.basename(proc.spawnfile || session.command),
+      configDir: session.hostedProviderBinding?.profileDir,
+      cwd,
+      ipcSessionId: session.sessionId,
+      operationId: params.operationId,
+      pid: proc.pid,
+      startedAt: new Date().toISOString(),
+      topicId: params.topicId,
+    });
 
     // Producer-side conversion (V3 contract): JSONL framing + adapter +
     // toStreamEvent all run inside the shared pipeline, so renderer + future
@@ -3049,6 +3114,9 @@ export default class HeterogeneousAgentCtr {
           // IPC by mirroring the freshest value onto the session record.
           if (pipeline.sessionId && pipeline.sessionId !== session.agentSessionId) {
             session.agentSessionId = pipeline.sessionId;
+            this.getInflightRuns()?.patch(session.sessionId, {
+              agentSessionId: pipeline.sessionId,
+            });
           }
           events.push(
             ...(await this.verifyCodexSessionModel({
@@ -3143,6 +3211,9 @@ export default class HeterogeneousAgentCtr {
 
           logger.info('Agent process exited:', { code, sessionId: session.sessionId, signal });
           session.process = undefined;
+          // A quit-driven kill must stay on the ledger: that entry is what the
+          // next launch resumes from. Every other exit is a settled run.
+          if (!this.shuttingDown) this.getInflightRuns()?.remove(session.sessionId);
 
           // If *we* killed it (cancel / stop / before-quit), treat the non-zero
           // exit as a clean shutdown — surfacing it as an error would make a
@@ -3150,6 +3221,13 @@ export default class HeterogeneousAgentCtr {
           // shutdown affecting OTHER running CC sessions would pollute their
           // topics with a misleading "Agent exited with code 143" message.
           if (session.cancelledByUs) {
+            // Quit-driven kill: say nothing to the renderer. A `complete`
+            // broadcast (or a settled `sendPrompt`) reaching a renderer that
+            // is still tearing down would let its executor mark the topic
+            // finished and drop the ledger entry — erasing exactly the state
+            // the next launch resumes from. The IPC promise is left pending;
+            // the process is exiting anyway.
+            if (this.shuttingDown) return;
             this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
             resolve();
             return;
@@ -3173,6 +3251,129 @@ export default class HeterogeneousAgentCtr {
           }
         });
     });
+  }
+
+  /**
+   * Runs this machine had in flight when the previous desktop process went
+   * away, handed over exactly once. Each is reaped first: a session that is
+   * still in memory (renderer reload, main survived) is stopped like a
+   * cancel, and a CLI left over from a crashed main (spawned detached, so it
+   * outlives its parent) is signalled after its command line is checked, so
+   * a recycled pid never gets an unrelated process killed. The caller replays
+   * the on-disk transcript and resumes from there.
+   */
+  async listInterruptedRuns(): Promise<HeteroInflightRun[]> {
+    const registry = this.getInflightRuns();
+    if (!registry) return [];
+    const runs = registry.takeAll();
+    for (const run of runs) {
+      try {
+        await this.reapInterruptedRun(run);
+      } catch (error) {
+        logger.warn('Failed to reap interrupted run:', { error, ipcSessionId: run.ipcSessionId });
+      }
+    }
+    return runs;
+  }
+
+  private async reapInterruptedRun(run: HeteroInflightRun): Promise<void> {
+    if (this.sessions.has(run.ipcSessionId)) {
+      await this.stopSession({ sessionId: run.ipcSessionId });
+      return;
+    }
+    if (!run.pid || process.platform === 'win32' || !this.isProcessGroupAlive(run.pid)) return;
+
+    const commandLine = await readProcessCommandLine(run.pid);
+    if (!commandLineLooksLikeHeteroCli(commandLine, run)) {
+      logger.info('Skipping pid reuse for interrupted run:', { commandLine, pid: run.pid });
+      return;
+    }
+    logger.info('Reaping orphaned CLI from previous desktop process:', {
+      agentType: run.agentType,
+      pid: run.pid,
+    });
+    try {
+      process.kill(-run.pid, 'SIGTERM');
+    } catch {
+      /* already gone */
+    }
+  }
+
+  /**
+   * Stream the last turn of a Claude Code transcript as if the CLI were
+   * printing it live. Same pipeline as `handleSpawnedAgentProcess`, so the
+   * renderer's executor cannot tell the difference; a cut-off turn ends as
+   * interrupted (its dangling tool marked unsuccessful by the flush) instead
+   * of clean, so nothing downstream treats it as a finished run.
+   */
+  private async replayTranscript(params: SendPromptParams): Promise<HeteroTranscriptReplayOutcome> {
+    const session = this.sessions.get(params.sessionId);
+    if (!session) throw new Error(`Session not found: ${params.sessionId}`);
+    if (session.agentType !== 'claude-code') {
+      throw new Error(
+        `Transcript replay is only supported for Claude Code, got ${session.agentType}`,
+      );
+    }
+    if (!session.agentSessionId || !session.cwd) {
+      throw new Error('Transcript replay needs a resumable session id and a working directory');
+    }
+
+    const filePath = await resolveClaudeCodeTranscriptPath({
+      configDir: session.hostedProviderBinding?.profileDir,
+      cwd: session.cwd,
+      sessionId: session.agentSessionId,
+    });
+    if (!filePath)
+      throw new Error(`Transcript replay rejected session id ${session.agentSessionId}`);
+
+    let content: string;
+    try {
+      content = await readFile(filePath, 'utf8');
+    } catch {
+      throw new Error(`No Claude Code transcript on disk for session ${session.agentSessionId}`);
+    }
+    const turn = buildClaudeCodeReplayTurn(content);
+    if (!turn)
+      throw new Error(`Claude Code transcript ${session.agentSessionId} has no turn to replay`);
+
+    const pipeline = new AgentStreamPipeline({
+      agentType: session.agentType,
+      cwd: session.cwd,
+      operationId: params.operationId,
+      uploadImage: this.uploadResultImage,
+    });
+    const emit = (events: AgentStreamEvent[]) => {
+      for (const event of events) {
+        this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+      }
+    };
+
+    try {
+      for (const line of turn.lines) emit(await pipeline.push(`${line}\n`));
+      emit(await pipeline.flush());
+      if (turn.complete) {
+        emit(pipeline.validateCompletion());
+      } else {
+        emit(
+          pipeline.completeRuntime({
+            kind: 'aborted',
+            reason: 'interrupted',
+            subtype: 'app_restart',
+          }),
+        );
+      }
+      if (pipeline.sessionId) session.agentSessionId = pipeline.sessionId;
+    } finally {
+      await session.hostedProviderBinding?.cleanup();
+    }
+
+    logger.info('Replayed Claude Code transcript turn:', {
+      complete: turn.complete,
+      recordCount: turn.recordCount,
+      sessionId: session.sessionId,
+    });
+    this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    return { replay: { complete: turn.complete, recordCount: turn.recordCount } };
   }
 
   /**
@@ -3560,6 +3761,9 @@ export default class HeterogeneousAgentCtr {
     }
 
     await session.hostedProviderBinding?.cleanup();
+    // See the exit handler: a stop that races app shutdown must keep the
+    // ledger entry for the next launch.
+    if (!this.shuttingDown) this.getInflightRuns()?.remove(params.sessionId);
     this.sessions.delete(params.sessionId);
   }
 

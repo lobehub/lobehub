@@ -3,6 +3,7 @@ import { HETERO_CONTINUE_PROMPT, LOADING_FLAT } from '@lobechat/const';
 import { shouldDropUnsupportedClaudeAssistantPrefill } from '@lobechat/model-runtime/providers/anthropic/modelId';
 import type {
   ChatImageItem,
+  ChatTopic,
   ConversationContext,
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
@@ -40,6 +41,7 @@ import {
 } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { resolveTopicHeteroPin } from '@/store/chat/slices/topic/selectors';
 import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
@@ -110,7 +112,7 @@ const settleGenerationEntry = (
  * mounted. No-ops for authors, members-with-resolved-answers, and non-workspace
  * agents; a failed fetch falls back to authorship for this run.
  */
-const ensureEffectiveAgencyAccess = async (agentId: string) => {
+export const ensureEffectiveAgencyAccess = async (agentId: string) => {
   const agentState = getAgentStoreState();
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
   await ensureAgentManagementAccess({
@@ -122,7 +124,7 @@ const ensureEffectiveAgencyAccess = async (agentId: string) => {
   });
 };
 
-const getEffectiveAgencyConfig = (agentId: string) => {
+export const getEffectiveAgencyConfig = (agentId: string) => {
   const agentState = getAgentStoreState();
   const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
@@ -178,10 +180,12 @@ const resolveHeteroRunContext = (
   chatStore: ReturnType<typeof useChatStore.getState>,
   context: ConversationContext,
   agentId: string,
+  /** Topic row when the caller already holds it (the paginated store may not). */
+  topicOverride?: ChatTopic,
 ) => {
-  const topic = context.topicId
-    ? topicSelectors.getTopicById(context.topicId)(chatStore)
-    : undefined;
+  const topic =
+    topicOverride ??
+    (context.topicId ? topicSelectors.getTopicById(context.topicId)(chatStore) : undefined);
   const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
   const agentState = getAgentStoreState();
   const desktopContext = globalAgentContextManager.getContext();
@@ -224,7 +228,7 @@ const resolveHeteroRunContext = (
  * `execHeterogeneousAgent` op as a child of the caller's parent op so Stop
  * cancels the executor without killing the parent op early.
  */
-const runHeterogeneousFromExistingMessage = async (
+export const runHeterogeneousFromExistingMessage = async (
   chatStore: ReturnType<typeof useChatStore.getState>,
   params: {
     context: ConversationContext;
@@ -234,23 +238,44 @@ const runHeterogeneousFromExistingMessage = async (
     parentMessageId: string;
     parentOperationId: string;
     prompt: string;
+    /**
+     * Replay the topic's on-disk CLI transcript into this row instead of
+     * spawning the CLI (desktop restart recovery). The saved session id must
+     * resolve, or there is nothing to read.
+     */
+    replayTranscript?: boolean;
+    /** Topic row when the caller already holds it (not necessarily in the paginated store). */
+    topic?: ChatTopic;
   },
-): Promise<string> => {
-  const { context, heterogeneousProvider, imageList, parentMessageId, parentOperationId, prompt } =
-    params;
+): Promise<{ assistantMessageId: string; replayComplete?: boolean }> => {
+  const {
+    context,
+    heterogeneousProvider,
+    imageList,
+    parentMessageId,
+    parentOperationId,
+    prompt,
+    replayTranscript,
+    topic: topicOverride,
+  } = params;
   const agentId = context.agentId;
   if (!agentId) throw new Error('agentId is required for heterogeneous agent');
 
   await ensureEffectiveAgencyAccess(agentId);
   const { cwdChanged, reason, resumeBindingKey, resumeSessionId, workingDirectory } =
-    resolveHeteroRunContext(chatStore, context, agentId);
+    resolveHeteroRunContext(chatStore, context, agentId, topicOverride);
+  if (replayTranscript && !resumeSessionId) {
+    throw new Error('Transcript replay needs a resumable CLI session on the topic');
+  }
   if (cwdChanged) toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
   else if (reason === 'binding_changed')
     toast.info(t('heteroAgent.resumeReset.bindingChanged', { ns: 'chat' }));
 
-  const topicPin = context.topicId
-    ? topicSelectors.getTopicHeteroPinById(context.topicId)(chatStore)
-    : undefined;
+  const topicPin =
+    (topicOverride ? resolveTopicHeteroPin(topicOverride) : undefined) ??
+    (context.topicId
+      ? topicSelectors.getTopicHeteroPinById(context.topicId)(chatStore)
+      : undefined);
   const effectiveHeterogeneousProvider = applyTopicModelToHeterogeneousProvider(
     heterogeneousProvider,
     topicPin,
@@ -283,19 +308,20 @@ const runHeterogeneousFromExistingMessage = async (
 
   const { executeHeterogeneousAgent } =
     await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
-  await executeHeterogeneousAgent(() => useChatStore.getState(), {
+  const outcome = await executeHeterogeneousAgent(() => useChatStore.getState(), {
     assistantMessageId: assistantMsg.id,
     context,
     heterogeneousProvider: effectiveHeterogeneousProvider,
     imageList: imageList?.length ? imageList : undefined,
     message: prompt,
     operationId: heteroOpId,
+    ...(replayTranscript ? { replayTranscript: true } : {}),
     resumeBindingKey,
     resumeSessionId,
     workingDirectory,
   });
 
-  return assistantMsg.id;
+  return { assistantMessageId: assistantMsg.id, replayComplete: outcome?.replay?.complete };
 };
 
 export interface HeteroContinuationScheduleParams {

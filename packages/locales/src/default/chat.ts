@@ -594,6 +594,10 @@ export default {
     'The previous Cursor session could not be restored through ACP, so a new conversation has started with fresh context.',
   'heteroAgent.resumeReset.resumeFailed':
     'The saved Codex thread could not be resumed safely, so a new conversation has started for this topic.',
+  'heteroAgent.restartRecovery.resumed_one':
+    'Picked up {{count}} local agent run that the app restart interrupted.',
+  'heteroAgent.restartRecovery.resumed_other':
+    'Picked up {{count}} local agent runs that the app restart interrupted.',
   'heteroAgent.switchCwd.cancel': 'Cancel',
   'heteroAgent.switchCwd.content':
     'Agent sessions are pinned to a working directory. Switching will start a new session for this topic — chat messages stay, but the previous session context cannot be resumed.',

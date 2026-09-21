@@ -65,6 +65,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async listInterruptedRuns(...args: Parameters<Implementation['listInterruptedRuns']>) {
+    return (await this.getImplementation()).listInterruptedRuns(...args);
+  }
+
+  @IpcMethod()
   async listModels(...args: Parameters<Implementation['listModels']>) {
     return (await this.getImplementation()).listModels(...args);
   }

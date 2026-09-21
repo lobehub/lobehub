@@ -41,6 +41,11 @@ class HeterogeneousAgentService {
     imageList?: Array<{ id: string; url: string }>;
     operationId: string;
     prompt: string;
+    /**
+     * Replay the session's on-disk transcript instead of spawning the CLI.
+     * Desktop main resolves with `{ replay: { complete } }`.
+     */
+    replayTranscript?: boolean;
     /** Prior turns used to rebuild a GC-ed Claude Code transcript before `--resume`. */
     resumeReplayMessages?: HeteroSessionImportMessage[];
     sessionId: string;
@@ -60,6 +65,14 @@ class HeterogeneousAgentService {
 
   async getSessionInfo(sessionId: string) {
     return this.ipc.heterogeneousAgent.getSessionInfo({ sessionId });
+  }
+
+  /**
+   * Local CLI runs the previous desktop process left in flight, handed over
+   * once. Main reaps any surviving process before returning.
+   */
+  async listInterruptedRuns() {
+    return this.ipc.heterogeneousAgent.listInterruptedRuns();
   }
 
   async listModels(

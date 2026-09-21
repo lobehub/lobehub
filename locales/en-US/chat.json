@@ -1054,6 +1054,8 @@
   "heteroAgent.quota.updatedAgo": "Updated {{duration}} ago",
   "heteroAgent.quota.updatedJustNow": "Updated just now",
   "heteroAgent.quota.weekly": "Weekly",
+  "heteroAgent.restartRecovery.resumed_one": "Picked up {{count}} local agent run that the app restart interrupted.",
+  "heteroAgent.restartRecovery.resumed_other": "Picked up {{count}} local agent runs that the app restart interrupted.",
   "heteroAgent.resumeReset.bindingChanged": "Authentication binding changed. The previous local agent session could not be resumed safely, so a new conversation has started.",
   "heteroAgent.resumeReset.cursorAcpIncompatible": "The previous Cursor session could not be restored through ACP, so a new conversation has started with fresh context.",
   "heteroAgent.resumeReset.cwdChanged": "Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started.",

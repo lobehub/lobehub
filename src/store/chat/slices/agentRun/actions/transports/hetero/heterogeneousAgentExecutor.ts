@@ -235,11 +235,25 @@ export interface HeterogeneousAgentExecutorParams {
   message: string;
   operationId: string;
   pageSelections?: PageSelection[];
+  /**
+   * Replay the last turn of the topic's on-disk CLI transcript instead of
+   * spawning the CLI (desktop restart recovery). Requires `resumeSessionId`.
+   */
+  replayTranscript?: boolean;
   /** CC session ID from previous execution in this topic (for --resume) */
   resumeBindingKey?: string;
   resumeSessionId?: string;
   workingDirectory?: string;
   workingDirectoryConfig?: WorkingDirConfig;
+}
+
+export interface HeterogeneousAgentExecutionOutcome {
+  /** Present when the run was a transcript replay; see `replayTranscript`. */
+  replay?: {
+    /** False when the replayed turn was cut off and a `--resume` continuation is still owed. */
+    complete: boolean;
+    recordCount: number;
+  };
 }
 
 const buildLocalHeterogeneousSystemContext = ({
@@ -467,7 +481,7 @@ const mutateMessageBatch = async (operations: MessageBatchOperation[]): Promise<
 export const executeHeterogeneousAgent = async (
   get: () => ChatStore,
   params: HeterogeneousAgentExecutorParams,
-): Promise<void> => {
+): Promise<HeterogeneousAgentExecutionOutcome | void> => {
   const {
     heterogeneousProvider: persistedHeterogeneousProvider,
     contextSelections,
@@ -477,11 +491,13 @@ export const executeHeterogeneousAgent = async (
     message,
     operationId,
     pageSelections,
+    replayTranscript,
     resumeBindingKey,
     resumeSessionId,
     workingDirectory,
     workingDirectoryConfig,
   } = params;
+  let outcome: HeterogeneousAgentExecutionOutcome | undefined;
 
   const heterogeneousProvider = normalizeHeterogeneousProviderConfig(
     persistedHeterogeneousProvider,
@@ -2552,18 +2568,21 @@ export const executeHeterogeneousAgent = async (
       : undefined;
 
     // Send the prompt — blocks until process exits
-    await heterogeneousAgentService.sendPrompt({
+    const sendResult = await heterogeneousAgentService.sendPrompt({
       agentId: context.agentId,
       imageList,
       operationId,
       // `/goal` travels as system-context instructions; the CLI gets only the
       // request so its own `/goal` command does not take the message over.
       prompt: stripGoalCommand(message),
+      ...(replayTranscript ? { replayTranscript: true } : {}),
       ...(resumeReplayMessages?.length ? { resumeReplayMessages } : {}),
       sessionId: ipcRunSessionId,
       systemContext: systemContext || undefined,
       topicId: context.topicId ?? undefined,
     });
+    const replayOutcome = (sendResult as HeterogeneousAgentExecutionOutcome | undefined)?.replay;
+    if (replayOutcome) outcome = { replay: replayOutcome };
     await waitForCompletionCallback();
 
     // Persist heterogeneous-agent session id + the cwd it was created under,
@@ -2719,4 +2738,6 @@ export const executeHeterogeneousAgent = async (
   if (fallbackPromise) {
     await fallbackPromise;
   }
+
+  return outcome;
 };

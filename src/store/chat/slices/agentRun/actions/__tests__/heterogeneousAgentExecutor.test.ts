@@ -2106,6 +2106,42 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
     });
 
+    it('forwards replayTranscript to sendPrompt and returns the replay outcome', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      const ipc = setupIpcCapture();
+      mockSendPrompt.mockImplementationOnce(async (params: any) => {
+        // Desktop main streams the transcript and completes the session itself.
+        ipc.emitRawLine(params.sessionId, ccInit('cc-session-1'));
+        ipc.emitRawLine(params.sessionId, ccText('msg-1', 'replayed answer'));
+        ipc.emitRawLine(params.sessionId, ccResult());
+        ipc.emitComplete(params.sessionId);
+        return { replay: { complete: false, recordCount: 1 } };
+      });
+
+      const outcome = await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        replayTranscript: true,
+        resumeSessionId: 'cc-session-1',
+      });
+
+      expect(mockSendPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({ replayTranscript: true, sessionId: 'ipc-sess-1' }),
+      );
+      expect(outcome).toEqual({ replay: { complete: false, recordCount: 1 } });
+    });
+
+    it('returns no outcome for a live run', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      setupIpcCapture();
+
+      const outcome = await executeHeterogeneousAgent(get, defaultParams);
+
+      expect(mockSendPrompt.mock.calls[0][0].replayTranscript).toBeUndefined();
+      expect(outcome).toBeUndefined();
+    });
+
     it('should forward imageList to heterogeneousAgentService.sendPrompt for Codex runs', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
