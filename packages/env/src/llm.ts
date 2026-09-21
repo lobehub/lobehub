@@ -199,6 +199,9 @@ export const getLLMConfig = () => {
       ENABLED_BFL: z.boolean(),
       BFL_API_KEY: z.string().optional(),
 
+      ENABLED_WAVESPEED: z.boolean(),
+      WAVESPEED_API_KEY: z.string().optional(),
+
       ENABLED_COMFYUI: z.boolean(),
       COMFYUI_BASE_URL: z.string().optional(),
       COMFYUI_AUTH_TYPE: z.string().optional(),
@@ -455,6 +458,9 @@ export const getLLMConfig = () => {
 
       ENABLED_BFL: !!process.env.BFL_API_KEY,
       BFL_API_KEY: process.env.BFL_API_KEY,
+
+      ENABLED_WAVESPEED: !!process.env.WAVESPEED_API_KEY,
+      WAVESPEED_API_KEY: process.env.WAVESPEED_API_KEY,
 
       ENABLED_COMFYUI: process.env.ENABLED_COMFYUI !== '0',
       COMFYUI_BASE_URL: process.env.COMFYUI_BASE_URL,
