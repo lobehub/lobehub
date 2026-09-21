@@ -87,7 +87,7 @@ export class EditorActionImpl {
     const { editor, activeDocumentId, documents, internal_dispatchDocument } = this.#get();
     const id = documentId || activeDocumentId;
 
-    if (!editor || !id) return false;
+    if (!editor || !id || id !== activeDocumentId) return false;
 
     const doc = documents[id];
     if (!doc) return false;
@@ -227,6 +227,9 @@ export class EditorActionImpl {
         value: {
           content,
           editorData,
+          ...(doc.contentFormat === 'skillMarkdown'
+            ? { skillFrontmatter: parseSkillMarkdownFrontmatter(content).frontmatter }
+            : {}),
           isDirty: false,
           lastSavedContent: content,
           lastSavedEditorData: editorData,
@@ -314,6 +317,7 @@ export class EditorActionImpl {
     const id = documentId || this.#get().activeDocumentId;
     if (!id) return;
 
+    this.syncEditorContent(id, { triggerAutoSave: false });
     const previous = this.#inflightSaves.get(id) ?? Promise.resolve();
     const run = previous.catch(() => {}).then(() => this.#runSave(id, metadata, options));
     this.#inflightSaves.set(id, run);
@@ -329,9 +333,9 @@ export class EditorActionImpl {
     metadata?: SaveMetadata,
     options?: SaveExecutionOptions,
   ): Promise<void> => {
-    const { editor, documents, internal_dispatchDocument } = this.#get();
+    const { documents, internal_dispatchDocument } = this.#get();
     const doc = documents[id];
-    if (!doc || !editor) return;
+    if (!doc) return;
 
     const hasMetadataChanges = metadata?.emoji !== undefined || metadata?.title !== undefined;
 
@@ -342,9 +346,8 @@ export class EditorActionImpl {
     internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'saving' } });
 
     try {
-      const currentEditorMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
-      const currentContent = this.getPersistedMarkdown(id, currentEditorMarkdown);
-      const currentEditorData = editor.getDocument('json');
+      const currentContent = doc.content ?? '';
+      const currentEditorData = doc.editorData;
 
       if (!isValidEditorData(currentEditorData)) {
         console.warn('[DocumentStore] Refusing to save invalid editorData:', currentEditorData);
@@ -387,9 +390,8 @@ export class EditorActionImpl {
         id,
         type: 'updateDocument',
         value: {
-          content: currentContent,
-          editorData: structuredClone(currentEditorData),
-          isDirty: false,
+          isDirty:
+            current?.content !== currentContent || !isEqual(current?.editorData, currentEditorData),
           lastSavedContent: currentContent,
           lastSavedEditorData: structuredClone(currentEditorData),
           lastUpdatedTime: savedAt,
@@ -398,10 +400,8 @@ export class EditorActionImpl {
         },
       });
 
-      const latestMarkdown = (editor.getDocument('markdown') as unknown as string) || '';
-      if (this.getPersistedMarkdown(id, latestMarkdown) !== currentContent) {
-        internal_dispatchDocument({ id, type: 'updateDocument', value: { isDirty: true } });
-        if (doc.autoSave !== false) this.#get().triggerDebouncedSave(id);
+      if (this.#get().documents[id]?.isDirty && doc.autoSave !== false) {
+        this.#get().triggerDebouncedSave(id);
       }
     } catch (error) {
       const errorCode = (error as { data?: { code?: string } })?.data?.code;
@@ -426,6 +426,7 @@ export class EditorActionImpl {
       if (conflicted && !lockBlocked && live?.isDirty && live.autoSave !== false) {
         this.#get().triggerDebouncedSave(id);
       }
+      if (hasMetadataChanges) throw error;
     }
   };
 

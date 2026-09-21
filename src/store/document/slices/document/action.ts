@@ -125,7 +125,7 @@ export class DocumentActionImpl {
 
     const remove = () => internal_dispatchDocument({ id: documentId, type: 'deleteDocument' });
     const pending = getPendingSave(documentId);
-    if (pending) void pending.finally(remove);
+    if (pending) void pending.then(remove, remove);
     else remove();
   };
 

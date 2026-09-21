@@ -1166,7 +1166,9 @@ name: skill-name
       vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
 
       await act(async () => {
-        await result.current.performSave('doc-1', { title: 'Renamed while conflicted' });
+        await expect(
+          result.current.performSave('doc-1', { title: 'Renamed while conflicted' }),
+        ).rejects.toBe(lockError);
       });
 
       // A collaborator may have changed only the title/emoji — the recovery's

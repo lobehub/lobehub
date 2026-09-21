@@ -41,34 +41,41 @@ export const useHighlightSave = ({
   const documentIdRef = useRef(documentId);
   const onSavedRef = useRef(onSaved);
   const expectedUpdatedAtRef = useRef(updatedAt);
-  const updatedAtPropRef = useRef(updatedAt);
+  const baseContentRef = useRef(content);
+  const pendingSaveRef = useRef<Promise<void> | undefined>(undefined);
   const tRef = useRef(t);
   bufferRef.current = buffer;
   documentIdRef.current = documentId;
   onSavedRef.current = onSaved;
-  if (updatedAtPropRef.current?.getTime() !== updatedAt?.getTime()) {
-    updatedAtPropRef.current = updatedAt;
-    expectedUpdatedAtRef.current = updatedAt;
-  }
   tRef.current = t;
 
-  const writeBuffer = useCallback(async (source: 'manual' | 'autosave') => {
+  const saveBuffer = useCallback(async (source: 'manual' | 'autosave') => {
     const toWrite = bufferRef.current;
     if (toWrite === undefined) return;
+    const expectedUpdatedAt = expectedUpdatedAtRef.current;
     try {
       const result = await documentService.updateDocument({
         content: toWrite,
         id: documentIdRef.current,
         saveSource: source,
-        ...(expectedUpdatedAtRef.current
-          ? { expectedUpdatedAt: expectedUpdatedAtRef.current }
-          : {}),
+        ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
       });
-      if (result?.updatedAt) expectedUpdatedAtRef.current = new Date(result.updatedAt);
+      if (result?.updatedAt) {
+        const savedAt = new Date(result.updatedAt);
+        if (expectedUpdatedAtRef.current && savedAt < expectedUpdatedAtRef.current) return;
+        expectedUpdatedAtRef.current = savedAt;
+      }
+      baseContentRef.current = toWrite;
       onSavedRef.current(toWrite, result?.updatedAt);
-      if (bufferRef.current === toWrite) setBuffer(undefined);
+      if (bufferRef.current === toWrite) {
+        bufferRef.current = undefined;
+        setBuffer(undefined);
+      }
     } catch (error) {
       if (isConflictError(error)) {
+        // A newer remote row already reconciled this request's base.
+        if (expectedUpdatedAtRef.current?.getTime() !== expectedUpdatedAt?.getTime()) return;
+        bufferRef.current = undefined;
         setBuffer(undefined);
         await Promise.allSettled([
           invalidateDocumentMutation({ documentId: documentIdRef.current }),
@@ -81,6 +88,15 @@ export const useHighlightSave = ({
     }
   }, []);
 
+  const writeBuffer = useCallback(
+    (source: 'manual' | 'autosave') => {
+      const run = (pendingSaveRef.current ?? Promise.resolve()).then(() => saveBuffer(source));
+      pendingSaveRef.current = run;
+      return run;
+    },
+    [saveBuffer],
+  );
+
   const debouncedAutoSave = useMemo(
     () =>
       debounce(() => writeBuffer('autosave'), EDITOR_DEBOUNCE_TIME, {
@@ -91,14 +107,27 @@ export const useHighlightSave = ({
     [writeBuffer],
   );
 
+  useEffect(() => {
+    const knownVersion = expectedUpdatedAtRef.current;
+    if (!updatedAt || (knownVersion && updatedAt <= knownVersion)) return;
+    if (content !== baseContentRef.current) {
+      debouncedAutoSave.cancel();
+      bufferRef.current = undefined;
+      setBuffer(undefined);
+    }
+    baseContentRef.current = content;
+    expectedUpdatedAtRef.current = updatedAt;
+  }, [content, updatedAt, debouncedAutoSave]);
+
   const handleChange = useCallback(
     (next: string) => {
-      const isDirty = next !== content;
-      setBuffer(isDirty ? next : undefined);
+      const isDirty = next !== baseContentRef.current;
+      bufferRef.current = isDirty ? next : undefined;
+      setBuffer(bufferRef.current);
       if (isDirty) debouncedAutoSave();
       else debouncedAutoSave.cancel();
     },
-    [content, debouncedAutoSave],
+    [debouncedAutoSave],
   );
 
   const handleSave = useCallback(async () => {
@@ -113,24 +142,15 @@ export const useHighlightSave = ({
     return () => {
       isMountedRef.current = false;
       debouncedAutoSave.cancel();
-      const pendingContent = bufferRef.current;
-      if (pendingContent === undefined) return;
-      const pendingDocumentId = documentIdRef.current;
-      const pendingExpectedUpdatedAt = expectedUpdatedAtRef.current;
       // Defer the fire-and-forget save to a microtask so that StrictMode's synchronous
       // unmount/remount in development does not trigger a save. If the component is
       // immediately remounted, isMountedRef flips back to true before this runs.
       queueMicrotask(() => {
         if (isMountedRef.current) return;
-        void documentService.updateDocument({
-          content: pendingContent,
-          id: pendingDocumentId,
-          saveSource: 'autosave',
-          ...(pendingExpectedUpdatedAt ? { expectedUpdatedAt: pendingExpectedUpdatedAt } : {}),
-        });
+        void writeBuffer('autosave');
       });
     };
-  }, [debouncedAutoSave]);
+  }, [debouncedAutoSave, writeBuffer]);
 
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {

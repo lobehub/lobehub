@@ -134,4 +134,149 @@ describe('useHighlightSave', () => {
     expect(onSaved).not.toHaveBeenCalled();
     expect(result.current.editingValue).toBe('before');
   });
+  it('adopts a refreshed remote body instead of submitting the old draft with its version', async () => {
+    const onSaved = vi.fn();
+    const { result, rerender } = renderHook(
+      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaved }),
+      { initialProps: { content: 'base', updatedAt: new Date('2024-01-01') } },
+    );
+    act(() => result.current.handleChange('local draft'));
+    rerender({ content: 'remote body', updatedAt: new Date('2024-01-02') });
+    await act(() => result.current.handleSave());
+    expect(result.current.editingValue).toBe('remote body');
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft after a metadata-only remote refresh', async () => {
+    const { result, rerender } = renderHook(
+      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaved: vi.fn() }),
+      { initialProps: { content: 'base', updatedAt: new Date('2024-01-01') } },
+    );
+    act(() => result.current.handleChange('local draft'));
+    rerender({ content: 'base', updatedAt: new Date('2024-01-02') });
+    await act(() => result.current.handleSave());
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        content: 'local draft',
+        expectedUpdatedAt: new Date('2024-01-02'),
+      }),
+    );
+  });
+
+  it('serializes overlapping saves and preserves the newest edit', async () => {
+    let resolveFirst!: (value: { updatedAt: string }) => void;
+    mockUpdateDocument.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    mockUpdateDocument.mockResolvedValue({ updatedAt: '2024-01-03T00:00:00.000Z' });
+    const { result } = renderHook(() =>
+      useHighlightSave({
+        content: 'base',
+        documentId: 'doc-1',
+        onSaved: vi.fn(),
+        updatedAt: new Date('2024-01-01'),
+      }),
+    );
+    act(() => result.current.handleChange('first'));
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.handleSave();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => result.current.handleChange('second'));
+    let second!: Promise<void>;
+    act(() => {
+      second = result.current.handleSave();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockUpdateDocument).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveFirst({ updatedAt: '2024-01-02T00:00:00.000Z' });
+      await Promise.all([first, second]);
+    });
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        content: 'second',
+        expectedUpdatedAt: new Date('2024-01-02'),
+      }),
+    );
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+  it('flushes the latest draft on unmount after an in-flight save', async () => {
+    let resolveFirst!: (value: { updatedAt: string }) => void;
+    mockUpdateDocument.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    mockUpdateDocument.mockResolvedValue({ updatedAt: '2024-01-03T00:00:00.000Z' });
+    const { result, unmount } = renderHook(() =>
+      useHighlightSave({
+        content: 'base',
+        documentId: 'doc-1',
+        onSaved: vi.fn(),
+        updatedAt: new Date('2024-01-01'),
+      }),
+    );
+    act(() => result.current.handleChange('first'));
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.handleSave();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => result.current.handleChange('second'));
+    unmount();
+    await act(async () => {
+      await Promise.resolve();
+      resolveFirst({ updatedAt: '2024-01-02T00:00:00.000Z' });
+      await first;
+      await Promise.resolve();
+    });
+    expect(mockUpdateDocument).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        content: 'second',
+        expectedUpdatedAt: new Date('2024-01-02'),
+      }),
+    );
+  });
+
+  it('ignores an old conflict after a newer remote row was adopted and edited', async () => {
+    let rejectFirst!: (error: unknown) => void;
+    mockUpdateDocument.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    const { result, rerender } = renderHook(
+      (props) => useHighlightSave({ ...props, documentId: 'doc-1', onSaved: vi.fn() }),
+      { initialProps: { content: 'base', updatedAt: new Date('2024-01-01') } },
+    );
+    act(() => result.current.handleChange('old draft'));
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.handleSave();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    rerender({ content: 'remote', updatedAt: new Date('2024-01-02') });
+    act(() => result.current.handleChange('new remote draft'));
+    await act(async () => {
+      rejectFirst({ data: { code: 'CONFLICT' } });
+      await first;
+    });
+    expect(result.current.editingValue).toBe('new remote draft');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 });
