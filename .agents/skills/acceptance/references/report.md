@@ -93,8 +93,8 @@ Three things the shape buys, none of them cosmetic:
 - **The tree is git-invisible.** `.acceptances/.gitignore` contains `*`, which
   ignores the whole directory including itself, so evidence binaries never land
   as untracked noise and the project's own `.gitignore` is never rewritten.
-  `lh acceptance install` and `lh acceptance run ingest` both seed that file, so
-  the guarantee does not depend on which entry point a run came through.
+  Create that file before writing evidence; a general-purpose skill installer
+  does not seed it. `lh acceptance run ingest` also ensures it exists.
 
 Writing a round somewhere else still works — `ingest` takes an explicit path —
 but then keeping it out of git is on you.
@@ -254,18 +254,27 @@ but its filename fallback does not satisfy the description requirement.
       "method": "<cli> task list --tree against a 3-level fixture",
       "expected": "root shows 3 nested children at depth 2",
       "requiredEvidence": ["text"]
+    },
+    {
+      "id": "2",
+      "title": "candidate model improves average precision",
+      "category": "Model quality",
+      "verifier": "program",
+      "method": "Evaluate the baseline and candidate on the same held-out dataset",
+      "expected": "candidate average precision exceeds the baseline",
+      "requiredEvidence": ["text"]
     }
   ],
   "summary": {
-    "total": 1,
-    "passed": 1,
+    "total": 2,
+    "passed": 2,
     "failed": 0,
     "blocked": 0,
     "verdict": "pass",
-    "conclusion": "One-paragraph verdict the page shows under the title."
+    "conclusion": "Both checks passed: the task tree returned the expected hierarchy, and the candidate model improved average precision from 0.742 to 0.796."
   },
   "surfaces": ["cli"],
-  "title": "Verify task tree API"
+  "title": "Verify task hierarchy and model quality"
 }
 ```
 

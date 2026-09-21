@@ -1,6 +1,8 @@
 ---
 name: acceptance
-version: 0.4.3
+license: Apache-2.0
+metadata:
+  version: "0.5.0"
 description: >
   End-to-end verification and self-evidence for a delivery in any repository,
   with or without a preconfigured verify plan. Discover an existing plan when
@@ -355,7 +357,7 @@ chat reply.
 Write the link as a plain-text line, never inside a fenced or inline code block — the
 chat client only linkifies plain text, and a code block makes it unclickable:
 
-Acceptance: <https://app.lobehub.com/acceptance/ACCEPTANCE_ID> (the placeholder is the id ingest printed; it stays inside the URL)
+Acceptance: <https://lobehub.com/acceptance/ACCEPTANCE_ID> (the placeholder is the id ingest printed; it stays inside the URL)
 Coverage: 2/2 criteria, all required evidence uploaded
 
 ## Portability rules
@@ -383,6 +385,7 @@ For both acceptance-checker handoffs and review output, read
 | Evidence media, provenance, submission, safety | [evidence.md](references/evidence.md)                                                                                                                                                   |
 | Interaction cost overlay                       | [interaction-cost.md](references/interaction-cost.md)                                                                                                                                   |
 | Web/Electron Chromium CLI commands             | [agent-browser.md](references/agent-browser.md)                                                                                                                                         |
+| Bundled CDP screenshot and macOS capture preflight | [screenshot-helpers.md](references/screenshot-helpers.md) |
 | Authenticated Web session                      | [auth-web.md](references/auth-web.md)                                                                                                                                                   |
 | Native macOS / OS-owned step                   | [computer-use.md](references/computer-use.md)                                                                                                                                           |
 | Temporal evidence: Web/Electron, iOS, native   | [recording-cdp.md](references/recording-cdp.md), [recording-ios-simulator.md](references/recording-ios-simulator.md), [recording-native-macos.md](references/recording-native-macos.md) |

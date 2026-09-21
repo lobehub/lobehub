@@ -193,8 +193,18 @@ agent-browser --session site2 open https://site-b.com
 agent-browser session list
 ```
 
-A named `--session` auto-saves and restores cookies + localStorage across
-commands.
+A named `--session` reuses the same running browser and its cookies + localStorage
+across commands. To save and restore that state across browser restarts, also
+enable `--restore` with a stable session ID:
+
+```bash
+agent-browser --session site1 --restore open https://site-a.com
+```
+
+Use the same session ID and `--restore` on later launches. See
+[auth-web.md](auth-web.md) for manual state files and persistent profiles, and the
+[official session persistence guide](https://agent-browser.dev/sessions#session-persistence)
+for restore behavior.
 
 ## Connect to an existing browser / app
 

@@ -28,7 +28,7 @@ skill wins.
 ```
 
 `.agents/acceptance/` is **committed** (the adapter and the project living logs are
-shared, versioned team assets). The report output directory `.records/` is
+shared, versioned team assets). The report output directory `.acceptances/` is
 **gitignored** — reports are per-run artifacts, published to LobeHub Acceptance,
 not committed.
 
@@ -150,7 +150,7 @@ When `.agents/acceptance/PROJECT.md` is absent, build it before doing anything e
 4. **Write it only after approval**, to `.agents/acceptance/PROJECT.md`. Create
    `.agents/acceptance/` if it does not exist.
 
-`lh acceptance install` only places the skill files; it does no repo exploration.
+Installing the skill only places its files; it does no repo exploration.
 The adapter draft needs a model, so the first verification run is what bootstraps
 `PROJECT.md`.
 

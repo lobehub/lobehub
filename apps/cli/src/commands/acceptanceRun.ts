@@ -54,6 +54,7 @@ interface InstallOptions {
   force?: boolean;
   json?: boolean | string;
   skill: string;
+  skillVersion?: string;
 }
 
 const listMaterializedFiles = (directory: string): string[] => {
@@ -67,8 +68,18 @@ const listMaterializedFiles = (directory: string): string[] => {
 
 async function installAction(options: InstallOptions): Promise<void> {
   const client = await getTrpcClient();
-  // Pulled live from the server's deployed builtin-skills — always the latest.
-  const bundle = await client.verify.getSkillBundle.query({ identifier: options.skill });
+  const version = options.skillVersion?.replace(/^v/, '');
+  const bundle = await client.verify.getSkillBundle.query({
+    identifier: options.skill,
+    ...(version === undefined ? {} : { version }),
+  });
+  // Older servers ignore unknown input fields. Never replace a pinned skill
+  // with their default bundle if the server has not been upgraded yet.
+  if (version !== undefined && bundle.version !== version) {
+    throw new Error(
+      `Requested acceptance skill ${version}, but the server returned ${bundle.version ?? 'an unversioned bundle'}. Update your server to support skill release selection.`,
+    );
+  }
 
   // The acceptance skeleton lands under `.agents/skills/<id>` — the harness dir
   // the project's own `.agents/acceptance/` adapter sits beside. Invariant: this
@@ -125,6 +136,7 @@ async function installAction(options: InstallOptions): Promise<void> {
     removed,
     skill: bundle.identifier,
     skipped,
+    source: bundle.source,
     // Recorded so a caller can tell which version now sits on disk; the
     // installed SKILL.md carries the same value in its frontmatter.
     version: bundle.version,
@@ -960,6 +972,10 @@ function withInstallOptions(cmd: Command): Command {
   return cmd
     .option('--dir <path>', 'Target working directory (default: current dir)')
     .option('--skill <id>', 'Skill identifier to pull', 'acceptance')
+    .option(
+      '--skill-version <version>',
+      'Install a specific skill release (default: latest stable)',
+    )
     .option('--force', 'Overwrite existing skill files')
     .option('--json [fields]', 'Output JSON');
 }
@@ -1070,16 +1086,14 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
   withInstallOptions(
     acceptance
       .command('install')
-      .description(
-        'Install the acceptance skill skeleton into .agents/skills/acceptance (pulled from the server)',
-      ),
+      .description('Install the stable acceptance skill release into .agents/skills/acceptance'),
   ).action(installAction);
 
   withInstallOptions(
     acceptance
       .command('update')
       .description(
-        'Re-pull the acceptance skill, replacing its materialized files and re-wiring harnesses',
+        'Download the stable skill release, replacing its files and re-wiring harnesses',
       ),
   ).action((options: InstallOptions) => installAction({ ...options, force: true }));
 

@@ -16,7 +16,8 @@ on the desktop shell or is fully provable through backend/CLI output.
 2. If the state under test is behind login, authenticate the agent-browser
    session first — see
    [../references/auth-web.md](../references/auth-web.md). Use a named `--session`
-   so cookies persist across commands.
+   to reuse cookies across commands in the same running browser. Add `--restore`
+   when authentication must survive browser restarts.
 
 ```bash
 SESSION=app

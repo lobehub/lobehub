@@ -4,6 +4,10 @@ Use this reference only when the criterion owns a native macOS window or OS
 chrome that CDP cannot observe. It requires a local macOS display and is not
 cloud-portable.
 
+Run the bundled [screen-recording preflight](screenshot-helpers.md#macos-screen-recording-preflight)
+before OS capture. Only a granted permission and a measured non-black frame pass;
+missing tools or an unsupported platform do not establish that recording works.
+
 ## Record the host screen
 
 Prefer a fixed duration so the recorder finalizes without an external kill:

@@ -15,6 +15,8 @@ Guidelines for using AI coding agents in this opensource LobeHub repository.
 
 `AGENTS.md` owns repository-wide architecture and workflow. Keep detailed implementation rules in skills so they have one source of truth.
 
+The `acceptance` skill is generated from a stable release of [lobehub/acceptance](https://github.com/lobehub/acceptance). Maintain its source there; update the committed `.agents/skills/acceptance/` copy using `bun apps/cli/src/index.ts acceptance update --skill-version <version>`. Repository-specific acceptance setup stays in `.agents/acceptance/`.
+
 - **React and TSX**: Before editing components, component state, render boundaries, or memoization, read the `react` skill. It owns component selection, styling, state locality, and render-performance rules.
 - **Heavy domain features**: When splitting a fat Viewer/Page into reusable pieces (page vs portal vs share vs micro-app), read the `compose-atoms` skill. Split on mountable capabilities, not visual sections, and do not hide unused work behind `readOnly` / `mode` flags.
 

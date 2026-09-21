@@ -19,10 +19,10 @@ domain, and session mechanism before selecting a path.
 ## Built-in mechanisms
 
 ```bash
-# Named session: persists cookies and localStorage.
-agent-browser --session app open https://app.example.com/login
-# Complete login once, then reuse the same session.
-agent-browser --session app open https://app.example.com/dashboard
+# Named session with --restore: saves cookies and localStorage across browser restarts.
+agent-browser --session app --restore open https://app.example.com/login
+# Complete login once, then reuse the same session ID and --restore.
+agent-browser --session app --restore open https://app.example.com/dashboard
 
 # Playwright-style storage state.
 agent-browser state save auth.json

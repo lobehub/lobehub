@@ -1,80 +1,60 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, expect, it } from 'vitest';
+import { fetchAcceptanceSkillBundle } from './index';
 
-import { AcceptanceSkill } from './index';
+const bundle = {
+  content: '---\nname: acceptance\nmetadata:\n  version: "0.5.0"\n---\n# Acceptance',
+  files: { 'references/report.md': '# Reports', 'scripts/capture.cjs': 'capture();' },
+  identifier: 'acceptance',
+  name: 'acceptance',
+  source: {
+    commit: 'a'.repeat(40),
+    path: 'skills/acceptance',
+    repository: 'lobehub/acceptance',
+    tag: 'v0.5.0',
+  },
+  version: '0.5.0',
+};
 
-const skillDir = path.dirname(fileURLToPath(import.meta.url));
-const readMarkdownBundle = (directory: string): string =>
-  readdirSync(directory, { withFileTypes: true })
-    .flatMap((entry) => {
-      const filePath = path.join(directory, entry.name);
-      if (entry.isDirectory()) return readMarkdownBundle(filePath);
-      return entry.name.endsWith('.md') ? readFileSync(filePath, 'utf8') : [];
-    })
-    .join('\n');
+afterEach(() => vi.restoreAllMocks());
 
-const listMarkdown = (directory: string): string[] =>
-  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const filePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return listMarkdown(filePath);
-    return entry.name.endsWith('.md') ? [path.relative(skillDir, filePath)] : [];
-  });
-
-const skillContent = readFileSync(path.join(skillDir, 'SKILL.md'), 'utf8');
-const skillBundle = readMarkdownBundle(skillDir);
-
-describe('AcceptanceSkill', () => {
-  it('exposes only the acceptance path in user-facing handoff guidance', () => {
-    const internalRunPath = ['', 'verify'].join('/');
-
-    expect(skillBundle).not.toContain(internalRunPath);
-    expect(skillContent).toContain('/acceptance/<acceptanceId>');
-    expect(skillContent).toContain(
-      'Put no images, local paths, local file links, or internal run-page paths',
+describe('fetchAcceptanceSkillBundle', () => {
+  it.each([undefined, '0.5.0', 'v0.5.0'])('downloads a complete release (%s)', async (version) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(bundle));
+    expect(await fetchAcceptanceSkillBundle(version)).toEqual(bundle);
+    const release = version ? 'download/v0.5.0' : 'latest/download';
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      `https://github.com/lobehub/acceptance/releases/${release}/acceptance-skill.json`,
     );
   });
 
-  it('ships every reference on disk — an unregistered file never reaches a builder', () => {
-    // The bundle is built from `resources`, not from the directory: a reference
-    // added to the folder but not registered here is invisible to every puller
-    // while still looking present in the repo.
-    const onDisk = listMarkdown(skillDir)
-      .filter((file) => file !== 'SKILL.md')
-      .sort();
-
-    expect(Object.keys(AcceptanceSkill.resources ?? {}).sort()).toEqual(onDisk);
+  it('reports failed downloads instead of falling back to an old bundled copy', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('Unavailable', { status: 503 }));
+    await expect(fetchAcceptanceSkillBundle()).rejects.toThrow('503');
   });
 
-  it('carries a version parsed from its own SKILL.md frontmatter', () => {
-    // The version must reach the bundle, not just sit in the markdown: an
-    // installer compares `bundle.version` against the copy already on disk, and
-    // a version only a human can read makes that impossible.
-    expect(skillContent).toMatch(/^version: \d+\.\d+\.\d+$/m);
-    expect(AcceptanceSkill.version).toMatch(/^\d+\.\d+\.\d+$/);
+  it.each(['../outside', '/outside', 'C:/outside', 'references/../../outside', 'a\\b', 'SKILL.md'])(
+    'rejects an unsafe resource path: %s',
+    async (file) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        Response.json({ ...bundle, files: { [file]: 'unsafe' } }),
+      );
+      await expect(fetchAcceptanceSkillBundle()).rejects.toThrow('relative paths');
+    },
+  );
+
+  it('rejects inconsistent release metadata and pinned-version mismatches', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(bundle));
+    await expect(fetchAcceptanceSkillBundle('0.6.0')).rejects.toThrow('version does not match');
+    fetchSpy.mockResolvedValueOnce(Response.json({ ...bundle, version: '0.6.0' }));
+    await expect(fetchAcceptanceSkillBundle()).rejects.toThrow('version does not match');
   });
 
-  it('names no host environment variable — the skill needs no ambient ids', () => {
-    // The skill is portable and runs anywhere. Instructing a builder to read
-    // `$LOBEHUB_TOPIC_ID` / `$LOBE_OPERATION_ID` both couples it to one host and
-    // invites it to hunt for an id that is absent by design; the CLI resolves
-    // subject and origin from its own env without the agent's help.
-    expect(skillBundle).not.toMatch(/LOBEHUB_[A-Z_]+/);
-    expect(skillBundle).not.toMatch(/LOBE_OPERATION_ID/);
-  });
-
-  it('routes to the project layer before touching an environment', () => {
-    expect(skillContent).toContain('.agents/acceptance/');
-    expect(skillContent).toContain('PROCESS.md');
-    expect(skillContent).toContain('project-adapter.md');
-  });
-
-  it('keeps the latest evidence and multi-round acceptance contracts', () => {
-    expect(skillBundle).toContain('Dual text evidence for non-visual behavior');
-    expect(skillContent).toContain('lh acceptance view <acceptanceId | type:id> --json');
-    expect(skillContent).toContain("supersedes: ['old-id']");
-    expect(skillContent).toContain('--requirement "<one-sentence business goal>"');
+  it('rejects malformed bundles and non-release refs', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ files: {} }));
+    await expect(fetchAcceptanceSkillBundle()).rejects.toThrow();
+    vi.mocked(fetch).mockClear();
+    await expect(fetchAcceptanceSkillBundle('master')).rejects.toThrow('stable version');
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

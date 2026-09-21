@@ -273,23 +273,28 @@ derive(item))`) captures the value at first render. When a persisted cache hydra
   (`Resource temporarily unavailable` / `CDP response channel closed`) while
   `eval`/`get url` keep working — **not** a display-sleep or permission issue. Reset
   with `agent-browser close --all`, or skip the daemon entirely (D6).
-- **D6. WORKS — raw-CDP screenshot bypasses the daemon.** `scripts/cdp-screenshot.sh [--port <n>] [--out x.png] [--full] [--check]` opens its own ws to the target, does
+- **D6. WORKS — raw-CDP screenshot bypasses the daemon.** The bundled
+  `bash "$SKILL_DIR/scripts/cdp-screenshot.sh" [--port <n>] [--out x.png] [--full] [--check]`
+  opens its own WebSocket to the target, does
   one `Page.captureScreenshot`, and closes (\~60ms). Immune to the D5 wedge and
   **robust when the display is asleep or the window is minimized/occluded** (the
   engine forces a compositor frame). Use it for Electron evidence and as a preflight
-  (`--check` → exit 0 iff a real, non-black frame was captured).
+  (`--check` → exit 0 iff a real, non-black frame was measured). Resolve `SKILL_DIR`
+  and check platform/runtime requirements in [screenshot-helpers.md](screenshot-helpers.md);
+  a missing brightness probe returns undetermined, never PASS.
 - **D7. OS `screencapture` is BLACK when the display is asleep/locked/screensaver.**
-  Distinct from D5/D6: `screencapture` (and `capture-app-window.sh`, osascript grabs)
-  captures the physical framebuffer, so an idle-slept display → a uniformly black PNG
-  (mean/max = 0). Permission can be fine. Gate with `scripts/check-screen-recording.sh`
+  Distinct from D5/D6: `screencapture` captures the physical framebuffer,
+  so an idle-slept display → a uniformly black PNG
+  (mean/max = 0). Permission can be fine. Gate with the bundled
+  `bash "$SKILL_DIR/scripts/check-screen-recording.sh"`
   (checks the permission bit + a real-frame blackness probe) and keep the display
   awake for the whole run: `caffeinate -dimsu &`. CDP capture (D6) does not have this
   problem.
 - **D8. The daemon serializes commands — `open` queues behind a screenshot loop.**
-  While a recording loop (`record-gif.sh`) is running, `agent-browser open <url>`
-  lands late/out of order, and your "during navigation" screenshot can show the
+  While a loop repeatedly takes screenshots through the same `agent-browser`
+  session, `agent-browser open <url>` can run late, and your "during navigation" screenshot can show the
   PREVIOUS page (which may look identical to the expected end state — a false read).
-  **Works**: during any recording loop, navigate with
+  **Works**: while that loop is running, navigate with
   `agent-browser eval 'location.href="<url>"'` (fire-and-forget) instead of `open`.
 - **D9. A mid-session bundler dependency re-optimize can wedge the renderer
   compositor.** Symptom: capture returns black, the app root's `innerText` is 0 while
@@ -371,17 +376,19 @@ unquoted vars` — stashing `S="--session x --cdp 9226"` then `agent-browser $S`
   you must not kill. Terminate the run, report the exact error, and ask the user to
   clean up other processes — do not change watch mode, fall back to a static build, or
   publish a report from a degraded surface.
-- **E7. The default `lobehub-dev` browser session is shared — a parallel run can steal your
-  tab.** `agent-browser` sessions are keyed by name, not by workspace, so two runs both using
-  `--session lobehub-dev` drive the **same** browser. The other run navigates the tab to _its_
+- **E7. A shared browser session name lets a parallel run steal your tab.**
+  `agent-browser` sessions are keyed by name, not by workspace, so two runs using
+  the same `--session <name>` drive the **same** browser. The other run navigates the tab to _its_
   dev server, after which your `eval` reads that page while `screenshot` may still show yours —
   a screenshot that renders your fixture next to a `document.body.innerText` from the same
   moment containing none of its strings, every assertion `false`. It reads like a product bug;
   it is two runs sharing one browser. **Works**: give every run its own session name, seed auth
-  into it, and confirm the tab is yours before asserting — `agent-browser --session <name> tab
-list` must print YOUR port and path. Same applies to ports: a worktree allocates its own
-  `SERVER_PORT`/`SPA_PORT`, so re-run `test-env.sh` inside the worktree you are testing rather
-  than assuming another checkout's ports.
+  into it, and confirm the tab is yours before asserting —
+  `agent-browser --session <name> tab list` must print the expected port and path.
+  Ports can also differ between worktrees. Resolve the tested worktree's ports and
+  URLs using the commands or configuration documented in its
+  `.agents/acceptance/PROJECT.md` (see [project-adapter.md](project-adapter.md)),
+  rather than assuming another checkout's ports.
 
 ### B5. ✅ WORKS — client-service mock state must survive reloads; persisted SWR cache replays old terminal data under the same key
 

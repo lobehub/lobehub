@@ -113,6 +113,9 @@ pbpaste
 
 ## Capturing as evidence
 
+Before OS capture, run the bundled [screen-recording preflight](screenshot-helpers.md#macos-screen-recording-preflight).
+Resolve its path from the loaded skill, not from the project's scripts directory.
+
 - A `screencapture` PNG → `--type screenshot --by cli`.
 - For time-based native behavior, OS screen-record to MP4/GIF — see
   [recording-native-macos.md](./recording-native-macos.md).
