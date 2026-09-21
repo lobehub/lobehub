@@ -97,7 +97,10 @@ const styles = createStaticStyles(({ css }) => ({
     /* "at least $404" must stay one line — a wrap pushes it out of the cell. */
     white-space: nowrap;
   `,
-  /** Keep the content surface neutral; intensity is carried by the corner dot. */
+  /**
+   * The cell is the only surface here — no panel behind it — so it carries a
+   * fill of its own. Intensity stays on the corner dot, not on this tint.
+   */
   dayCell: css`
     position: relative;
 
@@ -112,7 +115,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     &[data-in-month='false'] {
       opacity: 0.35;
@@ -188,7 +191,7 @@ const styles = createStaticStyles(({ css }) => ({
     width: 10px;
     height: 10px;
     border-radius: 3px;
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     &[data-rate-limited='true'] {
       background: ${cssVar.colorErrorBg};
@@ -289,7 +292,7 @@ const styles = createStaticStyles(({ css }) => ({
     /* "09:42 100%" is one unit — wrapping it splits the percentage in half. */
     white-space: nowrap;
 
-    background: ${cssVar.colorBgContainer};
+    background: ${cssVar.colorFillQuaternary};
 
     &[data-rate-limited='true'] {
       color: ${cssVar.colorErrorText};
@@ -302,9 +305,11 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 4px;
   `,
   /**
-   * One line per window — the row is a scannable comparison, not a card. The
-   * panel around them is the only card; a fill per row would stack a second
-   * surface on it for six rows running, so they are separated by rules instead.
+   * One line per window — the row is a scannable comparison, not a card. Six
+   * filled rows running would read as a block of surfaces, so the rows are
+   * separated by rules instead. The rule is translucent: it sits straight on the
+   * modal surface, and in dark mode the solid secondary border is that surface's
+   * exact colour.
    */
   windowListRow: css`
     display: grid;
@@ -317,13 +322,8 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 2px;
 
     &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+      border-block-end: 1px solid ${cssVar.colorSplit};
     }
-  `,
-  sectionPanel: css`
-    padding: 10px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
   `,
   weekday: css`
     font-size: 11px;
@@ -639,7 +639,7 @@ const WindowHistory = memo<{
     const grid = buildSessionGrid(stats, latestDay);
 
     return (
-      <Flexbox className={styles.sectionPanel} gap={8}>
+      <Flexbox gap={8}>
         <Flexbox horizontal align={'baseline'} justify={'space-between'}>
           <Text strong style={{ fontSize: 13 }}>
             {t('heteroAgent.claudeQuota.calendar.sessionHistory')}
@@ -693,7 +693,7 @@ const WindowHistory = memo<{
   }
 
   return (
-    <Flexbox className={styles.sectionPanel} gap={6}>
+    <Flexbox gap={6}>
       <Flexbox horizontal align={'baseline'} justify={'space-between'}>
         <Text strong style={{ fontSize: 13 }}>
           {t('heteroAgent.claudeQuota.calendar.weeklyHistory')}
@@ -951,7 +951,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId }) => {
           <WindowHistory series={series} stats={windowStats} />
         </Flexbox>
 
-        <Flexbox className={styles.sectionPanel} gap={8}>
+        <Flexbox gap={8}>
           <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
             <Flexbox horizontal align={'baseline'} gap={8}>
               <Text strong style={{ fontSize: 13 }}>
