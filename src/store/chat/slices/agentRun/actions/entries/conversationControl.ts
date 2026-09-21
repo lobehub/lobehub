@@ -16,6 +16,7 @@ import {
   getRuntimeCanManageAgent,
 } from '@/helpers/agentManagementAccess';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
+import { isLocalOnlyModelProvider } from '@/helpers/localModelProvider';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
@@ -263,6 +264,7 @@ export class ConversationControlActionImpl {
         heterogeneousProvider,
         isGatewayMode,
         isWorkspaceAgent: !!agent?.workspaceId,
+        modelProviderIsLocalOnly: isLocalOnlyModelProvider(agentConfig?.provider),
         workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
       }) === 'gateway'
     );

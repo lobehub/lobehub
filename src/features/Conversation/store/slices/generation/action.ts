@@ -22,6 +22,7 @@ import {
 import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { isLocalOnlyModelProviderForAgent } from '@/helpers/localModelProvider';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
@@ -429,6 +430,7 @@ const regenerateUserMessageFromSource = async (
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
       isWorkspaceAgent,
+      modelProviderIsLocalOnly: isLocalOnlyModelProviderForAgent(context.agentId),
       workspaceScoped,
     });
 
@@ -799,6 +801,7 @@ export const generationSlice: StateCreator<
       heterogeneousProvider: agencyConfig?.heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
       isWorkspaceAgent,
+      modelProviderIsLocalOnly: isLocalOnlyModelProviderForAgent(context.agentId),
       workspaceScoped,
     });
 
@@ -891,6 +894,7 @@ export const generationSlice: StateCreator<
       heterogeneousProvider,
       isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
       isWorkspaceAgent,
+      modelProviderIsLocalOnly: isLocalOnlyModelProviderForAgent(context.agentId),
       workspaceScoped,
     });
     const agentId = context.agentId;
