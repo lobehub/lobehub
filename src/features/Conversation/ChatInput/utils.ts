@@ -63,13 +63,18 @@ export const toChatInputMessages = (messages: UIChatMessage[]): ChatInputMessage
     role: m.role,
   }));
 
+/**
+ * Slice the conversation to the messages that will actually enter the next
+ * request's context window. Returns full `UIChatMessage`s (not stripped text)
+ * so token accounting can see tool calls, tool results, and reasoning.
+ */
 export const getContextWindowMessages = (
   messages: UIChatMessage[],
   options: {
     enableHistoryCount?: boolean;
     historyCount?: number;
   },
-) => toChatInputMessages(chatHelpers.getSlicedMessages(messages, options));
+): UIChatMessage[] => chatHelpers.getSlicedMessages(messages, options);
 
 export interface ConversationChatInputUiState {
   placeholderVariant: PlaceholderVariant;

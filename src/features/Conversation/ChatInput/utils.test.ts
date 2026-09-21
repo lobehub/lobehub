@@ -120,6 +120,25 @@ describe('getContextWindowMessages', () => {
       }),
     ).toEqual([]);
   });
+
+  it('keeps full messages so token accounting can see tools and reasoning', () => {
+    // Regression: these used to be stripped down to `{ content, role }`, so
+    // the context-window token panel counted tool calls / results / reasoning
+    // as zero and wildly under-reported agent conversations.
+    const richMessages = [
+      {
+        content: 'assistant text',
+        id: 'msg-1',
+        reasoning: { content: 'thinking trace' },
+        role: 'assistant',
+        tools: [{ apiName: 'search', arguments: '{}', id: 'call-1', identifier: 'p' }],
+      },
+    ] as unknown as UIChatMessage[];
+
+    expect(getContextWindowMessages(richMessages, { enableHistoryCount: false })).toEqual(
+      richMessages,
+    );
+  });
 });
 
 describe('getConversationChatInputUiState', () => {

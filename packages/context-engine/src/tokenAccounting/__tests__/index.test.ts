@@ -33,6 +33,7 @@ describe('countContextTokens', () => {
         toolCallId: 0,
         toolCalls: 0,
         toolDefinition: 0,
+        toolResult: 0,
       });
     });
 
@@ -446,7 +447,9 @@ describe('countContextTokens', () => {
       });
 
       expect(r.messages).toHaveLength(2);
-      expect(r.messages[1].bySource.content).toBeGreaterThan(100);
+      // 'assistant text' estimate + the 42-token fast-path child
+      expect(r.messages[1].bySource.content).toBeGreaterThanOrEqual(42);
+      expect(r.messages[1].bySource.toolResult).toBeGreaterThan(100);
       expect(r.messages[1].bySource.toolCalls).toBeGreaterThan(0);
       expect(r.messages[1].bySource.toolCallId).toBeGreaterThan(0);
       expect(r.rawTotal).toBeGreaterThan(150);
@@ -472,7 +475,8 @@ describe('countContextTokens', () => {
         ],
       });
 
-      expect(r.bySource.content).toBeGreaterThan(500);
+      expect(r.bySource.toolResult).toBeGreaterThan(500);
+      expect(r.bySource.content).toBeGreaterThan(0);
     });
 
     it('keeps counting result content even on the assistant usage fast-path', () => {
@@ -496,8 +500,10 @@ describe('countContextTokens', () => {
         ],
       });
 
-      // 42 (recorded output) + result payload tokens
-      expect(r.bySource.content).toBeGreaterThan(42);
+      // 42 (recorded output) under content; the result payload stays counted
+      // under toolResult — the fast-path never covers the tool's own results.
+      expect(r.bySource.content).toBe(42);
+      expect(r.bySource.toolResult).toBeGreaterThan(0);
     });
   });
 
@@ -649,12 +655,10 @@ describe('countContextTokens', () => {
         ],
       });
 
-      expect(r.bySource.content).toBeGreaterThan(200);
+      expect(r.bySource.content).toBeGreaterThan(50);
+      expect(r.bySource.toolResult).toBeGreaterThan(100);
       expect(r.bySource.toolCalls).toBeGreaterThan(0);
       // tool.id ships as the flattened tool message's tool_call_id
-      expect(r.bySource.toolCallId).toBeGreaterThan(0);
-      expect(r.bySource.content).toBeGreaterThan(150);
-      expect(r.bySource.toolCalls).toBeGreaterThan(0);
       expect(r.bySource.toolCallId).toBeGreaterThan(0);
     });
 
@@ -690,7 +694,8 @@ describe('countContextTokens', () => {
         ],
       });
 
-      expect(r.bySource.content).toBeGreaterThan(150);
+      expect(r.bySource.content).toBeGreaterThan(100);
+      expect(r.bySource.toolResult).toBeGreaterThan(50);
       expect(r.bySource.toolCalls).toBeGreaterThan(0);
       expect(r.bySource.toolCallId).toBeGreaterThan(0);
     });

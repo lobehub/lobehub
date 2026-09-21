@@ -17,8 +17,16 @@ interface TokenDetailsProps {
 const TokenDetails = memo<TokenDetailsProps>(({ breakdown }) => {
   const { t } = useTranslation(['chat', 'components']);
 
-  const { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken } =
-    breakdown;
+  const {
+    assistantMessagesToken,
+    historySummaryToken,
+    maxTokens,
+    systemRoleToken,
+    toolMessagesToken,
+    toolsToken,
+    totalToken,
+    userMessagesToken,
+  } = breakdown;
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   return (
@@ -71,9 +79,21 @@ const TokenDetails = memo<TokenDetailsProps>(({ breakdown }) => {
             },
             {
               color: cssVar.gold,
-              id: 'chats',
-              title: t('tokenDetails.chats'),
-              value: chatsToken,
+              id: 'userMessages',
+              title: t('tokenDetails.chatsUser'),
+              value: userMessagesToken,
+            },
+            {
+              color: cssVar.cyan,
+              id: 'assistantMessages',
+              title: t('tokenDetails.chatsAssistant'),
+              value: assistantMessagesToken,
+            },
+            {
+              color: cssVar.volcano,
+              id: 'toolMessages',
+              title: t('tokenDetails.chatsTool'),
+              value: toolMessagesToken,
             },
           ]}
         />

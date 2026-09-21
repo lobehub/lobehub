@@ -1,5 +1,6 @@
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { countContextTokens, ToolNameResolver } from '@lobechat/context-engine';
 import { pluginPrompts } from '@lobechat/prompts';
+import type { UIChatMessage } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 
@@ -21,7 +22,11 @@ import { settingsSelectors } from '@/store/user/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useStoreApi } from '../../store';
-import { getToolContextRefreshKey, getToolExcludeDefaultToolIds } from './utils';
+import {
+  bucketMessageTokensByRole,
+  getToolContextRefreshKey,
+  getToolExcludeDefaultToolIds,
+} from './utils';
 
 const toolNameResolver = new ToolNameResolver();
 
@@ -29,17 +34,16 @@ type ChatInputStoreApi = ReturnType<typeof useStoreApi>;
 
 interface ComposerSource {
   input: string;
-  messages: string;
+  messages: UIChatMessage[];
 }
+
+const EMPTY_MESSAGES: UIChatMessage[] = [];
 
 const readComposerSource = (storeApi: ChatInputStoreApi): ComposerSource => {
   const state = storeApi.getState();
   return {
     input: state.markdownContent || '',
-    messages:
-      state.contextWindowMessages
-        ?.map((message) => (typeof message.content === 'string' ? message.content : ''))
-        .join('') || '',
+    messages: state.contextWindowMessages || EMPTY_MESSAGES,
   };
 };
 
@@ -72,12 +76,19 @@ const useComposerSource = (): ComposerSource => {
 };
 
 export interface TokenBreakdown {
+  /** Assistant text + reasoning inside the context window */
+  assistantMessagesToken: number;
+  /** Sum of the three conversation buckets (user + assistant + tool) */
   chatsToken: number;
   historySummaryToken: number;
   maxTokens: number;
   systemRoleToken: number;
+  /** Tool call payloads + tool results + tool_call_id linkage */
+  toolMessagesToken: number;
   toolsToken: number;
   totalToken: number;
+  /** User message text + the current composer draft */
+  userMessagesToken: number;
 }
 
 export const useTokenBreakdown = (): TokenBreakdown => {
@@ -179,12 +190,34 @@ export const useTokenBreakdown = (): TokenBreakdown => {
   const toolsToken = useTokenCount(canUseTool ? toolsString : '');
 
   const inputTokenCount = useTokenCount(input);
-  const chatsToken = useTokenCount(messages) + inputTokenCount;
+
+  // Full context accounting: unlike joining message.content strings, this
+  // also counts tool call arguments, tool results, and reasoning — which
+  // dominate agent conversations.
+  const messageBuckets = useMemo(
+    () => bucketMessageTokensByRole(countContextTokens({ messages }).messages),
+    [messages],
+  );
+
+  const userMessagesToken = messageBuckets.user + inputTokenCount;
+  const assistantMessagesToken = messageBuckets.assistant;
+  const toolMessagesToken = messageBuckets.tool;
+  const chatsToken = userMessagesToken + assistantMessagesToken + toolMessagesToken;
 
   const systemRoleToken = useTokenCount(systemRole);
   const historySummaryToken = useTokenCount(historySummary);
 
   const totalToken = systemRoleToken + historySummaryToken + toolsToken + chatsToken;
 
-  return { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken };
+  return {
+    assistantMessagesToken,
+    chatsToken,
+    historySummaryToken,
+    maxTokens,
+    systemRoleToken,
+    toolMessagesToken,
+    toolsToken,
+    totalToken,
+    userMessagesToken,
+  };
 };

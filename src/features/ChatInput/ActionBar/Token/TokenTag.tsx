@@ -12,23 +12,45 @@ import { useTokenBreakdown } from './useTokenBreakdown';
 const Token = memo(() => {
   const { t } = useTranslation('chat');
 
-  const { chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken } =
-    useTokenBreakdown();
+  const {
+    assistantMessagesToken,
+    chatsToken,
+    historySummaryToken,
+    maxTokens,
+    systemRoleToken,
+    toolMessagesToken,
+    toolsToken,
+    totalToken,
+    userMessagesToken,
+  } = useTokenBreakdown();
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const content = useMemo(
     () => (
       <TokenDetails
         breakdown={{
+          assistantMessagesToken,
           chatsToken,
           historySummaryToken,
           maxTokens,
           systemRoleToken,
+          toolMessagesToken,
           toolsToken,
           totalToken,
+          userMessagesToken,
         }}
       />
     ),
-    [chatsToken, historySummaryToken, maxTokens, systemRoleToken, toolsToken, totalToken],
+    [
+      assistantMessagesToken,
+      chatsToken,
+      historySummaryToken,
+      maxTokens,
+      systemRoleToken,
+      toolMessagesToken,
+      toolsToken,
+      totalToken,
+      userMessagesToken,
+    ],
   );
 
   // Keep the composer quiet for regular users until context pressure is real;
