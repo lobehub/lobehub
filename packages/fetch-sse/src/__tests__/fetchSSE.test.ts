@@ -1,5 +1,5 @@
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
-import type { ChatMessageError } from '@lobechat/types';
+import { ChatErrorType, type ChatMessageError } from '@lobechat/types';
 import type { FetchEventSourceInit } from '@lobechat/utils/client/fetchEventSource/index';
 import { fetchEventSource } from '@lobechat/utils/client/fetchEventSource/index';
 import { sleep } from '@lobechat/utils/sleep';
@@ -479,6 +479,8 @@ describe('fetchSSE', () => {
 
   it('should call onFinish with correct parameters for different finish types', async () => {
     const mockOnFinish = vi.fn();
+    const abortController = new AbortController();
+    abortController.abort();
 
     (fetchEventSource as any).mockImplementationOnce(
       (url: string, options: FetchEventSourceInit) => {
@@ -488,7 +490,11 @@ describe('fetchSSE', () => {
       },
     );
 
-    await fetchSSE('/', { onFinish: mockOnFinish, responseAnimation: 'fadeIn' });
+    await fetchSSE('/', {
+      onFinish: mockOnFinish,
+      responseAnimation: 'fadeIn',
+      signal: abortController.signal,
+    });
 
     expect(mockOnFinish).toHaveBeenCalledWith('Hello', {
       observationId: null,
@@ -516,8 +522,10 @@ describe('fetchSSE', () => {
   });
 
   describe('onAbort', () => {
-    it('should call onAbort when AbortError is thrown', async () => {
+    it('should call onAbort when AbortError is thrown by an aborted request', async () => {
       const mockOnAbort = vi.fn();
+      const abortController = new AbortController();
+      abortController.abort();
 
       (fetchEventSource as any).mockImplementationOnce(
         (url: string, options: FetchEventSourceInit) => {
@@ -526,13 +534,19 @@ describe('fetchSSE', () => {
         },
       );
 
-      await fetchSSE('/', { onAbort: mockOnAbort, responseAnimation: 'fadeIn' });
+      await fetchSSE('/', {
+        onAbort: mockOnAbort,
+        responseAnimation: 'fadeIn',
+        signal: abortController.signal,
+      });
 
       expect(mockOnAbort).toHaveBeenCalledWith('Hello');
     });
 
-    it('should call onAbort when MESSAGE_CANCEL_FLAT is thrown', async () => {
+    it('should call onAbort when MESSAGE_CANCEL_FLAT is thrown by an aborted request', async () => {
       const mockOnAbort = vi.fn();
+      const abortController = new AbortController();
+      abortController.abort(MESSAGE_CANCEL_FLAT);
 
       (fetchEventSource as any).mockImplementationOnce(
         (url: string, options: FetchEventSourceInit) => {
@@ -541,9 +555,39 @@ describe('fetchSSE', () => {
         },
       );
 
-      await fetchSSE('/', { onAbort: mockOnAbort, responseAnimation: 'fadeIn' });
+      await fetchSSE('/', {
+        onAbort: mockOnAbort,
+        responseAnimation: 'fadeIn',
+        signal: abortController.signal,
+      });
 
       expect(mockOnAbort).toHaveBeenCalledWith('Hello');
+    });
+
+    it('surfaces an upstream canceled response as an error when the request signal is active', async () => {
+      const mockOnAbort = vi.fn();
+      const mockOnErrorHandle = vi.fn();
+
+      (fetchEventSource as any).mockImplementationOnce(
+        (url: string, options: FetchEventSourceInit) => {
+          options.onerror!(MESSAGE_CANCEL_FLAT);
+        },
+      );
+
+      await fetchSSE('/', {
+        onAbort: mockOnAbort,
+        onErrorHandle: mockOnErrorHandle,
+        responseAnimation: 'fadeIn',
+        signal: new AbortController().signal,
+      });
+
+      expect(mockOnAbort).not.toHaveBeenCalled();
+      expect(mockOnErrorHandle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: MESSAGE_CANCEL_FLAT,
+          type: ChatErrorType.UnknownChatFetchError,
+        }),
+      );
     });
   });
 
