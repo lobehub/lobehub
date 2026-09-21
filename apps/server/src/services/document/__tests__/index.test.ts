@@ -2009,6 +2009,7 @@ describe('DocumentService', () => {
         userId,
         'workspace-1',
         'public',
+        { type: 'ordinary' },
       );
       expect(transactionModel.findByFileId).toHaveBeenCalledWith('file-1', {
         type: 'ordinary',

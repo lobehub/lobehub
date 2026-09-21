@@ -75,6 +75,7 @@ Use `bun run check [changed-files...]`.
 - Every bug fix needs a regression test that fails before the fix and passes after it. Skip pure style/CSS fixes when the only practical assertion would match stylesheet source strings.
 - Run once with the selectors needed: no selector means lint + related tests; `--lint`, `--test`, and `--type` compose. Default scope is all staged, unstaged and untracked changes; explicit paths override it.
 - Lint autofixes files: review the emitted diff. Tests use the nearest owning Vitest config. `--type` checks the full repo. Never run `bun run test`, which runs the full suite.
+- `--alint` is opt-in: model-backed rules in `packages/alint/` for judgement calls eslint cannot express. It needs a provider (`bun run alint:setup`); findings are warnings to fix or justify in the PR.
 - For a manual package test, run from the owning package: `cd packages/database && bunx vitest run --silent='passed-only' '[file-path]'`.
 
 ### Acceptance

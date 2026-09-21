@@ -39,6 +39,7 @@ export interface HeterogeneousAgentStatusGuideProps {
   onDismiss?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
+  onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant?: HeterogeneousAgentStatusGuideVariant;
 }
@@ -63,6 +64,7 @@ export interface HeterogeneousAgentGuideStateProps {
   onDismiss?: () => void;
   onOpenSystemTools?: () => void;
   onRetry?: () => void;
+  onTransfer?: () => void;
   schedule?: HeterogeneousAgentScheduleState;
   variant: HeterogeneousAgentStatusGuideVariant;
 }

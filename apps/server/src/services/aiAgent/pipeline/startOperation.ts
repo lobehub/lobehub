@@ -40,6 +40,7 @@ export interface StartOperationInput {
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
+  includeFinalState?: boolean;
   /** Final runtime context — base prep context with 16b/16c overrides applied. */
   initialContext: OperationPrepResult['initialContext'];
   initialStepCount?: number;
@@ -137,6 +138,7 @@ export const startOperation = async (
   // If createOperation fails, we still have valid messages that need error info
   try {
     const result = await deps.agentRuntimeService.createOperation({
+      includeFinalState: input.includeFinalState,
       activeDeviceId: discovery.activeDeviceId,
       activeDeviceScope: discovery.activeDeviceScope,
       agentConfig,
@@ -272,10 +274,18 @@ export const startOperation = async (
           ...(typeof video === 'boolean' && { video }),
           ...(typeof vision === 'boolean' && { vision }),
         },
+        // Read once during discovery: every LLM attempt of this run resolves its
+        // parameters from here, so no step re-reads the bank, the user's model
+        // row or the reasoning config — and none of them can change mid-run.
+        modelFacts: discovery.modelFacts,
         model,
         provider,
       },
       hooks,
+      // Listed once during discovery: every step renders {{CREDS_LIST}} from
+      // here instead of asking the Market API again. Awaited only now, so the
+      // read overlapped with the operation preparation that ran in between.
+      operationCredentials: await discovery.credentialFactsPromise,
       operationId,
       parentOperationId,
       signal,

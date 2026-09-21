@@ -52,3 +52,29 @@ describe('resolveHeteroDispatchErrorType', () => {
     expect(resolveHeteroDispatchErrorType()).toBe(ChatErrorType.ServerAgentRuntimeError);
   });
 });
+
+describe('JSON device-gateway dispatch errors', () => {
+  it.each(['DEVICE_NOT_FOUND', 'DEVICE_OFFLINE', 'DEVICE_CHANNEL_UNAVAILABLE'])(
+    'explains %s and selects the localized device error',
+    (code) => {
+      const raw = JSON.stringify({ error: code, success: false });
+
+      expect(humanizeHeteroDispatchError(raw)).toBe(humanizeHeteroDispatchError(code));
+      expect(resolveHeteroDispatchErrorType(raw)).toBe(ChatErrorType.DeviceGatewayNotConfigured);
+    },
+  );
+
+  it.each([
+    '{"error":"UNKNOWN_DEVICE_ERROR","success":false}',
+    '{"error":{"code":"DEVICE_NOT_FOUND"}}',
+    '{"error":null}',
+    '{"error":42}',
+    '{"success":false}',
+    '{"error":"DEVICE_NOT_FOUND"',
+    'null',
+    '[]',
+  ])('preserves unrecognized or malformed responses: %s', (raw) => {
+    expect(humanizeHeteroDispatchError(raw)).toBe(raw);
+    expect(resolveHeteroDispatchErrorType(raw)).toBe(ChatErrorType.ServerAgentRuntimeError);
+  });
+});

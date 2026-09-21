@@ -23,6 +23,7 @@ import { resolveAgentWorkingDirectory } from '@/helpers/agentWorkingDirectory';
 import { resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { messageService } from '@/services/message';
+import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -507,7 +508,7 @@ const regenerateUserMessageFromSource = async (
  * Handles generation control (stop, cancel, regenerate, continue)
  */
 export interface GenerationAction {
-  cancelHeteroContinuation: () => Promise<void>;
+  cancelHeteroContinuation: (topicId?: string | null) => Promise<void>;
   /**
    * Cancel a specific operation
    */
@@ -669,13 +670,17 @@ export const generationSlice: StateCreator<
   [],
   GenerationAction
 > = (set, get) => ({
-  cancelHeteroContinuation: async () => {
-    const topicId = get().context.topicId;
+  cancelHeteroContinuation: async (sourceTopicId) => {
+    const topicId = sourceTopicId ?? get().context.topicId;
     if (!topicId) return;
 
-    const chatStore = useChatStore.getState();
-    await chatStore.updateTopicStatus({ status: 'failed', topicId });
-    await chatStore.updateTopicMetadata(topicId, { scheduledRun: null });
+    const result = await topicService.cancelRateLimitContinuation(topicId);
+    if (result)
+      useChatStore.getState().internal_dispatchTopic({
+        id: topicId,
+        type: 'updateTopic',
+        value: { metadata: result.metadata, status: 'failed' },
+      });
   },
   cancelScheduledRun: async () => {
     const { context, dbMessages, editor } = get();

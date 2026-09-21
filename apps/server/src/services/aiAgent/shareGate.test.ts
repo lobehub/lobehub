@@ -1,6 +1,8 @@
 import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
+  AgentDocumentsManifest,
+  agentShareSystemPrompt,
 } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { CalculatorIdentifier } from '@lobechat/builtin-tool-calculator';
@@ -14,14 +16,18 @@ import {
   LobeAgentIdentifier,
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
-import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import {
+  MemoryApiName,
+  MemoryIdentifier,
+  memoryReadOnlySystemPrompt,
+} from '@lobechat/builtin-tool-memory';
 import { TopicReferenceIdentifier } from '@lobechat/builtin-tool-topic-reference';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
   AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS,
   builtinTools,
 } from '@lobechat/builtin-tools';
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { generateToolsFromManifest, ToolNameResolver } from '@lobechat/context-engine';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentShareGate, ShareGateToolSet } from './shareGate';
@@ -29,6 +35,7 @@ import {
   applyShareGateToAgentConfig,
   applyShareGateToToolSet,
   filterPluginsByShareGate,
+  getShareGrantActivatedPluginIds,
   isShareBlockedBuiltinDispatch,
   isShareBlockedDataToolCall,
   shareGateGrantsCloudSandbox,
@@ -136,6 +143,17 @@ describe('filterPluginsByShareGate', () => {
   });
 });
 
+describe('getShareGrantActivatedPluginIds', () => {
+  it('activates Agent Documents only after the owner grants it for this Share', () => {
+    expect(getShareGrantActivatedPluginIds(buildGate())).toEqual([]);
+    expect(
+      getShareGrantActivatedPluginIds(
+        buildGate({ toolGrants: [{ identifier: AgentDocumentsIdentifier }] }),
+      ),
+    ).toEqual([AgentDocumentsIdentifier]);
+  });
+});
+
 describe('applyShareGateToAgentConfig', () => {
   it('always strips files and knowledge bases', () => {
     const agentConfig = {
@@ -188,7 +206,11 @@ describe('AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS', () => {
  * ignores — so pin the two together.
  */
 describe('AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS', () => {
-  const maximalPermissions = { allowReadMemory: true, knowledgeBaseIds: ['kb1'] };
+  const maximalPermissions = {
+    allowReadMemory: true,
+    knowledgeBaseIds: ['kb1'],
+    toolGrants: [{ identifier: AgentDocumentsIdentifier }],
+  };
 
   it('names only allowlisted identifiers', () => {
     for (const identifier of AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS) {
@@ -210,6 +232,10 @@ describe('AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS', () => {
 
   it('excludes memory, whose grant is conditional on allowReadMemory', () => {
     expect(AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS.has(MemoryIdentifier)).toBe(false);
+  });
+
+  it('excludes Agent Documents, whose grant enables only share-scoped authoring APIs', () => {
+    expect(AGENT_SHARE_NO_DATA_GRANT_BUILTIN_IDENTIFIERS.has(AgentDocumentsIdentifier)).toBe(false);
   });
 });
 
@@ -245,14 +271,34 @@ describe('isShareBlockedDataToolCall', () => {
     });
   });
 
-  it('blocks agent documents and knowledge base outright (no grant exists)', () => {
+  it('keeps Agent Documents closed by default, then allows only its scoped authoring APIs', () => {
     expect(
-      isShareBlockedDataToolCall(
-        { allowReadMemory: true },
-        AgentDocumentsIdentifier,
-        AgentDocumentsApiName.listDocuments,
-      ),
+      isShareBlockedDataToolCall({}, AgentDocumentsIdentifier, AgentDocumentsApiName.listDocuments),
     ).toBe(true);
+
+    const permissions = { toolGrants: [{ identifier: AgentDocumentsIdentifier }] };
+    for (const apiName of [
+      AgentDocumentsApiName.createDocument,
+      AgentDocumentsApiName.readDocument,
+      AgentDocumentsApiName.listDocuments,
+      AgentDocumentsApiName.modifyNodes,
+      AgentDocumentsApiName.replaceDocumentContent,
+      AgentDocumentsApiName.renameDocument,
+    ]) {
+      expect(isShareBlockedDataToolCall(permissions, AgentDocumentsIdentifier, apiName)).toBe(
+        false,
+      );
+    }
+    for (const apiName of [
+      AgentDocumentsApiName.copyDocument,
+      AgentDocumentsApiName.removeDocument,
+      AgentDocumentsApiName.updateLoadRule,
+    ]) {
+      expect(isShareBlockedDataToolCall(permissions, AgentDocumentsIdentifier, apiName)).toBe(true);
+    }
+  });
+
+  it('blocks knowledge base outright (no grant exists)', () => {
     expect(
       isShareBlockedDataToolCall(
         { allowReadMemory: true, knowledgeBaseIds: ['kb1'] },
@@ -321,10 +367,12 @@ describe('applyShareGateToToolSet', () => {
 
   it('keeps a non-builtin plugin the owner enabled', () => {
     const toolSet = buildToolSet([{ apis: [{ name: 'run' }], identifier: 'mcp-github' }]);
+    toolSet.manifestMap['mcp-github'].systemRole = 'Use run for repository operations.';
 
     applyShareGateToToolSet(toolSet, buildGate({ toolGrants: [{ identifier: 'mcp-github' }] }));
 
     expect(toolSet.enabledToolIds).toEqual(['mcp-github']);
+    expect(toolSet.manifestMap['mcp-github'].systemRole).toBe('Use run for repository operations.');
   });
 
   it('collapses the whole set when no tools are enabled', () => {
@@ -432,6 +480,7 @@ describe('applyShareGateToToolSet', () => {
       buildToolSet([
         {
           apis: [
+            { name: MemoryApiName.queryTaxonomyOptions },
             { name: MemoryApiName.searchUserMemory },
             { name: MemoryApiName.addContextMemory },
           ],
@@ -450,10 +499,106 @@ describe('applyShareGateToToolSet', () => {
       buildGate({ allowReadMemory: true, toolGrants: [{ identifier: MemoryIdentifier }] }),
     );
     expect(granted.manifestMap[MemoryIdentifier].api.map((api) => api.name)).toEqual([
+      MemoryApiName.queryTaxonomyOptions,
       MemoryApiName.searchUserMemory,
     ]);
+    expect(granted.manifestMap[MemoryIdentifier].systemRole).toBe(memoryReadOnlySystemPrompt);
     expect(granted.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName(MemoryIdentifier, MemoryApiName.queryTaxonomyOptions),
       toolName(MemoryIdentifier, MemoryApiName.searchUserMemory),
+    ]);
+  });
+
+  it('keeps only Share-scoped Agent Documents authoring APIs', () => {
+    const toolSet = buildToolSet([
+      {
+        apis: Object.values(AgentDocumentsApiName).map((name) => ({ name })),
+        identifier: AgentDocumentsIdentifier,
+      },
+    ]);
+    toolSet.manifestMap[AgentDocumentsIdentifier] = AgentDocumentsManifest;
+    toolSet.tools = generateToolsFromManifest(AgentDocumentsManifest);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({ toolGrants: [{ identifier: AgentDocumentsIdentifier }] }),
+    );
+
+    const manifest = toolSet.manifestMap[AgentDocumentsIdentifier];
+    expect(manifest.api.map((api) => api.name).sort()).toEqual(
+      [
+        AgentDocumentsApiName.createDocument,
+        AgentDocumentsApiName.listDocuments,
+        AgentDocumentsApiName.modifyNodes,
+        AgentDocumentsApiName.readDocument,
+        AgentDocumentsApiName.renameDocument,
+        AgentDocumentsApiName.replaceDocumentContent,
+      ].sort(),
+    );
+    expect(manifest.systemRole).toBe(agentShareSystemPrompt);
+    expect(manifest.meta?.description).toBe(
+      'Create, list, read, edit, and rename documents isolated to the current shared-agent topic.',
+    );
+
+    const createDocument = manifest.api.find(
+      (api) => api.name === AgentDocumentsApiName.createDocument,
+    );
+    const listDocuments = manifest.api.find(
+      (api) => api.name === AgentDocumentsApiName.listDocuments,
+    );
+    expect(Object.keys(createDocument!.parameters.properties).sort()).toEqual(['content', 'title']);
+    expect(Object.keys(listDocuments!.parameters.properties)).toEqual([]);
+
+    const createDocumentTool = toolSet.tools!.find(
+      (tool: any) =>
+        tool.function.name ===
+        toolName(AgentDocumentsIdentifier, AgentDocumentsApiName.createDocument),
+    );
+    const listDocumentsTool = toolSet.tools!.find(
+      (tool: any) =>
+        tool.function.name ===
+        toolName(AgentDocumentsIdentifier, AgentDocumentsApiName.listDocuments),
+    );
+    expect(Object.keys(createDocumentTool!.function.parameters.properties).sort()).toEqual([
+      'content',
+      'title',
+    ]);
+    expect(Object.keys(listDocumentsTool!.function.parameters.properties)).toEqual([]);
+  });
+
+  it('preserves the restricted Agent Documents schema for a per-API grant', () => {
+    const toolSet = buildToolSet([
+      {
+        apis: Object.values(AgentDocumentsApiName).map((name) => ({ name })),
+        identifier: AgentDocumentsIdentifier,
+      },
+    ]);
+    toolSet.manifestMap[AgentDocumentsIdentifier] = AgentDocumentsManifest;
+    toolSet.tools = generateToolsFromManifest(AgentDocumentsManifest);
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [
+          {
+            apis: [AgentDocumentsApiName.createDocument],
+            identifier: AgentDocumentsIdentifier,
+          },
+        ],
+      }),
+    );
+
+    const manifest = toolSet.manifestMap[AgentDocumentsIdentifier];
+    expect(manifest.api.map((api) => api.name)).toEqual([AgentDocumentsApiName.createDocument]);
+    expect(manifest.meta?.description).toBe(
+      'Use documents isolated to the current shared-agent topic.',
+    );
+    expect(manifest.systemRole).toBeUndefined();
+    expect(Object.keys(manifest.api[0].parameters.properties).sort()).toEqual(['content', 'title']);
+    expect(toolSet.tools).toHaveLength(1);
+    expect(Object.keys(toolSet.tools![0].function.parameters.properties).sort()).toEqual([
+      'content',
+      'title',
     ]);
   });
 
@@ -538,6 +683,8 @@ describe('applyShareGateToToolSet', () => {
         type: 'mcp',
       },
     ]);
+    toolSet.manifestMap['mcp-github'].systemRole =
+      'Use listRepos and deleteRepo for repository operations.';
 
     // The grant in `shareConfig.toolGrants` names the RAW api name, independent
     // of whatever `ToolNameResolver.generate` does for the WIRE tool-call name
@@ -549,6 +696,7 @@ describe('applyShareGateToToolSet', () => {
     );
 
     expect(toolSet.manifestMap['mcp-github'].api.map((api) => api.name)).toEqual(['listRepos']);
+    expect(toolSet.manifestMap['mcp-github'].systemRole).toBeUndefined();
     expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
       toolName('mcp-github', 'listRepos', 'mcp'),
     ]);
@@ -734,6 +882,39 @@ describe('isShareBlockedBuiltinDispatch', () => {
         { ...enabled, allowReadMemory: true },
         MemoryIdentifier,
         MemoryApiName.addContextMemory,
+      ),
+    ).toBe(true);
+  });
+
+  it('allows granted Agent Documents authoring APIs but blocks destructive and policy APIs', () => {
+    const enabled = { toolGrants: [{ identifier: AgentDocumentsIdentifier }] };
+
+    expect(
+      isShareBlockedBuiltinDispatch(
+        enabled,
+        AgentDocumentsIdentifier,
+        AgentDocumentsApiName.createDocument,
+      ),
+    ).toBe(false);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        enabled,
+        AgentDocumentsIdentifier,
+        AgentDocumentsApiName.renameDocument,
+      ),
+    ).toBe(false);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        enabled,
+        AgentDocumentsIdentifier,
+        AgentDocumentsApiName.removeDocument,
+      ),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        enabled,
+        AgentDocumentsIdentifier,
+        AgentDocumentsApiName.updateLoadRule,
       ),
     ).toBe(true);
   });

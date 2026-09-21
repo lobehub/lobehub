@@ -1,6 +1,34 @@
 name: E2E CI
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/lighthouse.yml'
+      - '.github/workflows/bundle-analyzer.yml'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/lighthouse.yml'
+      - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
   actions: write

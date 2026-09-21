@@ -347,6 +347,10 @@ describe('matchErrorPattern — second residue convergence round', () => {
       AgentRuntimeErrorType.InsufficientQuota,
     ],
     ['fetch failed', AgentRuntimeErrorType.ProviderNetworkError],
+    [
+      'Unable to download content from the provided URL before the timeout.',
+      AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+    ],
     ['404 page not found', AgentRuntimeErrorType.UserConfigError],
     [
       '{"errors":[{"code":7003,"message":"No route for that URI"}]}',

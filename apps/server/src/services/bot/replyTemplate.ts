@@ -1,5 +1,13 @@
-import type { ChatErrorBudgetContext } from '@lobechat/types';
+import {
+  formatErrorRef,
+  getErrorCodeSpec,
+  normalizeChatMessageError,
+} from '@lobechat/model-runtime/errors';
+import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 
+import modelRuntimeEnglish from '@/locales/default/modelRuntime';
+
+import modelRuntimeChinese from '../../../../../locales/zh-CN/modelRuntime.json';
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
 // Import from the leaf modules (`const` / `utils`) instead of the
@@ -8,6 +16,7 @@ import { getExtremeAck } from './ackPhrases';
 // Telegram Guest outbound path import this template for localized copy.
 import { type BotReplyLocale } from './platforms/const';
 import { formatDuration } from './platforms/utils';
+import { renderHeterogeneousError } from './renderHeterogeneousError';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
 // because bot-callback webhooks send via DiscordPlatformClient directly
@@ -251,6 +260,7 @@ type SystemStrings = {
   errorInvalidProviderAPIKey: string;
   errorCommandConnectionClosed: string;
   errorContentModeration: string;
+  errorDeviceUnreachable: string;
   errorEmptyCompletion: string;
   errorModelRefusal: string;
   errorHarnessInternal: string;
@@ -361,6 +371,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
     errorContentModeration:
       "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
+    errorDeviceUnreachable:
+      "**Couldn't reach the device this agent runs on.**\nThe run never started. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again — or bind this agent to another online device in its settings.",
     errorEmptyCompletion:
       "**The model provider returned an empty response.**\nEven without visible content, this request may still incur charges. You can retry, or switch models in the agent's settings and try again.",
     errorModelRefusal:
@@ -485,6 +497,8 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
     errorContentModeration:
       '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
+    errorDeviceUnreachable:
+      '**无法连接到运行该 Agent 的设备**\n本次执行没有启动。请确认 LobeHub 桌面端（或 `lh` CLI）正在运行且已连接后重试，也可以在 Agent 设置中改绑其他在线设备。',
     errorEmptyCompletion:
       '**模型供应商返回了空内容**\n即使没有可显示的内容，本次请求仍可能产生费用。你可以重试，或在 Agent 设置中切换模型后再试。',
     errorModelRefusal:
@@ -579,6 +593,11 @@ export function renderError(operationId?: string, lng?: BotReplyLocale): string 
 const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   // ── user-fixable config / input (attribution: user) ──
   ContentModeration: 'errorContentModeration',
+  // Every "we could not reach a run device" flavour (gateway unconfigured,
+  // device offline, registration gone) arrives under this one type — see
+  // `HETERO_DISPATCH_ERROR_TYPES`. Without it a hetero dispatch failure fell to
+  // the legacy tier and told an IM user nothing but an Operation ID.
+  DeviceGatewayNotConfigured: 'errorDeviceUnreachable',
   ExceededContextWindow: 'errorExceededContextWindow',
   // Managed credits: all three codes come out of the same cost-admission gate,
   // so the fix is topping up / upgrading — not editing the input (without them
@@ -717,14 +736,44 @@ export function renderAgentError(
   lng?: BotReplyLocale,
   attribution?: string,
   budget?: ChatErrorBudgetContext,
+  heterogeneous?: ChatErrorHeterogeneousContext,
 ): string {
   const strings = getSystemStrings(lng);
+  const heteroReply = renderHeterogeneousError(heterogeneous, lng);
+  if (heteroReply) return appendOperationId(heteroReply, operationId);
+
+  const normalized = normalizeChatMessageError({
+    message: errorMessage,
+    type: errorType ?? 'AgentRuntimeError',
+  });
+  // Classify legacy generic envelopes before selecting channel-specific copy.
+  // Unknown inputs retain the caller's fallback behavior.
+  const spec = getErrorCodeSpec(String(normalized.type));
+  if (spec && !spec.isFallback) {
+    errorType = spec.code;
+    attribution = spec.attribution;
+  }
+  const withReference = (value: string) => {
+    const reference = formatErrorRef(errorType);
+    const footer = reference
+      ? `\n${lng === 'zh-CN' ? '错误码' : 'Error code'}: \`${reference}\``
+      : '';
+    return appendOperationId(`${value}${footer}`, operationId);
+  };
 
   if (isCommandConnectionClosedError(errorType, errorMessage)) {
-    return appendOperationId(strings.errorCommandConnectionClosed, operationId);
+    return withReference(strings.errorCommandConnectionClosed);
   }
 
   const friendlyKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
+  if (!friendlyKey && spec && !spec.isFallback) {
+    // Reuse the same maintained translations as message error cards. Never
+    // interpolate raw provider error text into a shared IM channel.
+    const catalog: Record<string, string> =
+      lng === 'zh-CN' ? modelRuntimeChinese : modelRuntimeEnglish;
+    const copy = catalog[spec.code];
+    if (copy && !copy.includes('{{')) return withReference(`${strings.error}\n${copy}`);
+  }
   const stringKey =
     (friendlyKey && BUDGET_ADMISSION_KEYS.has(friendlyKey) && budget?.budgetTypeAtError
       ? BUDGET_SCOPE_ERROR.get(budget.budgetTypeAtError)
@@ -734,7 +783,7 @@ export function renderAgentError(
   if (stringKey) {
     const value = strings[stringKey];
     if (typeof value === 'string') {
-      return appendOperationId(value, operationId);
+      return withReference(value);
     }
   }
 

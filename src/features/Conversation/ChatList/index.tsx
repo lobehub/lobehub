@@ -45,12 +45,12 @@ MessageAuthorConfigLoader.displayName = 'MessageAuthorConfigLoader';
 export interface ChatListProps {
   /**
    * Default expand level for assistant workflow (tool-call) groups. When set,
-   * pins the initial/reset state and skips the built-in auto-collapse after
-   * streaming. Users can still toggle locally.
+   * pins the initial/reset state and overrides the built-in defaults
+   * (streaming `semi`, completion `full`). Users can still toggle locally.
    * - 'collapsed': show summary only
    * - 'semi': constrained scrollable tool list
    * - 'full': all tool details expanded
-   * Pass an object (e.g. `{ streaming: 'full' }`) to override only one phase.
+   * Pass an object (e.g. `{ completion: 'collapsed' }`) to override only one phase.
    * Only applies to the default item renderer; ignored when `itemContent` is supplied.
    */
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;

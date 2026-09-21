@@ -31,8 +31,11 @@ export const resolveFtsSearchMigrationCommand = (args: readonly string[]) => {
       (argument) =>
         argument === '--fresh-run' ||
         argument === '--in-place' ||
+        argument === '--rebuild-current' ||
         argument.startsWith('--entity=') ||
+        argument.startsWith('--generation=') ||
         argument.startsWith('--max-batches-per-entity=') ||
+        argument.startsWith('--run-id=') ||
         argument.startsWith('--version='),
     );
     if (unsupported) {
@@ -46,6 +49,18 @@ export const resolveFtsSearchMigrationCommand = (args: readonly string[]) => {
     throw new Error('--in-place can only be used with --apply on an existing generation');
   }
   if (
+    args.includes('--rebuild-current') &&
+    (command !== 'apply' || args.includes('--fresh-run') || args.includes('--in-place'))
+  ) {
+    throw new Error('--rebuild-current can only be used with --apply by itself');
+  }
+  if (
+    args.includes('--rebuild-current') &&
+    !args.some((argument) => argument.startsWith('--entity='))
+  ) {
+    throw new Error('--rebuild-current requires at least one --entity=<entity>');
+  }
+  if (
     (['promote', 'retire', 'purge'].includes(command) || args.includes('--in-place')) &&
     !args.some((argument) => argument.startsWith('--entity='))
   ) {
@@ -55,6 +70,21 @@ export const resolveFtsSearchMigrationCommand = (args: readonly string[]) => {
   }
   if (args.some((argument) => argument.startsWith('--version=')) && command !== 'promote') {
     throw new Error('--version can only be used with --promote');
+  }
+  if (args.some((argument) => argument.startsWith('--generation=')) && command !== 'promote') {
+    throw new Error('--generation can only be used with --promote');
+  }
+  if (
+    args.some((argument) => argument.startsWith('--generation=')) &&
+    args.some((argument) => argument.startsWith('--version='))
+  ) {
+    throw new Error('--generation and --version cannot be combined');
+  }
+  if (
+    args.some((argument) => argument.startsWith('--run-id=')) &&
+    !((command === 'apply' && args.includes('--rebuild-current')) || command === 'skip-failure')
+  ) {
+    throw new Error('--run-id can only resume --apply --rebuild-current or select --skip-failure');
   }
   return { command, releaseLockOwner };
 };

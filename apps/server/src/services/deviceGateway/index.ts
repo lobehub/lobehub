@@ -9,7 +9,11 @@ import {
   type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import type { ClaudeCodeQuotaSnapshot } from '@lobechat/heterogeneous-agents/quota';
+import type {
+  ClaudeCodeQuotaSnapshot,
+  CodexQuotaSnapshot,
+  KimiCodeQuotaSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
 import type {
   DeviceCopyAssetForPublishResult,
   DeviceDirectoryBrowseResult,
@@ -23,6 +27,11 @@ import type {
   DeviceGitDeleteBranchResult,
   DeviceGitFileRevertResult,
   DeviceGitLinkedPullRequestResult,
+  DeviceGitPullRequestAction,
+  DeviceGitPullRequestActionResult,
+  DeviceGitPullRequestActivity,
+  DeviceGitPullRequestDetailResult,
+  DeviceGitPullRequestMergeContext,
   DeviceGitRemoteBranchListItem,
   DeviceGitRemoveWorktreeResult,
   DeviceGitRenameBranchResult,
@@ -457,6 +466,67 @@ export class DeviceGateway {
     });
   }
 
+  /** Full detail of a pull request in a directory on a remote device. */
+  gitPullRequestDetail(params: {
+    coreOnly?: boolean;
+    deviceId: string;
+    number: number;
+    path: string;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<DeviceGitPullRequestDetailResult>(
+      'getPullRequestDetail',
+      { ...params, timeout: 20_000 },
+      {
+        coreOnly: params.coreOnly,
+        number: params.number,
+        path: params.path,
+      },
+    );
+  }
+
+  gitPullRequestActivity(params: {
+    deviceId: string;
+    number: number;
+    path: string;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<DeviceGitPullRequestActivity>(
+      'getPullRequestActivity',
+      { ...params, timeout: 20_000 },
+      {
+        number: params.number,
+        path: params.path,
+      },
+    );
+  }
+
+  /** Branch-protection / permission context for a pull request on a remote device. */
+  gitPullRequestMergeContext(params: {
+    baseRefName: string;
+    deviceId: string;
+    headRefOid: string;
+    number: number;
+    path: string;
+    repo: { name: string; owner: string };
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<DeviceGitPullRequestMergeContext>(
+      'getPullRequestMergeContext',
+      { ...params, timeout: 20_000 },
+      {
+        baseRefName: params.baseRefName,
+        headRefOid: params.headRefOid,
+        number: params.number,
+        path: params.path,
+        repo: params.repo,
+      },
+    );
+  }
+
   /** Working-tree dirty-file counts for a directory on a remote device. */
   gitWorkingTreeStatus(params: {
     deviceId: string;
@@ -490,6 +560,36 @@ export class DeviceGateway {
     workspaceId?: string;
   }) {
     return this.invokeDeviceRead<ClaudeCodeQuotaSnapshot>('getClaudeCodeQuota', params, {
+      env: params.env,
+      force: params.force,
+    });
+  }
+
+  /** Codex subscription quota sampled from the login on a remote device. */
+  codexQuota(params: {
+    command?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<CodexQuotaSnapshot>('getCodexQuota', params, {
+      command: params.command,
+      env: params.env,
+      force: params.force,
+    });
+  }
+
+  /** Kimi Code subscription quota sampled from the login on a remote device. */
+  kimiCodeQuota(params: {
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+    userId: string;
+    workspaceId?: string;
+  }) {
+    return this.invokeDeviceRead<KimiCodeQuotaSnapshot>('getKimiCodeQuota', params, {
       env: params.env,
       force: params.force,
     });
@@ -846,6 +946,42 @@ export class DeviceGateway {
     } catch (error) {
       log('pushGitBranch: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Push failed', success: false };
+    }
+  }
+
+  /**
+   * Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a
+   * directory on a remote device via the `runPullRequestAction` device RPC.
+   * Merge can take a while, so it gets the same 65s budget as push/pull.
+   */
+  async runGitPullRequestAction(params: {
+    action: DeviceGitPullRequestAction;
+    deviceId: string;
+    number: number;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceGitPullRequestActionResult> {
+    const { userId, deviceId, path, number, action, timeout = 65_000, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitPullRequestActionResult>(
+        { deviceId, timeout, userId, workspaceId },
+        { method: 'runPullRequestAction', params: { action, number, path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('runGitPullRequestAction: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Pull request action failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('runGitPullRequestAction: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Pull request action failed', success: false };
     }
   }
 

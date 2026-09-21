@@ -8,6 +8,8 @@ import { DocumentLoadPosition, getDocumentTemplate, PolicyLoad } from '@lobechat
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
+import type { DocumentAccessScope } from '@lobechat/types';
+import { ordinaryDocumentAccessScope } from '@lobechat/types';
 
 import type {
   AgentDocument,
@@ -152,13 +154,20 @@ export class AgentDocumentsService {
     userId: string,
     workspaceId?: string,
     callerAgentVisibility?: 'private' | 'public' | null,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
   ) {
-    this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
+    this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId, documentAccessScope);
     // Public-agent gate flows through DocumentService → DocumentModel so
     // agentDocuments list / attach / read cannot see the caller's own
     // private documents when the invoking agent itself is workspace-public.
-    this.documentService = new DocumentService(db, userId, workspaceId, callerAgentVisibility);
-    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
+    this.documentService = new DocumentService(
+      db,
+      userId,
+      workspaceId,
+      callerAgentVisibility,
+      documentAccessScope,
+    );
+    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
   }
 
   private async projectDocumentContent<T extends ProjectableAgentDocument>(doc: T): Promise<T>;

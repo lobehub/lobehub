@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
+import * as goalGraphUtils from '@lobechat/utils/goalGraph';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1748,6 +1749,100 @@ describe('GoalService', () => {
         (edge) => edge.kind === 'decomposes' && edge.targetNodeId === acceptanceWorks[0].id,
       ),
     ).toHaveLength(1);
+  });
+
+  /**
+   * Regression: the terminal acceptance hung only off the problem node, so it
+   * rendered beside the first round instead of after the work it closes.
+   */
+  it('builds the Goal-level Acceptance Task on the delivered leaf Tasks', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'Return two verified supplier quotes.',
+      title: 'Find two supplier quotes',
+      tasks: ['Research supplier A', 'Research supplier B'],
+    });
+
+    let acceptance;
+    for (let i = 0; i < 12 && !acceptance; i++) {
+      await service.tick(graph.goal.id);
+      const current = await service.graph(graph.goal.id);
+      for (const node of current.nodes) {
+        if (node.taskId && node.title !== 'Complete full Goal acceptance')
+          await taskModel.updateStatus(node.taskId, 'completed');
+      }
+      acceptance = current.nodes.find((node) => node.title === 'Complete full Goal acceptance');
+    }
+
+    const current = await service.graph(graph.goal.id);
+    const leaves = current.nodes
+      .filter((node) => node.title.startsWith('Research supplier'))
+      .map((node) => node.id);
+    expect(acceptance).toBeTruthy();
+    expect(
+      current.edges
+        .filter((edge) => edge.kind === 'depends_on' && edge.sourceNodeId === acceptance!.id)
+        .map((edge) => edge.targetNodeId)
+        .sort(),
+    ).toEqual(leaves.sort());
+  });
+
+  /**
+   * Regression: the acceptance node and its dependency edges were written in
+   * separate transactions. A failure between them left the node without its
+   * links for good, because once the node exists no later tick writes them.
+   */
+  it('creates the Goal-level Acceptance Task and its dependencies atomically', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'Return two verified supplier quotes.',
+      title: 'Atomic acceptance links',
+      tasks: ['Research supplier A', 'Research supplier B'],
+    });
+    const findAcceptance = async () =>
+      (await service.graph(graph.goal.id)).nodes.find(
+        (node) => node.title === 'Complete full Goal acceptance',
+      );
+
+    let interrupted = false;
+    for (let i = 0; i < 14 && !(await findAcceptance()); i++) {
+      const tasks = (await service.graph(graph.goal.id)).nodes.filter(
+        (node) => node.kind === 'task',
+      );
+      if (!interrupted && tasks.length > 0 && tasks.every((node) => node.status === 'resolved')) {
+        // Every Task is delivered, so this tick creates the acceptance. Fail it
+        // after the node insert and before its dependency edges are written.
+        const spy = vi.spyOn(goalGraphUtils, 'experimentOwner').mockImplementation(() => {
+          throw new Error('interrupted while linking the acceptance');
+        });
+        await service.tick(graph.goal.id).catch(() => undefined);
+        spy.mockRestore();
+        interrupted = true;
+        expect(await findAcceptance()).toBeUndefined();
+        continue;
+      }
+      await service.tick(graph.goal.id);
+      for (const node of (await service.graph(graph.goal.id)).nodes) {
+        if (node.taskId && node.title !== 'Complete full Goal acceptance')
+          await taskModel.updateStatus(node.taskId, 'completed');
+      }
+    }
+
+    const current = await service.graph(graph.goal.id);
+    const acceptance = current.nodes.find((node) => node.title === 'Complete full Goal acceptance');
+    const leaves = current.nodes
+      .filter((node) => node.title.startsWith('Research supplier'))
+      .map((node) => node.id);
+    expect(interrupted).toBe(true);
+    expect(acceptance).toBeTruthy();
+    expect(
+      current.edges
+        .filter((edge) => edge.kind === 'depends_on' && edge.sourceNodeId === acceptance!.id)
+        .map((edge) => edge.targetNodeId)
+        .sort(),
+    ).toEqual(leaves.sort());
   });
 
   it('parks a goal short of acceptance and reopens it when the measurement clears', async () => {

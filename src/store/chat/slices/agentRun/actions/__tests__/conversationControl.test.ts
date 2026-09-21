@@ -68,6 +68,7 @@ beforeEach(() => {
     });
   useChatStore.setState({
     updateTopicStatus: vi.fn().mockResolvedValue(undefined),
+    questionSubmissions: {},
   });
   useUserStore.setState({ user: undefined, workspaceUserPreference: {} });
 });
@@ -240,6 +241,41 @@ describe('ConversationControl actions', () => {
 
       expect(result.current.operations[operationId!].status).toBe('cancelled');
       expect(mockSetJSONState).toHaveBeenCalledWith(editorState);
+    });
+
+    it('does not restore a completed send or an older cancelled draft', () => {
+      const context = { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID };
+      const editor = { setJSONState: vi.fn() };
+      const store = useChatStore.getState();
+      const older = store.startOperation({ context, type: 'sendMessage' });
+      store.updateOperationMetadata(older.operationId, {
+        inputEditorTempState: { content: 'older cancelled draft' },
+      });
+      store.cancelOperation(older.operationId);
+      const latest = store.startOperation({ context, type: 'sendMessage' });
+      store.updateOperationMetadata(latest.operationId, {
+        inputEditorTempState: { content: 'already sent' },
+      });
+      store.completeOperation(latest.operationId);
+
+      store.cancelSendMessageInServer(context, editor as any);
+
+      expect(editor.setJSONState).not.toHaveBeenCalled();
+    });
+
+    it('restores a pending send only once after stop has cancelled operations', () => {
+      const context = { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID };
+      const editor = { setJSONState: vi.fn() };
+      const store = useChatStore.getState();
+      const { operationId } = store.startOperation({ context, type: 'sendMessage' });
+      const snapshot = { content: 'still sending' };
+      store.updateOperationMetadata(operationId, { inputEditorTempState: snapshot });
+      store.cancelOperation(operationId);
+
+      store.cancelSendMessageInServer(context, editor as any);
+      store.cancelSendMessageInServer(context, editor as any);
+
+      expect(editor.setJSONState).toHaveBeenCalledExactlyOnceWith(snapshot);
     });
 
     it('should cancel operation for specified topic ID', () => {

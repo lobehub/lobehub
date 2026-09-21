@@ -18,6 +18,7 @@ import {
 } from '@/server/services/resourcePermission';
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
+import { resolveRootOperation } from './_helpers/runProvenance';
 
 const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -69,24 +70,9 @@ export const notebookRouter = router({
           message: 'Operation does not belong to this topic',
         });
       }
-      let rootOperation = operation;
-      const visited = new Set<string>();
-      while (rootOperation?.parentOperationId) {
-        if (visited.has(rootOperation.id)) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid operation ancestry' });
-        }
-        visited.add(rootOperation.id);
-        const parent = await ctx.operationModel.findOwnOperationById(
-          rootOperation.parentOperationId,
-        );
-        if (!parent) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'Operation ancestry is not accessible',
-          });
-        }
-        rootOperation = parent;
-      }
+      const rootOperation = operation
+        ? await resolveRootOperation((id) => ctx.operationModel.findOwnOperationById(id), operation)
+        : null;
 
       // Create the document
       const document = await ctx.documentModel.create({

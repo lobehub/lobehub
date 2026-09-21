@@ -231,7 +231,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 60_000,
       description:
-        'Start a terminal session to execute a shell command and return console output collected during the wait window (up to 60 seconds by default). If the command is still running after the wait window, the result includes `shell_id` for later observation or termination.',
+        'Start a terminal session to execute a shell command and return console output collected during the wait window (60 seconds by default, up to 600000ms via `timeout`). If the command is still running after the wait window, the result includes `shell_id` for later observation or termination.',
       humanIntervention: 'required',
       name: LocalSystemApiName.runCommand,
       parameters: {
@@ -256,6 +256,11 @@ export const LocalSystemManifest: BuiltinToolManifest = {
               'Set to true to return immediately after starting the terminal session. The result will include a `shell_id` for later observation or termination.',
             type: 'boolean',
           },
+          timeout: {
+            description:
+              'How long to wait for the command, in milliseconds (default 60000, max 600000). Does not kill the command when it elapses — the result carries a `shell_id` you can keep observing. Size it to the work: a test suite or build deserves a long single wait rather than a series of short ones.',
+            type: 'number',
+          },
         },
         required: ['description', 'command'],
         type: 'object',
@@ -264,7 +269,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 60_000,
       description:
-        'Retrieve output from a running or completed background shell command. Waits for one output window (up to 60 seconds by default).',
+        'Retrieve output from a running or completed background shell command. Blocks until the command exits or `timeout` elapses, then reports whether it is still running. Prefer one long wait over repeated short polls.',
       name: LocalSystemApiName.getCommandOutput,
       parameters: {
         properties: {
@@ -276,6 +281,11 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           shell_id: {
             description: 'The ID of the background shell to retrieve output from',
             type: 'string',
+          },
+          timeout: {
+            description:
+              'How long to wait for the command to exit, in milliseconds (default 60000, max 600000). Does not kill the command when it elapses. Raise it instead of calling this repeatedly — each call is a full model turn, so ten 60s polls cost ten turns to learn what one 600s wait reports once.',
+            type: 'number',
           },
         },
         required: ['shell_id'],

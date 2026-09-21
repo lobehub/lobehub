@@ -1,4 +1,5 @@
 import {
+  AGENT_SHARE_DOCUMENT_API_NAMES,
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
 } from '@lobechat/builtin-tool-agent-documents';
@@ -26,10 +27,12 @@ import {
   type ShareToolGrant,
 } from '@lobechat/const';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { generateToolsFromManifest, ToolNameResolver } from '@lobechat/context-engine';
 import type { AgentShareToolGrant } from '@lobechat/types';
 
 import type { AgentShareConfig } from '@/database/schemas';
+
+import { resolveShareToolManifest } from './shareToolManifest';
 
 /**
  * Single shared resolver instance for regenerating function-calling names
@@ -93,6 +96,21 @@ export const filterPluginsByShareGate = (pluginIds: string[], gate: AgentShareGa
 };
 
 /**
+ * Builtins whose Share grant is also their runtime opt-in.
+ *
+ * Agent Documents is a default activatable builtin rather than a profile
+ * plugin, so creators have no separate profile switch that could place it in
+ * `agentConfig.plugins`. Adding it here only after an explicit Share grant
+ * lets the picker act as that opt-in for visitor runs while keeping the
+ * default-closed behavior. The final tool-set gate still narrows its APIs.
+ */
+export const getShareGrantActivatedPluginIds = (gate: AgentShareGate): string[] => {
+  const grants = resolveShareToolGrants(gate.shareConfig.toolGrants);
+
+  return hasShareToolGrant(grants, AgentDocumentsIdentifier) ? [AgentDocumentsIdentifier] : [];
+};
+
+/**
  * Whether the share grants `lobe-cloud-sandbox` (at any API scope). Drives
  * `resolveExecutionPlan`'s `sandboxFallback`: a visitor can never reach the
  * creator's device, so this grant is only meaningful if the plan resolves to
@@ -140,6 +158,7 @@ export interface ShareDataToolPermissions {
    * below stays wired should a knowledge-base grant return.
    */
   knowledgeBaseIds?: string[];
+  toolGrants?: AgentShareToolGrant[];
 }
 
 /**
@@ -215,19 +234,16 @@ interface DataToolAccessRule {
  */
 const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
   [AgentDocumentsIdentifier]: {
-    // No file grant exists in the current `AgentShareConfig` — see
-    // `applyShareGateToAgentConfig`'s adaptation note. Fail closed rather than
-    // silently defaulting the missing grant to `read`.
-    grant: () => 'none',
-    writeApiNames: [
-      AgentDocumentsApiName.createDocument,
-      AgentDocumentsApiName.copyDocument,
-      AgentDocumentsApiName.modifyNodes,
-      AgentDocumentsApiName.removeDocument,
-      AgentDocumentsApiName.renameDocument,
-      AgentDocumentsApiName.replaceDocumentContent,
-      AgentDocumentsApiName.updateLoadRule,
-    ],
+    // The tool grant opts into a separately scoped authoring store. It never
+    // exposes the creator's ordinary Agent Documents: the runtime and database
+    // both constrain reads and writes to (shareId, visitorUserId, topicId).
+    grant: (permissions) =>
+      hasShareToolGrant(resolveShareToolGrants(permissions.toolGrants), AgentDocumentsIdentifier)
+        ? 'read'
+        : 'none',
+    writeApiNames: Object.values(AgentDocumentsApiName).filter(
+      (apiName) => !AGENT_SHARE_DOCUMENT_API_NAMES.has(apiName),
+    ),
   },
   [KnowledgeBaseIdentifier]: {
     // `listFiles` / `getFileDetail` browse the creator's whole resource
@@ -882,6 +898,32 @@ const pruneToolsForIdentifier = (
   });
 };
 
+/**
+ * Replace surviving function schemas with a builtin-owned restricted
+ * projection while preserving which tools the upstream engine activated.
+ */
+const replaceToolsForIdentifier = (
+  toolSet: ShareGateToolSet,
+  identifier: string,
+  ownedNames: ReadonlySet<string>,
+  manifest: LobeToolManifest,
+): void => {
+  if (!toolSet.tools) return;
+
+  const replacements = new Map(
+    generateToolsFromManifest(manifest).map((tool) => [tool.function.name, tool]),
+  );
+
+  for (let i = 0; i < toolSet.tools.length; i += 1) {
+    const name: string | undefined = toolSet.tools[i]?.function?.name;
+    if (!name) continue;
+
+    const owned = ownedNames.has(name) || name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === identifier;
+    const replacement = replacements.get(name);
+    if (owned && replacement) toolSet.tools[i] = replacement;
+  }
+};
+
 /** Every generated tool-call name the manifest can currently produce. */
 const generateOwnedToolNames = (
   identifier: string,
@@ -920,8 +962,28 @@ const stripApisFromTool = (
   if (!manifest) return;
 
   const survivingApi = manifest.api.filter((api) => !blockedApiNames.has(api.name));
+  const wasTrimmed = survivingApi.length < manifest.api.length;
+  const ownedNames = generateOwnedToolNames(identifier, manifest);
+  const restrictedManifest = wasTrimmed
+    ? resolveShareToolManifest({
+        allowedApiNames: survivingApi.map((api) => api.name),
+        identifier,
+      })
+    : undefined;
+  const restrictedApiMap = new Map(restrictedManifest?.api.map((api) => [api.name, api]) ?? []);
 
-  toolSet.manifestMap[identifier] = { ...manifest, api: survivingApi };
+  // A manifest-level system role commonly documents its complete API surface.
+  // Keeping it after a partial strip lets the model infer and advertise APIs
+  // that are no longer callable, even though the function schemas are safe.
+  // ToolResolver applies the same invariant for per-step tool-name filtering.
+  toolSet.manifestMap[identifier] = {
+    ...manifest,
+    api: survivingApi.map((api) => restrictedApiMap.get(api.name) ?? api),
+    meta: restrictedManifest?.meta ?? manifest.meta,
+    ...(wasTrimmed && {
+      systemRole: restrictedManifest?.systemRole,
+    }),
+  };
 
   // Fail-closed: only keep `tools[]` entries this file can PROVE still
   // belong to a surviving API, by regenerating their exact names rather than
@@ -929,13 +991,17 @@ const stripApisFromTool = (
   pruneToolsForIdentifier(
     toolSet,
     identifier,
-    generateOwnedToolNames(identifier, manifest),
+    ownedNames,
     generateToolNames(
       identifier,
       survivingApi.map((api) => api.name),
       manifest.type,
     ),
   );
+
+  if (restrictedManifest) {
+    replaceToolsForIdentifier(toolSet, identifier, ownedNames, toolSet.manifestMap[identifier]);
+  }
 };
 
 const pruneArrayInPlace = <T>(array: T[], keep: (item: T) => boolean): void => {

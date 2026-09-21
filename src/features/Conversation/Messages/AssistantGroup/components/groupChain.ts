@@ -15,7 +15,15 @@ import type { RenderableAssistantContentBlock } from './types';
 const ANSWER_DOM_ID_SUFFIX = '__answer';
 const WORKFLOW_DOM_ID_SUFFIX = '__workflow';
 
-type DbMessageLike = { createdAt?: Date | number | string | null; id: string };
+type DbMessageLike = {
+  createdAt?: Date | number | string | null;
+  id: string;
+  updatedAt?: Date | number | string | null;
+};
+
+/** Anything that resolves to step rows in `dbMessages` — blocks, or their
+ *  rendered projections, which keep the source block id. */
+type BlockTimeSource = { id: string; tools?: { result_msg_id?: string | null }[] };
 
 export interface GroupChainInput {
   blocks: AssistantContentBlock[];
@@ -65,36 +73,85 @@ export const getTurnDurationMs = (
 };
 
 /**
- * `createdAt` of the turn's last step, normalized to epoch ms. Used to anchor the
- * tail running indicator's elapsed timer to "time since the last step" instead of
- * the whole run — the operation's own startTime marks the run's beginning.
- *
- * When the last block ends on tool calls, its freshest message is the tool RESULT
- * row (`result_msg_id`), created when the tool finished — not the assistant block
- * that issued the call. Anchoring to the block id alone would fold the tool's
- * runtime back into the elapsed time, defeating the point. So we take the latest
- * `createdAt` across the block and its tool-result rows.
+ * Earliest `createdAt` among a set of steps, normalized to epoch ms. Anchors a
+ * workflow collapse to the fold's own first entry instead of the operation
+ * start — a long run folds into several collapses, and anchoring them all to
+ * the op would print the same run-long number on each.
  */
-export const getLastBlockCreatedAt = (
+export const getFirstBlockCreatedAt = (
   dbMessages: DbMessageLike[] | undefined,
-  lastBlock: AssistantContentBlock | undefined,
+  blocks: BlockTimeSource[],
 ): number | undefined => {
-  if (!Array.isArray(dbMessages) || !lastBlock) return undefined;
+  if (!Array.isArray(dbMessages) || blocks.length === 0) return undefined;
 
-  const candidateIds = new Set<string>([lastBlock.id]);
-  for (const tool of lastBlock.tools ?? []) {
-    if (tool.result_msg_id) candidateIds.add(tool.result_msg_id);
+  const ids = new Set(blocks.map((block) => block.id));
+  let earliest: number | undefined;
+  for (const message of dbMessages) {
+    if (!ids.has(message.id)) continue;
+    const time = toEpochMs(message.createdAt);
+    if (time === undefined) continue;
+    if (earliest === undefined || time < earliest) earliest = time;
+  }
+  return earliest;
+};
+
+/**
+ * When a set of steps finished, normalized to epoch ms.
+ *
+ * When a step ends on tool calls, its freshest message is the tool RESULT row
+ * (`result_msg_id`) — not the assistant block that issued the call. Taking the
+ * block ids alone would end the span before the tools it is waiting on, so the
+ * result rows join the candidates.
+ *
+ * A result row's own end is `updatedAt`, not `createdAt`: the client runtime
+ * creates the row BEFORE invoking the tool (`ClientToolTransport.execute`) and
+ * writes the result into it afterwards, so `createdAt` there marks when the
+ * tool STARTED and would leave a slow tool's whole runtime outside the span.
+ * The server runtime writes the row once, on completion, where the two stamps
+ * coincide — so the later of the two is right on both paths. Assistant blocks
+ * keep `createdAt` only: their `updatedAt` also moves when the message is
+ * edited later, which has nothing to do with how long the step took.
+ */
+export const getBlocksEndCreatedAt = (
+  dbMessages: DbMessageLike[] | undefined,
+  blocks: BlockTimeSource[],
+): number | undefined => {
+  if (!Array.isArray(dbMessages) || blocks.length === 0) return undefined;
+
+  const blockIds = new Set<string>();
+  const resultIds = new Set<string>();
+  for (const block of blocks) {
+    blockIds.add(block.id);
+    for (const tool of block.tools ?? []) {
+      if (tool.result_msg_id) resultIds.add(tool.result_msg_id);
+    }
   }
 
   let latest: number | undefined;
   for (const message of dbMessages) {
-    if (!candidateIds.has(message.id)) continue;
-    const time = toEpochMs(message.createdAt);
-    if (time === undefined) continue;
-    if (latest === undefined || time > latest) latest = time;
+    const isResult = resultIds.has(message.id);
+    if (!isResult && !blockIds.has(message.id)) continue;
+
+    const created = toEpochMs(message.createdAt);
+    const settled = isResult ? toEpochMs(message.updatedAt) : undefined;
+    for (const time of [created, settled]) {
+      if (time === undefined) continue;
+      if (latest === undefined || time > latest) latest = time;
+    }
   }
   return latest;
 };
+
+/**
+ * When the turn's last step finished. Used to anchor the tail running
+ * indicator's elapsed timer to "time since the last step" instead of the whole
+ * run — the operation's own startTime marks the run's beginning, and folding a
+ * finished tool's runtime back into the elapsed time defeats the point.
+ */
+export const getLastBlockCreatedAt = (
+  dbMessages: DbMessageLike[] | undefined,
+  lastBlock: AssistantContentBlock | undefined,
+): number | undefined => getBlocksEndCreatedAt(dbMessages, lastBlock ? [lastBlock] : []);
 
 export const isEmptyBlock = (block: RenderableAssistantContentBlock) =>
   (!block.content || block.content === LOADING_FLAT) &&

@@ -43,6 +43,10 @@ import { useBusinessWorkingSidebarTabs } from '@/business/client/features/Workin
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
+import {
+  getPullRequestState,
+  PR_STATE_VISUAL,
+} from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
@@ -63,7 +67,12 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, portalThreadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { deviceSelectors, useDeviceStore } from '@/store/device';
+import {
+  deviceSelectors,
+  useDeviceStore,
+  useFetchGitBranch,
+  useFetchGitLinkedPR,
+} from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -73,6 +82,7 @@ import Files from './Files';
 import { sidebarWidthBudget } from './fitsBesidePortal';
 import Overview from './Overview';
 import OverviewSlot from './OverviewSlot';
+import PullRequest from './PullRequest';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
 import WorkspaceTab from './WorkspaceTab';
@@ -326,6 +336,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const topicWorkingDirectoryConfig = useChatStore(
     (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
   );
+  const topicDeviceId = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.boundDeviceId);
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const sourceWorkingDirectory = useMemo(() => {
     if (!workingDirectory) return undefined;
@@ -369,6 +380,33 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // directory is irrelevant to the user, so hide the tab even when one resolves.
   const filesAvailable = !isChatMode && (isLocalExecution || isDeviceMode) && !!workingDirectory;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
+  const snapshotConfig =
+    (topicDeviceId ? topicDeviceId === targetDeviceId : isLocalExecution) &&
+    getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
+      ? topicWorkingDirectoryConfig
+      : deviceDirs.find((entry) => getWorkingDirEffectivePath(entry) === workingDirectory);
+  const isGithub =
+    repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
+  const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
+  const { data: branchData } = useFetchGitBranch(remoteDeviceId, gitPath);
+  const { data: linkedPR } = useFetchGitLinkedPR(
+    remoteDeviceId,
+    gitPath,
+    branchData?.branch,
+    isGithub,
+  );
+  const snapshotPR =
+    !branchData || (snapshotConfig?.git?.branch === branchData.branch && !branchData.detached)
+      ? snapshotConfig?.git?.github?.pullRequest
+      : undefined;
+  // A settled empty lookup supersedes the snapshot; failures may keep displaying it.
+  const pullRequest =
+    filesystemEnvironmentAvailable && workingDirectory
+      ? linkedPR?.pullRequestStatus === 'ok'
+        ? linkedPR.pullRequest
+        : (linkedPR?.pullRequest ?? snapshotPR)
+      : undefined;
+  const prAvailable = !!pullRequest;
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
   const browserAvailable = isDesktop;
@@ -415,6 +453,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       ...(reviewAvailable
         ? [{ icon: ClipboardListIcon, key: 'review', label: t('workingPanel.review.title') }]
         : []),
+      ...(pullRequest
+        ? [
+            {
+              icon: PR_STATE_VISUAL[getPullRequestState(pullRequest)].icon,
+              key: 'pr',
+              label: `#${pullRequest.number}`,
+            },
+          ]
+        : []),
       ...(filesAvailable
         ? [{ icon: FilesIcon, key: 'files', label: t('workingPanel.files.title') }]
         : []),
@@ -443,6 +490,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       filesAvailable,
       isHetero,
       paramsAvailable,
+      pullRequest,
       reviewAvailable,
       t,
     ],
@@ -870,6 +918,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
 
     const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
       'review',
+      'pr',
       'files',
       'works',
       'comments',
@@ -943,6 +992,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   agentId={activeAgentId}
                   deviceId={remoteDeviceId}
                   environmentAvailable={filesystemEnvironmentAvailable}
+                  prAvailable={prAvailable}
                   repoType={environmentRepoType}
                   sourcePath={sourceWorkingDirectory}
                   workingDirectory={environmentWorkingDirectory}
@@ -1060,6 +1110,22 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                       onToggleTree={() => setShowReviewTree((v) => !v)}
                     />
                   </Flexbox>
+                )}
+                {pullRequest && workingDirectory && (
+                  <Activity mode={showRightPanel && activeTab === 'pr' ? 'visible' : 'hidden'}>
+                    <Flexbox className={styles.pane}>
+                      <PullRequest
+                        active={!!showRightPanel && activeTab === 'pr'}
+                        deviceId={remoteDeviceId}
+                        key={JSON.stringify([remoteDeviceId, workingDirectory, pullRequest.number])}
+                        number={pullRequest.number}
+                        summary={pullRequest}
+                        url={pullRequest.url}
+                        workingDirectory={workingDirectory}
+                        onOpenTab={openTab}
+                      />
+                    </Flexbox>
+                  </Activity>
                 )}
                 {filesAvailable && (
                   <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>

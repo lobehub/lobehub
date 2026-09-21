@@ -15,6 +15,7 @@ import type {
   InstructionExecutor,
 } from '../types';
 import { extractActivatedSkillsFromMessages, extractTodosFromMessages } from '../utils';
+import { selectToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
@@ -100,7 +101,7 @@ const requireToolTransport = (host: AgentRuntimeHost) => {
 const toolNameOf = (tool: ChatToolPayload) => `${tool.identifier}/${tool.apiName}`;
 
 const resolveToolSource = (state: AgentState, tool: ChatToolPayload): string | undefined =>
-  state.operationToolSet?.sourceMap?.[tool.identifier] ?? state.toolSourceMap?.[tool.identifier];
+  selectToolSourceMap(state)[tool.identifier];
 
 const parseToolArgs = (tool: ChatToolPayload): Record<string, unknown> => {
   try {
@@ -121,7 +122,7 @@ const parseToolArgs = (tool: ChatToolPayload): Record<string, unknown> => {
 };
 
 const buildEffectiveManifestMap = (state: AgentState): Record<string, any> => ({
-  ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
+  ...selectToolManifestMap(state),
   ...Object.fromEntries(
     (state.activatedStepTools ?? [])
       .filter((activation) => activation.manifest)

@@ -1,6 +1,34 @@
 name: Test CI
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/lighthouse.yml'
+      - '.github/workflows/bundle-analyzer.yml'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/workflows/claude*.yml'
+      - '.github/workflows/issue-*.yml'
+      - '.github/workflows/release*.yml'
+      - '.github/workflows/sync*.y*ml'
+      - '.github/workflows/auto-*.yml'
+      - '.github/workflows/manual-*.yml'
+      - '.github/workflows/lighthouse.yml'
+      - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
   actions: write
@@ -225,9 +253,11 @@ jobs:
   test-desktop:
     needs: check-duplicate-run
     if: needs.check-duplicate-run.outputs.should_skip != 'true'
-    name: Test Desktop App
+    name: ALint & Test Desktop App
 
     runs-on: ubuntu-latest
+    env:
+      ALINT_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
 
     steps:
       - name: Checkout
@@ -271,6 +301,59 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./apps/desktop/coverage/lcov.info
           flags: desktop
+
+      # ---- alint: model-backed lint rules (packages/alint) on this push's diff ----
+      # Advisory: findings land as inline warning annotations and a job summary,
+      # never as a failure. Skipped when the provider secret is unavailable (forks).
+      # Runs here to reuse the root install instead of paying for another job.
+      - name: alint · expose the diff against the base as dirty changes
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'canary' }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          MERGE_BASE=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE}...${HEAD_SHA}" --jq .merge_base_commit.sha)
+          echo "merge base: ${MERGE_BASE}"
+          git fetch --no-tags --depth=1 origin "${MERGE_BASE}"
+          # alint --dirty lints the working tree against HEAD and keeps only the
+          # findings on changed lines; moving HEAD to the merge base makes the
+          # whole diff "dirty", so the scope is exactly this change.
+          git reset --mixed "${MERGE_BASE}"
+          git status --short | head -50
+
+      - name: alint · restore cache
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: .alintcache
+          key: alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**') }}-${{ github.sha }}
+          restore-keys: |
+            alint-${{ hashFiles('alint.config.toml', 'packages/alint/rules/**') }}-
+
+      - name: alint · lint changed files
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        continue-on-error: true
+        run: |
+          bun run alint:setup
+          node_modules/.bin/alint plugin install
+          node_modules/.bin/alint --dirty --format json > alint-output.json || status=$?
+          # 1 = findings at error level (none of ours yet), 2 = alint could not run
+          if [ "${status:-0}" = "2" ]; then cat alint-output.json; exit 2; fi
+          if [ ! -s alint-output.json ]; then echo "nothing to lint"; exit 0; fi
+          bun packages/alint/annotate.ts alint-output.json
+
+      - name: alint · calibrate rule fixtures (when rules or fixtures changed)
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        continue-on-error: true
+        run: |
+          if git status --porcelain -- alint.config.toml packages/alint | grep -q .; then
+            cd packages/alint && bunx vitest run fixtures.test.ts
+          else
+            echo "rules and fixtures unchanged; skipping calibration"
+          fi
 
   test-server:
     needs: check-duplicate-run

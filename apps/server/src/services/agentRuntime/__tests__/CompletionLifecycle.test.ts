@@ -441,6 +441,32 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     expect(event.agentId).toBe('a');
   });
 
+  it('preserves safe external-agent context on completion hooks', () => {
+    const { event } = callBuild(
+      {
+        error: {
+          type: 'AgentRuntimeError',
+          body: {
+            agentType: 'claude-code',
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+            stderr: 'secret path',
+            rateLimitInfo: { status: 'rejected', rateLimitType: 'seven_day', resetsAt: 1789826400 },
+          },
+        },
+        origin: { agentId: 'agent-1', userId: 'user-1' },
+      },
+      'error',
+    );
+    expect(event.errorAttribution).toBe('user');
+    expect(event.errorHeterogeneous).toEqual({
+      agentType: 'claude-code',
+      kind: 'usage_limit',
+      rateLimitType: 'seven_day',
+      resetsAt: 1789826400,
+    });
+  });
+
   it('populates errorType + attribution from the normalized error on the error path', () => {
     // Regression: the event previously carried only errorDetail/errorMessage, so
     // bot reply renderers never saw the stable code/attribution and always fell

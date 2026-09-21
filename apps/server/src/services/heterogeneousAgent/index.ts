@@ -6,6 +6,7 @@ import {
   isHeteroStatusGuideErrorData,
   type LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
@@ -99,7 +100,18 @@ export const normalizeHeterogeneousFinishError = (
   agentType: HeterogeneousAgentType,
   error: HeterogeneousFinishError | undefined,
 ): HeterogeneousFinishError | undefined => {
-  if (!error || isHeteroStatusGuideErrorData(error.body)) return error;
+  if (!error) return error;
+  const normalized = normalizeHeterogeneousMessageError(
+    { ...error, type: 'AgentRuntimeError' },
+    agentType,
+  );
+  if (normalized.errorRef)
+    return {
+      ...normalized,
+      message: normalized.message ?? error.message,
+      type: 'AgentRuntimeError',
+    };
+  if (isHeteroStatusGuideErrorData(error.body)) return error;
 
   const body = error.body;
   const bodyDetails = body
@@ -112,11 +124,11 @@ export const normalizeHeterogeneousFinishError = (
 
   if (!classified) return error;
 
-  return {
+  return normalizeHeterogeneousMessageError({
     body: { ...classified },
     message: classified.message,
     type: 'AgentRuntimeError',
-  };
+  }) as HeterogeneousFinishError;
 };
 
 /**

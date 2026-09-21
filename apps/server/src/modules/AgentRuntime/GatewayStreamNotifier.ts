@@ -1,4 +1,5 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
+import { projectToolEndResult } from '@lobechat/tool-view-model';
 import type { ChatMessageError } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
@@ -22,6 +23,57 @@ import {
 import type { IStreamEventManager, PublishAgentRuntimeEndParams } from './types';
 
 const log = debug('lobe-server:agent-runtime:gateway-notifier');
+
+/**
+ * The only `stream_end` fields anything on this wire reads.
+ *
+ * `finalContent` is the one the gateway client applies (a reasoning-only answer
+ * arrives as chunks and gets promoted into it, so the bubble would be empty
+ * without it). `stepLabel` is a short display label carried alongside.
+ *
+ * Everything else the event publishes — `reasoning`, `toolsCalling`, `usage`,
+ * `grounding`, `imageList` — already reached this client token by token as
+ * `stream_chunk`, and lands again, canonically, with the message. No gateway
+ * consumer reads them here: the store's `stream_end` case touches
+ * `finalContent` alone, and the CLI's renders nothing from the payload. On a
+ * sampled run they were 12 kB of a 14 kB event.
+ *
+ * An allowlist rather than a denylist, so a new field on the publish site has
+ * to be looked at before it rides along.
+ */
+const STREAM_END_WIRE_FIELDS = ['finalContent', 'stepLabel'] as const;
+
+const projectStreamEndData = (data: unknown): unknown => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+
+  const record = data as Record<string, unknown>;
+  const projected: Record<string, unknown> = {};
+  for (const field of STREAM_END_WIRE_FIELDS) {
+    if (field in record) projected[field] = record[field];
+  }
+
+  return projected;
+};
+
+/**
+ * Reduce an event to what the gateway wire actually needs.
+ *
+ * Both cuts here rest on the same fact: this socket is not how a result reaches
+ * the screen. The message is, through a read path that already projects it, so
+ * an event repeating the payload is a second copy of it. `tool_end` carries a
+ * tool's body and state (see `projectToolEndResult`); `stream_end` carries the
+ * assistant's reasoning and tool calls, which also arrived as chunks.
+ *
+ * This is the transport seam on purpose. The shared stream-manager chokepoint
+ * would also catch the Responses API and the CLI's `--verbose`, both of which
+ * print what is dropped here.
+ */
+const projectGatewayEventData = (data: unknown, eventType: unknown): unknown => {
+  if (eventType === 'tool_end') return projectToolEndResult(data);
+  if (eventType === 'stream_end') return projectStreamEndData(data);
+
+  return data;
+};
 
 const POST_TIMEOUT = 5000; // 5s per request
 const MAX_INFLIGHT = 20; // bounded concurrency
@@ -155,10 +207,11 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   ): Promise<string> {
     const result = await this.inner.publishStreamEvent(operationId, event);
     const gatewayEvent = { ...event, operationId, timestamp: Date.now() };
-    if (event.type === 'stream_end') {
+    if (event.type === 'stream_end' || event.type === 'message_patch') {
       // `visible_output_end` may be published immediately after `stream_end`.
-      // Await the Gateway push for this boundary so the client applies
-      // stream_end.finalContent before closing visible loading/reasoning.
+      // Await ordering boundaries so the client applies stream_end.finalContent
+      // before visible_output_end, and its canonical message patch before the
+      // following step_start / agent_runtime_end revision check.
       await this.pushEvent(operationId, gatewayEvent);
     } else {
       void this.pushEvent(operationId, gatewayEvent);
@@ -235,10 +288,10 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     }
 
     void this.pushEvent(operationId, {
-      // Share-visitor runs must not receive the creator's raw operation
-      // metadata (agentConfig / system prompt, modelRuntimeConfig, userId,
-      // workspaceId) over their WS channel — see `buildPublicInitEventData`.
-      data: isShareInit ? buildPublicInitEventData(initialState) : initialState,
+      // Every run, not just share visitors: nothing on the other end reads this
+      // event's data, while the raw `initialState` is the whole `AgentState` —
+      // the LLM context plus the tool-set maps. See `buildPublicInitEventData`.
+      data: buildPublicInitEventData(initialState),
       operationId,
       stepIndex: 0,
       timestamp: Date.now(),
@@ -249,7 +302,16 @@ export class GatewayStreamNotifier implements IStreamEventManager {
   }
 
   async publishAgentRuntimeEnd(params: PublishAgentRuntimeEndParams): Promise<string> {
-    const { operationId, stepIndex, finalState, reason, reasonDetail, uiMessages } = params;
+    const {
+      operationId,
+      stepIndex,
+      finalState,
+      messagePatchMode,
+      messageRevision,
+      reason,
+      reasonDetail,
+      uiMessages,
+    } = params;
     const result = await this.inner.publishAgentRuntimeEnd(params);
 
     const endRedaction = resolveRedactionFromState(finalState);
@@ -289,7 +351,8 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // snapshot, so dropping it here would break the SoT contract.
     const endEventData = {
       errorType,
-      finalState,
+      ...(!messagePatchMode && { finalState }),
+      ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
       reason,
       reasonDetail: effectiveReasonDetail,
       ...(uiMessages !== undefined && { uiMessages }),
@@ -384,13 +447,20 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     // payload too. The gateway forwards events verbatim to clients, and
     // downstream consumers don't read these fields, so carrying them
     // would re-introduce the same multi-megabyte serialization that
-    // crashed the xadd path. Additionally, for a shared-agent visitor run,
+    // crashed the xadd path. step_complete state snapshots require the run
+    // to opt into includeFinalState. Additionally, for a shared-agent visitor run,
     // drop `finalState` wholesale and scrub the rest — see
     // `sanitizeGatewayEventData`.
     const sanitizedEvent =
       event.data === undefined
         ? event
-        : { ...event, data: sanitizeGatewayEventData(event.data, redaction, event.type) };
+        : {
+            ...event,
+            data: projectGatewayEventData(
+              sanitizeGatewayEventData(event.data, redaction, event.type),
+              event.type,
+            ),
+          };
     const pushes: Promise<void>[] = [
       this.httpPost('/api/operations/push-event', {
         event: sanitizedEvent,

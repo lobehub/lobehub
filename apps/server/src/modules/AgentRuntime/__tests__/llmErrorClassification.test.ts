@@ -76,6 +76,7 @@ describe('classifyLLMError', () => {
       ['ExceededToolLimit', 'tools array exceeds limit'],
       ['ModelEmptyCompletion', 'model returned an empty completion'],
       ['ModelRefusal', 'model declined to answer'],
+      ['RemoteMediaDownloadTimeout', 'provider timed out downloading remote media'],
     ])('classifies %s as stop (no HTTP status)', (errorType, message) => {
       expect(classifyLLMError({ errorType, message }).kind).toBe('stop');
     });

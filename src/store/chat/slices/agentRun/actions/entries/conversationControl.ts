@@ -178,8 +178,24 @@ export class ConversationControlActionImpl {
     });
     if (result.handled) {
       this.#interventionResolutionRequestIds.delete(resolutionKey);
+      if (result.state === 'claimed' && params.context) {
+        for (const id of params.toolMessageIds) {
+          this.#get().internal_confirmQuestionSubmission(id, params.action, params.context);
+        }
+      }
       if (result.state === 'already_resolved' && params.context) {
-        await this.#get().refreshMessages(params.context);
+        const submittingQuestions = params.toolMessageIds.filter(
+          (id) => this.#get().questionSubmissions[id],
+        );
+        if (submittingQuestions.length > 0) {
+          await Promise.all(
+            submittingQuestions.map((id) =>
+              this.#get().checkQuestionSubmission(id, params.context!),
+            ),
+          );
+        } else {
+          await this.#get().refreshMessages(params.context);
+        }
       }
     }
     return result;
@@ -475,13 +491,16 @@ export class ConversationControlActionImpl {
     const targetEditor =
       editor ?? (contextKey === messageMapKey(activeContext) ? this.#get().mainInputEditor : null);
     if (targetEditor) {
-      // Find the latest sendMessage operation with editor state
-      for (const opId of [...operationIds].reverse()) {
-        const op = this.#get().operations[opId];
-        if (op && op.type === 'sendMessage' && op.metadata.inputEditorTempState) {
-          targetEditor.setJSONState(op.metadata.inputEditorTempState);
-          break;
-        }
+      // Only the latest send can own the draft. Never fall back to a stale
+      // snapshot from an earlier turn when stopping an accepted message.
+      const operationId = [...operationIds]
+        .reverse()
+        .find((id) => this.#get().operations[id]?.type === 'sendMessage');
+      const operation = operationId ? this.#get().operations[operationId] : undefined;
+      if (operation?.status === 'cancelled' && operation.metadata.inputEditorTempState) {
+        const snapshot = operation.metadata.inputEditorTempState;
+        this.#get().updateOperationMetadata(operation.id, { inputEditorTempState: null });
+        targetEditor.setJSONState(snapshot);
       }
     }
   };

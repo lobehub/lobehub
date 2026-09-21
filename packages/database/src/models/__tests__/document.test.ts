@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { agentShareFileAccessScope } from '@lobechat/types';
+import { agentShareDocumentAccessScope, agentShareFileAccessScope } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -377,6 +377,63 @@ describe('DocumentModel', () => {
   });
 
   describe('findById', () => {
+    it('hides a generated Agent Share document from ordinary document reads', async () => {
+      const shareDocumentModel = new DocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        undefined,
+        agentShareDocumentAccessScope({
+          shareId: 'share-a',
+          topicId: 'topic-a',
+          visitorUserId: 'visitor-a',
+        }),
+      );
+      const { id: documentId, slug } = await shareDocumentModel.create({
+        content: 'private generated visitor content',
+        fileType: 'custom/document',
+        filename: 'visitor-note.md',
+        source: 'agent-document://agent-a/visitor-note.md',
+        sourceType: 'agent',
+        title: 'Visitor note',
+        totalCharCount: 33,
+        totalLineCount: 1,
+      });
+
+      await expect(documentModel.query({ sourceTypes: ['agent'] })).resolves.toMatchObject({
+        items: [],
+        total: 0,
+      });
+      await expect(documentModel.findById(documentId)).resolves.toBeUndefined();
+      await expect(documentModel.findByIds([documentId])).resolves.toEqual([]);
+      await expect(documentModel.findBySlug(slug!)).resolves.toBeUndefined();
+      await expect(shareDocumentModel.findById(documentId)).resolves.toBeDefined();
+    });
+
+    it('strips caller-supplied Agent Share provenance from ordinary document creates', async () => {
+      const created = await documentModel.create({
+        content: 'ordinary content',
+        fileType: 'custom/document',
+        filename: 'ordinary.md',
+        metadata: {
+          agentShare: {
+            shareId: 'forged-share',
+            topicId: 'forged-topic',
+            visitorUserId: 'forged-visitor',
+          },
+          purpose: 'ordinary',
+        },
+        source: 'document',
+        sourceType: 'api',
+        title: 'Ordinary note',
+        totalCharCount: 16,
+        totalLineCount: 1,
+      });
+
+      expect(created.metadata).toEqual({ purpose: 'ordinary' });
+      await expect(documentModel.findById(created.id)).resolves.toBeDefined();
+    });
+
     it('hides a document derived from an agent-share file from ordinary document reads', async () => {
       const { id: fileId } = await fileModel.create({
         fileType: 'application/pdf',

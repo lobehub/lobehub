@@ -1,5 +1,8 @@
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 
 import { AiAgentService } from '../../index';
 
@@ -10,6 +13,7 @@ import { AiAgentService } from '../../index';
 // below (which run before the test body) can wire them into stubbed models.
 const {
   mockCreateOperation,
+  mockCreateServerAgentToolsEngine,
   mockFindByIds,
   mockGetAgentConfig,
   mockGetUserSettings,
@@ -18,6 +22,10 @@ const {
   mockScheduleStaleConnectorToolsRefresh,
 } = vi.hoisted(() => ({
   mockCreateOperation: vi.fn(),
+  mockCreateServerAgentToolsEngine: vi.fn().mockReturnValue({
+    generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
+    getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
+  }),
   mockFindByIds: vi.fn(),
   mockGetAgentConfig: vi.fn(),
   mockGetUserSettings: vi.fn(),
@@ -161,10 +169,7 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
-  createServerAgentToolsEngine: vi.fn().mockReturnValue({
-    generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
-    getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
-  }),
+  createServerAgentToolsEngine: mockCreateServerAgentToolsEngine,
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
 }));
 
@@ -234,6 +239,17 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
     service = new AiAgentService(mockDb, 'creator-1');
   });
 
+  it('starts an operation even when the tools engine reports no enabled tool ids', async () => {
+    // `generateToolsDetailed` is not contractually obliged to return the field,
+    // and the credential-snapshot read used to assume it was always an array.
+    vi.mocked(createServerAgentToolsEngine).mockReturnValueOnce({
+      generateToolsDetailed: vi.fn().mockReturnValue({ tools: [] }),
+      getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
+    } as never);
+
+    await expect(service.execAgent({ agentId: 'agent-1', prompt: 'Hello' })).resolves.toBeDefined();
+  });
+
   it('does not resolve or schedule refresh for a pinned connector missing from toolGrants', async () => {
     await service.execAgent({
       agentId: 'agent-1',
@@ -283,6 +299,46 @@ describe('discoverTools - share gate blocks ungranted connectors early', () => {
     expect(resolvedIdentifiers).toEqual(
       expect.arrayContaining(['granted-plugin', 'ungranted-connector']),
     );
+  });
+
+  it('enables Agent Documents for this run only after an explicit Share grant', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Create a document',
+      shareGate: {
+        agentId: 'agent-1',
+        shareConfig: { toolGrants: [{ identifier: AgentDocumentsIdentifier }] },
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+    });
+
+    expect(mockCreateServerAgentToolsEngine).toHaveBeenCalledTimes(1);
+    expect(mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins).toEqual([
+      AgentDocumentsIdentifier,
+    ]);
+
+    vi.clearAllMocks();
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-2',
+      operationId: 'op-456',
+      success: true,
+    });
+    mockGetUserSettings.mockResolvedValue({ general: { timezone: 'UTC' } });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Create a document',
+      shareGate: {
+        agentId: 'agent-1',
+        shareConfig: { toolGrants: [] },
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+    });
+
+    expect(mockCreateServerAgentToolsEngine.mock.calls[0][1].agentConfig.plugins).toEqual([]);
   });
 
   it('reads attached file types through the exact share visitor scope', async () => {

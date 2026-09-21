@@ -909,4 +909,58 @@ describe('AgentBridgeService', () => {
       });
     });
   });
+  describe('startup failure reporting', () => {
+    // A hetero dispatch failure (device offline, no bound device, sandbox spawn
+    // rejected) finalizes the run through CompletionLifecycle — which fires the
+    // `bot-completion` hook — AND returns `success: false`. Reporting it here as
+    // well put two error messages in the same IM thread (#19676 follow-up).
+    const createProgressThread = () => {
+      const edit = vi.fn().mockResolvedValue(undefined);
+      const thread = createThread();
+      thread.post = vi.fn().mockResolvedValue({ edit, id: 'progress-msg-1' });
+      return { edit, thread };
+    };
+
+    const failedStartup = (extra?: Record<string, unknown>) => ({
+      assistantMessageId: 'assistant-msg-1',
+      createdAt: new Date().toISOString(),
+      error: 'DEVICE_NOT_FOUND (HTTP 404)',
+      operationId: 'op-1',
+      success: false,
+      topicId: 'topic-1',
+      ...extra,
+    });
+
+    it('stays silent when the terminal lifecycle already reported the failure', async () => {
+      mockExecAgent.mockResolvedValue(failedStartup({ terminalReported: true }));
+      const { edit, thread } = createProgressThread();
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      // Only the "Processing..." placeholder — the completion callback owns the
+      // error reply and edits that same message.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(edit).not.toHaveBeenCalled();
+    });
+
+    it('reports a startup failure that reached no completion hook', async () => {
+      mockExecAgent.mockResolvedValue(failedStartup());
+      const { edit, thread } = createProgressThread();
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(edit).toHaveBeenCalledTimes(1);
+      expect(edit.mock.calls[0][0].markdown).toContain('Operation ID');
+    });
+  });
 });

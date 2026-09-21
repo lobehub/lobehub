@@ -1,8 +1,11 @@
+import type { DocumentAccessScope } from '@lobechat/types';
+import { ordinaryDocumentAccessScope } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
 import type { DocumentItem, NewTopicDocument } from '../schemas';
 import { documents, topicDocuments } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { documentMatchesAccessScope } from '../utils/documentVisibility';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface TopicDocumentWithDetails extends DocumentItem {
@@ -13,11 +16,18 @@ export class TopicDocumentModel {
   private userId: string;
   private db: LobeChatDatabase;
   private workspaceId?: string;
+  private documentAccessScope: DocumentAccessScope;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.documentAccessScope = documentAccessScope;
   }
 
   private ownership = () =>
@@ -85,6 +95,7 @@ export class TopicDocumentModel {
           eq(topicDocuments.topicId, topicId),
           this.ownership(),
           buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+          documentMatchesAccessScope(documents.metadata, this.documentAccessScope),
           filter?.type ? eq(documents.fileType, filter.type) : undefined,
         ),
       )

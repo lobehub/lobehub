@@ -37,6 +37,7 @@ export const getImageUrl = async ({
   }
 
   const baseOptions = {
+    placeholders: false,
     scale: 2,
     width,
   };
@@ -52,8 +53,8 @@ export const getImageUrl = async ({
     // For raster formats, use toBlob directly with type option
     const blobType = (imageType === ImageType.JPG ? 'jpg' : imageType) as 'png' | 'jpg' | 'webp';
     const blobResult = await snapdom.toBlob(width ? copy : dom, {
+      ...baseOptions,
       type: blobType,
-      useProxy: 'https://proxy.corsfix.com/?',
     });
 
     if (!blobResult) {

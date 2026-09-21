@@ -14,10 +14,8 @@ export default {
     'This is a past round. Return to all rounds to review the current delivery.',
   'acceptance.review.backToImages': 'Back to images',
   'acceptance.review.writeFeedback': 'Write feedback',
-  'acceptance.review.mobileDrawHint': 'Drag to mark an issue',
-  'acceptance.review.mobileBrowseHint': 'Swipe to switch · scroll to read',
-  'acceptance.review.mobileDrawnHint':
-    '{{count}} region(s) marked · drag to move, corner dot to resize',
+  'acceptance.review.mobileRegionCommentsEmpty':
+    'Drag on the image above to mark a region; its comment lands here.',
   'acceptance.review.draftSaved': 'Your draft is saved on this device.',
   'acceptance.review.removeAttachment': 'Remove attachment',
   'acceptance.review.regionImage': 'Image {{image}} · Region {{region}}',
@@ -28,7 +26,6 @@ export default {
   'acceptance.review.nextImage': 'Next image',
   'acceptance.review.imageNumber': 'Image {{current}} / {{total}}',
   'acceptance.review.drawRegion': 'Draw region',
-  'acceptance.review.browseImage': 'Browse',
   'flow.expandGroup': 'Expand {{title}}',
   'flow.collapseGroup': 'Collapse {{title}}',
   'flow.enterGroup': 'Open {{title}}',
@@ -375,6 +372,7 @@ export default {
   'acceptance.review.attachFailed': 'Screenshot upload failed — please try again.',
   'acceptance.review.attachLimit': 'Up to {{count}} screenshots.',
   'acceptance.review.attachTooLarge': 'The image is too large (10MB max).',
+  'acceptance.review.confirmRegions': 'Done',
   'acceptance.review.confirmReject': 'Submit feedback',
   'acceptance.review.detailPlaceholder':
     'Leave a comment for this check. It will be submitted with your decision…',
@@ -395,6 +393,8 @@ export default {
   'acceptance.review.revertToAccept': 'Undo send-back · mark accepted',
   'acceptance.review.revertToReject': 'Change to reject with comment',
   'acceptance.review.supplement': 'Additional notes (optional)',
+  'acceptance.review.supplementButton': 'Notes',
+  'acceptance.review.supplementButtonDraft': 'Notes · draft saved',
   'acceptance.requirementEmpty': 'No acceptance goal recorded for this subject yet.',
   'acceptance.requirementEmptyEditable': 'No acceptance goal yet — click to add one.',
   'acceptance.requirementLabel': 'Acceptance goal',

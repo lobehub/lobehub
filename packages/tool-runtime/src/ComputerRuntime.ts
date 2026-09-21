@@ -55,6 +55,14 @@ const MAX_AGENT_GLOB_RESULTS = 1000;
  */
 export abstract class ComputerRuntime {
   /**
+   * Whether this backend's `getCommandOutput` manifest exposes a `timeout`, so
+   * a still-running observation may tell the reader to wait longer in one call
+   * rather than poll. Opt-in: the advice is only useful where the schema the
+   * model is holding actually carries the parameter.
+   */
+  protected readonly supportsObservationTimeout: boolean = false;
+
+  /**
    * Call the underlying service to execute a tool.
    * Each subclass maps this to its own transport (IPC, HTTP, tRPC, etc.).
    */
@@ -369,7 +377,9 @@ export abstract class ComputerRuntime {
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         outputFiles,
+        running: r.running,
         shellId: r.commandId || r.shell_id,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout || r.output,
         success: commandSuccess,
@@ -411,25 +421,39 @@ export abstract class ComputerRuntime {
       const r = result.result || {};
       const outputSuccess = typeof r.success === 'boolean' ? r.success : result.success;
       const outputFiles = r.outputFiles ?? r.output_files;
+      const exitCode = r.exitCode ?? r.exit_code;
+      // Liveness comes from the backend. The fallback is for backends that do
+      // not report it and is knowingly lossy — a missing `exitCode` also
+      // describes a signalled or never-spawned command — so it stays a last
+      // resort. `r.running ?? false` was worse: it hard-coded "not running" for
+      // every such backend, so no consumer could tell a live session from a
+      // finished one.
+      const running = typeof r.running === 'boolean' ? r.running : exitCode === undefined;
 
       const state: GetCommandOutputState = {
         ...sessionState,
         durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
-        exitCode: r.exitCode ?? r.exit_code,
+        exitCode,
         outputFiles,
-        running: r.running ?? false,
+        running,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout,
         success: outputSuccess,
       };
 
       const content = formatCommandOutput({
+        canWaitLonger: this.supportsObservationTimeout,
         durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
-        exitCode: r.exitCode ?? r.exit_code,
+        exitCode,
+        filter: args.filter,
         output: r.newOutput || r.output,
         outputFiles,
+        running,
+        shellId: args.commandId,
+        signal: r.signal,
         stderr: r.stderr,
         stdout: r.stdout,
         success: outputSuccess,

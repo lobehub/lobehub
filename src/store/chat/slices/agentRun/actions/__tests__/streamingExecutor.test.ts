@@ -1322,14 +1322,11 @@ describe('StreamingExecutor actions', () => {
         undefined,
         expect.objectContaining({ executionEnv: 'local' }),
       );
-      const readFile = state.toolManifestMap['lobe-local-system']?.api.find(
-        (api: LobeChatPluginApi) => api.name === 'readFile',
-      );
+      const localSystem = state.operationToolSet?.manifestMap['lobe-local-system'];
+      const readFile = localSystem?.api.find((api: LobeChatPluginApi) => api.name === 'readFile');
 
       expect(readFile?.description).toContain('base64');
-      expect(state.toolManifestMap['lobe-local-system']?.systemRole).toContain(
-        'Image files are uploaded as visual tool results',
-      );
+      expect(localSystem?.systemRole).toContain('Image files are uploaded as visual tool results');
     });
 
     it('should not inject page editor context outside page scope', () => {
@@ -1844,8 +1841,9 @@ describe('StreamingExecutor actions', () => {
         disableTools: true,
       });
 
-      // toolManifestMap should be empty when disableTools is true
-      expect(state.toolManifestMap).toEqual({});
+      // The run's tool set lives on the operation slot, and it holds nothing.
+      expect(state.operationToolSet?.manifestMap).toEqual({});
+      expect(state.operationToolSet?.tools).toEqual([]);
     });
 
     it('should return empty tools in agentConfig when disableTools is true', async () => {

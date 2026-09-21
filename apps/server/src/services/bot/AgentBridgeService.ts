@@ -427,6 +427,14 @@ export class AgentBridgeService {
   }
 
   private async finishStartupFailure(params: {
+    /**
+     * The run's terminal lifecycle already fired its `onComplete` hooks, which
+     * include this bot's own completion callback (see `ExecAgentResult.
+     * terminalReported`). Posting here as well is what used to leave two error
+     * messages — the curated card and the callback's — in the same thread, so
+     * this path only cleans up and lets the callback own the reply.
+     */
+    alreadyReported?: boolean;
     client?: PlatformClient;
     error?: unknown;
     operationId?: string;
@@ -437,6 +445,7 @@ export class AgentBridgeService {
     userMessage: Message;
   }): Promise<void> {
     const {
+      alreadyReported,
       client,
       error,
       operationId,
@@ -450,14 +459,22 @@ export class AgentBridgeService {
       error instanceof Error ? error.message : error ? String(error) : 'Agent execution failed';
 
     log(
-      'finishStartupFailure: thread=%s, operationId=%s, stopped=%s, error=%s',
+      'finishStartupFailure: thread=%s, operationId=%s, stopped=%s, alreadyReported=%s, error=%s',
       thread.id,
       operationId,
       stopped,
+      alreadyReported,
       errorMessage,
     );
 
     AgentBridgeService.clearActiveThread(thread.id);
+
+    // A stop is ours to report either way: the completion callback renders an
+    // interrupted run, not this local "stopped" acknowledgement.
+    if (alreadyReported && !stopped) {
+      await this.clearReaction(thread, client);
+      return;
+    }
 
     // Classify before rendering so a startup failure lands on curated copy
     // (harness / provider / user tier) instead of a bare "Agent Execution
@@ -1235,6 +1252,7 @@ export class AgentBridgeService {
 
     if (!result.success) {
       await this.finishStartupFailure({
+        alreadyReported: result.terminalReported,
         client,
         error: result.error,
         operationId: result.operationId,
@@ -1450,6 +1468,7 @@ export class AgentBridgeService {
                       replyLocale,
                       event.errorAttribution,
                       event.errorBudget,
+                      event.errorHeterogeneous,
                     );
                     // Wrap in `{ markdown }` so the Chat SDK adapter sets the
                     // platform's markdown parse_mode (e.g. Telegram `Markdown`,
@@ -1627,12 +1646,18 @@ export class AgentBridgeService {
             clearTimeout(timeout);
 
             log(
-              'executeWithCallback[local]: startup failed, operationId=%s, error=%s',
+              'executeWithCallback[local]: startup failed, operationId=%s, terminalReported=%s, error=%s',
               result.operationId,
+              result.terminalReported,
               result.error,
             );
 
-            if (progressMessage) {
+            // The terminal lifecycle already ran this failure through the
+            // in-process `bot-completion` hook below, which edits the very same
+            // progress message. Rendering here too would just overwrite its
+            // (better-classified) copy — or, with no placeholder to edit, add a
+            // second error message to the thread.
+            if (progressMessage && !result.terminalReported) {
               try {
                 await progressMessage.edit({
                   markdown: renderThrownAgentError(result.error, result.operationId, replyLocale),

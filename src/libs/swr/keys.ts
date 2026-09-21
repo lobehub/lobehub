@@ -867,6 +867,35 @@ export const deviceKeys = {
       ...(pullRequestNumber === undefined ? [] : [pullRequestNumber]),
     ],
   ),
+  gitPullRequestDetail: def(
+    'device:gitPullRequestDetail',
+    (deviceId: string, path: string, number: number) => [
+      'device:gitPullRequestDetail',
+      deviceId,
+      path,
+      number,
+    ],
+  ),
+  gitPullRequestActivity: def(
+    'device:gitPullRequestActivity',
+    (deviceId: string, path: string, number: number) => [
+      'device:gitPullRequestActivity',
+      deviceId,
+      path,
+      number,
+    ],
+  ),
+  gitPullRequestMergeContext: def(
+    'device:gitPullRequestMergeContext',
+    (deviceId: string, path: string, number: number, headRefOid?: string, baseRefName?: string) => [
+      'device:gitPullRequestMergeContext',
+      deviceId,
+      path,
+      number,
+      ...(headRefOid === undefined ? [] : [headRefOid]),
+      ...(baseRefName === undefined ? [] : [baseRefName]),
+    ],
+  ),
   gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
     'device:gitRemoteBranches',
     deviceId,

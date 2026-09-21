@@ -1712,6 +1712,43 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('error handling', () => {
+    const authMetadata = {
+      attribution: 'user',
+      category: 'auth',
+      countAsFailure: false,
+      errorRef: 'H1001',
+      isFallback: false,
+      numericId: 1001,
+      retryable: false,
+      severity: 'warning',
+    };
+
+    it('preserves structured quota fields for a flattened local CLI error', async () => {
+      const store = createMockStore();
+      mockSendPrompt.mockRejectedValueOnce({
+        message: "You've hit your weekly limit · resets 10pm (Asia/Shanghai)",
+      });
+      await executeHeterogeneousAgent(
+        vi.fn(() => store),
+        defaultParams,
+      );
+      await flush();
+      expect(mockUpdateMessageError).toHaveBeenCalledWith(
+        'ast-initial',
+        expect.objectContaining({
+          errorRef: 'H2001',
+          attribution: 'user',
+          retryable: false,
+          body: expect.objectContaining({
+            agentType: 'claude-code',
+            code: 'rate_limit',
+            details: { kind: 'usage_limit' },
+          }),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it('should persist accumulated content on error', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);
@@ -1777,6 +1814,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1795,6 +1833,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1828,6 +1867,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1846,6 +1886,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1896,6 +1937,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
+          ...authMetadata,
           body: expect.objectContaining({
             agentType: 'claude-code',
             code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -1914,6 +1956,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           value: {
             content: '',
             error: {
+              ...authMetadata,
               body: expect.objectContaining({
                 agentType: 'claude-code',
                 code: HeterogeneousAgentSessionErrorCode.AuthRequired,
@@ -2015,7 +2058,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockUpdateMessageError).toHaveBeenCalledWith(
         'ast-initial',
         {
-          body: cliError,
+          attribution: 'user',
+          category: 'environment',
+          countAsFailure: false,
+          errorRef: 'H8001',
+          isFallback: false,
+          numericId: 8001,
+          retryable: false,
+          severity: 'warning',
+          body: { ...cliError, details: { kind: 'cli_not_found' } },
           message: 'Claude Code CLI was not found',
           type: 'AgentRuntimeError',
         },
@@ -2033,7 +2084,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
           type: 'updateMessage',
           value: {
             error: {
-              body: cliError,
+              attribution: 'user',
+              category: 'environment',
+              countAsFailure: false,
+              errorRef: 'H8001',
+              isFallback: false,
+              numericId: 8001,
+              retryable: false,
+              severity: 'warning',
+              body: { ...cliError, details: { kind: 'cli_not_found' } },
               message: 'Claude Code CLI was not found',
               type: 'AgentRuntimeError',
             },

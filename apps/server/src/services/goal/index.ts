@@ -1702,21 +1702,58 @@ export class GoalService {
       return { goalId, message: move.message, nodeId: move.focusNodeId, outcome: 'no_progress' };
     }
 
-    const result = await this.coordinatorGraph.createNodeOnce(goalId, {
-      description: [
-        `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
-        'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
-        'Explicitly close every remaining acceptance gap instead of treating completed upstream Tasks as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
-        'Return one auditable final delivery with evidence for every requirement. If a requirement cannot be satisfied, state the exact gap and the minimum next action; do not claim the Goal is complete.',
-        graph.goal.config?.manager && graph.goal.config.managerState?.submitted?.action === 'verify'
-          ? `Main Agent verification handoff (context only, not acceptance criteria):\n${graph.goal.config.managerState.submitted.reason}\nIndependently check these notes against the evidence. They do not amend the authoritative Goal requirement or establish that it passed.`
-          : undefined,
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-      kind: 'task',
-      priority: -1,
-      title: GOAL_ACCEPTANCE_TASK_TITLE,
+    // The node and its links commit together. Once the node exists no later tick
+    // comes back to link it, so writing them in separate transactions let an
+    // interruption in between leave the acceptance detached from the work it
+    // closes for good. Rolling the node back instead lets the next tick retry.
+    const result = await this.db.transaction(async (tx) => {
+      const writer = new GoalGraphModel(tx, this.userId, this.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      });
+      const created = await writer.createNodeOnce(goalId, {
+        description: [
+          `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
+          'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
+          'Explicitly close every remaining acceptance gap instead of treating completed upstream Tasks as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
+          'Return one auditable final delivery with evidence for every requirement. If a requirement cannot be satisfied, state the exact gap and the minimum next action; do not claim the Goal is complete.',
+          graph.goal.config?.manager &&
+          graph.goal.config.managerState?.submitted?.action === 'verify'
+            ? `Main Agent verification handoff (context only, not acceptance criteria):\n${graph.goal.config.managerState.submitted.reason}\nIndependently check these notes against the evidence. They do not amend the authoritative Goal requirement or establish that it passed.`
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        kind: 'task',
+        priority: -1,
+        title: GOAL_ACCEPTANCE_TASK_TITLE,
+      });
+      if (!created?.created) return created;
+
+      const problem = graph.nodes.find((node) => node.kind === 'problem');
+      if (problem) {
+        await writer.createEdge(goalId, problem.id, created.node.id, 'decomposes');
+      }
+      // Acceptance closes the whole Goal, so it builds on the work that ends each
+      // line of the graph. Linking the delivered leaf Tasks lays it out below them
+      // instead of beside the first round. They are all resolved, so nothing blocks.
+      const delivered = graph.nodes.filter(
+        (node) =>
+          node.kind === 'task' &&
+          node.status === 'resolved' &&
+          node.id !== created.node.id &&
+          !experimentOwner(graph, node.id),
+      );
+      const deliveredIds = new Set(delivered.map((node) => node.id));
+      const builtUpon = new Set(
+        graph.edges
+          .filter((edge) => edge.kind === 'depends_on' && deliveredIds.has(edge.sourceNodeId))
+          .map((edge) => edge.targetNodeId),
+      );
+      for (const leaf of delivered.filter((node) => !builtUpon.has(node.id))) {
+        await writer.createEdge(goalId, created.node.id, leaf.id, 'depends_on');
+      }
+      return created;
     });
     if (!result) {
       return {
@@ -1727,10 +1764,6 @@ export class GoalService {
     }
     if (result.created) {
       effects.push({ nodeId: result.node.id, type: 'created_node', detail: 'terminal acceptance' });
-      const problem = graph.nodes.find((node) => node.kind === 'problem');
-      if (problem) {
-        await this.coordinatorGraph.createEdge(goalId, problem.id, result.node.id, 'decomposes');
-      }
     }
     return {
       goalId,

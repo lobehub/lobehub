@@ -13,6 +13,7 @@ import type {
   ChatTopicBotContext,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
+  FrozenCredentialFacts,
   UserInterventionConfig,
 } from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
@@ -128,6 +129,7 @@ export type StepCompletionReason =
   | 'interrupted'
   | 'max_steps'
   | 'cost_limit'
+  | 'tool_call_repeat_limit'
   | 'waiting_for_human'
   | 'waiting_for_async_tool';
 
@@ -511,6 +513,8 @@ export interface OperationCreationParams {
    * Registered once, auto-adapt to local (in-memory) or production (webhook) mode
    */
   hooks?: AgentHook[];
+  /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
+  includeFinalState?: boolean;
   initialContext: AgentRuntimeContext;
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
@@ -530,6 +534,8 @@ export interface OperationCreationParams {
   modelRuntimeConfig?: any;
   /** Marks the source claim non-rollbackable once deterministic runtime state is durable. */
   onInterventionPrepared?: () => void;
+  /** Credentials frozen for the run; see {@link FrozenCredentialFacts}. */
+  operationCredentials?: FrozenCredentialFacts;
   operationId: string;
   /** Operation-level skill set for SkillResolver */
   operationSkillSet?: OperationSkillSet;

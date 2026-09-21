@@ -18,6 +18,7 @@ import {
   userPersonaDocuments,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { notAgentShareDocument } from '../../utils/documentVisibility';
 import { notAgentShareFile, notAgentShareFileReference } from '../../utils/fileVisibility';
 import { searchableMessage } from '../../utils/searchableMessage';
 import type {
@@ -934,6 +935,7 @@ export class FtsSearchDocumentBuilder {
       .from(documents)
       .where(
         and(
+          notAgentShareDocument(documents.metadata),
           notAgentShareFileReference(this.db, documents.fileId),
           selection.ids
             ? inArray(documents.id, selection.ids)

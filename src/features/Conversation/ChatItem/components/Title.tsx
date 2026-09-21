@@ -22,7 +22,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
   return (
     <>
       {showTitle && (
-        <Text fontSize={14} weight={500}>
+        <Text fontSize={14} style={{ whiteSpace: 'nowrap' }} weight={500}>
           {title}
         </Text>
       )}

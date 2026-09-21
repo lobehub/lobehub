@@ -20,6 +20,8 @@ import type {
   EvalToolForwardingConfig,
   ExecutionPlan,
   ExpertiseContextSnapshot,
+  FrozenCredentialFacts,
+  FrozenModelFacts,
   LobeAgentChatConfig,
   LobeAgentConfig,
   SecurityBlacklistConfig,
@@ -131,6 +133,10 @@ export interface AgentRunPrincipal {
   policy?: {
     /** Device-access decision; `reason` names the branch that granted or denied it. */
     deviceAccess?: { canUseDevice: boolean; reason: string };
+    /** Tool-call patterns that always need a human. Unset falls back to the runtime default. */
+    securityBlacklist?: SecurityBlacklistConfig;
+    /** Approval mode for this run — `headless` for background and sub-agent runs. */
+    userIntervention?: UserInterventionConfig;
   };
 }
 
@@ -159,6 +165,8 @@ export interface AgentRunPlan {
 export interface AgentRunHostEnvelope {
   /** Serialized lifecycle hook configs (webhook mode), so a queue worker can rebuild the dispatcher. */
   hooks?: SerializedAgentHook[];
+  /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
+  includeFinalState?: boolean;
   /** Queue retry policy for step scheduling. */
   queue?: { retries?: number; retryDelay?: string };
 }
@@ -221,8 +229,12 @@ export interface AgentWorldSnapshot {
    * is kept apart for the rules that must hide those tools from the model.
    */
   disabledPluginIds?: string[];
+  /** Whether the context engine may inject {@link AgentWorldSnapshot.expertise}. */
+  enableExpertise?: boolean;
   /** Evaluation prompt data for eval runs. */
   eval?: EvalContext;
+  /** Expertise snapshot resolved once when this operation started. */
+  expertise?: ExpertiseContextSnapshot;
   /** Multi-agent group roster (or bot-conversation fallback). */
   group?: AgentGroupConfig;
   /** Root instruction files of the bound project. */
@@ -285,10 +297,10 @@ export interface AgentState {
   costLimit?: CostLimit;
   // --- Metadata ---
   createdAt: string;
-  /** Whether ContextEngine may inject the operation expertise snapshot. */
+  /** @deprecated Use `world.enableExpertise`. */
   enableExpertise?: boolean;
   error?: any;
-  /** Immutable expertise snapshot resolved once when this operation starts. */
+  /** @deprecated Use `world.expertise`. */
   expertise?: ExpertiseContextSnapshot;
   /**
    * When true, the agent is in force-finish mode (maxSteps exceeded).
@@ -348,6 +360,15 @@ export interface AgentState {
       video?: boolean;
       vision?: boolean;
     };
+    /**
+     * Every model fact the host read once when the operation was created (cards,
+     * the user's model row, the reasoning config that won the topic pin). Every
+     * LLM attempt of the run resolves its parameters from this snapshot, so an
+     * edit the user makes mid-run lands on the next turn instead of changing the
+     * payload between two steps. Absent on operations created before it existed,
+     * and for an attempt on another model — those resolve live.
+     */
+    modelFacts?: FrozenModelFacts;
     model: string;
     provider: string;
     /**
@@ -360,6 +381,13 @@ export interface AgentState {
     };
   };
 
+  /**
+   * Credentials this run listed once when it was created. A step renders
+   * `{{CREDS_LIST}}` from here instead of asking the Market API again; absent
+   * when the run has changed its own credentials since, and the steps after
+   * that read the list live.
+   */
+  operationCredentials?: FrozenCredentialFacts;
   operationId: string;
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
@@ -418,12 +446,7 @@ export interface AgentState {
   // --- Principal ---
   /** Under whose authority the run acts and what it may do. Frozen at creation. */
   principal?: AgentRunPrincipal;
-  /**
-   * Security blacklist configuration
-   * These rules will ALWAYS block execution and require human intervention,
-   * regardless of user settings (even in auto-run mode).
-   * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
-   */
+  /** @deprecated Use `principal.policy.securityBlacklist`. */
   securityBlacklist?: SecurityBlacklistConfig;
   // --- State Machine ---
   status:
@@ -449,16 +472,35 @@ export interface AgentState {
    */
   toolCallRepeatGuard?: {
     counts: Record<string, number>;
+    /**
+     * Set on the turn the guard cut short. The run still lands in `status:
+     * 'done'` — the turn was finalized without tool calls, which is what
+     * finishing looks like — so without this marker a loop-death is
+     * indistinguishable from a real answer, and nothing downstream can count
+     * how often the guard fires.
+     */
+    stoppedByRepeatLimit?: boolean;
   };
 
-  /** Tool executor map for routing tool execution between server and client */
+  /**
+   * Legacy mirrors of {@link OperationToolSet}, kept only so operations that
+   * started before `operationToolSet` existed still resolve their tools. Nothing
+   * writes them: the maps are the heaviest thing on the state and it is
+   * re-serialized at every step boundary. Read through `selectToolManifestMap`
+   * and friends, which prefer the slot; `normalizeAgentState` lifts these into it
+   * on load.
+   *
+   * @deprecated Use `operationToolSet`.
+   */
   toolExecutorMap?: Record<string, ToolExecutor>;
 
-  toolManifestMap: Record<string, any>;
+  /** @deprecated Use `operationToolSet.manifestMap`. */
+  toolManifestMap?: Record<string, any>;
 
+  /** @deprecated Use `operationToolSet.tools`. */
   tools?: any[];
 
-  /** Tool source map for routing tool execution to correct handler */
+  /** @deprecated Use `operationToolSet.sourceMap`. */
   toolSourceMap?: Record<string, ToolSource>;
 
   /**
@@ -476,10 +518,7 @@ export interface AgentState {
    */
   usage: Usage;
 
-  /**
-   * User's global intervention configuration
-   * Controls how tools requiring approval are handled
-   */
+  /** @deprecated Use `principal.policy.userIntervention`. */
   userInterventionConfig?: UserInterventionConfig;
 
   // --- World snapshot ---
