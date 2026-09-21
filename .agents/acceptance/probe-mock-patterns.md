@@ -103,6 +103,8 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P79 | web, cli      | client, gateway | env            | Local SearXNG with `SEARCH_PROVIDERS=searxng`; the on-disk search1api keys are dead                                                                          |
 | P84 | cli           | any             | auth           | Drive `lh` against the local lobehub-cloud runtime by seeding an API key row into its main database                                                          |
 | P85 | cli           | any             | fixture        | Simulate a publish whose response was lost by restoring `pendingCreateKey` in `.lobehub/artifacts.json`                                                      |
+| P88 | web           | hetero          | fixture        | Force the device-offline guard by rewriting `listDevices` at the CDP Fetch layer; the tray needs a real `startOperation`                                     |
+| P89 | web           | any             | probe          | A layout before/after on one live page: swap only the changed files and let HMR settle; `getComputedStyle().bottom` is a used value, read `el.style.bottom`  |
 | P82 | web           | any             | drive          | Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups               |
 | P86 | electron, cli | any             | env, auth      | A session spawned by the desktop hetero runtime inherits `LOBEHUB_JWT` (production) and `ELECTRON_RUN_AS_NODE=1` — strip both before local Electron/CLI work |
 
@@ -2581,3 +2583,67 @@ printf '{"artifacts":{"dist/index.html":{"pendingCreateKey":"%s"}},"version":1}'
 
 Capture both publishes' `--json` output in one artifact with the restored
 manifest shown between them, so a reviewer can see the key was genuinely reused.
+
+#### P88 · Forcing the hetero composer's device-offline guard, and the status tray that sits above it
+
+**applies-to:** surface=web · runtime=hetero · phase=fixture
+
+**Situation:** verifying the guard banner above a heterogeneous agent's composer
+(设备未连接 / 云端未配置 …), and its relationship to the floating run-status tray.
+
+**Doesn't work:** actually disconnecting the bound device. `lh connect` runs the
+infrastructure executing the agent, and the round then depends on a gateway you
+had to take down.
+
+**Works:** the guard reads `deviceService.listDevices()`, so rewrite that one
+response at the CDP Fetch layer and leave the product's own guard logic intact:
+
+```js
+await send('Fetch.enable', { patterns: [{ urlPattern: '*listDevices*', requestStage: 'Response' }] });
+// in Fetch.requestPaused: getResponseBody → text.replace(/"online":true/g, '"online":false') → fulfillRequest
+```
+
+Drop `content-length` and `content-encoding` from the replayed headers or the
+fulfilled body is truncated. The interception dies with the CDP connection, so a
+later HMR re-fetch brings the device back online and the banner disappears —
+keep one script alive for the whole capture rather than attaching per step.
+
+The run-status tray needs a *real* operation, not a DOM stub:
+
+```js
+const { useChatStore } = await import('http://localhost:<vitePort>/src/store/chat/index.ts');
+useChatStore.getState().startOperation({
+  type: 'execHeterogeneousAgent',
+  context: { agentId, topicId },
+  metadata: { startTime: Date.now() - 5000 },
+});
+```
+
+`getVisibleAgentRuntimeStartTimeByContext` only counts `AI_RUNTIME_OPERATION_TYPES`
+whose `metadata.visibleLoadingDone` is unset, and it keys off the conversation's
+full context — pass the route's own `agentId` / `topicId` or the tray never mounts.
+
+#### P89 · A layout A/B on one live page: swap the changed files, and read inline styles not computed ones
+
+**applies-to:** surface=web · runtime=any · phase=probe
+
+**Situation:** proving a CSS/structure fix changed what the user sees, with only
+the code as the variable.
+
+**Works:** keep one page open and swap just the changed files under the running
+Vite server, letting HMR settle between measurements — same route, same data,
+same viewport, same injected state. In a shared working tree take the "after"
+copy with `cp` first and restore from it (never `git stash`, see
+[[feedback_no_git_stash_shared_worktrees]] in the user memory); recover the
+"before" with `git show HEAD:<path>`. When the tree sits on an unrelated branch,
+write the PR branch's exact file content in for the capture and record the
+sha256 of both sides in the evidence.
+
+**Trap:** `getComputedStyle(el).bottom` on a positioned element returns the
+**used** value in pixels, so a selector looking for `bottom === '100%'` silently
+matches nothing and the overlay reads as absent. Match on the inline style
+(`el.style.bottom === '100%'`) instead. Same for any percentage offset.
+
+For "does A cover B", assert the rectangles rather than eyeballing the capture:
+`!(a.bottom <= b.top || b.bottom <= a.top)`. A banner whose top sliver is still
+visible looks fine in a thumbnail and is still broken.
