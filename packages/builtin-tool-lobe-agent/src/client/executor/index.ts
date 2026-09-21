@@ -101,10 +101,10 @@ const clientPlanService: PlanRuntimeService = {
     return normalizePlanDoc(doc);
   },
 
-  updatePlanMetadata: async (id, metadata) => {
+  updatePlanMetadata: async (id, metadata, topicId) => {
     await notebookService.updateDocument({ id, metadata });
     const { invalidateDocumentMutation } = await import('@/services/document/invalidation');
-    await invalidateDocumentMutation({ cause: 'notebook', documentId: id });
+    await invalidateDocumentMutation({ cause: 'notebook', documentId: id, topicId });
   },
 };
 
