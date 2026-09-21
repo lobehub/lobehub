@@ -1,10 +1,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  hydrateProjectedToolMessages,
-  mergeStoredToolPayloads,
-} from '../hydrateProjectedTools';
+import { hydrateProjectedToolMessages, mergeStoredToolPayloads } from '../hydrateProjectedTools';
 
 const msg = (over: Partial<UIChatMessage>): UIChatMessage =>
   ({ content: '', createdAt: 1_780_000_000_000, id: 'm', role: 'user', ...over }) as UIChatMessage;

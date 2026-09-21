@@ -28,6 +28,7 @@ vi.mock('@/libs/trpc/client', () => ({
           success: false,
         }),
       },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
   },
@@ -1565,6 +1566,30 @@ describe('ConversationControl actions', () => {
       return pausedOperationId;
     };
 
+    it('refreshes the resolved approval and restores active status after a gateway stop', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedDurableTerminalCard(result);
+      const refresh = vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
+      const dispatch = vi.spyOn(result.current, 'internal_dispatchMessage');
+      await act(async () => {
+        await result.current.stopPendingApproval(['tool-msg-terminal-source']);
+      });
+      expect(lambdaClient.aiAgent.stopPendingApproval.mutate).toHaveBeenCalled();
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'tool-msg-terminal-source',
+          value: expect.objectContaining({
+            pluginIntervention: expect.objectContaining({ status: 'aborted' }),
+          }),
+        }),
+        expect.anything(),
+      );
+      expect(refresh).toHaveBeenCalledWith({ agentId, topicId });
+      expect(result.current.updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId, status: 'active' }),
+      );
+    });
+
     it('does not retire the paused operation when Stop loses the durable claim', async () => {
       const { result } = renderHook(() => useChatStore());
       const pausedOperationId = seedDurableTerminalCard(result);
@@ -1600,6 +1625,7 @@ describe('ConversationControl actions', () => {
     it('retires the paused operation only when Stop wins the durable claim', async () => {
       const { result } = renderHook(() => useChatStore());
       const pausedOperationId = seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
       const executeGatewayAgentSpy = vi
         .spyOn(result.current, 'executeGatewayAgent')
         .mockResolvedValue({} as any);

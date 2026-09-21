@@ -15,6 +15,17 @@ vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
   useAgentManagementAccess: () => managementAccess,
 }));
 
+const topicState = vi.hoisted(() => ({
+  activeAgentId: 'agent-1',
+  metadata: {} as { projectExecution?: { deviceId: string } },
+}));
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (s: typeof topicState) => unknown) => selector(topicState),
+}));
+vi.mock('@/store/chat/selectors', () => ({
+  topicSelectors: { currentTopicMetadata: (s: typeof topicState) => s.metadata },
+}));
+
 vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
 vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
@@ -72,6 +83,7 @@ const setupStores = ({
 describe('useEffectiveAgencyConfig', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    topicState.metadata = {};
     managementAccess.canManageAgent = false;
     managementAccess.isAccessLoading = false;
   });
@@ -242,6 +254,17 @@ describe('useEffectiveAgencyConfig', () => {
     const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
 
     expect(result.current.agencyConfig).toEqual(sharedConfig);
+  });
+
+  it('pins the conversation device without changing the agent default', () => {
+    setupStores();
+    topicState.metadata = { projectExecution: { deviceId: 'project-device' } };
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('project-device');
+    expect(result.current.canSelectExecutionTarget).toBe(false);
+    const defaults = renderHook(() => useEffectiveAgencyConfig('agent-1', { ignoreTopic: true }));
+    expect(defaults.result.current.agencyConfig).toEqual(sharedConfig);
+    expect(sharedConfig.boundDeviceId).toBe('creator-device');
   });
 
   it('returns undefined config when agentId is missing', () => {

@@ -344,7 +344,9 @@ export class ChatTopicActionImpl {
 
   summaryTopicTitle = async (topicId: string, messages: UIChatMessage[]): Promise<void> => {
     const { internal_updateTopicTitleInSummary } = this.#get();
-    const topic = topicSelectors.getTopicById(topicId)(this.#get());
+    const topic =
+      topicSelectors.getTopicById(topicId)(this.#get()) ??
+      (await topicService.getTopicDetail(topicId));
     if (!topic) return;
 
     const messagesForTitle = normalizeTopicTitleMessages(messages);
@@ -1179,8 +1181,9 @@ export class ChatTopicActionImpl {
     );
   };
 
-  autoRenameTopicTitle = async (id: string): Promise<void> => {
-    const { activeAgentId: agentId, summaryTopicTitle } = this.#get();
+  autoRenameTopicTitle = async (id: string, topicAgentId?: string): Promise<void> => {
+    const { activeAgentId, summaryTopicTitle } = this.#get();
+    const agentId = topicAgentId ?? activeAgentId;
 
     const messages = await messageService.getMessages({ agentId, topicId: id });
 
