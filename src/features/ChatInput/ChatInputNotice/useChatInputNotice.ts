@@ -104,7 +104,6 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     usePermission('manage_provider_key');
   const agentId = useAgentId();
   const [actionLoading, setActionLoading] = useState(false);
-
   const [isAgentConfigLoading, isHeterogeneousAgent] = useAgentStore((s) => [
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
     agentByIdSelectors.isAgentHeterogeneousById(agentId)(s),
@@ -266,4 +265,10 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     actionLoading,
     onAction: canManageAiInfra ? handleEnableModel : undefined,
   };
+};
+
+export const useIsChatInputModelUnavailable = (): boolean => {
+  const notice = useChatInputNotice();
+
+  return notice?.key === 'input.modelUnavailable' || notice?.key === 'input.modelDisabled';
 };
