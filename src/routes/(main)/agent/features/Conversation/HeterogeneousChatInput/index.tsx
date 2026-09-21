@@ -47,10 +47,9 @@ const leftActions: ActionKeys[] = [];
  * block, no oversized 24px icon) so the guard stays a compact strip instead of
  * eating a chunk of the conversation area.
  *
- * Rendered through `ChatInput`'s `notices` slot, i.e. inside the composer's own
- * `WideScreenContainer`: no extra inline padding or width cap, so its edges
- * land exactly on the input's edges, and the floating status trays (which
- * anchor to the top of that container) stack above it instead of covering it.
+ * Rendered through `ChatInput`'s `notices` slot, which places it at the top of
+ * the composer's floating stack: above the run-status tray, and with no inline
+ * padding or width cap of its own so its edges land on the input's edges.
  */
 const GuardBanner = memo<{ action?: ReactNode; hint?: string; title: string }>(
   ({ title, hint, action }) => (
@@ -312,9 +311,9 @@ const HeterogeneousChatInput = memo(() => {
     deviceBlocked ||
     (!isConfigured && !isDeviceExecution);
 
-  // The guards go through `notices` (inside the composer column) rather than as
-  // siblings above `ChatInput`: the running-status / queue trays float above
-  // that column, and as siblings the guard would sit underneath them.
+  // The guards go through `notices` rather than as siblings above `ChatInput`:
+  // the running-status / queue trays float above this column, so a sibling
+  // guard would sit underneath them. The slot puts it on top of that stack.
   const notices = hasGuard ? (
     <>
       {renderApiModeTargetGuard()}
@@ -328,6 +327,7 @@ const HeterogeneousChatInput = memo(() => {
   return (
     <Flexbox>
       <ChatInput
+        skipScrollMarginWithList
         allowExpand={false}
         controlBarSlot={<HeteroControlBar />}
         extraActionItems={extraActionItems}
@@ -335,7 +335,6 @@ const HeterogeneousChatInput = memo(() => {
         notices={notices}
         sendAreaPrefix={sendAreaPrefix}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
-        skipScrollMarginWithList={!hasGuard}
         onEditorReady={(instance) => {
           // Sync to global ChatStore for compatibility with other features
           useChatStore.setState({ mainInputEditor: instance });
