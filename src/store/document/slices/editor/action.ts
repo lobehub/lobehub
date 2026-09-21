@@ -239,19 +239,6 @@ export class EditorActionImpl {
     return 'adopted';
   };
 
-  applyServerSnapshot = (
-    documentId: string,
-    snapshot: {
-      content?: string;
-      editorData?: Record<string, unknown> | null;
-      title?: string;
-      updatedAt?: Date | string;
-    },
-  ): void => {
-    if (!snapshot.updatedAt) return;
-    this.reconcileRemote(documentId, { ...snapshot, updatedAt: snapshot.updatedAt });
-  };
-
   onEditorInit = async (editor: IEditor): Promise<void> => {
     const { activeDocumentId, documents } = this.#get();
     if (!editor || !activeDocumentId) return;

@@ -21,14 +21,21 @@ import {
 } from '../types';
 
 // APIs that change the document set the client list renders (membership or
-// visible title). Content-only edits (replaceDocumentContent / modifyNodes) and
-// read-only calls are excluded — they don't alter the list. Used by
-// `onAfterCall` to decide when to refresh the client-side documents list.
+// visible title). Read-only calls are excluded — they don't alter the list.
 const LIST_MUTATING_APIS = new Set<string>([
   AgentDocumentsApiName.createDocument,
   AgentDocumentsApiName.removeDocument,
   AgentDocumentsApiName.renameDocument,
   AgentDocumentsApiName.copyDocument,
+]);
+
+// APIs that write the body or metadata of an existing `documents` row, so an
+// editor holding that row must revalidate. Create / copy produce rows nobody
+// has open yet and remove must not revalidate a deleted id.
+const DOCUMENT_WRITING_APIS = new Set<string>([
+  AgentDocumentsApiName.replaceDocumentContent,
+  AgentDocumentsApiName.modifyNodes,
+  AgentDocumentsApiName.renameDocument,
 ]);
 
 export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsApiName> {
@@ -49,41 +56,14 @@ export class AgentDocumentsExecutor extends BaseExecutor<typeof AgentDocumentsAp
   onAfterCall = async ({ apiName, result }: ToolAfterCallContext): Promise<void> => {
     if (!result.success) return;
 
-    const state = result.state as
-      | {
-          documentContent?: unknown;
-          documentEditorData?: unknown;
-          documentId?: unknown;
-          documentTitle?: unknown;
-          updatedAt?: unknown;
-        }
-      | undefined;
-    const documentId = typeof state?.documentId === 'string' ? state.documentId : undefined;
-    if (documentId) {
-      const content =
-        typeof state?.documentContent === 'string' ? state.documentContent : undefined;
-      const title = typeof state?.documentTitle === 'string' ? state.documentTitle : undefined;
-      const editorData =
-        state?.documentEditorData && typeof state.documentEditorData === 'object'
-          ? (state.documentEditorData as Record<string, unknown>)
-          : state?.documentEditorData === null
-            ? null
-            : undefined;
-      const updatedAt =
-        state?.updatedAt instanceof Date || typeof state?.updatedAt === 'string'
-          ? state.updatedAt
-          : undefined;
-      await this.runtime.notifyDocumentWritten({
-        content,
-        documentId,
-        editorData,
-        title,
-        updatedAt,
-      });
-    }
+    const state = result.state as { documentId?: unknown } | undefined;
+    const documentId =
+      DOCUMENT_WRITING_APIS.has(apiName) && typeof state?.documentId === 'string'
+        ? state.documentId
+        : undefined;
 
-    if (!LIST_MUTATING_APIS.has(apiName)) return;
-    await this.runtime.notifyMutated();
+    if (!documentId && !LIST_MUTATING_APIS.has(apiName)) return;
+    await this.runtime.notifyMutated({ documentId });
   };
 
   listDocuments = async (

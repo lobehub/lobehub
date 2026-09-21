@@ -30,7 +30,6 @@ interface AgentDocumentRecord {
    * `agentDocuments` association row id.
    */
   documentId?: string;
-  editorData?: Record<string, unknown> | null;
   filename?: string;
   /**
    * The `agentDocuments` association row id. This is what the LLM receives
@@ -39,7 +38,6 @@ interface AgentDocumentRecord {
   id: string;
   litexml?: string;
   title?: string;
-  updatedAt?: Date | string;
 }
 
 interface AgentDocumentOperationContext {
@@ -174,25 +172,14 @@ export interface AgentDocumentsRuntimeOptions {
     documentId: string;
   }) => MaybePromise<string | undefined>;
   /**
-   * Fired after a document-mutating tool call finishes (create / remove /
-   * rename / copy) so the host can invalidate client-side caches. This is the
-   * only refresh signal for the server-runtime path — where the tool executes
-   * on the gateway and the client service layer (which normally invalidates)
-   * never runs. Invoked from the executor's `onAfterCall` lifecycle hook.
+   * Fired after a document-mutating tool call finishes so the host can
+   * invalidate client-side caches. This is the only refresh signal for the
+   * server-runtime path — where the tool executes on the gateway and the
+   * client service layer (which normally invalidates) never runs. Invoked from
+   * the executor's `onAfterCall` lifecycle hook. `documentId` is set only when
+   * the call wrote the body or metadata of an existing `documents` row.
    */
-  onDocumentsMutated?: () => MaybePromise<void>;
-  /**
-   * Fired when a tool wrote a document body the host may have open in an editor.
-   * The host should adopt the snapshot through DocumentStore.applyServerSnapshot
-   * so a pending autosave cannot overwrite the server write.
-   */
-  onDocumentWritten?: (snapshot: {
-    content?: string;
-    documentId: string;
-    editorData?: Record<string, unknown> | null;
-    title?: string;
-    updatedAt?: Date | string;
-  }) => MaybePromise<void>;
+  onDocumentsMutated?: (params: { documentId?: string }) => MaybePromise<void>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -208,18 +195,8 @@ export class AgentDocumentsExecutionRuntime {
    * mutation ran client- or server-side — covering the server-runtime path the
    * inline client service invalidation can't reach.
    */
-  notifyMutated(): Promise<void> {
-    return Promise.resolve(this.options.onDocumentsMutated?.());
-  }
-
-  notifyDocumentWritten(snapshot: {
-    content?: string;
-    documentId: string;
-    editorData?: Record<string, unknown> | null;
-    title?: string;
-    updatedAt?: Date | string;
-  }): Promise<void> {
-    return Promise.resolve(this.options.onDocumentWritten?.(snapshot));
+  notifyMutated(params: { documentId?: string } = {}): Promise<void> {
+    return Promise.resolve(this.options.onDocumentsMutated?.(params));
   }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
@@ -508,16 +485,9 @@ export class AgentDocumentsExecutionRuntime {
       state: {
         agentDocumentId: args.id,
         agentId,
-        documentContent: typeof doc.content === 'string' ? doc.content : args.content,
-        documentEditorData:
-          doc.editorData && typeof doc.editorData === 'object'
-            ? (doc.editorData as Record<string, unknown>)
-            : undefined,
         documentId: doc.documentId ?? existing.documentId,
-        documentTitle: doc.title ?? existing.title,
         id: args.id,
         updated: true,
-        updatedAt: doc.updatedAt,
       },
       success: true,
     };

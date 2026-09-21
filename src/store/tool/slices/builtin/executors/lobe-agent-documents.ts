@@ -279,20 +279,12 @@ const runtime = new AgentDocumentsExecutionRuntime(
     // Revalidate the documents list after the agent mutates it. `onAfterCall`
     // carries no agentId, so resolve the active chat agent — the one whose run
     // just produced the tool call. Covers the server-runtime path where the
-    // client service layer never invalidates.
-    onDocumentsMutated: async () => {
+    // client service layer never invalidates. A written `documentId` also
+    // revalidates the editor key so the open editor reconciles the server row.
+    onDocumentsMutated: async ({ documentId }) => {
       const agentId = useAgentStore.getState().activeAgentId;
-      if (!agentId) return;
-      await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
-    },
-    onDocumentWritten: async ({ documentId, content, editorData, title, updatedAt }) => {
-      const { getDocumentStoreState } = await import('@/store/document');
-      getDocumentStoreState().applyServerSnapshot(documentId, {
-        content,
-        editorData,
-        title,
-        updatedAt,
-      });
+      if (!agentId && !documentId) return;
+      await invalidateDocumentMutation({ agentId, cause: 'agent-document', documentId });
     },
   },
 );

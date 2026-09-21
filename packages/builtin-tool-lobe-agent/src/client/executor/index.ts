@@ -19,6 +19,12 @@ import {
   selectMediaFileItems,
   validateMediaUrls,
 } from '../../media';
+import {
+  type PlanDocument,
+  PlanExecutionRuntime,
+  type PlanRuntimeContext,
+  type PlanRuntimeService,
+} from '../../PlanRuntime';
 import type {
   AnalyzeMediaParams,
   AskUserQuestionArgs,
@@ -32,12 +38,6 @@ import type {
   VentState,
 } from '../../types';
 import { LobeAgentApiName, VENT_CATEGORIES, VENT_SEVERITIES } from '../../types';
-import {
-  type PlanDocument,
-  PlanExecutionRuntime,
-  type PlanRuntimeContext,
-  type PlanRuntimeService,
-} from '../../PlanRuntime';
 import { getTodosFromContext } from './planTodoHelper';
 import { resolveClientMediaPayloadItems } from './resolveMediaUris';
 
@@ -103,6 +103,8 @@ const clientPlanService: PlanRuntimeService = {
 
   updatePlanMetadata: async (id, metadata) => {
     await notebookService.updateDocument({ id, metadata });
+    const { invalidateDocumentMutation } = await import('@/services/document/invalidation');
+    await invalidateDocumentMutation({ cause: 'notebook', documentId: id });
   },
 };
 
