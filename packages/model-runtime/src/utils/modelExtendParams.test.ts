@@ -64,6 +64,26 @@ describe('applyModelExtendParams', () => {
     expect(result.thinkingLevel).toBe('medium');
   });
 
+  it('defaults Gemini 3.8 Flash thinkingLevel to medium (thinkingLevel3)', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({}),
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      model: 'gemini-3.8-flash',
+    });
+
+    expect(result.thinkingLevel).toBe('medium');
+  });
+
+  it('honors an explicit Gemini 3.8 Flash thinkingLevel3 value', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ thinkingLevel3: 'low' }),
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      model: 'gemini-3.8-flash',
+    });
+
+    expect(result.thinkingLevel).toBe('low');
+  });
+
   it('honors an explicit Gemini 3.7 Flash thinkingLevel3 value', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({ thinkingLevel3: 'high' }),
@@ -160,6 +180,16 @@ describe('applyModelExtendParams', () => {
     });
 
     expect(result.reasoning_effort).toBe('max');
+  });
+
+  it('resolves GPT-6 xhigh reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ gpt6ReasoningEffort: 'xhigh' }),
+      extendParams: ['gpt6ReasoningEffort'],
+      model: 'gpt-6-astra',
+    });
+
+    expect(result.reasoning_effort).toBe('xhigh');
   });
 
   it('resolves Kimi K3 reasoning effort', () => {
@@ -344,6 +374,43 @@ describe('applyModelExtendParams', () => {
     expect(result.thinking).toEqual({ type: 'enabled' });
   });
 
+  it('maps qwen38ReasoningEffort none to disabled thinking', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'none' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result.reasoning_effort).toBeUndefined();
+    expect(result.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('maps qwen38ReasoningEffort medium to enabled thinking and reasoning_effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'medium' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result).toEqual({
+      reasoning_effort: 'medium',
+      thinking: { type: 'enabled' },
+    });
+  });
+
+  it('maps qwen38ReasoningEffort xhigh to enabled thinking and reasoning_effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ qwen38ReasoningEffort: 'xhigh' }),
+      extendParams: ['qwen38ReasoningEffort'],
+      model: 'qwen3.8-max',
+    });
+
+    expect(result).toEqual({
+      reasoning_effort: 'xhigh',
+      thinking: { type: 'enabled' },
+    });
+  });
+
   it('respects Claude Sonnet 5 adaptive thinking default when unset', () => {
     const result = applyModelExtendParams({
       chatConfig: chatConfig({}),
@@ -402,6 +469,10 @@ describe('resolveDefaultThinkingLevelForModel', () => {
     );
     expect(resolveDefaultThinkingLevelForModel('gemini-3.7-flash')).toBe('medium');
     expect(resolveDefaultThinkingLevelForModel('gemini-3.7-flash', 'thinkingLevel3')).toBe(
+      'medium',
+    );
+    expect(resolveDefaultThinkingLevelForModel('gemini-3.8-flash')).toBe('medium');
+    expect(resolveDefaultThinkingLevelForModel('gemini-3.8-flash', 'thinkingLevel3')).toBe(
       'medium',
     );
     expect(resolveDefaultThinkingLevelForModel('gemini-flash-lite-latest')).toBe('minimal');

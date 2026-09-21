@@ -21,6 +21,7 @@ export {
   type ErrorSeverity,
   formatErrorRef,
   getErrorCodeSpec,
+  getRuntimeErrorI18nKey,
   isEmptyModelCompletion,
   isUserSideError,
   matchErrorPattern,
@@ -31,6 +32,7 @@ export {
   parseErrorRef,
   refineErrorCode,
   type RefineErrorInput,
+  type RuntimeErrorI18nKey,
   type SpecErrorCode,
 } from './errors';
 export * from './helpers';

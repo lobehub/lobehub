@@ -7,23 +7,31 @@ export const APPLICATION_DEFAULT_FONT = '__application_default__';
 
 interface UseSystemFontOptionsParams {
   defaultLabel: string;
+  enabled?: boolean;
   monospaceOnly?: boolean;
   unavailableLabel: (font: string) => string;
-  value?: string;
+  values?: string[];
 }
 
 export const useSystemFontOptions = ({
   defaultLabel,
+  enabled = true,
   monospaceOnly,
   unavailableLabel,
-  value,
+  values,
 }: UseSystemFontOptionsParams) => {
   const [systemFonts, setSystemFonts] = useState<SystemFont[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(enabled);
   const [hasLoadError, setHasLoadError] = useState(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
+
     let active = true;
+    setIsLoading(true);
 
     const load = monospaceOnly
       ? electronSystemService.getSystemMonospaceFonts()
@@ -49,17 +57,15 @@ export const useSystemFontOptions = ({
     return () => {
       active = false;
     };
-  }, [monospaceOnly]);
+  }, [enabled, monospaceOnly]);
 
   const options = useMemo(() => {
-    const fontOptions = [...systemFonts];
+    const missing = (values ?? [])
+      .filter((value) => !systemFonts.some((font) => font.value === value))
+      .map((value) => ({ label: unavailableLabel(value), value }));
 
-    if (value && !systemFonts.some((font) => font.value === value)) {
-      fontOptions.unshift({ label: unavailableLabel(value), value });
-    }
-
-    return [{ label: defaultLabel, value: APPLICATION_DEFAULT_FONT }, ...fontOptions];
-  }, [systemFonts, value, defaultLabel, unavailableLabel]);
+    return [{ label: defaultLabel, value: APPLICATION_DEFAULT_FONT }, ...missing, ...systemFonts];
+  }, [systemFonts, values, defaultLabel, unavailableLabel]);
 
   return { hasLoadError, isLoading, options };
 };

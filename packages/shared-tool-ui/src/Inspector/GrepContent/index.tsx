@@ -88,14 +88,14 @@ export const createGrepContentInspector = ({
       if (isArgumentsStreaming) {
         if (!pattern)
           return (
-            <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey as any)}</span>
+            <div className={inspectorTextStyles.root}>
+              <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
-          <div className={cx(inspectorTextStyles.root, styles.baseline, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey as any)}:</span>
+          <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+            <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}:</span>
             <PatternTags pattern={pattern} />
           </div>
         );
@@ -105,14 +105,10 @@ export const createGrepContentInspector = ({
       const hasResults = resultCount > 0;
 
       return (
-        <div
-          className={cx(
-            inspectorTextStyles.root,
-            styles.baseline,
-            isLoading && shinyTextStyles.shinyText,
-          )}
-        >
-          <span>{t(translationKey as any)}:</span>
+        <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+          <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+            {t(translationKey as any)}:
+          </span>
           {pattern && <PatternTags pattern={pattern} />}
           {!isLoading &&
             pluginState &&

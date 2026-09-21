@@ -9,6 +9,10 @@ vi.mock('@/store/tool', () => ({
   getToolStoreState: vi.fn(),
 }));
 
+vi.mock('@/store/tool/slices/builtin/loadBuiltinSkills', () => ({
+  loadBuiltinSkills: async () => getToolStoreState().builtinSkills,
+}));
+
 vi.mock('@/services/skill', () => ({
   agentSkillService: {
     getById: vi.fn(),

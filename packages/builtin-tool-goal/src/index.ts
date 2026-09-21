@@ -1,9 +1,12 @@
+export { conversationGoalPrompt, withConversationGoalPrompt } from './conversationGoalPrompt';
 export {
   buildGoalRequirement,
   type GoalCriterionInput,
   resolveGoalAttemptBudget,
+  resolveGoalScheduleConfig,
 } from './createGoalInput';
-export { isGoalPrompt } from './goalPrompt';
+export { isGoalPrompt, stripGoalCommand } from './goalPrompt';
 export { GoalIdentifier, GoalManifest } from './manifest';
+export * from './supervisor';
 export { systemPrompt } from './systemRole';
 export * from './types';

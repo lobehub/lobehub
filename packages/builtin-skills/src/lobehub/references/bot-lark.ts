@@ -71,6 +71,10 @@ Connect a Lark custom app bot to your agent. Lark is the international version o
 2. Add:
    - \`im:message\` — send and receive messages
    - \`im:message.group_at_msg:readonly\` — receive @bot mentions in groups (if needed)
+   - \`im:message:readonly\` — read chat history (needed for \`readMessages\`)
+   - \`im:message.group_msg\` — "获取群组中所有消息", read **group** chat history; required *in addition to* \`im:message:readonly\`, otherwise history reads in groups fail with \`230027 Permission denied\`. Search Permissions & Scopes by that display name — the console does not match on the code. No review is required, but the app must be re-published for it to take effect. Do NOT confuse it with \`im:message.group_msg.include_bot:read\`, which governs the receive-message event, not history reads
+   - \`docx:document:readonly\` — "View new docs", lets \`readDocument\` pull the text of docx documents (meeting minutes, specs) shared into the chat. The document must ALSO be visible to the app: sharing it into a group the bot is in is not enough — the owner adds the app as a collaborator (Share → add collaborator → search the app name), or the wiki space grants the app access
+   - \`wiki:wiki:readonly\` — only if users share \`/wiki/\` links; resolves a wiki page to the docx behind it
 
 ### Step 7: Publish the App
 

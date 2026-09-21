@@ -21,4 +21,6 @@ export const GoalRenders: Record<string, BuiltinRender> = {
 };
 
 export { GoalIdentifier, GoalManifest };
+export { GoalSupervisorManifest } from '../supervisor';
 export * from '../types';
+export { GoalSupervisorInspectors } from './supervisorInspector';

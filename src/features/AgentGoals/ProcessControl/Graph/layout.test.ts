@@ -1,7 +1,7 @@
 import type { GoalGraphEdge, GoalGraphNode } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { layoutGraph } from './layout';
+import { hideKinds, layoutGraph } from './layout';
 
 const node = (id: string, kind: GoalGraphNode['kind'] = 'task'): GoalGraphNode => ({
   confidence: null,
@@ -49,6 +49,16 @@ describe('layoutGraph', () => {
     expect(boxes.w1.y).toBeLessThan(boxes.w2.y);
   });
 
+  it('keeps branches from an older experiment on the same generation', () => {
+    const boxes = layoutGraph(
+      [node('baseline'), node('second'), node('third')],
+      [edge('second', 'baseline', 'derived_from'), edge('third', 'baseline', 'derived_from')],
+    );
+    expect(boxes.baseline.y).toBeLessThan(boxes.second.y);
+    expect(boxes.second.y).toBe(boxes.third.y);
+    expect(boxes.second.x).not.toBe(boxes.third.x);
+  });
+
   it('does not let a finding-to-problem support edge push the problem down', () => {
     const boxes = layoutGraph(
       [node('p1', 'problem'), node('w1'), node('f1', 'finding')],
@@ -69,6 +79,50 @@ describe('layoutGraph', () => {
     expect(boxes.w1.x).not.toBe(boxes.w2.x);
   });
 
+  it('puts each finding under the task that produced it, not in the middle of the row', () => {
+    const boxes = layoutGraph(
+      [
+        node('p1', 'problem'),
+        node('w1'),
+        node('w2'),
+        node('w3'),
+        node('w4'),
+        node('f1', 'finding'),
+      ],
+      [
+        edge('p1', 'w1', 'decomposes'),
+        edge('p1', 'w2', 'decomposes'),
+        edge('p1', 'w3', 'decomposes'),
+        edge('p1', 'w4', 'decomposes'),
+        edge('w1', 'f1', 'produces'),
+      ],
+    );
+    const center = (id: string) => boxes[id].x + boxes[id].width / 2;
+
+    expect(center('f1')).toBe(center('w1'));
+    // Siblings under one parent still centre on it.
+    expect((center('w1') + center('w4')) / 2).toBe(center('p1'));
+  });
+
+  it('keeps neighbours in a row apart when their parents are close together', () => {
+    const boxes = layoutGraph(
+      [node('w1'), node('w2'), node('f1', 'finding'), node('f2', 'finding'), node('f3', 'finding')],
+      [edge('w1', 'f1', 'produces'), edge('w1', 'f2', 'produces'), edge('w2', 'f3', 'produces')],
+    );
+    const ordered = ['f1', 'f2', 'f3'].map((id) => boxes[id]).sort((a, b) => a.x - b.x);
+
+    for (let i = 1; i < ordered.length; i++)
+      expect(ordered[i].x).toBeGreaterThanOrEqual(ordered[i - 1].x + ordered[i - 1].width);
+  });
+
+  it('stacks the next rank below the tallest measured card, not the per-kind estimate', () => {
+    const boxes = layoutGraph([node('w1'), node('f1', 'finding')], [edge('w1', 'f1', 'produces')], {
+      w1: { height: 190 },
+    });
+
+    expect(boxes.f1.y).toBeGreaterThanOrEqual(boxes.w1.y + 190);
+  });
+
   it('terminates on a cycle instead of relaxing forever', () => {
     const boxes = layoutGraph(
       [node('w1'), node('w2')],
@@ -77,4 +131,92 @@ describe('layoutGraph', () => {
 
     expect(Object.keys(boxes)).toHaveLength(2);
   });
+});
+
+describe('hideKinds', () => {
+  const chain = {
+    edges: [edge('p1', 'w1', 'decomposes'), edge('w1', 'f1', 'produces')],
+    nodes: [node('p1', 'problem'), node('w1'), node('f1', 'finding')],
+  };
+
+  it('keeps everything and bridges nothing when no kind is hidden', () => {
+    const { bridges, visibleIds } = hideKinds(chain.nodes, chain.edges, new Set());
+
+    expect([...visibleIds].sort()).toEqual(['f1', 'p1', 'w1']);
+    expect(bridges).toEqual([]);
+  });
+
+  it('bridges the problem to the finding when the task between them is hidden', () => {
+    const { bridges, visibleIds } = hideKinds(chain.nodes, chain.edges, new Set(['task']));
+
+    expect(visibleIds.has('w1')).toBe(false);
+    expect(bridges).toEqual([{ sourceNodeId: 'p1', targetNodeId: 'f1' }]);
+  });
+
+  it('keeps a bridged finding ranked below the problem', () => {
+    const { bridges, visibleIds } = hideKinds(chain.nodes, chain.edges, new Set(['task']));
+    const boxes = layoutGraph(
+      chain.nodes.filter((n) => visibleIds.has(n.id)),
+      bridges.map((bridge) => ({ ...bridge, kind: 'leads_to' as const })),
+    );
+
+    expect(boxes.f1.y).toBeGreaterThan(boxes.p1.y);
+  });
+
+  it('bridges through consecutive hidden hops', () => {
+    const { bridges } = hideKinds(
+      [node('p1', 'problem'), node('w1'), node('w2'), node('f1', 'finding')],
+      [edge('p1', 'w1', 'decomposes'), edge('w1', 'w2', 'leads_to'), edge('w2', 'f1', 'produces')],
+      new Set(['task']),
+    );
+
+    expect(bridges).toEqual([{ sourceNodeId: 'p1', targetNodeId: 'f1' }]);
+  });
+
+  it('does not add a bridge that duplicates a surviving direct edge', () => {
+    const { bridges } = hideKinds(
+      [node('p1', 'problem'), node('w1'), node('f1', 'finding')],
+      [edge('p1', 'w1', 'decomposes'), edge('w1', 'f1', 'produces'), edge('p1', 'f1', 'leads_to')],
+      new Set(['task']),
+    );
+
+    expect(bridges).toEqual([]);
+  });
+
+  it('survives a cycle among hidden nodes', () => {
+    const { bridges } = hideKinds(
+      [node('p1', 'problem'), node('w1'), node('w2'), node('f1', 'finding')],
+      [
+        edge('p1', 'w1', 'decomposes'),
+        edge('w1', 'w2', 'leads_to'),
+        edge('w2', 'w1', 'leads_to'),
+        edge('w2', 'f1', 'produces'),
+      ],
+      new Set(['task']),
+    );
+
+    expect(bridges).toEqual([{ sourceNodeId: 'p1', targetNodeId: 'f1' }]);
+  });
+});
+
+it('filters experiment nodes independently of execution tasks while preserving graph depth', () => {
+  const nodes = [
+    node('problem', 'problem'),
+    { ...node('experiment'), kind: 'experiment' as const },
+    node('acceptance'),
+    node('result', 'finding'),
+  ];
+  const edges = [
+    edge('problem', 'experiment', 'decomposes'),
+    edge('experiment', 'result', 'produces'),
+  ];
+  expect(hideKinds(nodes, edges, new Set(['task'])).visibleIds).toEqual(
+    new Set(['problem', 'experiment', 'result']),
+  );
+  const hidden = hideKinds(nodes, edges, new Set(['experiment']));
+  expect(hidden.visibleIds).toEqual(new Set(['problem', 'acceptance', 'result']));
+  expect(hidden.bridges).toEqual([{ sourceNodeId: 'problem', targetNodeId: 'result' }]);
+  const boxes = layoutGraph(nodes, edges);
+  expect(boxes.experiment.y).toBeGreaterThan(boxes.problem.y);
+  expect(boxes.result.y).toBeGreaterThan(boxes.experiment.y);
 });

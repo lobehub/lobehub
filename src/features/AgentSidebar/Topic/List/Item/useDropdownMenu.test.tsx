@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
@@ -99,6 +99,35 @@ describe('useTopicItemDropdownMenu', () => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     versionMock.isDesktop = false;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'execCommand');
+  });
+
+  it.each([
+    ['copySessionId', 'topic-1'],
+    ['copyLink', 'https://example.com/agent/agent-1/topic-1'],
+  ])('copies %s when the Clipboard API is unavailable', async (key, expected) => {
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue(undefined as never);
+    let copiedText: string | undefined;
+    const copy = vi.fn(() => {
+      copiedText = (document.activeElement as HTMLTextAreaElement).value;
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: copy });
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1' }),
+    );
+    const item = getMenuItem(result.current.dropdownMenu(), key);
+    if (!item || !('onClick' in item)) throw new Error('Expected copy action');
+
+    await item.onClick?.({} as never);
+
+    expect(copy).toHaveBeenCalledWith('copy');
+    expect(copiedText).toBe(expected);
+    expect(document.querySelector('textarea')).toBeNull();
   });
 
   it('groups desktop topic actions by intent', () => {

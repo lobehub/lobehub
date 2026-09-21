@@ -39,7 +39,7 @@ export const copyOperationIdAction = defineAction({
         s.messageOperationMap[ctx.id];
       if (!localOpId) return;
       // Only accept an AI-runtime ancestor: messageOperationMap is
-      // last-write-wins, so per-message utility operations (translate, tts, …)
+      // last-write-wins, so per-message utility operations (translate, …)
       // can own the slot — their ids are not what this action traces.
       const rootOp = operationSelectors.findRootRuntimeOperation(localOpId)(s);
       if (!rootOp) return;

@@ -13,31 +13,31 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
     const { t } = useTranslation('plugin');
 
     const query = args?.query || partialArgs?.query || '';
-    const resultCount = pluginState?.results?.length ?? 0;
+    // The read path drops the hit list and pins its size as `resultCount`; the
+    // array is only here for a payload stored before that.
+    const resultCount = pluginState?.resultCount ?? pluginState?.results?.length ?? 0;
     const hasResults = resultCount > 0;
+    const hasSettled = !!pluginState?.results || typeof pluginState?.resultCount === 'number';
 
     if (isArgumentsStreaming && !query) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-web-browsing.apiName.search')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-web-browsing.apiName.search')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-web-browsing.apiName.search')}:{'\u00A0'}
         </span>
         {query && <span className={highlightTextStyles.primary}>{query}</span>}
         {!isLoading &&
           !isArgumentsStreaming &&
-          pluginState?.results &&
+          hasSettled &&
           (hasResults ? (
             <span style={{ marginInlineStart: 4 }}>({resultCount})</span>
           ) : (

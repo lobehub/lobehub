@@ -7,13 +7,14 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentLikes,
   documents,
   files,
   users,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { DocumentModel } from '../document';
+import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '../document';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -184,6 +185,25 @@ describe('DocumentModel.transferTo', () => {
     expect(await ws1.subtreeHasForeignRows(page.id)).toBe(true);
   });
 
+  it("treats another member's like as a foreign transfer row, but not the caller's own", async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, 'Liked by teammate', 'foreign-like');
+
+    await serverDB.insert(documentLikes).values({
+      documentId: page.id,
+      userId,
+      workspaceId: wsId1,
+    });
+    expect(await ws1.subtreeHasForeignRows(page.id)).toBe(false);
+
+    await serverDB.insert(documentLikes).values({
+      documentId: page.id,
+      userId: otherUserId,
+      workspaceId: wsId1,
+    });
+    expect(await ws1.subtreeHasForeignRows(page.id)).toBe(true);
+  });
+
   it('resolves slug conflicts by suffixing', async () => {
     const ws1 = new DocumentModel(serverDB, userId, wsId1);
     await createPage(ws1, 'Existing', 'shared-slug');
@@ -217,6 +237,57 @@ describe('DocumentModel.transferTo', () => {
     const [file] = await serverDB.select().from(files).where(eq(files.id, 'file-x'));
     expect(file.workspaceId).toBe(wsId1);
     expect(file.userId).toBe(userId);
+  });
+
+  it('rehomes likes with a cross-workspace transfer and drops them on personal transfer', async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, 'Liked page', 'liked-page');
+    await serverDB.insert(documentLikes).values([
+      { documentId: page.id, userId, workspaceId: wsId1 },
+      { documentId: page.id, userId: otherUserId, workspaceId: wsId1 },
+    ]);
+
+    await ws1.transferTo(page.id, wsId2, userId);
+
+    const moved = await serverDB
+      .select({ userId: documentLikes.userId, workspaceId: documentLikes.workspaceId })
+      .from(documentLikes)
+      .where(eq(documentLikes.documentId, page.id));
+    expect(moved).toHaveLength(2);
+    for (const like of moved) expect(like.workspaceId).toBe(wsId2);
+
+    await new DocumentModel(serverDB, userId, wsId2).transferTo(page.id, null, userId);
+
+    expect(
+      await serverDB.select().from(documentLikes).where(eq(documentLikes.documentId, page.id)),
+    ).toHaveLength(0);
+  });
+
+  it('rechecks foreign rows inside the transfer transaction when forbidden', async () => {
+    const ws1 = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws1, 'Guarded page', 'guarded-page');
+
+    // A clean own-content subtree transfers fine under the guard.
+    await ws1.transferTo(page.id, wsId2, userId, undefined, { forbidForeignRows: true });
+
+    // A teammate's like blocks a guarded transfer even without any preflight.
+    const ws2 = new DocumentModel(serverDB, userId, wsId2);
+    await serverDB.insert(documentLikes).values({
+      documentId: page.id,
+      userId: otherUserId,
+      workspaceId: wsId2,
+    });
+    await expect(
+      ws2.transferTo(page.id, wsId1, userId, undefined, { forbidForeignRows: true }),
+    ).rejects.toThrow(DOCUMENT_TRANSFER_FOREIGN_ROWS);
+
+    // The owner override (no flag) still moves the tree, likes included.
+    await ws2.transferTo(page.id, wsId1, userId);
+    const moved = await serverDB
+      .select({ workspaceId: documentLikes.workspaceId })
+      .from(documentLikes)
+      .where(eq(documentLikes.documentId, page.id));
+    expect(moved).toEqual([{ workspaceId: wsId1 }]);
   });
 
   it('transfers from workspace back to personal', async () => {

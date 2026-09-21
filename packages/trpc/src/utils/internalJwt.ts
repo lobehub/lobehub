@@ -13,7 +13,7 @@ export const HETERO_OPERATION_JWT_AUDIENCE = 'urn:lobehub:hetero-operation';
 export const HETERO_OPERATION_JWT_PURPOSE = 'hetero-operation';
 
 export type HeteroOperationCapability =
-  'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read' | 'model:invoke';
+  'goal:manage' | 'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read' | 'model:invoke';
 
 export interface HeteroOperationJwtClaims {
   aud: typeof HETERO_OPERATION_JWT_AUDIENCE;
@@ -185,9 +185,13 @@ export const validateHeteroOperationClaims = (
     typeof payload.exp !== 'number' ||
     !Array.isArray(capabilities) ||
     !capabilities.every((capability) =>
-      ['model:invoke', 'hetero:ingest', 'hetero:finish', 'hetero:intervention:read'].includes(
-        capability as string,
-      ),
+      [
+        'goal:manage',
+        'model:invoke',
+        'hetero:ingest',
+        'hetero:finish',
+        'hetero:intervention:read',
+      ].includes(capability as string),
     ) ||
     (payload.model !== undefined && typeof payload.model !== 'string') ||
     (payload.provider_id !== undefined && typeof payload.provider_id !== 'string') ||

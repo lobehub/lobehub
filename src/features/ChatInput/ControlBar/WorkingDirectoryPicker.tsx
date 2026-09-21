@@ -225,7 +225,7 @@ const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: Folder
 );
 ChooseLocalFolderRow.displayName = 'ChooseLocalFolderRow';
 
-/** Web / remote device: filesystem isn't browsable here — enter an absolute path. */
+/** Browse the target device through its directory RPC. */
 const AddRemoteFolderRow = memo<{
   defaultCwd?: string;
   deviceId?: string;
@@ -234,7 +234,7 @@ const AddRemoteFolderRow = memo<{
 }>(({ defaultCwd, deviceId, onBeforeOpen, onPick }) => {
   const { t } = useTranslation('device');
 
-  // Stat the entered path on the target device (it can't be browsed here): block
+  // Validate the selected or manually entered path on the target device: block
   // on a definitive negative, otherwise commit with the detected repoType so the
   // recent entry shows the right (git / github) icon. An unreachable device
   // (null) is treated as "can't verify" and allowed through without a repoType.
@@ -250,7 +250,11 @@ const AddRemoteFolderRow = memo<{
 
   const handleClick = () => {
     onBeforeOpen();
-    openAddWorkingDirModal({ onSubmit: handleSubmit, placeholder: defaultCwd || undefined });
+    openAddWorkingDirModal({
+      defaultPath: defaultCwd || undefined,
+      deviceId,
+      onSubmit: handleSubmit,
+    });
   };
   return (
     <Flexbox

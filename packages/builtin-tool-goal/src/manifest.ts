@@ -37,10 +37,15 @@ export const GoalManifest: BuiltinToolManifest = {
             },
             type: 'array',
           },
+          deadline: {
+            description:
+              'Optional ISO-8601 calendar deadline. Past it the coordinator stops dispatching new work and pauses the goal — use for long-horizon goals that must conclude by a date. Null means no user-specified deadline.',
+            type: ['string', 'null'],
+          },
           instruction: { description: 'Detailed task direction and constraints.', type: 'string' },
           maxIterations: {
             description:
-              'Maximum attempts one task may take before the goal opens a decision gate. Default 3, minimum 2. Null means no user-specified cap.',
+              'Maximum attempts one task may take before the goal opens a decision gate. Default 8, minimum 2. Null means no user-specified cap.',
             type: ['number', 'null'],
           },
           maxTotalCost: {

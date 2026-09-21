@@ -1,4 +1,4 @@
-import { resolveSearchDecision, type SearchDecision } from 'model-bank';
+import { resolveSearchDecision, type SearchDecision } from 'model-bank/utils';
 
 import { getAgentStoreState } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';

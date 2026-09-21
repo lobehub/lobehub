@@ -352,7 +352,7 @@ async function main() {
     .export({ format: 'pem', type: 'spki' })
     .toString();
   const feedDir = path.join(outDir, channel, appVersion, 'renderer', 'v2');
-  const mainHash = args.mainHash ?? computeMainHash();
+  const mainHash = args.mainHash ?? (await computeMainHash());
   const { objects, tree } = readRendererTree(rendererDir);
   const fullMetadata = { kind: 'full', packVersion: 1, tree, version };
   const fullPack = encodePack(fullPackEntries(objects, fullMetadata));

@@ -77,7 +77,7 @@ const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: s
       {
         children: <Tabs items={imageTypeOptions} />,
         label: t('shareModal.imageType'),
-        layout: 'horizontal',
+        layout: 'vertical',
         minWidth: undefined,
         name: 'imageType',
         valuePropName: 'activeKey',

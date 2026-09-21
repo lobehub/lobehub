@@ -1,5 +1,10 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
-import type { ExecutionSnapshot, ISnapshotStore } from '@lobechat/agent-tracing';
+import type {
+  ExecutionSnapshot,
+  ISnapshotStore,
+  PartialSaveOptions,
+  PartialSaveResult,
+} from '@lobechat/agent-tracing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { HeteroTraceRecorder } from '../HeteroTraceRecorder';
@@ -15,7 +20,11 @@ class FakeSnapshotStore implements ISnapshotStore {
     // accidentally short-circuit the persist round-trip we want to exercise.
     return p ? (JSON.parse(JSON.stringify(p)) as Partial<ExecutionSnapshot>) : null;
   }
-  async savePartial(operationId: string, partial: Partial<ExecutionSnapshot>) {
+  async savePartial(
+    operationId: string,
+    partial: Partial<ExecutionSnapshot>,
+    _options?: PartialSaveOptions,
+  ): Promise<PartialSaveResult | void> {
     this.partials.set(operationId, partial);
   }
   async removePartial(operationId: string) {
@@ -35,6 +44,42 @@ class FakeSnapshotStore implements ISnapshotStore {
   }
   async listPartials() {
     return [...this.partials.keys()];
+  }
+}
+
+/**
+ * Mirrors the S3 store: every write returns a token and a write that names a
+ * stale one is refused. Only such a store lets the recorder keep a copy.
+ */
+class FencingSnapshotStore extends FakeSnapshotStore {
+  tokens = new Map<string, string>();
+  reads = 0;
+  writes = 0;
+
+  async loadPartial(operationId: string) {
+    this.reads += 1;
+    return super.loadPartial(operationId);
+  }
+
+  async savePartial(
+    operationId: string,
+    partial: Partial<ExecutionSnapshot>,
+    options?: PartialSaveOptions,
+  ): Promise<PartialSaveResult> {
+    this.writes += 1;
+    const current = this.tokens.get(operationId);
+    if (options?.expected && options.expected !== current) return { conflict: true };
+
+    await super.savePartial(operationId, partial);
+    const token = `t${this.writes}`;
+    this.tokens.set(operationId, token);
+    return { token };
+  }
+
+  /** Another instance writing the same partial. */
+  writeElsewhere(operationId: string, partial: Partial<ExecutionSnapshot>) {
+    this.partials.set(operationId, partial);
+    this.tokens.set(operationId, `other-${this.writes}`);
   }
 }
 
@@ -163,6 +208,78 @@ describe('HeteroTraceRecorder', () => {
 
     // partial cleaned up after finalize
     expect(store.partials.has('op-1')).toBe(false);
+  });
+
+  describe('cross-request partial reuse', () => {
+    const chunk = (op: string, step: number, ts: number, text: string): AgentStreamEvent => ({
+      data: { chunkType: 'text', content: text },
+      operationId: op,
+      stepIndex: step,
+      timestamp: ts,
+      type: 'stream_chunk',
+    });
+
+    it('reads the partial once and appends later batches from the copy it kept', async () => {
+      const fencing = new FencingSnapshotStore();
+      const rec = new HeteroTraceRecorder(fencing);
+
+      await rec.appendBatch('op-reuse', [chunk('op-reuse', 0, 100, 'a')]);
+      await rec.appendBatch('op-reuse', [chunk('op-reuse', 0, 110, 'b')]);
+      await rec.appendBatch('op-reuse', [chunk('op-reuse', 0, 120, 'c')]);
+
+      // One read for the first batch; the rest append to the copy in memory.
+      expect(fencing.reads).toBe(1);
+      expect(fencing.writes).toBe(3);
+      expect(fencing.partials.get('op-reuse')?.steps?.[0].content).toBe('abc');
+    });
+
+    it('re-reads and folds into the newer copy when another instance wrote meanwhile', async () => {
+      const fencing = new FencingSnapshotStore();
+      const rec = new HeteroTraceRecorder(fencing);
+
+      await rec.appendBatch('op-conflict', [chunk('op-conflict', 0, 100, 'a')]);
+
+      // A batch of the same run handled elsewhere lands first.
+      fencing.writeElsewhere('op-conflict', {
+        startedAt: 100,
+        steps: [{ content: 'aZ', startedAt: 100, stepIndex: 0 } as never],
+      });
+
+      await rec.appendBatch('op-conflict', [chunk('op-conflict', 0, 120, 'c')]);
+
+      // Our stale copy was refused, so the other instance's 'Z' survives.
+      expect(fencing.partials.get('op-conflict')?.steps?.[0].content).toBe('aZc');
+    });
+
+    it('finalizes from the stored partial, not from the copy it happens to hold', async () => {
+      const fencing = new FencingSnapshotStore();
+      const rec = new HeteroTraceRecorder(fencing);
+
+      await rec.appendBatch('op-final', [chunk('op-final', 0, 100, 'a')]);
+
+      // `heteroFinish` can land here while later batches were recorded
+      // elsewhere. Finalizing from the copy would drop them and then delete the
+      // partial that had them.
+      fencing.writeElsewhere('op-final', {
+        startedAt: 100,
+        steps: [{ content: 'a-then-elsewhere', startedAt: 100, stepIndex: 0 } as never],
+      });
+
+      await rec.finalize('op-final', { completionReason: 'done' });
+
+      expect(fencing.saved.get('op-final')?.steps[0].content).toBe('a-then-elsewhere');
+    });
+
+    it('keeps re-reading for a store that cannot fence a write', async () => {
+      await recorder.appendBatch('op-plain', [
+        ev('stream_chunk', 0, 100, { chunkType: 'text', content: 'a' }),
+      ]);
+      await recorder.appendBatch('op-plain', [
+        ev('stream_chunk', 0, 110, { chunkType: 'text', content: 'b' }),
+      ]);
+
+      expect(store.partials.get('op-plain')?.steps?.[0].content).toBe('ab');
+    });
   });
 
   it('returns null from finalize when no partial was accumulated', async () => {

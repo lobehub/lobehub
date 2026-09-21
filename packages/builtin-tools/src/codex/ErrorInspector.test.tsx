@@ -44,8 +44,7 @@ describe('Codex ErrorInspector', () => {
       />,
     );
 
-    expect(screen.getByText('Session compatibility warning')).toBeTruthy();
-    expect(screen.getByTestId('codex-error-inspector').classList).toContain('shiny-text');
+    expect(screen.getByText('Session compatibility warning').classList).toContain('shiny-text');
   });
 
   it('uses localized fallback copy when no message is available', () => {

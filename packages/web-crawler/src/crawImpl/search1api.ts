@@ -41,8 +41,8 @@ export const search1api: CrawlImpl = async (url) => {
   }
 
   if (!res.ok) {
-    if (res.status === 404) {
-      throw new PageNotFoundError(res.statusText);
+    if (res.status === 404 || res.status === 410) {
+      throw new PageNotFoundError(res.statusText, res.status);
     }
 
     throw await createHTTPStatusError(res, 'Search1API');

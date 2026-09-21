@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LobeAgentManifest } from './manifest';
+import { LobeAgentApiName } from './types';
 
 describe('LobeAgentManifest', () => {
   it('should keep the package metadata generic for future Lobe Agent capabilities', () => {
@@ -56,5 +57,23 @@ describe('LobeAgentManifest', () => {
     expect(parameters).not.toHaveProperty('oneOf');
     expect(parameters).not.toHaveProperty('allOf');
     expect(parameters).not.toHaveProperty('anyOf');
+  });
+
+  it('should expose a restrained vent API for reporting platform friction', () => {
+    const ventApi = LobeAgentManifest.api.find((api) => api.name === LobeAgentApiName.vent);
+
+    expect(ventApi).toBeDefined();
+    expect(ventApi!.parameters.required).toEqual(['category', 'severity', 'summary', 'details']);
+    expect(Object.keys(ventApi!.parameters.properties)).toEqual([
+      'category',
+      'severity',
+      'summary',
+      'details',
+      'attempts',
+      'toolName',
+      'evidenceRefs',
+    ]);
+    expect(ventApi!.description).toContain('at most one vent per task');
+    expect(LobeAgentManifest.systemRole).toContain('<vent>');
   });
 });

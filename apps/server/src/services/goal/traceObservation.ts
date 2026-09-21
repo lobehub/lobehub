@@ -4,6 +4,7 @@ import type {
   GoalBudgetState,
   GoalFrontierTaskState,
   GoalGraphState,
+  GoalMetricCriteriaState,
   GoalTickBranch,
   GoalTickOutcome,
 } from '@lobechat/agent-tracing';
@@ -21,11 +22,14 @@ export interface GoalTickObservation {
   branch: GoalTickBranch;
   budget?: GoalBudgetState;
   candidates: FrontierCandidate[];
+  candidateTasks?: GoalFrontierTaskState[];
   chosenNodeId?: string;
+  concurrency?: number;
   effects: GoalAdvanceEffect[];
-  frontierTask?: GoalFrontierTaskState;
   graphState: GoalGraphState;
   message: string;
+  /** Numeric acceptance clauses as they read, on terminal-phase decisions. */
+  metricCriteria?: GoalMetricCriteriaState;
   outcome: GoalTickOutcome;
   taskId?: string;
 }
@@ -57,6 +61,7 @@ export const toTraceGraphState = (graph: GoalGraphSnapshot): GoalGraphState => (
   })),
   goal: {
     agentId: graph.goal.agentId,
+    exploration: graph.goal.config?.exploration,
     id: graph.goal.id,
     maxRounds: graph.goal.maxRounds,
     maxTotalCost: graph.goal.maxTotalCost,
@@ -75,26 +80,32 @@ export const toTraceGraphState = (graph: GoalGraphSnapshot): GoalGraphState => (
   })),
 });
 
-export const toFrontierTaskState = (task: TaskItem): GoalFrontierTaskState => ({
+export const toFrontierTaskState = (task: TaskItem, nodeId?: string): GoalFrontierTaskState => ({
   error: task.error,
   id: task.id,
   identifier: task.identifier,
+  nodeId,
   status: task.status,
   updatedAt: new Date(task.updatedAt).getTime(),
 });
 
 export interface BudgetEvaluation {
   costLimitReached: boolean;
+  /** ISO deadline from the goal's schedule config; null = uncapped. */
+  deadline: string | null;
+  deadlinePassed: boolean;
   roundLimitReached: boolean;
-  runs: { length: number };
+  /** Runs the graph's Task nodes produced — the round count. */
+  runs: number;
   totalCost: number;
 }
 
 export const toBudgetState = (goal: GoalItem, budget: BudgetEvaluation): GoalBudgetState => ({
   costLimitReached: budget.costLimitReached,
+  deadlinePassed: budget.deadlinePassed,
   maxRounds: goal.maxRounds,
   maxTotalCost: goal.maxTotalCost === null ? null : Number(goal.maxTotalCost),
   roundLimitReached: budget.roundLimitReached,
-  runs: budget.runs.length,
+  runs: budget.runs,
   totalCost: budget.totalCost,
 });

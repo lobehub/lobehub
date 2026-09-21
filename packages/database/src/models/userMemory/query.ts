@@ -171,7 +171,7 @@ interface LayerScalarAggregationConfig {
   userIdColumn: AnyColumn;
 }
 
-const normalizeSearchQueries = (queries?: string[]): string[] => {
+export const normalizeUserMemorySearchQueries = (queries?: string[]): string[] => {
   if (!queries) return [];
 
   return [...new Set(queries.map((query) => query.trim()).filter(Boolean))];
@@ -182,6 +182,12 @@ const buildRetrievalQuery = (queries: string[]) => {
 
   return queries.join(' ');
 };
+
+/**
+ * Long conversation context is useful to embeddings but not to conjunction-based lexical search:
+ * requiring hundreds of analyzed terms to match one field produces no meaningful candidates.
+ */
+export const USER_MEMORY_LEXICAL_QUERY_CHARACTER_LIMIT = 256;
 
 const combineEmbeddings = (embeddings: number[][]) => {
   if (embeddings.length === 0) return undefined;
@@ -198,6 +204,13 @@ const combineEmbeddings = (embeddings: number[][]) => {
 
     return sum / embeddings.length;
   });
+};
+
+export const shouldRunUserMemoryLexicalSearch = (queries: string[], embeddings: number[][]) => {
+  const retrievalQuery = buildRetrievalQuery(queries);
+  if (!retrievalQuery || !combineEmbeddings(embeddings)) return true;
+
+  return Array.from(retrievalQuery).length <= USER_MEMORY_LEXICAL_QUERY_CHARACTER_LIMIT;
 };
 
 const normalizeSimilarityTerm = (value: string) => value.trim().toLowerCase();
@@ -810,7 +823,8 @@ export class UserMemoryQueryModel {
     params: SearchMemoryParams,
     queryEmbeddings: number[][] = [],
   ): Promise<UserMemoryHybridSearchAggregatedResult> => {
-    const appliedQueries = normalizeSearchQueries(params.queries);
+    const appliedQueries = normalizeUserMemorySearchQueries(params.queries);
+    const lexicalSearch = shouldRunUserMemoryLexicalSearch(appliedQueries, queryEmbeddings);
     const limits: HybridLayerLimitRecord = {
       activities: params.topK?.activities ?? DEFAULT_HYBRID_SEARCH_LIMIT,
       contexts: params.topK?.contexts ?? DEFAULT_HYBRID_SEARCH_LIMIT,
@@ -846,6 +860,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Activity)
         ? this.searchHybridActivities({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -853,6 +868,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Context)
         ? this.searchHybridContexts({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -860,6 +876,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Experience)
         ? this.searchHybridExperiences({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -867,6 +884,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Identity)
         ? this.searchHybridIdentities({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -874,6 +892,7 @@ export class UserMemoryQueryModel {
       requestedLayers.has(LayersEnum.Preference)
         ? this.searchHybridPreferences({
             embeddings: queryEmbeddings,
+            lexicalSearch,
             params,
             queries: appliedQueries,
           })
@@ -1627,6 +1646,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridActivities(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1641,7 +1661,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchActivitiesLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1663,6 +1683,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridContexts(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1677,7 +1698,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchContextsLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1699,6 +1720,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridExperiences(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1713,7 +1735,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchExperiencesLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1735,6 +1757,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridIdentities(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1749,7 +1772,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchIdentitiesLexical(retrievalQuery, limit, params.params)]
         : [];
 
@@ -1771,6 +1794,7 @@ export class UserMemoryQueryModel {
 
   private async searchHybridPreferences(params: {
     embeddings: number[][];
+    lexicalSearch: boolean;
     params: SearchMemoryParams;
     queries: string[];
   }) {
@@ -1785,7 +1809,7 @@ export class UserMemoryQueryModel {
         : [];
     const retrievalQuery = buildRetrievalQuery(params.queries);
     const lexicalLists =
-      retrievalQuery || this.hasSearchFilters(params.params)
+      params.lexicalSearch && (retrievalQuery || this.hasSearchFilters(params.params))
         ? [await this.searchPreferencesLexical(retrievalQuery, limit, params.params)]
         : [];
 

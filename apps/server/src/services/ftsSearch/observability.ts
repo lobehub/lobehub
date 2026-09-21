@@ -16,12 +16,43 @@ export type FtsSearchBackendOperation = 'candidate_query' | 'pg_hydration' | 'pr
 export type FtsSearchBackendOperationResult = 'error' | 'success';
 export type ElasticsearchFtsSearchRequestResult =
   'http_error' | 'other_error' | 'parse_error' | 'success' | 'timeout';
+export type ElasticsearchFtsSearchErrorCode =
+  | 'authentication'
+  | 'authorization'
+  | 'index_not_found'
+  | 'invalid_query'
+  | 'none'
+  | 'rate_limited'
+  | 'request_too_large'
+  | 'response_parse_error'
+  | 'server_error'
+  | 'timeout'
+  | 'too_many_clauses'
+  | 'transport_error'
+  | 'unknown_http_error';
+export type ElasticsearchFtsSearchTraceContext = 'missing' | 'non_recording' | 'recording';
+export type FtsSearchUsage =
+  | 'home_search'
+  | 'knowledge_base'
+  | 'memory'
+  | 'memory_extraction'
+  | 'memory_tool'
+  | 'message_search'
+  | 'message_search_mobile'
+  | 'session_search'
+  | 'topic_search'
+  | 'unattributed'
+  | 'unified_search';
+export type UserMemoryLexicalSearchDecision = 'executed' | 'skipped_long_context';
+export type UserMemoryLexicalSearchSource =
+  'api' | 'memory_extraction' | 'tool' | 'topic_retrieval';
 
 export interface FtsSearchBackendOperationAttributes {
   entity: FtsSearchBackendEntity;
   operation: FtsSearchBackendOperation;
   provider: FtsSearchProvider;
   result: FtsSearchBackendOperationResult;
+  usage: FtsSearchUsage;
 }
 
 type FtsSearchBackendOperationBaseAttributes = Omit<FtsSearchBackendOperationAttributes, 'result'>;
@@ -63,6 +94,22 @@ const elasticsearchRequestBytes = meter.createHistogram('fts_search_elasticsearc
   unit: 'By',
 });
 
+const elasticsearchOriginalQueryCharacters = meter.createHistogram(
+  'fts_search_elasticsearch_original_query_characters',
+  {
+    description: 'Unicode code points in the original Elasticsearch lexical query.',
+    unit: '{character}',
+  },
+);
+
+const elasticsearchExecutedQueryCharacters = meter.createHistogram(
+  'fts_search_elasticsearch_executed_query_characters',
+  {
+    description: 'Unicode code points sent in the bounded Elasticsearch lexical query.',
+    unit: '{character}',
+  },
+);
+
 const elasticsearchServerTook = meter.createHistogram('fts_search_elasticsearch_server_took', {
   description: 'Elasticsearch-reported server processing time for successful search requests.',
   unit: 'ms',
@@ -88,6 +135,22 @@ const elasticsearchResponseHits = meter.createHistogram('fts_search_elasticsearc
   description: 'Hits returned by each Elasticsearch search request.',
 });
 
+const userMemoryLexicalDecisions = meter.createCounter(
+  'fts_search_user_memory_lexical_decisions_total',
+  {
+    description: 'User-memory lexical search decisions grouped by bounded source and decision.',
+    unit: '{decision}',
+  },
+);
+
+const userMemoryLexicalQueryCharacters = meter.createHistogram(
+  'fts_search_user_memory_lexical_query_characters',
+  {
+    description: 'Unicode code points considered for user-memory lexical retrieval.',
+    unit: '{character}',
+  },
+);
+
 const recordSafely = (operation: string, record: () => void): void => {
   try {
     record();
@@ -105,6 +168,7 @@ export const buildFtsSearchBackendMetricAttributes = (
   operation: attributes.operation,
   provider: attributes.provider,
   result: attributes.result,
+  usage: attributes.usage,
 });
 
 const finishOperation = (
@@ -132,31 +196,64 @@ export const recordElasticsearchFtsSearchRequest = (input: {
   decodedBytes?: number;
   durationMs: number;
   entity: ElasticsearchFtsSearchEntity;
+  errorCode: ElasticsearchFtsSearchErrorCode;
+  executedQueryChars: number;
   hits?: number;
+  originalQueryChars: number;
   pagination: 'bounded' | 'unbounded';
+  queryFieldCount: number;
   requestBytes: number;
   result: ElasticsearchFtsSearchRequestResult;
   serverTookMs?: number;
+  traceContext: ElasticsearchFtsSearchTraceContext;
+  truncated: boolean;
+  usage: FtsSearchUsage;
 }): void => {
   recordSafely('Elasticsearch search request', () => {
-    const attributes: Attributes = {
+    const histogramAttributes: Attributes = {
       entity: input.entity,
       pagination: input.pagination,
       result: input.result,
     };
-    elasticsearchRequests.add(1, attributes);
-    elasticsearchRequestDuration.record(input.durationMs, attributes);
-    elasticsearchRequestBytes.record(input.requestBytes, attributes);
+    const costAttributes: Attributes = {
+      ...histogramAttributes,
+      usage: input.usage,
+    };
+    const requestAttributes: Attributes = {
+      ...costAttributes,
+      error_code: input.errorCode,
+      query_truncated: input.truncated,
+      trace_context: input.traceContext,
+    };
+    elasticsearchRequests.add(1, requestAttributes);
+    elasticsearchRequestDuration.record(input.durationMs, costAttributes);
+    elasticsearchRequestBytes.record(input.requestBytes, costAttributes);
+    elasticsearchOriginalQueryCharacters.record(input.originalQueryChars, costAttributes);
+    elasticsearchExecutedQueryCharacters.record(input.executedQueryChars, costAttributes);
     if (input.contentLength !== undefined) {
-      elasticsearchResponseContentLength.record(input.contentLength, attributes);
+      elasticsearchResponseContentLength.record(input.contentLength, costAttributes);
     }
     if (input.decodedBytes !== undefined) {
-      elasticsearchResponseDecodedBytes.record(input.decodedBytes, attributes);
+      elasticsearchResponseDecodedBytes.record(input.decodedBytes, costAttributes);
     }
-    if (input.hits !== undefined) elasticsearchResponseHits.record(input.hits, attributes);
+    if (input.hits !== undefined) {
+      elasticsearchResponseHits.record(input.hits, costAttributes);
+    }
     if (input.serverTookMs !== undefined) {
-      elasticsearchServerTook.record(input.serverTookMs, attributes);
+      elasticsearchServerTook.record(input.serverTookMs, costAttributes);
     }
+  });
+};
+
+export const recordUserMemoryLexicalSearchDecision = (input: {
+  decision: UserMemoryLexicalSearchDecision;
+  queryCharacters: number;
+  source: UserMemoryLexicalSearchSource;
+}): void => {
+  recordSafely('user-memory lexical search decision', () => {
+    const attributes: Attributes = { decision: input.decision, source: input.source };
+    userMemoryLexicalDecisions.add(1, attributes);
+    userMemoryLexicalQueryCharacters.record(input.queryCharacters, attributes);
   });
 };
 
@@ -196,6 +293,7 @@ export const observeFtsSearchBackendOperation = async <Result>(
         'fts.search.backend.entity': attributes.entity,
         'fts.search.backend.operation': attributes.operation,
         'fts.search.backend.provider': attributes.provider,
+        'fts.search.backend.usage': attributes.usage,
       },
     },
     async (span) => {
@@ -211,14 +309,20 @@ export const observeFtsSearchBackendOperation = async <Result>(
     },
   );
 
-export const createElasticsearchFtsSearchObserver = (): ElasticsearchFtsSearchObserver => ({
+export const createElasticsearchFtsSearchObserver = (
+  usage: FtsSearchUsage,
+): ElasticsearchFtsSearchObserver => ({
   observe: (entity, operation, callback) =>
-    observeFtsSearchBackendOperation({ entity, operation, provider: 'elasticsearch' }, callback),
+    observeFtsSearchBackendOperation(
+      { entity, operation, provider: 'elasticsearch', usage },
+      callback,
+    ),
 });
 
 export const withFtsSearchBackendObservability = (
   backend: FtsSearchBackend,
   resolveProvider: (request: FtsSearchBackendRequest) => FtsSearchProvider,
+  usage: FtsSearchUsage,
 ): FtsSearchBackend => ({
   key: backend.key,
   search: (request) => {
@@ -228,6 +332,7 @@ export const withFtsSearchBackendObservability = (
         entity: request.entity,
         operation: 'product_path',
         provider,
+        usage,
       },
       async () => {
         const response = await backend.search(request);

@@ -1,21 +1,28 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { Pause, Play, StepForward } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
+import { Accordion, type AccordionItemType, Tag, Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
-import { goalService } from '@/services/goal';
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import GoalAcceptanceCriteria from '../GoalAcceptanceCriteria';
 import Activity from './Activity';
+import Deliverables from './Deliverables';
 import Findings from './Findings';
-import Frontier, { type FrontierActions } from './Frontier';
+import Frontier from './Frontier';
 import { buildGoalGraphView } from './goalGraphViewModel';
 import Graph from './Graph';
+import {
+  isGoalClosed,
+  isGoalPlanning,
+  useFrontierActions,
+  useGoalNodeSelect,
+} from './useGoalProcessActions';
 
 /**
  * The process-control band of the goal detail page: what can move now
@@ -24,152 +31,159 @@ import Graph from './Graph';
  * a plain task-carried goal has no nodes and keeps the page it always had.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  section: css`
-    padding-block: 8px;
-  `,
-}));
-
 interface ProcessControlProps {
   /** The `goals` row id — not the carrier task's identifier. */
   goalId: string;
+  /** Owned by the page so it can swap its portal panel for the overlay's. */
+  graphFullscreen: boolean;
+  onGraphFullscreenChange: (fullscreen: boolean) => void;
 }
 
-const ProcessControl = memo<ProcessControlProps>(({ goalId }) => {
-  const { t } = useTranslation('chat');
-  const { allowed: canEdit } = usePermission('create_content');
-  const [selectedId, setSelectedId] = useState<string>();
-  const [advancing, setAdvancing] = useState(false);
+const ProcessControl = memo<ProcessControlProps>(
+  ({ goalId, graphFullscreen, onGraphFullscreenChange }) => {
+    const { t } = useTranslation('chat');
+    const { allowed: canEdit } = usePermission('create_content');
+    const [lastSelectedId, setSelectedId] = useState<string>();
+    const nodePortal = useChatStore(chatPortalSelectors.goalNodeView);
+    const selectedId = nodePortal?.goalId === goalId ? nodePortal.nodeId : lastSelectedId;
 
-  const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
-  const decideGoal = useGoalStore((s) => s.decideGoal);
-  const pauseGoal = useGoalStore((s) => s.pauseGoal);
-  const resumeGoal = useGoalStore((s) => s.resumeGoal);
-  const advanceGoalNow = useGoalStore((s) => s.advanceGoal);
-  const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
-  useFetchGoalGraph(goalId);
-  const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
+    const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
+    useFetchGoalGraph(goalId);
+    const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
 
-  const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
+    const graph = useMemo(() => (snapshot ? buildGoalGraphView(snapshot) : undefined), [snapshot]);
 
-  // One press hands the goal to the server's coordinator, which runs it as far
-  // as it can go in one call and then keeps going on its own as each Work Task
-  // settles. A single coordinator step is an implementation unit — a press that
-  // only ticked once usually looked like it did nothing, because the very next
-  // step is what dispatches the task.
-  const advance = useCallback(async () => {
-    if (advancing) return;
-    setAdvancing(true);
-    try {
-      const result = await advanceGoalNow(goalId);
-      toast.info(result.message);
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setAdvancing(false);
-    }
-  }, [advancing, advanceGoalNow, goalId]);
+    const actions = useFrontierActions(goalId);
+    const openNode = useGoalNodeSelect(goalId, graph);
 
-  const actions: FrontierActions = useMemo(
-    () => ({
-      addTask: async (title: string) => {
-        await goalService.addNode({ id: goalId, kind: 'task', title });
-        await refreshGoalGraph(goalId);
+    // Every click funnels here: keep the map highlight (spatial continuity) and
+    // open the drill-down (see `useGoalNodeSelect` for where each node lands).
+    const select = useCallback(
+      (nodeId: string) => {
+        setSelectedId(nodeId);
+        openNode(nodeId);
       },
-      advance: () => void advance(),
-      decide: (decisionId, optionId, resolution) =>
-        void decideGoal(goalId, { decisionId, optionId, resolution }),
-    }),
-    [advance, decideGoal, goalId, refreshGoalGraph],
-  );
+      [openNode],
+    );
 
-  // Task-carried goals share the `goals` table but never grow a graph. Nothing
-  // to control here, so the page keeps its original shape.
-  if (!graph || graph.nodes.length === 0) return null;
+    // Task-carried goals share the `goals` table but never grow a graph. Nothing
+    // to control here, so the page keeps its original shape.
+    if (!graph || graph.nodes.length === 0) return null;
 
-  const paused = graph.goal.status === 'paused';
-  // A closed goal cannot move: the coordinator returns immediately for these,
-  // so Advance would report nothing happened and a Work added here would sit
-  // `proposed` forever. Stop offering actions that cannot land.
-  const closed = ['achieved', 'canceled', 'failed'].includes(graph.goal.status);
-  const canAct = canEdit && !closed;
+    // While the coordinator decomposes the problem, the surfaces below promise
+    // the incoming structure instead of reading as an empty goal — the graph
+    // poll fills them in as nodes land.
+    const planning = isGoalPlanning(graph);
+    // Presence of the acceptance block (not a non-empty list) keeps the section
+    // mounted: removing the last criterion must leave the add control reachable,
+    // while legacy prose-only goals (no acceptance config at all) show nothing.
+    const acceptanceConfig = graph.goal.config?.acceptance;
+    const criteriaIds = acceptanceConfig?.criteriaIds ?? [];
+    // Stop offering actions that cannot land on a closed goal. The goal otherwise
+    // advances entirely on its own — the only legitimate human control over its
+    // pace is pause/resume.
+    const canAct = canEdit && !isGoalClosed(graph);
+    const hasExperiments = graph.nodes.some((view) => view.node.kind === 'experiment');
 
-  return (
-    <Flexbox gap={20}>
-      <Flexbox gap={12}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          {canAct && (
-            <>
-              <Tooltip title={t('goalProcess.advance.tooltip')}>
-                <Button
-                  icon={<Icon icon={StepForward} />}
-                  loading={advancing}
-                  size={'small'}
-                  type={'primary'}
-                  onClick={advance}
-                >
-                  {advancing ? t('goalProcess.advance.running') : t('goalProcess.advance.label')}
-                </Button>
-              </Tooltip>
-              <Button
-                icon={<Icon icon={paused ? Play : Pause} />}
-                size={'small'}
-                onClick={() => void (paused ? resumeGoal(goalId) : pauseGoal(goalId))}
-              >
-                {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
-              </Button>
-            </>
-          )}
-          {paused && (
-            <Text fontSize={12} type={'secondary'}>
-              {t('goalProcess.paused')}
-            </Text>
-          )}
+    const map = (
+      <Graph
+        fullscreen={graphFullscreen}
+        graph={graph}
+        key={goalId}
+        planning={planning}
+        selectedId={selectedId}
+        onFullscreenChange={onGraphFullscreenChange}
+        onSelect={select}
+      />
+    );
+
+    return (
+      <Flexbox gap={20}>
+        {hasExperiments && map}
+        <Flexbox gap={12}>
+          <Frontier
+            actions={actions}
+            canEdit={canAct}
+            graph={graph}
+            planning={planning}
+            onSelect={select}
+          />
         </Flexbox>
 
-        <Frontier actions={actions} canEdit={canAct} graph={graph} onSelect={setSelectedId} />
+        {!hasExperiments && map}
+
+        <Accordion
+          defaultValue={['deliverables', 'findings', 'activity']}
+          gap={0}
+          indicatorPlacement="inline"
+          styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
+          items={
+            [
+              // The structured acceptance standard the terminal goal acceptance is
+              // gated on. Collapsed by default — reference material, like the task
+              // detail's 交付验收 section. Prose-only legacy goals have none.
+              !!acceptanceConfig && {
+                children: <GoalAcceptanceCriteria criteriaIds={criteriaIds} goalId={goalId} />,
+                key: 'acceptance',
+                title: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text fontSize={14} weight={600}>
+                      {t('goalAcceptance.title')}
+                    </Text>
+                    {criteriaIds.length > 0 && <Tag size={'small'}>{criteriaIds.length}</Tag>}
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('goalAcceptance.gateHint')}
+                    </Text>
+                  </Flexbox>
+                ),
+              },
+              // Between the standard and the conclusions on purpose: 验收标准 says
+              // what counts as done, 交付物 what was produced, 结论 what the goal now
+              // believes about it. Findings routinely cite these artifacts.
+              {
+                children: <Deliverables graph={graph} />,
+                key: 'deliverables',
+                title: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text fontSize={14} weight={600}>
+                      {t('goalProcess.deliverables.title')}
+                    </Text>
+                    {graph.artifacts.length > 0 && (
+                      <Tag size={'small'}>{graph.artifacts.length}</Tag>
+                    )}
+                  </Flexbox>
+                ),
+              },
+              {
+                children: <Findings graph={graph} onSelect={select} />,
+                key: 'findings',
+                title: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text fontSize={14} weight={600}>
+                      {t('goalProcess.findings.title')}
+                    </Text>
+                    {graph.findings.length > 0 && <Tag size={'small'}>{graph.findings.length}</Tag>}
+                  </Flexbox>
+                ),
+              },
+              {
+                children: <Activity graph={graph} onSelect={select} />,
+                key: 'activity',
+                title: (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <Text fontSize={14} weight={600}>
+                      {t('goalProcess.activity.title')}
+                    </Text>
+                  </Flexbox>
+                ),
+              },
+            ].filter(Boolean) as AccordionItemType[]
+          }
+        />
       </Flexbox>
-
-      <Graph graph={graph} selectedId={selectedId} onSelect={setSelectedId} />
-
-      <Accordion defaultExpandedKeys={['findings', 'activity']} gap={0}>
-        <AccordionItem
-          itemKey={'findings'}
-          paddingBlock={6}
-          paddingInline={0}
-          title={
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Text fontSize={14} weight={600}>
-                {t('goalProcess.findings.title')}
-              </Text>
-              {graph.findings.length > 0 && <Tag size={'small'}>{graph.findings.length}</Tag>}
-            </Flexbox>
-          }
-        >
-          <Flexbox className={styles.section}>
-            <Findings graph={graph} onSelect={setSelectedId} />
-          </Flexbox>
-        </AccordionItem>
-        <AccordionItem
-          itemKey={'activity'}
-          paddingBlock={6}
-          paddingInline={0}
-          title={
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Text fontSize={14} weight={600}>
-                {t('goalProcess.activity.title')}
-              </Text>
-            </Flexbox>
-          }
-        >
-          <Flexbox className={styles.section}>
-            <Activity graph={graph} onSelect={setSelectedId} />
-          </Flexbox>
-        </AccordionItem>
-      </Accordion>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 ProcessControl.displayName = 'GoalProcessControl';
 

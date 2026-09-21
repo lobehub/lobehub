@@ -18,6 +18,14 @@ describe('getRuntimeErrorMessage', () => {
     );
   });
 
+  it('translates deprecated alias codes under their canonical key', () => {
+    const t = createTranslator({
+      'modelRuntime:ContextEnginePipelineError': 'Localized pipeline error',
+    });
+
+    expect(getRuntimeErrorMessage(t, 'PipelineError')).toBe('Localized pipeline error');
+  });
+
   it('returns the raw fallback when a registered runtime error has no locale key', () => {
     const t = createTranslator({});
 

@@ -8,14 +8,24 @@ import type {
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';
-import { and, asc, eq, gt, inArray, max, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, max, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
 import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { messages, nextauthAccounts, topics, users, userSettings } from '../schemas';
+import {
+  agents,
+  chatGroups,
+  goals,
+  messages,
+  nextauthAccounts,
+  sessions,
+  topics,
+  users,
+  userSettings,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
@@ -23,6 +33,22 @@ type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,
   userId?: string,
 ) => Promise<UserKeyVaults>;
+
+/** PostgreSQL stores statement_timeout as a signed 32-bit millisecond value.
+ * @see https://github.com/postgres/postgres/blob/f9562b95/src/backend/utils/misc/guc_parameters.dat
+ */
+const MAX_STATEMENT_TIMEOUT_MS = 2_147_483_647;
+
+const validateDeletionStatementTimeout = (timeoutMs?: number) => {
+  if (
+    timeoutMs !== undefined &&
+    (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_STATEMENT_TIMEOUT_MS)
+  ) {
+    throw new Error(
+      `Account deletion statement timeout must be between 1 and ${MAX_STATEMENT_TIMEOUT_MS} milliseconds`,
+    );
+  }
+};
 
 export class UserNotFoundError extends TRPCError {
   constructor() {
@@ -437,17 +463,211 @@ export class UserModel {
     return { duplicate: false, user };
   };
 
-  static deleteUser = async (db: LobeChatDatabase, id: string) => {
+  /**
+   * Deletes a user account and their agent-share visitor conversations.
+   *
+   * Agent-share visitor topics are stored under the CREATOR's userId (for
+   * billing/data attribution) and linked to the visitor only via
+   * `topics.senderId`, which has no FK. That means the `users` cascade cannot
+   * reach them — deleting the visitor's account would otherwise orphan every
+   * conversation they had inside someone else's shared agent. We explicitly
+   * drop `topics` where `senderId = id`; messages, threads, and topic
+   * documents cascade from `topics.id`, so the topic delete is enough.
+   */
+  static deleteUser = async (
+    db: LobeChatDatabase,
+    id: string,
+    options: { statementTimeoutMs?: number; transactionTimeoutMs?: number } = {},
+  ) => {
+    const timeoutMs = options.statementTimeoutMs;
+    validateDeletionStatementTimeout(timeoutMs);
+    validateDeletionStatementTimeout(options.transactionTimeoutMs);
     // A pending agent-TRANSFER backfill means message rows moved to (or from)
     // this user still carry the other side's scope snapshot; cascading the
     // delete now would destroy history the transfer already re-homed. Transfer
-    // is admin-initiated and drains in minutes — the delete can simply be
+    // drains in minutes — the delete can simply be
     // retried afterwards. Pending `copy` jobs do not block: they duplicate
     // rather than move, and both sides self-heal (see `isPendingTransfer`).
     if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
       throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
     }
-    return db.delete(users).where(eq(users.id, id));
+    return db.transaction(async (tx) => {
+      const deadline =
+        options.transactionTimeoutMs === undefined
+          ? undefined
+          : Date.now() + options.transactionTimeoutMs;
+      // PostgreSQL statement_timeout restarts for each statement. Spend one
+      // shared budget across all cascades instead of granting each another 300s.
+      const applyRemainingTimeout = async () => {
+        const remaining = deadline === undefined ? timeoutMs : deadline - Date.now();
+        if (remaining !== undefined && remaining <= 0)
+          throw new Error('Account deletion transaction deadline exceeded');
+        if (remaining !== undefined) {
+          const limit = Math.min(remaining, timeoutMs ?? remaining);
+          await tx.execute(sql`SELECT set_config('statement_timeout', ${String(limit)}, true)`);
+        }
+      };
+      await applyRemainingTimeout();
+      // A goal decision can reference the same user that owns its parent goal.
+      // Delete the graph first so its CASCADE completes before the user delete
+      // runs the decision's SET NULL action on an already-deleted node.
+      await tx.delete(goals).where(eq(goals.userId, id));
+      await applyRemainingTimeout();
+      // Purge share-visitor topics authored by this user under any creator.
+      await tx.delete(topics).where(eq(topics.senderId, id));
+      await applyRemainingTimeout();
+      const result = await tx.delete(users).where(eq(users.id, id));
+      if (deadline !== undefined && Date.now() >= deadline)
+        throw new Error('Account deletion transaction deadline exceeded');
+      return result;
+    });
+  };
+
+  /**
+   * Remove high-volume rows in committed batches before the final user cascade.
+   * An interrupted call can safely resume from the remaining rows. The final
+   * transaction still checks for pending transfers and handles concurrent writes.
+   * Call only after account deletion has become irreversible, because each batch commits.
+   */
+  static deleteUserInBatches = async (
+    db: LobeChatDatabase,
+    id: string,
+    options: {
+      batchSize?: number;
+      finalStatementTimeoutMs?: number;
+      shouldContinue?: () => boolean;
+    } = {},
+  ) => {
+    const batchSize = options.batchSize ?? 500;
+    if (!Number.isSafeInteger(batchSize) || batchSize < 1) {
+      throw new Error('Account deletion batch size must be a positive integer');
+    }
+    const timeoutMs = options.finalStatementTimeoutMs;
+    validateDeletionStatementTimeout(timeoutMs);
+    const topicBatchSize = Math.min(batchSize, 20);
+
+    if (await AgentTransferJobModel.hasPendingJobTouchingUser(db, id)) {
+      throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+    }
+
+    const topiclessMessage = and(eq(messages.userId, id), isNull(messages.topicId));
+    for (;;) {
+      if (options.shouldContinue?.() === false) return false;
+      const rows = await db
+        .select({
+          id: messages.id,
+          agentId: messages.agentId,
+          groupId: messages.groupId,
+          sessionId: messages.sessionId,
+        })
+        .from(messages)
+        .where(topiclessMessage)
+        .limit(batchSize);
+      if (rows.length === 0) break;
+      await db.transaction(async (tx) => {
+        // Topicless history moves with its group/agent/session. Lock those
+        // parents before checking jobs, so a new transfer cannot commit between
+        // the guard and deletion. Recheck captured links to avoid deleting rows
+        // that were reattached to an unlocked parent while we waited.
+        for (const [table, ids] of [
+          [chatGroups, rows.flatMap((row) => (row.groupId ? [row.groupId] : []))],
+          [agents, rows.flatMap((row) => (row.agentId ? [row.agentId] : []))],
+          [sessions, rows.flatMap((row) => (row.sessionId ? [row.sessionId] : []))],
+        ] as const) {
+          if (ids.length > 0)
+            await tx
+              .select({ id: table.id })
+              .from(table)
+              .where(inArray(table.id, [...new Set(ids)]))
+              .orderBy(asc(table.id))
+              .for('update');
+        }
+        if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id))
+          throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        await tx
+          .delete(messages)
+          .where(
+            and(
+              topiclessMessage,
+              or(
+                ...rows.map((row) =>
+                  and(
+                    eq(messages.id, row.id),
+                    row.agentId === null
+                      ? isNull(messages.agentId)
+                      : eq(messages.agentId, row.agentId),
+                    row.groupId === null
+                      ? isNull(messages.groupId)
+                      : eq(messages.groupId, row.groupId),
+                    row.sessionId === null
+                      ? isNull(messages.sessionId)
+                      : eq(messages.sessionId, row.sessionId),
+                  ),
+                ),
+              ),
+            ),
+          );
+      });
+    }
+
+    const ownedTopic = or(eq(topics.userId, id), eq(topics.senderId, id));
+    for (;;) {
+      if (options.shouldContinue?.() === false) return false;
+      const foundTopics = await db.transaction(async (tx) => {
+        // Transfers lock topics before changing their owner and messages. Holding
+        // the same locks keeps every captured message inside its original scope.
+        const currentTopics = await tx
+          .select({ id: topics.id })
+          .from(topics)
+          .where(ownedTopic)
+          .orderBy(asc(topics.id))
+          .limit(topicBatchSize)
+          .for('update');
+        if (currentTopics.length === 0) return false;
+        if (await AgentTransferJobModel.hasPendingJobTouchingUser(tx, id)) {
+          throw new Error(AGENT_TRANSFER_PENDING_OWNER_DELETE);
+        }
+
+        const topicIds = currentTopics.map((topic) => topic.id);
+        // A visitor's topic can contain messages owned by the host account.
+        const rows = await tx
+          .select({ id: messages.id })
+          .from(messages)
+          .where(inArray(messages.topicId, topicIds))
+          .limit(batchSize);
+        if (rows.length > 0) {
+          await tx.delete(messages).where(
+            and(
+              inArray(messages.topicId, topicIds),
+              inArray(
+                messages.id,
+                rows.map((row) => row.id),
+              ),
+            ),
+          );
+        }
+
+        const remainingTopics = await tx
+          .selectDistinct({ id: messages.topicId })
+          .from(messages)
+          .where(inArray(messages.topicId, topicIds));
+        const remainingTopicIds = new Set(remainingTopics.map((topic) => topic.id));
+        const emptyTopicIds = topicIds.filter((topicId) => !remainingTopicIds.has(topicId));
+        if (emptyTopicIds.length > 0) {
+          await tx.delete(topics).where(and(inArray(topics.id, emptyTopicIds), ownedTopic));
+        }
+        return true;
+      });
+      if (!foundTopics) break;
+    }
+
+    if (options.shouldContinue?.() === false) return false;
+
+    await UserModel.deleteUser(db, id, {
+      statementTimeoutMs: options.finalStatementTimeoutMs,
+      transactionTimeoutMs: options.finalStatementTimeoutMs,
+    });
+    return true;
   };
 
   static findById = async (db: LobeChatDatabase, id: string) => {
@@ -492,6 +712,23 @@ export class UserModel {
         id: users.id,
         username: users.username,
       })
+      .from(users)
+      .where(inArray(users.id, ids));
+  };
+
+  /**
+   * Emails for a set of users. Deliberately separate from
+   * {@link UserModel.getDisplayInfoByIds}, whose contract is display-only and
+   * must never leak email — call this only where the audience is allowed to
+   * see addresses (e.g. workspace members resolving a teammate to assign).
+   */
+  static getEmailsByIds = async (
+    db: LobeChatDatabase,
+    ids: string[],
+  ): Promise<Array<{ email: string | null; id: string }>> => {
+    if (ids.length === 0) return [];
+    return db
+      .select({ email: users.email, id: users.id })
       .from(users)
       .where(inArray(users.id, ids));
   };

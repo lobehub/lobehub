@@ -1,4 +1,10 @@
-import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
+import {
+  DEFAULT_SECURITY_BLACKLIST,
+  InterventionChecker,
+  selectSecurityBlacklist,
+  selectToolManifestMap,
+  selectUserInterventionConfig,
+} from '@lobechat/agent-runtime';
 import {
   type ChatToolPayload,
   classifyToolInterventionPresentation,
@@ -168,7 +174,7 @@ const actionsFor = (
  * Unknown tools and incomplete discovery placeholders remain Review-only.
  */
 const hasAuthoritativeApiDefinition = (state: any, tool: ChatToolPayload): boolean => {
-  const baseManifestMap = state?.operationToolSet?.manifestMap ?? state?.toolManifestMap ?? {};
+  const baseManifestMap = selectToolManifestMap(state ?? {});
   const activatedManifestMap = Object.fromEntries(
     (Array.isArray(state?.activatedStepTools) ? state.activatedStepTools : [])
       .filter(
@@ -224,6 +230,7 @@ export const buildRuntimeInterventionNotification = async ({
   const batch = state?.pendingApprovalBatch;
   const toolMessageIds = state?.pendingToolMessageIds;
   const metadata = state?.metadata ?? {};
+  const origin = state?.origin ?? {};
 
   if (
     state?.status !== 'waiting_for_human' ||
@@ -239,8 +246,10 @@ export const buildRuntimeInterventionNotification = async ({
   }
 
   const items: NotifyAgentInterventionItem[] = [];
-  const securityBlacklist = state?.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
-  const resolvedApprovalMode = approvalMode(state?.userInterventionConfig?.approvalMode);
+  const securityBlacklist = selectSecurityBlacklist(state ?? {}) ?? DEFAULT_SECURITY_BLACKLIST;
+  const resolvedApprovalMode = approvalMode(
+    selectUserInterventionConfig(state ?? {})?.approvalMode,
+  );
 
   for (const tool of pendingTools) {
     const toolMessageId = toolMessageIds[tool.id];
@@ -257,9 +266,7 @@ export const buildRuntimeInterventionNotification = async ({
       canonicalToolKey: `${tool.identifier}/${tool.apiName}`,
       interactionKind,
       provider:
-        boundedString(state?.modelRuntimeConfig?.provider) ??
-        boundedString(metadata?.modelRuntimeConfig?.provider) ??
-        boundedString(metadata?.provider),
+        boundedString(state?.modelRuntimeConfig?.provider) ?? boundedString(metadata?.provider),
       requestRevision: revisionFor(tool),
       ...(security.blocked && {
         risk: {
@@ -358,7 +365,7 @@ export const buildRuntimeInterventionNotification = async ({
   }
 
   return {
-    agentId: boundedString(metadata.agentId),
+    agentId: boundedString(origin.agentId),
     approvalMode: resolvedApprovalMode,
     batch: {
       activityKey: deriveAgentInterventionActivityKey({
@@ -374,17 +381,17 @@ export const buildRuntimeInterventionNotification = async ({
       stepIndex: batch.stepIndex,
     },
     context: {
-      agentId: boundedString(metadata.agentId),
+      agentId: boundedString(origin.agentId),
       assistantMessageId: batch.assistantMessageId,
-      groupId: boundedString(metadata.groupId),
+      groupId: boundedString(origin.groupId),
       operationId,
-      pageId: boundedString(metadata.documentId),
-      scope: messageMapScope(metadata.scope),
-      sessionId: boundedString(metadata.sessionId),
-      taskId: boundedString(metadata.taskId),
-      threadId: boundedString(metadata.threadId),
-      topicId: boundedString(metadata.topicId),
-      triggerMessageId: boundedString(metadata.sourceMessageId),
+      pageId: boundedString(origin.documentId),
+      scope: messageMapScope(origin.scope),
+      sessionId: boundedString(origin.sessionId),
+      taskId: boundedString(origin.taskId),
+      threadId: boundedString(origin.threadId),
+      topicId: boundedString(origin.topicId),
+      triggerMessageId: boundedString(origin.sourceMessageId),
       workspaceId,
     },
     items,

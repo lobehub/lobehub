@@ -70,16 +70,13 @@ vi.mock('@/store/agent/selectors', () => ({
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
     getTopicById: () => () => undefined,
+    getTopicHeteroPinById: () => () => undefined,
     getTopicModelById: () => () => undefined,
   },
 }));
 
 vi.mock('@/store/electron', () => ({
   getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
-}));
-
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: { info: vi.fn() },
 }));
 
 const noop = vi.fn();

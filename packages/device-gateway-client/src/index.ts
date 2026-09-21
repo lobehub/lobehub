@@ -1,6 +1,16 @@
 export type { GatewayClientLogger, GatewayClientOptions } from './client';
 export { GatewayClient } from './client';
 export type {
+  DeviceTransportFailure,
+  DeviceTransportOperation,
+  DeviceUnavailableErrorData,
+} from './deviceTransportError';
+export {
+  describeGatewayRequestFailure,
+  describeGatewayResponseFailure,
+  DeviceTransportErrorCode,
+} from './deviceTransportError';
+export type {
   DeviceMessageApiResult,
   DeviceRpcResult,
   DeviceStatusResult,

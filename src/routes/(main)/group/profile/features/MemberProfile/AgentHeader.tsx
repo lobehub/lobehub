@@ -1,8 +1,8 @@
 'use client';
 
 import { DEFAULT_AVATAR, EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import { Block, Flexbox, Icon, Input, Skeleton, Tooltip } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Input, Tooltip } from '@lobehub/ui';
+import { Skeleton, toast } from '@lobehub/ui/base-ui';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';
@@ -199,8 +199,8 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }
                 <Suspense
                   fallback={
                     <Flexbox gap={8}>
-                      <Skeleton.Button block style={{ height: 38 }} />
-                      <Skeleton.Button block style={{ height: 38 }} />
+                      <Skeleton height={38} />
+                      <Skeleton height={38} />
                     </Flexbox>
                   }
                 >

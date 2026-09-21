@@ -1,8 +1,12 @@
 import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type { TaskListItem, TaskParticipant, TaskVerifyConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
+import type { TaskCommentActivityRecipient } from '@/business/server/task/notifyTaskCommentActivity';
+import { notifyTaskCommentActivity } from '@/business/server/task/notifyTaskCommentActivity';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
@@ -15,14 +19,22 @@ import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
+import { TaskIntentService } from '@/server/services/task/intent';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  extractMentionedUserIds,
+  filterActiveWorkspaceMemberIds,
+  validateMentionedUserIds,
+} from '@/server/utils/commentMentions';
+import { after } from '@/server/utils/scheduleAfterResponse';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
@@ -37,6 +49,7 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
       editLockService: new EditLockService(ctx.userId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
+      taskIntentService: new TaskIntentService(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
       taskTopicModel: new TaskTopicModel(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
@@ -118,9 +131,13 @@ const updateSchema = z.object({
   priority: z.number().min(0).max(4).optional(),
   schedulePattern: z.string().nullish(),
   scheduleTimezone: z.string().nullish(),
+  status: z.enum(TASK_STATUSES).optional(),
 });
 
 const listSchema = z.object({
+  // Keyset cursor — rows strictly after this `(orderBy timestamp, seq)` position
+  // in newest-first order. Stable under concurrent inserts/deletes, unlike `offset`.
+  after: z.object({ at: z.coerce.date(), seq: z.number().int() }).optional(),
   assigneeAgentId: z.string().optional(),
   // true → only tasks whose schedule or heartbeat can still fire (a terminal or
   // misconfigured one cannot), false → its exact complement. Omitted leaves the
@@ -134,6 +151,10 @@ const listSchema = z.object({
   parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
   projectId: z.string().optional(),
+  // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
+  // caller, 'created' → tasks the caller created. Always resolved against
+  // `ctx.userId` so the endpoint never filters by an arbitrary member.
+  scope: z.enum(['assigned', 'created']).optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
   // UI-side narrowing of the result set. Omitted means "All" (the chip's
   // default 'private' is enforced client-side; the server stays permissive
@@ -161,6 +182,9 @@ const groupListSchema = z
       .optional(),
     parentTaskId: z.string().nullish(),
     projectId: z.string().optional(),
+    // Same "My tasks" narrowing as `listSchema.scope`, so the board renders the
+    // exact set its list view does. Always resolved against `ctx.userId`.
+    scope: z.enum(['assigned', 'created']).optional(),
     visibility: z.enum(['private', 'public']).optional(),
   })
   .refine(({ groupBy, groups }) => Boolean(groupBy) !== Boolean(groups), {
@@ -172,6 +196,128 @@ async function resolveOrThrow(model: TaskModel, id: string) {
   const task = await model.resolve(id);
   if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
   return task;
+}
+
+/**
+ * Recipients of a new member comment on a task: the creator and the member
+ * assignee as ambient `commented` pings, upgraded to `mentioned` when the
+ * comment @mentions them. The actor never appears in the result.
+ */
+function collectTaskCommentRecipients(params: {
+  actorUserId: string;
+  mentionedUserIds: string[];
+  task: { assigneeUserId: string | null; createdByUserId: string };
+}): TaskCommentActivityRecipient[] {
+  const { actorUserId, mentionedUserIds, task } = params;
+  const byUserId = new Map<string, TaskCommentActivityRecipient['kind']>();
+  for (const userId of [task.createdByUserId, task.assigneeUserId]) {
+    if (userId) byUserId.set(userId, 'commented');
+  }
+  for (const userId of mentionedUserIds) byUserId.set(userId, 'mentioned');
+  byUserId.delete(actorUserId);
+  return [...byUserId].map(([userId, kind]) => ({ kind, userId }));
+}
+
+/**
+ * Whether a notification deep-linking to `task` would land on a page `userId`
+ * cannot open. Mirrors `TaskModel.ownership()`: public tasks are visible to
+ * every member, private ones only to their creator. Membership is a separate
+ * check (`filterActiveWorkspaceMemberIds`).
+ */
+function isTaskHiddenFrom(
+  task: { createdByUserId: string; visibility: 'private' | 'public' },
+  userId: string,
+): boolean {
+  return task.visibility === 'private' && task.createdByUserId !== userId;
+}
+
+interface TaskNotificationCtx {
+  serverDB: LobeChatDatabase;
+  taskModel: TaskModel;
+  workspaceId: string;
+}
+
+/**
+ * Re-authorize every recipient against the task before any id reaches the
+ * delivery slot (same contract as topic and document comments): a member
+ * @mentioned on a private task they cannot see must not receive its title and
+ * link, and the creator / assignee rows can outlive workspace membership.
+ */
+async function filterRecipientsByTaskAccess(
+  ctx: TaskNotificationCtx,
+  taskId: string,
+  recipients: TaskCommentActivityRecipient[],
+): Promise<TaskCommentActivityRecipient[]> {
+  if (recipients.length === 0) return [];
+  const task = await ctx.taskModel.findById(taskId);
+  if (!task) return [];
+
+  const visible = recipients.filter(({ userId }) => !isTaskHiddenFrom(task, userId));
+  const activeUserIds = new Set(
+    await filterActiveWorkspaceMemberIds(
+      ctx.serverDB,
+      ctx.workspaceId,
+      visible.map(({ userId }) => userId),
+    ),
+  );
+  return visible.filter(({ userId }) => activeUserIds.has(userId));
+}
+
+/**
+ * Member comment ping (Linear-style), delivered after the response as
+ * best-effort work: the `@/business` slot defaults to a no-op, and a rejecting
+ * implementation must neither fail the mutation nor surface as an unhandled
+ * rejection. `after()` keeps the work alive past the response on serverless.
+ */
+function notifyCommentActivityBestEffort(
+  ctx: TaskNotificationCtx,
+  params: Parameters<typeof notifyTaskCommentActivity>[0],
+) {
+  after(async () => {
+    try {
+      const recipients = await filterRecipientsByTaskAccess(ctx, params.taskId, params.recipients);
+      if (recipients.length === 0) return;
+      await notifyTaskCommentActivity({ ...params, recipients });
+    } catch (error) {
+      console.error('[task-comment] Failed to send activity notification', error);
+    }
+  });
+}
+
+/**
+ * Assignment ping (Linear-style), delivered after the response as best-effort
+ * work. Silent for self-assignment; the assignee lock already guarantees the
+ * member is active and can open the task (`assertAssigneeUserVisibilityCompat`
+ * rejects private tasks assigned to anyone but their creator). Callers decide
+ * whether the assignee actually changed.
+ */
+function notifyAssignedBestEffort(
+  ctx: { userId: string; workspaceId?: string | null },
+  task: {
+    assigneeUserId: string | null;
+    id: string;
+    identifier: string;
+    name: string | null;
+  },
+) {
+  const { assigneeUserId } = task;
+  if (!assigneeUserId || assigneeUserId === ctx.userId) return;
+
+  const params = {
+    actorUserId: ctx.userId,
+    assigneeUserId,
+    taskId: task.id,
+    taskIdentifier: task.identifier,
+    taskName: task.name,
+    workspaceId: ctx.workspaceId ?? undefined,
+  };
+  after(async () => {
+    try {
+      await notifyTaskAssigned(params);
+    } catch (error) {
+      console.error('[task] Failed to send assignment notification', error);
+    }
+  });
 }
 
 async function assertAssigneeAgentBelongsToUser(
@@ -193,6 +339,37 @@ async function assertAssigneeAgentBelongsToUser(
     }
     throw error;
   }
+}
+
+/**
+ * Who an activity row is attributed to.
+ *
+ * A server-side caller (the gateway task runtime) carries the agent in
+ * `ctx.actingAgentId`, which no HTTP request can set — that is the trusted
+ * path and always wins. The client-first runtime (gateway off, self-hosted)
+ * has no such channel: its task tools are ordinary TRPC calls from the
+ * browser, so it names the agent in the payload — the same contract
+ * `addComment.authorAgentId` already uses — and the claim is honoured only
+ * for an agent the caller can use. That bounds any misattribution to the
+ * caller's own agents rather than letting a request pin a change on anyone.
+ */
+async function resolveActivityActor(
+  ctx: {
+    actingAgentId?: string | null;
+    serverDB: LobeChatDatabase;
+    userId: string;
+    workspaceId?: string | null;
+  },
+  claimedAgentId?: string,
+): Promise<{ agentId?: string | null; userId: string }> {
+  if (ctx.actingAgentId) return { agentId: ctx.actingAgentId, userId: ctx.userId };
+  if (claimedAgentId) {
+    await assertAgentUsableBy(ctx.serverDB, claimedAgentId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId ?? undefined,
+    });
+  }
+  return { agentId: claimedAgentId ?? null, userId: ctx.userId };
 }
 
 async function resolveSafeParentTaskId(
@@ -230,6 +407,72 @@ async function resolveSafeParentTaskId(
 }
 
 export const taskRouter = router({
+  /**
+   * Read a composer draft and report what it means — a name, the outcome as
+   * understood, the questions that would change the deliverable, and whether
+   * it is really a standing goal. Returns a reading only; nothing is created.
+   */
+  analyzeIntent: taskProcedureWrite
+    .input(
+      z.object({
+        context: z.string().optional(),
+        instruction: z.string().min(1).max(20_000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.taskIntentService.analyze(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          // Runtime errors are plain payloads, so tRPC normalizes them into an
+          // Error cause; mark the cause the shared handler actually receives.
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
+  /**
+   * Rewrite a confirmed draft into the brief that gets executed, folding in the
+   * answers the user just gave. Returns a brief only; nothing is created.
+   */
+  synthesizeInstruction: taskProcedureWrite
+    .input(
+      z.object({
+        answers: z
+          .array(z.object({ answer: z.string().min(1), question: z.string().min(1) }))
+          .max(3),
+        context: z.string().optional(),
+        instruction: z.string().min(1).max(20_000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.taskIntentService.synthesize(input);
+      } catch (error) {
+        const errorType = (error as { errorType?: unknown } | null)?.errorType;
+        if (errorType === AgentRuntimeErrorType.InvalidProviderAPIKey) {
+          const trpcError = new TRPCError({
+            cause: error,
+            code: 'PRECONDITION_FAILED',
+            message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+          });
+          markSilentTRPCErrorLog(trpcError.cause);
+          throw trpcError;
+        }
+
+        throw error;
+      }
+    }),
+
   reorderSubtasks: taskProcedureWrite
     .input(
       z.object({
@@ -303,6 +546,16 @@ export const taskRouter = router({
           { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
           input.authorAgentId,
         );
+        // Resolve @mentions before the insert so an invalid editorData never
+        // leaves a comment behind that nobody was told about.
+        const mentionedUserIds =
+          ctx.workspaceId && !input.authorAgentId
+            ? await validateMentionedUserIds(
+                ctx.serverDB,
+                { actorUserId: ctx.userId, workspaceId: ctx.workspaceId },
+                input.editorData,
+              )
+            : [];
         const comment = await model.addComment({
           authorAgentId: input.authorAgentId,
           authorUserId: input.authorAgentId ? undefined : ctx.userId,
@@ -313,6 +566,29 @@ export const taskRouter = router({
           topicId: input.topicId,
           userId: ctx.userId,
         });
+        // Member comment ping (Linear-style): the task creator and the member
+        // assignee learn about new discussion; @mentioned members get the
+        // stronger "mentioned" notification instead. Agent-authored progress
+        // notes stay silent — they are not a conversation between members.
+        if (ctx.workspaceId && !input.authorAgentId) {
+          const recipients = collectTaskCommentRecipients({
+            actorUserId: ctx.userId,
+            mentionedUserIds,
+            task,
+          });
+          if (recipients.length > 0) {
+            notifyCommentActivityBestEffort(
+              { serverDB: ctx.serverDB, taskModel: model, workspaceId: ctx.workspaceId },
+              {
+                actorUserId: ctx.userId,
+                commentId: comment.id,
+                recipients,
+                taskId: task.id,
+                workspaceId: ctx.workspaceId,
+              },
+            );
+          }
+        }
         return { data: comment, message: 'Comment added', success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -355,11 +631,40 @@ export const taskRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        const workspaceId = ctx.workspaceId ?? undefined;
+        const previous = await ctx.taskModel.findCommentById(input.commentId);
+        if (!previous) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        // Only members @mentioned for the first time by this edit are pinged;
+        // mentions kept from the previous revision were already notified.
+        let addedMentionUserIds: string[] = [];
+        if (workspaceId && !previous.authorAgentId && input.editorData !== undefined) {
+          const previousMentions = new Set(extractMentionedUserIds(previous.editorData));
+          const nextMentions = await validateMentionedUserIds(
+            ctx.serverDB,
+            { actorUserId: ctx.userId, workspaceId },
+            input.editorData,
+          );
+          addedMentionUserIds = nextMentions.filter((id) => !previousMentions.has(id));
+        }
         const comment = await ctx.taskModel.updateComment(input.commentId, input.content, {
           editorData: input.editorData === undefined ? null : input.editorData,
         });
         if (!comment) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Comment not found' });
+        }
+        if (workspaceId && addedMentionUserIds.length > 0) {
+          notifyCommentActivityBestEffort(
+            { serverDB: ctx.serverDB, taskModel: ctx.taskModel, workspaceId },
+            {
+              actorUserId: ctx.userId,
+              commentId: comment.id,
+              recipients: addedMentionUserIds.map((userId) => ({ kind: 'mentioned', userId })),
+              taskId: comment.taskId,
+              workspaceId,
+            },
+          );
         }
         return { data: comment, message: 'Comment updated', success: true };
       } catch (error) {
@@ -471,6 +776,8 @@ export const taskRouter = router({
         await ctx.taskModel.delete(task.id).catch(() => {});
         throw error;
       }
+      // Creating a task already assigned to another member notifies them.
+      notifyAssignedBestEffort(ctx, task);
       return { data: task, message: 'Task created', success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -708,7 +1015,12 @@ export const taskRouter = router({
   groupList: taskProcedure.input(groupListSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const groups = await model.groupList(input);
+      const { scope, ...query } = input;
+      const groups = await model.groupList({
+        ...query,
+        ...(scope === 'assigned' ? { assigneeUserId: ctx.userId } : {}),
+        ...(scope === 'created' ? { createdByUserId: ctx.userId } : {}),
+      });
       return { data: groups, success: true };
     } catch (error) {
       console.error('[task:groupList]', error);
@@ -723,7 +1035,7 @@ export const taskRouter = router({
   list: taskProcedure.input(listSchema).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const { parentIdentifier, ...query } = input;
+      const { parentIdentifier, scope, ...query } = input;
       let parentTaskId = query.parentTaskId;
 
       if (parentIdentifier) {
@@ -740,6 +1052,8 @@ export const taskRouter = router({
 
       const result = await model.list({
         ...query,
+        ...(scope === 'assigned' ? { assigneeUserId: ctx.userId } : {}),
+        ...(scope === 'created' ? { createdByUserId: ctx.userId } : {}),
         parentTaskId,
       });
 
@@ -1140,89 +1454,115 @@ export const taskRouter = router({
       }
     }),
 
-  update: taskProcedureWrite.input(idInput.merge(updateSchema)).mutation(async ({ input, ctx }) => {
-    const { id, parentTaskId, ...data } = input;
-    try {
-      const model = ctx.taskModel;
-      await assertAssigneeAgentBelongsToUser(
-        ctx.serverDB,
-        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
-        data.assigneeAgentId,
-      );
-      const resolved = await resolveOrThrow(model, id);
+  update: taskProcedureWrite
+    .input(idInput.merge(updateSchema).extend({ actorAgentId: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const { actorAgentId, id, parentTaskId, status, ...data } = input;
+      try {
+        const model = ctx.taskModel;
+        const actor = await resolveActivityActor(ctx, actorAgentId);
+        await assertAssigneeAgentBelongsToUser(
+          ctx.serverDB,
+          { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          data.assigneeAgentId,
+        );
+        const resolved = await resolveOrThrow(model, id);
 
-      // Collaborative edit lock: reject writes to a workspace task another member
-      // is actively editing. Inert until a client acquires the lock.
-      if (ctx.workspaceId) {
-        const blockedBy = await ctx.editLockService.getBlockingHolder('task', resolved.id);
-        if (blockedBy) {
-          throw new TRPCError({
-            cause: { data: { code: 'DocumentLocked' } },
-            code: 'CONFLICT',
-            message: 'Task is being edited by another user',
-          });
+        // Collaborative edit lock: reject writes to a workspace task another member
+        // is actively editing. Inert until a client acquires the lock.
+        if (ctx.workspaceId) {
+          const blockedBy = await ctx.editLockService.getBlockingHolder('task', resolved.id);
+          if (blockedBy) {
+            throw new TRPCError({
+              cause: { data: { code: 'DocumentLocked' } },
+              code: 'CONFLICT',
+              message: 'Task is being edited by another user',
+            });
+          }
         }
+
+        // Reject changing the assignee to a private agent on a public task —
+        // a public task must never be assigned to a private agent.
+        // `undefined` means "no change"; `null` clears the assignee and is
+        // always safe.
+        if (data.assigneeAgentId) {
+          const agentVisibility = await ctx.agentModel.getAgentVisibility(data.assigneeAgentId);
+          ctx.taskService.assertAgentVisibilityCompat(resolved.visibility, agentVisibility);
+        }
+
+        // A private task can only be assigned to its creator — the assignee
+        // would otherwise never see the task. `null` clears and is always safe.
+        ctx.taskService.assertAssigneeUserVisibilityCompat(
+          resolved.visibility,
+          data.assigneeUserId,
+          resolved.createdByUserId,
+        );
+
+        const resolvedParentTaskId =
+          parentTaskId === undefined
+            ? undefined
+            : await resolveSafeParentTaskId(model, resolved.id, parentTaskId);
+
+        // Reparenting a public task under a private one breaks the parent
+        // visibility invariant — a subtask cannot be more public than its
+        // parent (otherwise workspace members would still see the child while
+        // its new parent is hidden). `undefined` means "no change"; `null`
+        // clears the parent and is always safe.
+        if (resolvedParentTaskId) {
+          const newParent = await model.findById(resolvedParentTaskId);
+          ctx.taskService.assertParentVisibilityCompat(resolved.visibility, newParent?.visibility);
+        }
+
+        const updateData =
+          parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
+        // `instruction` is the markdown source of truth while `editorData` is its
+        // rich-text mirror. Text-only callers (for example the editTask builtin)
+        // cannot produce Lexical JSON, so discard the stale mirror and let the
+        // editor rebuild from markdown. Callers that provide both fields keep
+        // their explicit editor state.
+        const normalizedUpdateData =
+          updateData.instruction !== undefined && updateData.editorData === undefined
+            ? { ...updateData, editorData: null }
+            : updateData;
+        // Agent attribution comes from `resolveActivityActor` above. The
+        // assignment activity is written inside this update's own transaction
+        // (see `TaskModel.updateWithLog`), so a concurrent reassignment cannot
+        // interleave between reading the old assignee and recording it.
+        const task = status
+          ? await ctx.serverDB.transaction(async (tx) => {
+              const taskService = new TaskService(tx, ctx.userId, ctx.workspaceId ?? undefined);
+              const updated = await taskService.updateTaskWithAssigneeLock(
+                resolved.id,
+                normalizedUpdateData,
+                actor,
+              );
+              if (!updated) return null;
+
+              const result = await taskService.updateStatus({ id: resolved.id, status }, actor);
+              return result.task;
+            })
+          : await ctx.taskService.updateTaskWithAssigneeLock(
+              resolved.id,
+              normalizedUpdateData,
+              actor,
+            );
+        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        // Only an actual assignee change notifies — re-saving the same assignee
+        // stays silent (self-assignment is filtered inside the helper).
+        if (task.assigneeUserId !== resolved.assigneeUserId) {
+          notifyAssignedBestEffort(ctx, task);
+        }
+        return { data: task, message: 'Task updated', success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:update]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update task',
+        });
       }
-
-      // Reject changing the assignee to a private agent on a public task —
-      // a public task must never be assigned to a private agent.
-      // `undefined` means "no change"; `null` clears the assignee and is
-      // always safe.
-      if (data.assigneeAgentId) {
-        const agentVisibility = await ctx.agentModel.getAgentVisibility(data.assigneeAgentId);
-        ctx.taskService.assertAgentVisibilityCompat(resolved.visibility, agentVisibility);
-      }
-
-      // A private task can only be assigned to its creator — the assignee
-      // would otherwise never see the task. `null` clears and is always safe.
-      ctx.taskService.assertAssigneeUserVisibilityCompat(
-        resolved.visibility,
-        data.assigneeUserId,
-        resolved.createdByUserId,
-      );
-
-      const resolvedParentTaskId =
-        parentTaskId === undefined
-          ? undefined
-          : await resolveSafeParentTaskId(model, resolved.id, parentTaskId);
-
-      // Reparenting a public task under a private one breaks the parent
-      // visibility invariant — a subtask cannot be more public than its
-      // parent (otherwise workspace members would still see the child while
-      // its new parent is hidden). `undefined` means "no change"; `null`
-      // clears the parent and is always safe.
-      if (resolvedParentTaskId) {
-        const newParent = await model.findById(resolvedParentTaskId);
-        ctx.taskService.assertParentVisibilityCompat(resolved.visibility, newParent?.visibility);
-      }
-
-      const updateData =
-        parentTaskId === undefined ? data : { ...data, parentTaskId: resolvedParentTaskId };
-      // `instruction` is the markdown source of truth while `editorData` is its
-      // rich-text mirror. Text-only callers (for example the editTask builtin)
-      // cannot produce Lexical JSON, so discard the stale mirror and let the
-      // editor rebuild from markdown. Callers that provide both fields keep
-      // their explicit editor state.
-      const normalizedUpdateData =
-        updateData.instruction !== undefined && updateData.editorData === undefined
-          ? { ...updateData, editorData: null }
-          : updateData;
-      const task = await ctx.taskService.updateTaskWithAssigneeLock(
-        resolved.id,
-        normalizedUpdateData,
-      );
-      if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-      return { data: task, message: 'Task updated', success: true };
-    } catch (error) {
-      if (error instanceof TRPCError) throw error;
-      console.error('[task:update]', error);
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to update task',
-      });
-    }
-  }),
+    }),
 
   updateVisibility: taskProcedureWrite
     .input(idInput.merge(z.object({ visibility: z.enum(['private', 'public']) })))
@@ -1426,14 +1766,19 @@ export const taskRouter = router({
   updateStatus: taskProcedureWrite
     .input(
       z.object({
+        actorAgentId: z.string().optional(),
         error: z.string().optional(),
         id: z.string(),
         status: z.enum(TASK_STATUSES),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const { actorAgentId, ...statusInput } = input;
       try {
-        const result = await ctx.taskService.updateStatus(input);
+        // A person (or their agent) changed it: record who. System
+        // transitions call the service without an actor and stay silent.
+        const actor = await resolveActivityActor(ctx, actorAgentId);
+        const result = await ctx.taskService.updateStatus(statusInput, actor);
         const { task, unlocked, paused, checkpointTriggered, allSubtasksDone, parentTaskId } =
           result;
         return {
@@ -1452,6 +1797,31 @@ export const taskRouter = router({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to update status',
+        });
+      }
+    }),
+
+  updateStatusCascade: taskProcedureWrite
+    .input(
+      z.object({
+        id: z.string(),
+        status: z.enum(['canceled', 'completed']),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const result = await ctx.taskService.updateStatusCascade(
+          input,
+          await resolveActivityActor(ctx),
+        );
+        return { data: result, message: `Task family ${input.status}`, success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateStatusCascade]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update task family status',
         });
       }
     }),

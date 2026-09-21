@@ -1,4 +1,19 @@
 export default {
+  'authorizeError.backToHome': 'Back to Home',
+  'authorizeError.code': 'Error code',
+  'authorizeError.reason.access_denied': 'The authorization was denied.',
+  'authorizeError.reason.invalid_client': 'This app could not be found, or it has been disabled.',
+  'authorizeError.reason.invalid_redirect_uri':
+    "The app asked to send you back to an address it hasn't registered, so the request was stopped to protect your account. If you develop this app, add this redirect URI in its OAuth app settings.",
+  'authorizeError.reason.invalid_request':
+    'The authorization request is malformed or missing required parameters.',
+  'authorizeError.reason.invalid_scope':
+    'The app requested permissions it is not allowed to request.',
+  'authorizeError.reason.server_error': 'Something went wrong on our side. Please try again later.',
+  'authorizeError.reason.unauthorized_client':
+    'This app is not allowed to use this sign-in method.',
+  'authorizeError.reason.unknown': 'The authorization request could not be completed.',
+  'authorizeError.title': "Authorization Can't Continue",
   'consent.buttons.accept': 'Authorize',
   'consent.buttons.deny': 'Deny',
   'consent.description':

@@ -36,7 +36,7 @@ export interface RecordAdvanceInput {
  * Deltas are computed here rather than by the caller because advances run in
  * separate processes — a QStash worker holds no memory of the previous one. The
  * partial is the only place the prior state exists, so folding it forward is
- * also what keeps a graph edit made outside an advance (a work node added from
+ * also what keeps a graph edit made outside an advance (a task node added from
  * the UI between two advances) inside the trace instead of vanishing between
  * two states.
  */

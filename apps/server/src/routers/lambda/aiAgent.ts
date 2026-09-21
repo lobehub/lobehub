@@ -4,10 +4,12 @@ import { type AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { LOADING_FLAT } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { parse } from '@lobechat/conversation-flow';
+import { getServerDefaultHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
 import type { ExecAgentResult, TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import {
   CreateThreadWithMessageSchema,
   entityIdPattern,
+  isServerDefaultHeterogeneousRelayInvocation,
   LocalHeterogeneousAgentTypeSchema,
   RequestTrigger,
   ThreadStatus,
@@ -54,6 +56,7 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -65,6 +68,7 @@ import {
   resolveServerDefaultHeterogeneousModel,
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
 } from '@/server/modules/ModelRuntime';
+import { mapAgentInterventionTRPCError } from '@/server/routers/lambda/_helpers/agentInterventionError';
 import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
@@ -358,8 +362,7 @@ const probeRuntimeActionDispatch = async (
       : { state: 'conflict' };
   }
 
-  const stateProvenance = state.metadata?.agentInterventionContinuation as
-    typeof provenance | undefined;
+  const stateProvenance = state.origin?.continuation as typeof provenance | undefined;
   const statePreparation = state.metadata?.agentInterventionPreparation as
     | {
         deduplicationId?: unknown;
@@ -370,20 +373,20 @@ const probeRuntimeActionDispatch = async (
     | undefined;
   const stateContextMatches =
     state.operationId === continuationOperationId &&
-    state.metadata?.userId === resolution.ownerUserId &&
+    state.origin?.userId === resolution.ownerUserId &&
     sameNullable(
-      state.metadata?.workspaceId,
+      state.origin?.workspaceId,
       resolution.workspaceId ?? ctx.workspaceId ?? undefined,
     ) &&
-    state.metadata?.agentId === continuation.agentId &&
-    state.metadata?.topicId === continuation.appContext.topicId &&
-    sameNullable(state.metadata?.threadId, continuation.appContext.threadId) &&
-    sameNullable(state.metadata?.taskId, continuation.appContext.taskId) &&
-    sameNullable(state.metadata?.groupId, continuation.appContext.groupId) &&
-    sameNullable(state.metadata?.documentId, continuation.appContext.documentId) &&
-    sameNullable(state.metadata?.scope, continuation.appContext.scope) &&
-    sameNullable(state.metadata?.sessionId, continuation.appContext.sessionId) &&
-    state.metadata?.sourceMessageId === continuation.parentMessageId &&
+    state.origin?.agentId === continuation.agentId &&
+    state.origin?.topicId === continuation.appContext.topicId &&
+    sameNullable(state.origin?.threadId, continuation.appContext.threadId) &&
+    sameNullable(state.origin?.taskId, continuation.appContext.taskId) &&
+    sameNullable(state.origin?.groupId, continuation.appContext.groupId) &&
+    sameNullable(state.origin?.documentId, continuation.appContext.documentId) &&
+    sameNullable(state.origin?.scope, continuation.appContext.scope) &&
+    sameNullable(state.origin?.sessionId, continuation.appContext.sessionId) &&
+    state.origin?.sourceMessageId === continuation.parentMessageId &&
     stateProvenance?.resolutionRequestId === resolution.resolutionRequestId &&
     stateProvenance.sourceOperationId === continuation.operationId &&
     Array.isArray(stateProvenance.sourceToolMessageIds) &&
@@ -753,6 +756,63 @@ const assertCanUseOperationAgent = async (params: {
 };
 
 /**
+ * Ownership guard for operation-keyed READ endpoints (`getOperationStatus`,
+ * `getPendingInterventions`). The runtime coordinator keys operations purely
+ * by id and returns the raw operation metadata — including the executing
+ * user's full `agentConfig` and `modelRuntimeConfig` — so the id itself must
+ * not act as a bearer token.
+ *
+ * Historically that was inert: an operation id was only ever known to the
+ * user who started it. Agent Share breaks the assumption on purpose — a share
+ * run executes under the CREATOR's identity while the VISITOR receives the
+ * `operationId` (to attach to the Gateway stream, which redacts creator
+ * details). Without this guard the visitor could replay that id here and read
+ * the unredacted creator config the stream path deliberately hides.
+ *
+ * Visible to: the operation's owner, or (workspace runs) a member with `use`
+ * access to the operation's agent in the SAME workspace as the caller.
+ * Everything else — share visitors, AND the creator looking at a visitor's
+ * run — resolves as NOT_FOUND so the endpoint does not confirm which ids
+ * exist.
+ */
+const assertOperationVisibleToCaller = async (params: {
+  db: LobeChatDatabase;
+  operationId: string;
+  userId: string;
+  workspaceId?: string | null;
+}) => {
+  const { db, operationId, userId, workspaceId } = params;
+
+  // Share-visitor runs are ALSO excluded (`notShareVisitorTopicRef`): they
+  // execute under the creator's userId, so the owner shortcut below would
+  // otherwise hand the creator the visitor's run metadata, history and
+  // stream events — the same exclusion `findOwnOperationById` applies to
+  // the trace reads.
+  const [row] = await db
+    .select({
+      agentId: agentOperations.agentId,
+      userId: agentOperations.userId,
+      workspaceId: agentOperations.workspaceId,
+    })
+    .from(agentOperations)
+    .where(
+      and(eq(agentOperations.id, operationId), notShareVisitorTopicRef(agentOperations.topicId)),
+    )
+    .limit(1);
+
+  const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });
+
+  if (!row) throw notFound();
+  if (row.userId === userId) return;
+
+  if (!row.workspaceId || !workspaceId || row.workspaceId !== workspaceId || !row.agentId) {
+    throw notFound();
+  }
+
+  await assertCanUseWorkspaceAgent({ agentId: row.agentId, db, userId, workspaceId });
+};
+
+/**
  * Resolve client-supplied conversation ids before an agent run writes through
  * AiAgentService. Checking only the requested agent/group is insufficient: an
  * existing topic or parent message can belong to a different, view-only
@@ -876,6 +936,7 @@ const StartExecutionSchema = z.object({
  */
 const ExecAgentSchema = z
   .object({
+    includeFinalState: z.boolean().optional(),
     /** The agent ID to run (either agentId or slug is required) */
     agentId: z.string().optional(),
     /** Application context for message storage */
@@ -1037,7 +1098,18 @@ const ExecAgentSchema = z
      * messages are the dominant caller. Pass a more specific value (`'cli'`,
      * `'openapi'`, `'eval'`, …) to override.
      */
-    trigger: z.string().optional(),
+    /**
+     * The prompt was queued while the previous turn was still running. The
+     * persisted user message carries `metadata.steer` so it renders as a
+     * continuation of that turn instead of a new one.
+     */
+    steer: z.boolean().optional(),
+    trigger: z
+      .string()
+      .refine((value) => value !== RequestTrigger.Bot, {
+        message: 'The bot trigger is reserved for authenticated server-side bot ingress',
+      })
+      .optional(),
     /**
      * User intervention configuration for tool approvals.
      * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
@@ -1263,6 +1335,15 @@ const UpdateClientTaskThreadStatusSchema = z.object({
   resultContent: z.string().optional(),
   /** The Thread ID */
   threadId: z.string(),
+});
+
+/**
+ * Schema for setQueuedMessages - flag queued follow-ups on a running operation
+ */
+const SetQueuedMessagesSchema = z.object({
+  operationId: z.string(),
+  /** Whether the composer still holds user messages queued behind the run. */
+  pending: z.boolean(),
 });
 
 /**
@@ -1537,11 +1618,13 @@ const authorizeOperationCallback = async (
   },
   operationId: string,
   capability: 'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read',
+  options: { allowTerminalOperation?: boolean } = {},
 ) => {
   if (ctx.heteroAuthKind !== 'operation') return;
   if (!ctx.heteroOperation) throw new TRPCError({ code: 'UNAUTHORIZED' });
   try {
     await resolveActiveHeteroOperationPrincipal({
+      allowTerminalOperation: options.allowTerminalOperation,
       capability,
       claims: ctx.heteroOperation,
       db: ctx.serverDB,
@@ -1777,13 +1860,28 @@ export const aiAgentRouter = router({
         operationId: input.operationId,
         userId: ctx.userId,
       });
+      const relayInvocation = operation.metadata?.serverDefaultRelayInvocation;
+      const agentType = operation.metadata?.agentType;
+      const agentConfig =
+        typeof agentType === 'string'
+          ? getServerDefaultHeterogeneousAgentConfig(agentType)
+          : undefined;
+      const verifiedRelayInvocation =
+        isServerDefaultHeterogeneousRelayInvocation(relayInvocation) &&
+        agentConfig?.ingress === relayInvocation.ingress &&
+        relayInvocation.operationId === input.operationId &&
+        relayInvocation.agentType === agentType &&
+        relayInvocation.model === operation.model &&
+        relayInvocation.provider === operation.provider
+          ? relayInvocation
+          : null;
       await settleServerDefaultControlOperation({
         currentStatus: operation.status,
         model,
         operationId: input.operationId,
         targetStatus: input.result,
       });
-      return { success: true as const };
+      return { relayInvocation: verifiedRelayInvocation, success: true as const };
     }),
 
   cancelServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
@@ -2054,6 +2152,7 @@ export const aiAgentRouter = router({
       resumeApprovals,
       resumeToolResult,
       selectedToolIds,
+      steer,
       trigger,
       userInterventionConfig,
     } = input;
@@ -2226,6 +2325,7 @@ export const aiAgentRouter = router({
         appContext,
         autoStart,
         clientIds: input.clientIds,
+        includeFinalState: input.includeFinalState,
         // This procedure serves the composer (`aiAgentService.execAgentTask`).
         // The client already queues follow-ups behind a live run and shows the
         // user a tray; refusing here would only make the message disappear.
@@ -2250,6 +2350,7 @@ export const aiAgentRouter = router({
         resumeToolResult,
         selectedToolIds,
         slug,
+        steer,
         trigger: trigger ?? RequestTrigger.Chat,
         userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
@@ -2379,6 +2480,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          includeFinalState: task.includeFinalState,
           agentId,
           appContext,
           autoStart,
@@ -2577,6 +2679,13 @@ export const aiAgentRouter = router({
 
       log('Getting operation status for %s', operationId);
 
+      await assertOperationVisibleToCaller({
+        db: ctx.serverDB,
+        operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
       // Get operation status using AgentRuntimeService
       const operationStatus = await ctx.agentRuntimeService.getOperationStatus({
         historyLimit,
@@ -2594,10 +2703,28 @@ export const aiAgentRouter = router({
 
       log('Getting pending interventions for operationId: %s, userId: %s', operationId, userId);
 
+      // Same bearer-token hazard as `getOperationStatus`: an operation id must
+      // resolve to a run the caller may see, and the user-wide listing may only
+      // ever enumerate the CALLER's own runs — `input.userId` is not a way to
+      // read another user's pending interventions.
+      if (operationId) {
+        await assertOperationVisibleToCaller({
+          db: ctx.serverDB,
+          operationId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      } else if (userId && userId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Cannot list operations of another user',
+        });
+      }
+
       // Get pending interventions using AgentRuntimeService
       const result = await ctx.agentRuntimeService.getPendingInterventions({
         operationId: operationId || undefined,
-        userId: userId || undefined,
+        userId: operationId ? undefined : ctx.userId,
       });
 
       return result;
@@ -2961,6 +3088,20 @@ export const aiAgentRouter = router({
     }),
 
   /**
+   * Tell a running server operation whether the composer still holds user
+   * messages queued behind it. The run reads the flag at its next step
+   * boundary and ends the turn early, so the queued follow-up starts as the
+   * next turn instead of waiting for the whole run to finish.
+   */
+  setQueuedMessages: aiAgentWriteProcedure
+    .input(SetQueuedMessagesSchema)
+    .mutation(async ({ input, ctx }) => {
+      log('setQueuedMessages: operationId=%s, pending=%s', input.operationId, input.pending);
+
+      return ctx.aiAgentService.setQueuedMessages(input);
+    }),
+
+  /**
    * Ingest a batch of `AgentStreamEvent`s from a `lh hetero exec` producer
    * (CLI standalone, sandboxed CC, etc.) and republish them through the
    * existing stream fanout so renderer-side gateway WS subscribers see them
@@ -2969,7 +3110,14 @@ export const aiAgentRouter = router({
   heteroIngest: heteroAgentProcedure.input(HeteroIngestSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, events, operationId, topicId } = input;
 
-    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
+    // "The operation already ended" is one of the two refusals this procedure
+    // exists to report, so it has to survive the door check — rejecting it here
+    // would make the producer retry a permanent refusal through its whole
+    // budget and leave no record that its output was dropped. The batch still
+    // cannot be persisted: the service refuses it on the very same status.
+    await authorizeOperationCallback(ctx, operationId, 'hetero:ingest', {
+      allowTerminalOperation: true,
+    });
 
     log(
       'heteroIngest: topic=%s op=%s type=%s count=%d',
@@ -2993,14 +3141,20 @@ export const aiAgentRouter = router({
       // Zod's z.any() infers `data?: any`, but the wire shape always includes
       // a `data` field (may be null). Cast at the boundary instead of widening
       // the shared `AgentStreamEvent` type or the service signature.
-      await heteroService.heteroIngest({
+      const outcome = await heteroService.heteroIngest({
         agentType,
         assistantMessageId,
         events: events as AgentStreamEvent[],
         operationId,
         topicId,
       });
-      return { ack: true as const };
+
+      // A refused batch is reported in the ack, not as a transport error: it is
+      // permanent (every later batch is refused too), so a producer must stop
+      // and fail the run rather than burn its retry budget on it. Returned
+      // alongside the original `ack` so producers that predate this field keep
+      // working — the row marker `heteroIngest` stamps is what covers them.
+      return { ack: true as const, ...outcome };
     } catch (error: any) {
       // Preserve deliberate auth errors (e.g. the ownership FORBIDDEN) instead
       // of masking them as a generic 500.
@@ -3015,6 +3169,42 @@ export const aiAgentRouter = router({
   }),
 
   /**
+   * Re-mint the operation token a long `lh hetero exec` run authenticates with.
+   *
+   * The token is signed for four hours, and a Goal Task can run far longer. Past
+   * the expiry every heteroIngest is rejected, the run's heartbeats stop renewing
+   * its lease, and the operation is reclaimed as abandoned while the agent is still
+   * working. The producer calls this before expiry. The replacement carries the
+   * same claims, and is issued only while the operation is still running under a
+   * principal that is still authorized — so renewal never outlives revocation.
+   */
+  refreshHeteroOperationToken: heteroAgentProcedure
+    .input(z.object({ operationId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      // A user session has its own refresh flow, and a legacy token carries no
+      // operation claims to copy, so only the narrow operation token renews here.
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Only an operation token can be renewed',
+        });
+      }
+      await authorizeOperationCallback(ctx, input.operationId, 'hetero:ingest');
+
+      const claims = ctx.heteroOperation;
+      const jwt = await signHeteroOperationJWT({
+        capabilities: claims.capabilities,
+        model: claims.model,
+        operationId: claims.operation_id,
+        providerId: claims.provider_id,
+        userId: claims.sub,
+        workspaceId: claims.workspace_id,
+      });
+
+      return { jwt };
+    }),
+
+  /**
    * Terminal handshake from a `lh hetero exec` producer: signals process exit
    * and carries the run's high-level outcome. Always emits a final
    * `agent_runtime_end` so renderer subscribers can shut down even when the
@@ -3023,7 +3213,13 @@ export const aiAgentRouter = router({
   heteroFinish: heteroAgentProcedure.input(HeteroFinishSchema).mutation(async ({ input, ctx }) => {
     const { agentType, assistantMessageId, error, operationId, result, sessionId, topicId } = input;
 
-    await authorizeOperationCallback(ctx, operationId, 'hetero:finish');
+    // A terminal row is the normal state for a finish that lost a race (gateway
+    // completion, a settle from another tab). The service already has the stale
+    // branches for it; turning it away here would drop the run's outcome instead
+    // — no error bubble, no lifecycle hooks, no bot callback.
+    await authorizeOperationCallback(ctx, operationId, 'hetero:finish', {
+      allowTerminalOperation: true,
+    });
 
     log('heteroFinish: topic=%s op=%s type=%s result=%s', topicId, operationId, agentType, result);
 
@@ -3180,6 +3376,8 @@ export const aiAgentRouter = router({
         workspaceId: ctx.workspaceId,
       });
 
+      // A rejected resolution describes the submitted response, not a server
+      // fault, so map the contract failure instead of letting it become a 500.
       const resolution = await resolveAgentInterventionBySource({
         action: input.action,
         actorUserId: ctx.userId,
@@ -3188,6 +3386,8 @@ export const aiAgentRouter = router({
         resolutionRequestId: input.resolutionRequestId,
         targets: input.targets,
         workspaceId: ctx.workspaceId ?? undefined,
+      }).catch((error: unknown) => {
+        throw mapAgentInterventionTRPCError(error);
       });
 
       if (!resolution.handled) {
@@ -3235,6 +3435,8 @@ export const aiAgentRouter = router({
         reviewToken: input.reviewToken,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
+      }).catch((error: unknown) => {
+        throw mapAgentInterventionTRPCError(error);
       });
 
       if (!resolution.handled) {
@@ -3293,6 +3495,8 @@ export const aiAgentRouter = router({
         target: { reviewToken: input.reviewToken },
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
+      }).catch((error: unknown) => {
+        throw mapAgentInterventionTRPCError(error);
       });
 
       if (!resolution.handled) return { status: 'unavailable' as const, success: false as const };
@@ -3588,16 +3792,44 @@ export const aiAgentRouter = router({
     }),
 
   /**
+   * Mint the per-USER Gateway JWT for the multiplexed v2 WebSocket (one
+   * socket per user, `GET /v2/ws`). Unlike `refreshGatewayToken` it is not
+   * bound to a running operation: the user hub authorizes every `subscribe`
+   * against the op's registered owner, so the token only has to carry the
+   * caller's identity. Short-lived (5m) like the v1 token; the client re-mints
+   * before every connect attempt.
+   *
+   * Blocked for restricted API keys (`TRPC_BLOCKED_PATH_PREFIXES`), like
+   * `refreshGatewayToken`: the JWT it returns passes `oidcAuth` as ordinary
+   * non-API-key auth, so a scoped key must never be able to mint one.
+   */
+  issueGatewayUserToken: aiAgentProcedure.query(async ({ ctx }) => {
+    const token = await signUserJWT(ctx.userId);
+
+    return { token };
+  }),
+
+  /**
    * Refresh Gateway JWT token for an existing operation.
    * Used when reconnecting after page reload (original token expired).
    */
   refreshGatewayToken: aiAgentProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
-      // Verify the topic belongs to this user and has a running operation
-      const topic = await ctx.topicModel.findById(input.topicId);
+      // Verify the topic belongs to this user and has a running operation.
+      // Use the creator-facing finder: a creator must not mint a token
+      // against a visitor's running operation; visitors use
+      // `shareChat.refreshGatewayToken` instead.
+      const topic = await ctx.topicModel.findOwnTopicById(input.topicId);
 
-      if (!topic?.metadata?.runningOperation) {
+      // Same liveness check as `shareChat.refreshGatewayToken`: the marker is
+      // cleared best-effort, so refuse to reconnect a client to a run that has
+      // already ended — the client treats NOT_FOUND as "stale marker, clear it".
+      const runningOperation = topic?.metadata?.runningOperation;
+      if (
+        !runningOperation ||
+        !(await ctx.topicModel.isRunningOperationAlive(ctx.serverDB, runningOperation))
+      ) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'No running operation found on this topic',

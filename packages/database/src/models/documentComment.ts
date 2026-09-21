@@ -1,5 +1,21 @@
-import type { DocumentCommentJson } from '@lobechat/types';
-import { and, asc, count, eq, getTableColumns, gt, inArray, isNull, or, sql } from 'drizzle-orm';
+import type {
+  DocumentCommentAnchorItem,
+  DocumentCommentJson,
+  DocumentCommentSelectionAnchor,
+} from '@lobechat/types';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  getTableColumns,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import type { DocumentCommentItem } from '../schemas/documentComment';
 import { documentCommentMentions, documentComments } from '../schemas/documentComment';
@@ -36,6 +52,8 @@ export interface CreateDocumentCommentParams {
   /** Validated active Workspace members parsed from editorData by the router. */
   mentionedUserIds?: string[];
   parentCommentId?: string;
+  /** Body anchor for a root comment; ignored for replies, which share the thread's anchor. */
+  selectionAnchor?: DocumentCommentSelectionAnchor;
 }
 
 export interface CreateDocumentCommentResult {
@@ -46,8 +64,17 @@ export interface CreateDocumentCommentResult {
   documentAuthorUserId: string;
   /** true when the idempotency key already existed and no new activity should be emitted */
   isDuplicate: boolean;
-  /** Author of the directly targeted comment when creating a reply. */
+  /**
+   * Author of the directly targeted comment when creating a reply. Null when
+   * the target is a tombstone so nobody is pinged about a deleted comment.
+   */
   parentAuthorUserId?: string | null;
+  /**
+   * Everyone else already talking in the thread when creating a reply: the
+   * root author plus authors of live replies, minus the actor and the direct
+   * reply target (who receives the stronger `replied` ping instead).
+   */
+  threadParticipantUserIds: string[];
 }
 
 export interface UpdateDocumentCommentParams {
@@ -67,6 +94,12 @@ export interface UpdateDocumentCommentResult {
 }
 
 export interface ListDocumentCommentThreadsParams {
+  /**
+   * Restrict to roots with (`true`) or without (`false`) a selection anchor.
+   * Anchored threads render beside the text, document-level ones below it, so
+   * each surface pages its own subset instead of filtering a mixed list.
+   */
+  anchored?: boolean;
   cursor?: string;
   documentId: string;
   limit?: number;
@@ -112,10 +145,12 @@ export class DocumentCommentModel {
       let parentCommentId: string | null = null;
       let parentAuthorUserId: string | null | undefined;
       let replyToCommentId: string | null = null;
+      let threadParticipantUserIds: string[] = [];
       if (params.parentCommentId) {
         const [parent] = await tx
           .select({
             authorUserId: documentComments.authorUserId,
+            deletedAt: documentComments.deletedAt,
             documentId: documentComments.documentId,
             id: documentComments.id,
             parentCommentId: documentComments.parentCommentId,
@@ -133,9 +168,30 @@ export class DocumentCommentModel {
         ) {
           throw new Error(DOCUMENT_COMMENT_PARENT_NOT_FOUND);
         }
-        parentAuthorUserId = parent.authorUserId;
+        parentAuthorUserId = parent.deletedAt ? null : parent.authorUserId;
         parentCommentId = parent.parentCommentId ?? parent.id;
         replyToCommentId = parent.parentCommentId ? parent.id : null;
+
+        const threadMembers = await tx
+          .select({ authorUserId: documentComments.authorUserId })
+          .from(documentComments)
+          .where(
+            and(
+              or(
+                eq(documentComments.id, parentCommentId),
+                eq(documentComments.parentCommentId, parentCommentId),
+              ),
+              eq(documentComments.workspaceId, workspaceId),
+              isNull(documentComments.deletedAt),
+            ),
+          )
+          .groupBy(documentComments.authorUserId);
+        threadParticipantUserIds = threadMembers
+          .map(({ authorUserId }) => authorUserId)
+          .filter(
+            (userId): userId is string =>
+              Boolean(userId) && userId !== this.userId && userId !== parentAuthorUserId,
+          );
       }
 
       const [inserted] = await tx
@@ -148,6 +204,10 @@ export class DocumentCommentModel {
           editorData: params.editorData,
           parentCommentId,
           replyToCommentId,
+          // The thread's anchor lives on its root row (enforced by
+          // `document_comments_reply_has_no_anchor`), so a reply drops any
+          // anchor the caller sent instead of failing the insert.
+          selectionAnchor: parentCommentId ? null : params.selectionAnchor,
           workspaceId,
         })
         .onConflictDoNothing({
@@ -180,6 +240,7 @@ export class DocumentCommentModel {
           documentAuthorUserId: document.userId,
           isDuplicate: false,
           parentAuthorUserId,
+          threadParticipantUserIds,
         };
       }
 
@@ -202,6 +263,7 @@ export class DocumentCommentModel {
         documentAuthorUserId: document.userId,
         isDuplicate: true,
         parentAuthorUserId,
+        threadParticipantUserIds: [],
       };
     });
   }
@@ -361,14 +423,32 @@ export class DocumentCommentModel {
     return comment;
   }
 
+  /** Live (non-tombstoned) replies under one root, for a single-thread lookup. */
+  async countLiveReplies(rootCommentId: string) {
+    const workspaceId = this.requireWorkspaceId();
+    const [row] = await this.db
+      .select({ total: count() })
+      .from(documentComments)
+      .where(
+        and(
+          eq(documentComments.workspaceId, workspaceId),
+          eq(documentComments.parentCommentId, rootCommentId),
+          isNull(documentComments.deletedAt),
+        ),
+      );
+    return row?.total ?? 0;
+  }
+
   async listThreads(params: ListDocumentCommentThreadsParams) {
     const workspaceId = this.requireWorkspaceId();
-    const { cursor, documentId, limit = 20 } = params;
+    const { anchored, cursor, documentId, limit = 20 } = params;
     const conditions = [
       eq(documentComments.documentId, documentId),
       eq(documentComments.workspaceId, workspaceId),
       isNull(documentComments.parentCommentId),
     ];
+    if (anchored === true) conditions.push(isNotNull(documentComments.selectionAnchor));
+    if (anchored === false) conditions.push(isNull(documentComments.selectionAnchor));
     const decodedCursor = decodeCursor(cursor);
     if (decodedCursor) {
       const createdAt = sql`${decodedCursor.createdAt}::timestamptz`;
@@ -415,6 +495,33 @@ export class DocumentCommentModel {
         ? encodeCursor(pageRows.at(-1)!.cursorCreatedAt, pageRows.at(-1)!.id)
         : null,
     };
+  }
+
+  /**
+   * Every anchored root of a document, oldest-first, unpaginated. Anchors are
+   * small and bounded (see the router's quote cap), and a document has far
+   * fewer anchored threads than comments, so one round trip is cheaper than
+   * paging the full thread list just to paint highlights. Tombstoned roots
+   * keep their anchor while replies remain, matching `listThreads`.
+   */
+  async listAnchors(documentId: string): Promise<DocumentCommentAnchorItem[]> {
+    const workspaceId = this.requireWorkspaceId();
+    const rows = await this.db
+      .select({ id: documentComments.id, selectionAnchor: documentComments.selectionAnchor })
+      .from(documentComments)
+      .where(
+        and(
+          eq(documentComments.documentId, documentId),
+          eq(documentComments.workspaceId, workspaceId),
+          isNull(documentComments.parentCommentId),
+          isNotNull(documentComments.selectionAnchor),
+        ),
+      )
+      .orderBy(asc(documentComments.createdAt), asc(documentComments.id));
+
+    return rows.flatMap(({ id, selectionAnchor }) =>
+      selectionAnchor ? [{ id, selectionAnchor }] : [],
+    );
   }
 
   async listReplies(params: ListDocumentCommentRepliesParams) {

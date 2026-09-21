@@ -230,13 +230,26 @@ const askUserQuestionSection = `
 </ask_user_question>
 `;
 
-// Sections independent of sub-agent dispatch (multimodal fallback + ask-user + plan/todo).
+const ventSection = `
+<vent>
+\`vent\` is a private side channel for telling the people who built this platform that something about your *own working conditions* got in the way: a missing tool, a parameter/schema that does not match the docs or actual behavior, conflicting or wrong documentation, anomalous platform behavior, or an environment limitation that made you fail repeatedly.
+
+- It is NOT shown to the user, is NOT an answer, apology, or progress update, and does NOT fix anything by itself. Recording a vent never changes what you do next — continue the task normally after venting.
+- Be reluctant, not eager. Most tasks run fine and need no vent. Vent only when you are *genuinely blocked or clearly frustrated* by the platform itself — typically after the friction has actually cost you (a failed tool call, a retry that hit the same wall, a doc that contradicted reality).
+- Emit at most ONE vent per task, only for the single worst blocker. Do not vent about your own mistakes, a hard user request, normal model limitations, or things you simply chose not to do. Never put secrets or sensitive user data in a vent.
+- **category**: missing_tool (no tool could do what was needed) · schema_mismatch (params/schema disagreed with docs or behavior) · doc_conflict (docs/instructions wrong, contradictory, or missing) · platform_bug (a surface errored or behaved anomalously, not your input) · env_limitation (sandbox/network/timeout/resource limit caused repeated failure) · other.
+- **severity**: high = could not complete, medium = forced a costly workaround, low = friction but recovered. **details**: what you tried, expected, what happened, and why it blocked you — specific enough to reproduce or fix.
+</vent>
+`;
+
+// Sections independent of sub-agent dispatch (multimodal fallback + ask-user + plan/todo + vent).
 // Kept as a base so contexts where callSubAgent is unavailable can drop the sub-agent
 // guidance without leaving dangling references to a tool the model can't call.
 const baseSystemPrompt = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
 ${multimodalAnalysisSection}
 ${askUserQuestionSection}
-${planTodoSection}`;
+${planTodoSection}
+${ventSection}`;
 
 /** Full prompt, including sub-agent dispatch (callSubAgent) guidance. */
 export const systemPrompt = `${baseSystemPrompt}

@@ -1,11 +1,9 @@
-import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
+import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
 import {
-  getConnectorCatalog,
   REQUEST_AGENT_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
-import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
@@ -26,21 +24,9 @@ import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
-import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { getAgentStoreState } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentChatConfigSelectors,
-  agentSelectors,
-} from '@/store/agent/selectors';
-import { aiModelSelectors, aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
-import { getChatStoreState } from '@/store/chat';
-import { getToolStoreState } from '@/store/tool';
-import {
-  builtinToolSelectors,
-  composioStoreSelectors,
-  lobehubSkillStoreSelectors,
-} from '@/store/tool/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
   settingsSelectors,
@@ -59,7 +45,7 @@ import {
   contextEngineering,
   getTargetAgentId,
   initializeWithClientStore,
-  resolveModelExtendParams,
+  resolveBrowserModelParams,
 } from './mecha';
 import { type FetchOptions } from './types';
 
@@ -88,6 +74,10 @@ export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload
 export interface PreparedAssistantMessageContext {
   options: FetchOptions;
   params: Partial<ChatStreamPayload>;
+  /** Forced or configured `preserveThinking` for the payload, when the model supports it. */
+  preserveThinking?: boolean;
+  /** Whether the assistant reasoning in history is replayed to the model. */
+  replayAssistantReasoning: boolean;
 }
 
 type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
@@ -122,17 +112,6 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
 }
 
 class ChatService {
-  private resolveAgentDocumentsTargetId = (
-    targetAgentId: string,
-    enabledToolIds: string[] = [],
-  ): string | undefined => {
-    if (enabledToolIds.includes(AgentBuilderIdentifier)) {
-      return getChatStoreState().activeAgentId || targetAgentId || undefined;
-    }
-
-    return targetAgentId || undefined;
-  };
-
   buildAssistantMessageContext = async (
     {
       messages,
@@ -183,136 +162,56 @@ class ChatService {
     const userMemorySettings = settingsSelectors.currentMemorySettings(getUserStoreState());
     const effectiveMemoryEffort =
       chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
-    const enableAgentMode =
-      chatConfig.enableAgentMode !== false && isCanUseFC(payload.model, payload.provider!);
 
-    // =================== 1.2 build agent builder context =================== //
+    // =================== 1.2 resolve model parameters =================== //
 
-    // Check if Agent Builder tool is enabled and build context for it
-    // Note: When Agent Builder is active, we need to get the context of the agent being edited,
-    // which is stored in chatStore.activeAgentId, not the targetAgentId (which is the Agent Builder itself)
-    const isAgentBuilderEnabled = enabledToolIds.includes(AgentBuilderIdentifier);
-    const documentsAgentId = this.resolveAgentDocumentsTargetId(targetAgentId, enabledToolIds);
-    let agentBuilderContext;
-    let agentDocuments = documentsAgentId
-      ? agentSelectors.getAgentDocumentsById(documentsAgentId)(getAgentStoreState())
-      : undefined;
+    // Make sure the user's saved model-instance reasoning config is loaded
+    // before the synchronous store reads below — after a reload the
+    // ReasoningConfigLoader SWR fetch may still be in flight when the user
+    // sends the first message. No-op once cached; failures fall back to
+    // level defaults.
+    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
 
-    if (documentsAgentId && agentDocuments === undefined) {
-      try {
-        agentDocuments = await getAgentStoreState().ensureAgentDocuments(documentsAgentId);
-      } catch (error) {
-        // Agent documents are optional on the client; keep generation working if hydration fails.
-        console.error('[ChatService] Failed to ensure agent documents:', error);
-      }
-    }
-
-    if (isAgentBuilderEnabled) {
-      const activeAgentId = getChatStoreState().activeAgentId || '';
-      const baseContext =
-        agentByIdSelectors.getAgentBuilderContextById(activeAgentId)(getAgentStoreState());
-      const activeAgentConfig =
-        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
-
-      // Build official tools list (builtin tools + Composio tools)
-      const toolState = getToolStoreState();
-      const enabledPlugins = activeAgentConfig?.plugins || [];
-
-      const officialTools: OfficialToolItem[] = [];
-
-      const isComposioEnabled = Boolean(
-        typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio,
-      );
-      const isLobehubSkillEnabled = Boolean(
-        typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill,
-      );
-      const connectorCatalog = getConnectorCatalog({
-        composio: isComposioEnabled,
-        lobehub: isLobehubSkillEnabled,
-      });
-      const connectorIdentifiers = new Set(
-        connectorCatalog.map((item) =>
-          item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
-        ),
-      );
-
-      // Get builtin tools (excluding connectors rendered through their canonical owner)
-      const builtinTools = builtinToolSelectors.metaList(toolState);
-
-      for (const tool of builtinTools) {
-        if (connectorIdentifiers.has(tool.identifier)) continue;
-
-        officialTools.push({
-          description: tool.meta?.description,
-          enabled: enabledPlugins.includes(tool.identifier),
-          identifier: tool.identifier,
-          installed: true,
-          name: tool.meta?.title || tool.identifier,
-          type: 'builtin',
-        });
-      }
-
-      const allComposioServers = composioStoreSelectors.getServers(toolState);
-      const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
-      for (const connector of connectorCatalog) {
-        if (connector.type === 'composio') {
-          const { serverType } = connector;
-          const server = allComposioServers.find(
-            (item) => item.identifier === serverType.identifier,
-          );
-          officialTools.push({
-            description: `LobeHub Mcp Server: ${serverType.label}`,
-            enabled: enabledPlugins.includes(serverType.identifier),
-            identifier: serverType.identifier,
-            installed: !!server,
-            name: serverType.label,
-            type: 'composio',
-          });
-          continue;
-        }
-
-        const { provider } = connector;
-        const server = allLobehubSkillServers.find((item) => item.identifier === provider.id);
-        officialTools.push({
-          description: `LobeHub Skill Provider: ${provider.label}`,
-          enabled: enabledPlugins.includes(provider.id),
-          identifier: provider.id,
-          installed: !!server,
-          name: provider.label,
-          type: 'lobehub-skill',
-        });
-      }
-
-      agentBuilderContext = {
-        ...baseContext,
-        officialTools,
-      };
-    }
+    // Which extend params apply, where the reasoning effort comes from,
+    // whether assistant reasoning is replayed, the history window and the
+    // stream flag are decided by the shared rules — the same ones the server
+    // runtime applies — over the browser's stores.
+    const modelParams = await resolveBrowserModelParams({
+      agentId: targetAgentId,
+      chatConfig,
+      groupId,
+      model: payload.model,
+      provider: payload.provider!,
+      searchDecision: searchConfig,
+      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
+      topicId,
+    });
+    const messagesForContext = modelParams.shouldReplayAssistantReasoning
+      ? messages
+      : stripAssistantReasoningForReplay(messages);
 
     // Apply context engineering with preprocessing configuration
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
     const modelMessages = await contextEngineering({
-      agentBuilderContext,
-      agentDocuments,
       agentId: targetAgentId,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
       disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
-      enableAgentMode,
+      // The stored mode passes through: a model without function calling is
+      // not demoted to chat mode here, matching the server runtime.
+      enableAgentMode: modelParams.enableAgentMode,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
       groupId,
       additionalContexts,
-      // historyCount is number of history messages; add 1 for current user message
-      historyCount: (chatConfig.historyCount ?? 20) + 1,
+      // History messages + the current turn; unset means no truncation.
+      historyCount: modelParams.historyCount,
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
       manifests: enabledManifests,
-      messages,
+      messages: messagesForContext,
       model: payload.model,
       plugins,
       provider: payload.provider!,
@@ -326,46 +225,19 @@ class ChatService {
       },
     });
 
-    // ============  3. process extend params   ============ //
-
-    // Make sure the user's saved model-instance reasoning config is loaded
-    // before the synchronous resolution below — after a reload the
-    // ReasoningConfigLoader SWR fetch may still be in flight when the user
-    // sends the first message. No-op once cached; failures fall back to
-    // level defaults.
-    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
-
-    const extendParams = resolveModelExtendParams({
-      chatConfig,
-      model: payload.model,
-      provider: payload.provider!,
-      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
-    });
-
-    // For models governed by the reasoning extend-params family the user-level
-    // model-instance config is the single source of truth, so drop the legacy
-    // per-agent Advanced `params.reasoning_effort` — otherwise a stale agent
-    // value would leak into the payload whenever no instance value overlays it.
-    if (
-      aiModelSelectors.isModelHasReasoningExtendParams(
-        payload.model,
-        payload.provider!,
-      )(getAiInfraStoreState())
-    ) {
-      delete (params as Record<string, unknown>).reasoning_effort;
-    }
-
     return {
       options: { ...options, agentId: targetAgentId, topicId },
       params: {
         ...params,
-        ...extendParams,
-        enabledSearch: searchConfig.enabledSearch && searchConfig.useModelSearch ? true : undefined,
+        ...modelParams.resolvedExtendParams,
+        // Always present on the browser payload, even when unset.
+        enabledSearch: modelParams.resolvedExtendParams?.enabledSearch,
         messages: modelMessages,
-        // Use the chatConfig from the target agent for streaming preference
-        stream: chatConfig.enableStreaming !== false,
+        stream: modelParams.stream,
         tools,
       },
+      preserveThinking: modelParams.preserveThinkingForPayload,
+      replayAssistantReasoning: modelParams.shouldReplayAssistantReasoning,
     };
   };
 
@@ -480,7 +352,13 @@ class ChatService {
        */
       fetcher = async () => {
         try {
-          return await this.fetchOnClient({ payload, provider, runtimeProvider: sdkType, signal });
+          return await this.fetchOnClient({
+            payload,
+            provider,
+            runtimeProvider: sdkType,
+            signal,
+            topicId,
+          });
         } catch (e) {
           const {
             errorType = ChatErrorType.BadRequest,
@@ -615,6 +493,7 @@ class ChatService {
     provider: string;
     runtimeProvider: string;
     signal?: AbortSignal;
+    topicId?: string;
   }) => {
     /**
      * if enable login and not signed in, return unauthorized error
@@ -631,7 +510,10 @@ class ChatService {
     });
     const data = params.payload as ChatStreamPayload;
 
-    return agentRuntime.chat(data, { signal: params.signal });
+    return agentRuntime.chat(data, {
+      metadata: { topicId: params.topicId },
+      signal: params.signal,
+    });
   };
 }
 

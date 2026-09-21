@@ -39,18 +39,21 @@ const WorkingPanelToggle = memo(() => {
 
   return (
     <>
-      {!showWorkingOverview && (
-        <ActionIcon
-          aria-label={t('workingPanel.overview.title')}
-          icon={LayoutDashboardIcon}
-          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-          title={t('workingPanel.overview.title')}
-          onClick={() => {
-            toggleRightPanel(false);
-            updateSystemStatus({ showWorkingOverview: true });
-          }}
-        />
-      )}
+      <ActionIcon
+        active={showWorkingOverview}
+        aria-label={t('workingPanel.overview.title')}
+        icon={LayoutDashboardIcon}
+        size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+        title={t('workingPanel.overview.title')}
+        onClick={() => {
+          if (showWorkingOverview) {
+            updateSystemStatus({ showWorkingOverview: false });
+            return;
+          }
+          toggleRightPanel(false);
+          updateSystemStatus({ showWorkingOverview: true });
+        }}
+      />
       {!showRightPanel && (
         <ActionIcon
           aria-label={t('workingPanel.title')}

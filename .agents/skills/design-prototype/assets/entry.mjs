@@ -13,6 +13,7 @@ import {
   Button,
   Center,
   Collapse,
+  ConfigProvider,
   DraggablePanel,
   Drawer,
   DropdownMenu,
@@ -26,6 +27,7 @@ import {
   InputNumber,
   Markdown,
   Modal,
+  MotionProvider,
   NeuralNetworkLoading,
   Popover,
   ScrollShadow,
@@ -57,6 +59,8 @@ import {
 } from 'antd';
 import * as antdStyle from 'antd-style';
 import * as lucide from 'lucide-react';
+import * as motionReact from 'motion/react';
+import * as motionReactM from 'motion/react-m';
 import * as react from 'react';
 import * as jsxRuntime from 'react/jsx-runtime';
 import * as reactDom from 'react-dom';
@@ -71,6 +75,7 @@ export default {
     Button,
     Center,
     Collapse,
+    ConfigProvider,
     DraggablePanel,
     Drawer,
     DropdownMenu,
@@ -96,6 +101,7 @@ export default {
     Tag,
     Text,
     TextArea,
+    MotionProvider,
     ThemeProvider,
     Tooltip,
   },
@@ -104,6 +110,8 @@ export default {
   'antd': { App, Badge, Checkbox, Divider, Dropdown, Progress, Radio, Slider, Space, Steps, Table },
   'antd-style': antdStyle,
   'lucide-react': lucide,
+  'motion/react': motionReact,
+  'motion/react-m': motionReactM,
   'react': react,
   'react-dom': reactDom,
   'react-dom/client': reactDomClient,

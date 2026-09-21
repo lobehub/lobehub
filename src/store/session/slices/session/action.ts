@@ -1,4 +1,3 @@
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { toast } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
@@ -7,6 +6,7 @@ import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
 
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
+import { analyticsClient } from '@/libs/analytics/client';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { sessionKeys } from '@/libs/swr/keys';
 import { chatGroupService } from '@/services/chatGroup';
@@ -71,22 +71,17 @@ export class SessionActionImpl {
     const id = await sessionService.createSession(LobeSessionType.Agent, newSession);
     await refreshSessions();
 
-    // Track new agent creation analytics
-    const analytics = getSingletonAnalyticsOptional();
-    if (analytics) {
-      const userStore = getUserStoreState();
-      const userId = userProfileSelectors.userId(userStore);
+    const userId = userProfileSelectors.userId(getUserStoreState());
 
-      analytics.track({
-        name: 'new_agent_created',
-        properties: {
-          assistant_name: newSession.meta?.title || 'Untitled Agent',
-          assistant_tags: newSession.meta?.tags || [],
-          session_id: id,
-          user_id: userId || 'anonymous',
-        },
-      });
-    }
+    void analyticsClient.track({
+      name: 'new_agent_created',
+      properties: {
+        assistant_name: newSession.meta?.title || 'Untitled Agent',
+        assistant_tags: newSession.meta?.tags || [],
+        session_id: id,
+        user_id: userId || 'anonymous',
+      },
+    });
 
     // Whether to goto  to the new session after creation, the default is to switch to
     if (isSwitchSession) switchSession(id);

@@ -117,9 +117,7 @@ const TopicChat = memo(() => {
           {topicPending ? (
             <TopicMigrationPlaceholder agentId={activeAgentId} topicId={portalTopicId} />
           ) : (
-            <ChatList
-              defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
-            />
+            <ChatList />
           )}
         </Flexbox>
       </Suspense>

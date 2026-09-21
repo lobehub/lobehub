@@ -51,8 +51,10 @@ export async function loadGoalTrajectory(
   if (local) return local;
 
   const remote = new RemoteGoalTraceStore(rootDir);
+  // Cached copies are only written for finished goals, but an older cache may
+  // predate that rule, so an unfinished one is re-fetched rather than served.
   const cached = await remote.getCached(target);
-  if (cached) return cached;
+  if (cached?.completionReason) return cached;
 
   if (!allowDownload) return undefined;
 

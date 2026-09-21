@@ -13,7 +13,10 @@ import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 // agents` package so the desktop manager path and the `lh hetero exec` CLI /
 // sandbox path resolve binaries identically. This module only adapts it into
 // the desktop `BinarySpec` shape.
-export { detectHeterogeneousCliCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+export {
+  detectHeterogeneousCliCommand,
+  invalidateLoginShellPathCache,
+} from '@lobechat/heterogeneous-agents/resolveCliCommand';
 
 interface ValidatedBinaryOptions {
   candidates: string[];
@@ -98,6 +101,13 @@ export const droidBinary: BinarySpec = {
   description: 'Factory Droid - Factory agentic coding CLI',
   detect: () => detectHeterogeneousCliCommand('droid', 'droid'),
   name: 'droid',
+  priority: 3,
+};
+
+export const devinBinary: BinarySpec = {
+  description: 'Devin - Cognition agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('devin', 'devin'),
+  name: 'devin',
   priority: 3,
 };
 
@@ -213,6 +223,7 @@ export const heterogeneousCliAgentBinaries = {
   'codex': codexBinary,
   'cursor': cursorBinary,
   'droid': droidBinary,
+  'devin': devinBinary,
   'grok-build': grokBuildBinary,
   'kimi-code': kimiCliBinary,
   'opencode': opencodeBinary,

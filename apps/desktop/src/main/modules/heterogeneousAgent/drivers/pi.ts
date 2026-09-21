@@ -1,7 +1,6 @@
 import path from 'node:path';
 
 import type { HeterogeneousProviderBindingProtocol } from '@lobechat/heterogeneous-agents';
-import { PI_BASE_ARGS } from '@lobechat/heterogeneous-agents/spawn';
 import { formatServerDefaultHeterogeneousModel } from '@lobechat/types';
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
@@ -59,24 +58,12 @@ const sanitizePiProviderBindingEnv = (source: Record<string, string> | undefined
   return env;
 };
 
+/** Pi uses RPC exclusively; the driver still owns managed provider profiles. */
 export const piDriver: HeterogeneousAgentDriver = {
-  async buildSpawnPlan({
-    args,
-    helpers,
-    promptInput,
-    resumeSessionId,
-  }: HeterogeneousAgentBuildPlanParams) {
-    const inputPlan = await helpers.buildAgentInput('pi', promptInput);
-
-    return {
-      args: [
-        ...PI_BASE_ARGS,
-        ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
-        ...args,
-        ...inputPlan.args,
-      ],
-      stdinPayload: inputPlan.stdin,
-    };
+  async buildSpawnPlan(_params: HeterogeneousAgentBuildPlanParams) {
+    throw new Error(
+      'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle, not the CLI spawn path',
+    );
   },
   prepareProviderBinding({ args, env, profileDir, resolution }) {
     if (!resolution.endpoint) throw new Error('Pi provider binding requires an API endpoint.');

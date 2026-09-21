@@ -1,13 +1,14 @@
 'use client';
 
 import { type ConversationContext } from '@lobechat/types';
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { createModal, type ModalInstance, Tabs } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 import ShareDataProvider, { useShareData } from './ShareDataProvider';
@@ -91,7 +92,7 @@ const ShareModalContent = memo(() => {
       />
       {isLoading && dbMessages.length === 0 ? (
         <Flexbox gap={12} paddingBlock={8}>
-          <Skeleton active paragraph={{ rows: 8 }} />
+          <ArticleSkeleton rows={8} />
         </Flexbox>
       ) : rendererState.status === 'error' && rendererState.tab === tab ? (
         <AsyncError error={rendererState.error} variant={'block'} onRetry={retryRenderer} />
@@ -99,7 +100,7 @@ const ShareModalContent = memo(() => {
         rendererState.render({ mobile: isMobile })
       ) : (
         <Flexbox gap={12} paddingBlock={8}>
-          <Skeleton active paragraph={{ rows: 8 }} />
+          <ArticleSkeleton rows={8} />
         </Flexbox>
       )}
     </Flexbox>

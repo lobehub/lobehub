@@ -1,4 +1,4 @@
-import { Skeleton } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
@@ -207,11 +207,7 @@ const LiteTableInner = <RecordType,>({
                           data-list-slot={column.listSlot}
                           key={column.key}
                         >
-                          <Skeleton.Button
-                            active
-                            size={'small'}
-                            style={{ height: 14, minWidth: 0, width: '100%' }}
-                          />
+                          <Skeleton style={{ height: 14, minWidth: 0, width: '100%' }} />
                         </td>
                       ))}
                     </tr>

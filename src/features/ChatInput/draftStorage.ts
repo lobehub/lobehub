@@ -51,11 +51,11 @@ const writeAll = (map: DraftMap): boolean => {
 
 // --- Reactive draft-key registry -------------------------------------------
 // localStorage isn't reactive, but the topic list needs to react when a draft
-// appears or clears so it can show a draft indicator on the topic row. We mirror
-// the *set of keys that currently hold a draft* into an in-memory snapshot and
-// notify subscribers whenever that set changes — not on every keystroke-level
-// save, so a topic that already shows the indicator doesn't re-render while the
-// user keeps typing.
+// appears or clears so it can show a "[draft]" hint next to the topic title. We
+// mirror the *set of keys that currently hold a draft* into an in-memory
+// snapshot and notify subscribers whenever that set changes — not on every
+// keystroke-level save, so a topic that already shows the hint doesn't re-render
+// while the user keeps typing.
 
 const draftKeysListeners = new Set<() => void>();
 let draftKeysSnapshot: ReadonlySet<string> = new Set<string>();
@@ -86,8 +86,8 @@ const subscribeDraftKeys = (listener: () => void) => {
 
 /**
  * Reactively report whether a draft currently exists for the given draft key.
- * Returns false for an empty key. Used by the topic list to mark topics that
- * hold unsent input.
+ * Returns false for an empty key. Used by the topic list to show a "[draft]"
+ * hint on topics that hold unsent input.
  */
 export const useHasDraft = (key: string | undefined): boolean =>
   useSyncExternalStore(

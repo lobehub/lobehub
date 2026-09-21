@@ -14,16 +14,24 @@ const { createMany, execAgent, findByOperation, upsertByCheckItem } = vi.hoisted
 }));
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn(() => ({ execAgent })),
+  AiAgentService: vi.fn(function () {
+    return { execAgent };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({ upsertByCheckItem })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return { upsertByCheckItem };
+  }),
 }));
 vi.mock('@/database/models/verifyEvidence', () => ({
-  VerifyEvidenceModel: vi.fn(() => ({ createMany })),
+  VerifyEvidenceModel: vi.fn(function () {
+    return { createMany };
+  }),
 }));
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({ findByOperation })),
+  VerifyRunModel: vi.fn(function () {
+    return { findByOperation };
+  }),
 }));
 
 describe('startEvidenceSubmission', () => {

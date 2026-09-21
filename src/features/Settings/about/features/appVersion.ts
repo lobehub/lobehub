@@ -1,3 +1,1 @@
-import { CURRENT_VERSION } from '@/const/version';
-
-export const APP_VERSION = CURRENT_VERSION;
+export { WEB_APP_VERSION as APP_VERSION } from '@/const/appVersion';

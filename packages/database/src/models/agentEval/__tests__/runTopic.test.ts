@@ -227,6 +227,45 @@ describe('AgentEvalRunTopicModel', () => {
 
       expect(results).toHaveLength(0);
     });
+
+    it('should apply limit and offset pagination', async () => {
+      const firstPage = await runTopicModel.findByRunId(runId, { limit: 1, offset: 0 });
+      const secondPage = await runTopicModel.findByRunId(runId, { limit: 1, offset: 1 });
+
+      expect(firstPage).toHaveLength(1);
+      expect(secondPage).toHaveLength(1);
+      expect(firstPage[0].topicId).toBe(topicId1);
+      expect(secondPage[0].topicId).toBe(topicId2);
+    });
+  });
+
+  describe('countByRunId', () => {
+    beforeEach(async () => {
+      await serverDB.insert(agentEvalRunTopics).values([
+        {
+          userId,
+          runId,
+          topicId: topicId1,
+          testCaseId: testCaseId1,
+        },
+        {
+          userId,
+          runId,
+          topicId: topicId2,
+          testCaseId: testCaseId2,
+        },
+      ]);
+    });
+
+    it('should count topics of a run', async () => {
+      expect(await runTopicModel.countByRunId(runId)).toBe(2);
+    });
+
+    it('should not count rows owned by another user', async () => {
+      const otherModel = new AgentEvalRunTopicModel(serverDB, 'someone-else');
+
+      expect(await otherModel.countByRunId(runId)).toBe(0);
+    });
   });
 
   describe('deleteByRunId', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatPrompt, formatReferencedMessage } from '../formatPrompt';
+import { buildBotSender, formatPrompt, formatReferencedMessage } from '../formatPrompt';
 
 describe('formatReferencedMessage', () => {
   it('should return undefined when raw is undefined', () => {
@@ -180,5 +180,100 @@ describe('formatPrompt', () => {
     const result = formatPrompt(baseMessage);
 
     expect(result).toContain('nickname="Test User"');
+  });
+
+  it('should prepend Telegram reply_to_message as referenced_message', () => {
+    const msg = {
+      ...baseMessage,
+      raw: {
+        reply_to_message: {
+          from: { first_name: 'Dana', username: 'dana' },
+          text: 'please translate this',
+        },
+      },
+      text: '@bot 翻译',
+    };
+    const result = formatPrompt(msg);
+
+    expect(result).toContain(
+      '<referenced_message sender="Dana">please translate this</referenced_message>',
+    );
+    expect(result).toContain('@bot 翻译');
+  });
+
+  it('should use Telegram reply_to_message caption when text is empty', () => {
+    expect(
+      formatReferencedMessage({
+        reply_to_message: { caption: 'photo caption', from: { username: 'eve' } },
+      }),
+    ).toBe('<referenced_message sender="eve">photo caption</referenced_message>');
+  });
+
+  it('should include both the full Telegram reply and the selected quote', () => {
+    expect(
+      formatReferencedMessage({
+        quote: { text: 'selected fragment' },
+        reply_to_message: {
+          from: { first_name: 'Dana' },
+          text: 'full original message',
+        },
+      }),
+    ).toBe(
+      '<referenced_message sender="Dana"><full_message>full original message</full_message>\n<selected_quote>selected fragment</selected_quote></referenced_message>',
+    );
+  });
+
+  it('should preserve a selected Telegram quote when reply_to_message is omitted', () => {
+    expect(formatReferencedMessage({ quote: { text: 'selected fragment' } })).toBe(
+      '<referenced_message sender="unknown"><selected_quote>selected fragment</selected_quote></referenced_message>',
+    );
+  });
+});
+
+describe('buildBotSender', () => {
+  it('keeps a Feishu sender as name only, dropping the duplicated username', () => {
+    expect(
+      buildBotSender(
+        { author: { fullName: '文彬', userId: 'ou_1', userName: '文彬' }, raw: {} },
+        'feishu',
+      ),
+    ).toEqual({
+      avatar: undefined,
+      fullName: '文彬',
+      id: 'ou_1',
+      platform: 'feishu',
+      username: undefined,
+    });
+  });
+
+  it('resolves a Discord avatar hash and prefers global_name', () => {
+    expect(
+      buildBotSender(
+        {
+          author: { fullName: 'john', userId: '123', userName: 'john' },
+          raw: { author: { avatar: 'a_hash', global_name: 'John Doe' } },
+        },
+        'discord',
+      ),
+    ).toEqual({
+      avatar: 'https://cdn.discordapp.com/avatars/123/a_hash.gif',
+      fullName: 'John Doe',
+      id: '123',
+      platform: 'discord',
+      username: 'john',
+    });
+  });
+
+  it('passes an absolute avatar url through and drops an opaque one', () => {
+    expect(
+      buildBotSender(
+        { author: { userId: 'u1' }, raw: { author: { avatar: 'https://x/a.png' } } },
+        'slack',
+      ).avatar,
+    ).toBe('https://x/a.png');
+    expect(
+      buildBotSender({ author: { userId: 'u1' }, raw: { author: { avatar: 'hash' } } }, 'slack')
+        .avatar,
+    ).toBeUndefined();
   });
 });

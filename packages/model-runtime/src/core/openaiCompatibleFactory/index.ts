@@ -5,14 +5,14 @@ import debug from 'debug';
 import type { AiFullModelCard, AiModelType } from 'model-bank';
 import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import type { ClientOptions } from 'openai';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { ErrorClassifier, refineErrorCode } from '../../errors';
 import {
-  isGPT5ProResponsesModel,
+  isGPTProResponsesModel,
   isResponsesAPIModel,
-  supportsGPT5ResponsesReasoningEffortNone,
+  supportsGPTResponsesReasoningEffortNone,
 } from '../../providers/openai/modelId';
 import type {
   ASROptions,
@@ -76,6 +76,7 @@ import { OpenAIResponsesStream, OpenAIStream } from '../streams';
 import { type ChatPayloadForTransformStream, readableFromAsyncIterable } from '../streams/protocol';
 import { convertOpenAIResponseUsage, convertOpenAIUsage } from '../usageConverters/openai';
 import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
+import { OpenAICompatibleClient } from './client';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
@@ -165,12 +166,12 @@ const getGenerateObjectResponsesReasoningParams = ({
   reasoning_effort,
   thinking,
 }: GenerateObjectReasoningParams & { model: string }) => {
-  if (isGPT5ProResponsesModel(model)) {
+  if (isGPTProResponsesModel(model)) {
     return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
   }
 
   if (thinking?.type === 'disabled') {
-    return supportsGPT5ResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
+    return supportsGPTResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
   }
 
   return reasoning_effort && reasoning_effort !== 'max'
@@ -399,7 +400,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       if (customClient?.createClient) {
         this.client = customClient.createClient(initOptions as any);
       } else {
-        this.client = new OpenAI(initOptions);
+        this.client = new OpenAICompatibleClient(initOptions);
       }
 
       this.baseURL = baseURL || this.client.baseURL;
@@ -722,7 +723,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           if (customClient?.createClient) {
             this.client = customClient.createClient(initOptions);
           } else {
-            this.client = new OpenAI(initOptions);
+            this.client = new OpenAICompatibleClient(initOptions);
           }
 
           this.baseURL = targetBaseURL;
@@ -1208,9 +1209,19 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (shouldUseResponses) {
           log('calling responses.create for structured output');
+          // Chat Completions content parts are not valid Responses input: a `text` part must
+          // become `input_text` and an `image_url` part `input_image`, or the API rejects the
+          // whole request. String content survives untouched, which is why text-only callers
+          // never hit this.
+          const input = await convertOpenAIResponseInputs(messages as any, {
+            forceImageBase64: chatCompletion?.forceImageBase64,
+            forceVideoBase64: chatCompletion?.forceVideoBase64,
+            provider: this.id,
+            strictToolPairing: true,
+          });
           const preparedRequest = this.prepareResponsesRequest(
             {
-              input: messages,
+              input,
               model,
               ...getGenerateObjectResponsesReasoningParams(payload),
               ...this.resolvePromptCacheKeyParams(model, options?.user),
@@ -1444,6 +1455,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
               endpoint: desensitizedEndpoint,
               error: error as any,
               errorType: ErrorType.invalidAPIKey,
+              provider: this.id,
+            });
+          }
+
+          case 413: {
+            return AgentRuntimeError.chat({
+              endpoint: desensitizedEndpoint,
+              error: error as any,
+              errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
               provider: this.id,
             });
           }

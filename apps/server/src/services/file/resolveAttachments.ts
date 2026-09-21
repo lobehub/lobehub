@@ -1,5 +1,12 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import type {
+  ChatAudioItem,
+  ChatFileItem,
+  ChatImageItem,
+  ChatVideoItem,
+  FileAccessScope,
+} from '@lobechat/types';
+import { ordinaryFileAccessScope } from '@lobechat/types';
 import { readAudioDurationMs } from '@lobechat/utils/audio';
 import debug from 'debug';
 
@@ -25,6 +32,7 @@ export interface ResolvedAttachments {
 
 interface ResolveArgs {
   db: LobeChatDatabase;
+  fileAccessScope?: FileAccessScope;
   fileIds: string[];
   userId: string;
   workspaceId?: string;
@@ -60,6 +68,7 @@ const getAudioMetadata = (
  */
 export const resolveAttachmentsByFileIds = async ({
   db,
+  fileAccessScope = ordinaryFileAccessScope,
   fileIds,
   userId,
   workspaceId,
@@ -77,7 +86,7 @@ export const resolveAttachmentsByFileIds = async ({
   const dedupedFileIds = dedupe(fileIds);
   const fileModel = new FileModel(db, userId, workspaceId);
   const fileService = new FileService(db, userId, workspaceId);
-  const fileRecords = await fileModel.findByIds(dedupedFileIds);
+  const fileRecords = await fileModel.findByIds(dedupedFileIds, fileAccessScope);
   if (fileRecords.length === 0) {
     log('no file records found for fileIds=%O', dedupedFileIds);
     return result;
@@ -107,7 +116,7 @@ export const resolveAttachmentsByFileIds = async ({
       let content: string | undefined;
       let parseError: unknown;
       try {
-        const document = await documentService.parseFile(file.id);
+        const document = await documentService.parseFile(file.id, fileAccessScope);
         content = document.content ?? undefined;
       } catch (error) {
         parseError = error;

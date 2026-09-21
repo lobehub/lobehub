@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseInternalLink } from './internalLink';
+import { isBareLinkLabel, parseInternalLink } from './internalLink';
 
 describe('parseInternalLink', () => {
   it('parses official agent document links', () => {
@@ -31,6 +31,22 @@ describe('parseInternalLink', () => {
     expect(parseInternalLink('/agent/agent-1/task/T-199')).toEqual({
       agentId: 'agent-1',
       pathname: '/agent/agent-1/task/T-199',
+      taskId: 'T-199',
+      type: 'task',
+    });
+  });
+
+  it('ignores the readable title slug tail when resolving a task link', () => {
+    expect(parseInternalLink('https://app.lobehub.com/task/T-198/ship-the-thing')).toEqual({
+      pathname: '/task/T-198/ship-the-thing',
+      taskId: 'T-198',
+      type: 'task',
+    });
+    // A CJK slug round-trips through `new URL`, so the pathname comes back
+    // percent-encoded — still a valid link to the same task.
+    expect(parseInternalLink('/agent/agent-1/task/T-199/飞书适配器')).toEqual({
+      agentId: 'agent-1',
+      pathname: '/agent/agent-1/task/T-199/%E9%A3%9E%E4%B9%A6%E9%80%82%E9%85%8D%E5%99%A8',
       taskId: 'T-199',
       type: 'task',
     });
@@ -164,5 +180,21 @@ describe('parseInternalLink', () => {
     expect(parseInternalLink('/favicon.ico')).toBeNull();
     expect(parseInternalLink('/manifest.webmanifest')).toBeNull();
     expect(parseInternalLink('/.well-known/assetlinks.json')).toBeNull();
+  });
+});
+
+describe('isBareLinkLabel', () => {
+  it('treats a label that IS the address as bare', () => {
+    expect(isBareLinkLabel('/acceptance/acc_1', '/acceptance/acc_1')).toBe(true);
+    expect(
+      isBareLinkLabel('https://app.lobehub.com/task/tsk_1', 'https://app.lobehub.com/task/tsk_1'),
+    ).toBe(true);
+  });
+
+  it('treats authored text as not bare, even when it looks like a URL', () => {
+    expect(isBareLinkLabel('验收报告', '/acceptance/acc_1')).toBe(false);
+    // A URL-shaped authored label must survive: the author chose it.
+    expect(isBareLinkLabel('https://docs.example', '/task/T-198')).toBe(false);
+    expect(isBareLinkLabel('/project plan', '/task/T-198')).toBe(false);
   });
 });

@@ -1,9 +1,14 @@
 import type { GoalGraphState, GoalTickSnapshot, GoalTrajectory } from '@lobechat/agent-tracing';
 import { describe, expect, it } from 'vitest';
 
-import { replayGoalAgainstCurrentCoordinator } from './replayCoordinator';
+import {
+  coordinatorDecider,
+  fromTraceGraphState,
+  replayGoalAgainstCurrentCoordinator,
+} from './replayCoordinator';
+import { toTraceGraphState } from './traceObservation';
 
-const work = (id: string, overrides: Partial<GoalGraphState['nodes'][number]> = {}) => ({
+const task = (id: string, overrides: Partial<GoalGraphState['nodes'][number]> = {}) => ({
   createdAt: 1000,
   id,
   kind: 'task',
@@ -51,7 +56,7 @@ const tick = (index: number, overrides: Partial<GoalTickSnapshot>): GoalTickSnap
 });
 
 /**
- * Two advances of a two-Work goal: the second Work depends on the first, so the
+ * Two advances of a two-Task goal: the second Task depends on the first, so the
  * coordinator picks `a`, then picks `b` only once `a` resolves.
  */
 const trajectory: GoalTrajectory = {
@@ -81,7 +86,7 @@ const trajectory: GoalTrajectory = {
         tick(0, {
           candidates: [{ blockedBy: [], nodeId: 'b', priority: 0, status: 'proposed', title: 'b' }],
           chosenNodeId: 'b',
-          graphDelta: { nodesUpserted: [work('a', { status: 'resolved' })] },
+          graphDelta: { nodesUpserted: [task('a', { status: 'resolved' })] },
         }),
       ],
       trigger: 'settle',
@@ -90,7 +95,7 @@ const trajectory: GoalTrajectory = {
   goalId: 'goal_1',
   graphBaseline: graphState({
     edges: [{ id: 'e1', kind: 'depends_on', sourceNodeId: 'b', targetNodeId: 'a' }],
-    nodes: [work('a'), work('b')],
+    nodes: [task('a'), task('b')],
   }),
   startedAt: 0,
   title: 'Reproduce nanoGPT',
@@ -154,7 +159,8 @@ describe('replayGoalAgainstCurrentCoordinator', () => {
                 { blockedBy: ['a'], nodeId: 'b', priority: 0, status: 'proposed', title: 'b' },
               ],
               chosenNodeId: 'a',
-              frontierTask: { id: 'task_1', status: 'backlog', updatedAt: 0 },
+              candidateTasks: [{ id: 'task_1', nodeId: 'a', status: 'backlog', updatedAt: 0 }],
+              concurrency: 3,
               outcome: 'no_progress',
             }),
           ],
@@ -162,10 +168,99 @@ describe('replayGoalAgainstCurrentCoordinator', () => {
       ],
       graphBaseline: graphState({
         edges: [{ id: 'e1', kind: 'depends_on', sourceNodeId: 'b', targetNodeId: 'a' }],
-        nodes: [work('a', { taskId: 'task_1' }), work('b')],
+        nodes: [task('a', { taskId: 'task_1' }), task('b')],
       }),
     };
 
     expect(replayGoalAgainstCurrentCoordinator(exhausted).divergences).toEqual([]);
   });
+
+  /**
+   * The measured gate stops in the terminal phase, exactly like the delivery
+   * contract does. If the replay could not tell the two apart, a regressed gate
+   * would be reported as a match — the one failure mode a regression harness
+   * must not have.
+   */
+  const measured = (branch: 'measured_acceptance' | 'terminal_acceptance'): GoalTrajectory => ({
+    ...trajectory,
+    advances: [
+      {
+        ...trajectory.advances[0],
+        ticks: [
+          tick(0, {
+            branch,
+            candidates: [],
+            metricCriteria: {
+              allMet: false,
+              criteria: [{ key: 'followers', met: false, op: 'gte', target: 1_000_000, value: 42 }],
+            },
+            outcome: 'no_progress',
+          }),
+        ],
+      },
+    ],
+    // No config on the replayed goal on purpose: the gate reads the recorded
+    // `metricCriteria` and nothing else, which is what makes it replayable
+    // from the trajectory alone.
+    graphBaseline: graphState({ nodes: [task('a', { status: 'resolved' })] }),
+  });
+
+  it('carries the recorded measured criteria into the decision', () => {
+    expect(
+      replayGoalAgainstCurrentCoordinator(measured('measured_acceptance')).divergences,
+    ).toEqual([]);
+  });
+
+  it('reports a gate that no longer fires instead of matching it', () => {
+    // A trajectory whose terminal tick was recorded as the plain delivery
+    // contract must not replay as an unmet gate, and vice versa.
+    expect(
+      replayGoalAgainstCurrentCoordinator(measured('terminal_acceptance')).divergences,
+    ).toMatchObject([
+      { field: 'branch', recorded: 'terminal_acceptance', replayed: 'measured_acceptance' },
+    ]);
+  });
+});
+
+describe('replaying trajectories recorded before the scheduler', () => {
+  it('reads the legacy single-task field instead of seeing no tasks at all', () => {
+    // Older ticks carry `frontierTask`, not `candidateTasks`. Dropping it would
+    // replay every one of them as `missing_task` and report divergences that
+    // never happened.
+    const legacy: GoalTrajectory = {
+      ...trajectory,
+      advances: [
+        {
+          ...trajectory.advances[0],
+          ticks: [
+            {
+              ...trajectory.advances[0].ticks[0],
+              branch: 'dispatch_task',
+              candidateTasks: undefined,
+              frontierTask: { id: 'task_1', status: 'backlog', updatedAt: 0 },
+            },
+          ],
+        },
+      ],
+      graphBaseline: {
+        ...trajectory.graphBaseline,
+        nodes: [
+          { ...trajectory.graphBaseline.nodes[0], taskId: 'task_1' },
+          trajectory.graphBaseline.nodes[1],
+        ],
+      },
+    };
+
+    const result = replayGoalAgainstCurrentCoordinator(legacy);
+
+    expect(result.divergences.filter((item) => item.replayed === 'missing_task')).toEqual([]);
+  });
+});
+
+it('preserves exploration policy through trace and replay', () => {
+  const state = graphState({ nodes: [task('baseline', { status: 'resolved' })] });
+  state.goal.exploration = { instruction: 'Explore alternatives', maxExperiments: 3 };
+  const roundtrip = toTraceGraphState(fromTraceGraphState(state));
+  expect(roundtrip.goal.exploration).toEqual(state.goal.exploration);
+  expect(coordinatorDecider({ graph: roundtrip }).branch).toBe('explore_graph');
 });

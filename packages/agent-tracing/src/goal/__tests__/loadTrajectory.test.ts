@@ -80,6 +80,43 @@ describe('loadGoalTrajectory', () => {
     expect(resolveDownloadUrl).toHaveBeenCalledWith('goal_missing');
   });
 
+  it('re-fetches an unfinished goal instead of serving a stale cached copy', async () => {
+    // A running goal is a moving object; a cache hit would pin the reader to
+    // whatever it looked like the first time it was inspected.
+    const cacheDir = path.join(rootDir, '.goal-tracing', '_remote');
+    await fs.mkdir(cacheDir, { recursive: true });
+    await fs.writeFile(
+      path.join(cacheDir, 'goal_running.json'),
+      JSON.stringify({ ...trajectory('goal_running'), advances: [] }),
+      'utf8',
+    );
+    const resolveDownloadUrl = vi.fn().mockResolvedValue(null);
+
+    await loadGoalTrajectory('goal_running', { allowDownload: true, resolveDownloadUrl, rootDir });
+
+    expect(resolveDownloadUrl).toHaveBeenCalledWith('goal_running');
+  });
+
+  it('serves a finished goal from cache without asking the server again', async () => {
+    const cacheDir = path.join(rootDir, '.goal-tracing', '_remote');
+    await fs.mkdir(cacheDir, { recursive: true });
+    await fs.writeFile(
+      path.join(cacheDir, 'goal_done.json'),
+      JSON.stringify({ ...trajectory('goal_done'), completionReason: 'achieved' }),
+      'utf8',
+    );
+    const resolveDownloadUrl = vi.fn();
+
+    const loaded = await loadGoalTrajectory('goal_done', {
+      allowDownload: true,
+      resolveDownloadUrl,
+      rootDir,
+    });
+
+    expect(loaded?.completionReason).toBe('achieved');
+    expect(resolveDownloadUrl).not.toHaveBeenCalled();
+  });
+
   it('reads a trajectory straight off a json path', async () => {
     const filePath = path.join(rootDir, 'exported.json');
     await fs.writeFile(filePath, JSON.stringify(trajectory('goal_3')), 'utf8');

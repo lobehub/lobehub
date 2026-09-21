@@ -4,6 +4,7 @@ import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  AgentProviderAccountModel,
   AgentQuotaCalibrationModel,
   AgentQuotaUsageLedgerModel,
   AgentQuotaWindowModel,
@@ -109,6 +110,35 @@ describe('AgentQuotaService.ingestSnapshot', () => {
 
     expect(await windows.listByAccount(account.id)).toHaveLength(4);
     expect(await calibrations.latest(account.id, 'session')).toBeNull();
+  });
+
+  it('persists the Extra Usage wallet on account metadata, and clears it on null', async () => {
+    // The wallet is not a limit reading — it rides the account row so the
+    // persisted panel keeps the Extra Usage section between live samples.
+    const accounts = new AgentProviderAccountModel(serverDB, userId);
+    const extraUsage = {
+      balanceCents: 1234,
+      currency: 'CNY',
+      monthlyChargeLimitCents: 5000,
+      monthlyChargeLimitEnabled: true,
+      monthlyUsedCents: 42,
+      totalCents: 2000,
+    };
+    const account = await service.ingestSnapshot({
+      extraUsage,
+      identity,
+      provider: 'kimi-code',
+      readings: [],
+    });
+    expect((await accounts.findById(account.id))?.metadata?.['extraUsage']).toEqual(extraUsage);
+
+    await service.ingestSnapshot({
+      extraUsage: null,
+      identity,
+      provider: 'kimi-code',
+      readings: [],
+    });
+    expect((await accounts.findById(account.id))?.metadata?.['extraUsage']).toBeNull();
   });
 });
 
@@ -243,5 +273,32 @@ describe('AgentQuotaService.recordUsage', () => {
       usage: { output: 1000 },
     });
     // no throw = pass; the row is accountId-null and excluded from calibration
+  });
+});
+
+describe('Codex quota persistence', () => {
+  it('preserves provider bucket names and monthly durations through DB reads and projection', async () => {
+    const capturedAt = Date.now();
+    const reading = {
+      capturedAt,
+      limitName: 'Other models',
+      limitType: 'weekly_all',
+      resetsAt: capturedAt + 100000,
+      scopeKey: 'codex_other',
+      utilization: 41,
+      windowMinutes: 43200,
+    };
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [reading],
+    });
+    expect(await service.listLatestReadings(account.id)).toContainEqual(
+      expect.objectContaining(reading),
+    );
+    expect(await service.listSnapshotSeries(account.id, new Date(capturedAt - 1))).toContainEqual(
+      expect.objectContaining(reading),
+    );
+    expect((await windows.listByAccount(account.id))[0].windowSeconds).toBe(43200 * 60);
   });
 });

@@ -1,0 +1,45 @@
+---
+title: Using Unsloth in LobeHub
+description: >-
+  Learn how to configure and use Unsloth to run local AI models, including your
+  own fine-tuned models, for conversations within LobeHub.
+tags:
+  - LobeHub
+  - Unsloth
+  - Open Source Models
+  - Fine-tuning
+---
+
+# Using Unsloth in LobeHub
+
+[Unsloth](https://unsloth.ai/) runs local models and exposes an OpenAI-compatible API through Unsloth Studio. LobeHub connects to your running instance; this integration does not provide a hosted inference account or download models for you. Check the model's license and your hardware requirements before downloading it.
+
+<Steps>
+  ### Step 1: Start Unsloth Studio
+
+  - Follow the [official installation guide](https://unsloth.ai/docs) to install Unsloth Studio and start its desktop app or CLI service.
+  - Download a model in Studio and make it available for inference. The [Unsloth model catalog](https://huggingface.co/unsloth) lists available models; a catalog entry does not mean the model is installed locally.
+  - The default API base URL is `http://127.0.0.1:8888/v1`. If you explicitly start Studio on another port, replace `8888` with that port, such as `8000`. Use the base URL ending in `/v1`, not the full `/chat/completions` path.
+
+  ### Step 2: Choose How LobeHub Connects
+
+  - Server requests require the LobeHub server to reach Studio. `127.0.0.1` refers to the server itself; inside Docker it refers to the container. Use an address reachable from that server or container when Studio runs elsewhere.
+  - Client Request Mode sends requests from your browser. Studio must allow the LobeHub page's origin through CORS, and requests from another browser origin require a real API key from your Studio instance. A successful keyless terminal request does not establish browser access. Do not use a made-up key.
+
+  ### Step 3: Configure and Check the Connection
+
+  - Go to the `App Settings` in LobeHub and open the `AI Service Providers` section
+  - Find and select the `Unsloth` provider from the list
+  - Enable the provider, enter your API base URL, and enter the real Studio API key when authentication is required. Enable Client Request Mode only for a browser-accessible endpoint.
+  - Click **Fetch Model List** and choose a model returned by your running Studio instance. If adding a model manually, use its exact local API model ID. The two built-in example models are not enabled by default and are not guaranteed to be installed. Existing saved model selections are preserved.
+  - Load the model in Studio, then fetch the list again to discover its tool and vision capabilities. Studio reports these capabilities for the loaded model; they may be unavailable for models that are not loaded.
+  - Select that model for **Connection Check** and run the check. After it succeeds, select the same model for your assistant.
+</Steps>
+
+## Connection Problems
+
+- **CORS or failed preflight:** As of September 6, 2026, Studio desktop API-only mode rejects browser origins on other local ports. The upstream fix, [unsloth#10084](https://github.com/unslothai/unsloth/pull/10084), is still open. Enabling Client Request Mode alone does not fix this. Use a Studio mode that allows your origin, or a server request from a host that can reach Studio.
+- **Not authenticated / Invalid token payload:** Cross-origin browser calls need valid Studio authentication even when a keyless terminal call works. Enter a real key; an arbitrary placeholder will be rejected.
+- **Connection refused or unknown model:** Check the actual listening port, server/container reachability, and the model list returned by this Studio instance. Fetching the list does not itself prove that model inference succeeds.
+
+For shared server configuration, see the [Unsloth environment variables](/docs/self-hosting/environment-variables/model-provider#unsloth). Local inference uses your own hardware; this provider does not define a per-token hosted API price. Refer to [Unsloth's official site](https://unsloth.ai/) for current product availability and commercial offerings.

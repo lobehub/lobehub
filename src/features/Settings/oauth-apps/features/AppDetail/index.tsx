@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { Button, confirmModal, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, Skeleton, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';
@@ -14,7 +14,9 @@ import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 import { type OAuthAppItem } from '@/types/oauthApp';
 
 import ClientIdDisplay from '../ClientIdDisplay';
-import EditForm from './EditForm';
+import { showClientSecretModal } from '../SecretModal';
+import BasicInfoCard from './BasicInfoCard';
+import RedirectUrisCard from './RedirectUrisCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   backButton: css`
@@ -89,12 +91,33 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
     },
   });
   const enabledMutation = lambdaQuery.oauthApp.setEnabled.useMutation({ onSuccess: revalidate });
+  const rotateSecretMutation = lambdaQuery.oauthApp.rotateSecret.useMutation({
+    onSuccess: ({ clientSecret }) => {
+      revalidate();
+      showClientSecretModal({ clientSecret });
+    },
+  });
   const deleteMutation = lambdaQuery.oauthApp.delete.useMutation({
     onSuccess: () => {
       onChanged();
       onBack();
     },
   });
+
+  const handleUpdate = async (value: Parameters<typeof updateMutation.mutateAsync>[0]['value']) => {
+    await updateMutation.mutateAsync({ id, value });
+  };
+
+  const handleRotateSecret = () =>
+    confirmModal({
+      content: t('oauthApp.secret.rotateConfirm.content'),
+      okButtonProps: { danger: true },
+      okText: t('oauthApp.secret.rotateConfirm.ok'),
+      onOk: async () => {
+        await rotateSecretMutation.mutateAsync({ id });
+      },
+      title: t('oauthApp.secret.rotateConfirm.title'),
+    });
 
   const handleDelete = () =>
     confirmModal({
@@ -107,12 +130,14 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
       title: t('oauthApp.deleteConfirm.title'),
     });
 
+  const isWebApp = detail?.applicationType === 'web';
+
   if (!detail)
     return (
       <Flexbox gap={16}>
-        <Skeleton active paragraph={{ rows: 1, width: 200 }} title={false} />
+        <Skeleton.Text rows={1} width={200} />
         <div className={styles.card}>
-          <Skeleton active paragraph={{ rows: 4 }} title={false} />
+          <Skeleton.Text rows={4} />
         </div>
       </Flexbox>
     );
@@ -141,16 +166,21 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
         {!detail.enabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
       </Flexbox>
 
-      <div className={styles.card}>
-        <EditForm
+      <BasicInfoCard
+        canEdit={canEdit}
+        detail={detail}
+        key={`basic-${detail.id}`}
+        onSubmit={handleUpdate}
+      />
+
+      {isWebApp && (
+        <RedirectUrisCard
           canEdit={canEdit}
           detail={detail}
-          key={detail.id}
-          onSubmit={async (value) => {
-            await updateMutation.mutateAsync({ id, value });
-          }}
+          key={`redirect-${detail.id}`}
+          onSubmit={handleUpdate}
         />
-      </div>
+      )}
 
       <Flexbox className={styles.card} gap={16}>
         <div className={styles.row}>
@@ -160,8 +190,25 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
 
         <div className={styles.row}>
           <span className={styles.label}>{t('oauthApp.detail.type')}</span>
-          <Tag>{t('oauthApp.type.badge')}</Tag>
+          <Tag>{t(isWebApp ? 'oauthApp.type.webBadge' : 'oauthApp.type.badge')}</Tag>
         </div>
+
+        {detail.hasSecret && (
+          <div className={styles.row}>
+            <span className={styles.label}>{t('oauthApp.detail.clientSecret')}</span>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Text type={'secondary'}>{t('oauthApp.secret.hidden')}</Text>
+              <Button
+                disabled={!canEdit}
+                loading={rotateSecretMutation.isPending}
+                size={'small'}
+                onClick={handleRotateSecret}
+              >
+                {t('oauthApp.secret.rotate')}
+              </Button>
+            </Flexbox>
+          </div>
+        )}
 
         <div className={styles.row}>
           <span className={styles.label}>{t('oauthApp.detail.createdAt')}</span>

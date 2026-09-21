@@ -50,32 +50,6 @@ const cerebrasModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      "GLM-4.7 is Zhipu's new generation flagship model with 355B total parameters and 32B active parameters, fully upgraded in general dialogue, reasoning, and agent capabilities. GLM-4.7 enhances Interleaved Thinking and introduces Preserved Thinking and Turn-level Thinking.",
-    displayName: 'GLM-4.7',
-    family: 'glm',
-    generation: 'glm-4.7',
-    id: 'zai-glm-4.7',
-    maxOutput: 40_960,
-    pricing: {
-      currency: 'USD',
-      units: [
-        { name: 'textInput', rate: 2.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.75, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-12-22',
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
 ];
 
 export const allModels = [...cerebrasModels];

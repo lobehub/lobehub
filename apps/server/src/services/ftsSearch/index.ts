@@ -7,7 +7,7 @@ import {
   type FtsSearchBackendScope,
   FtsSearchRepo,
   type FtsSearchRepoOptions,
-  isElasticsearchFtsSearchEntity,
+  PgLikeFtsSearchBackend,
   PgSearchFtsSearchBackend,
 } from '@/database/repositories/ftsSearch';
 import { ftsSearchEnv } from '@/envs/ftsSearch';
@@ -15,6 +15,7 @@ import { ftsSearchEnv } from '@/envs/ftsSearch';
 import { ElasticsearchFtsSearchHttpClient } from './elasticsearch';
 import {
   createElasticsearchFtsSearchObserver,
+  type FtsSearchUsage,
   withFtsSearchBackendObservability,
 } from './observability';
 
@@ -22,12 +23,14 @@ export interface CreateFtsSearchRepoInput {
   callerAgentVisibility?: 'private' | 'public' | null;
   db: LobeChatDatabase;
   options?: FtsSearchRepoOptions;
+  usage: FtsSearchUsage;
   userId: string;
   workspaceId?: string;
 }
 
 export const FTS_SEARCH_PROVIDERS = {
   elasticsearch: 'elasticsearch',
+  pgLike: 'pg_like',
   pgSearch: 'pg_search',
 } as const;
 
@@ -38,20 +41,29 @@ interface FtsSearchBackendFactoryContext {
   db: CreateFtsSearchRepoInput['db'];
   provider: FtsSearchProvider;
   scope: FtsSearchBackendScope;
+  usage: FtsSearchUsage;
 }
 
 interface FtsSearchBackendFactoryDependencies {
   createBackend?: (context: FtsSearchBackendFactoryContext) => FtsSearchBackend | undefined;
   createElasticsearchClient?: (
     config: ElasticsearchFtsSearchConfig,
+    usage: FtsSearchUsage,
   ) => ElasticsearchFtsSearchClient;
+  createPgLikeBackend?: (context: FtsSearchBackendFactoryContext) => FtsSearchBackend;
   createPgSearchBackend?: (context: FtsSearchBackendFactoryContext) => FtsSearchBackend;
   loadElasticsearchConfig?: () => ElasticsearchFtsSearchConfig | undefined;
   loadFtsSearchProvider?: () => FtsSearchProvider;
 }
 
 export interface ElasticsearchFtsSearchConfig {
-  apiKey: string;
+  /**
+   * Explicit opt-in for plaintext HTTP / no API key on a private container network.
+   * Optional so downstream callers that build a config literal keep the secure default (`false`).
+   */
+  allowInsecureHttp?: boolean;
+  /** Required unless `allowInsecureHttp` is enabled; never sent over plaintext HTTP. */
+  apiKey?: string;
   indexNamespace: string;
   url: string;
 }
@@ -70,9 +82,13 @@ export const loadElasticsearchFtsSearchConfig = (): ElasticsearchFtsSearchConfig
   const indexNamespace =
     ftsSearchEnv.ES_INDEX_NAMESPACE ??
     (process.env.NODE_ENV === 'development' ? 'lobehub-dev' : undefined);
-  if (!ftsSearchEnv.ES_API_KEY || !ftsSearchEnv.ES_URL || !indexNamespace) return;
+  const allowInsecureHttp = ftsSearchEnv.ES_ALLOW_INSECURE_HTTP === 'true';
+  /** The Elastic Cloud path keeps requiring an API key; only the explicit insecure mode may omit it. */
+  if (!ftsSearchEnv.ES_URL || !indexNamespace) return;
+  if (!ftsSearchEnv.ES_API_KEY && !allowInsecureHttp) return;
 
   return {
+    allowInsecureHttp,
     apiKey: ftsSearchEnv.ES_API_KEY,
     indexNamespace,
     url: ftsSearchEnv.ES_URL,
@@ -80,40 +96,41 @@ export const loadElasticsearchFtsSearchConfig = (): ElasticsearchFtsSearchConfig
 };
 
 const createFtsSearchBackendForProvider = (
-  { db, provider, scope }: FtsSearchBackendFactoryContext,
+  { db, provider, scope, usage }: FtsSearchBackendFactoryContext,
   dependencies: FtsSearchBackendFactoryDependencies,
 ): FtsSearchBackend | undefined => {
-  const createPgSearchBackend =
-    dependencies.createPgSearchBackend ??
-    ((context: FtsSearchBackendFactoryContext) =>
-      new PgSearchFtsSearchBackend(context.db, context.scope));
-  const pgSearchBackend = createPgSearchBackend({ db, provider, scope });
-
   if (provider === FTS_SEARCH_PROVIDERS.pgSearch) {
-    return pgSearchBackend;
+    const createPgSearchBackend =
+      dependencies.createPgSearchBackend ??
+      ((context: FtsSearchBackendFactoryContext) =>
+        new PgSearchFtsSearchBackend(context.db, context.scope));
+    return createPgSearchBackend({ db, provider, scope, usage });
   }
+
+  if (provider === FTS_SEARCH_PROVIDERS.pgLike) {
+    const createPgLikeBackend =
+      dependencies.createPgLikeBackend ??
+      ((context: FtsSearchBackendFactoryContext) =>
+        new PgLikeFtsSearchBackend(context.db, context.scope));
+    return createPgLikeBackend({ db, provider, scope, usage });
+  }
+
+  // Only Elasticsearch remains; keep it explicit so a future provider cannot
+  // silently inherit the Elasticsearch path.
+  if (provider !== FTS_SEARCH_PROVIDERS.elasticsearch) return;
 
   const config = (dependencies.loadElasticsearchConfig ?? loadElasticsearchFtsSearchConfig)();
   if (!config) return;
 
   const client = (
     dependencies.createElasticsearchClient ??
-    ((input) => new ElasticsearchFtsSearchHttpClient(input))
-  )(config);
-  const elasticsearchBackend = new ElasticsearchFtsSearchBackend(db, {
+    ((input, inputUsage) => new ElasticsearchFtsSearchHttpClient({ ...input, usage: inputUsage }))
+  )(config, usage);
+  return new ElasticsearchFtsSearchBackend(db, {
     client,
     indexNamespace: config.indexNamespace,
-    observer: createElasticsearchFtsSearchObserver(),
+    observer: createElasticsearchFtsSearchObserver(usage),
   });
-
-  return {
-    key: `${elasticsearchBackend.key}+${pgSearchBackend.key}`,
-    /** Unmigrated entities stay on pg_search; Elasticsearch failures on migrated entities remain fatal. */
-    search: (request) =>
-      isElasticsearchFtsSearchEntity(request.entity)
-        ? elasticsearchBackend.search(request)
-        : pgSearchBackend.search(request),
-  };
 };
 
 export const resolveFtsSearchProvider = (
@@ -139,6 +156,7 @@ export const createFtsSearchRepo = async (
     db: input.db,
     provider,
     scope,
+    usage: input.usage,
   };
   const backend = dependencies.createBackend
     ? dependencies.createBackend(context)
@@ -146,16 +164,13 @@ export const createFtsSearchRepo = async (
 
   if (!backend) throw new FtsSearchBackendUnavailableError(provider);
 
-  const observedBackend = withFtsSearchBackendObservability(backend, (request) =>
-    provider === FTS_SEARCH_PROVIDERS.elasticsearch &&
-    !isElasticsearchFtsSearchEntity(request.entity)
-      ? FTS_SEARCH_PROVIDERS.pgSearch
-      : provider,
-  );
+  const observedBackend = withFtsSearchBackendObservability(backend, () => provider, input.usage);
 
   return new FtsSearchRepo(input.db, input.userId, input.workspaceId, input.callerAgentVisibility, {
     ...input.options,
     backend: observedBackend,
-    ftsSearchCandidateEnabled: provider === FTS_SEARCH_PROVIDERS.elasticsearch,
+    // pg_search keeps candidate retrieval inline in the model queries; every
+    // other provider answers candidate-only requests through the backend.
+    ftsSearchCandidateEnabled: provider !== FTS_SEARCH_PROVIDERS.pgSearch,
   });
 };

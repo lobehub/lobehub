@@ -58,9 +58,14 @@ export class RemoteGoalTraceStore {
     const decoded = isZstdFrame(body) ? await decompressZstd(body) : body;
     const trajectory = JSON.parse(decoded.toString('utf8')) as GoalTrajectory;
 
-    await fs.mkdir(this.cacheDir, { recursive: true });
-    await fs.writeFile(this.cachePath(goalId), JSON.stringify(trajectory, null, 2), 'utf8');
-    console.error(`✓ Cached to: ${DEFAULT_DIR}/${REMOTE_DIR}/${goalId}.json`);
+    // Only a finished goal is safe to cache. A running one is a snapshot of a
+    // moving object, and caching it would pin the reader to whatever the goal
+    // happened to look like the first time it was inspected.
+    if (trajectory.completionReason) {
+      await fs.mkdir(this.cacheDir, { recursive: true });
+      await fs.writeFile(this.cachePath(goalId), JSON.stringify(trajectory, null, 2), 'utf8');
+      console.error(`✓ Cached to: ${DEFAULT_DIR}/${REMOTE_DIR}/${goalId}.json`);
+    }
 
     return trajectory;
   }

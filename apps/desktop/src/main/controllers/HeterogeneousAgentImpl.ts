@@ -14,6 +14,7 @@ import type {
   CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
   HeterogeneousCliAgentType,
+  KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
 import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
@@ -27,24 +28,37 @@ import {
   resolveHeterogeneousAgentCommand,
   resolveHeterogeneousProviderBinding,
 } from '@lobechat/heterogeneous-agents';
+import type { AskUserBridgeOptions } from '@lobechat/heterogeneous-agents/askUser';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   LobeBuiltinMcpServer,
   McpToolResult,
 } from '@lobechat/heterogeneous-agents/builtinMcp';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
-import type { HeteroExecImageRef } from '@lobechat/heterogeneous-agents/protocol';
+import type {
+  HeteroExecImageRef,
+  HeterogeneousAgentCancellationResult,
+  HeterogeneousAgentCancellationSignal,
+} from '@lobechat/heterogeneous-agents/protocol';
 import {
   buildHeteroExecStdinPayload,
   buildHeterogeneousPrompt,
+  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
 } from '@lobechat/heterogeneous-agents/protocol';
 import {
   CLAUDE_CODE_QUOTA_FRESH_MS,
   createQuotaCacheKey,
   fetchClaudeCodeQuota,
+  KIMI_CODE_QUOTA_FRESH_MS,
   QuotaSnapshotCache,
   readClaudeCodeIdentity,
 } from '@lobechat/heterogeneous-agents/quota-sampler';
+import { isLoginShellTimeoutStatus } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+import {
+  type PiRpcImage,
+  PiRpcSession,
+  type PiRpcSessionCallbacks,
+} from '@lobechat/heterogeneous-agents/rpc';
 import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
@@ -55,6 +69,8 @@ import {
   buildCodexAppServerThreadParams,
   buildCursorAcpArgs,
   buildCursorAcpPrompt,
+  buildDevinAcpArgs,
+  buildDevinAcpPrompt,
   buildDroidAcpArgs,
   buildDroidAcpPrompt,
   buildGrokAcpArgs,
@@ -66,13 +82,16 @@ import {
   CodexThreadSession,
   createFileStoreImageUploader,
   CursorAcpSession,
+  DevinAcpSession,
   DroidAcpSession,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
   isCodexAppServerCompatibilityError,
   isCursorAcpSessionNotFoundError,
+  isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
+  normalizeImage,
   readCodexSessionModel,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
@@ -90,6 +109,7 @@ import type {
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import { sleep } from '@lobechat/utils/sleep';
 import { app as electronApp, BrowserWindow } from 'electron';
 import { isPlainObject } from 'es-toolkit';
 import semver from 'semver';
@@ -107,6 +127,8 @@ import {
   createLambdaFileStorePort,
   type RemoteServerAuth,
 } from '@/modules/heterogeneousAgent/fileStorePort';
+import { fetchKimiCodeQuota } from '@/modules/heterogeneousAgent/kimiCodeQuota';
+import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
 import {
   gcHostedProviderBindingProfiles,
@@ -117,6 +139,7 @@ import {
   beginServerDefaultOperation,
   getProviderBindingRuntime,
   getServerDefaultEndpoint,
+  type ServerDefaultOperationSettlement,
   settleServerDefaultOperation,
 } from '@/modules/heterogeneousAgent/providerBindingPort';
 import type {
@@ -194,6 +217,16 @@ const CODEX_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+(?:DEBUG|ERROR|INFO|TRACE|WA
 const CLI_ERROR_LINE_PATTERN = /^(?:error:|Error:|Usage:)/;
 const HETERO_SESSION_COMPLETE_GRACE_MS = 1_000;
 const HETERO_RUNTIME_LAB_ENABLED_VALUES = new Set(['1', 'true', 'yes', 'on']);
+
+const readPositiveEnvMs = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+};
+
+/** Default idle grace before a pooled pi RPC process is closed (5 min). */
+const PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
@@ -320,6 +353,18 @@ interface GetSessionInfoParams {
   sessionId: string;
 }
 
+/**
+ * A runtime dispatcher decides whether it handles a prompt for its agent
+ * type. Returns `true` when handled (the caller returns early); `false` when
+ * the caller should fall through to the generic CLI spawn. Entries live in
+ * the `runtimeDispatchers` registry so long-lived runtimes (pi RPC, codex
+ * app-server, ACP sessions, Claude SDK) select themselves by agent type.
+ */
+type HeterogeneousRuntimeDispatcher = (
+  params: SendPromptParams,
+  session: AgentSession,
+) => Promise<boolean>;
+
 interface GetCodexQuotaParams {
   command?: string;
   env?: Record<string, string>;
@@ -336,6 +381,12 @@ interface ConsumeCodexRateLimitResetCreditParams {
 interface GetClaudeCodeQuotaParams {
   env?: Record<string, string>;
   force?: boolean;
+}
+
+interface GetKimiCodeQuotaParams {
+  env?: Record<string, string>;
+  force?: boolean;
+  kimiCodeHomePath?: string | null;
 }
 
 export interface SessionInfo {
@@ -361,6 +412,7 @@ interface AgentSession {
   command: string;
   cursorAcpSession?: CursorAcpSession;
   cwd?: string;
+  devinAcpSession?: DevinAcpSession;
   droidAcpSession?: DroidAcpSession;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
@@ -369,6 +421,8 @@ interface AgentSession {
   modelSource?: string;
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;
+  /** Active pi RPC run (per-run process; cleared when the run settles). */
+  piRpcSession?: PiRpcSession;
   process?: ChildProcess;
   /**
    * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
@@ -392,6 +446,13 @@ interface AgentSession {
   serverOperationToken?: string;
   sessionId: string;
   traeAcpSession?: TraeAcpSession;
+  /**
+   * Set when this turn had to rebuild a garbage-collected Claude Code
+   * transcript before resuming it. The rebuild is assembled from persisted
+   * chat rows, which never carried the session-scoped prompt context, so the
+   * resumed transcript has not seen it even though the session id survives.
+   */
+  transcriptRebuiltForResume?: boolean;
   useClaudeCodeSdk?: boolean;
   useCodexAppServer?: boolean;
   verifiedModel?: string;
@@ -408,20 +469,16 @@ interface CliTraceSession {
   writeQueue: Promise<void>;
 }
 
-/** Result of cancelling a device-gateway CLI wrapper. */
-export interface LhHeteroExecCancellationResult {
-  /** Whether the wrapper emitted its exit/error terminal signal before the bounded wait elapsed. */
-  exited: boolean;
-  /** Operating-system process id when Node assigned one before cancellation. */
-  pid?: number;
-  /** Initial signal requested by the server cancellation call. */
-  signal: NodeJS.Signals;
-}
+export type LhHeteroExecCancellationResult = HeterogeneousAgentCancellationResult;
 
 interface LhHeteroExecTask {
   cancellation?: Promise<LhHeteroExecCancellationResult>;
   exit: Promise<void>;
   process: ChildProcess;
+}
+
+interface InteractiveAcpSession {
+  run: () => Promise<void>;
 }
 
 /**
@@ -463,9 +520,98 @@ export default class HeterogeneousAgentCtr {
       getAccessToken: async () => (await this.remoteServerConfigCtr?.getAccessToken()) ?? null,
       getServerUrl: async () => (await this.remoteServerConfigCtr?.getRemoteServerUrl()) ?? null,
     };
+    this.piRpcPool = new PiRpcPool({
+      // Read per-construction so tests can inject a tiny idle window.
+      idleTimeoutMs: readPositiveEnvMs(
+        'LOBE_PI_RPC_IDLE_TIMEOUT_MS',
+        PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS,
+      ),
+      onReap: (key, reason) => logger.info('Reaped pooled Pi RPC process:', { key, reason }),
+    });
   }
 
   private sessions = new Map<string, AgentSession>();
+
+  /**
+   * Runtime selection registry — the heterogeneous-agent counterpart of the
+   * adapter registry. Each entry decides whether it handles a prompt for its
+   * agent type and returns `true` when it did (the caller then returns early
+   * instead of falling through to the generic CLI spawn). Long-lived runtimes
+   * (pi RPC, codex app-server, ACP sessions, Claude SDK) register here so a
+   * future agent adopting an RPC mode only adds one entry — no dispatch edit.
+   */
+  private readonly runtimeDispatchers: Partial<
+    Record<HeterogeneousCliAgentType, HeterogeneousRuntimeDispatcher>
+  > = {
+    'claude-code': async (params, session) => {
+      if (!(session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)) return false;
+      try {
+        await this.sendPromptWithClaudeSdk(params, session);
+        return true;
+      } finally {
+        // Also clean up failures before the SDK run starts.
+        await session.hostedProviderBinding?.cleanup();
+      }
+    },
+    'codex': async (params, session) => {
+      if (
+        session.hostedProviderBinding ||
+        session.codexAppServerFallback ||
+        !(session.useCodexAppServer || this.isCodexAppServerLabEnabled)
+      ) {
+        return false;
+      }
+      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
+        resume: !!session.agentSessionId,
+      });
+      if (unsupportedArgs.length === 0) {
+        // `true` = app-server handled the prompt; `false` = fall through to
+        // the generic `codex exec` spawn.
+        return this.sendPromptWithCodexAppServer(params, session);
+      }
+      if (session.agentSessionId) {
+        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
+        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
+        throw new Error(message);
+      }
+      session.codexAppServerFallback = true;
+      logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
+        sessionId: session.sessionId,
+        unsupportedArgs,
+      });
+      return false;
+    },
+    'cursor': async (params, session) => {
+      await this.sendPromptWithCursorAcp(params, session);
+      return true;
+    },
+    'devin': async (params, session) => {
+      await this.sendPromptWithDevinAcp(params, session);
+      return true;
+    },
+    'droid': async (params, session) => {
+      await this.sendPromptWithDroidAcp(params, session);
+      return true;
+    },
+    'grok-build': async (params, session) => {
+      await this.sendPromptWithGrokAcp(params, session);
+      return true;
+    },
+    'trae': async (params, session) => {
+      await this.sendPromptWithTraeAcp(params, session);
+      return true;
+    },
+    // Pi runs exclusively over the RPC transport — there is no json fallback.
+    'pi': async (params, session) => {
+      try {
+        await this.sendPromptWithPiRpc(params, session);
+        return true;
+      } finally {
+        await session.hostedProviderBinding?.cleanup();
+      }
+    },
+  };
+
   /** Device-gateway CLI wrappers keyed by their server operation id. */
   private lhHeteroExecTasks = new Map<string, LhHeteroExecTask>();
   /**
@@ -486,12 +632,18 @@ export default class HeterogeneousAgentCtr {
   private builtinMcpStartPromise?: Promise<LobeBuiltinMcpServer>;
   /** One lazy, long-lived native Codex app-server connection shared by thread sessions. */
   private codexAppServerClient?: CodexAppServerClient;
+  /** Cross-turn pi RPC process pool (reuse + idle reaping). */
+  private readonly piRpcPool: PiRpcPool;
+  private shuttingDown = false;
   // Fresh window sits under the renderer's 2-minute auto-refresh so each
   // scheduled poll reaches the usage API instead of a cache echo.
   private readonly claudeCodeQuotaCache = new QuotaSnapshotCache<ClaudeCodeQuotaSnapshot>({
     freshMs: CLAUDE_CODE_QUOTA_FRESH_MS,
   });
   private readonly codexQuotaCache = new QuotaSnapshotCache<CodexQuotaSnapshot>();
+  private readonly kimiCodeQuotaCache = new QuotaSnapshotCache<KimiCodeQuotaSnapshot>({
+    freshMs: KIMI_CODE_QUOTA_FRESH_MS,
+  });
 
   /**
    * Typed as optional on purpose: a deferred chunk cannot assume the registry
@@ -698,6 +850,33 @@ export default class HeterogeneousAgentCtr {
     };
   }
 
+  private getDevinResumeError(
+    error: unknown,
+    session: AgentSession,
+  ): HeterogeneousAgentSessionError | undefined {
+    if (
+      session.agentType !== 'devin' ||
+      !session.resumeSessionId ||
+      !isDevinAcpSessionNotFoundError(error)
+    ) {
+      return;
+    }
+
+    return {
+      agentType: 'devin',
+      code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+      command: session.command,
+      details: {
+        code: error.rpcError.code,
+        data: error.rpcError.data,
+      },
+      message: 'The saved Devin session could not be found, so a new conversation will start.',
+      resumeSessionId: session.resumeSessionId,
+      stderr: error.message,
+      workingDirectory: session.cwd,
+    };
+  }
+
   private getCliAuthRequiredError(
     error: unknown,
     session: AgentSession,
@@ -725,7 +904,8 @@ export default class HeterogeneousAgentCtr {
       this.getCodexResumeError(error, session) ??
       this.getDroidResumeError(error, session) ??
       this.getGrokResumeError(error, session) ??
-      this.getCursorResumeError(error, session);
+      this.getCursorResumeError(error, session) ??
+      this.getDevinResumeError(error, session);
     if (resumeError) return resumeError;
 
     const authRequiredError = this.getCliAuthRequiredError(error, session);
@@ -790,7 +970,11 @@ export default class HeterogeneousAgentCtr {
     const command = this.resolveSessionCommand(session);
     const status =
       command === defaultCommand
-        ? await this.app.binaryManager?.detect?.(defaultCommand, true)
+        ? // Normal launches must reuse the successful binary/PATH detection.
+          // Forcing here invalidates the login-shell PATH cache on every message,
+          // putting a slow interactive shell back on the critical path. Explicit
+          // Rescan actions remain responsible for force-refreshing the cache.
+          await this.app.binaryManager?.detect?.(defaultCommand)
         : await detectHeterogeneousCliCommand(session.agentType, command);
 
     if (!status || status.available) {
@@ -832,6 +1016,23 @@ export default class HeterogeneousAgentCtr {
       // `#!/usr/bin/env node` shim spawned by absolute path still finds `node`.
       session.resolvedCommandSearchPath = useResolvedPath ? status!.resolvedPathEnv : undefined;
       return;
+    }
+
+    // A shell probe that ran out of time says nothing about whether the CLI is
+    // installed — on a busy machine it is the likeliest outcome, and the run
+    // before it may well have succeeded. Telling the user to install it would
+    // send them after software that is already there.
+    if (isLoginShellTimeoutStatus(status)) {
+      return {
+        agentType: session.agentType,
+        code: 'cli_detection_timeout',
+        command,
+        message:
+          `Timed out looking for \`${command}\` while reading PATH from your login shell. ` +
+          'This usually means the machine was busy rather than that the CLI is missing — ' +
+          'retry, or set an absolute path for the command in the agent settings.',
+        workingDirectory,
+      };
     }
 
     return this.buildCliMissingError(session);
@@ -1103,7 +1304,7 @@ export default class HeterogeneousAgentCtr {
   private setupAcpInterventionForOp(
     operationId: string,
     sessionId: string,
-    provider: 'cursor' | 'droid',
+    provider: NonNullable<AskUserBridgeOptions['provider']>,
   ): {
     bridge: AskUserBridge;
     cleanup: () => Promise<void>;
@@ -1276,6 +1477,22 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
+   * Whether this prompt reaches a CLI transcript that has never seen the
+   * session-scoped context (the `lh` guide), and therefore has to carry it.
+   *
+   * Two ways that happens. A client-mode session is created per turn with the
+   * previous turn's id in `resumeSessionId`, so its absence is exactly
+   * "nothing to continue": the first turn of a topic, or the resume-recovery
+   * retry the renderer re-dispatches with `resumeSessionId` cleared after a
+   * stale session id. And a transcript this turn rebuilt from persisted chat
+   * rows resumes under the original session id while containing none of the
+   * context that session was given — the rows never carried it.
+   */
+  private needsSessionIntroduction(session: AgentSession): boolean {
+    return !session.resumeSessionId || session.transcriptRebuiltForResume === true;
+  }
+
+  /**
    * Build a Claude Code stream-json user message with text + base64 images.
    * Semantic context is assembled by the shared prompt engine before the
    * provider-specific serializer runs.
@@ -1284,8 +1501,14 @@ export default class HeterogeneousAgentCtr {
     prompt: string,
     imageList: HeterogeneousAgentImageAttachment[] = [],
     systemContext?: string,
+    isNewSession?: boolean,
   ): Promise<string> {
-    const promptInput = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+    const promptInput = buildHeterogeneousPrompt({
+      imageList,
+      isNewSession,
+      prompt,
+      systemContext,
+    });
     const plan = await buildAgentInput('claude-code', promptInput, {
       cacheDir: this.fileCacheDir,
     });
@@ -1396,7 +1619,7 @@ export default class HeterogeneousAgentCtr {
    * the shared `AgentStreamPipeline` (JSONL → adapter → toStreamEvent) and
    * broadcasts the resulting `AgentStreamEvent`s on `heteroAgentEvent`.
    */
-  async sendPrompt(params: SendPromptParams): Promise<void> {
+  async sendPrompt(params: SendPromptParams): Promise<ServerDefaultOperationSettlement | void> {
     const session = this.sessions.get(params.sessionId);
     if (session) session.cancelledByUs = false;
     const serverDefaultApiConfig = session?.serverDefaultApiConfig;
@@ -1414,6 +1637,7 @@ export default class HeterogeneousAgentCtr {
       topicId: params.topicId,
     });
     let result: 'done' | 'error' = 'error';
+    let settlement: ServerDefaultOperationSettlement | void;
     try {
       if (session.cancelledByUs) {
         await this.completeCancelledSessionBeforeLaunch(session);
@@ -1425,12 +1649,13 @@ export default class HeterogeneousAgentCtr {
       if (!session.cancelledByUs) result = 'done';
     } finally {
       session.serverOperationToken = undefined;
-      await settleServerDefaultOperation(this.remoteServerAuth, {
+      settlement = await settleServerDefaultOperation(this.remoteServerAuth, {
         cancelled: session.cancelledByUs,
         operationId: params.operationId,
         result,
       }).catch((error) => logger.warn('Failed to settle server-default operation:', error));
     }
+    return settlement;
   }
 
   private async sendPromptImpl(params: SendPromptParams): Promise<void> {
@@ -1477,69 +1702,29 @@ export default class HeterogeneousAgentCtr {
           messages: params.resumeReplayMessages,
           sessionId: session.agentSessionId,
         });
-        if (ensured.written)
+        if (ensured.written) {
+          // The rebuilt transcript is made of persisted chat rows only, so
+          // whatever session-scoped context the original session was given is
+          // not in it — this turn has to introduce itself again.
+          session.transcriptRebuiltForResume = true;
           logger.info('Rebuilt GC-ed Claude Code transcript for resume:', {
             path: ensured.path,
             turns: params.resumeReplayMessages.length,
           });
+        }
       } catch (error) {
         // Never block the run on this — worst case CC starts a fresh session.
         logger.warn('Failed to rebuild Claude Code resume transcript:', error);
       }
     }
 
-    if (
-      session.agentType === 'claude-code' &&
-      (session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)
-    ) {
-      try {
-        return await this.sendPromptWithClaudeSdk(params, session);
-      } finally {
-        // The SDK helper owns cleanup once `run()` starts; this outer guard
-        // also covers input/trace/session construction failures before that try/finally.
-        await session.hostedProviderBinding?.cleanup();
-      }
-    }
-
-    if (
-      session.agentType === 'codex' &&
-      !session.hostedProviderBinding &&
-      !session.codexAppServerFallback &&
-      (session.useCodexAppServer || this.isCodexAppServerLabEnabled)
-    ) {
-      const unsupportedArgs = getCodexAppServerUnsupportedArgs(session.args, {
-        resume: !!session.agentSessionId,
-      });
-      if (unsupportedArgs.length === 0) {
-        if (await this.sendPromptWithCodexAppServer(params, session)) return;
-      } else if (session.agentSessionId) {
-        const message = `Codex app-server cannot safely resume this session without dropping CLI arguments: ${unsupportedArgs.join(', ')}`;
-        this.broadcast('heteroAgentSessionError', { error: message, sessionId: session.sessionId });
-        throw new Error(message);
-      } else {
-        session.codexAppServerFallback = true;
-        logger.warn('Falling back to codex exec because app-server cannot preserve CLI args:', {
-          sessionId: session.sessionId,
-          unsupportedArgs,
-        });
-      }
-    }
-
-    if (session.agentType === 'grok-build') {
-      return this.sendPromptWithGrokAcp(params, session);
-    }
-
-    if (session.agentType === 'cursor') {
-      return this.sendPromptWithCursorAcp(params, session);
-    }
-
-    if (session.agentType === 'droid') {
-      return this.sendPromptWithDroidAcp(params, session);
-    }
-
-    if (session.agentType === 'trae') {
-      return this.sendPromptWithTraeAcp(params, session);
-    }
+    // Long-lived runtimes (pi RPC, codex app-server, ACP sessions, Claude
+    // SDK) select themselves via the runtime registry. A dispatcher that
+    // returns `true` handled the prompt; `false` falls through to the generic
+    // CLI spawn below.
+    const runtimeDispatcher =
+      this.runtimeDispatchers[session.agentType as HeterogeneousCliAgentType];
+    if (runtimeDispatcher && (await runtimeDispatcher(params, session))) return;
 
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
     // building the spawn plan so the driver can wire the temp config path
@@ -1565,6 +1750,7 @@ export default class HeterogeneousAgentCtr {
       const driver = getHeterogeneousAgentDriver(session.agentType);
       const promptInput = buildHeterogeneousPrompt({
         imageList: params.imageList,
+        isNewSession: this.needsSessionIntroduction(session),
         prompt: params.prompt,
         systemContext: params.systemContext,
       });
@@ -1721,6 +1907,7 @@ export default class HeterogeneousAgentCtr {
       params.prompt,
       params.imageList ?? [],
       params.systemContext,
+      this.needsSessionIntroduction(session),
     );
     const traceSession = await this.createCliTraceSession({
       cliArgs: ['sdk-stream', ...session.args],
@@ -1819,6 +2006,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2011,6 +2199,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2120,6 +2309,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2173,44 +2363,16 @@ export default class HeterogeneousAgentCtr {
     });
     session.cursorAcpSession = cursorAcpSession;
 
-    try {
-      await cursorAcpSession.run();
-      void this.writeCliTraceJson(traceSession, 'exit.json', {
-        finishedAt: new Date().toISOString(),
-        transport: 'cursor-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-    } catch (error) {
-      void this.writeCliTraceJson(traceSession, 'process-error.json', {
-        message: this.getErrorMessage(error),
-        transport: 'cursor-acp',
-      });
-      await this.flushCliTrace(traceSession);
-      if (session.cancelledByUs) {
-        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
-        return;
-      }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = isCursorAcpSessionNotFoundError(error)
-        ? error
-        : stderr
-          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-              cause: error,
-            })
-          : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
-      this.broadcast('heteroAgentSessionError', {
-        error: sessionError,
-        sessionId: session.sessionId,
-      });
-      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
-        cause: error,
-      });
-    } finally {
-      await intervention.cleanup();
-      if (session.cursorAcpSession === cursorAcpSession) session.cursorAcpSession = undefined;
-    }
+    await this.runInteractiveAcpSession({
+      acpSession: cursorAcpSession,
+      activeSessionKey: 'cursorAcpSession',
+      cleanup: intervention.cleanup,
+      isResumeError: isCursorAcpSessionNotFoundError,
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'cursor-acp',
+    });
   }
 
   private async sendPromptWithDroidAcp(
@@ -2222,6 +2384,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2320,6 +2483,151 @@ export default class HeterogeneousAgentCtr {
     }
   }
 
+  private async sendPromptWithDevinAcp(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+    const promptInput = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const prompt = await buildDevinAcpPrompt(promptInput, { cacheDir: this.fileCacheDir });
+    const tracePayload = `${JSON.stringify(prompt)}\n`;
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: buildDevinAcpArgs(session.args),
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: tracePayload,
+    });
+    void this.writeCliTraceFile(traceSession, 'stdin.txt', tracePayload);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    const stderrChunks: string[] = [];
+    const intervention = this.setupAcpInterventionForOp(
+      params.operationId,
+      session.sessionId,
+      'devin',
+    );
+    const devinAcpSession = new DevinAcpSession({
+      args: session.args,
+      askUserBridge: intervention.bridge,
+      clientVersion: electronApp.getVersion(),
+      commandPath,
+      cwd,
+      env: spawnEnv,
+      initialModel: session.model,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+        }
+      },
+      onModel: (model) => {
+        session.model = model;
+        session.modelSource = 'devin-acp';
+      },
+      onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
+      onRuntimeStatus: (status) => this.broadcast('heteroAgentRuntimeStatus', status),
+      onSessionId: (agentSessionId) => {
+        session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => {
+        stderrChunks.push(data);
+        return this.appendCliTraceFile(traceSession, 'stderr.log', data);
+      },
+      operationId: params.operationId,
+      prompt,
+      resumeSessionId: session.agentSessionId,
+      sessionId: session.sessionId,
+    });
+    session.devinAcpSession = devinAcpSession;
+
+    await this.runInteractiveAcpSession({
+      acpSession: devinAcpSession,
+      activeSessionKey: 'devinAcpSession',
+      cleanup: intervention.cleanup,
+      isResumeError: isDevinAcpSessionNotFoundError,
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'devin-acp',
+    });
+  }
+
+  private async runInteractiveAcpSession({
+    acpSession,
+    activeSessionKey,
+    cleanup,
+    isResumeError,
+    session,
+    stderrChunks,
+    traceSession,
+    transport,
+  }: {
+    acpSession: InteractiveAcpSession;
+    activeSessionKey: 'cursorAcpSession' | 'devinAcpSession' | 'traeAcpSession';
+    cleanup?: () => Promise<void>;
+    isResumeError?: (error: unknown) => boolean;
+    session: AgentSession;
+    stderrChunks: string[];
+    traceSession: CliTraceSession | undefined;
+    transport: 'cursor-acp' | 'devin-acp' | 'trae-acp';
+  }): Promise<void> {
+    try {
+      await acpSession.run();
+      void this.writeCliTraceJson(traceSession, 'exit.json', {
+        finishedAt: new Date().toISOString(),
+        transport,
+      });
+      await this.flushCliTrace(traceSession);
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      void this.writeCliTraceJson(traceSession, 'process-error.json', {
+        message: this.getErrorMessage(error),
+        transport,
+      });
+      await this.flushCliTrace(traceSession);
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+      const stderr = stderrChunks.join('').trim();
+      const errorForClassification = isResumeError?.(error)
+        ? error
+        : stderr
+          ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
+              cause: error,
+            })
+          : error;
+      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
+        cause: error,
+      });
+    } finally {
+      await cleanup?.();
+      if (activeSessionKey === 'cursorAcpSession' && session.cursorAcpSession === acpSession) {
+        session.cursorAcpSession = undefined;
+      } else if (activeSessionKey === 'devinAcpSession' && session.devinAcpSession === acpSession) {
+        session.devinAcpSession = undefined;
+      } else if (activeSessionKey === 'traeAcpSession' && session.traeAcpSession === acpSession) {
+        session.traeAcpSession = undefined;
+      }
+    }
+  }
+
   private async sendPromptWithTraeAcp(
     params: SendPromptParams,
     session: AgentSession,
@@ -2329,6 +2637,7 @@ export default class HeterogeneousAgentCtr {
     const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
     const promptInput = buildHeterogeneousPrompt({
       imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
       prompt: params.prompt,
       systemContext: params.systemContext,
     });
@@ -2382,31 +2691,207 @@ export default class HeterogeneousAgentCtr {
     });
     session.traeAcpSession = traeAcpSession;
 
+    await this.runInteractiveAcpSession({
+      acpSession: traeAcpSession,
+      activeSessionKey: 'traeAcpSession',
+      cleanup: async () => {
+        await session.hostedProviderBinding?.cleanup();
+      },
+      session,
+      stderrChunks,
+      traceSession,
+      transport: 'trae-acp',
+    });
+  }
+
+  /**
+   * Pi RPC host callbacks for one run. Built per run (not per process) so a
+   * pooled process can be rebound to the current IPC session and trace.
+   */
+  private buildPiRpcCallbacks(
+    session: AgentSession,
+    traceSession: CliTraceSession | undefined,
+    operationId: string,
+    shellOperationId: string | null,
+  ): PiRpcSessionCallbacks {
+    return {
+      operationId,
+      sessionId: session.sessionId,
+      shellOperationId,
+      onEvents: async (events) => {
+        for (const event of events) {
+          this.broadcast('heteroAgentEvent', {
+            event,
+            sessionId: session.sessionId,
+          });
+        }
+      },
+      onRuntimeStatus: (status) => {
+        this.broadcast('heteroAgentRuntimeStatus', status);
+      },
+      onSessionId: (agentSessionId) => {
+        if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+      },
+      onStderr: (data) => this.appendCliTraceFile(traceSession, 'stderr.log', data),
+    };
+  }
+
+  /**
+   * Pi over the RPC transport — the only pi execution path (no json fallback).
+   *
+   * The first prompt spawns a process; settled runs hand it to the pool for
+   * follow-up turns. A pool miss resumes the native session via --session-id.
+   */
+  private async sendPromptWithPiRpc(
+    params: SendPromptParams,
+    session: AgentSession,
+  ): Promise<void> {
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const spawnEnv = this.buildSessionSpawnEnv(session);
+    const commandPath = session.resolvedCommandPath ?? this.resolveSessionCommand(session);
+
+    // Text + base64 images for the RPC `prompt` command (no `@path` temp files).
+    const promptBlocks = buildHeterogeneousPrompt({
+      imageList: params.imageList,
+      isNewSession: this.needsSessionIntroduction(session),
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    });
+    const text: string[] = [];
+    const images: PiRpcImage[] = [];
+    for (const block of promptBlocks) {
+      if (block.type === 'text') {
+        if (block.text) text.push(block.text);
+        continue;
+      }
+      try {
+        const image = await normalizeImage(block.source, { cacheDir: this.fileCacheDir });
+        images.push({
+          data: image.buffer.toString('base64'),
+          mimeType: image.mediaType,
+          type: 'image',
+        });
+      } catch (error) {
+        // A broken attachment must not silently drop the image from the
+        // prompt — surface it like the Codex/Grok paths do.
+        throw new Error(
+          `Failed to attach image(s) to Pi RPC prompt: ${this.getErrorMessage(error) || 'Unknown error'}`,
+          { cause: error },
+        );
+      }
+    }
+
+    const traceSession = await this.createCliTraceSession({
+      cliArgs: ['--mode', 'rpc', ...session.args],
+      cwd,
+      imageList: params.imageList ?? [],
+      session,
+      stdinPayload: '',
+    });
+    void this.writeCliTraceFile(traceSession, 'prompt.txt', params.prompt);
+
+    if (session.cancelledByUs) {
+      await this.completeCancelledSessionBeforeLaunch(session);
+      return;
+    }
+
+    // Cross-turn reuse: the pool keeps one `pi --mode rpc` process alive per
+    // `cwd::nativeSessionId`. The first turn spawns (no native id yet); later
+    // turns resume with `--session-id` and hit the pool instead of respawning.
+    const poolKey = session.agentSessionId ? `${cwd}::${session.agentSessionId}` : undefined;
+    // Extensions that cache env or launch unawaited work after settlement can
+    // opt out per agent without losing RPC or disabling their custom tools.
+    const reuse = spawnEnv.LOBE_PI_RPC_REUSE !== '0';
+    const callbacks = this.buildPiRpcCallbacks(
+      session,
+      traceSession,
+      params.operationId,
+      spawnEnv.LOBEHUB_OPERATION_ID ?? null,
+    );
+    // Fingerprint the runtime options that shape the spawned process (command
+    // path, args, env) so a pool hit under changed settings — model/provider,
+    // proxy env, cwd env — spawns fresh instead of reusing stale config.
+    const spawnFingerprint = [
+      commandPath,
+      cwd,
+      JSON.stringify(session.args ?? []),
+      JSON.stringify(
+        Object.entries(spawnEnv)
+          .filter(([key]) => key !== 'LOBEHUB_OPERATION_ID')
+          .sort(),
+      ),
+    ].join('::');
+    if (this.shuttingDown) throw new Error('Application is shutting down');
+    const pooledSession = poolKey ? this.piRpcPool.acquire(poolKey, spawnFingerprint) : undefined;
+    const rpcSession =
+      pooledSession ??
+      new PiRpcSession({
+        args: session.args,
+        commandPath,
+        cwd,
+        env: spawnEnv,
+        resumeSessionId: session.agentSessionId,
+        autoCloseOnSettle: !reuse,
+        uploadImage: this.uploadResultImage,
+        ...callbacks,
+      });
+    // A pooled process carries the callbacks of the run that spawned it —
+    // rebind to THIS run's IPC session / trace or events would broadcast to
+    // a stale sessionId.
+    if (pooledSession) pooledSession.rebind(callbacks);
+    session.piRpcSession = rpcSession;
+
+    logger.info(pooledSession ? 'Reusing pooled Pi RPC process:' : 'Starting Pi RPC session:', {
+      commandPath,
+      cwd,
+      pooled: !!pooledSession,
+      sessionId: session.sessionId,
+    });
+
     try {
-      await traeAcpSession.run();
+      const { aborted } = await rpcSession.run({
+        text: text.join('\n\n'),
+        ...(images.length > 0 ? { images } : {}),
+      });
+      if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      // Hand the process to the pool for the next turn (native id known now).
+      // A fresh process without a native id cannot be keyed — recycle it.
+      if (session.agentSessionId && reuse) {
+        const key = `${cwd}::${session.agentSessionId}`;
+        if (!pooledSession) this.piRpcPool.register(key, rpcSession, spawnFingerprint);
+        this.piRpcPool.release(rpcSession);
+      } else if (!pooledSession) {
+        await rpcSession.close().catch(() => {
+          /* best-effort */
+        });
+      }
       void this.writeCliTraceJson(traceSession, 'exit.json', {
+        aborted,
         finishedAt: new Date().toISOString(),
-        transport: 'trae-acp',
+        pooled: !!pooledSession,
+        transport: 'pi-rpc',
       });
       await this.flushCliTrace(traceSession);
       this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
     } catch (error) {
+      if (session.piRpcSession === rpcSession) session.piRpcSession = undefined;
+      // The run failed — the process is not reusable; close and drop it.
+      this.piRpcPool.remove(rpcSession);
+      logger.error('Pi RPC session error:', error);
       void this.writeCliTraceJson(traceSession, 'process-error.json', {
         message: this.getErrorMessage(error),
-        transport: 'trae-acp',
+        name: error instanceof Error ? error.name : 'Error',
+        transport: 'pi-rpc',
       });
       await this.flushCliTrace(traceSession);
+
+      // A user-initiated cancel resolves the run as `aborted`, so reaching the
+      // catch means a genuine failure — unless we tore the process down.
       if (session.cancelledByUs) {
         this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
         return;
       }
-      const stderr = stderrChunks.join('').trim();
-      const errorForClassification = stderr
-        ? new Error([this.getErrorMessage(error), stderr].filter(Boolean).join('\n'), {
-            cause: error,
-          })
-        : error;
-      const sessionError = this.getSessionErrorPayload(errorForClassification, session);
+      const sessionError = this.getSessionErrorPayload(error, session);
       this.broadcast('heteroAgentSessionError', {
         error: sessionError,
         sessionId: session.sessionId,
@@ -2414,9 +2899,6 @@ export default class HeterogeneousAgentCtr {
       throw new Error(typeof sessionError === 'string' ? sessionError : sessionError.message, {
         cause: error,
       });
-    } finally {
-      await session.hostedProviderBinding?.cleanup();
-      if (session.traeAcpSession === traeAcpSession) session.traeAcpSession = undefined;
     }
   }
 
@@ -2807,6 +3289,21 @@ export default class HeterogeneousAgentCtr {
   }
 
   /**
+   * Read the Kimi Code subscription quota. No CLI is spawned: the quota comes
+   * from the Kimi usage API using the local `kimi` login, and the request goes
+   * through the app's global proxy dispatcher.
+   */
+  async getKimiCodeQuota(params: GetKimiCodeQuotaParams = {}): Promise<KimiCodeQuotaSnapshot> {
+    const sourceKey = createQuotaCacheKey('kimi-code', params.env, params.kimiCodeHomePath);
+
+    return this.kimiCodeQuotaCache.get(
+      sourceKey,
+      () => fetchKimiCodeQuota({ env: params.env, kimiCodeHomePath: params.kimiCodeHomePath }),
+      { force: params.force },
+    );
+  }
+
+  /**
    * Signal the whole process tree spawned by this session.
    *
    * On Unix the child was spawned with `detached: true`, so negating the pid
@@ -2836,6 +3333,39 @@ export default class HeterogeneousAgentCtr {
         // already exited
       }
     }
+  }
+
+  private isProcessGroupAlive(pid: number): boolean {
+    try {
+      process.kill(-pid, 0);
+      return true;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+    }
+  }
+
+  private async waitForProcessTreeExit(
+    task: LhHeteroExecTask,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    if (process.platform === 'win32') {
+      let timer: NodeJS.Timeout | undefined;
+      const timedOut = new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeoutMs);
+      });
+      const exited = await Promise.race([task.exit.then(() => true as const), timedOut]);
+      if (timer) clearTimeout(timer);
+      return exited;
+    }
+    if (!task.process.pid) return true;
+
+    const deadline = Date.now() + timeoutMs;
+    while (this.isProcessGroupAlive(task.process.pid)) {
+      if (Date.now() >= deadline) return false;
+      await sleep(50);
+    }
+
+    return true;
   }
 
   /**
@@ -2904,6 +3434,10 @@ export default class HeterogeneousAgentCtr {
     if (!session) return;
 
     session.cancelledByUs = true;
+    if (session.devinAcpSession) {
+      session.devinAcpSession.interrupt();
+      return;
+    }
     if (session.grokAcpSession) {
       session.grokAcpSession.interrupt();
       return;
@@ -2929,6 +3463,12 @@ export default class HeterogeneousAgentCtr {
     }
     if (session.traeAcpSession) {
       await session.traeAcpSession.interrupt();
+      return;
+    }
+    if (session.piRpcSession) {
+      // Resolves only after settlement or confirmed shutdown. Propagate a
+      // failed shutdown so "Send now" cannot start another native writer.
+      await session.piRpcSession.abort();
       return;
     }
     if (session.sdkSession) {
@@ -2962,6 +3502,11 @@ export default class HeterogeneousAgentCtr {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
 
+    if (session.devinAcpSession) {
+      session.cancelledByUs = true;
+      session.devinAcpSession.close();
+    }
+
     if (session.grokAcpSession) {
       session.cancelledByUs = true;
       session.grokAcpSession.close();
@@ -2990,6 +3535,12 @@ export default class HeterogeneousAgentCtr {
     if (session.traeAcpSession) {
       session.cancelledByUs = true;
       session.traeAcpSession.close();
+    }
+
+    if (session.piRpcSession) {
+      session.cancelledByUs = true;
+      // Healthy settled processes remain pooled; failed cancellation closes them.
+      await session.piRpcSession.abort();
     }
 
     if (session.sdkSession) {
@@ -3063,10 +3614,25 @@ export default class HeterogeneousAgentCtr {
    * harnesses, OS shutdown) where Electron's lifecycle events never fire.
    */
   afterAppReady() {
-    electronApp.on('before-quit', () => {
+    let quitReady = false;
+    electronApp.on('before-quit', (event) => {
+      if (quitReady) return;
+      event.preventDefault();
+      if (this.shuttingDown) return;
+      this.shuttingDown = true;
+      const piClosing: Promise<void>[] = [];
       this.unlinkPendingInterventionConfigsSync();
       for (const [, session] of this.sessions) {
         session.hostedProviderBinding?.cleanupSync();
+        // First-turn processes have not reached the pool yet.
+        if (session.piRpcSession) {
+          session.cancelledByUs = true;
+          piClosing.push(session.piRpcSession.close());
+        }
+        if (session.devinAcpSession) {
+          session.cancelledByUs = true;
+          session.devinAcpSession.close();
+        }
         if (session.grokAcpSession) {
           session.cancelledByUs = true;
           session.grokAcpSession.close();
@@ -3098,6 +3664,8 @@ export default class HeterogeneousAgentCtr {
       }
       this.codexAppServerClient?.close();
       this.codexAppServerClient = undefined;
+      // Pooled pi processes outlive their IPC sessions — reap them on quit.
+      piClosing.push(this.piRpcPool.closeAll());
       this.sessions.clear();
       // The exit handlers will tear each per-op intervention down, but if
       // CC's stdio close races shutdown we'd leave the MCP server bound to
@@ -3105,6 +3673,13 @@ export default class HeterogeneousAgentCtr {
       // `session_ended` and closes the listener.
       void this.builtinMcpServer?.stop().catch((err) => {
         logger.warn('AskUserQuestion MCP server stop error:', err);
+      });
+      void Promise.allSettled(piClosing).then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') logger.warn('Pi RPC shutdown failed:', result.reason);
+        }
+        quitReady = true;
+        electronApp.quit();
       });
     });
 
@@ -3118,10 +3693,11 @@ export default class HeterogeneousAgentCtr {
         /* during late shutdown app.quit may throw — fine */
       }
       // Last-resort exit if Electron is wedged and won't quit on its own.
-      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 1000).unref();
+      // Allow EOF → TERM → KILL (up to seven seconds) to complete first.
+      setTimeout(() => process.exit(signal === 'SIGINT' ? 130 : 143), 10_000).unref();
     };
-    process.on('SIGTERM', onSignal);
-    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', () => onSignal('SIGTERM'));
+    process.on('SIGINT', () => onSignal('SIGINT'));
   }
 
   /**
@@ -3152,6 +3728,12 @@ export default class HeterogeneousAgentCtr {
     topicId: string;
     /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
     workspaceId?: string;
+    /**
+     * Called once the child process has spawned (pid available). The caller
+     * (gateway dispatcher) uses this to register the process so a later
+     * `cancelHeteroTask` can kill it by operationId.
+     */
+    onChildSpawned?: (child: ChildProcess) => void;
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
       agentType,
@@ -3161,6 +3743,7 @@ export default class HeterogeneousAgentCtr {
       imageList,
       jwt,
       operationId,
+      onChildSpawned,
       prompt,
       resumeFallbackSystemContext,
       resumeSessionId,
@@ -3209,6 +3792,7 @@ export default class HeterogeneousAgentCtr {
 
     const stdinPayload = buildHeteroExecStdinPayload({
       imageList,
+      isNewSession: !resumeSessionId,
       prompt,
       resumeFallbackSystemContext,
       systemContext,
@@ -3225,6 +3809,7 @@ export default class HeterogeneousAgentCtr {
       ...process.env,
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ELECTRON_RUN_AS_NODE: '1',
+      [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
       LOBEHUB_JWT: jwt,
       ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
@@ -3239,16 +3824,22 @@ export default class HeterogeneousAgentCtr {
     // Execute the CLI shipped with this desktop build. A bare `lh` would prefer
     // an older global install earlier on PATH, letting model discovery report a
     // capability that the actual execution runtime does not support.
+    // `detached: true` puts the CLI in its own process group so
+    // `killPlatformProcessTree(-pid, signal)` reaches the CLI and its children;
+    // the inherited-group env contract prevents the inner agent from detaching
+    // into a second, unreachable group.
     const child = spawn(process.execPath, [cliScript, ...args], {
       cwd: spawnCwd,
+      detached: true,
       env,
       stdio: ['pipe', 'inherit', 'inherit'],
+      windowsHide: true,
     });
 
-    // Keep the wrapper reachable by the gateway cancellation tool. The wrapper
-    // owns the inner agent handle and forwards SIGINT/SIGTERM into the native
-    // CLI process group, so signalling this process is the only reliable way
-    // to release a Codex thread writer before a replacement turn starts.
+    // Keep the wrapper reachable by the gateway cancellation tool. Its pid is
+    // also the inherited process-group id shared by the native agent and tool
+    // descendants, so the gateway can confirm the complete writer tree exited
+    // before a replacement turn starts.
     const exit = new Promise<void>((resolve) => {
       child.once('exit', () => resolve());
       child.once('error', () => resolve());
@@ -3286,6 +3877,12 @@ export default class HeterogeneousAgentCtr {
       });
 
       child.once('spawn', () => {
+        // Register the child with the gateway's platform task registry so a
+        // later `cancelHeteroTask` (triggered by the user clicking Stop in the
+        // web UI) can find and kill this process by operationId. Without this
+        // the CLI keeps running after the user cancels — the server only marks
+        // its own operation state as interrupted, never signalling the device.
+        onChildSpawned?.(child);
         try {
           child.stdin.write(stdinPayload);
           child.stdin.end();
@@ -3324,7 +3921,7 @@ export default class HeterogeneousAgentCtr {
    */
   async cancelLhHeteroExec(params: {
     operationId: string;
-    signal?: NodeJS.Signals;
+    signal?: HeterogeneousAgentCancellationSignal;
   }): Promise<LhHeteroExecCancellationResult | undefined> {
     const { operationId, signal = 'SIGINT' } = params;
     const task = this.lhHeteroExecTasks.get(operationId);
@@ -3332,35 +3929,14 @@ export default class HeterogeneousAgentCtr {
     if (task.cancellation) return task.cancellation;
 
     task.cancellation = (async () => {
-      const waitForExit = async (timeoutMs: number): Promise<boolean> => {
-        // Bound cancellation so an unresponsive wrapper cannot hold the gateway
-        // request forever. The timeout only gates waiting; the second signal below
-        // escalates the inner agent through the wrapper's repeated-SIGINT handler.
-        let timer: NodeJS.Timeout | undefined;
-        const timedOut = new Promise<false>((resolve) => {
-          timer = setTimeout(() => resolve(false), timeoutMs);
-        });
-        const exited = await Promise.race([task.exit.then(() => true as const), timedOut]);
-        if (timer) clearTimeout(timer);
-        return exited;
-      };
-
-      task.process.kill(signal);
-      let exited = await waitForExit(2000);
+      this.killProcessTree(task.process, signal);
+      let exited = await this.waitForProcessTreeExit(task, 2000);
 
       if (!exited) {
-        // `lh hetero exec` treats a repeated SIGINT as an explicit SIGKILL of the
-        // inner native process group. Give that path a short drain window so its
-        // heteroFinish callback can settle before the replacement starts.
-        task.process.kill(signal === 'SIGINT' ? 'SIGINT' : 'SIGKILL');
-        exited = await waitForExit(2000);
-      }
-
-      if (!exited) {
-        // Last resort: terminate the wrapper itself. This is intentionally after
-        // the cooperative path because a direct SIGKILL cannot run its finish hook.
-        task.process.kill('SIGKILL');
-        exited = await waitForExit(1000);
+        // The wrapper and native agent inherit one detached group. Escalate that
+        // complete group instead of relying on a second wrapper-only SIGINT.
+        this.killProcessTree(task.process, 'SIGKILL');
+        exited = await this.waitForProcessTreeExit(task, 3000);
       }
 
       return { exited, pid: task.process.pid, signal };

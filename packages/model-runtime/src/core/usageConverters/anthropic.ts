@@ -22,7 +22,7 @@ export const buildAnthropicInitialUsage = (
 
   return {
     inputCacheMissTokens: usage.input_tokens,
-    inputCachedTokens: usage.cache_read_input_tokens || undefined,
+    inputCachedTokens: usage.cache_read_input_tokens ?? undefined,
     inputWriteCacheTokens: usage.cache_creation_input_tokens || undefined,
     totalInputTokens,
     totalOutputTokens,

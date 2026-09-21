@@ -468,7 +468,6 @@ export class AgentRuntime {
       messages: [],
       status: 'idle',
       stepCount: 0,
-      toolManifestMap: {},
       usage: AgentRuntime.createDefaultUsage(),
       // User provided values override defaults
       ...(partialState || { operationId: '' }),
@@ -641,7 +640,8 @@ export class AgentRuntime {
 
       for (const toolCalling of payload.toolsCalling) {
         const result = {
-          content: 'Blocked by security/privacy.',
+          content: payload.blockedContent ?? 'Blocked by security/privacy.',
+          ...(payload.blockedReason && { error: payload.blockedReason }),
           success: false,
         };
 

@@ -6,6 +6,7 @@ import {
   isScopedWeeklyLimit,
   isSessionLimit,
   isWeeklyAllLimit,
+  type KimiCodeExtraUsage,
   MIN_CALIBRATION_SAMPLES,
   projectWindows,
   type QuotaAccountIdentity,
@@ -33,6 +34,17 @@ import {
 } from '@/database/types/agentQuota';
 
 import { claudeModelPrice } from './pricing';
+
+const readQuotaWindowMetadata = (raw: Record<string, unknown> | null) => ({
+  ...(typeof raw?.windowMinutes === 'number' &&
+  Number.isFinite(raw.windowMinutes) &&
+  raw.windowMinutes > 0
+    ? { windowMinutes: raw.windowMinutes }
+    : {}),
+  ...(typeof raw?.limitName === 'string' || raw?.limitName === null
+    ? { limitName: raw.limitName }
+    : {}),
+});
 
 export interface AccountLoadView extends AccountLoad {
   capacityUsd?: number;
@@ -81,6 +93,7 @@ export class AgentQuotaService {
   ingestSnapshot = async (params: {
     credentialRef?: QuotaAccountCredentialRef;
     deviceId?: string;
+    extraUsage?: KimiCodeExtraUsage | null;
     identity: QuotaAccountIdentity;
     provider: string;
     readings: QuotaLimitReading[];
@@ -90,6 +103,14 @@ export class AgentQuotaService {
       params.identity as AccountIdentityInput,
       params.credentialRef ? { credentialRef: params.credentialRef } : {},
     );
+    // The wallet is not a limit reading, so it can't ride the snapshots table —
+    // keep the latest sample on the account row or the persisted view loses the
+    // Extra Usage section between live samples.
+    if (params.extraUsage !== undefined) {
+      await this.accounts.update(account.id, {
+        metadata: { ...account.metadata, extraUsage: params.extraUsage },
+      });
+    }
     await this.ingestReadings(account.id, params.readings, params.deviceId);
     // Ingestion is the only moment new evidence arrives, so it is also the only
     // sensible calibration trigger. Cheap and self-guarding: without enough clean
@@ -116,6 +137,7 @@ export class AgentQuotaService {
         capturedAt: new Date(r.capturedAt),
         deviceId,
         isActive: r.isActive,
+        raw: { windowMinutes: r.windowMinutes, limitName: r.limitName },
         limitType: r.limitType,
         resetsAt: r.resetsAt == null ? null : new Date(r.resetsAt),
         scopeKey: r.scopeKey,
@@ -190,7 +212,7 @@ export class AgentQuotaService {
         method: result.method,
         sampleCount: result.sampleCount,
         scopeKey,
-        windowSeconds: windowSecondsForKind(limitType),
+        windowSeconds: list[0]?.windowSeconds ?? windowSecondsForKind(limitType),
       });
     }
   };
@@ -268,6 +290,7 @@ export class AgentQuotaService {
     const rows = await this.snapshots.latestPerBucket(accountId);
 
     return rows.map((row) => ({
+      ...readQuotaWindowMetadata(row.raw),
       capturedAt: row.capturedAt.getTime(),
       isActive: row.isActive ?? undefined,
       limitType: row.limitType,
@@ -287,6 +310,7 @@ export class AgentQuotaService {
     const rows = await this.snapshots.listRange(accountId, since);
 
     return rows.map((row) => ({
+      ...readQuotaWindowMetadata(row.raw),
       capturedAt: row.capturedAt.getTime(),
       isActive: row.isActive ?? undefined,
       limitType: row.limitType,

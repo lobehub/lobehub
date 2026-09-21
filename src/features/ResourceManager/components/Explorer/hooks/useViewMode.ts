@@ -3,18 +3,8 @@ import { useCallback, useEffect } from 'react';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { type ViewMode } from '@/features/ResourceManager/store/initialState';
 import { parseAsStringEnum, useQueryState } from '@/hooks/useQueryParam';
-import { FilesTabs } from '@/types/files';
 
-/**
- * Categories whose content is media first — they open in the gallery
- * (masonry) view unless the URL explicitly asks for another one.
- */
-const GALLERY_FIRST_CATEGORIES = new Set<FilesTabs>([
-  FilesTabs.Audios,
-  FilesTabs.Images,
-  FilesTabs.Videos,
-  FilesTabs.Websites,
-]);
+import { getDefaultResourceViewMode } from '../viewMode';
 
 /**
  * Hook to manage view mode with URL query sync
@@ -29,8 +19,7 @@ export const useViewMode = (): [ViewMode, (mode: ViewMode) => void] => {
 
   // Inside a library the category filter is not applied, so the stale home
   // category must not leak its gallery default there.
-  const defaultViewMode: ViewMode =
-    !libraryId && GALLERY_FIRST_CATEGORIES.has(category) ? 'masonry' : 'list';
+  const defaultViewMode = getDefaultResourceViewMode(category, libraryId);
 
   // Sync view mode with URL query parameter
   const [viewModeFromUrl, setViewModeInUrl] = useQueryState(

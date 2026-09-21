@@ -31,14 +31,18 @@ export const ReadKnowledgeInspector = memo<
   if (isArgumentsStreaming) {
     if (fileCount === 0)
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-knowledge-base.apiName.readKnowledge')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-knowledge-base.apiName.readKnowledge')}
+          </span>
         </div>
       );
 
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-knowledge-base.apiName.readKnowledge')}: </span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-knowledge-base.apiName.readKnowledge')}:{' '}
+        </span>
         <span className={highlightTextStyles.gold}>
           {fileCount} {fileCount === 1 ? 'file' : 'files'}
         </span>
@@ -73,9 +77,11 @@ export const ReadKnowledgeInspector = memo<
   };
 
   return (
-    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+    <div className={inspectorTextStyles.root}>
       <span style={{ marginInlineStart: 2 }}>
-        <span>{t('builtins.lobe-knowledge-base.apiName.readKnowledge')}: </span>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-knowledge-base.apiName.readKnowledge')}:{' '}
+        </span>
         {renderFileInfo()}
       </span>
     </div>

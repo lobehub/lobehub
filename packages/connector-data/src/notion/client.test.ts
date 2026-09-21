@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ConnectorDataError } from '../errors';
+import type { NotionComposioTools } from './client';
 import { createNotionConnectorClient } from './client';
 
 const createClient = (
-  execute: ReturnType<typeof vi.fn>,
-  resolveVersion: ReturnType<typeof vi.fn> = vi.fn(async () => ({ version: '20260730_00' })),
+  execute: NotionComposioTools['execute'],
+  resolveVersion: NotionComposioTools['getRawComposioToolBySlug'] = vi.fn(async () => ({
+    version: '20260730_00',
+  })),
 ) =>
   createNotionConnectorClient({
     composio: { tools: { execute, getRawComposioToolBySlug: resolveVersion } },

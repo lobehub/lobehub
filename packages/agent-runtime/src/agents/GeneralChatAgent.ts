@@ -25,11 +25,29 @@ import {
   type SubAgentResultPayload,
   type SubAgentsBatchResultPayload,
 } from '../types';
+import { selectRunTools, selectToolManifestMap } from '../utils/operationToolSet';
+import { selectSecurityBlacklist, selectUserInterventionConfig } from '../utils/stateSlots';
 import { shouldCompress } from '../utils/tokenCounter';
 
 const TOOL_NOT_ALLOWED_CONTENT =
   'Tool execution blocked because the tool is not allowed in the current execution scope.';
 const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
+/**
+ * Names the offending calls so the model sees what it actually emitted. The
+ * name it reads back from its own turn is regenerated from the persisted
+ * identifier/apiName pair, which for an unparseable name is not what it typed.
+ */
+const unresolvedToolContent = (names: string) =>
+  `Tool call rejected: no available tool is named ${names}. Copy a name exactly as declared in the tools schema and call it again.`;
+const UNRESOLVED_TOOL_REASON = 'tool_name_unresolved';
+/**
+ * How many times one operation may answer unresolvable tool calls with a
+ * rejected tool result before giving up. The feedback exists so the model can
+ * fix a garbled name; a model that keeps emitting names nothing can match is
+ * broken, and failing loudly beats burning the step budget on it.
+ */
+const UNRESOLVED_TOOL_FEEDBACK_LIMIT = 2;
+const PLUGIN_SCHEMA_SEPARATOR = '____';
 // Leave 35% of the model window for server-side context engineering (system
 // role, knowledge, memories, skills, etc.) and the model's completion. The
 // initial 50% threshold still supplies the lower side of the hysteresis band.
@@ -56,7 +74,7 @@ export class GeneralChatAgent implements Agent {
   }
 
   private getTools(state: AgentState, fallbackTools?: any[]): any[] | undefined {
-    return this.config.tools ?? state.tools ?? state.operationToolSet?.tools ?? fallbackTools;
+    return this.config.tools ?? selectRunTools(state) ?? fallbackTools;
   }
 
   private getAllowedToolNamesPayload() {
@@ -92,7 +110,7 @@ export class GeneralChatAgent implements Agent {
     state: AgentState,
   ): ExtendedHumanInterventionConfig | undefined {
     const { identifier, apiName } = toolCalling;
-    const manifest = state.toolManifestMap[identifier];
+    const manifest = selectToolManifestMap(state)[identifier];
 
     if (!manifest) return undefined;
 
@@ -143,13 +161,19 @@ export class GeneralChatAgent implements Agent {
     const toolsToExecute: ChatToolPayload[] = [];
 
     // Get security blacklist for resolver metadata
-    const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
+    const securityBlacklist = selectSecurityBlacklist(state) ?? DEFAULT_SECURITY_BLACKLIST;
 
-    // Build resolver metadata: merge state.metadata with security blacklist
-    const resolverMetadata = { ...state.metadata, securityBlacklist };
+    // Resolvers see one flat record: the run ledger plus the facts they audit
+    // against — the security blacklist and the plan's working directory (the
+    // path-scope audit fences file paths to it).
+    const resolverMetadata = {
+      ...state.metadata,
+      securityBlacklist,
+      workingDirectory: state.plan?.workingDirectory,
+    };
 
     // Get user config (default to 'manual' mode)
-    const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
+    const userConfig = selectUserInterventionConfig(state) || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
 
     // Global audits: default to security blacklist audit if not provided
@@ -195,12 +219,12 @@ export class GeneralChatAgent implements Agent {
       }
 
       // Phase 2.5: Get manifest for later use
-      const manifest = state.toolManifestMap?.[identifier];
+      const manifest = selectToolManifestMap(state)[identifier];
 
       // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
       const isDynamicConfig = this.isDynamicInterventionConfig(config);
-      const dynamicPolicy = await this.resolveDynamicPolicy(config, toolArgs, state.metadata);
+      const dynamicPolicy = await this.resolveDynamicPolicy(config, toolArgs, resolverMetadata);
       const staticConfig = isDynamicConfig
         ? undefined
         : (config as HumanInterventionConfig | undefined);
@@ -250,7 +274,7 @@ export class GeneralChatAgent implements Agent {
       // Only applies to manual/allow-list modes; auto-run users accept the risk
       if (!manifest) {
         console.warn(
-          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(state.toolManifestMap ?? {}).join(', ')}), requiring intervention`,
+          `[InterventionGuard] Unknown tool "${identifier}/${apiName}" not found in toolManifestMap (keys: ${Object.keys(selectToolManifestMap(state)).join(', ')}), requiring intervention`,
         );
         toolsNeedingIntervention.push(toolCalling);
         continue;
@@ -730,9 +754,12 @@ export class GeneralChatAgent implements Agent {
           // Request approval for tools that need intervention
           // Non-headless mode waits for human approval; headless mode returns blocked tool results.
           if (toolsNeedingIntervention.length > 0) {
-            if (state.userInterventionConfig?.approvalMode === 'headless') {
+            if (selectUserInterventionConfig(state)?.approvalMode === 'headless') {
               instructions.push({
                 payload: {
+                  blockedContent:
+                    'This run cannot wait for user interaction. Continue in a user-facing conversation to answer questions or approve tools.',
+                  blockedReason: 'human_intervention_unavailable',
                   parentMessageId,
                   toolsCalling: toolsNeedingIntervention,
                 },
@@ -757,26 +784,75 @@ export class GeneralChatAgent implements Agent {
           return instructions;
         }
 
-        // Silent-drop diagnostic: LLM emitted raw tool_calls but every one
-        // failed to resolve to a known tool (e.g. malformed names without the
-        // `____` separator). Surface this in reasonDetail so dashboards can
-        // distinguish it from a genuine no-tool completion. See .
-        const rawToolCallCount = result?.tool_calls?.length ?? 0;
-        const hasUnresolvedToolCalls = rawToolCallCount > 0;
+        // The model asked for tools but not one name resolved — it garbled the
+        // `____` separator beyond repair, or named a tool that was never
+        // offered. Finishing here would write an empty assistant message and
+        // mark the operation `done` while the requested work never ran, which
+        // reads as a conversation that just stopped mid-task. Hand the model a
+        // rejected tool result instead so it can retry with a real name.
+        const rawToolCalls = result?.tool_calls ?? [];
+        if (rawToolCalls.length > 0) {
+          const namedToolCalls = rawToolCalls.filter((toolCall) => !!toolCall.function?.name);
+          const unresolvedNames = namedToolCalls
+            .map((toolCall) => toolCall.function.name)
+            .join(', ');
+          const overFeedbackLimit =
+            (state.unresolvedToolFeedbackRounds ?? 0) >= UNRESOLVED_TOOL_FEEDBACK_LIMIT;
+
+          // Past max steps the LLM payload carries no tools at all, so a tool
+          // call here is the model ignoring that. The run is already over
+          // budget — end it rather than spending more steps on a retry, and
+          // keep the names for the dashboards.
+          if (state.forceFinish) {
+            return {
+              reason: 'max_steps_completed',
+              reasonDetail: `LLM returned ${rawToolCalls.length} unresolvable tool_calls after max steps: ${unresolvedNames || 'unnamed'}`,
+              type: 'finish',
+            };
+          }
+
+          // Nothing addressable to reject (nameless calls), or the model has
+          // already been told twice: fail the operation so it surfaces as an
+          // error instead of a silent `done`.
+          if (namedToolCalls.length === 0 || overFeedbackLimit) {
+            throw new Error(
+              `LLM returned ${rawToolCalls.length} unresolvable tool_calls: ${unresolvedNames || 'unnamed'}`,
+            );
+          }
+
+          return {
+            payload: {
+              blockedContent: unresolvedToolContent(unresolvedNames),
+              blockedReason: UNRESOLVED_TOOL_REASON,
+              parentMessageId,
+              unresolvedToolNames: true,
+              toolsCalling: namedToolCalls.map((toolCall): ChatToolPayload => {
+                const [identifier, apiName] = toolCall.function.name.split(PLUGIN_SCHEMA_SEPARATOR);
+
+                return {
+                  apiName: apiName ?? identifier,
+                  arguments: toolCall.function.arguments,
+                  id: toolCall.id,
+                  identifier,
+                  // A garbled name does not mean a garbled signature: Gemini
+                  // 3.x still requires `thoughtSignature` to come back on the
+                  // next turn or it 400s, which would kill the retry this
+                  // rejection exists to enable.
+                  thoughtSignature: toolCall.thoughtSignature,
+                  type: 'builtin',
+                };
+              }),
+            },
+            type: 'resolve_blocked_tools',
+          } satisfies AgentInstruction;
+        }
 
         // No tool calls, conversation is complete
         return {
           reason: state.forceFinish ? 'max_steps_completed' : 'completed',
-          reasonDetail: hasUnresolvedToolCalls
-            ? `LLM returned ${rawToolCallCount} unresolvable tool_calls: ${(
-                result?.tool_calls ?? []
-              )
-                .map((tc) => tc.function?.name)
-                .filter(Boolean)
-                .join(', ')}`
-            : state.forceFinish
-              ? 'Force finish: LLM produced final text response after max steps'
-              : 'LLM response completed without tool calls',
+          reasonDetail: state.forceFinish
+            ? 'Force finish: LLM produced final text response after max steps'
+            : 'LLM response completed without tool calls',
           type: 'finish',
         };
       }

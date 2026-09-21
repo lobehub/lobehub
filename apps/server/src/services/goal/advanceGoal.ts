@@ -13,7 +13,7 @@ const log = debug('lobe-server:goal-advance');
  * Outcomes the coordinator cannot get past by ticking again.
  *
  * `waiting_external` is one of them here, and that is the whole point of the
- * event-driven design: it means a Work Task is now executing, so the next move
+ * event-driven design: it means a graph Task is now executing, so the next move
  * belongs to that task's completion, not to a poll loop holding a worker open.
  */
 const STOP_OUTCOMES = new Set<GoalTickOutcome>([
@@ -25,9 +25,10 @@ const STOP_OUTCOMES = new Set<GoalTickOutcome>([
 ]);
 
 /**
- * Safety limit for one advance. Dispatching a Work takes two ticks, so a
- * healthy run is a handful; anything near this is a loop that is not
- * converging, and the sweep will come back to it.
+ * Safety limit for one advance. Dispatching a Task takes two ticks and an
+ * advance now fills every free concurrency slot, so a healthy run is a
+ * handful; anything near this is a loop that is not converging, and the sweep
+ * will come back to it.
  */
 export const MAX_TICKS_PER_ADVANCE = 20;
 

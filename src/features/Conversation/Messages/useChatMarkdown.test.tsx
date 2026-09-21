@@ -43,7 +43,7 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     const { result } = renderHook(() => useChatMarkdown({ id: 'a2', isGenerating: false }));
     const remarkPlugins = result.current.markdownProps.remarkPlugins ?? [];
 
-    // Sanity: an assistant-scoped plugin (e.g. LocalFile) is still wired in, so
+    // Sanity: an assistant-scoped plugin (e.g. LobeThinking) is still wired in, so
     // the filter narrowed the set rather than emptying it.
     const assistantScoped = markdownElements.find(
       (el) => el.scope === 'assistant' && el.remarkPlugin,

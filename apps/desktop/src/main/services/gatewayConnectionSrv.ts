@@ -9,6 +9,7 @@ import type {
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
+  DeviceSystemInfo,
   GatewayClient,
   GatewayMcpParams,
   MessageApiRequestMessage,
@@ -25,6 +26,7 @@ import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
 import { createLogger } from '@/utils/logger';
 import { getDesktopUserAgent } from '@/utils/user-agent';
+import { safeGetPath } from '@/utils/user-path';
 
 import { ServiceModule } from './index';
 
@@ -102,9 +104,11 @@ interface RpcHandler {
 
 interface DeviceRegistrar {
   (info: {
+    architecture: string;
     deviceId: string;
     hostname: string;
     identitySource: IdentitySource;
+    metadata: Record<string, string>;
     platform: string;
   }): Promise<void>;
 }
@@ -304,6 +308,31 @@ export default class GatewayConnectionService extends ServiceModule {
     };
   }
 
+  /**
+   * Whether a registry device id belongs to this physical desktop.
+   *
+   * A machine can be reachable through both its personal identity and one
+   * derived identity per persisted workspace enrollment. Reconnect deep links
+   * must accept all of those identities without waking a different machine.
+   */
+  async matchesDeviceId(deviceId: string): Promise<boolean> {
+    if (this.getDeviceId() === deviceId) return true;
+
+    const token = await this.tokenProvider?.();
+    const userId = token ? this.extractUserIdFromToken(token) : undefined;
+    if (userId) {
+      const identity = await this.resolveDeviceIdentity(userId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    for (const workspaceId of this.getPersistedWorkspaceEnrollments()) {
+      const identity = await this.resolveWorkspaceDeviceIdentity(workspaceId);
+      if (identity.deviceId === deviceId) return true;
+    }
+
+    return false;
+  }
+
   // ─── Connection Logic ───
 
   async connect(): Promise<{ error?: string; success: boolean }> {
@@ -356,9 +385,16 @@ export default class GatewayConnectionService extends ServiceModule {
     if (userId) {
       const identity = await this.resolveDeviceIdentity(userId);
       await this.deviceRegistrar?.({
+        architecture: os.arch(),
         deviceId: identity.deviceId,
         hostname: os.hostname(),
         identitySource: identity.identitySource,
+        metadata: {
+          appVersion: app.getVersion(),
+          electron: process.versions.electron,
+          node: process.versions.node,
+          osRelease: os.release(),
+        },
         platform: process.platform,
       }).catch((err) => {
         logger.warn(`Device registration failed (non-fatal): ${(err as Error).message}`);
@@ -419,7 +455,7 @@ export default class GatewayConnectionService extends ServiceModule {
     });
 
     client.on('system_info_request', (request) => {
-      this.handleSystemInfoRequest(client, request);
+      void this.handleSystemInfoRequest(client, request);
     });
 
     client.on('rpc_request', (request) => {
@@ -666,29 +702,42 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── System Info ───
 
+  /**
+   * Triggering workflow: gateway `system_info_request` -> handleSystemInfoRequest
+   * -> {@link GatewayClient.sendSystemInfoResponse}, including desktop tool support.
+   */
   private async handleSystemInfoRequest(client: GatewayClient, request: SystemInfoRequestMessage) {
     logger.info(`Received system_info_request: requestId=${request.requestId}`);
+    try {
+      client.sendSystemInfoResponse({
+        requestId: request.requestId,
+        result: { success: true, systemInfo: await this.collectSystemInfo() },
+      });
+    } catch (error) {
+      // The gateway keeps the agent run parked until a correlated reply arrives,
+      // so a failed collection must still answer instead of only logging.
+      logger.error(`system_info_request failed: requestId=${request.requestId}`, error);
+      client.sendSystemInfoResponse({ requestId: request.requestId, result: { success: false } });
+    }
+  }
+
+  private async collectSystemInfo(): Promise<DeviceSystemInfo> {
     const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
-    client.sendSystemInfoResponse({
-      requestId: request.requestId,
-      result: {
-        success: true,
-        systemInfo: {
-          arch: os.arch(),
-          // Tell the server-side prompt builder which shell runCommand spawns here.
-          defaultShell: (await getShellInfo()).displayName,
-          desktopPath: app.getPath('desktop'),
-          documentsPath: app.getPath('documents'),
-          downloadsPath: app.getPath('downloads'),
-          homePath: app.getPath('home'),
-          musicPath: app.getPath('music'),
-          picturesPath: app.getPath('pictures'),
-          userDataPath: app.getPath('userData'),
-          videosPath: app.getPath('videos'),
-          workingDirectory: process.cwd(),
-        },
-      },
-    });
+    return {
+      supportedTools: ['lobe-computer-use'],
+      arch: os.arch(),
+      // Tell the server-side prompt builder which shell runCommand spawns here.
+      defaultShell: (await getShellInfo()).displayName,
+      desktopPath: app.getPath('desktop'),
+      documentsPath: app.getPath('documents'),
+      downloadsPath: safeGetPath('downloads'),
+      homePath: app.getPath('home'),
+      musicPath: safeGetPath('music'),
+      picturesPath: safeGetPath('pictures'),
+      userDataPath: app.getPath('userData'),
+      videosPath: safeGetPath('videos'),
+      workingDirectory: process.cwd(),
+    };
   }
 
   // ─── Generic Device RPC ───

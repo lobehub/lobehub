@@ -42,6 +42,10 @@ vi.mock('../../../store', () => ({
     selector({ dbMessages: mockDbMessages }),
 }));
 
+vi.mock('./SteerMessage', () => ({
+  default: ({ id }: { id: string }) => <div data-id={id} data-testid="steer-message" />,
+}));
+
 vi.mock('./CollapsedMessage', () => ({
   CollapsedMessage: ({ content }: { content?: string }) => <div>{content}</div>,
 }));
@@ -344,6 +348,65 @@ describe('Group', () => {
         toolCount: 1,
       },
     ]);
+  });
+
+  it('breaks an image-bearing tool out between two workflow folds', () => {
+    const { container } = render(
+      <Group
+        isLatestItem
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Inspecting.',
+            id: 'block-1',
+            tools: [
+              { apiName: 'Bash', id: 'tool-0', identifier: 'claude-code' } as any,
+              { apiName: 'Bash', id: 'tool-1', identifier: 'claude-code' } as any,
+              {
+                apiName: 'Read',
+                id: 'tool-2',
+                identifier: 'claude-code',
+                result: {
+                  content: 'ok',
+                  id: 'r2',
+                  state: { images: [{ url: 'https://x/a.png' }] },
+                },
+              } as any,
+              { apiName: 'Bash', id: 'tool-3', identifier: 'claude-code' } as any,
+            ],
+          }),
+          blk({
+            content: 'Continuing.',
+            id: 'block-2',
+            tools: [{ apiName: 'Bash', id: 'tool-4', identifier: 'claude-code' } as any],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+    expect(sequence).toEqual(['workflow-segment', 'answer-segment', 'workflow-segment']);
+
+    const [first, second] = screen
+      .getAllByTestId('workflow-segment')
+      .map((node) => JSON.parse(node.getAttribute('data-blocks') || '[]'));
+    expect(first).toEqual([
+      expect.objectContaining({
+        contentOverride: 'Inspecting.',
+        domId: 'block-1__tool-0__workflow',
+        toolCount: 2,
+      }),
+    ]);
+    expect(second).toEqual([
+      expect.objectContaining({ domId: 'block-1__tool-3__workflow', toolCount: 1 }),
+      expect.objectContaining({ content: 'Continuing.', toolCount: 1 }),
+    ]);
+    expect(parseAnswerSegment()).toEqual(
+      expect.objectContaining({ domId: 'block-1__tool-2__workflow', id: 'block-1', toolCount: 1 }),
+    );
   });
 
   it('does not fold the latest process behind a non-renderable final answer placeholder', () => {
@@ -814,5 +877,112 @@ describe('Group', () => {
     expect(screen.getByTestId('workflow-segment').getAttribute('data-chrome-complete')).toBe(
       'false',
     );
+  });
+
+  describe('steered continuations', () => {
+    const chain1 = [
+      blk({
+        content: 'Looking into it.',
+        id: 'a1',
+        tools: [{ apiName: 'search', id: 't1' } as any],
+      }),
+      blk({ content: 'Turn one answer.', id: 'a2' }),
+    ];
+    const chain2 = [
+      blk({ content: '', id: 'b1', tools: [{ apiName: 'readFile', id: 't2' } as any] }),
+      blk({ content: 'Final answer.', id: 'b2' }),
+    ];
+
+    it('renders steer bubbles inline between chains while streaming', () => {
+      mockIsGenerating = true;
+
+      const { container } = render(
+        <Group
+          isLatestItem
+          blocks={chain1}
+          continuations={[{ blocks: chain2, id: 'group-2', steerUserId: 'steer-1' }]}
+          id="group-1"
+          messageIndex={0}
+        />,
+      );
+
+      const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+        node.getAttribute('data-testid'),
+      );
+      expect(sequence).toEqual([
+        'answer-segment',
+        'answer-segment',
+        'steer-message',
+        'answer-segment',
+        'answer-segment',
+      ]);
+      expect(screen.getByTestId('steer-message').getAttribute('data-id')).toBe('steer-1');
+      expect(screen.queryByTestId('process-fold')).not.toBeInTheDocument();
+    });
+
+    it('folds each turn separately and keeps the steer bubble between the folds', () => {
+      mockOperations = [];
+
+      const { container } = render(
+        <Group
+          enableProcessFold
+          isLatestItem
+          blocks={chain1}
+          continuations={[{ blocks: chain2, id: 'group-2', steerUserId: 'steer-1' }]}
+          id="group-1"
+          messageIndex={0}
+        />,
+      );
+
+      const folds = screen.getAllByTestId('process-fold');
+      expect(folds.map((fold) => fold.getAttribute('data-step-count'))).toEqual(['2', '2']);
+
+      const steer = screen.getByTestId('steer-message');
+      expect(
+        folds[0]!.compareDocumentPosition(steer) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        steer.compareDocumentPosition(folds[1]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(folds.some((fold) => fold.contains(steer))).toBe(false);
+
+      const idsIn = (root: Element) =>
+        Array.from(root.querySelectorAll('[data-testid="answer-segment"]')).map(
+          (node) => JSON.parse(node.getAttribute('data-block') || '{}').id,
+        );
+      expect(idsIn(folds[0]!)).toEqual(['a1', 'a2']);
+      expect(idsIn(folds[1]!)).toEqual(['b1']);
+
+      const outside = Array.from(container.querySelectorAll('[data-testid="answer-segment"]'))
+        .filter((node) => !folds.some((fold) => fold.contains(node)))
+        .map((node) => JSON.parse(node.getAttribute('data-block') || '{}').id);
+      expect(outside).toEqual(['b2']);
+    });
+
+    it('skips the fold for a continuation whose whole output is the final answer', () => {
+      mockOperations = [];
+
+      render(
+        <Group
+          enableProcessFold
+          isLatestItem
+          blocks={chain1}
+          id="group-1"
+          messageIndex={0}
+          continuations={[
+            {
+              blocks: [blk({ content: 'Final answer.', id: 'b2' })],
+              id: 'group-2',
+              steerUserId: 'steer-1',
+            },
+          ]}
+        />,
+      );
+
+      const folds = screen.getAllByTestId('process-fold');
+      expect(folds).toHaveLength(1);
+      expect(folds[0]!.getAttribute('data-step-count')).toBe('2');
+      expect(screen.getByTestId('steer-message')).toBeInTheDocument();
+    });
   });
 });

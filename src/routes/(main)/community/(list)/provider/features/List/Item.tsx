@@ -1,4 +1,4 @@
-import { Github, ModelTag, ProviderCombine } from '@lobehub/icons';
+import { Github } from '@lobehub/icons';
 import { Block, Flexbox, MaskShadow, stopPropagation } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { ModelTag, ProviderCombine } from '@/components/LobeIcons';
 import { GITHUB } from '@/const/url';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';

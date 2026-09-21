@@ -1,9 +1,9 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ReadFileState } from '@lobechat/tool-runtime';
-import { Flexbox, Icon, Image, Markdown, PreviewGroup } from '@lobehub/ui';
+import { Flexbox, Image, Markdown, PreviewGroup } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { AlignLeft, Asterisk, ExternalLink, FolderOpen } from 'lucide-react';
+import { ExternalLink, FolderOpen } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,23 +20,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     justify-content: space-between;
 
-    padding: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    transition: all 0.2s ${cssVar.motionEaseInOut};
-
     .local-file-actions {
       opacity: 0;
     }
 
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-
-      .local-file-actions {
-        opacity: 1;
-      }
+    &:hover .local-file-actions {
+      opacity: 1;
     }
   `,
   fileName: css`
@@ -51,12 +40,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
     cursor: pointer;
   `,
-  lineCount: css`
-    color: ${cssVar.colorTextQuaternary};
+  image: css`
+    border-radius: ${cssVar.borderRadiusLG};
   `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
+  imageList: css`
+    flex-wrap: wrap;
   `,
   path: css`
     margin-block-start: 4px;
@@ -89,20 +77,32 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const ReadFileView = memo<ReadFileState>(
-  ({
-    filename: filenameProp,
-    path,
-    fileType,
-    charCount,
-    content,
-    images,
-    totalLines,
-    totalCharCount,
-    loc,
-  }) => {
+  ({ filename: filenameProp, path, fileType, content, images }) => {
     const { t } = useTranslation('tool');
     const { openFile, openFolder, displayRelativePath } = useToolRenderCapabilities();
     const filename = filenameProp || path.split('/').pop() || path;
+
+    // Reading an image is best shown as the image itself: no card, no header, no path.
+    if (images && images.length > 0) {
+      return (
+        <PreviewGroup>
+          <Flexbox horizontal align={'flex-start'} className={styles.imageList} gap={8}>
+            {images.map((image, index) => (
+              <Image
+                alt={filename || image.mediaType || ''}
+                className={styles.image}
+                key={image.url || index}
+                maxHeight={600}
+                objectFit={'contain'}
+                src={image.url}
+                variant={'outlined'}
+              />
+            ))}
+          </Flexbox>
+        </PreviewGroup>
+      );
+    }
+
     const isHtml = isHtmlFile({ fileName: filename, fileType, path });
 
     const handleOpenFile = openFile
@@ -122,7 +122,7 @@ const ReadFileView = memo<ReadFileState>(
     const displayPath = displayRelativePath ? displayRelativePath(path) : path;
 
     return (
-      <Flexbox className={styles.container} gap={12}>
+      <Flexbox className={styles.container} gap={8}>
         <Flexbox>
           <Flexbox
             horizontal
@@ -138,7 +138,12 @@ const ReadFileView = memo<ReadFileState>(
                   {filename}
                 </Text>
                 {(handleOpenFile || handleOpenFolder) && (
-                  <Flexbox horizontal className={styles.actions} gap={2} style={{ marginLeft: 8 }}>
+                  <Flexbox
+                    horizontal
+                    className={`${styles.actions} local-file-actions`}
+                    gap={2}
+                    style={{ marginLeft: 8 }}
+                  >
                     {handleOpenFile && (
                       <ActionIcon
                         icon={ExternalLink}
@@ -159,36 +164,6 @@ const ReadFileView = memo<ReadFileState>(
                 )}
               </Flexbox>
             </Flexbox>
-            <Flexbox horizontal align={'center'} className={styles.meta} gap={16}>
-              {charCount !== undefined && (
-                <Flexbox horizontal align={'center'} gap={4}>
-                  <Icon icon={Asterisk} size={'small'} />
-                  <span>
-                    {charCount}
-                    {totalCharCount !== undefined && (
-                      <>
-                        {' '}
-                        / <span className={styles.lineCount}>{totalCharCount}</span>
-                      </>
-                    )}
-                  </span>
-                </Flexbox>
-              )}
-              {loc && (
-                <Flexbox horizontal align={'center'} gap={4}>
-                  <Icon icon={AlignLeft} size={'small'} />
-                  <span>
-                    L{loc[0]}-{loc[1]}
-                    {totalLines !== undefined && (
-                      <>
-                        {' '}
-                        / <span className={styles.lineCount}>{totalLines}</span>
-                      </>
-                    )}
-                  </span>
-                </Flexbox>
-              )}
-            </Flexbox>
           </Flexbox>
 
           <Text ellipsis className={styles.path} type={'secondary'}>
@@ -200,20 +175,7 @@ const ReadFileView = memo<ReadFileState>(
           className={styles.previewBox}
           style={{ height: isHtml ? 240 : undefined, maxHeight: 240 }}
         >
-          {images && images.length > 0 ? (
-            <PreviewGroup>
-              <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap', padding: 8 }}>
-                {images.map((image, index) => (
-                  <Image
-                    alt={filename || image.mediaType || ''}
-                    key={image.url || index}
-                    src={image.url}
-                    style={{ borderRadius: 8, maxHeight: 224, objectFit: 'contain' }}
-                  />
-                ))}
-              </Flexbox>
-            </PreviewGroup>
-          ) : isHtml ? (
+          {isHtml ? (
             <InlineHtmlPreview content={content} />
           ) : fileType === 'md' ? (
             <Markdown style={{ overflow: 'auto' }}>{content}</Markdown>

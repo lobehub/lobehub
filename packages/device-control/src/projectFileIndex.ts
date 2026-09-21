@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -7,6 +8,8 @@ import fg from 'fast-glob';
 
 import { projectFileSearchManager } from './projectFileSearchManager';
 import type {
+  ProjectDirectoryListParams,
+  ProjectDirectoryListResult,
   ProjectFileIndexEntry,
   ProjectFileIndexParams,
   ProjectFileIndexResult,
@@ -17,17 +20,28 @@ import type {
 const execFileAsync = promisify(execFile);
 const PROJECT_FILE_GLOB_LIMIT = 5000;
 const PROJECT_FILE_SEARCH_DEFAULT_LIMIT = 100;
+const PROJECT_DIRECTORY_LIST_LIMIT = 1000;
 
 const toPosixRelativePath = (filePath: string) => filePath.split(path.sep).join('/');
+
+/** Parent of a posix index path (`a/b/c.ts` → `a/b/`), or null at the root. */
+const getParentRelativePath = (relativePath: string): string | null => {
+  const cleaned = relativePath.endsWith('/') ? relativePath.slice(0, -1) : relativePath;
+  const index = cleaned.lastIndexOf('/');
+  if (index < 0) return null;
+  return `${cleaned.slice(0, index)}/`;
+};
 
 const createProjectFileEntry = (
   root: string,
   absolutePath: string,
   isDirectory: boolean,
   gitIgnored?: boolean,
+  collapsed?: boolean,
 ): ProjectFileIndexEntry => {
   const relativePath = toPosixRelativePath(path.relative(root, absolutePath));
   return {
+    ...(collapsed ? { collapsed: true } : {}),
     ...(gitIgnored ? { gitIgnored: true } : {}),
     isDirectory,
     name: path.basename(absolutePath),
@@ -73,11 +87,19 @@ const buildEntries = (
   // collapsing fully ignored directories (for example node_modules/) into one
   // bounded entry. The trailing slash is therefore meaningful and must be
   // preserved as directory metadata before resolving the absolute path.
+  // A collapsed directory has real children on disk that this index will never
+  // list, so it is flagged for the caller to expand on demand.
   const ignoredEntries = ignoredPaths
     .map((relativePath) => {
       const isDirectory = relativePath.endsWith('/');
       const normalizedPath = isDirectory ? relativePath.slice(0, -1) : relativePath;
-      return createProjectFileEntry(root, path.resolve(root, normalizedPath), isDirectory, true);
+      return createProjectFileEntry(
+        root,
+        path.resolve(root, normalizedPath),
+        isDirectory,
+        true,
+        isDirectory,
+      );
     })
     .filter((entry) => {
       if (seen.has(entry.path)) return false;
@@ -85,34 +107,127 @@ const buildEntries = (
       return true;
     });
 
-  const indexedPaths = [...fileEntries, ...ignoredEntries].map((entry) => entry.path);
-
-  return [...collectProjectDirectories(indexedPaths, root), ...fileEntries, ...ignoredEntries];
+  return clearCollapsedOnIndexedDirectories(
+    addMissingParentDirectories([...fileEntries, ...ignoredEntries], root),
+  );
 };
 
-const collectGlobFilePaths = async (scope: string): Promise<string[]> => {
-  const files: string[] = [];
+/**
+ * A directory Git collapsed can still have indexed descendants — a nested
+ * `.gitignore` re-including part of the subtree, for example. Those rows are
+ * already complete, so drop the flag to keep the caller from re-listing them.
+ */
+const clearCollapsedOnIndexedDirectories = (
+  entries: ProjectFileIndexEntry[],
+): ProjectFileIndexEntry[] => {
+  const parentsWithChildren = new Set<string>();
+  for (const entry of entries) {
+    let parent = getParentRelativePath(entry.relativePath);
+    while (parent) {
+      if (parentsWithChildren.has(parent)) break;
+      parentsWithChildren.add(parent);
+      parent = getParentRelativePath(parent);
+    }
+  }
+
+  return entries.map((entry) => {
+    if (!entry.collapsed || !parentsWithChildren.has(entry.relativePath)) return entry;
+    const { collapsed: _collapsed, ...rest } = entry;
+    return rest;
+  });
+};
+
+const addMissingParentDirectories = (
+  entries: ProjectFileIndexEntry[],
+  root: string,
+): ProjectFileIndexEntry[] => {
+  const indexedPaths = entries.map((entry) => entry.path);
+  const seen = new Set(indexedPaths);
+  // Explicit entries carry ignore metadata; only synthesize missing parents.
+  const directories = collectProjectDirectories(indexedPaths, root).filter(
+    (entry) => !seen.has(entry.path),
+  );
+
+  return [...directories, ...entries];
+};
+
+const collectGlobEntries = async (scope: string): Promise<ProjectFileIndexEntry[]> => {
+  const entries: ProjectFileIndexEntry[] = [];
   const stream = fg.stream('**/*', {
     cwd: scope,
     dot: true,
     ignore: ['**/node_modules/**', '**/.git/**'],
-    onlyFiles: true,
+    objectMode: true,
+    onlyFiles: false,
   });
 
-  for await (const relativePath of stream as AsyncIterable<string>) {
-    files.push(path.resolve(scope, relativePath));
-    if (files.length >= PROJECT_FILE_GLOB_LIMIT) break;
+  for await (const entry of stream as AsyncIterable<fg.Entry>) {
+    entries.push(
+      createProjectFileEntry(scope, path.resolve(scope, entry.path), entry.dirent.isDirectory()),
+    );
+    if (entries.length >= PROJECT_FILE_GLOB_LIMIT) break;
   }
 
-  return files;
+  return addMissingParentDirectories(entries, scope);
 };
 
 /**
- * Portable project file index for the CLI (and any non-desktop device). Prefers
+ * Children of a single directory inside a project, read straight from disk.
+ *
+ * The index collapses fully ignored directories, so their contents never reach
+ * the tree. This fills one level at a time when the user expands such a row —
+ * an ignored subtree is enumerated only if someone actually looks at it, which
+ * is what keeps `node_modules` from ever being walked.
+ */
+export const defaultListProjectDirectory = async ({
+  limit = PROJECT_DIRECTORY_LIST_LIMIT,
+  relativePath,
+  root,
+}: ProjectDirectoryListParams): Promise<ProjectDirectoryListResult> => {
+  const resolvedRoot = path.resolve(root);
+  const target = path.resolve(resolvedRoot, relativePath);
+
+  // Never step outside the project the caller already has access to. The check
+  // runs on real paths: `path.resolve` does not follow links, so a symlink
+  // inside the project pointing outside it would pass a lexical prefix check
+  // and then have its target enumerated. Entries are still built from the
+  // lexical path below, so their ids stay anchored to the path the caller
+  // asked for rather than wherever a link happened to land.
+  const realRoot = await realpath(resolvedRoot);
+  const realTarget = await realpath(target);
+  if (realTarget !== realRoot && !realTarget.startsWith(`${realRoot}${path.sep}`)) {
+    throw new Error('Directory is outside the project root');
+  }
+
+  const dirents = await readdir(target, { withFileTypes: true });
+  const visible = dirents
+    .filter((dirent) => dirent.isDirectory() || dirent.isFile() || dirent.isSymbolicLink())
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  const entries = visible.slice(0, limit).map((dirent) => {
+    // Symlinks stay leaf rows — following one could walk outside the project
+    // root, or into a cycle.
+    const isDirectory = !dirent.isSymbolicLink() && dirent.isDirectory();
+
+    return createProjectFileEntry(
+      resolvedRoot,
+      path.join(target, dirent.name),
+      isDirectory,
+      // Everything under a collapsed directory is ignored by the same rule
+      // that collapsed the parent.
+      true,
+      isDirectory,
+    );
+  });
+
+  return { entries, truncated: visible.length > entries.length };
+};
+
+/**
+ * Shared project file index for desktop and CLI devices. Prefers
  * `git ls-files` (tracked + untracked + collapsed ignored entries,
  * submodule-aware) to enumerate the repo, falling back to a `fast-glob` walk
- * when the scope is not a git repo. Mirrors the desktop
- * `LocalFileCtr.getProjectFileIndex` output shape.
+ * when the scope is not a git repo. Platform adapters own preview authorization.
  */
 export const defaultGetProjectFileIndex = async (
   params: ProjectFileIndexParams = {},
@@ -180,11 +295,8 @@ export const defaultGetProjectFileIndex = async (
     // fall through to glob
   }
 
-  // Non-git scope: walk with fast-glob. `dot: true` keeps dot-directories (e.g.
-  // `.agents`) that the git path would surface via `ls-files`, and `onlyFiles`
-  // leaves directory entries to `buildEntries` so nesting matches the git path.
-  const files = await collectGlobFilePaths(requestedScope);
-  const entries = buildEntries(files, requestedScope);
+  // Include hidden and empty directories consistently across desktop and CLI.
+  const entries = await collectGlobEntries(requestedScope);
 
   return {
     entries,

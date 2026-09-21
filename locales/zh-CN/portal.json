@@ -1,4 +1,5 @@
 {
+  "FilePreview.actions.download": "下载源文件",
   "FilePreview.tabs.chunk": "分块",
   "FilePreview.tabs.file": "文件",
   "Plugins": "技能",

@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import { platform } from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
@@ -11,6 +12,7 @@ import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStrea
 import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
+import { buildDevinAcpPrompt, DevinAcpSession } from './devinAcpSession';
 import { buildDroidAcpPrompt, DroidAcpSession } from './droidAcpSession';
 import { buildGrokAcpPrompt, GrokAcpSession } from './grokAcpSession';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
@@ -31,6 +33,8 @@ export interface SpawnAgentOptions {
   command?: string;
   /** Working directory for the spawned child. Defaults to `process.cwd()`. */
   cwd?: string;
+  /** Create a dedicated Unix process group. Disable beneath a detached wrapper. */
+  detached?: boolean;
   /** Extra environment variables merged on top of `process.env`. */
   env?: Record<string, string>;
   /** Extra CLI arguments appended after the agent's preset flags. */
@@ -66,6 +70,8 @@ export interface SpawnAgentOptions {
    * events still carry the conventional shape.
    */
   operationId: string;
+  /** (Devin ACP only) Global `--permission-mode` value, placed before `acp`. */
+  permissionMode?: string;
   /**
    * User prompt. A plain string is sugar for a single text block; the array
    * form supports mixed text + image content blocks (URL / path / base64).
@@ -101,9 +107,9 @@ export interface SpawnAgentHandle {
    */
   exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   /**
-   * Send a signal to the child. On Unix, the child is spawned with
-   * `detached: true` so the whole process group can be signaled via
-   * `process.kill(-pid, signal)`; this helper does that automatically.
+   * Send a signal to the child. A dedicated Unix process group is signaled as
+   * a tree; inherited-group children receive a direct signal because their
+   * outer wrapper owns group-level cancellation.
    */
   kill: (signal?: NodeJS.Signals) => void;
   /** Spawned child PID, undefined if spawn failed pre-PID. */
@@ -208,7 +214,6 @@ export const AMP_BASE_ARGS = [
 ] as const;
 
 export const OPENCODE_BASE_ARGS = ['run', '--format', 'json', '--thinking', '--auto'] as const;
-export const PI_BASE_ARGS = ['--mode', 'json'] as const;
 export const KIMI_CODE_BASE_ARGS = ['--output-format', 'stream-json'] as const;
 export const QODER_BASE_ARGS = [
   '-p',
@@ -291,12 +296,13 @@ const buildOpenCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawn
   ...extraArgs,
 ];
 
-const buildPiArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
-  ...PI_BASE_ARGS,
-  ...(resumeSessionId ? ['--session-id', resumeSessionId] : []),
-  ...inputArgs,
-  ...extraArgs,
-];
+const buildPiArgs = (_params: BuildSpawnArgsParams): never => {
+  // pi runs exclusively over the RPC transport (PiRpcSession /
+  // createPiRpcAgentHandle). Reaching the legacy json spawn is a bug.
+  throw new Error(
+    'pi runs over the RPC transport only — use PiRpcSession / createPiRpcAgentHandle',
+  );
+};
 
 const buildKimiCodeArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => [
   ...KIMI_CODE_BASE_ARGS,
@@ -354,14 +360,14 @@ const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   }
 };
 
-const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
+const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals, detached: boolean): void => {
   if (!proc.pid || proc.killed) return;
 
   // On Windows the spawn `detached` flag has different semantics; fall back
   // to a direct signal. Tree-kill via `taskkill` is what the desktop
   // controller does for end-user CC, but the CLI's primary use case is
   // sandbox + Unix dev terminals, so keep this minimal.
-  if (process.platform === 'win32') {
+  if (platform() === 'win32') {
     try {
       proc.kill(signal);
     } catch {
@@ -370,14 +376,19 @@ const killProcessTree = (proc: ChildProcess, signal: NodeJS.Signals): void => {
     return;
   }
 
-  try {
-    process.kill(-proc.pid, signal);
-  } catch {
+  if (detached) {
     try {
-      proc.kill(signal);
+      process.kill(-proc.pid, signal);
+      return;
     } catch {
-      // already gone
+      // Fall through to a direct signal when the process group is gone.
     }
+  }
+
+  try {
+    proc.kill(signal);
+  } catch {
+    // already gone
   }
 };
 
@@ -483,6 +494,35 @@ const createAcpSpawnBridge = () => {
   return { attach, events, onEvents, onStderr, stderr };
 };
 
+interface AcpSpawnSession {
+  close: (signal?: NodeJS.Signals) => void;
+  interrupt: () => void;
+  pid?: number;
+  run: () => Promise<void>;
+  sessionId?: string;
+}
+
+const createAcpSpawnHandle = (
+  bridge: ReturnType<typeof createAcpSpawnBridge>,
+  session: AcpSpawnSession,
+  getSessionId: () => string | undefined = () => session.sessionId,
+): SpawnAgentHandle => {
+  const { exit, kill } = bridge.attach(session);
+
+  return {
+    events: bridge.events,
+    exit,
+    kill,
+    get pid() {
+      return session.pid;
+    },
+    get sessionId() {
+      return getSessionId();
+    },
+    stderr: bridge.stderr,
+  };
+};
+
 const spawnGrokAcpAgent = async (
   options: SpawnAgentOptions,
   command: string,
@@ -495,6 +535,7 @@ const spawnGrokAcpAgent = async (
     clientVersion: 'lobehub-cli',
     commandPath: command,
     cwd,
+    detached: options.detached,
     env: { ...process.env, ...options.env },
     onEvents: bridge.onEvents,
     onRawMessage: teeAcpRawStdout(options.onRawStdout),
@@ -506,20 +547,7 @@ const spawnGrokAcpAgent = async (
     resumeSessionId: options.resumeSessionId,
     sessionId: options.operationId,
   });
-  const { exit, kill } = bridge.attach(session);
-
-  return {
-    events: bridge.events,
-    exit,
-    kill,
-    get pid() {
-      return session.pid;
-    },
-    get sessionId() {
-      return session.sessionId;
-    },
-    stderr: bridge.stderr,
-  };
+  return createAcpSpawnHandle(bridge, session);
 };
 
 const spawnCursorAcpAgent = async (
@@ -535,6 +563,7 @@ const spawnCursorAcpAgent = async (
     clientVersion: 'lobehub-cli',
     commandPath: command,
     cwd,
+    detached: options.detached,
     env: { ...process.env, ...options.env },
     onEvents: bridge.onEvents,
     onRawMessage: teeAcpRawStdout(options.onRawStdout),
@@ -546,20 +575,7 @@ const spawnCursorAcpAgent = async (
     resumeSessionId: options.resumeSessionId,
     sessionId: options.operationId,
   });
-  const { exit, kill } = bridge.attach(session);
-
-  return {
-    events: bridge.events,
-    exit,
-    kill,
-    get pid() {
-      return session.pid;
-    },
-    get sessionId() {
-      return session.sessionId;
-    },
-    stderr: bridge.stderr,
-  };
+  return createAcpSpawnHandle(bridge, session);
 };
 
 const spawnDroidAcpAgent = async (
@@ -603,6 +619,36 @@ const spawnDroidAcpAgent = async (
   };
 };
 
+const spawnDevinAcpAgent = async (
+  options: SpawnAgentOptions,
+  command: string,
+  cwd: string,
+): Promise<SpawnAgentHandle> => {
+  const prompt = await buildDevinAcpPrompt(options.prompt, options.inputOptions);
+  const bridge = createAcpSpawnBridge();
+  const session = new DevinAcpSession({
+    args: options.extraArgs ?? [],
+    askUserBridge: options.askUserBridge,
+    clientVersion: 'lobehub-cli',
+    commandPath: command,
+    cwd,
+    detached: options.detached,
+    env: { ...process.env, ...options.env },
+    initialModel: options.initialModel,
+    onEvents: bridge.onEvents,
+    permissionMode: options.permissionMode,
+    onRawMessage: teeAcpRawStdout(options.onRawStdout),
+    onRuntimeStatus: () => {},
+    onSessionId: () => {},
+    onStderr: bridge.onStderr,
+    operationId: options.operationId,
+    prompt,
+    resumeSessionId: options.resumeSessionId,
+    sessionId: options.operationId,
+  });
+  return createAcpSpawnHandle(bridge, session);
+};
+
 /**
  * Spawn an external agent CLI (Amp, Claude Code, CodeBuddy, Codex, Cursor,
  * Factory Droid, Kimi Code, OpenCode, Pi, Qoder, or TRAE) and yield its stream as unified
@@ -624,6 +670,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const command = resolveHeterogeneousAgentCommand(options.agentType, options.command);
   const cwd = options.cwd || process.cwd();
   assertSpawnableWorkingDirectory(cwd);
+  if (options.agentType === 'devin') {
+    return spawnDevinAcpAgent(options, command, cwd);
+  }
   if (options.agentType === 'grok-build') {
     return spawnGrokAcpAgent(options, command, cwd);
   }
@@ -658,9 +707,10 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const initialCumulativeUsage = resumedCodexSession?.cumulativeUsage;
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
+  const detached = platform() !== 'win32' && (options.detached ?? true);
   const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
-    detached: process.platform !== 'win32',
+    detached,
     env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -808,7 +858,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     exit,
     kill: (signal: NodeJS.Signals = 'SIGINT') => {
       killedByUs = true;
-      killProcessTree(proc, signal);
+      killProcessTree(proc, signal, detached);
     },
     pid: proc.pid,
     get sessionId() {
@@ -841,6 +891,7 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
     clientVersion: '1.0.0',
     commandPath: commandStatus.path,
     cwd,
+    detached: options.detached,
     env: {
       ...childEnv,
       ...(commandStatus.resolvedPathEnv ? { PATH: commandStatus.resolvedPathEnv } : {}),
@@ -856,18 +907,5 @@ export const spawnTraeAcpAgent = async (options: SpawnAgentOptions): Promise<Spa
     resumeSessionId: options.resumeSessionId,
     sessionId: options.operationId,
   });
-  const { exit, kill } = bridge.attach(session);
-
-  return {
-    events: bridge.events,
-    exit,
-    kill,
-    get pid() {
-      return session.pid;
-    },
-    get sessionId() {
-      return session.nativeSessionId;
-    },
-    stderr: bridge.stderr,
-  };
+  return createAcpSpawnHandle(bridge, session, () => session.nativeSessionId);
 };

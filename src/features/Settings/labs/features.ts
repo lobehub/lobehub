@@ -13,12 +13,12 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
-  | 'agentProviderBinding'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
   | 'evalCapture'
+  | 'gatewayMux'
   | 'heteroSessionImport'
   | 'imessage'
   | 'inputMarkdown'
@@ -78,6 +78,12 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
+    flag: 'enableGatewayMux',
+    i18nKey: 'gatewayMux',
+    searchKeywords: ['gateway', 'websocket', 'multiplex'],
+    stage: 'alpha',
+  },
+  {
     flag: 'enableTopicAcceptance',
     i18nKey: 'topicAcceptance',
     searchKeywords: ['acceptance', 'checklist'],
@@ -113,13 +119,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableImessage',
     i18nKey: 'imessage',
     searchKeywords: ['imessage', 'bluebubbles'],
-    stage: 'alpha',
-  },
-  {
-    desktopOnly: true,
-    flag: 'enableAgentProviderBinding',
-    i18nKey: 'agentProviderBinding',
-    searchKeywords: ['agent provider binding', 'claude code api', 'codex api', 'api provider'],
     stage: 'alpha',
   },
   {

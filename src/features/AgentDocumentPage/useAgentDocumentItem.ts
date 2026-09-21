@@ -17,7 +17,7 @@ import {
  * bundle rename.
  */
 export const useAgentDocumentItem = (agentId: string | undefined, documentId: string) => {
-  const { data, error, mutate } = useClientDataSWR(
+  const { data, error, isLoading, mutate } = useClientDataSWR(
     agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
     () => agentDocumentService.listDocuments({ agentId: agentId! }),
   );
@@ -37,5 +37,5 @@ export const useAgentDocumentItem = (agentId: string | undefined, documentId: st
   // the breadcrumb render a placeholder title over a 404 body.
   const isNotFound = !!agentId && data !== undefined && !error && !item;
 
-  return { error, isNotFound, item, mutate, skillBundle };
+  return { error, isLoading, isNotFound, item, mutate, skillBundle };
 };

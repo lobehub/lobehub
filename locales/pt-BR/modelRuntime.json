@@ -38,6 +38,7 @@
   "ProviderServiceUnavailable": "O provedor está temporariamente sobrecarregado ou indisponível. Por favor, tente novamente em breve.",
   "QuotaLimitReached": "Desculpe, o uso de tokens ou a contagem de solicitações atingiu o limite de cota para esta chave. Por favor, aumente a cota da chave ou tente novamente mais tarde.",
   "RateLimitExceeded": "Desculpe, o uso de tokens ou a contagem de solicitações atingiu o limite de taxa para esta chave. Por favor, tente novamente mais tarde ou aumente a cota da chave.",
+  "RequestBodyTooLarge": "Esta solicitação é muito grande para o provedor do modelo. Compacte a conversa ou reduza o conteúdo anexado e tente novamente.",
   "StateStorePersistError": "Um problema temporário com o armazenamento do estado da conversa interrompeu esta operação. Por favor, tente novamente; se o problema persistir, entre em contato com o suporte.",
   "StateStoreReadError": "Esta operação não pôde ser retomada porque o estado da sessão estava indisponível. Por favor, reabra a conversa para continuar; se o problema persistir, entre em contato com o suporte.",
   "StreamChunkError": "Erro ao analisar o fragmento de mensagem da solicitação de streaming. Por favor, verifique se a interface da API atual está em conformidade com as especificações padrão ou entre em contato com o provedor da API para obter assistência.",

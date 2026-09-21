@@ -1,12 +1,15 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import {
+  RESOURCE_HOME_SECTIONS,
+  ResourceSectionSkeleton,
+} from '@/components/Skeleton/ResourceHome';
 import { useWorkspaceWorksInfinite } from '@/features/WorkGallery/hooks';
 import { useOpenWork } from '@/features/WorkGallery/useOpenWork';
 import WorkPreviewCard from '@/features/WorkGallery/WorkPreviewCard';
@@ -39,15 +42,14 @@ const RecentWorks = memo(() => {
       {error && recent.length === 0 ? (
         <AsyncError error={error} variant={'inline'} onRetry={reload} />
       ) : isLoadingInitial ? (
-        <div className={styles.grid}>
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton.Node active key={index} style={{ height: 220, width: '100%' }} />
-          ))}
-        </div>
+        <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.works} />
       ) : (
         <div className={styles.grid}>
           {recent.map((item) => (
-            <WorkPreviewCard item={item} key={item.id} onOpen={openWork} />
+            // `onRemoved` is required here: this list is `useSWRInfinite`-backed,
+            // and `useRemoveWork`'s global refresh skips `$inf$` keys, so without
+            // it a removed orphan card lingers until a page reload.
+            <WorkPreviewCard item={item} key={item.id} onOpen={openWork} onRemoved={reload} />
           ))}
         </div>
       )}

@@ -1085,6 +1085,104 @@
       "when": 1788141397076,
       "tag": "0154_goal_node_task_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1788177029327,
+      "tag": "0155_document_likes",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1788281814640,
+      "tag": "0156_project_working_directories",
+      "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1788399005304,
+      "tag": "0157_add_metrics_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1788457369087,
+      "tag": "0158_file_upload_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 159,
+      "version": "7",
+      "when": 1788751998345,
+      "tag": "0159_task_activities",
+      "breakpoints": true
+    },
+    {
+      "idx": 160,
+      "version": "7",
+      "when": 1788849739068,
+      "tag": "0160_acceptance_check_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 161,
+      "version": "7",
+      "when": 1789038060245,
+      "tag": "0161_acceptance_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 162,
+      "version": "7",
+      "when": 1789308031904,
+      "tag": "0162_fts_capture_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 163,
+      "version": "7",
+      "when": 1789468414007,
+      "tag": "0163_environments",
+      "breakpoints": true
+    },
+    {
+      "idx": 164,
+      "version": "7",
+      "when": 1789483504676,
+      "tag": "0164_document_comment_selection_anchor",
+      "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "7",
+      "when": 1789610500888,
+      "tag": "0165_expertise_rejection_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1789816134383,
+      "tag": "0166_device_architecture",
+      "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1789835190230,
+      "tag": "0167_user_deletion_fk_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 168,
+      "version": "7",
+      "when": 1789892818833,
+      "tag": "0168_scm_integration",
+      "breakpoints": true
     }
   ],
   "version": "6"

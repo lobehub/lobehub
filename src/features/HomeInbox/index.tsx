@@ -36,7 +36,7 @@ import { resolveInboxBlockState } from './inboxBlockState';
 import InboxBriefCard from './InboxBriefCard';
 import MarkAllReadButton from './MarkAllReadButton';
 import NeedsYouRailCard from './NeedsYouRailCard';
-import { resolveShownNewsOffset } from './newsDayOffset';
+import { resolveShownNewsOffset, shouldShowNewsItemTime } from './newsDayOffset';
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
@@ -281,7 +281,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
         hideUnread,
         needsYouCount: needsYou.length,
         preferUnread: isMain,
-        runningCount: runningTopics.length,
         unreadCount: unreadTopics.length,
       })
     : null;
@@ -407,14 +406,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: (
-        <RunningTasksCard
-          action={placeToggle('running')}
-          bare={isRail}
-          running={runningTopics}
-          showAuthor={teamView}
-        />
-      ),
+      node: <RunningTasksCard bare={isRail} running={runningTopics} showAuthor={teamView} />,
     });
 
   // A first-load failure of the day feed must not make the whole section
@@ -497,7 +489,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
             {t(shownNewsOffset === 0 ? 'inbox.news.emptyToday' : 'inbox.news.emptyDay')}
           </span>
         ) : (
-          <NewsList bare={isRail} news={news} />
+          <NewsList bare={isRail} news={news} showTime={shouldShowNewsItemTime(shownNewsOffset)} />
         ),
       subtitle: t('inbox.news.subtitle'),
     });

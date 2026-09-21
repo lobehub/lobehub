@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { AGENT_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
 import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -131,19 +132,31 @@ describe('AgentDocumentsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (AgentDocumentModel as any).mockImplementation(() => mockModel);
-    (AgentModel as any).mockImplementation(() => mockAgentModel);
-    (AgentSkillModel as any).mockImplementation(() => mockSkillModel);
-    (DocumentService as any).mockImplementation(() => mockDocumentService);
-    (SkillResourceService as any).mockImplementation(() => mockSkillResourceService);
-    (TopicDocumentModel as any).mockImplementation(() => mockTopicDocumentModel);
+    (AgentDocumentModel as any).mockImplementation(function () {
+      return mockModel;
+    });
+    (AgentModel as any).mockImplementation(function () {
+      return mockAgentModel;
+    });
+    (AgentSkillModel as any).mockImplementation(function () {
+      return mockSkillModel;
+    });
+    (DocumentService as any).mockImplementation(function () {
+      return mockDocumentService;
+    });
+    (SkillResourceService as any).mockImplementation(function () {
+      return mockSkillResourceService;
+    });
+    (TopicDocumentModel as any).mockImplementation(function () {
+      return mockTopicDocumentModel;
+    });
     vi.mocked(buildDocumentFilename).mockImplementation((title: string) => title);
     vi.mocked(extractMarkdownH1Title).mockImplementation((content: string) => ({ content }));
   });
 
   describe('createDocument', () => {
     it('should append a numeric suffix when the base filename already exists', async () => {
-      mockModel.findByFilename
+      mockModel.findByParentAndFilename
         .mockResolvedValueOnce({ id: 'existing-doc' })
         .mockResolvedValueOnce(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'note-2' });
@@ -151,8 +164,13 @@ describe('AgentDocumentsService', () => {
       const service = new AgentDocumentsService(db, userId);
       const result = await service.createDocument('agent-1', 'note', 'content');
 
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(1, 'agent-1', 'note');
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(2, 'agent-1', 'note-2');
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(1, 'agent-1', null, 'note');
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
+        2,
+        'agent-1',
+        null,
+        'note-2',
+      );
       expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'note-2', 'content', {
         editorData: { root: { children: [] } },
         title: 'note',
@@ -161,13 +179,13 @@ describe('AgentDocumentsService', () => {
     });
 
     it('should preserve an explicit filename extension', async () => {
-      mockModel.findByFilename.mockResolvedValueOnce(undefined);
+      mockModel.findByParentAndFilename.mockResolvedValueOnce(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'notes.txt' });
 
       const service = new AgentDocumentsService(db, userId);
       await service.createDocument('agent-1', 'notes.txt', 'content');
 
-      expect(mockModel.findByFilename).toHaveBeenCalledWith('agent-1', 'notes.txt');
+      expect(mockModel.findByParentAndFilename).toHaveBeenCalledWith('agent-1', null, 'notes.txt');
       expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'notes.txt', 'content', {
         editorData: { root: { children: [] } },
         title: 'notes.txt',
@@ -175,7 +193,7 @@ describe('AgentDocumentsService', () => {
     });
 
     it('should append collision suffix before the filename extension', async () => {
-      mockModel.findByFilename
+      mockModel.findByParentAndFilename
         .mockResolvedValueOnce({ id: 'existing-doc' })
         .mockResolvedValueOnce(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Untitled document-2.md' });
@@ -183,14 +201,16 @@ describe('AgentDocumentsService', () => {
       const service = new AgentDocumentsService(db, userId);
       const result = await service.createDocument('agent-1', 'Untitled document.md', 'content');
 
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
         1,
         'agent-1',
+        null,
         'Untitled document.md',
       );
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
         2,
         'agent-1',
+        null,
         'Untitled document-2.md',
       );
       expect(mockModel.create).toHaveBeenCalledWith(
@@ -206,7 +226,7 @@ describe('AgentDocumentsService', () => {
     });
 
     it('should throw after too many filename collisions', async () => {
-      mockModel.findByFilename.mockResolvedValue({ id: 'existing-doc' });
+      mockModel.findByParentAndFilename.mockResolvedValue({ id: 'existing-doc' });
 
       const service = new AgentDocumentsService(db, userId);
 
@@ -221,7 +241,7 @@ describe('AgentDocumentsService', () => {
         content: 'body',
         title: 'My Title',
       });
-      mockModel.findByFilename.mockResolvedValue(undefined);
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
 
       const service = new AgentDocumentsService(db, userId);
@@ -235,7 +255,7 @@ describe('AgentDocumentsService', () => {
     });
 
     it('persists agent signal skill hints in document metadata', async () => {
-      mockModel.findByFilename.mockResolvedValue(undefined);
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Reusable Procedure' });
 
       const service = new AgentDocumentsService(db, userId);
@@ -257,11 +277,52 @@ describe('AgentDocumentsService', () => {
         }),
       );
     });
+
+    it('creates a document under a parent folder and scopes filename collisions to it', async () => {
+      mockModel.findByDocumentId.mockResolvedValue({
+        documentId: 'folder-doc-id',
+        fileType: DOCUMENT_FOLDER_TYPE,
+        id: 'folder-agent-doc-id',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'note' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'note', 'content', {
+        parentId: 'folder-doc-id',
+      });
+
+      expect(mockModel.findByParentAndFilename).toHaveBeenCalledWith(
+        'agent-1',
+        'folder-doc-id',
+        'note',
+      );
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'note', 'content', {
+        editorData: { root: { children: [] } },
+        parentId: 'folder-doc-id',
+        title: 'note',
+      });
+    });
+
+    it('rejects a parentId that does not identify an agent folder', async () => {
+      mockModel.findByDocumentId.mockResolvedValue({
+        documentId: 'file-doc-id',
+        fileType: 'text/markdown',
+        id: 'file-agent-doc-id',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.createDocument('agent-1', 'note', 'content', { parentId: 'file-doc-id' }),
+      ).rejects.toThrow('Parent document is not a folder: file-doc-id');
+      expect(mockModel.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('createForTopic', () => {
     it('should create an agent document and associate the underlying document with the topic', async () => {
-      mockModel.findByFilename.mockResolvedValue(undefined);
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({
         documentId: 'documents-1',
         filename: 'note',

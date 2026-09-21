@@ -5,6 +5,7 @@ import type { HeterogeneousApiConfig } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
 import { TooltipGroup } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
+import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
 import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
@@ -35,7 +36,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const updateAgentConfigById = useAgentStore((state) => state.updateAgentConfigById);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const activeTopicId = useChatStore((state) => state.activeTopicId);
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  const topicModel = useChatStore(topicSelectors.activeTopicHeteroPin, isEqual);
   const updateTopicModel = useChatStore((state) => state.updateTopicModel);
   const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
   const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);

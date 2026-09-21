@@ -54,13 +54,17 @@ const trajectory: GoalTrajectory = {
             totalCost: 0,
           },
           effects: [{ operationId: 'op_1', targetId: 'task_A', type: 'started_run' }],
-          frontierTask: {
-            error: null,
-            id: 'task_A',
-            identifier: 'T-31',
-            status: 'backlog',
-            updatedAt: 0,
-          },
+          candidateTasks: [
+            {
+              error: null,
+              id: 'task_A',
+              identifier: 'T-31',
+              nodeId: 'aaaaaaaa-1111',
+              status: 'backlog',
+              updatedAt: 0,
+            },
+          ],
+          concurrency: 3,
         }),
       ],
       trigger: 'create',
@@ -108,8 +112,36 @@ describe('renderGoalAdvanceDetail', () => {
     const output = renderGoalAdvanceDetail(trajectory, 0);
 
     expect(output).toContain('budget: rounds ∞  cost $0.0000/$5');
-    expect(output).toContain('task: T-31 backlog');
+    expect(output).toContain('▸ task: T-31 backlog');
+    expect(output).toContain('concurrency: 3');
     expect(output).toContain('effect: started_run task_A op=op_1');
+  });
+
+  it('shows the legacy frontier task when candidate tasks were not recorded yet', () => {
+    const legacyTrajectory: GoalTrajectory = {
+      ...trajectory,
+      advances: [
+        {
+          ...trajectory.advances[0],
+          ticks: [
+            tick({
+              candidateTasks: undefined,
+              frontierTask: {
+                error: 'Device offline',
+                id: 'task_legacy',
+                identifier: 'T-legacy',
+                status: 'failed',
+                updatedAt: 0,
+              },
+            }),
+          ],
+        },
+      ],
+    };
+
+    const output = renderGoalAdvanceDetail(legacyTrajectory, 0);
+
+    expect(output).toContain('task: T-legacy failed — Device offline');
   });
 
   it('says so rather than rendering an empty frame for an advance that is not there', () => {

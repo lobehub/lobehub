@@ -183,6 +183,7 @@ export class KnowledgeBaseSearchService {
         callerAgentVisibility: this.callerAgentVisibility,
         db: this.serverDB,
         userId: this.userId,
+        usage: 'knowledge_base',
         workspaceId: this.workspaceId,
       });
       return ftsSearchRepo.searchKnowledgeBaseDocuments(input.query, knowledgeIds, topK);

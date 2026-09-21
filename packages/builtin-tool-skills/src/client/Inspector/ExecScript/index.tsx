@@ -28,14 +28,18 @@ export const ExecScriptInspector = memo<BuiltinInspectorProps<ExecScriptParams, 
     if (isArgumentsStreaming) {
       if (!description)
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t('builtins.lobe-skills.apiName.execScript')}</span>
+          <div className={inspectorTextStyles.root}>
+            <span className={shinyTextStyles.shinyText}>
+              {t('builtins.lobe-skills.apiName.execScript')}
+            </span>
           </div>
         );
 
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-skills.apiName.execScript')}: </span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-skills.apiName.execScript')}:{' '}
+          </span>
           <span className={highlightTextStyles.primary}>{description}</span>
         </div>
       );
@@ -49,9 +53,11 @@ export const ExecScriptInspector = memo<BuiltinInspectorProps<ExecScriptParams, 
     const isStillRunning = pluginState?.exitCode === undefined && !!pluginState?.shellId;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+      <div className={inspectorTextStyles.root}>
         <span style={{ marginInlineStart: 2 }}>
-          <span>{t('builtins.lobe-skills.apiName.execScript')}: </span>
+          <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+            {t('builtins.lobe-skills.apiName.execScript')}:{' '}
+          </span>
           {description && <span className={highlightTextStyles.primary}>{description}</span>}
           {isLoading ? null : isStillRunning ? (
             <Icon spin className={styles.statusIcon} icon={LoaderCircle} size={14} />

@@ -2,9 +2,10 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Tag } from '@lobehub/ui/base-ui';
 import { BrainCircuitIcon } from 'lucide-react';
 import { type FC } from 'react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MemoryListBoundary, useResetMemoryList } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -34,6 +35,7 @@ const ContextsArea = memo(() => {
   const contextsPage = useUserMemoryStore((s) => s.contextsPage);
   const contextsInit = useUserMemoryStore((s) => s.contextsInit);
   const contextsTotal = useUserMemoryStore((s) => s.contextsTotal);
+  const contextsSearchError = useUserMemoryStore((s) => s.contextsSearchError);
   const contextsSearchLoading = useUserMemoryStore((s) => s.contextsSearchLoading);
   const useFetchContexts = useUserMemoryStore((s) => s.useFetchContexts);
   const resetContextsList = useUserMemoryStore((s) => s.resetContextsList);
@@ -48,14 +50,15 @@ const ContextsArea = memo(() => {
   const apiSort =
     sortValue === 'capturedAt' ? undefined : (sortValue as 'scoreImpact' | 'scoreUrgency');
 
-  // Reset list when search or sort changes
-  useEffect(() => {
-    const sort = viewMode === 'grid' ? apiSort : undefined;
-    resetContextsList({ q: searchValue || undefined, sort });
-  }, [searchValue, apiSort, viewMode]);
+  useResetMemoryList({
+    query: searchValue,
+    resetList: resetContextsList,
+    sort: apiSort,
+    viewMode,
+  });
 
   // Call SWR hook to fetch data
-  const { isLoading } = useFetchContexts({
+  const { data, isLoading, mutate } = useFetchContexts({
     page: contextsPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -76,9 +79,6 @@ const ContextsArea = memo(() => {
     },
     [setSortValueRaw],
   );
-
-  // Show loading: during search/reset or initial load
-  const showLoading = contextsSearchLoading || !contextsInit;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -109,11 +109,17 @@ const ContextsArea = memo(() => {
             onSearch={handleSearch}
             onSortChange={viewMode === 'grid' ? handleSortChange : undefined}
           />
-          {showLoading ? (
-            <Loading viewMode={viewMode} />
-          ) : (
+          <MemoryListBoundary
+            data={data}
+            error={contextsSearchError}
+            isInitialized={contextsInit}
+            isLoading={isLoading}
+            isResetting={contextsSearchLoading}
+            loading={<Loading viewMode={viewMode} />}
+            onRetry={() => void mutate()}
+          >
             <List isLoading={isLoading} searchValue={searchValue} viewMode={viewMode} />
-          )}
+          </MemoryListBoundary>
         </WideScreenContainer>
       </Flexbox>
     </Flexbox>

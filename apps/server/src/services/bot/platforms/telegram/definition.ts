@@ -15,6 +15,8 @@ export const telegram: PlatformDefinition = {
     setupGuideUrl: channelDocUrl('telegram'),
   },
   schema,
+  // Member chats only. Guest summons overlay TELEGRAM_GUEST_UNSUPPORTED_MESSAGE_APIS
+  // via resolveUnsupportedMessageApis — a guest bot is not a chat member.
   unsupportedMessageApis: PLATFORM_UNSUPPORTED_MESSAGE_APIS.telegram,
   clientFactory: new TelegramClientFactory(),
 };

@@ -425,6 +425,30 @@ describe('user memory query layer', () => {
       expect(semanticSpy).toHaveBeenCalledOnce();
     });
 
+    it('skips the lexical leg for long context when semantic retrieval is available', async () => {
+      const ftsSearchCandidates = vi.fn().mockResolvedValue({ candidates: [], total: 0 });
+      const model = new UserMemoryModel(serverDB, userId, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+      const queryModel = Reflect.get(model, 'queryModel') as {
+        searchActivitiesSemantic: (...args: unknown[]) => Promise<unknown[]>;
+      };
+      const semanticSpy = vi.spyOn(queryModel, 'searchActivitiesSemantic').mockResolvedValue([]);
+
+      await model.searchMemory(
+        {
+          layers: [LayersEnum.Activity],
+          queries: ['对话'.repeat(200)],
+          topK: { activities: 2, contexts: 0, experiences: 0, identities: 0, preferences: 0 },
+        },
+        [[0.1, 0.2, 0.3]],
+      );
+
+      expect(semanticSpy).toHaveBeenCalledOnce();
+      expect(ftsSearchCandidates).not.toHaveBeenCalled();
+    });
+
     it('deduplicates contexts before applying the lexical candidate limit', async () => {
       const { memory: linkedMemoryOne } = await createContextPair({
         description: 'Atlas roadmap and staffing',

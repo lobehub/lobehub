@@ -2,7 +2,9 @@ import type { GoalTickOutcome, GoalTickResult } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  createStore: vi.fn(() => null as unknown),
+  createStore: vi.fn(function () {
+    return null as unknown;
+  }),
   execute: vi.fn(),
   status: vi.fn(),
   tick: vi.fn(),
@@ -18,11 +20,15 @@ vi.mock('@/database/server', () => ({
   }),
 }));
 vi.mock('./index', () => ({
-  GoalService: vi.fn(() => ({ status: mocks.status, tick: mocks.tick })),
+  GoalService: vi.fn(function () {
+    return { status: mocks.status, tick: mocks.tick };
+  }),
 }));
 vi.mock('./traceStore', () => ({ createDefaultGoalTraceStore: mocks.createStore }));
 vi.mock('@/database/models/goalTrace', () => ({
-  GoalTraceModel: vi.fn(() => ({ upsert: mocks.upsert })),
+  GoalTraceModel: vi.fn(function () {
+    return { upsert: mocks.upsert };
+  }),
 }));
 
 const { advanceGoal, MAX_TICKS_PER_ADVANCE } = await import('./advanceGoal');
@@ -51,7 +57,7 @@ describe('advanceGoal', () => {
   });
 
   it('hands off at waiting_external instead of polling a running task', async () => {
-    // The Work Task's own settle queues the next advance. Polling here would
+    // The Task's own settle queues the next advance. Polling here would
     // hold a worker open for the whole execution and duplicate that event.
     mocks.tick
       .mockResolvedValueOnce(tickResult('advanced'))
@@ -201,7 +207,10 @@ describe('advanceGoal trajectory recording', () => {
         finalStatus: null,
         goalId: 'goal-1',
         ticksTotal: 1,
-        traceS3Key: 'goal-traces/goal-1.json.zst',
+        // The partial, because that is the object that exists while the goal
+        // runs. Pointing at the finalized key here made `hasTrace` a lie and
+        // had the server sign a URL that 404s until the goal was over.
+        traceS3Key: 'goal-traces/_partial/goal-1.json.zst',
         // The column name, not the rollup's. Pinned so the mapping in
         // `writeObservationRow` cannot drift silently.
         workOperations: 1,
@@ -222,6 +231,13 @@ describe('advanceGoal trajectory recording', () => {
 
     expect(state.saved).toMatchObject({ completionReason: 'achieved', totalAdvances: 1 });
     expect(state.partial).toBeUndefined();
+    // And the row follows the object: the partial is gone, so the key moves.
+    expect(mocks.upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        finalStatus: 'achieved',
+        traceS3Key: 'goal-traces/goal-1.json.zst',
+      }),
+    );
   });
 
   it('leaves the trajectory open for a goal that is merely parked', async () => {

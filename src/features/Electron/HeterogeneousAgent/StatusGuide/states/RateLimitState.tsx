@@ -1,6 +1,7 @@
+import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { CalendarClock, Play, RotateCcw } from 'lucide-react';
+import { CalendarClock, Forward, Play, RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,15 +22,17 @@ const RateLimitState = ({
   onDismiss,
   onOpenSystemTools,
   onRetry,
+  onTransfer,
   schedule,
   variant,
 }: HeterogeneousAgentGuideStateProps) => {
   const { t, i18n } = useTranslation('chat');
+  const quotaContext = readHeterogeneousErrorContext({ type: 'AgentRuntimeError', body: error });
   const rawErrorDetails = error?.stderr || error?.message;
   const dateLocale = i18n.resolvedLanguage || i18n.language || undefined;
   // Prefer the persisted scheduled reset time so the "已安排" copy stays stable
   // even if the live error payload is missing it on reload.
-  const effectiveResetsAt = schedule?.resetsAt ?? error?.rateLimitInfo?.resetsAt;
+  const effectiveResetsAt = schedule?.resetsAt ?? quotaContext?.resetsAt;
   const timezoneLabel = useMemo(
     () => extractTimezoneLabel(rawErrorDetails) || Intl.DateTimeFormat().resolvedOptions().timeZone,
     [rawErrorDetails],
@@ -56,7 +59,7 @@ const RateLimitState = ({
     }
   }, [dateLocale, effectiveResetsAt, timezoneLabel]);
   const rateLimitTypeLabel = useMemo(() => {
-    const rateLimitType = error?.rateLimitInfo?.rateLimitType;
+    const rateLimitType = quotaContext?.rateLimitType;
     if (!rateLimitType) return;
 
     if (rateLimitType === 'seven_day') {
@@ -68,7 +71,7 @@ const RateLimitState = ({
     }
 
     return rateLimitType.replaceAll('_', ' ');
-  }, [error?.rateLimitInfo?.rateLimitType, t]);
+  }, [quotaContext?.rateLimitType, t]);
   // The "~X h Y m" duration string, reused both for the header hint and the
   // scheduling action/label copy.
   const relativeDuration = useMemo(() => {
@@ -106,9 +109,14 @@ const RateLimitState = ({
           <Button size="small" onClick={schedule.onCancel}>
             {t('cliRateLimitGuide.schedule.cancel')}
           </Button>
-          <Button icon={<Play size={14} />} size="small" type="primary" onClick={schedule.onRunNow}>
+          <Button icon={<Play size={14} />} size="small" onClick={schedule.onRunNow}>
             {t('cliRateLimitGuide.schedule.runNow')}
           </Button>
+          {onTransfer && (
+            <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onTransfer}>
+              {t('cliRateLimitGuide.actions.transfer')}
+            </Button>
+          )}
         </Flexbox>
       );
     }
@@ -116,23 +124,23 @@ const RateLimitState = ({
     return (
       <Flexbox horizontal gap={8} justify="flex-end" style={{ flexWrap: 'wrap' }}>
         {onRetry && (
-          <Button icon={<RotateCcw size={14} />} size="small" onClick={onRetry}>
+          <Button icon={<RotateCcw size={14} />} size="small" type="text" onClick={onRetry}>
             {t('cliRateLimitGuide.schedule.retryNow')}
           </Button>
         )}
-        <Button
-          icon={<CalendarClock size={14} />}
-          size="small"
-          type="primary"
-          onClick={schedule.onSchedule}
-        >
+        <Button icon={<CalendarClock size={14} />} size="small" onClick={schedule.onSchedule}>
           {relativeDuration
             ? t('cliRateLimitGuide.schedule.continueAfter', { duration: relativeDuration })
             : t('cliRateLimitGuide.schedule.continueAfterReset')}
         </Button>
+        {onTransfer && (
+          <Button icon={<Forward size={14} />} size="small" type="primary" onClick={onTransfer}>
+            {t('cliRateLimitGuide.actions.transfer')}
+          </Button>
+        )}
       </Flexbox>
     );
-  }, [onRetry, relativeDuration, schedule, t]);
+  }, [onRetry, onTransfer, relativeDuration, schedule, t]);
 
   const isScheduled = Boolean(schedule?.isScheduled);
   const title = isScheduled

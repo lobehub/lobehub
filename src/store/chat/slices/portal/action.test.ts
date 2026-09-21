@@ -274,6 +274,40 @@ describe('chatDockSlice', () => {
   });
 
   describe('openArtifact', () => {
+    it('keeps a parent task portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskDetail('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskDetailId(result.current)).toBe('task-1');
+    });
+
+    it('keeps a parent task result portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskResult('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskResultId(result.current)).toBe('task-1');
+    });
+
     it('should push Artifact view and open portal', () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -379,6 +413,117 @@ describe('chatDockSlice', () => {
         { agentId: 'agt_1', type: PortalViewType.AgentDetail },
       ]);
       expect(result.current.showPortal).toBe(true);
+    });
+  });
+
+  describe('goal drill-down', () => {
+    it('preserves experiment history and returns to an already visited node without cycles', () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        result.current.openGoalNode('goal_1', 'third');
+        result.current.drillIntoGoalNode('goal_1', 'first');
+      });
+      expect(result.current.portalStack).toHaveLength(2);
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('first');
+      act(() => result.current.goBack());
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('third');
+      act(() => {
+        result.current.drillIntoGoalNode('goal_1', 'first');
+        result.current.drillIntoGoalNode('goal_1', 'third');
+      });
+      expect(result.current.portalStack).toHaveLength(1);
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('third');
+    });
+
+    it('openGoal pushes a Goal view and a node drill-down returns to it on Back', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoal('goal_1');
+      });
+
+      expect(result.current.portalStack).toEqual([{ goalId: 'goal_1', type: PortalViewType.Goal }]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
+    });
+
+    it('openGoalNode pushes a GoalNode view and exposes it via selector', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { goalId: 'goal_1', nodeId: 'node_1', type: PortalViewType.GoalNode },
+      ]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.goalNodeView(result.current)).toEqual({
+        goalId: 'goal_1',
+        nodeId: 'node_1',
+        type: PortalViewType.GoalNode,
+      });
+    });
+
+    it('openGoalMetric pushes a GoalMetric view; a second metric replaces it in place', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalMetric('goal_1', 'budget');
+        result.current.openGoalMetric('goal_1', 'liveness');
+      });
+
+      // Same view type replaces instead of stacking, so Back never walks
+      // through a trail of metric tabs.
+      expect(result.current.portalStack).toEqual([
+        { goalId: 'goal_1', metric: 'liveness', type: PortalViewType.GoalMetric },
+      ]);
+      expect(chatPortalSelectors.goalMetricView(result.current)?.metric).toBe('liveness');
+    });
+
+    it('a work node drill-down stacks TaskDetail on top of GoalNode for Back navigation', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+        result.current.openTaskDetail('task_1');
+      });
+
+      expect(result.current.portalStack).toHaveLength(2);
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.TaskDetail);
+
+      act(() => {
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('node_1');
+    });
+
+    it('opens a Task result and returns to it after inspecting the original Task', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskResult('task_1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { taskId: 'task_1', type: PortalViewType.TaskResult },
+      ]);
+      expect(chatPortalSelectors.taskResultId(result.current)).toBe('task_1');
+
+      act(() => {
+        result.current.openTaskDetail('task_1');
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.TaskResult);
     });
   });
 

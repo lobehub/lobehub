@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { FileSource } from '@lobechat/types';
+import { FileSource, LIBRARY_HIDDEN_FILE_SOURCES } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -85,6 +85,146 @@ afterEach(async () => {
 });
 
 describe('ElasticsearchFtsSearchBackend', () => {
+  it('backs up to a word boundary when the clause budget cuts a Latin word', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+    const completeWords = 'word '.repeat(19);
+    const query = `${completeWords}fragment`;
+
+    await backend.search({
+      entity: 'memoryExperiences',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 3 },
+      query: { text: query },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must: [
+                {
+                  multi_match: expect.objectContaining({
+                    query: completeWords.trimEnd(),
+                  }),
+                },
+              ],
+            }),
+          },
+        }),
+        executedQueryChars: completeWords.trimEnd().length,
+        originalQueryChars: Array.from(query).length,
+        queryFieldCount: 8,
+        truncated: true,
+      }),
+    );
+  });
+
+  it('bounds long Unicode queries before building an eight-field multi-match request', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+    const query = `${'界'.repeat(95)}😀${'文'.repeat(7000)}`;
+
+    await backend.search({
+      entity: 'memoryExperiences',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 3 },
+      query: { text: query },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must: [
+                {
+                  multi_match: expect.objectContaining({
+                    query: `${'界'.repeat(95)}😀`,
+                  }),
+                },
+              ],
+            }),
+          },
+        }),
+        executedQueryChars: 96,
+        originalQueryChars: 7096,
+        queryFieldCount: 8,
+        truncated: true,
+      }),
+    );
+  });
+
+  it('excludes tool documents from message candidate searches', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    await backend.search({
+      entity: 'messages',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 5 },
+      query: { fields: ['content'], text: 'search phrase' },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must_not: expect.arrayContaining([
+                { term: { fts_search_sync_deleted: true } },
+                { term: { role: 'tool' } },
+              ]),
+            }),
+          },
+        }),
+      }),
+    );
+  });
+
+  it('scales the query-character budget with the selected field count', async () => {
+    const client = createClient([]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    await backend.search({
+      entity: 'userMemories',
+      filters: {},
+      mode: 'candidates',
+      pagination: { limit: 3 },
+      query: { fields: ['title', 'summary', 'details'], text: '界'.repeat(300) },
+      scope: { userId },
+    });
+
+    expect(client.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          query: {
+            bool: expect.objectContaining({
+              must: [
+                {
+                  multi_match: expect.objectContaining({
+                    query: '界'.repeat(256),
+                  }),
+                },
+              ],
+            }),
+          },
+        }),
+        executedQueryChars: 256,
+        originalQueryChars: 300,
+        queryFieldCount: 3,
+        truncated: true,
+      }),
+    );
+  });
+
   it('searches and reauthorizes unified user-memory candidates in PostgreSQL', async () => {
     await db.insert(userMemories).values([
       {
@@ -257,8 +397,12 @@ describe('ElasticsearchFtsSearchBackend', () => {
         track_total_hits: true,
       },
       entity: 'memoryContexts',
+      executedQueryChars: 13,
       index: 'lobehub-dev-memory-contexts',
+      originalQueryChars: 13,
       pagination: 'bounded',
+      queryFieldCount: 4,
+      truncated: false,
     });
   });
 
@@ -469,7 +613,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
                   },
                 },
               ],
-              must_not: [{ term: { fts_search_sync_deleted: true } }],
+              must_not: [{ term: { fts_search_sync_deleted: true } }, { term: { role: 'tool' } }],
             }),
           },
         }),
@@ -679,8 +823,12 @@ describe('ElasticsearchFtsSearchBackend', () => {
         sort: [{ _score: 'desc' }, { id: 'asc' }],
       },
       entity: 'agents',
+      executedQueryChars: 13,
       index: 'lobehub-dev-agents',
+      originalQueryChars: 13,
       pagination: 'bounded',
+      queryFieldCount: 5,
+      truncated: false,
     });
 
     const publicCaller = await backend.search(
@@ -1206,7 +1354,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
     );
   });
 
-  it('searches files by name and rechecks hidden sources and restricted KB memberships in PG', async () => {
+  it('searches files by name and rechecks non-library files and restricted KB memberships in PG', async () => {
     const longFileDescription = `Hydrated file description ${'x'.repeat(220)}`;
     await db.insert(knowledgeBases).values([
       {
@@ -1250,6 +1398,16 @@ describe('ElasticsearchFtsSearchBackend', () => {
         size: 30,
         source: FileSource.Acceptance,
         url: 'file://file-hidden-source',
+        userId,
+        workspaceId,
+      },
+      {
+        fileType: 'text/plain',
+        id: 'file-agent-share',
+        metadata: { agentShare: { shareId: 'share-1', visitorUserId: 'visitor-1' } },
+        name: 'Search phrase visitor attachment',
+        size: 30,
+        url: 'file://file-agent-share',
         userId,
         workspaceId,
       },
@@ -1298,6 +1456,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
     const client = createClient([
       { _id: 'file-restricted', _score: 12 },
       { _id: 'file-hidden-source', _score: 11 },
+      { _id: 'file-agent-share', _score: 10.5 },
       { _id: 'file-page-shell', _score: 10 },
       { _id: 'file-private-other', _score: 9 },
       { _id: 'file-deleted', _score: 8 },
@@ -1336,7 +1495,7 @@ describe('ElasticsearchFtsSearchBackend', () => {
               ],
               must_not: expect.arrayContaining([
                 { term: { file_type: 'custom/document' } },
-                { terms: { source: [FileSource.Acceptance] } },
+                { terms: { source: LIBRARY_HIDDEN_FILE_SOURCES } },
                 { terms: { knowledge_base_ids: ['file-kb-restricted'] } },
               ]),
             }),
@@ -1566,6 +1725,41 @@ describe('ElasticsearchFtsSearchBackend', () => {
     );
   });
 
+  it('does not hydrate a page derived from an agent-share file', async () => {
+    await db.insert(files).values({
+      fileType: 'application/pdf',
+      id: 'page-agent-share-file',
+      metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+      name: 'visitor.pdf',
+      size: 100,
+      url: 'file://page-agent-share-file',
+      userId,
+      workspaceId,
+    });
+    await db.insert(documents).values({
+      content: 'Search phrase private visitor page',
+      fileId: 'page-agent-share-file',
+      fileType: 'custom/document',
+      filename: 'visitor',
+      id: 'page-agent-share-document',
+      source: 'file://page-agent-share-file',
+      sourceType: 'file',
+      title: 'Visitor document',
+      totalCharCount: 34,
+      totalLineCount: 1,
+      userId,
+      workspaceId,
+    });
+    const client = createClient([{ _id: 'page-agent-share-document', _score: 10 }]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(
+      request('documents', { filters: { documentKind: 'page' } }),
+    );
+
+    expect(response.items).toEqual([]);
+  });
+
   it('hydrates inline and file-backed KB documents without truncating candidates by document size', async () => {
     const largeContent = `search phrase ${'x'.repeat(1_000_000)}`;
     await db.insert(knowledgeBases).values([
@@ -1717,6 +1911,59 @@ describe('ElasticsearchFtsSearchBackend', () => {
         }),
       }),
     );
+  });
+
+  it('does not hydrate a knowledge-base document derived from an agent-share file', async () => {
+    await db.insert(knowledgeBases).values({
+      id: 'agent-share-document-kb',
+      name: 'Agent share document KB',
+      userId,
+      visibility: 'public',
+      workspaceId,
+    });
+    await db.insert(files).values({
+      fileType: 'application/pdf',
+      id: 'agent-share-document-file',
+      metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+      name: 'visitor.pdf',
+      size: 100,
+      url: 'file://agent-share-document-file',
+      userId,
+      workspaceId,
+    });
+    await db.insert(knowledgeBaseFiles).values({
+      fileId: 'agent-share-document-file',
+      knowledgeBaseId: 'agent-share-document-kb',
+      userId,
+      workspaceId,
+    });
+    await db.insert(documents).values({
+      content: 'Search phrase private visitor document',
+      fileId: 'agent-share-document-file',
+      fileType: 'application/pdf',
+      filename: 'visitor.pdf',
+      id: 'agent-share-document-row',
+      source: 'file://agent-share-document-file',
+      sourceType: 'file',
+      title: 'Visitor document',
+      totalCharCount: 38,
+      totalLineCount: 1,
+      userId,
+      workspaceId,
+    });
+    const client = createClient([{ _id: 'agent-share-document-row', _score: 10 }]);
+    const backend = new ElasticsearchFtsSearchBackend(db, { client, indexNamespace });
+
+    const response = await backend.search(
+      request('documents', {
+        filters: {
+          documentKind: 'knowledgeBaseDocument',
+          knowledgeBaseIds: ['agent-share-document-kb'],
+        },
+      }),
+    );
+
+    expect(response.items).toEqual([]);
   });
 
   it('searches knowledge bases and rechecks visibility and restricted IDs in PG', async () => {

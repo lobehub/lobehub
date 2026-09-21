@@ -95,6 +95,9 @@ export const renderGoalAdvanceDetail = (trajectory: GoalTrajectory, seq: number)
     );
 
     if (tick.budget) {
+      if (tick.concurrency !== undefined) {
+        lines.push(`    concurrency: ${tick.concurrency}`);
+      }
       const limits = [
         tick.budget.maxRounds == null
           ? 'rounds ∞'
@@ -106,11 +109,11 @@ export const renderGoalAdvanceDetail = (trajectory: GoalTrajectory, seq: number)
       lines.push(`    budget: ${limits}`);
     }
 
-    if (tick.frontierTask) {
-      const error = tick.frontierTask.error ? ` — ${tick.frontierTask.error}` : '';
-      lines.push(
-        `    task: ${tick.frontierTask.identifier ?? tick.frontierTask.id} ${tick.frontierTask.status}${error}`,
-      );
+    const candidateTasks = tick.candidateTasks ?? (tick.frontierTask ? [tick.frontierTask] : []);
+    for (const task of candidateTasks) {
+      const error = task.error ? ` — ${task.error}` : '';
+      const mark = task.nodeId && task.nodeId === tick.chosenNodeId ? '▸' : ' ';
+      lines.push(`    ${mark} task: ${task.identifier ?? task.id} ${task.status}${error}`);
     }
 
     if (tick.candidates.length > 0) {

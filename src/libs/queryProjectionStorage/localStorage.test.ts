@@ -7,6 +7,16 @@ afterEach(() => {
 });
 
 describe('LocalStorageQueryProjectionStorage', () => {
+  it('restores a scoped projection synchronously before the next paint', () => {
+    const storage = new LocalStorageQueryProjectionStorage<string[]>({ namespace: 'test' });
+    const key = { queryKey: 'display', scope: 'user-a' };
+
+    void storage.set(key, { data: ['cached'], updatedAt: 1 });
+
+    expect(storage.getSync(key)).toEqual({ data: ['cached'], updatedAt: 1 });
+    expect(storage.getSync({ ...key, scope: 'user-b' })).toBeUndefined();
+  });
+
   it('reads and writes one scoped query through the async interface', async () => {
     const storage = new LocalStorageQueryProjectionStorage<string[]>({ namespace: 'test' });
     const key = { queryKey: 'limit:10', scope: 'user:workspace' };

@@ -4,6 +4,7 @@ import type {
   GoalBudgetState,
   GoalFrontierTaskState,
   GoalGraphState,
+  GoalMetricCriteriaState,
   GoalTickBranch,
   GoalTrajectory,
 } from './types';
@@ -14,10 +15,14 @@ import type {
  */
 export interface GoalDecisionInput {
   budget?: GoalBudgetState;
-  /** State of the chosen work node's responsible task, when it already has one. */
+  /** Every candidate's responsible task — the scheduler reads all of them. */
+  candidateTasks?: GoalFrontierTaskState[];
+  concurrency?: number;
+  /** @deprecated Legacy single-task shape; present only on older trajectories. */
   frontierTask?: GoalFrontierTaskState;
   graph: GoalGraphState;
-  now: number;
+  /** Numeric acceptance clauses as the recorded tick read them. */
+  metricCriteria?: GoalMetricCriteriaState;
 }
 
 /**
@@ -29,7 +34,7 @@ export interface GoalDecisionInput {
  */
 export interface GoalDecision {
   branch: GoalTickBranch;
-  /** Every eligible work node, in the order the coordinator ranked them. */
+  /** Every eligible task node, in the order the coordinator ranked them. */
   candidates: FrontierCandidate[];
   chosenNodeId?: string;
 }
@@ -78,9 +83,14 @@ export const replayGoalTrajectory = (
       const graph: GoalGraphState = reconstructGraphAt(trajectory, advance.seq, tick.index);
       const replayed = decide({
         budget: tick.budget,
-        frontierTask: tick.frontierTask,
+        metricCriteria: tick.metricCriteria,
+        // A trajectory recorded before the scheduler existed has only the
+        // chosen candidate's task. Dropping it would replay every one of those
+        // ticks as `missing_task` and report divergences that never happened.
+        candidateTasks:
+          tick.candidateTasks ?? (tick.frontierTask ? [tick.frontierTask] : undefined),
+        concurrency: tick.concurrency,
         graph,
-        now: tick.at,
       });
 
       const before = divergences.length;

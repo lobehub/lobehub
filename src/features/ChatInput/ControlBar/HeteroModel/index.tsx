@@ -30,9 +30,10 @@ const HeteroModel = memo(() => {
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
   const patch = useHeteroProviderPatch({ agentId, enabled, provider });
-  const topicModel = useChatStore(topicSelectors.activeTopicModel);
+  // Model AND effort pins: both follow the active topic once one exists.
+  const topicPin = useChatStore(topicSelectors.activeTopicHeteroPin, isEqual);
   const effectiveProvider = provider
-    ? applyTopicModelToHeterogeneousProvider(provider, topicModel)
+    ? applyTopicModelToHeterogeneousProvider(provider, topicPin)
     : undefined;
 
   const shape = resolveSelectorShape(effectiveProvider, enabled);

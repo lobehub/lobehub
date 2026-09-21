@@ -1,8 +1,8 @@
 'use client';
 
 import { upsertPluginMode } from '@lobechat/types';
-import { Dropdown, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, DropdownMenu, Text } from '@lobehub/ui/base-ui';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon, PlugZapIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -56,29 +56,17 @@ const AgentToolsSection = memo<{ agentId: string; onStartCopy: () => void }>(
 
     const addMenuItems = [
       {
-        icon: <Icon icon={PlugZapIcon} />,
+        desc: t('settingAgent.agentTools.connectNew.desc'),
+        icon: PlugZapIcon,
         key: 'connectNew',
-        label: (
-          <Flexbox>
-            <Text>{t('settingAgent.agentTools.connectNew.title')}</Text>
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {t('settingAgent.agentTools.connectNew.desc')}
-            </Text>
-          </Flexbox>
-        ),
+        label: t('settingAgent.agentTools.connectNew.title'),
         onClick: () => createAgentSkillStoreModal(agentId),
       },
       {
-        icon: <Icon icon={CopyIcon} />,
+        desc: t('settingAgent.agentTools.copy.desc'),
+        icon: CopyIcon,
         key: 'copy',
-        label: (
-          <Flexbox>
-            <Text>{t('settingAgent.agentTools.copy.title')}</Text>
-            <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {t('settingAgent.agentTools.copy.desc')}
-            </Text>
-          </Flexbox>
-        ),
+        label: t('settingAgent.agentTools.copy.title'),
         onClick: onStartCopy,
       },
     ];
@@ -89,16 +77,16 @@ const AgentToolsSection = memo<{ agentId: string; onStartCopy: () => void }>(
           {t('settingAgent.agentTools.tabAgent')} · {agentConnectors.length}
         </Text>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          <Dropdown
-            disabled={!canEdit}
-            menu={{ items: addMenuItems }}
-            placement={'bottomLeft'}
-            trigger={['click']}
-          >
-            <Button icon={<Icon icon={PlusIcon} />} size={'small'} type={'text'}>
+          <DropdownMenu items={addMenuItems} placement={'bottomLeft'}>
+            <Button
+              disabled={!canEdit}
+              icon={<Icon icon={PlusIcon} />}
+              size={'small'}
+              type={'text'}
+            >
               {t('settingAgent.agentTools.add')}
             </Button>
-          </Dropdown>
+          </DropdownMenu>
 
           {agentConnectors.length === 0 && (
             <Text style={{ fontSize: 12 }} type={'secondary'}>

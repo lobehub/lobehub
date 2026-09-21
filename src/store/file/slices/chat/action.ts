@@ -1,3 +1,4 @@
+import { SHARE_VISITOR_MAX_FILE_SIZE } from '@lobechat/const';
 import { type ChatContextContent } from '@lobechat/types';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
 import { toast } from '@lobehub/ui/base-ui';
@@ -7,6 +8,7 @@ import { t } from 'i18next';
 import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
+import { shareChatService } from '@/services/shareChat';
 import { UPLOAD_NETWORK_ERROR } from '@/services/upload';
 import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -20,6 +22,11 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type FileStore } from '../../store';
+import {
+  isShareFileTooLarge,
+  isShareStorageBlockError,
+  uploadShareVisitorFile,
+} from './shareVisitorUpload';
 import { filterSupportedChatUploadFiles } from './uploadGuard';
 
 const n = setNamespace('chat');
@@ -47,8 +54,25 @@ const getErrorMessage = (error: unknown): string => {
   return String(error);
 };
 
+export interface ChatUploadOptions {
+  /**
+   * Upload as an agent-share VISITOR: files go through the share-scoped
+   * endpoints onto the CREATOR's account and storage quota (see
+   * `uploadShareVisitorFile`) instead of the caller's own file API.
+   */
+  shareId?: string;
+}
+
+const formatShareUploadLimit = () => `${Math.round(SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024)} MB`;
+
 const getUploadErrorDescription = (error: unknown): string => {
   if (error === UPLOAD_NETWORK_ERROR) return t('upload.networkError', { ns: 'error' });
+
+  // A share upload is admitted by the CREATOR's storage quota, so the block
+  // is theirs to lift — never route the visitor to their own plan/usage page.
+  if (isShareStorageBlockError(error)) {
+    return t('share.visitor.upload.creatorStorageBlocked', { ns: 'agent' });
+  }
 
   if (getTrpcErrorCode(error) === 'FORBIDDEN') {
     return t('upload.permissionDenied', { ns: 'error' });
@@ -168,11 +192,22 @@ export class FileActionImpl {
 
     // Restored entries reference an already-persisted file that still backs the
     // original message — only drop the draft item, never delete the file itself.
-    const skipRemoveFile = chatUploadFileList.find((item) => item.id === id)?.skipRemoveFile;
+    const item = chatUploadFileList.find((entry) => entry.id === id);
 
     dispatchChatUploadFileList({ id, type: 'removeFile' });
 
-    if (skipRemoveFile) return;
+    if (item?.skipRemoveFile) return;
+
+    // Share uploads are creator-owned rows the visitor's own file API cannot
+    // see; the share endpoint deletes them only while still unsent.
+    if (item?.shareId) {
+      // Only a settled upload has a server row to drop; a pending or failed
+      // draft is client-side only (its id is still the file name) and the
+      // share endpoint would just reject it.
+      if (item.status !== 'success') return;
+      await shareChatService.removeFile(item.shareId, id);
+      return;
+    }
 
     await fileService.removeFile(id);
   };
@@ -183,7 +218,7 @@ export class FileActionImpl {
     if (!item?.agentId) return;
 
     dispatchChatUploadFileList({ id, type: 'removeFile' });
-    await this.uploadChatFiles([item.file], item.agentId);
+    await this.uploadChatFiles([item.file], item.agentId, { shareId: item.shareId });
   };
 
   startAsyncTask = async (
@@ -224,8 +259,13 @@ export class FileActionImpl {
     }
   };
 
-  uploadChatFiles = async (rawFiles: File[], agentId: string): Promise<void> => {
+  uploadChatFiles = async (
+    rawFiles: File[],
+    agentId: string,
+    options: ChatUploadOptions = {},
+  ): Promise<void> => {
     const { dispatchChatUploadFileList } = this.#get();
+    const { shareId } = options;
     // 0. skip file in blacklist
     const filteredFiles = rawFiles.filter((file) => !FILE_UPLOAD_BLACKLIST.includes(file.name));
 
@@ -235,10 +275,16 @@ export class FileActionImpl {
     // whitelist must not apply there. We key off the conversation's own agent id rather
     // than the global current agent, because the chat input can be scoped to a different
     // agent than activeAgentId (e.g. another desktop tab). See lobehub/lobehub#15770.
+    //
+    // A share VISITOR never has the creator's agent in their agent store, so
+    // the selectors below would always say "plain chat" by accident. Make it
+    // explicit: share uploads are parsed on the creator's account, so only the
+    // parseable whitelist is ever accepted there.
     const agentState = getAgentStoreState();
     const enforceFileTypeWhitelist =
-      !agentByIdSelectors.getAgentEnableModeById(agentId)(agentState) &&
-      !agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState);
+      !!shareId ||
+      (!agentByIdSelectors.getAgentEnableModeById(agentId)(agentState) &&
+        !agentByIdSelectors.isAgentHeterogeneousById(agentId)(agentState));
 
     const { supportedFiles, unsupportedFiles } = enforceFileTypeWhitelist
       ? filterSupportedChatUploadFiles(filteredFiles)
@@ -253,11 +299,27 @@ export class FileActionImpl {
       );
     }
 
-    if (supportedFiles.length === 0) return;
+    // Share uploads land on the creator's storage: bounded per file, and
+    // rejected here rather than after the bytes were already pushed.
+    const tooLarge = shareId ? supportedFiles.filter((file) => isShareFileTooLarge(file)) : [];
+    if (tooLarge.length > 0) {
+      toast.error(
+        t('share.visitor.upload.fileTooLarge', {
+          max: formatShareUploadLimit(),
+          ns: 'agent',
+        }),
+      );
+    }
+    const admittedFiles =
+      tooLarge.length > 0
+        ? supportedFiles.filter((file) => !tooLarge.includes(file))
+        : supportedFiles;
+
+    if (admittedFiles.length === 0) return;
 
     // 1. compress images and add files with base64
     const files = await Promise.all(
-      supportedFiles.map((file) =>
+      admittedFiles.map((file) =>
         COMPRESSIBLE_IMAGE_TYPES.has(file.type) ? compressImageFile(file) : file,
       ),
     );
@@ -283,6 +345,7 @@ export class FileActionImpl {
           file,
           id: file.name,
           previewUrl,
+          shareId,
           status: 'pending',
         } as UploadFileItem;
       }),
@@ -295,10 +358,16 @@ export class FileActionImpl {
       let fileResult: { id: string; url: string } | undefined;
 
       try {
-        fileResult = await this.#get().uploadWithProgress({
-          file,
-          onStatusUpdate: dispatchChatUploadFileList,
-        });
+        fileResult = shareId
+          ? await uploadShareVisitorFile({
+              file,
+              onStatusUpdate: dispatchChatUploadFileList,
+              shareId,
+            })
+          : await this.#get().uploadWithProgress({
+              file,
+              onStatusUpdate: dispatchChatUploadFileList,
+            });
       } catch (error) {
         if (getErrorMessage(error) === 'UNAUTHORIZED') {
           dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
@@ -319,6 +388,10 @@ export class FileActionImpl {
 
       // image don't need to be chunked and embedding
       if (isChunkingUnsupported(file.type)) return;
+
+      // A share file is creator-owned, so the visitor cannot pre-parse it; the
+      // run parses it on the creator's account when the turn is set up.
+      if (shareId) return;
 
       await ragService.parseFileContent(fileResult.id);
     });

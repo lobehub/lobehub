@@ -2,10 +2,34 @@ import { SKIP, visit } from 'unist-util-visit';
 
 import { treeNodeToString } from './getNodeContent';
 
-export const createRemarkCustomTagPlugin = (tag: string) => () => {
-  return (tree: any) => {
-    visit(tree, 'html', (node, index, parent) => {
-      if (node.value === `<${tag}>`) {
+export interface RemarkCustomTagOptions {
+  /**
+   * Only parse the tag when it is the very first node of the document. Tags
+   * appearing mid-document — including inline ones inside a paragraph — stay
+   * as raw HTML / plain text instead of becoming a custom block.
+   */
+  leadingOnly?: boolean;
+}
+
+export const createRemarkCustomTagPlugin =
+  (tag: string, options: RemarkCustomTagOptions = {}) =>
+  () => {
+    const leadingOnly = options.leadingOnly === true;
+
+    return (tree: any) => {
+      visit(tree, 'html', (node, index, parent) => {
+        if (leadingOnly) {
+          // Leading-only mode (e.g. the `think` tag): the tag is a leading block,
+          // not an inline construct. Only an exact standalone open tag sitting at
+          // the very head of the document is eligible — anything else (inline tag
+          // inside a paragraph, or a block tag after other content) must stay raw
+          // HTML so quoting `<think>` mid-message never renders a Thinking block.
+          if (parent?.type !== 'root' || index !== 0) return;
+          if (node.value !== `<${tag}>`) return;
+        } else if (node.value !== `<${tag}>`) {
+          return;
+        }
+
         const startIndex = index as number;
         let endIndex = startIndex + 1;
         let hasCloseTag = false;
@@ -50,7 +74,6 @@ export const createRemarkCustomTagPlugin = (tag: string) => () => {
 
         // Skip already-processed nodes
         return [SKIP, startIndex + 1];
-      }
-    });
+      });
+    };
   };
-};

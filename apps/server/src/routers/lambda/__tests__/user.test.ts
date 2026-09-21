@@ -603,7 +603,7 @@ describe('userRouter', () => {
     });
 
     it('does not expose unexpected repository or provider errors', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(function () {});
       mockUnderstandingService.confirm.mockRejectedValueOnce(
         new Error('redis://secret-token RAW_GMAIL_XML_SENTINEL'),
       );
@@ -643,12 +643,11 @@ describe('userRouter', () => {
         lastUserMessageAt: new Date('2026-06-01T00:00:00.000Z'),
         userCreatedAt: new Date('2026-01-01T00:00:00.000Z'),
       };
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            getUserActivitySummary: vi.fn().mockResolvedValue(summary),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          getUserActivitySummary: vi.fn().mockResolvedValue(summary),
+        } as any;
+      });
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserActivitySummary();
 
@@ -660,12 +659,11 @@ describe('userRouter', () => {
   describe('getUserRegistrationDuration', () => {
     it('should return registration duration', async () => {
       const mockDuration = { duration: 100, createdAt: '2023-01-01', updatedAt: '2023-01-02' };
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            getUserRegistrationDuration: vi.fn().mockResolvedValue(mockDuration),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          getUserRegistrationDuration: vi.fn().mockResolvedValue(mockDuration),
+        } as any;
+      });
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserRegistrationDuration();
 
@@ -684,12 +682,11 @@ describe('userRouter', () => {
           type: 'oauth',
         },
       ];
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            getUserSSOProviders: vi.fn().mockResolvedValue(mockProviders),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          getUserSSOProviders: vi.fn().mockResolvedValue(mockProviders),
+        } as any;
+      });
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserSSOProviders();
 
@@ -707,28 +704,25 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            advanceLastActiveAt: vi.fn().mockResolvedValue(undefined),
-            getUserState: vi.fn().mockResolvedValue(mockState),
-            updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          advanceLastActiveAt: vi.fn().mockResolvedValue(undefined),
+          getUserState: vi.fn().mockResolvedValue(mockState),
+          updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            countUpTo: vi.fn().mockResolvedValue(5),
-          }) as any,
-      );
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          countUpTo: vi.fn().mockResolvedValue(5),
+        } as any;
+      });
 
-      vi.mocked(SessionModel).mockImplementation(
-        () =>
-          ({
-            hasMoreThanN: vi.fn().mockResolvedValue(true),
-          }) as any,
-      );
+      vi.mocked(SessionModel).mockImplementation(function () {
+        return {
+          hasMoreThanN: vi.fn().mockResolvedValue(true),
+        } as any;
+      });
 
       const result = await userRouter.createCaller({ ...mockCtx }).getUserState();
 
@@ -757,25 +751,22 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            advanceLastActiveAt,
-            getUserState: vi.fn().mockResolvedValue(mockState),
-          }) as any,
-      );
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            countUpTo: vi.fn().mockResolvedValue(0),
-          }) as any,
-      );
-      vi.mocked(SessionModel).mockImplementation(
-        () =>
-          ({
-            hasMoreThanN: vi.fn().mockResolvedValue(false),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          advanceLastActiveAt,
+          getUserState: vi.fn().mockResolvedValue(mockState),
+        } as any;
+      });
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          countUpTo: vi.fn().mockResolvedValue(0),
+        } as any;
+      });
+      vi.mocked(SessionModel).mockImplementation(function () {
+        return {
+          hasMoreThanN: vi.fn().mockResolvedValue(false),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).getUserState();
       await flushAfterTasks();
@@ -798,25 +789,22 @@ describe('userRouter', () => {
         userId: mockUserId,
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            advanceLastActiveAt,
-            getUserState: vi.fn().mockResolvedValue(mockState),
-          }) as any,
-      );
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            countUpTo: vi.fn().mockResolvedValue(0),
-          }) as any,
-      );
-      vi.mocked(SessionModel).mockImplementation(
-        () =>
-          ({
-            hasMoreThanN: vi.fn().mockResolvedValue(false),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          advanceLastActiveAt,
+          getUserState: vi.fn().mockResolvedValue(mockState),
+        } as any;
+      });
+      vi.mocked(MessageModel).mockImplementation(function () {
+        return {
+          countUpTo: vi.fn().mockResolvedValue(0),
+        } as any;
+      });
+      vi.mocked(SessionModel).mockImplementation(function () {
+        return {
+          hasMoreThanN: vi.fn().mockResolvedValue(false),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).getUserState();
       await flushAfterTasks();
@@ -828,12 +816,11 @@ describe('userRouter', () => {
 
   describe('makeUserOnboarded', () => {
     it('should update user onboarded status', async () => {
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).makeUserOnboarded();
 
@@ -854,12 +841,11 @@ describe('userRouter', () => {
       };
 
       vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings(mockSettings);
 
@@ -901,7 +887,9 @@ describe('userRouter', () => {
 
     it('does not touch stored keyVaults when the field is omitted', async () => {
       const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      vi.mocked(UserModel).mockImplementation(() => ({ updateSetting }) as any);
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { updateSetting } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings({
         general: { language: 'en-US' },
@@ -913,12 +901,11 @@ describe('userRouter', () => {
     it('allows keyVaults updates from restricted keys holding model:write', async () => {
       const mockGateKeeper = { encrypt: vi.fn().mockResolvedValue('encrypted') };
       vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
       await namespacedRouter
         .createCaller({ ...mockCtx, apiKeyScopes: ['user:write', 'model:write'] })
@@ -932,12 +919,11 @@ describe('userRouter', () => {
         general: { language: 'en-US' },
       };
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting: vi.fn().mockResolvedValue({ rowCount: 1 }),
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings(mockSettings);
 
@@ -947,12 +933,11 @@ describe('userRouter', () => {
     it('should allow legacy system agent model-only fields', async () => {
       const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting,
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting,
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings({
         systemAgent: {
@@ -974,12 +959,11 @@ describe('userRouter', () => {
     it('should allow legacy scalar system agent fields', async () => {
       const updateSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
 
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            updateSetting,
-          }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return {
+          updateSetting,
+        } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateSettings({
         systemAgent: {
@@ -1002,7 +986,9 @@ describe('userRouter', () => {
   describe('updateToolIntervention', () => {
     it('delegates to the atomic model merge with the raw input', async () => {
       const mergeToolInterventionSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      vi.mocked(UserModel).mockImplementation(() => ({ mergeToolInterventionSetting }) as any);
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { mergeToolInterventionSetting } as any;
+      });
 
       await userRouter.createCaller({ ...mockCtx }).updateToolIntervention({
         appendAllowList: ['bash/bash'],
@@ -1019,9 +1005,9 @@ describe('userRouter', () => {
 
     it('rejects workspace members without content permission', async () => {
       const { RbacModel } = await import('@/database/models/rbac');
-      vi.mocked(RbacModel).mockImplementation(
-        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(false) }) as any,
-      );
+      vi.mocked(RbacModel).mockImplementation(function () {
+        return { hasAnyPermission: vi.fn().mockResolvedValue(false) } as any;
+      });
 
       await expect(
         userRouter
@@ -1032,12 +1018,14 @@ describe('userRouter', () => {
 
     it('allows workspace members holding content permission', async () => {
       const { RbacModel } = await import('@/database/models/rbac');
-      vi.mocked(RbacModel).mockImplementation(
-        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(true) }) as any,
-      );
+      vi.mocked(RbacModel).mockImplementation(function () {
+        return { hasAnyPermission: vi.fn().mockResolvedValue(true) } as any;
+      });
 
       const mergeToolInterventionSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      vi.mocked(UserModel).mockImplementation(() => ({ mergeToolInterventionSetting }) as any);
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { mergeToolInterventionSetting } as any;
+      });
 
       await userRouter
         .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
@@ -1051,12 +1039,14 @@ describe('userRouter', () => {
     it('patches the slot pinned by the input workspace, gated on that workspace', async () => {
       const { RbacModel } = await import('@/database/models/rbac');
       const hasAnyPermission = vi.fn().mockResolvedValue(true);
-      vi.mocked(RbacModel).mockImplementation(() => ({ hasAnyPermission }) as any);
+      vi.mocked(RbacModel).mockImplementation(function () {
+        return { hasAnyPermission } as any;
+      });
 
       const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      vi.mocked(UserModel).mockImplementation(
-        () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { replaceUninstalledBuiltinToolsSetting } as any;
+      });
 
       // ctx carries a DIFFERENT workspace than the pinned target — the write and
       // the RBAC check must both follow the pinned input scope, not the header.
@@ -1073,9 +1063,9 @@ describe('userRouter', () => {
 
     it('targets the personal scope when the pinned workspace is null', async () => {
       const replaceUninstalledBuiltinToolsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
-      vi.mocked(UserModel).mockImplementation(
-        () => ({ replaceUninstalledBuiltinToolsSetting }) as any,
-      );
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { replaceUninstalledBuiltinToolsSetting } as any;
+      });
 
       await userRouter
         .createCaller({ ...mockCtx })
@@ -1089,9 +1079,9 @@ describe('userRouter', () => {
 
     it('rejects members without content permission on the target workspace', async () => {
       const { RbacModel } = await import('@/database/models/rbac');
-      vi.mocked(RbacModel).mockImplementation(
-        () => ({ hasAnyPermission: vi.fn().mockResolvedValue(false) }) as any,
-      );
+      vi.mocked(RbacModel).mockImplementation(function () {
+        return { hasAnyPermission: vi.fn().mockResolvedValue(false) } as any;
+      });
 
       await expect(
         userRouter

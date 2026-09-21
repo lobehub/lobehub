@@ -44,6 +44,52 @@ describe('full-text search provider selection', () => {
     ).toBe(FTS_SEARCH_PROVIDERS.elasticsearch);
   });
 
+  it('routes pg_like to its own backend with candidate retrieval enabled', async () => {
+    const search = vi.fn<FtsSearchBackend['search']>().mockResolvedValue({
+      candidates: [{ id: agentResult.id, score: 4 }],
+      items: [],
+      total: 1,
+    });
+    const createPgLikeBackend = vi.fn((): FtsSearchBackend => ({ key: 'pg_like', search }));
+    const loadElasticsearchConfig = vi.fn(() => undefined);
+    const repo = await createFtsSearchRepo(
+      { db, userId: 'allowed-user', usage: 'unified_search' },
+      {
+        createPgLikeBackend,
+        loadElasticsearchConfig,
+        loadFtsSearchProvider: () => FTS_SEARCH_PROVIDERS.pgLike,
+      },
+    );
+
+    expect(createPgLikeBackend).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: FTS_SEARCH_PROVIDERS.pgLike }),
+    );
+    expect(loadElasticsearchConfig).not.toHaveBeenCalled();
+    expect(repo.ftsSearchCandidateEnabled).toBe(true);
+
+    await expect(
+      repo.ftsSearchCandidates({
+        entity: 'agents',
+        filters: {},
+        pagination: {},
+        query: { text: 'candidate' },
+      }),
+    ).resolves.toEqual({ candidates: [{ id: agentResult.id, score: 4 }], total: 1 });
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ mode: 'candidates' }));
+  });
+
+  it('keeps candidate retrieval inline for pg_search', async () => {
+    const repo = await createFtsSearchRepo(
+      { db, userId: 'allowed-user', usage: 'unified_search' },
+      {
+        createPgSearchBackend: () => ({ key: 'pg_search', search: vi.fn() }),
+        loadFtsSearchProvider: () => FTS_SEARCH_PROVIDERS.pgSearch,
+      },
+    );
+
+    expect(repo.ftsSearchCandidateEnabled).toBe(false);
+  });
+
   it('routes the stable repository facade through the selected backend', async () => {
     const search = vi.fn<FtsSearchBackend['search']>().mockResolvedValue({
       candidates: [{ id: agentResult.id, score: 9.5 }],
@@ -51,7 +97,7 @@ describe('full-text search provider selection', () => {
     });
     const createBackend = vi.fn(({ provider }): FtsSearchBackend => ({ key: provider, search }));
     const repo = await createFtsSearchRepo(
-      { db, userId: 'allowed-user' },
+      { db, userId: 'allowed-user', usage: 'unified_search' },
       {
         createBackend,
         loadFtsSearchProvider: () => FTS_SEARCH_PROVIDERS.elasticsearch,
@@ -76,7 +122,7 @@ describe('full-text search provider selection', () => {
       url: 'https://search.example.com',
     };
     const repo = await createFtsSearchRepo(
-      { db, userId: 'allowed-user' },
+      { db, userId: 'allowed-user', usage: 'unified_search' },
       {
         createElasticsearchClient,
         loadElasticsearchConfig: () => config,
@@ -85,7 +131,7 @@ describe('full-text search provider selection', () => {
     );
 
     await expect(repo.search({ query: 'candidate', type: 'agent' })).resolves.toEqual([]);
-    expect(createElasticsearchClient).toHaveBeenCalledWith(config);
+    expect(createElasticsearchClient).toHaveBeenCalledWith(config, 'unified_search');
     expect(search).toHaveBeenCalledWith(expect.objectContaining({ index: 'lobehub-dev-agents' }));
   });
 
@@ -95,11 +141,12 @@ describe('full-text search provider selection', () => {
       candidates: [],
       items: [],
     });
+    const createPgSearchBackend = vi.fn(() => ({ key: 'pg_search', search: pgSearch }));
     const repo = await createFtsSearchRepo(
-      { db, userId: 'allowed-user' },
+      { db, userId: 'allowed-user', usage: 'unattributed' },
       {
         createElasticsearchClient: () => ({ search: elasticsearchSearch }),
-        createPgSearchBackend: () => ({ key: 'pg_search', search: pgSearch }),
+        createPgSearchBackend,
         loadElasticsearchConfig: () => ({
           apiKey: 'test-api-key',
           indexNamespace: 'lobehub-dev',
@@ -111,6 +158,7 @@ describe('full-text search provider selection', () => {
 
     await expect(repo.search({ query: 'candidate' })).resolves.toEqual([]);
     expect(elasticsearchSearch).toHaveBeenCalledTimes(9);
+    expect(createPgSearchBackend).not.toHaveBeenCalled();
     expect(pgSearch).not.toHaveBeenCalled();
   });
 
@@ -121,7 +169,7 @@ describe('full-text search provider selection', () => {
       items: [],
     });
     const repo = await createFtsSearchRepo(
-      { db, userId: 'allowed-user' },
+      { db, userId: 'allowed-user', usage: 'unattributed' },
       {
         createElasticsearchClient: () => ({
           search: vi.fn().mockRejectedValue(providerError),
@@ -143,7 +191,7 @@ describe('full-text search provider selection', () => {
   it('fails explicitly when the selected provider is not configured', async () => {
     await expect(
       createFtsSearchRepo(
-        { db, userId: 'user-1' },
+        { db, userId: 'user-1', usage: 'unattributed' },
         {
           loadElasticsearchConfig: () => undefined,
           loadFtsSearchProvider: () => FTS_SEARCH_PROVIDERS.elasticsearch,
@@ -157,7 +205,7 @@ describe('full-text search provider selection', () => {
     const search = vi.fn<FtsSearchBackend['search']>().mockRejectedValue(providerError);
     const createBackend = vi.fn(({ provider }): FtsSearchBackend => ({ key: provider, search }));
     const repo = await createFtsSearchRepo(
-      { db, userId: 'user-1' },
+      { db, userId: 'user-1', usage: 'unattributed' },
       {
         createBackend,
         loadFtsSearchProvider: () => FTS_SEARCH_PROVIDERS.elasticsearch,

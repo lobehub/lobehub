@@ -115,15 +115,17 @@ vi.mock('@/hooks/useAppOrigin', () => ({
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({
+    'aria-label': ariaLabel,
     disabled,
     onClick,
     title,
   }: {
-    disabled?: boolean;
-    onClick?: () => void;
-    title?: string;
+    'aria-label'?: string;
+    'disabled'?: boolean;
+    'onClick'?: () => void;
+    'title'?: string;
   }) => (
-    <button aria-label={title} disabled={disabled} onClick={onClick}>
+    <button aria-label={ariaLabel} disabled={disabled} onClick={onClick}>
       {title}
     </button>
   ),
@@ -347,7 +349,9 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('button', { name: 'channel.refreshStatus' })).toBeDisabled();
   });
 
-  it('moves the platform links into the trailing overflow menu', () => {
+  it('exposes documentation in the header and keeps other platform actions in overflow', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
     render(
       <Header
         agentId="agent-id"
@@ -362,10 +366,19 @@ describe('Agent channel permission gates', () => {
     );
 
     expect(screen.getByRole('banner')).toHaveTextContent('Discord');
-    expect(screen.getByRole('banner')).toHaveTextContent('channel.documentation');
+    const documentationButton = screen.getByRole('button', { name: 'channel.documentation' });
+    expect(documentationButton).toHaveAttribute('aria-label', 'channel.documentation');
+    fireEvent.click(documentationButton);
+    expect(open).toHaveBeenCalledWith(
+      'https://lobehub.com/docs/usage/channels/discord',
+      '_blank',
+      'noopener,noreferrer',
+    );
     expect(screen.getByRole('banner')).toHaveTextContent('channel.openPlatform');
     expect(screen.getByRole('banner')).toHaveTextContent('channel.exportConfig');
     expect(screen.getByRole('banner')).toHaveTextContent('channel.importConfig');
+
+    open.mockRestore();
   });
 
   it('keeps the enable switch usable to turn off a paid-blocked channel that is still enabled', () => {

@@ -5,6 +5,107 @@ together with the agent-testing skill's generic `references/probe-mock-patterns.
 Product-independent rules belong upstream; LobeHub routes, stores, services, env
 variables, and fixtures belong here.
 
+## Index
+
+Read this block in full, pick entries by meaning, then pull each one by id — the next
+heading bounds it. Do not read the whole file.
+
+```bash
+P=.agents/acceptance/probe-mock-patterns.md
+rg -n '^#{3,4} P07 ' "$P" # start line of one entry
+rg -n '^#{2,4} ' "$P"     # every heading, to find the next bound
+```
+
+`applies-to` filters a round: **surface** = web / electron / cli / any; **runtime** = client /
+gateway / hetero / any (the agent runtime the recipe depends on); **phase** = env / auth / fixture /
+drive / probe / capture / publish. Skip a row only when its surface AND runtime both miss yours.
+
+| id  | surface       | runtime         | phase          | situation                                                                                                                                                    |
+| --- | ------------- | --------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P01 | any           | any             | probe          | `window.__LOBE_STORES.<name>()` returns state only; add a dev action instead of HMR `setState` patches                                                       |
+| P02 | web, electron | any             | probe          | `goto` / `location.assign` full-reload wipes fetch wrappers; change route via `history.pushState` + `popstate`                                               |
+| P03 | any           | client, gateway | probe          | Prove which runtime ran with a server-only artifact (operation row, queue step, server log)                                                                  |
+| P04 | web, electron | any             | probe          | A top-level `const` in a second `agent-browser eval` collides; wrap payloads in an IIFE                                                                      |
+| P05 | web           | any             | drive          | `lobehub-dev` is shared across runs; use a run-specific session and check `location.origin` / script src first                                               |
+| P06 | electron      | any             | probe          | After adding or moving a module the renderer may keep the old graph; `goto`, then confirm a structural signal                                                |
+| P07 | web           | any             | env            | `_dangerous_local_dev_proxy` in a signed-out automation context sits on the loading shell; use the isolated local stack                                      |
+| P08 | web           | any             | env            | Workspace `packages/*` dynamic imports fail cross-origin through the proxy; A/B at HEAD, use Electron for settled state                                      |
+| P09 | any           | client, gateway | fixture        | The stub must answer `stream:false` chat/completions with a plain JSON completion, never SSE                                                                 |
+| P10 | web           | gateway         | fixture        | `review_predict` is pinned to Gemini; pin the constants, allow private IPs, return schema JSON from the stub                                                 |
+| P11 | any           | gateway         | fixture        | `generateObject` via the deepseek stub crashes; route through the openai `/v1/responses` stub                                                                |
+| P12 | web           | gateway         | fixture        | Backdate node and op rows past the client's 15-minute lease, not the server's 5                                                                              |
+| P13 | web, cli      | any             | fixture        | `lh topic create` rows have NULL trigger/status and drop out of the paged view; set both, then `goto`                                                        |
+| P14 | web, electron | hetero          | fixture        | Seed `agency_config.heterogeneousProvider` with SQL, then cold-load; the store write drops it                                                                |
+| P15 | web           | any             | fixture        | Derive day boundaries from the browser's `resolvedOptions().timeZone`, never an assumed zone                                                                 |
+| P16 | web, electron | any             | fixture        | Clear cache tiers in the NEW document via `addScriptToEvaluateOnNewDocument`; the outgoing page re-flushes on reload                                         |
+| P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableTopicAcceptance`                                                                             |
+| P18 | electron      | hetero          | fixture        | Local-execution CC agent plus a four-table ledger fixture keyed to the live CLI identity                                                                     |
+| P19 | web           | any             | auth           | Seed a second user and sign in from inside a run-specific session; a signed-out context hits `/signin`                                                       |
+| P20 | cli           | any             | fixture        | Strip ambient topic/agent/operation ids for a LOCAL ingest; keep them for the production publish                                                             |
+| P21 | web           | any             | drive          | Upload through the Add-menu input, poll `dockUploadFileList`, A/B the hashing worker with `window.Worker = undefined`                                        |
+| P22 | web, electron | any             | drive          | `keyboard type` emits no keydown; fire `/` (and any menu trigger) with `press`                                                                               |
+| P23 | web, electron | any             | drive          | Tag `svg.lucide-<rendered-name>` and click through agent-browser; `el.click()` on the wrapper does nothing                                                   |
+| P24 | web, electron | any             | drive          | Re-query elements after every re-render; one assertion per eval                                                                                              |
+| P25 | web, electron | any             | capture        | Anchor on `#nav-panel-drawer`'s aside sibling; tell skeleton states apart by testid, not row count                                                           |
+| P26 | web           | any             | capture        | Park the route's own tRPC call with `park-request.cjs`; a broad `*trpc*` pattern stalls the shell                                                            |
+| P27 | web           | any             | drive          | `SWRConfig` only affects hooks below it; move the hooks into a child component                                                                               |
+| P28 | electron      | any             | capture        | Raw CDP `Fetch.enable` on the layout chunk holds the sidebar fallback; name the layout module only                                                           |
+| P29 | web, electron | any             | fixture, drive | Seed via `mkdirDocumentByPath` / `writeDocumentByPath`; rows live in pierre's shadow DOM; hetero agents have no Documents tab                                |
+| P30 | web, electron | any             | drive          | pierre's focus-visible and truncation-mask contracts when restyling the tree                                                                                 |
+| P31 | web           | any             | drive          | Row-shape bugs need the real account: foreground the MCP tab, zero-write clicks, in-page event ring buffer                                                   |
+| P32 | web, electron | hetero          | fixture        | Dispatch a temp assistant message and attach an `AgentRuntimeError` guide code                                                                               |
+| P33 | web, electron | any             | fixture        | Backfill `pluginState` from each tool message's result after Agent Mock playback                                                                             |
+| P34 | web, electron | any             | fixture        | Dispatch an assistant+tool pair into an empty conversation; truncate args to reach the Streaming render                                                      |
+| P35 | web           | gateway         | probe          | Step-boundary `uiMessages` snapshots overwrite the bucket; record `replaceMessages` stacks, A/B with `disableGatewayMode`                                    |
+| P36 | web           | gateway         | env            | Run the JWT handshake probe after every gateway restart; `/health` 200 proves nothing                                                                        |
+| P37 | any           | gateway         | env            | QStash / s3rver on fixed ports may belong to a sibling session; read the start log before stopping anything                                                  |
+| P38 | web           | any             | fixture        | Call the real load-more store action when the fixture is too short for the observer                                                                          |
+| P39 | web, electron | any             | fixture        | Replace the react-query `mutationFn` with a rejection via HMR so no network call ever fires                                                                  |
+| P40 | web, electron | any             | drive          | Remount the DevDock panel after a reload; pre-seed `LOBE_DEV_DOCK_UI` to land on it                                                                          |
+| P41 | web           | client          | fixture, drive | openai speaks `/v1/responses`; the model must be in `enabledAiModels`; set approval `auto-run`                                                               |
+| P42 | web           | hetero          | fixture, drive | In-page IPC mock feeding stream-json through the real `ClaudeCodeAdapter`, no Electron needed                                                                |
+| P43 | web, electron | any             | capture        | Focus and read in one eval, wait past the transition, assert an untransitioned property too                                                                  |
+| P44 | web, electron | any             | capture        | Inject `html > canvas { display: none }` at capture time and disclose it                                                                                     |
+| P45 | web           | any             | capture        | Gate on `checkVisibility`, match own text nodes, assert both columns in one pass                                                                             |
+| P46 | web, electron | any             | capture        | Sample in-page (`addScriptToEvaluateOnNewDocument` or an entry injection), record the max tick gap, mirror the timer                                         |
+| P47 | web, electron | any             | capture        | Sample opacity in-page at 8 ms and use `Page.startScreencast`; `data-ending-style` is never set                                                              |
+| P48 | web           | any             | capture        | `localStorage.theme` + reload; assert `dataset.theme`; restore before stopping the server                                                                    |
+| P49 | electron      | any             | capture        | Prove the hosted URL (curl + open it), not the in-app preview                                                                                                |
+| P50 | any           | any             | publish        | Re-running `ingest` mints a duplicate round; re-read with `run list` / `run get` / `view`                                                                    |
+| P51 | electron      | any             | probe          | Read the loaded entry script per run; never assume `entry.desktop.tsx`                                                                                       |
+| P52 | electron      | any             | capture        | `DESKTOP_RENDERER_STATIC=1` pool instance; prove the build via modulepreload hashes                                                                          |
+| P53 | electron      | any             | drive          | Open via `openTopicInNewWindow` and attach raw CDP to the popup target                                                                                       |
+| P54 | electron      | any             | drive          | `activateTab` alone is a no-op on the single-router shell; click the TabItem element and assert the pathname                                                 |
+| P55 | electron      | any             | drive          | `addTab` activates; enter the route with `goto` and assert tab / pathname / activeTopicId agree                                                              |
+| P56 | electron      | any             | capture        | Classify hidden slots on both sides of the switch and use the intersection                                                                                   |
+| P57 | electron      | any             | capture        | The renderer tracks OS appearance; `themeMode` never applies; mark the dark case untested                                                                    |
+| P58 | electron      | any             | probe          | i18next stays English until `switchLocale`; decide language from the DOM, not `status.language`                                                              |
+| P59 | electron      | any             | drive          | `addTab('/')` first; `goto /` alone keeps the restored tab                                                                                                   |
+| P60 | electron      | any             | auth, env      | Read `dataSyncConfig` first; `storageMode: cloud` means the run must stay read-only                                                                          |
+| P61 | web, electron | any             | capture        | Stall `indexedDB.open` only on web; it kills the Electron renderer                                                                                           |
+| P62 | electron      | any             | env            | Keep locale tests out of `packages/locales/src/default/` or the renderer imports vitest                                                                      |
+| P63 | cli           | gateway         | auth           | `lh task run --follow` needs OIDC; poll with `task view`; use internal ids for `--subject task:`                                                             |
+| P64 | web           | any             | auth           | No seeded session for the debug proxy; drive the user's Chrome and add DOM measurements                                                                      |
+| P65 | electron      | any             | auth, env      | Start the server on the snapshot's port with `SERVER_PORT=`; inject a better-auth cookie over CDP                                                            |
+| P66 | electron      | any             | auth           | `safeStorage` cannot decrypt the copied token; fall back to the legacy single instance                                                                       |
+| P67 | electron      | any             | auth, env      | Read the port from `/tmp/electron-dev.log`, mint a session, `Network.setCookie`                                                                              |
+| P68 | electron      | any             | auth, env      | Pool logs are `instance-<id>.log`; fix the port and start the server before Electron                                                                         |
+| P69 | electron      | any             | fixture        | Snapshot `dist/renderer` before building so the manifest differs from the local tree                                                                         |
+| P70 | any           | any             | env            | `.records/runtime/` holds the owned server's PID and ports; poll that port                                                                                   |
+| P71 | web           | any             | env            | `lsof` the listener, kill only the run-owned tree, restart, reseed auth                                                                                      |
+| P72 | web, electron | any             | env            | Two copies of a dep produce context errors; `pnpm dedupe`; local-only, never a branch defect                                                                 |
+| P73 | web           | any             | env            | Install without `--ignore-scripts` and `rm -rf .next`; turbo-tasks panics are disposable cache                                                               |
+| P74 | electron      | any             | env            | The desktop install duplicates `@types/react`; intersect errors with changed files, A/B after evidence                                                       |
+| P75 | electron      | any             | env            | Run the Model B desktop command in a long-lived PTY                                                                                                          |
+| P76 | any           | any             | env            | Prefix git and check commands with `cd <worktree>`; read the diffstat before pushing                                                                         |
+| P77 | web, cli      | gateway         | probe          | Read `llm_generation_tracing.prompt_version` after one call; restart the server if stale                                                                     |
+| P78 | web, cli      | gateway         | env            | `SSRF_ALLOW_PRIVATE_IP_ADDRESS=1` so the server can read local s3rver URLs                                                                                   |
+| P79 | web, cli      | client, gateway | env            | Local SearXNG with `SEARCH_PROVIDERS=searxng`; the on-disk search1api keys are dead                                                                          |
+| P84 | cli           | any             | auth           | Drive `lh` against the local lobehub-cloud runtime by seeding an API key row into its main database                                                          |
+| P85 | cli           | any             | fixture        | Simulate a publish whose response was lost by restoring `pendingCreateKey` in `.lobehub/artifacts.json`                                                      |
+| P82 | web           | any             | drive          | Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups               |
+| P86 | electron, cli | any             | env, auth      | A session spawned by the desktop hetero runtime inherits `LOBEHUB_JWT` (production) and `ELECTRON_RUN_AS_NODE=1` — strip both before local Electron/CLI work |
+
 ## Choose the least invasive mechanism
 
 1. **Use a supported command** in `scripts/app-probe.sh` for read-only app state.
@@ -69,7 +170,9 @@ belongs to, above `Detailed references`.
 
 ### Probing app state
 
-#### Store exposure
+#### P01 · Store exposure
+
+**applies-to:** surface=any · runtime=any · phase=probe
 
 `window.__LOBE_STORES.<name>` is a function returning the current state. Call it:
 
@@ -81,7 +184,9 @@ It intentionally does not expose Zustand's `getState` or `setState`. If a test
 repeatedly needs mutation, add a dev-only supported action or fixture command
 instead of normalizing temporary `setState` HMR patches.
 
-#### In-SPA navigation that preserves instrumentation
+#### P02 · In-SPA navigation that preserves instrumentation
+
+**applies-to:** surface=web, electron · runtime=any · phase=probe
 
 `app-probe.sh goto` and `location.assign("app://renderer/…")` perform a FULL
 reload — any `window.fetch` wrapper or debug global installed via `eval` is
@@ -97,13 +202,17 @@ This remounts the route component (SWR revalidates, list fetch observable by the
 wrapper) without recreating the JS context. Leave-and-return with this pattern is
 the way to capture a page's first-load request after installing a fetch wrapper.
 
-#### Runtime proof
+#### P03 · Runtime proof
+
+**applies-to:** surface=any · runtime=client, gateway · phase=probe
 
 Client and server agent runtimes can produce the same visible result. Prove the
 runtime with a server-only artifact: operation row, queue step, or enabled
 main/server log namespace. Renderer state alone is not sufficient.
 
-#### `eval` declarations persist in the page global scope
+#### P04 · `eval` declarations persist in the page global scope
+
+**applies-to:** surface=web, electron · runtime=any · phase=probe
 
 **Situation:** running several `agent-browser eval` payloads against one renderer.
 
@@ -114,7 +223,9 @@ shares the page's global scope.
 **Works:** wrap every payload in an IIFE (`(() => { … })()`), or attach state to a
 single namespaced `window.__X` object.
 
-#### Shared agent-browser session names can cross-wire concurrent acceptance runs
+#### P05 · Shared agent-browser session names can cross-wire concurrent acceptance runs
+
+**applies-to:** surface=web · runtime=any · phase=drive
 
 **Situation:** a Web acceptance run uses the adapter's default `lobehub-dev`
 session while another local run is active against a different port.
@@ -144,7 +255,9 @@ assertion about working-tree code, read `location.origin` AND the page's script
 `.records/runtime` resolved. A dead script origin that still renders = disk
 cache, not your build.
 
-#### A new module needs a renderer reload, not HMR, before probing the fix
+#### P06 · A new module needs a renderer reload, not HMR, before probing the fix
+
+**applies-to:** surface=electron · runtime=any · phase=probe
 
 **Situation:** verifying a source fix in the running Electron dev instance
 (`electron-dev.sh`) right after editing.
@@ -160,7 +273,9 @@ adding or moving a module, then re-probe. Confirm the new code is live by a
 structural signal (a renamed component in the fiber chain, a new class in the
 computed cascade) before concluding anything about behavior.
 
-#### Production debug proxy stays on the development loading shell in an isolated browser
+#### P07 · Production debug proxy stays on the development loading shell in an isolated browser
+
+**applies-to:** surface=web · runtime=any · phase=env
 
 **Situation:** verifying a public SPA route with local frontend code against the
 production backend through `/_dangerous_local_dev_proxy`.
@@ -176,7 +291,9 @@ Acceptance fixture through the local CLI, and capture the same route in separate
 authenticated and storage-empty browser contexts. This proves both owner and
 shared-viewer rendering without depending on production browser cookies.
 
-#### The debug proxy cannot reach a settled app — workspace `packages/*` dynamic imports fail cross-origin
+#### P08 · The debug proxy cannot reach a settled app — workspace `packages/*` dynamic imports fail cross-origin
+
+**applies-to:** surface=web · runtime=any · phase=env
 
 **Situation:** verifying frontend work through `/_dangerous_local_dev_proxy` (production
 page + production login + local Vite modules), needing a screenshot of the app after it
@@ -202,7 +319,9 @@ agent-browser session).
 
 ### Seeding fixtures
 
-#### Structured generation through the local OpenAI-compatible stub
+#### P09 · Structured generation through the local OpenAI-compatible stub
+
+**applies-to:** surface=any · runtime=client, gateway · phase=fixture
 
 **Situation:** a real product path uses non-streaming `chat/completions` for
 `generateObject`, while ordinary agent turns use streaming completions against the
@@ -217,7 +336,9 @@ before schema parsing.
 return a standard JSON chat completion for `stream: false`; set `STUB_TEXT` to the
 schema-valid JSON required by the check.
 
-#### Driving the Acceptance AI-review predictor locally: pinned Gemini, image fetch-back, and stub JSON
+#### P10 · Driving the Acceptance AI-review predictor locally: pinned Gemini, image fetch-back, and stub JSON
+
+**applies-to:** surface=web · runtime=gateway · phase=fixture
 
 **Situation:** verifying the ✨ "ask AI to review" round on `/acceptance/<id>` (the
 `review_predict` generation, its toast, the proposal cards) without a real vision key.
@@ -252,7 +373,47 @@ completion whose `content` is parsed as the object. A text-only evidence check i
 Assert the round from three places together: the toast copy (a MutationObserver on
 `document.body`), the rows' `status`/`action`/`created_at`, and the card count.
 
-#### A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
+#### P11 · Structured generation crashes on the deepseek provider path — stub via openai instead
+
+**applies-to:** surface=any · runtime=gateway · phase=fixture
+
+**Situation:** driving a server-side `generateObject` scenario (e.g. `verify_plan_gen`)
+through `llm-stub.mjs` when the resolved model config is `deepseek` (the OSS default).
+
+**Doesn't work:** pointing the deepseek provider's keyVaults at the stub. The chat
+turn streams fine, but `generateObject` fails with `TypeError: Cannot read properties
+of undefined (reading '0')` (visible in `llm_generation_tracing.error_detail`), and
+the caller silently falls back (verify plan gen → holistic single check), which reads
+as "my feature didn't run".
+
+**Works:** route the generation through the openai protocol path — e.g. point the
+resolver's agent (for verify: `update agents set model='gpt-5.6-luna', provider='openai'
+where slug='verify-agent'`) at the stubbed openai provider. The server-side openai
+provider calls `/v1/responses`, which the stub answers correctly for `stream:false`
+structured generation (`llm_generation_tracing.success=t` is the confirmation probe).
+
+#### P12・Forcing the goal frontier 失联 state needs >15 min, not the server's 5
+
+**applies-to:** surface=web · runtime=gateway · phase=fixture
+
+**Situation:** A/B-forcing the goal page's 失联 (lost-heartbeat) banner by backdating
+`goal_nodes.updated_at` / `agent_operations.updated_at` with SQL.
+
+**Doesn't work:** backdating by \~10 minutes because the server reclaim default
+(`resolveOperationLeaseTimeout`) is 5 minutes. The frontier still shows 运行中: the
+client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honors
+`goal.config.recovery.operationLeaseTimeoutMs` when the goal sets one.
+
+**Works:** backdate past the client's window (25 min is comfortable), or create the
+goal with an explicit `--operation-lease-timeout-ms`. Liveness = the newer of the
+node row and `runHeartbeats` (the running operation's `updated_at` served by
+`goal.graph`), so the A/B is: node stale + op fresh → 运行中；both stale → 失联.
+Restore the forced rows (node/task/task\_topics/operation status + timestamps) after
+capturing.
+
+#### P13 · A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
+
+**applies-to:** surface=web, cli · runtime=any · phase=fixture
 
 **Situation:** building a topic fixture with `lh topic create`, writing fields such as
 `workingDirectoryConfig` into `metadata` with SQL, then opening the UI to verify.
@@ -270,10 +431,12 @@ UI" split is especially misleading.
 
 **Works:** right after writing the metadata, also run
 `update topics set status='active', trigger='chat'`, then `app-probe.sh goto` once
-more. Keep the assertion order from M19: confirm `app-probe.sh topic` returns the
+more. Keep the assertion order from generic M6: confirm `app-probe.sh topic` returns the
 metadata before asserting anything in the UI.
 
-#### `agent.updateAgentConfig` silently drops `agencyConfig.heterogeneousProvider`
+#### P14 · `agent.updateAgentConfig` silently drops `agencyConfig.heterogeneousProvider`
+
+**applies-to:** surface=web, electron · runtime=hetero · phase=fixture
 
 **Situation:** turning a test agent into a CLI-agent shape (Claude Code / Codex) so
 the heterogeneous chat input and its quota badges render.
@@ -294,12 +457,14 @@ docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
 ```
 
 Then cold-load: a plain reload keeps serving the agent config from the tiered SWR
-cache, so the renderer still shows the pre-write value (generic M18). Clear
+cache, so the renderer still shows the pre-write value (generic M6). Clear
 `lobechat-swr-cache*` + `lobehub-local-data` through
 `Page.addScriptToEvaluateOnNewDocument` and reload (see "Cold SWR cache" above),
 then assert `agentMap[id].agencyConfig` before drawing any conclusion.
 
-#### Day-scoped fixtures must use the browser's measured timezone, not an assumed one
+#### P15 · Day-scoped fixtures must use the browser's measured timezone, not an assumed one
+
+**applies-to:** surface=web · runtime=any · phase=fixture
 
 **Situation:** seeding backdated rows (briefs, activity, digests) whose UI grouping is
 by the viewer's _local calendar day_ (`dayjs().startOf('day')` on the client).
@@ -317,7 +482,9 @@ every `[startAt, endAt)` from that. When a day view comes back empty, diff the
 client's real request window (fetch wrapper on the batch URL) against the seeded
 timestamps before suspecting the query.
 
-#### Cold SWR cache: clearing then reloading is undone by the outgoing page
+#### P16 · Cold SWR cache: clearing then reloading is undone by the outgoing page
+
+**applies-to:** surface=web, electron · runtime=any · phase=fixture
 
 **Situation:** forcing a first-load / skeleton state for anything backed by the
 tiered SWR cache (`recent:*`, `topic:*`, `message:*`, …).
@@ -361,7 +528,9 @@ stale frame separately if you observed it. Pair it with a warm control run: if
 the warm run renders data while the request is held paused and the cold run shows
 the skeleton, the cache tier is proven to be what the render reads.
 
-#### Reaching the Goals page: nested route plus a Labs toggle
+#### P17 · Reaching the Goals page: nested route plus a Labs toggle
+
+**applies-to:** surface=web · runtime=any · phase=drive
 
 **Situation:** accepting goal-related functionality requires opening the Goals page.
 
@@ -385,7 +554,9 @@ skips AI generation of the acceptance criteria (required when there is no local 
 key); the criteria editor and budget field are ordinary inputs, while the goal
 description is contenteditable (use `fill`; `type` does not support contenteditable).
 
-#### Reaching the Claude Code usage calendar: a local-execution agent, a live-CLI identity, and a four-table ledger fixture
+#### P18 · Reaching the Claude Code usage calendar: a local-execution agent, a live-CLI identity, and a four-table ledger fixture
+
+**applies-to:** surface=electron · runtime=hetero · phase=fixture
 
 **Situation:** verifying the quota usage calendar (`AgentQuotaCalendar`), which needs
 both a way to open it and quota history to render.
@@ -433,9 +604,89 @@ renders. Seed the history and the ledger, but never assert on the live window's 
 percentage — read it back from `agent_quota_snapshots` and report what the run
 actually rendered.
 
+#### P19 · Shared-viewer (non-owner) evidence needs a second signed-in user — signed-out hits /signin
+
+**applies-to:** surface=web · runtime=any · phase=auth
+
+**Situation:** capturing how a page renders for someone who is NOT the owner of the
+object (a shared acceptance link, a workspace-member view), on the local full stack.
+
+**Doesn't work:** a fresh storage-empty agent-browser session. The SPA's `/acceptance`
+(and the rest of the main layout) sits behind the client auth gate, so a signed-out
+context redirects to `/signin` before the route mounts — `location.pathname` lands on
+`/signin` and every "the notice never renders" reading is an artifact of the gate, not
+the change under test.
+
+**Works:** seed a second user directly (mirror what `seed-user` writes: a `users` row
+with `onboarding` finished + an `accounts` row with a bcryptjs password hash), then
+sign that user in from INSIDE the visitor session so the cookies land in it:
+
+```js
+await fetch('/api/auth/sign-in/email', {
+  body: JSON.stringify({ email, password }),
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  method: 'POST',
+});
+```
+
+Reload and assert identity with `app-probe.sh auth` before capturing. Use a
+run-specific session name, never `lobehub-dev` (that one is the owner).
+
+#### P20 · Ambient `LOBEHUB_TOPIC_ID` hijacks a local CLI ingest — strip it for fixture creation
+
+**applies-to:** surface=cli · runtime=any · phase=fixture
+
+**Situation:** creating a fixture acceptance on the LOCAL dev server with
+`bun src/index.ts acceptance run ingest` while running inside a LobeHub conversation
+(Claude Code sessions launched from a Topic export `LOBEHUB_TOPIC_ID` /
+`LOBEHUB_AGENT_ID` / `LOBEHUB_OPERATION_ID`).
+
+**Doesn't work:** plain ingest. The CLI auto-attaches to the ambient conversation, and
+that topic id belongs to PRODUCTION — the local server answers
+`topic "tpc_…" not found in the current workspace`, which reads like broken fixture
+data rather than an env leak.
+
+**Works:** strip the ambient ids only for the local fixture ingest
+(`env -u LOBEHUB_TOPIC_ID -u LOBEHUB_AGENT_ID -u LOBEHUB_OPERATION_ID …`) so it lands
+standalone. Keep them for the final PRODUCTION publish of the verification round —
+there the auto-attach to the current conversation is exactly what you want.
+
 ### Driving the UI
 
-#### The composer's slash menu needs real key events — `keyboard type` never opens it
+#### P21・Driving a 资源库 upload with agent-browser: use the Add-menu input, and a same-build A/B for the hashing thread
+
+**applies-to:** surface=web · runtime=any · phase=drive
+
+**Situation:** uploading a multi-GB fixture through the resource library (`/resource`)
+to verify the upload/hash pipeline without a real drag-and-drop.
+
+**Doesn't work:** `agent-browser upload` on the first `input[type=file][multiple]` the
+page exposes. That input belongs to another surface; `dockUploadFileList` stays empty
+and nothing errors, which reads as "the upload never started".
+
+**Works:** open the header `Add` menu first (`find role button click --name "Add"`),
+then upload into the antd input it mounts:
+`agent-browser upload '.ant-upload input[type=file][multiple]' <file>`. Poll
+`window.__LOBE_STORES.file().dockUploadFileList` for `status` / `uploadState.progress`;
+the hash phase is `pending` with a climbing `progress`, upload is `uploading`, and the
+row auto-clears \~3 s after `success`, so screenshot on the first `success` sample.
+Note the `eval` output is a JSON-encoded string — `\"status\":\"success\"` — so a
+`rg` trigger must not assume bare quotes (`'status.{2,6}success'`).
+
+To prove the hash left the main thread without checking out old code, run the same
+file twice in the same build: once after `window.Worker = undefined` (the shared
+`hashFile` then falls back to its inline streaming path, byte-for-byte the pre-worker
+behaviour) and once untouched. A 16 ms `setInterval` sampler's longest gap is the
+stall metric (measured: 16.4 s vs 61 ms for 1.1 GB); wrap `window.Worker` to record
+the constructed script URL and `window.fetch` to timestamp `file.checkFileHash`, which
+marks the end of hashing. A re-upload of the same file still hashes and then dedups
+(only `checkFileHash` + `createFile`), so it is a cheap way to re-capture the progress
+UI without another transfer.
+
+#### P22 · The composer's slash menu needs real key events — `keyboard type` never opens it
+
+**applies-to:** surface=web, electron · runtime=any · phase=drive
 
 **Situation:** driving the chat composer's `/` slash menu (or anything else gated on
 a Lexical `KEY_DOWN_COMMAND`) through agent-browser.
@@ -465,7 +716,9 @@ Confirm the mechanism rather than assuming a menu is missing:
 agent-browser --session "$RS" eval '(() => { window.__KD=[]; document.addEventListener("keydown", e => window.__KD.push(e.key), true); return "installed"; })()'
 ```
 
-#### An `ActionIcon` is not a `<button>` — select it by its lucide class, click through agent-browser
+#### P23 · An `ActionIcon` is not a `<button>` — select it by its lucide class, click through agent-browser
+
+**applies-to:** surface=web, electron · runtime=any · phase=drive
 
 **Situation:** driving an icon-only affordance inside a popover or panel (`ActionIcon`
 from `@lobehub/ui`: refresh, calendar, more, …).
@@ -508,7 +761,9 @@ and re-tag rather than assuming the control vanished), and a `Tooltip`-wrapped c
 needs a real pointer move (`Input.dispatchMouseEvent` over several coordinates, or a
 dispatched `pointerover`+`mouseover` pair) before its content mounts.
 
-#### A node reference captured before a re-render is silently dead — re-query per assertion
+#### P24 · A node reference captured before a re-render is silently dead — re-query per assertion
+
+**applies-to:** surface=web, electron · runtime=any · phase=drive
 
 **Situation:** asserting several tab-strip interactions (close, pin, switch) in one
 `agent-browser eval` payload, reusing the element list collected at the top.
@@ -525,7 +780,9 @@ stale reference, and it survived review because the number looked plausible.
 share a payload, re-query between actions and assert `el.isConnected` before dispatch.
 The same applies to any probe whose own action re-renders the tree it is measuring.
 
-#### Anchor nav-panel assertions on `#nav-panel-drawer`, not a `data-insp-path` match
+#### P25 · Anchor nav-panel assertions on `#nav-panel-drawer`, not a `data-insp-path` match
+
+**applies-to:** surface=web, electron · runtime=any · phase=capture
 
 **Situation:** asserting what the left nav panel renders on a given route.
 
@@ -550,7 +807,46 @@ identify the fallback by a row count — it is shaped per navKey now
 (`NAV_SKELETON_SHAPES`), so memory/discover render header plus a nav list and no body
 at all, while settings renders a search box plus four accordion groups.
 
-#### Park a route's lazy chunk to hold its pending sidebar on screen
+#### P26 · Hold a route's Suspense fallback by parking its data request
+
+**applies-to:** surface=web · runtime=any · phase=capture
+
+**Situation:** the route skeleton is now held by data (`SWRConfig{ suspense: true }`
+at the layout), not only by the lazy module, so parking the chunk no longer keeps it
+on screen once the module is cached. The fallback lasts a few hundred ms.
+
+**Works:** park the route's own tRPC call with raw CDP `Fetch.enable` — the skeleton
+stays up until the request is released, so it can be measured and screenshotted at
+leisure. `.agents/acceptance/scripts/park-request.cjs <browser-ws> <urlPattern> <holdMs>`
+does this against an `agent-browser` session:
+
+```bash
+node .agents/acceptance/scripts/park-request.cjs \
+  "$(agent-browser --session lobehub-dev get cdp-url)" '*trpc/lambda/aiProvider*' 25000
+```
+
+Name the route's **own** query in the pattern (`aiProvider*` for the provider page).
+A broad `*trpc*` parks the shell's queries too and the route never mounts, which reads
+as a product hang. For the error state, prefer `agent-browser network route <pattern> --abort` — an aborted request settles, so the boundary renders instead of hanging.
+
+#### P27 · `SWRConfig` reaches hooks below it, never the component that renders it
+
+**applies-to:** surface=web · runtime=any · phase=drive
+
+**Situation:** opting one page out of a subtree's suspense (a page whose sections are
+gated independently and must keep their own Retry).
+
+**Doesn't work:** wrapping that page's own JSX in `<SWRConfig value={{ suspense: false }}>`.
+The page's hooks run in its component body, which is _above_ the element it returns, so
+they still read the subtree's config and the page keeps suspending. The symptom is a
+whole route thrown to the error boundary the first time one section's fetch fails.
+
+**Works:** move the hooks into a child component and wrap that child. Verify by failing
+one section's request and confirming the rest of the page still renders.
+
+#### P28 · Park a route's lazy chunk to hold its pending sidebar on screen
+
+**applies-to:** surface=electron · runtime=any · phase=capture
 
 **Situation:** verifying what a route's `NavPanel` fallback (or any `dynamicElement`
 Suspense fallback) actually renders. The pending state lasts a few hundred ms, so no
@@ -582,7 +878,9 @@ pattern missed, it is not a product finding.
 Drive the navigation with `app-probe.sh goto <route>` (a full reload, so the module
 is re-requested and re-parked).
 
-#### Document-tree evidence: seed fixtures by path, drive through the shadow DOM, and note that heterogeneous Agents have no Documents tab
+#### P29 · Document-tree evidence: seed fixtures by path, drive through the shadow DOM, and note that heterogeneous Agents have no Documents tab
+
+**applies-to:** surface=web, electron · runtime=any · phase=fixture, drive
 
 **Situation:** verifying how `DocumentExplorerTree` renders (the left column of
 `/agent/:id/docs`, and the Documents tab of the conversation's right-hand working
@@ -642,7 +940,9 @@ if (el.getAttribute('aria-expanded') === 'false') el.click();
    screenshot. For indentation, read the content-box `x` and diff it level by level —
    that difference is the real step.
 
-#### Restyling ExplorerTree: pierre's focus state and truncation mask have two counter-intuitive contracts
+#### P30 · Restyling ExplorerTree: pierre's focus state and truncation mask have two counter-intuitive contracts
+
+**applies-to:** surface=web, electron · runtime=any · phase=drive
 
 **Situation:** tuning `ExplorerTree` (pierre/trees) appearance through `unsafeCSS` /
 `--trees-*` variables — removing the focus highlight, changing truncation behaviour,
@@ -697,7 +997,9 @@ recolouring row states.
   `opacity` to 0 is not enough — pierre has two more rules ("reveal on tree hover" and
   "highlight the focused row's ancestors") that push the opacity back to 1.
 
-#### Skill-menu interaction bugs depend on the shape of the user's data — foreground the MCP window and reproduce with zero-write clicks
+#### P31 · Skill-menu interaction bugs depend on the shape of the user's data — foreground the MCP window and reproduce with zero-write clicks
+
+**applies-to:** surface=web · runtime=any · phase=drive
 
 **Situation:** reproducing a row-level interaction defect in the `+` menu / skills
 submenu (hover detail card, the `...` policy menu, the uninstall confirmation). The
@@ -728,7 +1030,9 @@ alone cannot separate outside-press from focus-out from hover-out.
 
 ### Rendering messages and tool calls
 
-#### Message-attached heterogeneous-agent errors
+#### P32 · Message-attached heterogeneous-agent errors
+
+**applies-to:** surface=web, electron · runtime=hetero · phase=fixture
 
 Inject a temporary assistant message through
 `chat().internal_dispatchMessage`, then attach an `AgentRuntimeError`. Supported
@@ -736,7 +1040,9 @@ guide codes are `auth_required`, `cli_not_found`, `overloaded`, and `rate_limit`
 other values follow the generic error path. Use a unique content marker, verify the
 real rendered card, and delete the temporary message afterward.
 
-#### Agent Mock playback leaves `pluginState` empty — backfill it before capturing pluginState-driven renders
+#### P33 · Agent Mock playback leaves `pluginState` empty — backfill it before capturing pluginState-driven renders
+
+**applies-to:** surface=web, electron · runtime=any · phase=fixture
 
 **Situation:** verifying a builtin-tool Render/Inspector (lobe-agent todos, plans —
 anything reading `message.pluginState`) with DevDock → Agent Mock case playback as
@@ -778,7 +1084,9 @@ is what selects the Render component) and the tool message (`updateMessagePlugin
   (NOT `lobe-claude-code`) and PascalCase `apiName` (`TodoWrite`). All of this is
   in-memory only — a reload clears it; delete the temp topic at teardown.
 
-#### Verifying a builtin-tool Render with no provider key — dispatch a fresh assistant+tool pair
+#### P34 · Verifying a builtin-tool Render with no provider key — dispatch a fresh assistant+tool pair
+
+**applies-to:** surface=web, electron · runtime=any · phase=fixture
 
 **Situation:** verifying a builtin tool's Render / Streaming component when the local
 env has no LLM provider key, so no real model can be made to emit that tool call
@@ -863,7 +1171,9 @@ code A/B, re-dispatch after each edit rather than expecting react-refresh to kee
 the messages — and re-run the identical dispatch + expand + scroll sequence on both
 sides so the two frames differ only by the change.
 
-#### A client bucket that keeps reverting mid-run is the gateway `uiMessages` snapshot, not your write
+#### P35 · A client bucket that keeps reverting mid-run is the gateway `uiMessages` snapshot, not your write
+
+**applies-to:** surface=web · runtime=gateway · phase=probe
 
 **Situation:** a store bucket (`dbMessagesMap[<key>]`) holds the right messages right
 after a gateway send, then silently loses them a second or two later and stays wrong
@@ -893,7 +1203,9 @@ applies a pushed snapshot. If the behavior is correct there and wrong in gateway
 mode, the defect is in the gateway transport or in the server snapshot, and you have
 halved the search space before reading any code.
 
-#### `curl /health` does not prove the local agent-gateway trusts your key — run the JWT probe
+#### P36 · `curl /health` does not prove the local agent-gateway trusts your key — run the JWT probe
+
+**applies-to:** surface=web · runtime=gateway · phase=env
 
 **Situation:** restarting the local agent-gateway between acceptance rounds and
 gating on `curl -s -o /dev/null -w '%{http_code}' http://localhost:<port>/health`.
@@ -923,7 +1235,9 @@ worktree regenerating it) silently invalidates it for the next run — compare t
 `kid` in `agent-gateway/.dev.vars` against `.records/env/agent-testing-jwks.json`
 when in doubt.
 
-#### A required local service can be someone else's, and `preflight` will not tell you
+#### P37 · A required local service can be someone else's, and `preflight` will not tell you
+
+**applies-to:** surface=any · runtime=gateway · phase=env
 
 **Situation:** starting QStash / s3rver for a run through `init-dev-env.sh` in a
 worktree while another agent-testing session is already active on the machine.
@@ -941,14 +1255,18 @@ does not own.
 kills the other session's run. Only the dev server (`stop-dev`, which verifies PID
 ownership) and anything you launched on a port you chose yourself are yours to stop.
 
-#### Infinite-scroll failure states
+#### P38 · Infinite-scroll failure states
+
+**applies-to:** surface=web · runtime=any · phase=fixture
 
 When the fixture is too short for the observer to fire, call the real load-more
 store action rather than pretending to scroll. This covers the request, catch
 path, and rendered retry row; it does not prove the observer gate itself. Use a
 scrollable fixture when the observer behavior is the claim.
 
-#### Safe mutation-error injection against a real (cloud) account
+#### P39 · Safe mutation-error injection against a real (cloud) account
+
+**applies-to:** surface=web, electron · runtime=any · phase=fixture
 
 To exercise a mutation error branch when the app points at the user's real cloud
 backend, replace the react-query `mutationFn` body with an immediate
@@ -959,7 +1277,9 @@ error shapes through a window flag (e.g. plain `Error` vs
 marker before clicking. Snapshot the dirty file first and restore byte-identically
 (cmp), never `git checkout --`.
 
-#### Render Gallery shows "No builtin tool renders registered." after a reload
+#### P40 · Render Gallery shows "No builtin tool renders registered." after a reload
+
+**applies-to:** surface=web, electron · runtime=any · phase=drive
 
 **Situation:** driving DevDock → Render Gallery to capture builtin-tool
 Inspector/Render evidence, after a renderer reload or an HMR update.
@@ -987,9 +1307,143 @@ localStorage.setItem(
 );
 ```
 
+#### P41 · Driving a real queued-message (steer) run in client runtime: Responses-API stub, an enabled function-call model, and auto-run approval
+
+**applies-to:** surface=web · runtime=client · phase=fixture, drive
+
+**Situation:** verifying anything downstream of the input queue (steer/follow-up drain,
+the merged assistant chain) needs a turn that stays open long enough to enqueue a
+second message AND ends on a tool round, so the first turn renders as an
+`assistantGroup` rather than a bare `assistant`.
+
+**Doesn't work:** three things, each of which reads as a product defect.
+
+- Pointing the openai provider at the chat-completions `llm-stub.mjs`. The openai
+  provider calls `/v1/responses` (the stub 404s and the turn dies with
+  `ProviderBizError … retrying 4/6`). Side requests (topic title) hit the same endpoint
+  with `stream: false` and a `text.format` json\_schema — answer them with a JSON
+  `{"title":…}` string, never with SSE.
+- Setting `model: 'gpt-4o'` on the agent. Only models present in
+  `aiInfra().enabledAiModels` for the provider carry `abilities.functionCall`; an
+  unlisted id gets NO `tools` in the request, the runtime then flattens tool rounds
+  into plain user/assistant text, and a stub that keeps emitting a function call loops
+  until `Stopped after the same tool call was requested 20 consecutive times`. Note the
+  app still EXECUTES a function call the stub emits unprompted, so "the tool ran" is not
+  proof that tools were offered.
+- Leaving `tool.humanIntervention.approvalMode` on its default. The calculator call parks
+  on the approval bar, which also covers the composer at its click point
+  (`agent-browser click` refuses; use `eval` `el.focus()` + `keyboard type` instead).
+
+**Works:** `updateAgentConfig({ model: 'gpt-5.6-luna', provider: 'openai' })` (any
+`enabledAiModels` entry with `functionCall: true`), `setPluginMode('lobe-calculator',
+'pinned')`, `user().updateHumanIntervention({ approvalMode: 'auto-run' })`, and a stub
+that speaks Responses SSE: `response.output_item.added` (`type: 'function_call'`,
+`call_id`, `name: 'lobe-calculator____calculate'`) → `response.function_call_arguments.delta`
+→ `response.output_item.done` → `response.completed`; on the next request the tool
+result arrives as a `function_call_output` input item, so stream the final text then.
+Detect the conversation turn by `payload.stream === true`, not by `payload.tools`.
+Restore the agent's original `plugins` array afterwards — `updateAgentConfig({ plugins })`
+replaces the whole list (the read-back is stale for \~1s, so verify after a delay).
+
+#### P42 · Driving the heterogeneous (Claude Code) runtime on web without Electron — an in-page IPC mock over the real adapter
+
+**applies-to:** surface=web · runtime=hetero · phase=fixture, drive
+
+**Situation:** verifying anything the `hetero` executor owns (its own queue drain, `--resume`
+turn chaining, streamed tool/text rendering) when Electron is unavailable, or the dev
+Electron login snapshot is `storageMode: cloud` (writes would land in the real account).
+
+**Doesn't work:** a fake `claude` binary. It needs the desktop main process, a local backend
+for the `agencyConfig.heterogeneousProvider` SQL seed, and the Electron auth/port traps.
+
+**Works:** three `[AGENT-TEST]` injections, all gated on `localStorage.__HETERO_MOCK === '1'`
+(snapshot dirty files first, restore with `cp` + `cmp`):
+
+- `src/services/electron/heterogeneousAgent.ts` — the `ipc` getter returns an in-page object
+  whose `sendPrompt` feeds scripted stream-json lines through
+  `new ClaudeCodeAdapter().adapt(line)` (importable from `@lobechat/heterogeneous-agents` in
+  the renderer) and emits each event on `window.__HETERO_BUS` as `heteroAgentEvent
+{ event, sessionId }`, then `heteroAgentSessionComplete`. `startSession` reuses
+  `resumeSessionId` so turn 2 chains; stub every other method the executor calls
+  (`getClaudeCodeIdentity`, `cancelSession`, `stopSession`, quotas) or the getter throws
+  inside a `.then`.
+- executor `subscribeBroadcasts` — `const ipc = window.__HETERO_BUS ?? window.electron!.ipcRenderer`.
+- `conversationLifecycle` — under the flag inject `heterogeneousProvider = { type: 'claude-code',
+command: 'claude' }` and call `selectRuntimeType(ctx, { isDesktop: true })`.
+
+Line order that streams live: `system/init` → `stream_event message_start` → `assistant`
+(tool\_use Bash) → `user` (tool\_result) → `stream_event message_start` → `content_block_delta`
+text\_delta ×N → `assistant` (full text) → `result`. The op shows as `execHeterogeneousAgent`,
+the bubble shows "Claude Code is running…", and the topic persists user → assistant(Bash) →
+tool → assistant(text) rows. Capture mid-turn by polling the top-level `[data-index]` rows,
+not `body.innerText`, and key turn-2 captures on the store/DOM state you assert rather than a
+fixed sleep.
+
+#### P82 · Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups
+
+**applies-to:** surface=web · runtime=any · phase=drive
+
+**Situation:** verifying the acceptance flow graph (`src/features/Acceptance/Viewer/Flow`)
+with local worktree code against production data through
+`/_dangerous_local_dev_proxy/acceptance/<id>?debug-host=http://localhost:<port>`, using a
+publicly shared acceptance so no production login is injected.
+
+**Doesn't work:**
+
+- Idle gaps between `agent-browser` commands. The anonymous context is redirected to
+  `/signin?reason=sessionExpired` within roughly a minute, so a later screenshot silently
+  becomes the login page and reads as "the group frame is gone".
+- `focus @ref` + `press Enter` on a group button after the flow's fullscreen toggle was
+  used. `AcceptanceFlow.tsx` refocuses the fullscreen `ActionIcon` when fullscreen exits, so
+  the Enter re-enters fullscreen while the group action also fires.
+- Trusting the default `fitView`. `FlowCanvas` fits with `minZoom: 0.65`, so on a
+  1440×1800 viewport a 26-node group does not fit and the wrapper's title row is clipped
+  out of the canvas; collapsing a group does not refit, so the collapsed card can sit
+  outside the viewport. Both are pre-existing and identical on production.
+
+**Works:** one bash script that opens the URL, waits for the `验收流程` tab, and performs
+every click and screenshot back to back; log `get url` before each screenshot and skip any
+that is not on the acceptance route. Click `.react-flow__controls-zoomout` twice before the
+root/focused screenshots and `.react-flow__controls-fitview` after collapsing; drive group
+buttons with `click @ref` (focus+Enter only as fallback) and take the fullscreen shot last.
+Assert structure with `get count '.react-flow__node-flowGroup'` /
+`'.react-flow__node-state'`, capture `before` from the same route on production and `after`
+from the proxy in the same session and viewport, and rely on a top-bar string that exists
+only in the worktree as the visible identity marker of every `after` screenshot.
+
+#### P86 · A session spawned by the desktop hetero runtime inherits production env — strip `LOBEHUB_JWT` and `ELECTRON_RUN_AS_NODE` before local work
+
+**applies-to:** surface=electron, cli · runtime=any · phase=env, auth
+
+**Situation:** running acceptance (Electron dev instance, `lh connect`, local CLI
+calls) from an agent session that is itself a heterogeneous-agent child of the
+LobeHub desktop app. The session shell carries `LOBEHUB_JWT` (the user's
+**production** token), `LOBEHUB_SERVER=https://lobehub.com`,
+`LOBEHUB_OPERATION_ID` / `LOBEHUB_TOPIC_ID`, and `ELECTRON_RUN_AS_NODE=1`.
+
+**Doesn't work:** using that env as-is. `ELECTRON_RUN_AS_NODE=1` makes the spawned
+Electron boot as plain Node — the main bundle dies at
+`TypeError: Cannot read properties of undefined (reading 'isPackaged')`.
+`pickAuthSource` gives `LOBEHUB_JWT` top precedence, so `lh connect` / `whoami`
+authenticate as the production account against production no matter what
+`LOBEHUB_CLI_HOME` says (an identical token `exp` across different CLI homes is
+the tell); against a local device-gateway that fails as
+`Authentication failed: signature verification failed`, and any successful write
+would have landed in the production account.
+
+**Works:** prefix local invocations with
+`env -u LOBEHUB_JWT -u LOBEHUB_SERVER -u LOBEHUB_OPERATION_ID -u LOBEHUB_TOPIC_ID -u LOBEHUB_ASSISTANT_MESSAGE_ID`,
+run `electron-dev.sh` as `env -u ELECTRON_RUN_AS_NODE .agents/acceptance/scripts/electron-dev.sh start`,
+then set the isolated home/server explicitly. Publish steps (ingest) strip
+`LOBEHUB_JWT` as well so the stored `~/.lobehub` login is used.
+
+`holds-while: pickAuthSource precedence LOBEHUB_JWT > flags > LOBEHUB_CLI_API_KEY > stored (apps/cli/src/auth/source.ts); Electron honors ELECTRON_RUN_AS_NODE.`
+
 ### Capturing and publishing evidence
 
-#### Reading a transitioned CSS property immediately after focus/hover
+#### P43 · Reading a transitioned CSS property immediately after focus/hover
+
+**applies-to:** surface=web, electron · runtime=any · phase=capture
 
 **Situation:** asserting that a `:focus-within` / `:hover` rule reveals a
 control.
@@ -1004,7 +1458,9 @@ and assert the untransitioned property too (`width`) plus
 `el.matches('<selector>:focus-within')` so a mid-transition value cannot be
 mistaken for a non-matching rule.
 
-#### Leftover React Scan instrumentation poisons every screenshot
+#### P44 · Leftover React Scan instrumentation poisons every screenshot
+
+**applies-to:** surface=web, electron · runtime=any · phase=capture
 
 **Situation:** capturing UI evidence in a dev instance the user (or an earlier
 round) had DevTools / the DevDock open on.
@@ -1023,7 +1479,9 @@ survives re-creation, touches no product code or styles, and disappears on
 reload. Remove it at teardown. Disclose it in the report: it suppresses a dev
 overlay, which is a capture-time adjustment a reviewer should know about.
 
-#### Counting section instances across the Home rail collapse needs real visibility, not a rect
+#### P45 · Counting section instances across the Home rail collapse needs real visibility, not a rect
+
+**applies-to:** surface=web · runtime=any · phase=capture
 
 **Situation:** asserting that a Home section moved between the rail and the main
 column rather than being duplicated or lost.
@@ -1054,7 +1512,9 @@ if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) conti
 Assert both columns in the same pass — a claim about _moving_ is only settled by
 observing the source column go empty and the destination fill in one snapshot.
 
-#### Boot-phase UI cannot be observed by CDP polling — sample in-page, and mirror the timer
+#### P46 · Boot-phase UI cannot be observed by CDP polling — sample in-page, and mirror the timer
+
+**applies-to:** surface=web, electron · runtime=any · phase=capture
 
 **Situation:** asserting whether a transient boot-phase surface (a splash, a skeleton,
 a first-paint gate) appears between React's first commit and the app painting.
@@ -1090,7 +1550,9 @@ them turns a clean boot into a false "the logo flashed"); and record the max gap
 consecutive ticks — LobeHub's boot routinely shows a single 0.6–1.1s blocking task, so a
 phase with no sample inside it is a blocked window, not a missing state.
 
-#### Asserting a modal's exit window: `data-ending-style` is never set, and `record-gif.sh` is far too slow
+#### P47 · Asserting a modal's exit window: `data-ending-style` is never set, and `record-gif.sh` is far too slow
+
+**applies-to:** surface=web, electron · runtime=any · phase=capture
 
 **Situation:** proving what a base-ui modal does during its \~120ms exit — typically that the body
 stays mounted while the panel fades, rather than blanking at the start of the animation.
@@ -1129,7 +1591,9 @@ compositor paints, so they cluster inside the animation — \~9 frames in the 12
 those unmodified frames slowly with ffmpeg. Do not slow the product's own transition: the exit is a
 JS animation, so a CSS `transition-duration` override does nothing anyway.
 
-#### Switching web-session theme for dark-mode evidence needs no UI — next-themes reads `localStorage.theme`
+#### P48 · Switching web-session theme for dark-mode evidence needs no UI — next-themes reads `localStorage.theme`
+
+**applies-to:** surface=web · runtime=any · phase=capture
 
 **Situation:** capturing light- and dark-mode evidence in the seeded `agent-browser`
 web session (settings UI navigation is slow and the theme control moved between
@@ -1154,7 +1618,9 @@ document becomes sourceless and `localStorage` access throws SecurityError, so t
 override stays behind for the next run. Assert the applied theme via
 `document.documentElement.dataset.theme`, not the storage value.
 
-#### Workspace HTML publish: prove the hosted page, not the local preview
+#### P49 · Workspace HTML publish: prove the hosted page, not the local preview
+
+**applies-to:** surface=electron · runtime=any · phase=capture
 
 **Situation:** after publishing workspace HTML, checking whether CSS/SVG/images
 actually load on the public Artifact URL.
@@ -1172,7 +1638,9 @@ open that URL and assert computed CSS plus `img.naturalWidth > 0`. If the hosted
 `<img>` is a data URI with `text/plain`, the image is broken even though it is
 not a 404.
 
-#### `acceptance run ingest` is creative — re-running it to re-read its output mints a duplicate round
+#### P50 · `acceptance run ingest` is creative — re-running it to re-read its output mints a duplicate round
+
+**applies-to:** surface=any · runtime=any · phase=publish
 
 **Situation:** after a successful ingest, wanting to re-check a field from its JSON
 output (evidence count, acceptanceId).
@@ -1189,7 +1657,9 @@ error, distinct from the forbidden overwrite-a-real-round.
 
 ### Electron and the desktop shell
 
-#### Which entry the dev Electron main window loads is NOT stable — measure it, never assume
+#### P51 · Which entry the dev Electron main window loads is NOT stable — measure it, never assume
+
+**applies-to:** surface=electron · runtime=any · phase=probe
 
 **Situation:** verifying anything that lives in `src/spa/entry.desktop.tsx` (bootstrap
 identity, adapter registration, boot marks) on an `electron-dev.sh` instance.
@@ -1221,7 +1691,9 @@ a source-order regression test, and say in the report that the runtime path need
 packaged build (`DESKTOP_RENDERER_STATIC` / `resolveRendererFilePath` maps
 `apps/desktop/index.html`, `popup.html`, `overlay.html`).
 
-#### Measuring production-bundle startup behavior without packaging the app
+#### P52 · Measuring production-bundle startup behavior without packaging the app
+
+**applies-to:** surface=electron · runtime=any · phase=capture
 
 **Situation:** a claim depends on the built renderer (chunk splitting, lazy-route
 boundaries, startup paint timing), which dev-mode Vite cannot reproduce.
@@ -1257,7 +1729,9 @@ A/B builds, swap `dist/renderer` directories between restarts — remote-image L
 entries are network-noisy, so compare text-paint candidates and DCL across ≥5
 cold samples per variant before attributing a delta.
 
-#### Driving and probing a real Electron popup window
+#### P53 · Driving and probing a real Electron popup window
+
+**applies-to:** surface=electron · runtime=any · phase=drive
 
 **Situation:** verifying `entry.popup.tsx` behavior (its own HTML shell, no `BootShell`).
 
@@ -1278,7 +1752,9 @@ claims, measure rather than eyeball: `getComputedStyle` for `pointer-events` / b
 alpha plus `document.elementFromPoint(x, y)` — a 50%-alpha scrim looks like a cosmetic
 tint in a screenshot while actually swallowing every click.
 
-#### Desktop tab switching is not `activateTab` alone — drive the real tab element
+#### P54 · Desktop tab switching is not `activateTab` alone — drive the real tab element
+
+**applies-to:** surface=electron · runtime=any · phase=drive
 
 **Situation:** benchmarking or driving a desktop tab switch from an `eval`
 payload, using `window.__LOBE_STORES.electron().activateTab(id)`.
@@ -1313,7 +1789,9 @@ the generic D11 trusted-input caveat does not apply). Always record
 `location.pathname` before and after and keep a `navigated` flag on every sample —
 that flag is what catches a payload that silently stopped switching.
 
-#### Clicking an already-active tab is a no-op — a desynced tab can never be re-entered by clicking
+#### P55 · Clicking an already-active tab is a no-op — a desynced tab can never be re-entered by clicking
+
+**applies-to:** surface=electron · runtime=any · phase=drive
 
 **Situation:** a probe adds a tab with `addTab(url)` and then clicks it to enter that route.
 
@@ -1334,7 +1812,9 @@ const tab = (st.tabs || []).find((t) => t.id === st.activeTabId);
 // tab.url, location.pathname and chat.activeTopicId must all point at the same topic
 ```
 
-#### Attributing switch work to hidden keep-alive trees — classify on BOTH sides of the action
+#### P56 · Attributing switch work to hidden keep-alive trees — classify on BOTH sides of the action
+
+**applies-to:** surface=electron · runtime=any · phase=capture
 
 **Situation:** measuring what a per-tab keep-alive shell costs while a tab is hidden.
 
@@ -1362,7 +1842,9 @@ Measured this way, still-hidden slots produced **0** mutations in 6/6 switches: 
 changes (visible/hidden, active/inactive, mounted/unmounted), capture the classification on both sides
 and use the intersection. Otherwise the action's own effect lands in the wrong bucket.
 
-#### Desktop theme follows the system appearance, not `settings.general.themeMode`
+#### P57 · Desktop theme follows the system appearance, not `settings.general.themeMode`
+
+**applies-to:** surface=electron · runtime=any · phase=capture
 
 **Situation:** capturing dark-mode evidence for a desktop UI change.
 
@@ -1379,7 +1861,9 @@ outside the harness's remit: mark the dark case untested and say why, rather tha
 flipping a device-level preference. Note the setting write is not free — it syncs to
 the account and affects other surfaces; restore it (`auto`) at teardown if you set it.
 
-#### A cold desktop boot renders English copy while `status.language` already says zh-CN
+#### P58 · A cold desktop boot renders English copy while `status.language` already says zh-CN
+
+**applies-to:** surface=electron · runtime=any · phase=probe
 
 **Situation:** asserting anything about localized UI copy on a freshly started
 `electron-dev.sh` instance — a label's text, or that a settings section rendered at all.
@@ -1396,7 +1880,9 @@ by calling `window.__LOBE_STORES.global().switchLocale('<locale>')` — the same
 select calls — and only then assert. When the check under test IS the language, drive the real
 select, and re-read `status.language` plus the DOM copy after every switch: the two can disagree.
 
-#### `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
+#### P59 · `app-probe.sh goto /` cannot reach the desktop Home route — seed the tab first
+
+**applies-to:** surface=electron · runtime=any · phase=drive
 
 **Situation:** driving the Electron shell to the Home route (`/`) to check the nav
 panel there.
@@ -1419,7 +1905,9 @@ window.__LOBE_STORES.electron().addTab('/'); // addTab also activates it
 
 Assert `location.pathname` after the reload rather than trusting `goto`'s echo.
 
-#### The dev Electron instance may be a thin client on PRODUCTION — read `dataSyncConfig` before any write
+#### P60 · The dev Electron instance may be a thin client on PRODUCTION — read `dataSyncConfig` before any write
+
+**applies-to:** surface=electron · runtime=any · phase=auth, env
 
 **Situation:** starting `electron-dev.sh` to verify a frontend change, then driving flows that
 create or mutate product objects (labels, groups, agents, forwarded topics, saved edits).
@@ -1453,7 +1941,9 @@ confirm the request body carries the key, and confirm an ALREADY-shipped sibling
 server schema version rather than failing the change; only a local full stack running the branch's
 schema can close that loop.
 
-#### A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
+#### P61 · A global `indexedDB.open` stall holds the boot on web but kills the Electron renderer
+
+**applies-to:** surface=web, electron · runtime=any · phase=capture
 
 **Situation:** needing to freeze the boot at a pre-app phase long enough to capture it,
 by keeping the SWR cache hydration from ever completing.
@@ -1472,7 +1962,9 @@ in-page sampler above. Either way, disarm with
 `Page.removeScriptToEvaluateOnNewDocument` and reload before capturing the settled
 state, or the comparison shot is taken against a still-crippled runtime.
 
-#### Locale regression tests and desktop resource scanning
+#### P62 · Locale regression tests and desktop resource scanning
+
+**applies-to:** surface=electron · runtime=any · phase=env
 
 **Situation:** a locale-copy change needs a focused regression assertion while
 the Electron dev renderer imports locale resources from the default resource tree.
@@ -1487,7 +1979,9 @@ bad scan because the optimized dependency graph can remain poisoned.
 
 ### Auth and session state
 
-#### Task CLI polling with seeded API-key auth
+#### P63 · Task CLI polling with seeded API-key auth
+
+**applies-to:** surface=cli · runtime=gateway · phase=auth
 
 **Situation:** A local acceptance run is driven through `lh task run` with the
 seeded `LOBEHUB_CLI_API_KEY`, and the test needs to observe the asynchronous
@@ -1510,7 +2004,9 @@ acceptance by the task's INTERNAL id — the page then renders an empty state ev
 though ingest succeeded. Use the internal id in `--subject` (or fix the
 `subject_id` row afterwards) when the evidence must render in the local app UI.
 
-#### Production-backend web runs have no seeded agent-browser session
+#### P64 · Production-backend web runs have no seeded agent-browser session
+
+**applies-to:** surface=web · runtime=any · phase=auth
 
 **Situation:** verifying frontend-only work against real production data through
 `bun run dev:spa`'s `_dangerous_local_dev_proxy` URL.
@@ -1529,7 +2025,9 @@ Prove the working-tree bundle is actually live first — read back a string that
 exists only in the working tree (e.g. a changed placeholder), never assume HMR
 applied.
 
-#### The desktop instance pins a previous run's server port, and its saved OAuth login expires
+#### P65 · The desktop instance pins a previous run's server port, and its saved OAuth login expires
+
+**applies-to:** surface=electron · runtime=any · phase=auth, env
 
 **Situation:** starting an Electron dev instance for a surface that needs the local
 backend (any tRPC-backed panel), in a fresh worktree.
@@ -1574,7 +2072,9 @@ curl -c cookie.jar -H 'Content-Type: application/json' -X POST \
 Gate on `app-probe.sh server-auth` returning `{"authenticated":true,"status":200}` —
 renderer `isSignedIn` alone never proves the server accepted anything.
 
-#### A pool instance seeded from the login snapshot can boot signed out — `safeStorage` cannot decrypt the copied token
+#### P66 · A pool instance seeded from the login snapshot can boot signed out — `safeStorage` cannot decrypt the copied token
+
+**applies-to:** surface=electron · runtime=any · phase=auth
 
 **Situation:** `electron-dev.sh start <id>` in a worktree; the helper reports the
 renderer ready and the seeded login is present on disk.
@@ -1592,7 +2092,9 @@ which runs on the golden profile in place and decrypts normally. It boots on the
 loading shell once, so reload once before probing (see L-S8). Gate on
 `app-probe.sh auth` AND `server-auth`, never on the helper's "Ready" line.
 
-#### Electron dev's BackendProxy targets the server port persisted in the login snapshot — mint a session and inject the cookie over CDP
+#### P67 · Electron dev's BackendProxy targets the server port persisted in the login snapshot — mint a session and inject the cookie over CDP
+
+**applies-to:** surface=electron · runtime=any · phase=auth, env
 
 **Situation:** starting the Electron surface inside a worktree to verify a pure
 frontend change; the renderer looks fine, but `app-probe.sh server-auth` returns 502
@@ -1616,7 +2118,9 @@ Electron's cookie store through raw CDP `Network.setCookie` (with `url` set to
 `http://localhost:<port>/`); after `location.reload()`, `server-auth` returns 200 and
 `isUserStateInit` is true.
 
-#### A pool instance's BackendProxy port also comes from the login snapshot, and its log is `instance-<id>.log`
+#### P68 · A pool instance's BackendProxy port also comes from the login snapshot, and its log is `instance-<id>.log`
+
+**applies-to:** surface=electron · runtime=any · phase=auth, env
 
 **Situation:** starting a pool instance with `electron-dev.sh start <id>` to verify a
 pure frontend change; `auth` and `server-auth` both pass, but the content area shows
@@ -1638,7 +2142,9 @@ pool instance along the way (the log shows
 `GPU process exited unexpectedly: exit_code=15`), so the order is: fix the port and
 start the server first, then start Electron.
 
-### Renderer OTA: creating a real download delta in dev
+### P69 · Renderer OTA: creating a real download delta in dev
+
+**applies-to:** surface=electron · runtime=any · phase=fixture
 
 **Situation:** verifying renderer OTA incremental download in dev, where the
 "builtin" renderer (`apps/desktop/dist/renderer`) is the same directory the build
@@ -1656,7 +2162,9 @@ delta. Also: read the feed server's 404 line after boot to learn the exact
 
 ### Dev server, install, and ports
 
-#### A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
+#### P70 · A backgrounded `init-dev-env.sh dev` looks dead while the server is alive on a dynamic port
+
+**applies-to:** surface=any · runtime=any · phase=env
 
 **Situation:** starting the dev server from a harness-managed background command in a
 worktree, then waiting for readiness.
@@ -1671,7 +2179,9 @@ already up elsewhere; a retry then fails with "an owned dev server is already ru
 that. For a long-lived start prefer a detached `screen -dmS <name> … >> .records/logs/x.log`
 so the log lands in a stable file; `stop-dev` still stops the recorded PID tree either way.
 
-#### Agent-browser navigation hangs after an orphaned Next child keeps the port
+#### P71 · Agent-browser navigation hangs after an orphaned Next child keeps the port
+
+**applies-to:** surface=web · runtime=any · phase=env
 
 **Situation:** an isolated full-stack dev launcher exits, but its Next child
 continues listening without returning HTTP responses. `agent-browser open`,
@@ -1687,7 +2197,9 @@ working tree, terminate only that run-owned process tree, then restart through
 `init-dev-env.sh dev` and reseed the isolated browser auth. A successful HTTP
 probe must precede browser assertions.
 
-#### An unconverged lockfile puts two copies of a dep in the graph — every route using it dies at the ErrorBoundary
+#### P72 · An unconverged lockfile puts two copies of a dep in the graph — every route using it dies at the ErrorBoundary
+
+**applies-to:** surface=web, electron · runtime=any · phase=env
 
 **Situation:** after rebasing onto a canary that bumped a shared UI dependency and
 running `pnpm install`, every route rendering the rich-text editor (agent profile,
@@ -1729,7 +2241,9 @@ checkout and appears right after a rebase that bumps the root range. Do not repo
 as a defect of the branch or of the base ref; note it as an environment finding and
 move on. Back up the lockfile before `dedupe` anyway — it is the only copy.
 
-#### A fresh worktree installed with `--ignore-scripts` returns 500 on every `/trpc/lambda/*`
+#### P73 · A fresh worktree installed with `--ignore-scripts` returns 500 on every `/trpc/lambda/*`
+
+**applies-to:** surface=web · runtime=any · phase=env
 
 **Situation:** bootstrapping a new git worktree for a run — `pnpm install` at the root,
 then `init-dev-env.sh dev`.
@@ -1768,7 +2282,9 @@ Gate on a real authenticated TRPC call rather than on the page rendering: a 200 
 `apps/desktop` are standalone installs (PROJECT.md §1), so each also needs its own
 `pnpm install` in a fresh worktree.
 
-#### A worktree Electron run leaves a second `@types/react` that fails the worktree type-check
+#### P74 · A worktree Electron run leaves a second `@types/react` that fails the worktree type-check
+
+**applies-to:** surface=electron · runtime=any · phase=env
 
 **Situation:** running the Electron surface from a git worktree, which requires
 the `apps/desktop` standalone install (adapter §1), then running `bun run check --type`.
@@ -1787,7 +2303,9 @@ drawing any conclusion, and confirm causality by A/B — moving
 Electron binary runs out of that directory, so parking it kills the instance;
 capture all UI evidence first.
 
-#### Managed command runners can reap `electron-dev.sh start` children after the helper returns
+#### P75 · Managed command runners can reap `electron-dev.sh start` children after the helper returns
+
+**applies-to:** surface=electron · runtime=any · phase=env
 
 **Situation:** `electron-dev.sh start` (legacy and pool forms) reports that CDP
 and the renderer are ready, but the CDP port closes immediately after the helper
@@ -1813,7 +2331,9 @@ Keep that command session open for the run. Confirm the CDP endpoint, project
 process path, `app-probe.sh ready`, renderer auth, server auth, and a raw-CDP
 screenshot before collecting evidence.
 
-#### A reset shell cwd silently retargets git commits at the main repo's checked-out branch
+#### P76 · A reset shell cwd silently retargets git commits at the main repo's checked-out branch
+
+**applies-to:** surface=any · runtime=any · phase=env
 
 **Situation:** a long worktree-based session where the harness occasionally resets the
 shell cwd back to the main repo root (e.g. after a `cd /tmp` in a compound command).
@@ -1825,6 +2345,10 @@ unrelated dirty files, while the intended worktree change stays uncommitted. The
 only tell is an unexpected diffstat / parent commit; `push <branch>` then reports
 "Everything up-to-date" because the worktree branch ref never moved.
 
+The same reset has a second, harder-to-spot consequence: it also retargets
+`init-dev-env.sh dev`, so the dev server and its Vite serve the MAIN checkout while
+every health signal stays green — see `common-mistakes.md` L-S21.
+
 **Works:** in any worktree session, prefix every git/check command with an explicit
 `cd <worktree> &&`, and read the commit output's diffstat + `git log -1` parent
 before pushing. Recovery for a mistaken main-repo commit: `git reset --mixed HEAD~1`
@@ -1832,7 +2356,80 @@ restores the user's branch and leaves their working tree as it was (verify again
 the session-start `gitStatus` snapshot); nothing needs force-pushing because the
 wrong-branch push was a no-op.
 
-#### Server-side reads of local S3 evidence are blocked by SSRF protection — private IPs must be allowed explicitly
+#### P77 · Proving which prompt version the running server holds
+
+**applies-to:** surface=web, cli · runtime=gateway · phase=probe
+
+**Situation:** verifying a change to a prompt under `packages/prompts` — the assertion is
+about the model's behaviour, so the run is only meaningful if the server is executing the
+new prompt.
+
+**Doesn't work:** trusting the Vite HMR line (`page reload packages/prompts/src/...`).
+That is the client reloading; the Next server keeps the workspace package it started
+with, so it answers with the old prompt indefinitely. Reading the model's output and
+judging "this looks like the new behaviour" is circular — the whole point of the change
+is that the output should differ, so any difference confirms the hypothesis either way.
+
+**Works:** every traced generation records the version it ran. After one call, read it
+back:
+
+```bash
+docker exec lobehub-agent-testing-postgres psql -U postgres -d postgres -tAc \
+  "select prompt_version, model, created_at from llm_generation_tracing \
+   where scenario='<scenario>' order by created_at desc limit 1"
+```
+
+A stale version means the server needs a real process restart (PROJECT.md §6), not a
+reload. Gate the first evidence-bearing call on this row, not on the edit's timestamp —
+otherwise the round publishes new-prompt claims backed by old-prompt output.
+
+#### P80 · The user's Vite serves a `node_modules` that a reinstall already replaced — every `.vite/deps` 504s, the page is black
+
+**applies-to:** surface=web · runtime=client · phase=env
+
+**Situation:** the user's own `bun run dev` is up (Next answers, auth is green), but
+the SPA never mounts: `#root` has 0 children, no console error, and every
+`/node_modules/.vite/deps/*.js` request returns 504. `ls node_modules/.vite` shows no
+`deps/` directory and a sibling `node_modules/.old_modules-<hash>/` exists.
+
+**Doesn't work:** waiting for the optimizer, reloading, or blaming the change under
+test. That Vite process predates a `pnpm install` that moved the old tree aside; its
+dep cache is gone for good and HMR cannot recover it.
+
+**Works:** leave the user's process alone and start an isolated SPA on a free port
+against the same backend — `PORT=3010 SPA_PORT=<free> bun run dev:spa` from the repo
+root. `localhost` cookies are port-agnostic, so the seeded `lobehub-dev` session is
+already signed in there. Prove identity before capturing (fetch the changed module from
+the new Vite origin and grep the change's marker), stop only that pid at teardown, and
+tell the user to restart their `dev:spa`.
+
+#### P81 · Every agent/topic read returns 500 `Failed query: select … from "agents"` — the `.env` database is behind the repo's migrations
+
+**applies-to:** surface=web · runtime=gateway · phase=env
+
+**Situation:** with the user's `.env` backend, opening a conversation shows
+"Failed to load agent settings"; `agent.getBuiltinAgent` and `topic.queryTopics`
+are 500 with a `Failed query` whose column list includes fields the table lacks.
+
+**Doesn't work:** reading the error tail (the pg cause is not included) or assuming
+the change under test broke the server.
+
+**Works:** compare the database's migration count with the repo's:
+
+```bash
+docker exec -c 'echo $POSTGRES_USER $POSTGRES_DB' < pg-container > sh # never read .env for this
+docker exec -U "select count(*) from drizzle.__drizzle_migrations" < pg-container > psql < user > -d < db > -Atc
+ls packages/database/migrations | grep -c '\.sql$'
+```
+
+A gap means the running canary server expects columns the DB never got. This is the
+user's database: surface it at the plan gate and run `bun run db:migrate` (it loads
+`.env` itself) only with their authorization; the isolated alternative is a worktree
+with a second Next against the managed `:5434` test DB.
+
+#### P78 · Server-side reads of local S3 evidence are blocked by SSRF protection — private IPs must be allowed explicitly
+
+**applies-to:** surface=web, cli · runtime=gateway · phase=env
 
 **Situation:** verifying any capability where the **server** reads back an uploaded
 file (multimodal image judging, thumbnail processing, feeding a screenshot to a
@@ -1853,6 +2450,33 @@ followed by `Error converting image to base64`. Production uses a real object-st
 domain and is unaffected, so this is purely a local verification-environment gate and
 not a product defect — do not report it as a bug, and do not work around it by
 switching to inline base64, which would verify a path the product never takes.
+
+#### P79 · Real web-search evidence needs local SearXNG — the on-disk search1api keys are dead
+
+**applies-to:** surface=web, cli · runtime=client, gateway · phase=env
+
+**Situation:** a check needs the product's real web-search pipeline (builtin
+`lobe-web-browsing____search` executing an actual HTTP search and rendering result
+cards), e.g. "ask the agent a weather question".
+
+**Doesn't work:** `SEARCH_PROVIDERS=search1api` with any `SEARCH1API_SEARCH_API_KEY`
+found in sibling repo `.env` files — they all return 401 (verify with a direct
+`curl api.search1api.com/search` before blaming the product). Keyless fallbacks
+don't exist: with no `SEARCH_PROVIDERS` the impl list is empty and every search
+returns "all configured providers returned errors"; public SearXNG instances
+rate-limit (429) or ship JSON-disabled (HTML back).
+
+**Works:** run a local SearXNG:
+`docker run -d -p 8888:8080 -v <dir>:/etc/searxng searxng/searxng` with a
+`settings.yml` of `use_default_settings: true`, `server.limiter: false`, and
+`search.formats: [html, json]`, then start the dev server with
+`SEARCH_PROVIDERS=searxng SEARXNG_URL=http://localhost:8888`. It aggregates real
+engines, so the whole product path (server search impl → result cards → tool
+message persistence) is genuine. English queries return results more reliably
+than Chinese ones. One trap when the model is a tool\_call-emitting stub AND a
+synthetic context injector is active (e.g. `getGoalContext`): "last message is a
+tool result → answer" fires on the injected pair and skips the search — key the
+stub's answer-mode off the NAME of the last `function_call` instead.
 
 ## Detailed references
 
@@ -1876,3 +2500,84 @@ switching to inline base64, which would verify a path the product never takes.
   duplicating them here.
 - Put a new recipe inside the `Project-specific recipes` group it belongs to, above
   `Detailed references` — never after the closing sections, or the taxonomy drifts.
+- Give it the next `P<nn>` id in its heading, an `**applies-to:**` line right under the
+  heading, and one row in the `## Index` table. Ids are stable — never renumber.
+
+#### Acceptance evidence rendering in Electron uses the Portal
+
+The standalone `/acceptance/:id` route is Web-only. Adding that URL as an
+Electron tab can fall back to Home without exercising the Acceptance viewer.
+For desktop verification, open a real conversation and use the existing
+`chat.openAcceptance(id)` action to mount the canonical Acceptance Portal.
+When reusing a reviewed fixture, select the inventory's All filter before
+expanding its evidence; the default pending filter can legitimately be empty.
+
+When checking media or error-card spacing, inspect the complete rendered
+ancestor chain. `@lobehub/ui` Image has its own rounded root inside
+ScreenshotTiles, and Highlighter's `styles.content` styles a container whose
+`pre` has separate padding. An outer wrapper or `img` override alone does not
+prove the visible edge or total inset changed. Measure the settled DOM, then
+inspect a screenshot before declaring the styling verified.
+
+#### P84 · Driving `lh` against the local lobehub-cloud runtime
+
+**applies-to:** surface=cli · runtime=any · phase=auth
+
+**Situation:** a CLI command that only exists on cloud (`market.deployments.*`,
+which the OSS lambda router stubs out as an empty object) has to be exercised
+against `lobehub-cloud`'s own dev runtime, not this repo's `:3010` server. The
+adapter's seeded CLI profile (§4 CLI) points at the wrong backend, and cloud's
+`bun run dev:runtime:auth` only writes **browser** cookies.
+
+**Doesn't work:** `dev:runtime:auth` for the CLI (cookies, not a token); an
+interactive device-code login (hijacks the user's browser and is forbidden).
+
+**Works:** insert an api\_keys row into the runtime's main database and use it as
+`LOBEHUB_CLI_API_KEY`. `key_hash` is `HMAC-SHA256(key, KEY_VAULTS_SECRET)`;
+`key` is the same plaintext AES-GCM encrypted with that secret as
+`iv:authTag:ciphertext` hex — the shapes `init-dev-env.sh seed-user` uses. Read
+`keyVaultsSecret` and `seedEmail` from
+`~/.lobehub/runtime-dev/secrets/<checkout>.json`, resolve the user id by that
+email, then:
+
+```bash
+LOBEHUB_CLI_API_KEY=sk-lh-<16 lowercase alnum> \
+LOBEHUB_SERVER=http://localhost:<runtime app port> \
+LOBEHUB_CLI_HOME=<scratch dir> \
+  node apps/cli/dist/index.js <command>
+```
+
+The key must match `^sk-lh-[\da-z]{16}$` or the server rejects it before any
+lookup. Give the run its own `LOBEHUB_CLI_HOME` so it cannot disturb the user's
+real login, and remember the publishing identity is now that seeded user — see
+`common-mistakes.md` L-S22 before blaming a quota error on the code.
+
+Cloud's runtime commands each re-read the container ports, so pass the same
+`LOBEHUB_RUNTIME_POSTGRES_PORT` / `LOBEHUB_RUNTIME_REDIS_PORT` overrides to
+_every_ `bun run dev …` invocation. Omitting them on a later call silently
+targets the default 5433, which on a developer machine is usually a different
+project's Postgres and fails as `password authentication failed for user
+"postgres"`.
+
+#### P85 · Simulating a publish whose response never arrived
+
+**applies-to:** surface=cli · runtime=any · phase=fixture
+
+**Situation:** proving that retrying an interrupted `lh artifact publish` does not
+create a second site. The real failure — a dropped reply — cannot be produced by
+killing the process, because the manifest is what carries the recovery state.
+
+**Works:** the CLI writes `pendingCreateKey` into `.lobehub/artifacts.json`
+_before_ sending a create, and replaces it with `deploymentId` on success. So
+write the manifest by hand with only a known `pendingCreateKey`, publish (the
+CLI adopts that key), then restore the same one-key manifest and publish again.
+A correct implementation returns the first deployment id and does not advance
+the revision; a broken one mints a second site with its own URL.
+
+```bash
+printf '{"artifacts":{"dist/index.html":{"pendingCreateKey":"%s"}},"version":1}' "$KEY" \
+  > .lobehub/artifacts.json
+```
+
+Capture both publishes' `--json` output in one artifact with the restored
+manifest shown between them, so a reviewer can see the key was genuinely reused.

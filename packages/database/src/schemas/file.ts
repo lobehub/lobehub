@@ -16,10 +16,17 @@ import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
 import type { LobeDocumentPage } from '@/types/document';
-import type { FileSource } from '@/types/files';
+import type { FileSource, FileUploadSessionStatus } from '@/types/files';
 
 import { idGenerator, randomSlug } from '../utils/idGenerator';
-import { accessedAt, createdAt, softDeleteColumns, timestamps } from './_helpers';
+import {
+  accessedAt,
+  createdAt,
+  softDeleteColumns,
+  timestamps,
+  timestamptz,
+  updatedAt,
+} from './_helpers';
 import { asyncTasks } from './asyncTask';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -249,6 +256,45 @@ export const files = pgTable(
 );
 export type NewFile = typeof files.$inferInsert;
 export type FileItem = typeof files.$inferSelect;
+
+/**
+ * One row per direct S3 upload. Active rows reserve their declared bytes until
+ * the object is either attached to a durable file or cleaned up.
+ */
+export const fileUploads = pgTable(
+  'file_uploads',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    pathname: text('pathname').notNull(),
+    /** Exact byte count reserved before upload credentials are issued. */
+    size: integer('size').notNull(),
+    status: text('status').$type<FileUploadSessionStatus>().default('active').notNull(),
+    multipartUploadId: text('multipart_upload_id'),
+    multipartPartSize: integer('multipart_part_size'),
+    /** Set after S3 confirms a single or multipart object is complete. */
+    completedAt: timestamptz('completed_at'),
+    fileId: text('file_id').references(() => files.id, { onDelete: 'set null' }),
+    expiresAt: timestamptz('expires_at').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index('file_uploads_user_scope_status_idx').on(table.userId, table.workspaceId, table.status),
+    index('file_uploads_workspace_status_idx').on(table.workspaceId, table.status),
+    index('file_uploads_status_expires_at_idx').on(table.status, table.expiresAt),
+    index('file_uploads_status_updated_at_id_idx').on(table.status, table.updatedAt, table.id),
+    uniqueIndex('file_uploads_live_pathname_unique')
+      .on(table.pathname)
+      .where(sql`${table.status} IN ('active', 'cleaning')`),
+  ],
+);
+
+export type NewFileUpload = typeof fileUploads.$inferInsert;
+export type FileUploadItem = typeof fileUploads.$inferSelect;
 
 /** Knowledge-base visibility — shared by column def and insert schema. */
 export const KNOWLEDGE_BASE_VISIBILITY = ['private', 'public'] as const;

@@ -1420,6 +1420,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     const isMcp = item?.runtimeType === 'mcp';
     const hasRealAvatar = !!item?.avatar && item.avatar !== 'MCP_AVATAR';
     const isCustom = item.type === 'customPlugin';
+    // Community rows installed server-side may carry no `meta.title`; never
+    // render an empty label — fall back to the identifier like every other
+    // group in this menu does.
+    const title = item.title || item.identifier;
     const icon = hasRealAvatar ? (
       <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
     ) : (
@@ -1430,7 +1434,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         description={item.description}
         identifier={item.identifier}
         sourceLabel={isCustom ? t('skillStore.tabs.custom') : t('skillStore.tabs.community')}
-        title={item.title}
+        title={title}
         icon={
           hasRealAvatar ? (
             <Avatar
@@ -1452,7 +1456,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         ? { onConfigure: () => openPluginEditDrawer(item.identifier) }
         : undefined,
       deleteConfig: {
-        displayName: item.title ?? item.identifier,
+        displayName: title,
         onDelete: () => uninstallPlugin(item.identifier),
       },
       extraTag: isCustom ? (
@@ -1465,8 +1469,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       icon,
       id: item.identifier,
       popoverContent,
-      searchText: `${item.title} ${item.identifier}`,
-      title: item.title,
+      searchText: `${title} ${item.identifier}`,
+      title,
     });
   };
 

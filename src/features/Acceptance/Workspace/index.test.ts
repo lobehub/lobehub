@@ -25,4 +25,15 @@ describe('shouldShowAcceptanceOnboarding', () => {
       false,
     );
   });
+
+  it('never swallows a deep-linked acceptance behind the onboarding, even with an empty own list', () => {
+    expect(
+      shouldShowAcceptanceOnboarding({
+        data: [],
+        enabled: true,
+        hasDeepLink: true,
+        isLoading: false,
+      }),
+    ).toBe(false);
+  });
 });

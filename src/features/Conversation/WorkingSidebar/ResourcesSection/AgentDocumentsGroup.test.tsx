@@ -353,6 +353,42 @@ describe('AgentDocumentsGroup', () => {
     expect(screen.getByText('device-writer')).toBeInTheDocument();
   });
 
+  it('keeps the filesystem skill scan inert while the pane is disabled', () => {
+    const projectItem = {
+      description: 'writes things',
+      fileCount: 2,
+      files: [],
+      id: 'project-skill',
+      name: 'project-writer',
+      scope: 'project' as const,
+    };
+    useProjectSkillsMock.mockReturnValue({
+      deviceItems: [],
+      error: undefined,
+      getRowActions: () => [],
+      isLoading: false,
+      items: [projectItem],
+      mutate: vi.fn(),
+      onOpenFile: () => undefined,
+      onOpenSkill: () => undefined,
+      projectItems: [projectItem],
+      raw: undefined,
+    });
+    useClientDataSWR.mockReturnValue({
+      data: [],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup showLocalProjectSkills enabled={false} workingDirectory="/repo" />);
+
+    // `undefined` workingDirectory is the hook's documented inert mode: no scan fires.
+    expect(useProjectSkillsMock).toHaveBeenCalledWith(undefined, undefined);
+    expect(screen.queryByTestId('skills-list')).not.toBeInTheDocument();
+    expect(screen.queryByText('project-writer')).not.toBeInTheDocument();
+  });
+
   it('opens the SKILL.md document in the portal when clicking a skill bundle row', () => {
     useClientDataSWR.mockReturnValue({
       data: [skillBundleRow, skillIndexRow],

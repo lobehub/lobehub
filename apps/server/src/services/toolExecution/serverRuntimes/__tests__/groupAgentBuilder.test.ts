@@ -30,38 +30,48 @@ const {
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn(() => ({
-    batchCreate: mockBatchCreate,
-    getAgentConfigById: mockGetAgentConfigById,
-    queryAgents: vi.fn(async () => []),
-    update: mockUpdateAgent,
-    updateConfig: vi.fn(),
-  })),
+  AgentModel: vi.fn(function () {
+    return {
+      batchCreate: mockBatchCreate,
+      getAgentConfigById: mockGetAgentConfigById,
+      queryAgents: vi.fn(async () => []),
+      update: mockUpdateAgent,
+      updateConfig: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/chatGroup', () => ({
-  ChatGroupModel: vi.fn(() => ({
-    addAgentsToGroup: mockAddAgentsToGroup,
-    findById: mockFindById,
-    getGroupAgentsWithMeta: mockGetGroupAgentsWithMeta,
-    removeAgentsFromGroup: mockRemoveAgentsFromGroup,
-    update: mockUpdateGroup,
-  })),
+  ChatGroupModel: vi.fn(function () {
+    return {
+      addAgentsToGroup: mockAddAgentsToGroup,
+      findById: mockFindById,
+      getGroupAgentsWithMeta: mockGetGroupAgentsWithMeta,
+      removeAgentsFromGroup: mockRemoveAgentsFromGroup,
+      update: mockUpdateGroup,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/resourcePermission', () => ({
-  ResourcePermissionModel: vi.fn(() => ({
-    getAccessLevel: mockGetAccessLevel,
-    setAccessLevel: mockSetAccessLevel,
-  })),
+  ResourcePermissionModel: vi.fn(function () {
+    return {
+      getAccessLevel: mockGetAccessLevel,
+      setAccessLevel: mockSetAccessLevel,
+    };
+  }),
 }));
 
 vi.mock('@/database/repositories/agentGroup', () => ({
-  AgentGroupRepository: vi.fn(() => ({ createGroupWithSupervisor: vi.fn() })),
+  AgentGroupRepository: vi.fn(function () {
+    return { createGroupWithSupervisor: vi.fn() };
+  }),
 }));
 
 vi.mock('@/server/services/agentGroup', () => ({
-  AgentGroupService: vi.fn(() => ({ normalizeGroupConfig: (config: unknown) => config })),
+  AgentGroupService: vi.fn(function () {
+    return { normalizeGroupConfig: (config: unknown) => config };
+  }),
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({

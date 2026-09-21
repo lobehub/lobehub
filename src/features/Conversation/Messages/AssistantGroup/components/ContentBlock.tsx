@@ -31,6 +31,7 @@ const ContentBlock = memo<ContentBlockProps>(
     disableEditing,
     disableMarkdownStreaming,
     hasToolsOverride,
+    projectionKey,
   }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
@@ -117,7 +118,11 @@ const ContentBlock = memo<ContentBlockProps>(
 
         {hasTools && (
           <SafeBoundary>
-            <Tools disableEditing={disableEditing} messageId={id} />
+            <Tools
+              disableEditing={disableEditing}
+              messageId={id}
+              toolIds={projectionKey ? tools?.map((tool) => tool.id) : undefined}
+            />
           </SafeBoundary>
         )}
 
