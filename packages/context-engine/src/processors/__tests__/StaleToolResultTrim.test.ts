@@ -73,8 +73,9 @@ describe('StaleToolResultTrimProcessor', () => {
     );
     expect(result.messages[0].tool_call_id).toBe(messages[0].tool_call_id);
     expect(result.messages[1].content).toBe(messages[1].content);
-    expect(result.metadata.staleToolResultTrim).toEqual({
+    expect(result.metadata.staleToolResultTrim).toMatchObject({
       byRule: { readSupersededByWrite: 1 },
+      cacheWarm: false,
       savedChars: 5000 - (result.messages[0].content as string).length,
       trimmedMessages: 1,
     });
@@ -335,7 +336,11 @@ describe('StaleToolResultTrimProcessor', () => {
       );
 
       expect(result.messages[0].content).toContain('superseded by a later write');
-      expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: false,
+        gapMs: 10 * MIN,
+        trimmedMessages: 1,
+      });
     });
 
     it('skips the trim on a warm follow-up when savings are small relative to the payload', async () => {
@@ -349,12 +354,17 @@ describe('StaleToolResultTrimProcessor', () => {
       );
 
       expect(result.messages[1].content).toBe('x'.repeat(5000));
-      expect(result.metadata.staleToolResultTrim).toEqual({
-        byRule: {},
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        gapMs: 60_000,
         savedChars: 0,
         skippedReason: 'warm-cache',
         trimmedMessages: 0,
       });
+      // the gate's economic inputs are recorded for observability
+      expect(result.metadata.staleToolResultTrim?.potentialSavedChars).toBeGreaterThan(4000);
+      expect(result.metadata.staleToolResultTrim?.gainEstimate).toBeGreaterThan(0);
+      expect(result.metadata.staleToolResultTrim?.rewriteCostEstimate).toBeGreaterThan(0);
     });
 
     it('still trims on a warm follow-up when savings clear the warm thresholds', async () => {

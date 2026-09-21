@@ -7,6 +7,16 @@ declare module '../types' {
   interface PipelineContextMetadataOverrides {
     staleToolResultTrim?: {
       byRule: Record<string, number>;
+      /** Whether the turn boundary fell inside the provider cache TTL. */
+      cacheWarm?: boolean;
+      /** Estimated gain used by the warm break-even check (skip path only). */
+      gainEstimate?: number;
+      /** Measured gap between the previous turn's last activity and the trigger. */
+      gapMs?: number;
+      /** What the trim would have saved (skip path only). */
+      potentialSavedChars?: number;
+      /** Estimated rewrite cost used by the warm break-even check (skip path only). */
+      rewriteCostEstimate?: number;
       savedChars: number;
       skippedReason?: 'warm-cache';
       trimmedMessages: number;
@@ -296,33 +306,39 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     );
     const triggeredAt = Date.parse(messages[lastUserIndex]?.createdAt ?? '');
     const prevActivityAt = Date.parse(messages[lastUserIndex - 1]?.createdAt ?? '');
-    const cacheWarm =
-      Number.isFinite(triggeredAt) &&
-      Number.isFinite(prevActivityAt) &&
-      triggeredAt - prevActivityAt <= this.config.cacheTtlMs;
+    const gapMs =
+      Number.isFinite(triggeredAt) && Number.isFinite(prevActivityAt)
+        ? triggeredAt - prevActivityAt
+        : undefined;
+    const cacheWarm = gapMs !== undefined && gapMs <= this.config.cacheTtlMs;
 
     if (cacheWarm) {
       const totalChars = messages.reduce(
         (s, m) => s + (typeof m.content === 'string' ? m.content.length : 0),
         0,
       );
-      const gain =
+      const gainEstimate =
         this.config.warmRemainingStepsEstimate * potentialSavedChars * this.config.cacheReadPrice;
-      const rewriteDelta =
+      const rewriteCostEstimate =
         (totalChars - potentialSavedChars) * this.config.cacheWritePrice -
         totalChars * this.config.cacheReadPrice;
-      const worthwhile = gain > rewriteDelta * this.config.warmSafetyMargin;
+      const worthwhile = gainEstimate > rewriteCostEstimate * this.config.warmSafetyMargin;
       if (!worthwhile) {
         log(
           'Skipping trim: cache warm (gap <= %dms), gain %d <= cost %d × %d',
           this.config.cacheTtlMs,
-          gain,
-          rewriteDelta,
+          gainEstimate,
+          rewriteCostEstimate,
           this.config.warmSafetyMargin,
         );
         const skipped = this.cloneContext(context);
         skipped.metadata.staleToolResultTrim = {
           byRule: {},
+          cacheWarm,
+          gapMs,
+          gainEstimate,
+          potentialSavedChars,
+          rewriteCostEstimate,
           savedChars: 0,
           skippedReason: 'warm-cache',
           trimmedMessages: 0,
@@ -352,7 +368,13 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       log('Trimmed %d stale tool result(s), saved %d chars', trimmedMessages, savedChars);
     }
 
-    clonedContext.metadata.staleToolResultTrim = { byRule, savedChars, trimmedMessages };
+    clonedContext.metadata.staleToolResultTrim = {
+      byRule,
+      cacheWarm,
+      gapMs,
+      savedChars,
+      trimmedMessages,
+    };
     return this.markAsExecuted(clonedContext);
   }
 
