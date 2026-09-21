@@ -69,8 +69,8 @@
         var hl = new URLSearchParams(location.search).get('hl');
         var m = document.cookie.match(/(?:^|;\s*)LOBE_LOCALE=([^;]*)/);
         var cookie = m ? decodeURIComponent(m[1]) : '';
-        var locale = hl || cookie || navigator.language || 'en-US';
-        if (locale === 'auto') locale = navigator.language || 'en-US';
+        var locale = hl || cookie || 'zh-CN';
+        if (locale === 'auto') locale = navigator.language || 'zh-CN';
         if (hl && !cookie) {
           document.cookie =
             'LOBE_LOCALE=' + encodeURIComponent(hl) + ';path=/;max-age=7776000;SameSite=Lax';
