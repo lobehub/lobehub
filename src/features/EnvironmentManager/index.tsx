@@ -2,7 +2,7 @@
 
 import type { EnvironmentVisibility } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
@@ -126,16 +126,20 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
           — it is the one fact about the list that the list itself does not
           state, and it keeps the row from being two buttons against a blank. */}
       <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
-        {tabs ?? (
-          <Text fontSize={12} type={'secondary'} weight={500}>
-            {/* Zero counts too, once the fetch has settled: "no environments"
-                is an answer, and withholding it left this side of the row blank
-                in exactly the case that needed filling. What stays blank is the
-                window before the first result, where the count is unknown
-                rather than zero. */}
-            {data ? t('environments.total', { count: environments.length }) : ''}
-          </Text>
-        )}
+        {/* Zero counts too, once the fetch has settled: "no environments" is an
+            answer, and withholding it left this side of the row blank in exactly
+            the case that needed filling. Before the first result the count is
+            unknown rather than zero, so the slot holds a placeholder the same
+            width — the row is never empty and nothing shifts when the real
+            count lands. */}
+        {tabs ??
+          (data ? (
+            <Text fontSize={12} type={'secondary'} weight={500}>
+              {t('environments.total', { count: environments.length })}
+            </Text>
+          ) : (
+            <Skeleton height={14} width={72} />
+          ))}
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           <Button
             icon={<Icon icon={RefreshCwIcon} />}
