@@ -43,6 +43,9 @@ describe('GatewayStreamNotifier', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // `clearAllMocks` keeps implementations, so a test that installs a fetch
+    // that never resolves would otherwise hang whichever test runs next.
+    mockFetch.mockReset().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
     inner = createMockInner();
     notifier = new GatewayStreamNotifier(inner, gatewayUrl, serviceToken);
   });
@@ -170,6 +173,7 @@ describe('GatewayStreamNotifier', () => {
       };
 
       await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+      await notifier.drainPushes('op-1');
 
       const pushed = JSON.parse(mockFetch.mock.calls[0][1].body).event.data;
       expect(pushed).toEqual({ finalContent: 'the answer', stepLabel: 'Step 2' });
@@ -181,6 +185,7 @@ describe('GatewayStreamNotifier', () => {
       const data = { reasoning: 'dropped', toolsCalling: [] };
 
       await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+      await notifier.drainPushes('op-1');
 
       expect(JSON.parse(mockFetch.mock.calls[0][1].body).event.data).toEqual({});
     });
@@ -214,7 +219,7 @@ describe('GatewayStreamNotifier', () => {
       });
     });
 
-    it('awaits stream_end gateway push before resolving', async () => {
+    it('does not wait for the stream_end gateway push, but drainPushes does', async () => {
       let resolveFetch!: () => void;
       mockFetch.mockImplementationOnce(
         () =>
@@ -223,28 +228,60 @@ describe('GatewayStreamNotifier', () => {
           }),
       );
 
-      const result = notifier.publishStreamEvent('op-1', {
-        data: { finalContent: 'final answer' },
-        stepIndex: 0,
-        type: 'stream_end' as const,
-      });
-      let resolved = false;
-      void result.then(() => {
-        resolved = true;
-      });
+      // The step publishes and moves on: the push is ordered, not awaited.
+      await expect(
+        notifier.publishStreamEvent('op-1', {
+          data: { finalContent: 'final answer' },
+          stepIndex: 0,
+          type: 'stream_end' as const,
+        }),
+      ).resolves.toBe('publishStreamEvent-result');
 
+      let drained = false;
+      const drain = notifier.drainPushes('op-1').then(() => {
+        drained = true;
+      });
       await Promise.resolve();
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${gatewayUrl}/api/operations/push-event`,
-        expect.objectContaining({ method: 'POST' }),
-      );
-      expect(resolved).toBe(false);
+      expect(drained).toBe(false);
 
       resolveFetch();
+      await drain;
+      expect(drained).toBe(true);
+    });
 
-      await expect(result).resolves.toBe('publishStreamEvent-result');
-      expect(resolved).toBe(true);
+    it('keeps a barrier behind the pushes issued before it, and ahead of later ones', async () => {
+      const order: string[] = [];
+      let releaseChunk!: () => void;
+      mockFetch.mockImplementation((_url: string, init: { body: string }) => {
+        const { type } = JSON.parse(init.body).event;
+        if (type === 'stream_chunk') {
+          return new Promise((resolve) => {
+            releaseChunk = () => {
+              order.push('stream_chunk');
+              resolve({ ok: true, text: () => Promise.resolve('') });
+            };
+          });
+        }
+        order.push(type);
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+      });
+
+      await notifier.publishStreamChunk('op-1', 0, { chunkType: 'text' } as StreamChunkData);
+      await notifier.publishStreamEvent('op-1', {
+        data: { finalContent: 'done' },
+        stepIndex: 0,
+        type: 'stream_end',
+      });
+      await notifier.publishStreamEvent('op-1', { data: {}, stepIndex: 1, type: 'step_start' });
+
+      // Nothing may pass the barrier while the chunk it waits for is in flight.
+      await Promise.resolve();
+      expect(order).toEqual([]);
+
+      releaseChunk();
+      await notifier.drainPushes('op-1');
+
+      expect(order).toEqual(['stream_chunk', 'stream_end', 'step_start']);
     });
 
     it('still returns inner result even if gateway fails', async () => {
