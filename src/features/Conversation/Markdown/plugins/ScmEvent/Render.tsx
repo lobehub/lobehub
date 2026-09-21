@@ -26,7 +26,7 @@ import {
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
     padding-block: 2px;
-    padding-inline: 12px;
+    padding-inline: 0;
   `,
   check: css`
     padding-block: 8px;
@@ -42,13 +42,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorSuccess};
   `,
   header: css`
-    padding-block: 10px;
-    padding-inline: 12px;
+    padding-block: 4px 10px;
+    padding-inline: 0;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   instruction: css`
-    padding-block: 8px 10px;
-    padding-inline: 12px;
+    padding-block: 8px 2px;
+    padding-inline: 0;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     font-size: 12px;
@@ -169,8 +169,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     inline-size: 100%;
     min-inline-size: 320px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
 
     font-size: 13px;
     text-align: start;
