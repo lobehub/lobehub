@@ -26,6 +26,10 @@ export {
   renderPlaceholderTemplate,
 } from './PlaceholderVariables';
 export { ReactionFeedbackProcessor } from './ReactionFeedback';
+export {
+  type StaleToolResultTrimConfig,
+  StaleToolResultTrimProcessor,
+} from './StaleToolResultTrim';
 export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
 export { TaskCallbackMessageProcessor } from './TaskCallbackMessage';
 export { TaskMessageProcessor } from './TaskMessage';

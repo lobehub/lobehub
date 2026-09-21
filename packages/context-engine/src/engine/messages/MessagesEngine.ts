@@ -18,6 +18,7 @@ import {
   PlaceholderMessageFilterProcessor,
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
+  StaleToolResultTrimProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
@@ -565,6 +566,14 @@ export class MessagesEngine {
         injectedManifests: injectedToolManifests,
         injectedSkills: injectedActivatedSkills,
       }),
+      // Stale tool-result trimming — replaces the bodies of superseded tool
+      // results (file reads later overwritten, stale browser snapshots, old
+      // command output) with short placeholders. Rules are monotone so the
+      // trimmed prefix stays byte-stable across requests and the prompt-cache
+      // prefix survives; savings land at the operation boundary where the
+      // cache is cold anyway. Same pipeline position constraints as
+      // ActivationResultTrimProcessor above.
+      new StaleToolResultTrimProcessor(),
       // Placeholder variables processing — MUST run AFTER all flatten / role
       // transform steps. AssistantGroup / Supervisor messages keep their real
       // content (including any `{{...}}` placeholders inside tool results)
