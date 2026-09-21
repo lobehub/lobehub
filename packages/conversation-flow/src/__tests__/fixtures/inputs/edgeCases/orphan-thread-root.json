@@ -1,0 +1,42 @@
+[
+  {
+    "id": "msg-thread-user-1",
+    "role": "user",
+    "content": "Continue the discussion in this thread.",
+    "parentId": "msg-outside-window",
+    "threadId": "thd_orphan",
+    "createdAt": 1735526559000,
+    "updatedAt": 1735526559000
+  },
+  {
+    "id": "msg-thread-assistant-1",
+    "role": "assistant",
+    "content": "Picking up from where the parent conversation left off.",
+    "parentId": "msg-thread-user-1",
+    "threadId": "thd_orphan",
+    "model": "gpt-4",
+    "provider": "openai",
+    "createdAt": 1735526560000,
+    "updatedAt": 1735526560000
+  },
+  {
+    "id": "msg-thread-user-2",
+    "role": "user",
+    "content": "Good, keep going.",
+    "parentId": "msg-thread-assistant-1",
+    "threadId": "thd_orphan",
+    "createdAt": 1735526561000,
+    "updatedAt": 1735526561000
+  },
+  {
+    "id": "msg-thread-assistant-2",
+    "role": "assistant",
+    "content": "Here is the rest of the analysis.",
+    "parentId": "msg-thread-user-2",
+    "threadId": "thd_orphan",
+    "model": "gpt-4",
+    "provider": "openai",
+    "createdAt": 1735526562000,
+    "updatedAt": 1735526562000
+  }
+]
