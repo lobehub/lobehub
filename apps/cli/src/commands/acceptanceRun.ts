@@ -77,7 +77,7 @@ async function installAction(options: InstallOptions): Promise<void> {
   // with their default bundle if the server has not been upgraded yet.
   if (version !== undefined && bundle.version !== version) {
     throw new Error(
-      `Requested acceptance skill ${version}, but the server returned ${bundle.version ?? 'an unversioned bundle'}. Update your server to support skill release selection.`,
+      `Requested acceptance skill ${version}, but the server returned ${bundle.version ?? 'an unversioned bundle'}. Update your server to support skill tag selection.`,
     );
   }
 
@@ -974,7 +974,7 @@ function withInstallOptions(cmd: Command): Command {
     .option('--skill <id>', 'Skill identifier to pull', 'acceptance')
     .option(
       '--skill-version <version>',
-      'Install a specific skill release (default: latest stable)',
+      'Install a specific skill tag (default: latest default-branch source)',
     )
     .option('--force', 'Overwrite existing skill files')
     .option('--json [fields]', 'Output JSON');
@@ -1086,15 +1086,13 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
   withInstallOptions(
     acceptance
       .command('install')
-      .description('Install the stable acceptance skill release into .agents/skills/acceptance'),
+      .description('Install the latest acceptance skill source into .agents/skills/acceptance'),
   ).action(installAction);
 
   withInstallOptions(
     acceptance
       .command('update')
-      .description(
-        'Download the stable skill release, replacing its files and re-wiring harnesses',
-      ),
+      .description('Download the latest skill source, replacing its files and re-wiring harnesses'),
   ).action((options: InstallOptions) => installAction({ ...options, force: true }));
 
   const run = acceptance

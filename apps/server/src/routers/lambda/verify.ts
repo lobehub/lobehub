@@ -668,7 +668,7 @@ export const verifyRouter = router({
   /**
    * Serve a pullable skill bundle (`SKILL.md` + inline resource files) by
    * identifier. Keep the authenticated contract and legacy alias while sourcing
-   * all installers from the same public stable release.
+   * all installers from the upstream default branch (or an explicitly selected tag).
    */
   getSkillBundle: wsCompatProcedure
     .input(

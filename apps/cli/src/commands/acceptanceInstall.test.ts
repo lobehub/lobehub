@@ -26,7 +26,7 @@ const bundle = {
     commit: 'a'.repeat(40),
     path: 'skills/acceptance',
     repository: 'lobehub/acceptance',
-    tag: 'v0.5.0',
+    ref: 'HEAD',
   },
   version: '0.5.0',
 };
@@ -58,7 +58,7 @@ describe('acceptance skill installation', () => {
     await rm(directory, { force: true, recursive: true });
   });
 
-  it('installs every release resource through the authenticated server and wires Claude', async () => {
+  it('installs every source resource through the authenticated server and wires Claude', async () => {
     await mkdir(path.join(directory, '.claude'));
 
     await run('install');
@@ -110,7 +110,7 @@ describe('acceptance skill installation', () => {
     ]);
   });
 
-  it('supports forcing an install and pinning a release', async () => {
+  it('supports forcing an install and selecting a tag', async () => {
     await run('install');
     const skillPath = path.join(directory, '.agents/skills/acceptance/SKILL.md');
     await writeFile(skillPath, 'local copy');

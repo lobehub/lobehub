@@ -1,4 +1,5 @@
 import { getHTTPStatusCodeFromError } from '@trpc/server/http';
+import { strToU8, zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
@@ -116,7 +117,7 @@ describe('verifyRouter', () => {
   });
 
   describe('getSkillBundle compatibility', () => {
-    const release = {
+    const snapshot = {
       content: '---\nname: acceptance\nmetadata:\n  version: "0.5.0"\n---\n# Acceptance',
       files: { 'scripts/capture.cjs': 'capture();', 'surfaces/cli.md': '# CLI' },
       identifier: 'acceptance',
@@ -125,16 +126,32 @@ describe('verifyRouter', () => {
         commit: 'a'.repeat(40),
         path: 'skills/acceptance',
         repository: 'lobehub/acceptance',
-        tag: 'v0.5.0',
+        ref: 'HEAD',
       },
       version: '0.5.0',
     };
 
+    const mockSnapshot = () => {
+      const files = { 'SKILL.md': snapshot.content, ...snapshot.files };
+      const zip = zipSync(
+        Object.fromEntries(
+          Object.entries(files).map(([file, text]) => [
+            `acceptance-${snapshot.source.commit}/skills/acceptance/${file}`,
+            strToU8(text),
+          ]),
+        ),
+      );
+      return vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(Response.json({ sha: snapshot.source.commit }))
+        .mockResolvedValueOnce(new Response(new Uint8Array(zip).buffer));
+    };
+
     it.each(['acceptance', 'verify'])(
-      'serves the public release to legacy %s callers',
+      'serves the default-branch source to legacy %s callers',
       async (identifier) => {
-        vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(release));
-        expect(await createCaller().getSkillBundle({ identifier })).toEqual(release);
+        mockSnapshot();
+        expect(await createCaller().getSkillBundle({ identifier })).toEqual(snapshot);
       },
     );
 
@@ -149,23 +166,23 @@ describe('verifyRouter', () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it('resolves an explicitly requested stable release for newer clients', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(release));
+    it('resolves an explicitly requested tag for newer clients', async () => {
+      const fetchSpy = mockSnapshot();
 
       expect(
         await createCaller().getSkillBundle({ identifier: 'acceptance', version: 'v0.5.0' }),
-      ).toEqual(release);
+      ).toEqual({ ...snapshot, source: { ...snapshot.source, ref: 'v0.5.0' } });
       expect(fetchSpy).toHaveBeenCalledWith(
-        'https://github.com/lobehub/acceptance/releases/download/v0.5.0/acceptance-skill.json',
+        'https://api.github.com/repos/lobehub/acceptance/commits/v0.5.0',
         expect.any(Object),
       );
     });
 
     it('does not initialize reporting services to download an authenticated public skill', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(release));
+      mockSnapshot();
       modelMocks.getServerDB.mockRejectedValueOnce(new Error('Reporting database unavailable'));
 
-      expect(await createCaller().getSkillBundle({ identifier: 'acceptance' })).toEqual(release);
+      expect(await createCaller().getSkillBundle({ identifier: 'acceptance' })).toEqual(snapshot);
       expect(modelMocks.getServerDB).not.toHaveBeenCalled();
       modelMocks.getServerDB.mockReset().mockResolvedValue({});
     });
