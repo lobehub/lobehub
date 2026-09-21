@@ -124,6 +124,14 @@ export interface ChatInputProps {
    */
   mentionItems?: SlashOptions['items'];
   /**
+   * Blocking notices (device offline, cloud not configured, …) rendered inside
+   * the composer column, in flow directly above the editor. The floating trays
+   * (OpStatusTray / QueueTray / TodoProgress) anchor to the top of this column,
+   * so a notice placed here sits *below* them; rendered as a sibling above
+   * `ChatInput` instead, the trays would float over and cover it.
+   */
+  notices?: ReactNode;
+  /**
    * Callback when editor instance is ready
    */
   onEditorReady?: (editor: any) => void;
@@ -175,6 +183,7 @@ const ChatInput = memo<ChatInputProps>(
     extraActionItems,
     isConfigLoading = false,
     mentionItems,
+    notices,
     controlBarSlot,
     sendMenu,
     sendAreaPrefix,
@@ -447,6 +456,7 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
+          {notices}
           {sendMessageErrorMsg && (
             <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
               <Alert
