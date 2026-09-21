@@ -955,6 +955,21 @@ describe('DocumentService', () => {
       });
     });
 
+    it('should return the pre-existing updatedAt unchanged when nothing is written', async () => {
+      const currentDocument = createCurrentDocument();
+      mockDocumentModel.findById.mockResolvedValue(currentDocument);
+
+      const result = await service.updateDocument('doc-1', { saveSource: 'manual' });
+
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        historyAppended: false,
+        id: 'doc-1',
+        savedAt: undefined,
+        updatedAt: currentDocument.updatedAt,
+      });
+    });
+
     it('should report members newly mentioned by this save on the accepted view', async () => {
       const mention = (id: string) => ({ metadata: { id, type: 'member' }, type: 'mention' });
       const paragraph = (...children: unknown[]) => ({ children, type: 'paragraph' });

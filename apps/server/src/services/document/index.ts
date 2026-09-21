@@ -768,7 +768,9 @@ export class DocumentService {
         });
       }
 
-      if (Object.keys(updates).length > 0 || historyAppended) {
+      const rowUpdated = Object.keys(updates).length > 0 || historyAppended;
+
+      if (rowUpdated) {
         await documentModel.update(id, { ...updates, updatedAt: now } as Partial<DocumentItem>);
       }
 
@@ -779,14 +781,14 @@ export class DocumentService {
         await fileModel.update(currentDocument.fileId, fileUpdates);
       }
 
-      changed = Object.keys(updates).length > 0 || historyAppended;
+      changed = rowUpdated;
 
       return {
         ...(addedMentionUserIds.length > 0 ? { addedMentionUserIds } : {}),
         historyAppended,
         id,
         savedAt,
-        updatedAt: now,
+        updatedAt: rowUpdated ? now : currentDocument.updatedAt,
       };
     });
 
