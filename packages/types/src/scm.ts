@@ -88,6 +88,7 @@ export type ScmChangeRequestEventKind =
   | 'review_approved'
   | 'review_changes_requested'
   | 'review_commented'
+  | 'review_dismissed'
   | 'synchronized';
 
 /** Open bag for change-request facts the columns do not model. */
@@ -95,6 +96,13 @@ export interface ScmChangeRequestMetadata {
   [key: string]: unknown;
   /** Acceptance links parsed out of the change request body. */
   acceptanceIdsFromBody?: string[];
+  /**
+   * Provider-clock timestamp of the newest change-request event applied.
+   * Kept apart from the `lastEventAt` column, which also records events we
+   * time with our own clock (check results), so ordering only ever compares
+   * two provider timestamps.
+   */
+  lastProviderEventAt?: string;
   /** Provider's mergeability verdict, when it exposes one (`MERGEABLE`, `CONFLICTING`, …). */
   mergeable?: string;
 }

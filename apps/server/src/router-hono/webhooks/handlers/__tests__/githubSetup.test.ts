@@ -13,19 +13,22 @@ const userId = 'scm-setup-user';
 
 const mocks = vi.hoisted(() => ({
   consumeState: vi.fn(),
+  issueClaim: vi.fn(),
+  scmEnv: { ENABLED_GITHUB_APP: true, ENABLED_GITHUB_APP_OAUTH: true },
   exchangeCode: vi.fn(),
   fetchInstallation: vi.fn(),
   getSession: vi.fn(),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => serverDB) }));
-vi.mock('@/envs/scm', () => ({ scmEnv: { ENABLED_GITHUB_APP: true } }));
+vi.mock('@/envs/scm', () => ({ scmEnv: mocks.scmEnv }));
 vi.mock('@/auth', () => ({ auth: { api: { getSession: mocks.getSession } } }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => undefined },
 }));
 vi.mock('@/server/services/scm/oauth/stateStore', () => ({
   consumeScmInstallState: mocks.consumeState,
+  issueScmInstallClaim: mocks.issueClaim,
 }));
 vi.mock('@/server/services/scm/github/app', () => ({
   exchangeGitHubUserCode: mocks.exchangeCode,
@@ -49,7 +52,9 @@ const snapshot = {
 beforeEach(async () => {
   await serverDB.insert(users).values([{ id: userId }, { id: 'scm-setup-other' }]);
   mocks.consumeState.mockResolvedValue(null);
+  mocks.issueClaim.mockResolvedValue('claim-token');
   mocks.getSession.mockResolvedValue(null);
+  mocks.scmEnv.ENABLED_GITHUB_APP_OAUTH = true;
   mocks.fetchInstallation.mockResolvedValue(snapshot);
   mocks.exchangeCode.mockResolvedValue({
     accessToken: 'ghu_token',
@@ -109,9 +114,15 @@ describe('githubSetup', () => {
       setup_action: 'install',
     });
     const firstLocation = new URL(first.headers.get('location')!);
+    // The confirmation carries a single-use claim, never the raw id.
     expect(Object.fromEntries(firstLocation.searchParams)).toEqual({
       account: 'arvinxx',
-      pending: '777',
+      pending: 'claim-token',
+    });
+    expect(mocks.issueClaim).toHaveBeenCalledWith({
+      installationId: '777',
+      lobeUserId: userId,
+      provider: 'github',
     });
     expect(mocks.exchangeCode).not.toHaveBeenCalled();
     expect(
@@ -121,7 +132,9 @@ describe('githubSetup', () => {
     // Someone else's installation: also pending, never refreshed into their row.
     await ScmInstallationModel.bind(serverDB, { ...snapshot, userId: 'scm-setup-other' });
     const theirs = await setup({ installation_id: '777', setup_action: 'update' });
-    expect(new URL(theirs.headers.get('location')!).searchParams.get('pending')).toBe('777');
+    expect(new URL(theirs.headers.get('location')!).searchParams.get('pending')).toBe(
+      'claim-token',
+    );
     expect(
       (await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'))
         ?.repositories,
@@ -138,6 +151,21 @@ describe('githubSetup', () => {
       '777',
     );
     expect(refreshed?.repositories).toEqual([]);
+  });
+
+  it('binds without linking an identity when the deployment has no OAuth credentials', async () => {
+    mocks.scmEnv.ENABLED_GITHUB_APP_OAUTH = false;
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+
+    // GitHub still appends a code when the App asks for user authorization;
+    // exchanging it without credentials can only fail, so the install
+    // proceeds and only the identity link is skipped.
+    const res = await setup({ code: 'c', installation_id: '777', state: 's' });
+    expect(new URL(res.headers.get('location')!).searchParams.get('installed')).toBe('ok');
+    expect(mocks.exchangeCode).not.toHaveBeenCalled();
+    expect(
+      await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'),
+    ).toMatchObject({ installedByExternalLogin: null, userId });
   });
 
   it('binds without an identity when the state is valid but GitHub sent no code', async () => {

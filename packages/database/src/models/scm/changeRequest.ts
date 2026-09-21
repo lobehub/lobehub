@@ -159,7 +159,27 @@ export class ScmChangeRequestModel {
       params.number,
     );
 
-    const headChanged = !!params.headSha && !!existing && existing.headSha !== params.headSha;
+    // Deliveries are not ordered: GitHub retries, and a redelivery of an old
+    // `opened` after a `merged` would otherwise reopen the row, rewind the
+    // head and drop the CI rollup for the commit that actually landed. Two
+    // independent guards, because neither covers the other:
+    //
+    // - an event whose provider timestamp predates the newest one applied is
+    //   a replay (compared provider-clock to provider-clock; the
+    //   `lastEventAt` column also carries events we stamp ourselves, so it
+    //   cannot serve as the reference);
+    // - a merge is terminal and a close only reopens through `reopened`,
+    //   whatever the timestamps say.
+    const previousEventAt = existing?.metadata?.lastProviderEventAt;
+    const outOfOrder =
+      !!previousEventAt && !!params.eventAt && params.eventAt < new Date(previousEventAt);
+    const regressesLifecycle =
+      (existing?.state === 'merged' && params.state !== 'merged') ||
+      (existing?.state === 'closed' && params.state === 'open' && params.eventKind !== 'reopened');
+    const stale = !!existing && (outOfOrder || regressesLifecycle);
+
+    const headChanged =
+      !stale && !!params.headSha && !!existing && existing.headSha !== params.headSha;
     const links = params.links ?? {};
     const now = new Date();
 
@@ -175,7 +195,11 @@ export class ScmChangeRequestModel {
       mergeStateStatus: params.mergeStateStatus ?? existing?.mergeStateStatus ?? null,
       mergedAt: params.mergedAt ?? existing?.mergedAt ?? null,
       mergedByExternalId: params.mergedByExternalId ?? existing?.mergedByExternalId ?? null,
-      metadata: { ...existing?.metadata, ...params.metadata },
+      metadata: {
+        ...existing?.metadata,
+        ...params.metadata,
+        ...(params.eventAt ? { lastProviderEventAt: params.eventAt.toISOString() } : {}),
+      },
       repoExternalId: params.repoExternalId ?? existing?.repoExternalId ?? null,
       state: params.state,
       title: params.title ?? existing?.title ?? null,
@@ -202,15 +226,22 @@ export class ScmChangeRequestModel {
       ? { checks: null, ciHeadSha: params.headSha ?? null, ciStatus: null }
       : {};
 
-    const eventValues = params.eventKind
-      ? { lastEventAt: params.eventAt ?? now, lastEventKind: params.eventKind }
-      : {};
+    const eventValues =
+      params.eventKind && !stale
+        ? { lastEventAt: params.eventAt ?? now, lastEventKind: params.eventKind }
+        : {};
 
     if (existing) {
+      // A stale delivery still carries link context worth keeping (an
+      // acceptance id parsed from the body), so fills apply; the lifecycle
+      // columns do not.
+      const stateValues = stale
+        ? { metadata: { ...snapshot.metadata, ...existing.metadata, ...params.metadata } }
+        : snapshot;
       const [row] = await db
         .update(scmChangeRequests)
         .set({
-          ...snapshot,
+          ...stateValues,
           ...linkValues,
           ...ownerValues,
           ...ciValues,

@@ -52,7 +52,8 @@ export type ScmInboundEvent =
   | {
       actor?: ScmActor;
       installationId: string;
-      kind: 'review_approved' | 'review_changes_requested' | 'review_commented';
+      kind:
+        'review_approved' | 'review_changes_requested' | 'review_commented' | 'review_dismissed';
       number: number;
       occurredAt?: Date;
       repoFullName: string;

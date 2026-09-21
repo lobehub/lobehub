@@ -110,6 +110,15 @@ describe('ScmIngestService', () => {
       reviewDecision: 'changes_requested',
     });
 
+    // the same review dismissed: GitHub invalidated the verdict
+    await ingest(
+      'pull_request_review',
+      { ...fx.reviewEvent('dismissed'), action: 'dismissed' },
+      service,
+    );
+    row = await ScmChangeRequestModel.findById(serverDB, row!.id);
+    expect(row).toMatchObject({ lastEventKind: 'review_dismissed', reviewDecision: null });
+
     // merged
     await ingest(
       'pull_request',

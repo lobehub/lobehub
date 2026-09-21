@@ -11,6 +11,7 @@ import { scmEnv } from '@/envs/scm';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { fetchGitHubInstallation } from '@/server/services/scm/github/app';
+import { consumeScmInstallClaim } from '@/server/services/scm/oauth/stateStore';
 import { canWriteScmScope } from '@/server/services/scm/scope';
 
 /** Path the "Connect GitHub" button navigates to; the server route owns the redirect. */
@@ -32,18 +33,29 @@ const scmProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
  */
 export const scmRouter = router({
   /**
-   * Bind an installation to the caller's scope. This is the explicit
-   * confirmation the stateless callback defers to: GitHub is asked for the
-   * installation, so a made-up id binds nothing, and a workspace needs the
-   * member role. No identity is linked here; "Connect account" does that.
+   * Finish an installation that reached the callback without our state, by
+   * redeeming the single-use claim that callback issued. The claim is what
+   * authorizes the bind: an installation id proves nothing on its own — it
+   * is a small integer, and naming someone else's would hand their
+   * repositories to the caller — so a claim minted for another user, or a
+   * replayed one, is refused. A workspace additionally needs the member
+   * role. No identity is linked here; "Connect account" does that.
    */
   connectInstallation: scmProcedure
-    .input(z.object({ installationId: z.string().min(1), provider: z.enum(['github']) }))
+    .input(z.object({ claim: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       if (!scmEnv.ENABLED_GITHUB_APP) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: 'GitHub App is not configured',
+        });
+      }
+
+      const claim = await consumeScmInstallClaim(input.claim);
+      if (!claim || claim.lobeUserId !== ctx.userId) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'this installation claim is expired or was issued for another user',
         });
       }
       if (!(await canWriteScmScope(ctx.serverDB, ctx.userId, ctx.scope.workspaceId))) {
@@ -52,15 +64,15 @@ export const scmRouter = router({
 
       let snapshot: Awaited<ReturnType<typeof fetchGitHubInstallation>>;
       try {
-        snapshot = await fetchGitHubInstallation(input.installationId);
+        snapshot = await fetchGitHubInstallation(claim.installationId);
       } catch {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'installation not found on GitHub' });
       }
 
       const existing = await ScmInstallationModel.findByProviderInstallationId(
         ctx.serverDB,
-        input.provider,
-        input.installationId,
+        claim.provider,
+        claim.installationId,
       );
       // An installation already bound elsewhere stays there: re-binding it
       // would pull another tenant's repositories into this one.

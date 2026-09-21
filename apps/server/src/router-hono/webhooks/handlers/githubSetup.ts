@@ -7,7 +7,10 @@ import { ScmIdentityModel, ScmInstallationModel } from '@/database/models/scm';
 import { scmEnv } from '@/envs/scm';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { exchangeGitHubUserCode, fetchGitHubInstallation } from '@/server/services/scm/github/app';
-import { consumeScmInstallState } from '@/server/services/scm/oauth/stateStore';
+import {
+  consumeScmInstallState,
+  issueScmInstallClaim,
+} from '@/server/services/scm/oauth/stateStore';
 import { canWriteScmScope, sanitizeReturnTo } from '@/server/services/scm/scope';
 
 const log = debug('lobe-server:scm:github-setup');
@@ -32,10 +35,11 @@ const redirectToSettings = (origin: string, params: Record<string, string>, retu
  * - **Without `state`** (the flow started on github.com, or the state
  *   expired): nothing is bound automatically. A known installation owned by
  *   the session user is refreshed; anything else is handed to the settings
- *   page as `pending`, where the user confirms the connection in a signed-in
- *   request. The `code` is never exchanged here: a stateless callback could
- *   be an attacker's authorization URL forwarded to a signed-in victim, and
- *   linking that identity would hand the victim's account to the attacker.
+ *   page as a single-use claim, which the user redeems from a signed-in
+ *   request to finish the connection. The `code` is never exchanged here: a
+ *   stateless callback could be an attacker's authorization URL forwarded to
+ *   a signed-in victim, and linking that identity would hand the victim's
+ *   account to the attacker.
  */
 export const githubSetup = async (c: Context): Promise<Response> => {
   const url = new URL(c.req.url);
@@ -94,16 +98,22 @@ export const githubSetup = async (c: Context): Promise<Response> => {
       return redirectToSettings(url.origin, { installed: 'updated' });
     }
 
+    // The confirmation carries a claim, not the raw id: redeeming it is the
+    // proof that this user came back from GitHub holding this installation.
+    const claim = await issueScmInstallClaim({
+      installationId,
+      lobeUserId: userId,
+      provider: 'github',
+    });
+    if (!claim) return redirectToSettings(url.origin, { error: 'claim_unavailable' });
+
     log(
       'installation %s (%s) arrived without state for user=%s; asking for confirmation',
       installationId,
       snapshot.accountLogin,
       userId,
     );
-    return redirectToSettings(url.origin, {
-      account: snapshot.accountLogin,
-      pending: installationId,
-    });
+    return redirectToSettings(url.origin, { account: snapshot.accountLogin, pending: claim });
   }
 
   // ---- Stateful leg: the user and scope come from the state we issued.
@@ -117,7 +127,11 @@ export const githubSetup = async (c: Context): Promise<Response> => {
   }
 
   let installedBy: { login: string; userId: string } | undefined;
-  if (code) {
+  // Identity linking is its own capability: without OAuth credentials the
+  // exchange can only fail, so bind the installation and skip it.
+  if (code && !scmEnv.ENABLED_GITHUB_APP_OAUTH) {
+    log('skipping identity link for installation %s: OAuth is not configured', installationId);
+  } else if (code) {
     let authorization: Awaited<ReturnType<typeof exchangeGitHubUserCode>>;
     try {
       authorization = await exchangeGitHubUserCode(code);

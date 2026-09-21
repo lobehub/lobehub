@@ -157,6 +157,45 @@ describe('ScmChangeRequestModel', () => {
     ).toHaveLength(0);
   });
 
+  it('ignores a delivery older than the last one applied, and never reopens a merge', async () => {
+    const merged = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventAt: new Date('2026-09-20T12:00:00Z'),
+      eventKind: 'merged',
+      mergedAt: new Date('2026-09-20T12:00:00Z'),
+      state: 'merged',
+    });
+    expect(merged.state).toBe('merged');
+
+    // A redelivered `opened` from before the merge: links still fill, the
+    // lifecycle does not move.
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: 's', subjectType: 'standalone', userId })
+      .returning();
+    const replayed = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventAt: new Date('2026-09-20T09:00:00Z'),
+      eventKind: 'opened',
+      headSha: sha2,
+      links: { acceptanceId: acceptance.id },
+      state: 'open',
+    });
+    expect(replayed.state).toBe('merged');
+    expect(replayed.headSha).toBe(sha1);
+    expect(replayed.lastEventKind).toBe('merged');
+    expect(replayed.acceptanceId).toBe(acceptance.id);
+
+    // Even a *newer* event cannot walk a merge back to open.
+    const later = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      eventAt: new Date('2026-09-20T18:00:00Z'),
+      eventKind: 'reopened',
+      state: 'open',
+    });
+    expect(later.state).toBe('merged');
+  });
+
   it('keeps every check when deliveries for one commit land concurrently', async () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
     const names = ['Lint', 'Test', 'Build', 'Typecheck', 'E2E', 'Docs'];

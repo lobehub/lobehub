@@ -54,6 +54,8 @@ export const getScmConfig = () => {
         !!privateKey &&
         !!process.env.GITHUB_APP_WEBHOOK_SECRET &&
         !!process.env.GITHUB_APP_SLUG,
+      ENABLED_GITHUB_APP_OAUTH:
+        !!process.env.GITHUB_APP_CLIENT_ID && !!process.env.GITHUB_APP_CLIENT_SECRET,
       GITHUB_APP_CLIENT_ID: process.env.GITHUB_APP_CLIENT_ID,
       GITHUB_APP_CLIENT_SECRET: process.env.GITHUB_APP_CLIENT_SECRET,
       GITHUB_APP_ID: process.env.GITHUB_APP_ID,
@@ -64,6 +66,13 @@ export const getScmConfig = () => {
     server: {
       /** True when every value the webhook + install flow needs is present. */
       ENABLED_GITHUB_APP: z.boolean(),
+      /**
+       * True when the App can also exchange the install `code` for a user
+       * token. Identity linking is a separate capability: an App without
+       * OAuth credentials still receives webhooks and binds installations,
+       * it just cannot say which GitHub user connected it.
+       */
+      ENABLED_GITHUB_APP_OAUTH: z.boolean(),
       GITHUB_APP_CLIENT_ID: z.string().optional(),
       GITHUB_APP_CLIENT_SECRET: z.string().optional(),
       GITHUB_APP_ID: z.string().optional(),

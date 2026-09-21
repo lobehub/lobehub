@@ -19,7 +19,10 @@ vi.mock('@/envs/scm', () => ({
   scmEnv: { ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' },
 }));
 
-const mocks = vi.hoisted(() => ({ fetchInstallation: vi.fn() }));
+const mocks = vi.hoisted(() => ({ consumeClaim: vi.fn(), fetchInstallation: vi.fn() }));
+vi.mock('@/server/services/scm/oauth/stateStore', () => ({
+  consumeScmInstallClaim: mocks.consumeClaim,
+}));
 vi.mock('@/server/services/scm/github/app', () => ({
   fetchGitHubInstallation: mocks.fetchInstallation,
 }));
@@ -137,7 +140,47 @@ describe('scmRouter', () => {
     ]);
   });
 
+  it('refuses a claim that is expired or was minted for someone else', async () => {
+    mocks.fetchInstallation.mockResolvedValue({
+      accountExternalId: '9',
+      accountLogin: 'arvinxx',
+      accountType: 'user',
+      installationId: '900',
+      provider: 'github',
+      repositorySelection: 'all',
+    });
+
+    // Expired or replayed: the store hands back nothing.
+    mocks.consumeClaim.mockResolvedValueOnce(null);
+    await expect(caller({ userId }).connectInstallation({ claim: 'gone' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+
+    // Minted for another user: knowing the token is not enough.
+    mocks.consumeClaim.mockResolvedValueOnce({
+      installationId: '900',
+      lobeUserId: otherUserId,
+      provider: 'github',
+      ts: 1,
+    });
+    await expect(caller({ userId }).connectInstallation({ claim: 'theirs' })).rejects.toMatchObject(
+      { code: 'FORBIDDEN' },
+    );
+
+    // Neither attempt reached GitHub or the database.
+    expect(mocks.fetchInstallation).not.toHaveBeenCalled();
+    expect(
+      await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '900'),
+    ).toBeNull();
+  });
+
   it('connects a pending installation into the caller scope, but never one bound elsewhere', async () => {
+    mocks.consumeClaim.mockResolvedValue({
+      installationId: '900',
+      lobeUserId: userId,
+      provider: 'github',
+      ts: 1,
+    });
     mocks.fetchInstallation.mockResolvedValue({
       accountExternalId: '9',
       accountLogin: 'arvinxx',
@@ -148,28 +191,37 @@ describe('scmRouter', () => {
     });
 
     const mine = caller({ userId });
-    const bound = await mine.connectInstallation({ installationId: '900', provider: 'github' });
+    const bound = await mine.connectInstallation({ claim: 'c1' });
     expect(bound).toMatchObject({ accountLogin: 'arvinxx', userId, workspaceId: null });
     expect(mocks.fetchInstallation).toHaveBeenCalledWith('900');
 
     // Re-confirming in the same scope is a refresh, not an error.
-    await expect(
-      mine.connectInstallation({ installationId: '900', provider: 'github' }),
-    ).resolves.toMatchObject({ id: bound.id });
+    await expect(mine.connectInstallation({ claim: 'c2' })).resolves.toMatchObject({
+      id: bound.id,
+    });
 
-    // Another user cannot pull it into their account.
+    // Another user holding a claim of their own cannot pull it into their account.
+    mocks.consumeClaim.mockResolvedValueOnce({
+      installationId: '900',
+      lobeUserId: otherUserId,
+      provider: 'github',
+      ts: 1,
+    });
     await expect(
-      caller({ userId: otherUserId }).connectInstallation({
-        installationId: '900',
-        provider: 'github',
-      }),
+      caller({ userId: otherUserId }).connectInstallation({ claim: 'c3' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
 
-    // An id GitHub does not know binds nothing.
+    // An installation GitHub does not know binds nothing.
+    mocks.consumeClaim.mockResolvedValueOnce({
+      installationId: '404',
+      lobeUserId: userId,
+      provider: 'github',
+      ts: 1,
+    });
     mocks.fetchInstallation.mockRejectedValueOnce(new Error('404'));
-    await expect(
-      mine.connectInstallation({ installationId: '404', provider: 'github' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(mine.connectInstallation({ claim: 'c4' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
     expect(
       await ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '404'),
     ).toBeNull();
@@ -192,21 +244,29 @@ describe('scmRouter', () => {
       repositorySelection: 'all',
     });
 
+    mocks.consumeClaim.mockResolvedValue({
+      installationId: '901',
+      lobeUserId: otherUserId,
+      provider: 'github',
+      ts: 1,
+    });
     await expect(
       caller({ userId: otherUserId, workspaceId: workspace.id }).connectInstallation({
-        installationId: '901',
-        provider: 'github',
+        claim: 'c5',
       }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
     await serverDB
       .insert(workspaceMembers)
       .values({ role: 'member', userId, workspaceId: workspace.id });
+    mocks.consumeClaim.mockResolvedValue({
+      installationId: '901',
+      lobeUserId: userId,
+      provider: 'github',
+      ts: 1,
+    });
     await expect(
-      caller({ userId, workspaceId: workspace.id }).connectInstallation({
-        installationId: '901',
-        provider: 'github',
-      }),
+      caller({ userId, workspaceId: workspace.id }).connectInstallation({ claim: 'c6' }),
     ).resolves.toMatchObject({ userId, workspaceId: workspace.id });
   });
 });

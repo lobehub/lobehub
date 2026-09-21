@@ -133,8 +133,11 @@ const REVIEW_STATE_KINDS: Record<
 };
 
 const normalizePullRequestReview = (payload: Json): ScmInboundEvent => {
-  if (payload.action !== 'submitted') {
-    return { reason: `pull_request_review action ${payload.action} not tracked`, type: 'ignored' };
+  const action = String(payload.action);
+  // `dismissed` is tracked too: GitHub has invalidated the review, so the
+  // stored decision has to be cleared rather than left standing.
+  if (action !== 'submitted' && action !== 'dismissed') {
+    return { reason: `pull_request_review action ${action} not tracked`, type: 'ignored' };
   }
   const review = payload.review;
   const pr = payload.pull_request;
@@ -144,7 +147,10 @@ const normalizePullRequestReview = (payload: Json): ScmInboundEvent => {
     return { reason: 'pull_request_review payload incomplete', type: 'ignored' };
   }
 
-  const kind = REVIEW_STATE_KINDS[String(review.state).toLowerCase()];
+  const kind =
+    action === 'dismissed'
+      ? ('review_dismissed' as const)
+      : REVIEW_STATE_KINDS[String(review.state).toLowerCase()];
   if (!kind) return { reason: `review state ${review.state} not tracked`, type: 'ignored' };
 
   return {
@@ -152,7 +158,8 @@ const normalizePullRequestReview = (payload: Json): ScmInboundEvent => {
     installationId,
     kind,
     number: Number(pr.number),
-    occurredAt: date(review.submitted_at) ?? undefined,
+    // A dismissal happens now; `submitted_at` still names the original review.
+    occurredAt: action === 'dismissed' ? undefined : (date(review.submitted_at) ?? undefined),
     repoFullName: String(repo.full_name),
     review: {
       body: typeof review.body === 'string' ? review.body : null,

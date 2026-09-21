@@ -284,7 +284,12 @@ export class ScmIngestService {
         : event.kind === 'review_changes_requested'
           ? 'changes_requested'
           : null;
-    if (decision) await ScmChangeRequestModel.setReviewDecision(this.db, row.id, decision);
+    // A dismissal clears the aggregate: GitHub says the verdict no longer counts.
+    if (event.kind === 'review_dismissed') {
+      await ScmChangeRequestModel.setReviewDecision(this.db, row.id, null);
+    } else if (decision) {
+      await ScmChangeRequestModel.setReviewDecision(this.db, row.id, decision);
+    }
     await ScmChangeRequestModel.recordEvent(this.db, row.id, event.kind, event.occurredAt);
 
     const fresh = (await ScmChangeRequestModel.findById(this.db, row.id)) ?? row;

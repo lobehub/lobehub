@@ -97,11 +97,20 @@ describe('normalizeGitHubEvent', () => {
       ).toMatchObject({
         kind: 'review_commented',
       });
+      // `dismissed` arrives as an action, not a review state: GitHub has
+      // invalidated the verdict, so it has to reach the ingest path.
       expect(
-        normalizeGitHubEvent('pull_request_review', fx.reviewEvent('dismissed')),
-      ).toMatchObject({
-        type: 'ignored',
-      });
+        normalizeGitHubEvent('pull_request_review', {
+          ...fx.reviewEvent('dismissed'),
+          action: 'dismissed',
+        }),
+      ).toMatchObject({ kind: 'review_dismissed', occurredAt: undefined, type: 'review' });
+      expect(
+        normalizeGitHubEvent('pull_request_review', {
+          ...fx.reviewEvent('approved'),
+          action: 'edited',
+        }),
+      ).toMatchObject({ type: 'ignored' });
     });
 
     it('maps an inline review comment with its file location', () => {

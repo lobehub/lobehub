@@ -37,4 +37,23 @@ describe('getScmConfig', () => {
     expect(env.ENABLED_GITHUB_APP).toBe(true);
     expect(env.GITHUB_APP_PRIVATE_KEY).toBe(PEM);
   });
+
+  it('reports identity linking as its own capability', () => {
+    vi.stubEnv('GITHUB_APP_ID', '1');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY', PEM);
+    vi.stubEnv('GITHUB_APP_WEBHOOK_SECRET', 's');
+    vi.stubEnv('GITHUB_APP_SLUG', 'lobehub');
+
+    // Webhooks and installs work without OAuth credentials; only the
+    // identity link needs them, so the two flags move independently.
+    expect(getScmConfig().ENABLED_GITHUB_APP_OAUTH).toBe(false);
+
+    vi.stubEnv('GITHUB_APP_CLIENT_ID', 'Iv23');
+    expect(getScmConfig().ENABLED_GITHUB_APP_OAUTH).toBe(false);
+
+    vi.stubEnv('GITHUB_APP_CLIENT_SECRET', 'secret');
+    const env = getScmConfig();
+    expect(env.ENABLED_GITHUB_APP).toBe(true);
+    expect(env.ENABLED_GITHUB_APP_OAUTH).toBe(true);
+  });
 });

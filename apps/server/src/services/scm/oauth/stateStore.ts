@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { ScmProvider } from '@lobechat/types';
 import debug from 'debug';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
@@ -8,8 +9,11 @@ const log = debug('lobe-server:scm:oauth-state');
 
 const STATE_TTL_SECONDS = 600;
 const KEY_PREFIX = 'scm:install-state:';
+const CLAIM_TTL_SECONDS = 600;
+const CLAIM_PREFIX = 'scm:install-claim:';
 
 const stateKey = (state: string): string => `${KEY_PREFIX}${state}`;
+const claimKey = (claim: string): string => `${CLAIM_PREFIX}${claim}`;
 
 export interface ScmInstallStatePayload {
   /** LobeHub user who clicked "Connect"; the installation binds to them. */
@@ -52,6 +56,56 @@ export const consumeScmInstallState = async (
 
   try {
     return JSON.parse(raw) as ScmInstallStatePayload;
+  } catch {
+    return null;
+  }
+};
+
+export interface ScmInstallClaimPayload {
+  installationId: string;
+  /** LobeHub user the callback resolved from the session; only they may redeem it. */
+  lobeUserId: string;
+  provider: ScmProvider;
+  ts: number;
+}
+
+/**
+ * Proof that *this* user just came back from GitHub holding *this*
+ * installation. An installation id is a small integer an attacker can guess,
+ * so the confirmation mutation must not accept one on its own: the callback
+ * mints a single-use claim bound to the session it resolved, and redeeming
+ * it is what authorizes the bind.
+ */
+export const issueScmInstallClaim = async (
+  payload: Omit<ScmInstallClaimPayload, 'ts'>,
+): Promise<string | null> => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return null;
+
+  const claim = randomUUID().replaceAll('-', '');
+  const value: ScmInstallClaimPayload = { ...payload, ts: Date.now() };
+
+  await redis.set(claimKey(claim), JSON.stringify(value), 'EX', CLAIM_TTL_SECONDS);
+  log(
+    'issued install claim for user=%s installation=%s',
+    payload.lobeUserId,
+    payload.installationId,
+  );
+  return claim;
+};
+
+export const consumeScmInstallClaim = async (
+  claim: string,
+): Promise<ScmInstallClaimPayload | null> => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return null;
+
+  const raw = await redis.get(claimKey(claim));
+  if (!raw) return null;
+  await redis.del(claimKey(claim));
+
+  try {
+    return JSON.parse(raw) as ScmInstallClaimPayload;
   } catch {
     return null;
   }
