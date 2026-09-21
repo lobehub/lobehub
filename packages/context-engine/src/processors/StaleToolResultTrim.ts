@@ -150,6 +150,38 @@ const locOf = (message: Message, plugin: PluginInfo | undefined): [number, numbe
 };
 
 /**
+ * The window a readFile call actually returned. An omitted `loc` defaults to
+ * the first 200 lines in the service (`readLocalFile` slices `loc ?? [0, 200]`)
+ * unless `fullContent` was requested — treating it as an unbounded full-file
+ * read would let a later default read claim to cover ranges it never returned.
+ */
+const effectiveReadWindow = (
+  message: Message,
+  plugin: PluginInfo | undefined,
+): [number, number] => {
+  const explicit = locOf(message, plugin);
+  if (explicit) return explicit;
+  return parseArguments(plugin?.arguments)?.fullContent
+    ? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+    : [0, 200];
+};
+
+/**
+ * `UIChatMessage.createdAt` is an epoch-milliseconds number on the canonical
+ * path; DB dumps and tests carry ISO strings. `Date.parse(number)` coerces to
+ * a garbage string and yields NaN, so normalize explicitly.
+ */
+const toEpochMs = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const t = Date.parse(value);
+    return Number.isFinite(t) ? t : undefined;
+  }
+  return undefined;
+};
+
+/**
  * Replaces the bodies of stale tool results with short placeholders at the
  * payload-assembly boundary.
  *
@@ -201,20 +233,11 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
     const messages = context.messages;
 
-    const totalToolChars = messages.reduce(
-      (sum, m) =>
-        m.role === 'tool' && typeof m.content === 'string' ? sum + m.content.length : sum,
-      0,
-    );
-    if (totalToolChars < this.config.minTotalToolChars) {
-      return this.markAsExecuted(context);
-    }
-
     // Turn boundary: the last user message starts the in-flight turn. Every
     // LLM step of a running operation re-assembles the payload and re-runs
     // this pipeline, so the trim set must be FROZEN for the whole turn —
     // anything that changes it mid-operation rewrites the prefix and colds
-    // the warm prompt cache for every remaining step. Two moving parts are
+    // the warm prompt cache for every remaining step. Three moving parts are
     // pinned accordingly:
     //
     // 1. The recency window is derived from the turn boundary, not the
@@ -226,6 +249,10 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     //    the boundary: an in-flight write must not retroactively trim
     //    pre-boundary reads mid-operation. It takes effect at the next turn
     //    boundary instead.
+    // 3. The minimum-size gate is measured on the closed history only:
+    //    counting in-flight tool output would let the gate trip mid-turn as
+    //    the op appends results, activating trims that were off at the
+    //    boundary.
     //
     // When no user message exists (tests, exotic flows), the recency window
     // alone applies.
@@ -235,16 +262,28 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
         ? Math.max(0, lastUserIndex + 1 - this.config.keepRecentMessages)
         : Math.max(0, messages.length - this.config.keepRecentMessages);
 
+    let closedToolChars = 0;
+    for (let i = 0; i < boundary; i++) {
+      const m = messages[i];
+      if (m.role === 'tool' && typeof m.content === 'string') closedToolChars += m.content.length;
+    }
+    if (closedToolChars < this.config.minTotalToolChars) {
+      return this.markAsExecuted(context);
+    }
+
     // Pass 1 — index events inside the closed history that invalidate earlier
     // results:
     // - writes per file path (any writeFile/editFile result row marks a write)
     // - read windows per path, to find reads fully covered by a later re-read
+    // Failed results index nothing: a failed write did not supersede anything,
+    // a failed read covers nothing.
     const lastWriteIndexByPath = new Map<string, number>();
     const readWindowsByPath = new Map<string, { end: number; index: number; start: number }[]>();
 
     for (let index = 0; index < boundary; index++) {
       const m = messages[index];
       if (m.role !== 'tool') continue;
+      if (m.pluginError) continue;
       const plugin = getPlugin(m);
       if (plugin?.identifier !== LOCAL_SYSTEM) continue;
 
@@ -254,14 +293,9 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       if (WRITE_APIS.has(plugin.apiName ?? '')) {
         lastWriteIndexByPath.set(path, index);
       } else if (READ_APIS.has(plugin.apiName ?? '')) {
-        const loc = locOf(m, plugin);
+        const loc = effectiveReadWindow(m, plugin);
         const windows = readWindowsByPath.get(path) ?? [];
-        windows.push(
-          loc
-            ? { end: loc[1], index, start: loc[0] }
-            : // A full-file read covers every earlier window of the same file
-              { end: Number.POSITIVE_INFINITY, index, start: Number.NEGATIVE_INFINITY },
-        );
+        windows.push({ end: loc[1], index, start: loc[0] });
         readWindowsByPath.set(path, windows);
       }
     }
@@ -304,10 +338,10 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       (s, c) => s + (messages[c.index].content as string).length - c.content.length,
       0,
     );
-    const triggeredAt = Date.parse(messages[lastUserIndex]?.createdAt ?? '');
-    const prevActivityAt = Date.parse(messages[lastUserIndex - 1]?.createdAt ?? '');
+    const triggeredAt = toEpochMs(messages[lastUserIndex]?.createdAt);
+    const prevActivityAt = toEpochMs(messages[lastUserIndex - 1]?.createdAt);
     const gapMs =
-      Number.isFinite(triggeredAt) && Number.isFinite(prevActivityAt)
+      triggeredAt !== undefined && prevActivityAt !== undefined
         ? triggeredAt - prevActivityAt
         : undefined;
     const cacheWarm = gapMs !== undefined && gapMs <= this.config.cacheTtlMs;
@@ -402,17 +436,15 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
         };
       }
 
-      const loc = locOf(message, plugin);
-      if (loc) {
-        const covered = (readWindowsByPath.get(path) ?? []).some(
-          (w) => w.index > index && w.start <= loc[0] && w.end >= loc[1],
-        );
-        if (covered) {
-          return {
-            content: `[readFile result trimmed: ${path} (lines ${loc[0]}-${loc[1]}) — the same range was read again later. Refer to the newer read, or call readFile again if needed.]`,
-            rule: 'readSupersededByRead',
-          };
-        }
+      const loc = effectiveReadWindow(message, plugin);
+      const covered = (readWindowsByPath.get(path) ?? []).some(
+        (w) => w.index > index && w.start <= loc[0] && w.end >= loc[1],
+      );
+      if (covered) {
+        return {
+          content: `[readFile result trimmed: ${path} (lines ${loc[0]}-${loc[1]}) — the same range was read again later. Refer to the newer read, or call readFile again if needed.]`,
+          rule: 'readSupersededByRead',
+        };
       }
       return undefined;
     }

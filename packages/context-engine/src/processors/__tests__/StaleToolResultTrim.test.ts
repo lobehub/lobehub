@@ -375,5 +375,104 @@ describe('StaleToolResultTrimProcessor', () => {
       expect(result.messages[0].content).toContain('superseded by a later write');
       expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(1);
     });
+
+    // Regression (Codex P1): UIChatMessage.createdAt is epoch-ms NUMBER on the
+    // canonical path; Date.parse(number) yields NaN, which would silently
+    // disable the warmth gate (always "cold").
+    it('reads numeric epoch-ms timestamps for the warmth check', async () => {
+      const messages = [
+        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        writeFileResult('/a.ts'),
+        { content: 'filler', id: 'f1', role: 'assistant' },
+        { content: 'filler', id: 'f2', role: 'assistant' },
+        { content: 'filler', id: 'f3', role: 'assistant' },
+        { content: 'previous turn done', createdAt: T0, id: 'prev', role: 'assistant' },
+        { content: 'next task', createdAt: T0 + MIN, id: 'trigger', role: 'user' },
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        gapMs: MIN,
+        skippedReason: 'warm-cache',
+      });
+    });
+  });
+
+  describe('closed-history pinning', () => {
+    // Regression (Codex P1): the size gate must be measured on the closed
+    // history only — otherwise in-flight tool output trips it mid-turn and
+    // activates trims that were off at the boundary, flipping the prefix.
+    it('does not let in-flight tool output trip the minimum-size gate mid-turn', async () => {
+      const processor = new StaleToolResultTrimProcessor({
+        keepRecentMessages: 3,
+        minTotalToolChars: 10_000,
+      });
+      const messages = [
+        readFileResult('/a.ts', 'x'.repeat(3000), [0, 200]), // closed history: 3k < 10k gate
+        writeFileResult('/a.ts'),
+        { content: 'start', id: 'u1', role: 'user' },
+        // in-flight tool output pushes total tool chars past the gate
+        toolMessage('lobe-local-system', 'runCommand', 'y'.repeat(50_000)),
+        ...recencyPadding(3),
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(result.messages[0].content).toBe('x'.repeat(3000));
+      expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
+    });
+  });
+
+  describe('invalidation index hygiene', () => {
+    // Regression (Codex P2): a FAILED write must not supersede a good read.
+    it('ignores failed writes when superseding reads', async () => {
+      const messages = [
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        toolMessage('lobe-local-system', 'writeFile', 'Error: disk full', {
+          plugin: {
+            apiName: 'writeFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginError: { message: 'disk full' },
+          pluginState: { path: '/a.ts', success: false },
+        }),
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toBe('x'.repeat(5000));
+    });
+
+    // Regression (Codex P2): an omitted loc means the service's [0, 200]
+    // default window, not a full-file read.
+    it('treats an omitted loc as the default [0, 200] window', async () => {
+      const messages = [
+        readFileResult('/a.ts', 'first-window', undefined),
+        readFileResult('/a.ts', 'first-window-again', undefined),
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toContain('the same range was read again later');
+    });
+
+    it('a default-window re-read does not cover an explicit later range', async () => {
+      const messages = [
+        readFileResult('/a.ts', 'middle chunk', [300, 400]),
+        readFileResult('/a.ts', 'default window', undefined),
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toBe('middle chunk');
+    });
   });
 });
