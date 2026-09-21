@@ -180,53 +180,54 @@ export const buildServerCallLlmContext = async ({
     ...(facts.step.onboardingContext && { onboardingContext: facts.step.onboardingContext }),
   };
 
-  const processedMessages = await agentRuntimeTracer.startActiveSpan(
-    CONTEXT_ENGINEERING_SPAN_NAME,
-    {
-      attributes: buildContextEngineeringAttributes({
-        hasImages: (messagesForContext as Array<{ content?: unknown }>).some(
-          (message) =>
-            Array.isArray(message.content) &&
-            (message.content as Array<{ type?: string }>).some(
-              (part) => part?.type === 'image_url',
-            ),
-        ),
-        historyCompressed:
-          Array.isArray(messagesForContext) &&
-          messagesForContext.some(
-            (message: { role?: string }) => message?.role === 'compressedGroup',
+  const { messages: processedMessages, metadata: ceMetadata } =
+    await agentRuntimeTracer.startActiveSpan(
+      CONTEXT_ENGINEERING_SPAN_NAME,
+      {
+        attributes: buildContextEngineeringAttributes({
+          hasImages: (messagesForContext as Array<{ content?: unknown }>).some(
+            (message) =>
+              Array.isArray(message.content) &&
+              (message.content as Array<{ type?: string }>).some(
+                (part) => part?.type === 'image_url',
+              ),
           ),
-        knowledgeCount:
-          (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) +
-          (contextEngineInput.knowledge?.fileContents?.length ?? 0),
-        knowledgeInjected:
-          (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
-          (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
-        memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
-        messageCount: messagesForContext.length,
-        operationId,
-        stepIndex,
-        systemRoleLength: contextEngineInput.systemRole?.length,
-        toolCount: contextEngineInput.toolsConfig?.tools?.length ?? 0,
-      }),
-    },
-    async (ceSpan) => {
-      try {
-        const result = await serverMessagesEngine(contextEngineInput);
-        ceSpan.setAttribute('lobehub.context.message_count', result.length);
-        return result;
-      } catch (error) {
-        ceSpan.recordException(error as Error);
-        ceSpan.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      } finally {
-        ceSpan.end();
-      }
-    },
-  );
+          historyCompressed:
+            Array.isArray(messagesForContext) &&
+            messagesForContext.some(
+              (message: { role?: string }) => message?.role === 'compressedGroup',
+            ),
+          knowledgeCount:
+            (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) +
+            (contextEngineInput.knowledge?.fileContents?.length ?? 0),
+          knowledgeInjected:
+            (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
+            (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
+          memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
+          messageCount: messagesForContext.length,
+          operationId,
+          stepIndex,
+          systemRoleLength: contextEngineInput.systemRole?.length,
+          toolCount: contextEngineInput.toolsConfig?.tools?.length ?? 0,
+        }),
+      },
+      async (ceSpan) => {
+        try {
+          const result = await serverMessagesEngine(contextEngineInput);
+          ceSpan.setAttribute('lobehub.context.message_count', result.messages.length);
+          return result;
+        } catch (error) {
+          ceSpan.recordException(error as Error);
+          ceSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        } finally {
+          ceSpan.end();
+        }
+      },
+    );
 
   const {
     messages: _inputMsgs,
@@ -236,6 +237,7 @@ export const buildServerCallLlmContext = async ({
   ctx.tracingContextEngine?.(
     { ...contextEngineInputLite, toolCount: _toolsConfig?.tools?.length ?? 0 },
     processedMessages,
+    ceMetadata,
   );
 
   return {
