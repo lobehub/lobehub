@@ -142,6 +142,7 @@ export const buildServerCallLlmContext = async ({
     }),
     historyCount,
     initialContext: (state as any).initialContext?.initialContext,
+    inputTemplate: agentConfig.chatConfig?.inputTemplate ?? undefined,
     knowledge: {
       fileContents: agentConfig.files
         ?.filter((file: { enabled?: boolean | null }) => file.enabled === true)
