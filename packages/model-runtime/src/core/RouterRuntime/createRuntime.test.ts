@@ -979,6 +979,39 @@ describe('createRouterRuntime', () => {
       expect(returned).toHaveBeenCalledTimes(2);
     });
 
+    it('does not mark attempts as managed when request task registration fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const returned = vi.fn().mockResolvedValue(undefined);
+      const finished = vi.fn().mockResolvedValue(undefined);
+      class MockRuntime implements LobeRuntimeAI {
+        chat = async (_payload: unknown, options?: ChatMethodOptions) =>
+          createChatResponse(options, { final: { text: 'answer' }, text: 'answer' });
+      }
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        onRouteAttempt: returned,
+        onRouteAttemptFinished: finished,
+        routers: [{ apiType: 'openai', models: ['gpt-4'], options: {}, runtime: MockRuntime }],
+        scheduleRouteRequestSettled: async () => {
+          throw new Error('request scope unavailable');
+        },
+        shouldFallbackChatAttempt: () => true,
+      });
+
+      const response = await new Runtime().chat({ messages: [], model: 'gpt-4' });
+      expect(await response.text()).toBe('answer');
+      expect(returned).toHaveBeenCalledWith(
+        expect.objectContaining({ routeRequestManaged: false }),
+      );
+      expect(finished).toHaveBeenCalledWith(
+        expect.objectContaining({ routeRequestManaged: false }),
+      );
+      expect(consoleError).toHaveBeenCalledWith(
+        '[RouterRuntime] Failed to schedule route request work:',
+        expect.objectContaining({ message: 'request scope unavailable' }),
+      );
+    });
+
     it('returns a non-streaming JSON response without retrying another route', async () => {
       const finished = vi.fn();
       const returned = vi.fn().mockResolvedValue(undefined);

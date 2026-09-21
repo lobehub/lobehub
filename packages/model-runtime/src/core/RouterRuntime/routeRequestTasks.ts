@@ -14,6 +14,8 @@ export const createRouteRequestTasks = async (
     await schedule(settled);
   } catch (error) {
     console.error('[RouterRuntime] Failed to schedule route request work:', error);
+    resolveTerminal();
+    return undefined;
   }
 
   return {
