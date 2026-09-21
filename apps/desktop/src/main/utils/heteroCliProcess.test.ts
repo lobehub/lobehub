@@ -22,6 +22,34 @@ describe('commandLineLooksLikeHeteroCli', () => {
     );
   });
 
+  it('matches a Windows executable token regardless of case and suffix', () => {
+    expect(
+      commandLineLooksLikeHeteroCli(
+        'C:\\Users\\me\\bin\\Claude.exe -p --output-format stream-json',
+        {
+          agentType: 'claude-code',
+          command: 'claude',
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects an unrelated process that merely mentions the CLI name', () => {
+    // Substring matching would have killed this process tree.
+    expect(
+      commandLineLooksLikeHeteroCli('python /tmp/claude-cleanup.py --force', {
+        agentType: 'claude-code',
+        command: 'claude',
+      }),
+    ).toBe(false);
+    expect(
+      commandLineLooksLikeHeteroCli('/usr/bin/grep -r claude /var/log', {
+        agentType: 'claude-code',
+        command: 'claude',
+      }),
+    ).toBe(false);
+  });
+
   it('rejects an unrelated process that recycled the pid', () => {
     expect(
       commandLineLooksLikeHeteroCli('/Applications/Safari.app/Contents/MacOS/Safari', {

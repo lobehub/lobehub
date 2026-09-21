@@ -176,7 +176,7 @@ export const getEffectiveAgencyConfig = (agentId: string) => {
  * over the agent-level default, so regenerate/continue stay on the same project
  * as the original turn.
  */
-const resolveHeteroRunContext = (
+export const resolveHeteroRunContext = (
   chatStore: ReturnType<typeof useChatStore.getState>,
   context: ConversationContext,
   agentId: string,

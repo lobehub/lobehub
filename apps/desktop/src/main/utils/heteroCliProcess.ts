@@ -1,22 +1,44 @@
 import { execFile } from 'node:child_process';
 
 /**
+ * Basename of an argv token, lowercased and without a Windows executable
+ * suffix: `/usr/local/bin/claude` and `C:\\bin\\Claude.exe` both yield `claude`.
+ */
+const tokenIdentity = (token: string): string => {
+  const name = token.split(/[/\\]/).pop() ?? token;
+  return name.toLowerCase().replace(/\.(?:exe|cmd|bat)$/, '');
+};
+
+/**
  * Whether a live process's command line plausibly belongs to a recorded
- * heterogeneous-agent CLI run. Pids are recycled, so before an orphaned run
- * is signalled its pid must still look like the CLI that was spawned — the
- * command basename recorded at spawn time (e.g. `claude`, `codex`) or, as a
- * fallback, the agent type itself.
+ * heterogeneous-agent CLI run. Pids are recycled, so an orphan is only
+ * signalled when its command line still carries the CLI that was spawned.
+ *
+ * Only tokens that can BE the program are considered: the first token, or any
+ * token spelled as a path (the CLI is often launched through an interpreter,
+ * `node /path/bin/claude …`). A plain substring — or any argv token — would
+ * accept unrelated processes that merely name it (`grep -r claude /var/log`,
+ * `python /tmp/claude-cleanup.py`) and kill their whole process tree.
  */
 export const commandLineLooksLikeHeteroCli = (
   commandLine: string | undefined,
   run: { agentType: string; command?: string },
 ): boolean => {
   if (!commandLine) return false;
-  const haystack = commandLine.toLowerCase();
-  const needles = [run.command, run.agentType]
-    .filter((value): value is string => !!value)
-    .map((value) => value.toLowerCase());
-  return needles.some((needle) => haystack.includes(needle));
+  const needles = new Set(
+    [run.command, run.agentType]
+      .filter((value): value is string => !!value)
+      .map((value) => tokenIdentity(value)),
+  );
+  if (needles.size === 0) return false;
+
+  return commandLine
+    .trim()
+    .split(/\s+/)
+    .some((token, index) => {
+      const isProgramPosition = index === 0 || /[/\\]/.test(token);
+      return isProgramPosition && needles.has(tokenIdentity(token));
+    });
 };
 
 const run = (file: string, args: string[]): Promise<string | undefined> =>

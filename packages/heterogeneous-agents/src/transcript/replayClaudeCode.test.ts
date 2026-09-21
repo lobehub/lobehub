@@ -197,6 +197,64 @@ describe('buildClaudeCodeReplayTurn', () => {
     expect(parsed.filter((p) => p.uuid === 'ra')).toHaveLength(1);
   });
 
+  it('holds a bundled parallel result until every call it answers is registered', async () => {
+    // The API returns parallel tool results as ONE user record answering both
+    // calls; emitting it on the first call would deliver b's result before b
+    // was registered.
+    const bundled = line({
+      ...base,
+      message: {
+        content: [
+          { content: 'out-a', tool_use_id: 'toolu_a', type: 'tool_result' },
+          { content: 'out-b', tool_use_id: 'toolu_b', type: 'tool_result' },
+        ],
+        role: 'user',
+      },
+      parentUuid: 'm2b',
+      timestamp: '2026-09-21T02:00:02.000Z',
+      type: 'user',
+      uuid: 'rboth',
+    });
+    const transcript = [
+      ...FIRST_TURN,
+      userPrompt('u2', 'm1', 'second request'),
+      assistant('m2a', 'u2', 'msg_2', bash('toolu_a', 'ls a'), 'tool_use'),
+      assistant('m2b', 'm2a', 'msg_2', bash('toolu_b', 'ls b'), 'tool_use'),
+      bundled,
+      assistant('m3', 'rboth', 'msg_3', { text: 'both done', type: 'text' }, 'end_turn'),
+      line({ leafUuid: 'm3', type: 'last-prompt' }),
+    ].join('\n');
+
+    const turn = buildClaudeCodeReplayTurn(transcript)!;
+    const parsed = turn.lines.map((l) => JSON.parse(l));
+
+    // The bundled record lands only after BOTH tool_use lines.
+    expect(parsed.map((p) => p.type)).toEqual([
+      'system',
+      'assistant',
+      'assistant',
+      'user',
+      'assistant',
+      'result',
+    ]);
+    expect(parsed[3].uuid).toBe('rboth');
+    // It is written once, not once per answered call.
+    expect(parsed.filter((p) => p.uuid === 'rboth')).toHaveLength(1);
+    expect(turn.complete).toBe(true);
+
+    // The real adapter resolves both calls successfully.
+    const pipeline = new AgentStreamPipeline({ agentType: 'claude-code', operationId: 'op-1' });
+    const events = [];
+    for (const l of turn.lines) events.push(...(await pipeline.push(`${l}\n`)));
+    events.push(...(await pipeline.flush()));
+
+    const toolEnds = events.filter((e) => e.type === 'tool_end') as any[];
+    expect(toolEnds.map((e) => [e.data.toolCallId, e.data.isSuccess])).toEqual([
+      ['toolu_a', true],
+      ['toolu_b', true],
+    ]);
+  });
+
   it('does not anchor on the meta follow-up the CLI injects after an interrupt', () => {
     const transcript = [
       ...FIRST_TURN,

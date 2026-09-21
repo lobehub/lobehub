@@ -34,9 +34,11 @@ vi.mock('@/services/agent', () => ({
 const mockRunHetero = vi.fn();
 const mockEnsureAccess = vi.fn(async (..._args: unknown[]) => {});
 const mockGetAgencyConfig = vi.fn();
+const mockResolveRunContext = vi.fn();
 vi.mock('@/features/Conversation/store/slices/generation/action', () => ({
   ensureEffectiveAgencyAccess: (...args: unknown[]) => mockEnsureAccess(...args),
   getEffectiveAgencyConfig: (...args: unknown[]) => mockGetAgencyConfig(...args),
+  resolveHeteroRunContext: (...args: unknown[]) => mockResolveRunContext(...args),
   runHeterogeneousFromExistingMessage: (...args: unknown[]) => mockRunHetero(...args),
 }));
 
@@ -104,6 +106,16 @@ describe('recoverInterruptedHeteroRuns', () => {
     mockGetAgencyConfig.mockReturnValue({
       agencyConfig: { heterogeneousProvider: provider },
     });
+    // Mirror the real resolver: it reads the (possibly just-patched) topic.
+    mockResolveRunContext.mockImplementation((...args: any[]) => {
+      const topicArg = args[3];
+      const cwd = topicArg?.metadata?.workingDirectory ?? '/repo';
+      return {
+        cwdChanged: false,
+        resumeSessionId: topicArg?.metadata?.heteroSessionIdByWorkingDirectory?.[cwd],
+        workingDirectory: cwd,
+      };
+    });
   });
 
   it('does nothing when the ledger is empty', async () => {
@@ -130,6 +142,8 @@ describe('recoverInterruptedHeteroRuns', () => {
       cwd: '/repo',
       sessionId: 'cc-1',
     });
+    // The probe identity comes from the resolver the run itself uses.
+    expect(mockResolveRunContext).toHaveBeenCalled();
     expect(chatStore.updateTopicMetadata).not.toHaveBeenCalled();
     // Only the interrupted turn's own rows go; earlier turns and thread rows stay.
     expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
@@ -304,6 +318,70 @@ describe('recoverInterruptedHeteroRuns', () => {
     await recoverInterruptedHeteroRuns();
 
     expect(chatStore.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('leaves a topic alone when a newer turn took it over while the app was down', async () => {
+    // Another device started a turn after our run was spawned: its user row is
+    // newer than the ledger entry. Touching it would delete that live run's
+    // output, and settling would clobber its status.
+    mockGetMessages.mockResolvedValue([
+      ...messages,
+      {
+        content: 'newer turn',
+        createdAt: Date.parse(run.startedAt) + 1000,
+        id: 'u2',
+        role: 'user',
+      },
+    ]);
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'topic-taken-over', topicId: 'topic-1' },
+    ]);
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    expect(mockRunHetero).not.toHaveBeenCalled();
+    expect(chatStore.updateTopicStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps the rows when the saved session cannot be resumed under the current binding', async () => {
+    // The shared resolver rejects the session (auth binding changed while the
+    // app was down); deleting rows first would lose the output for nothing.
+    mockResolveRunContext.mockReturnValue({
+      cwdChanged: false,
+      reason: 'binding_changed',
+      resumeSessionId: undefined,
+      workingDirectory: '/repo',
+    });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'resume-unavailable', topicId: 'topic-1' },
+    ]);
+    expect(mockProbeTranscriptReplay).not.toHaveBeenCalled();
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    expect(chatStore.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('settles the topic when the pre-flight agent load fails', async () => {
+    // The ledger entry is already consumed, so a throw here would otherwise
+    // leave the topic spinning until the stale-topic watchdog runs.
+    mockGetAgentConfigById.mockRejectedValue(new Error('network down'));
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([{ outcome: 'failed', reason: 'network down', topicId: 'topic-1' }]);
+    expect(chatStore.failOperation).not.toHaveBeenCalled();
+    expect(chatStore.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      status: 'active',
+      topicId: 'topic-1',
+    });
   });
 
   it('recovers each topic once even when the ledger holds duplicate entries', async () => {

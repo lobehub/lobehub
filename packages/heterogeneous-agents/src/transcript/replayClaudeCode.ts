@@ -128,7 +128,10 @@ export const buildClaudeCodeReplayTurn = (content: string): ClaudeCodeReplayTurn
 
   // Every tool_result in the file, by the tool_use it answers. Parallel tool
   // calls park their results on sibling branches the trunk walk never visits.
+  // A single record can answer SEVERAL calls (the API bundles parallel results
+  // into one user message), so the reverse index is kept too.
   const toolResultByUseId = new Map<string, any>();
+  const answeredIdsByRecord = new Map<string, string[]>();
   for (const record of records) {
     if (record?.type !== 'user' || record.isSidechain) continue;
     const blocks = record.message?.content;
@@ -136,7 +139,21 @@ export const buildClaudeCodeReplayTurn = (content: string): ClaudeCodeReplayTurn
     for (const block of blocks) {
       if (block?.type === 'tool_result' && block.tool_use_id) {
         toolResultByUseId.set(block.tool_use_id, record);
+        const answered = answeredIdsByRecord.get(record.uuid) ?? [];
+        answered.push(block.tool_use_id);
+        answeredIdsByRecord.set(record.uuid, answered);
       }
+    }
+  }
+
+  // Every tool_use this turn issues. A bundled result may also answer calls
+  // from an earlier turn; those must not hold the record back forever.
+  const turnToolUseIds = new Set<string>();
+  for (const record of turn) {
+    if (record.type !== 'assistant') continue;
+    const blocks = Array.isArray(record.message?.content) ? record.message.content : [];
+    for (const block of blocks) {
+      if (block?.type === 'tool_use' && block.id) turnToolUseIds.add(block.id);
     }
   }
 
@@ -148,6 +165,9 @@ export const buildClaudeCodeReplayTurn = (content: string): ClaudeCodeReplayTurn
   let dangling = false;
   let recordCount = 0;
 
+  /** tool_use ids already written to the stream — see `emitToolResult`. */
+  const openedToolUseIds = new Set<string>();
+
   const emitToolResult = (toolUseId: string) => {
     const record = toolResultByUseId.get(toolUseId);
     if (!record) {
@@ -155,6 +175,16 @@ export const buildClaudeCodeReplayTurn = (content: string): ClaudeCodeReplayTurn
       return;
     }
     if (emitted.has(record.uuid)) return;
+
+    // Hold a bundled record until every call it answers has been written.
+    // Emitting it on the first call would hand the consumer a result for a
+    // tool it has not registered yet — dropped as unknown, and never retried
+    // because the record is then marked emitted.
+    const pending = (answeredIdsByRecord.get(record.uuid) ?? []).filter(
+      (id) => turnToolUseIds.has(id) && !openedToolUseIds.has(id),
+    );
+    if (pending.length > 0) return;
+
     emitted.add(record.uuid);
     lines.push(toUserLine(record, sessionId));
     recordCount++;
@@ -172,6 +202,11 @@ export const buildClaudeCodeReplayTurn = (content: string): ClaudeCodeReplayTurn
       recordCount++;
 
       const blocks = Array.isArray(record.message?.content) ? record.message.content : [];
+      // Register every call this record opens BEFORE resolving any of them, so
+      // a record bundling this message's own parallel results is not held back.
+      for (const block of blocks) {
+        if (block?.type === 'tool_use' && block.id) openedToolUseIds.add(block.id);
+      }
       for (const block of blocks) {
         if (block?.type === 'tool_use' && block.id) emitToolResult(block.id);
       }

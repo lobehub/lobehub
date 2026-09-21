@@ -4,6 +4,7 @@ import type { ChatTopic, ConversationContext, UIChatMessage } from '@lobechat/ty
 import {
   ensureEffectiveAgencyAccess,
   getEffectiveAgencyConfig,
+  resolveHeteroRunContext,
   runHeterogeneousFromExistingMessage,
 } from '@/features/Conversation/store/slices/generation/action';
 import {
@@ -50,6 +51,8 @@ interface InterruptedRun {
   configDir?: string;
   cwd?: string;
   ipcSessionId: string;
+  /** ISO timestamp of the spawn — the ownership token for the topic's latest turn. */
+  startedAt?: string;
   topicId?: string;
 }
 
@@ -97,88 +100,119 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     return { outcome: 'skipped', reason: 'unsupported-run', topicId };
   }
 
-  await ensureAgentLoaded(agentId);
-  await ensureEffectiveAgencyAccess(agentId);
-  const heterogeneousProvider =
-    getEffectiveAgencyConfig(agentId).agencyConfig?.heterogeneousProvider;
-  if (heterogeneousProvider?.type !== 'claude-code') {
-    await settle();
-    return { outcome: 'skipped', reason: 'provider-mismatch', topicId };
-  }
-
-  const context: ConversationContext = { agentId, topicId };
-
-  // The topic's resume metadata is written by the renderer as the stream
-  // starts; a quit that lands between main patching the ledger and that write
-  // settling leaves the topic without a session id even though the ledger
-  // knows it. Restore the write from the ledger so the run stays resumable.
-  const workingDirectory = topic.metadata?.workingDirectory ?? run.cwd;
-  let sessionId = getHeteroSessionIdForWorkingDirectory(topic.metadata, workingDirectory);
-  if (!sessionId && run.agentSessionId && workingDirectory) {
-    sessionId = run.agentSessionId;
-    const patch = {
-      heteroSessionId: sessionId,
-      heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
-        topic.metadata,
-        workingDirectory,
-        sessionId,
-      ),
-      workingDirectory,
-    };
-    await chatStore.updateTopicMetadata(topicId, patch);
-    topic.metadata = { ...topic.metadata, ...patch };
-  }
-
-  // Nothing is touched until the transcript is known to be readable: the
-  // rows already persisted are the only record of the run when it is not.
-  const probe = await heterogeneousAgentService.probeTranscriptReplay({
-    agentType: run.agentType,
-    configDir: run.configDir,
-    cwd: workingDirectory,
-    sessionId,
-  });
-  if (!probe.available) {
-    await settle();
-    return { outcome: 'skipped', reason: `no-transcript: ${probe.reason ?? 'unknown'}`, topicId };
-  }
-
-  const allMessages = await messageService.getMessages(context);
-  const mainChain = mainChainOf(allMessages);
-  const userTurn = mainChain.findLast((message) => message.role === 'user');
-  if (!userTurn) {
-    await settle();
-    return { outcome: 'skipped', reason: 'no-user-turn', topicId };
-  }
-
-  // Everything the interrupted turn persisted is a partial view of what the
-  // transcript holds in full — replace it rather than try to stitch.
-  const userAt = toTime(userTurn.createdAt);
-  const staleIds = mainChain
-    .filter(
-      (message) =>
-        message.id !== userTurn.id &&
-        message.role !== 'user' &&
-        toTime(message.createdAt) >= userAt,
-    )
-    .map((message) => message.id);
-  if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
-
-  // Seed the in-memory list ourselves: while the recovery op is running, the
-  // topic's own fetch is gated off (a mid-run snapshot would clobber streamed
-  // rows), so without this the surviving user turn never reaches the view
-  // and only the rows the executor dispatches would render.
-  const staleIdSet = new Set(staleIds);
-  chatStore.replaceMessages(
-    allMessages.filter((message) => !staleIdSet.has(message.id)),
-    { action: 'restartRecovery', context },
-  );
-
-  const { operationId } = chatStore.startOperation({
-    context: { ...context, messageId: userTurn.id },
-    type: 'regenerate',
-  });
-
+  // Every failure from here on has to put the topic down: `listInterruptedRuns`
+  // already consumed the ledger entry, so nothing will retry this run and the
+  // topic would otherwise spin until the two-hour stale watchdog notices.
+  let operationId: string | undefined;
   try {
+    await ensureAgentLoaded(agentId);
+    await ensureEffectiveAgencyAccess(agentId);
+    const heterogeneousProvider =
+      getEffectiveAgencyConfig(agentId).agencyConfig?.heterogeneousProvider;
+    if (heterogeneousProvider?.type !== 'claude-code') {
+      await settle();
+      return { outcome: 'skipped', reason: 'provider-mismatch', topicId };
+    }
+
+    const context: ConversationContext = { agentId, topicId };
+
+    // The topic's resume metadata is written by the renderer as the stream
+    // starts; a quit that lands between main patching the ledger and that write
+    // settling leaves the topic without a session id even though the ledger
+    // knows it. Restore the write from the ledger so the run stays resumable.
+    const ledgerCwd = topic.metadata?.workingDirectory ?? run.cwd;
+    if (
+      run.agentSessionId &&
+      ledgerCwd &&
+      !getHeteroSessionIdForWorkingDirectory(topic.metadata, ledgerCwd)
+    ) {
+      const patch = {
+        heteroSessionId: run.agentSessionId,
+        heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
+          topic.metadata,
+          ledgerCwd,
+          run.agentSessionId,
+        ),
+        workingDirectory: ledgerCwd,
+      };
+      await chatStore.updateTopicMetadata(topicId, patch);
+      topic.metadata = { ...topic.metadata, ...patch };
+    }
+
+    // Ask the SAME resolver the run itself will use. Comparing adapter types is
+    // not enough: an auth binding the user changed while the app was down makes
+    // the saved session unresumable, and finding that out after the rows are
+    // gone would lose the output for nothing.
+    const { resumeSessionId, workingDirectory } = resolveHeteroRunContext(
+      chatStore,
+      context,
+      agentId,
+      topic as ChatTopic,
+    );
+    if (!resumeSessionId) {
+      await settle();
+      return { outcome: 'skipped', reason: 'resume-unavailable', topicId };
+    }
+
+    // Nothing is touched until the transcript is known to be readable: the
+    // rows already persisted are the only record of the run when it is not.
+    const probe = await heterogeneousAgentService.probeTranscriptReplay({
+      agentType: run.agentType,
+      configDir: run.configDir,
+      cwd: workingDirectory,
+      sessionId: resumeSessionId,
+    });
+    if (!probe.available) {
+      await settle();
+      return { outcome: 'skipped', reason: `no-transcript: ${probe.reason ?? 'unknown'}`, topicId };
+    }
+
+    const allMessages = await messageService.getMessages(context);
+    const mainChain = mainChainOf(allMessages);
+    const userTurn = mainChain.findLast((message) => message.role === 'user');
+    if (!userTurn) {
+      await settle();
+      return { outcome: 'skipped', reason: 'no-user-turn', topicId };
+    }
+
+    // The topic is `running` — but is it running OUR run? Another device may
+    // have started a newer turn on it while this desktop was down. Its user row
+    // postdates our spawn, and recovering would delete that live run's output
+    // and replay a stale session over it. Leave the topic completely alone:
+    // settling it would also clobber the other device's status.
+    const startedAt = run.startedAt ? Date.parse(run.startedAt) : Number.NaN;
+    if (Number.isFinite(startedAt) && toTime(userTurn.createdAt) > startedAt) {
+      return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
+    }
+
+    // Everything the interrupted turn persisted is a partial view of what the
+    // transcript holds in full — replace it rather than try to stitch.
+    const userAt = toTime(userTurn.createdAt);
+    const staleIds = mainChain
+      .filter(
+        (message) =>
+          message.id !== userTurn.id &&
+          message.role !== 'user' &&
+          toTime(message.createdAt) >= userAt,
+      )
+      .map((message) => message.id);
+    if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
+
+    // Seed the in-memory list ourselves: while the recovery op is running, the
+    // topic's own fetch is gated off (a mid-run snapshot would clobber streamed
+    // rows), so without this the surviving user turn never reaches the view
+    // and only the rows the executor dispatches would render.
+    const staleIdSet = new Set(staleIds);
+    chatStore.replaceMessages(
+      allMessages.filter((message) => !staleIdSet.has(message.id)),
+      { action: 'restartRecovery', context },
+    );
+
+    operationId = chatStore.startOperation({
+      context: { ...context, messageId: userTurn.id },
+      type: 'regenerate',
+    }).operationId;
+
     const { replayComplete } = await runHeterogeneousFromExistingMessage(chatStore, {
       context,
       heterogeneousProvider,
@@ -210,24 +244,22 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     chatStore.completeOperation(operationId);
     return { outcome: 'resumed', topicId };
   } catch (error) {
-    chatStore.failOperation(operationId, {
-      message: error instanceof Error ? error.message : String(error),
-      type: 'RestartRecoveryError',
-    });
-    // A failure before the executor took ownership (row creation, resume
-    // metadata resolution) leaves the topic `running` with nobody left to
-    // reset it. The executor writes its own terminal status, so only a topic
-    // still marked running is settled here.
+    const message = error instanceof Error ? error.message : String(error);
+    if (operationId) {
+      chatStore.failOperation(operationId, { message, type: 'RestartRecoveryError' });
+    }
+    // The executor writes its own terminal status once it owns the run, so
+    // only a topic still marked running is put down here.
     const current = await topicService.getTopicDetail(topicId).catch(() => null);
     if (current?.status === 'running') await settle().catch(() => {});
-    return {
-      outcome: 'failed',
-      reason: error instanceof Error ? error.message : String(error),
-      topicId,
-    };
+    return { outcome: 'failed', reason: message, topicId };
   } finally {
-    // Reconcile with the server snapshot now that nothing is streaming.
-    await chatStore.refreshMessages(context).catch(() => {});
+    // Reconcile with the server snapshot now that nothing is streaming. Only
+    // meaningful once a run actually started; the early exits above never
+    // touched the in-memory list.
+    if (operationId) {
+      await chatStore.refreshMessages({ agentId, topicId }).catch(() => {});
+    }
   }
 };
 
