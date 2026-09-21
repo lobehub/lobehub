@@ -1,13 +1,11 @@
 'use client';
 
-import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import { Flexbox, TextArea } from '@lobehub/ui';
 import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { debounce } from 'es-toolkit/compat';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -37,6 +35,7 @@ import {
 } from './documentViewContext';
 import EditorCanvas from './EditorCanvas';
 import TodoList from './TodoList';
+import { useHighlightSave } from './useHighlightSave';
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`
@@ -218,107 +217,30 @@ interface HighlightEditorProps {
   content: string;
   documentId: string;
   filename: string;
-  onSaved: (newContent: string) => void;
+  onSaved: (newContent: string, updatedAt?: string) => void;
+  updatedAt?: Date;
 }
 
-const HighlightEditor = memo<HighlightEditorProps>(({ content, documentId, filename, onSaved }) => {
-  const [buffer, setBuffer] = useState<string | undefined>(undefined);
-  const editingValue = buffer ?? content;
+const HighlightEditor = memo<HighlightEditorProps>(
+  ({ content, documentId, filename, onSaved, updatedAt }) => {
+    const { editingValue, handleChange, handleSave } = useHighlightSave({
+      content,
+      documentId,
+      onSaved,
+      updatedAt,
+    });
 
-  const bufferRef = useRef(buffer);
-  const documentIdRef = useRef(documentId);
-  const onSavedRef = useRef(onSaved);
-  bufferRef.current = buffer;
-  documentIdRef.current = documentId;
-  onSavedRef.current = onSaved;
-
-  const writeBuffer = useCallback(async (source: 'manual' | 'autosave') => {
-    const toWrite = bufferRef.current;
-    if (toWrite === undefined) return;
-    try {
-      await documentService.updateDocument({
-        content: toWrite,
-        id: documentIdRef.current,
-        saveSource: source,
-      });
-      // Update SWR cache before clearing the buffer so the editor's value prop
-      // never falls back to stale content, which would otherwise reset the cursor.
-      onSavedRef.current(toWrite);
-      if (bufferRef.current === toWrite) setBuffer(undefined);
-    } catch (error) {
-      console.error('[HighlightEditor] save failed:', error);
-    }
-  }, []);
-
-  const debouncedAutoSave = useMemo(
-    () =>
-      debounce(() => writeBuffer('autosave'), EDITOR_DEBOUNCE_TIME, {
-        leading: false,
-        maxWait: EDITOR_MAX_WAIT,
-        trailing: true,
-      }),
-    [writeBuffer],
-  );
-
-  const handleChange = useCallback(
-    (next: string) => {
-      const isDirty = next !== content;
-      setBuffer(isDirty ? next : undefined);
-      if (isDirty) debouncedAutoSave();
-      else debouncedAutoSave.cancel();
-    },
-    [content, debouncedAutoSave],
-  );
-
-  const handleSave = useCallback(async () => {
-    debouncedAutoSave.cancel();
-    await writeBuffer('manual');
-  }, [debouncedAutoSave, writeBuffer]);
-
-  const isMountedRef = useRef(false);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      debouncedAutoSave.cancel();
-      const pendingContent = bufferRef.current;
-      if (pendingContent === undefined) return;
-      const pendingDocumentId = documentIdRef.current;
-      // Defer the fire-and-forget save to a microtask so that StrictMode's synchronous
-      // unmount/remount in development does not trigger a save. If the component is
-      // immediately remounted, isMountedRef flips back to true before this runs.
-      queueMicrotask(() => {
-        if (isMountedRef.current) return;
-        void documentService.updateDocument({
-          content: pendingContent,
-          id: pendingDocumentId,
-          saveSource: 'autosave',
-        });
-      });
-    };
-  }, [debouncedAutoSave]);
-
-  useEffect(() => {
-    const handler = (event: BeforeUnloadEvent) => {
-      if (bufferRef.current === undefined) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, []);
-
-  return (
-    <CodeEditorPane
-      showStatusBar
-      filePath={filename}
-      value={editingValue}
-      onChange={handleChange}
-      onSave={handleSave}
-    />
-  );
-});
+    return (
+      <CodeEditorPane
+        showStatusBar
+        filePath={filename}
+        value={editingValue}
+        onChange={handleChange}
+        onSave={handleSave}
+      />
+    );
+  },
+);
 
 HighlightEditor.displayName = 'HighlightEditor';
 
@@ -356,10 +278,14 @@ const DocumentBody = memo(() => {
     : { mode: 'editor' as const };
 
   const handleHighlightSaved = useCallback(
-    (saved: string) => {
-      mutateDocumentMeta((prev) => (prev ? { ...prev, content: saved } : prev), {
-        revalidate: false,
-      });
+    (saved: string, updatedAt?: string) => {
+      mutateDocumentMeta(
+        (prev) =>
+          prev
+            ? { ...prev, content: saved, ...(updatedAt ? { updatedAt: new Date(updatedAt) } : {}) }
+            : prev,
+        { revalidate: false },
+      );
     },
     [mutateDocumentMeta],
   );
@@ -377,6 +303,7 @@ const DocumentBody = memo(() => {
           documentId={documentId}
           filename={documentMeta?.filename ?? ''}
           key={documentId}
+          updatedAt={documentMeta?.updatedAt}
           onSaved={handleHighlightSaved}
         />
       ) : (
