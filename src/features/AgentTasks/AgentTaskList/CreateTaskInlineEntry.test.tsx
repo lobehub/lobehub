@@ -177,6 +177,35 @@ vi.mock('../features/TaskPriorityTag', () => ({
   ),
 }));
 
+/**
+ * The run-location / working-directory cluster talks to the device list, the
+ * workspace preference and the agent store. Stubbed here so this suite stays
+ * about the composer's own contract — which is that whatever the cluster hands
+ * over is what reaches `createTask`, and that an untouched composer sends
+ * nothing at all. The cluster's own rendering is covered by its own suite.
+ */
+const executionControlsMock = vi.hoisted(() => ({
+  value: undefined as undefined | { boundDeviceId?: string },
+}));
+
+vi.mock('../features/TaskExecutionControls', () => ({
+  default: ({
+    onChange,
+    value,
+  }: {
+    onChange: (execution?: { boundDeviceId?: string }) => void;
+    value?: { boundDeviceId?: string };
+  }) => {
+    executionControlsMock.value = value;
+    return (
+      <div data-pinned={value?.boundDeviceId ?? ''} data-testid="execution-controls">
+        <span data-testid="pin-device" onClick={() => onChange({ boundDeviceId: 'device-a' })} />
+        <span data-testid="unpin-device" onClick={() => onChange(undefined)} />
+      </div>
+    );
+  },
+}));
+
 vi.mock('../features/AssigneeAgentSelector', () => ({
   default: ({
     children,
@@ -374,6 +403,68 @@ describe('CreateTaskInlineEntry', () => {
         localStorage.getItem('lobehub:task-create-draft:workspace-1:agent-locked') || '{}',
       );
       expect(draft).toMatchObject({ assigneeUserId: 'user-1' });
+    });
+  });
+
+  it('creates the task with no execution config when no run location is pinned', async () => {
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    // The whole point of the contract: an untouched composer must create the
+    // ordinary task it always did — the run inherits the assignee agent.
+    await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+    expect('config' in createTaskMock.mock.calls[0][0]).toBe(false);
+  });
+
+  it('sends the pinned device as the task execution config', async () => {
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('pin-device'));
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(createTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: {
+            execution: {
+              boundDeviceId: 'device-a',
+              repos: null,
+              workingDirectory: null,
+              workingDirectoryConfig: null,
+            },
+          },
+        }),
+      ),
+    );
+  });
+
+  it('keeps the pinned device in the draft and drops it when unpinned', async () => {
+    // The draft is only written once there is something to restore.
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
+    fireEvent.click(screen.getByTestId('pin-device'));
+
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:all') || '{}',
+      );
+      expect(draft.execution).toEqual({ boundDeviceId: 'device-a' });
+    });
+
+    rerender(<CreateTaskInlineEntry placeholder="reload" variant="hero" />);
+    fireEvent.click(screen.getByTestId('unpin-device'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('execution-controls')).toHaveAttribute('data-pinned', ''),
+    );
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:all') || '{}',
+      );
+      expect(draft.execution).toBeUndefined();
     });
   });
 
