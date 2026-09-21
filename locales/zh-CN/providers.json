@@ -27,6 +27,7 @@
   "glmcodingplan.description": "GLM Coding Plan 提供对智谱 AI 模型（包括 GLM-5 和 GLM-4.7）的访问，适用于编程任务，采用固定月费订阅模式。",
   "google.description": "Google 的 Gemini 系列是其最先进的通用 AI，由 Google DeepMind 构建，支持文本、代码、图像、音频与视频的多模态应用，具备从数据中心到移动设备的高效扩展能力。",
   "groq.description": "Groq 的 LPU 推理引擎在基准测试中表现卓越，具备极高速度与效率，为低延迟云端大模型推理设立新标杆。",
+  "hefu.description": "HeFu 是位于香港的 AI API 聚合网关，通过统一的 OpenAI 兼容接口提供 GPT、Claude、Gemini、DeepSeek、Kimi、Qwen、GLM、MiniMax、Grok 等主流模型访问，支持美元按量计费。",
   "higress.description": "Higress 是阿里巴巴内部打造的云原生 API 网关，解决 Tengine 重载对长连接的影响及 gRPC/Dubbo 负载均衡的不足。",
   "huggingface.description": "Hugging Face 推理 API 提供快速访问数千个高性能模型，适用于原型开发与机器学习实验。",
   "hunyuan.description": "腾讯自研大模型，具备强大的中文写作能力、复杂语境下的推理能力与任务执行稳定性。",
