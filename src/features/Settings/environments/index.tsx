@@ -8,9 +8,10 @@ import EnvironmentManager from '@/features/EnvironmentManager';
 import EnvironmentsGate from '@/features/EnvironmentManager/EnvironmentsGate';
 
 /**
- * Thin: the toolbar, the list and the detail panel all live in the manager, the
- * way the devices page composes its own. The page's heading comes from the
- * settings route (`tab.environments`), so nothing here repeats it.
+ * Thin: the titled group, the list and the detail panel all live in the manager,
+ * the way the devices page composes its own. The group repeats the page's name
+ * on purpose, for the same reason "My Devices" appears twice there — the header
+ * bar scrolls away, the section heading does not.
  */
 const Page = memo(() => (
   <Flexbox style={{ maxWidth: MAX_WIDTH, width: '100%' }}>

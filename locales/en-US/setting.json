@@ -554,6 +554,7 @@
   "environments.meta.creator": "Created by",
   "environments.meta.creatorTooltip": "Created by {{name}}",
   "environments.meta.unknownCreator": "Unknown",
+  "environments.mine": "My environments",
   "environments.nameLabel": "Name",
   "environments.namePlaceholder": "Environment name",
   "environments.refresh": "Refresh",

@@ -554,6 +554,7 @@
   "environments.meta.creator": "创建者",
   "environments.meta.creatorTooltip": "由 {{name}} 创建",
   "environments.meta.unknownCreator": "未知",
+  "environments.mine": "我的环境",
   "environments.nameLabel": "名称",
   "environments.namePlaceholder": "环境名称",
   "environments.refresh": "刷新",
