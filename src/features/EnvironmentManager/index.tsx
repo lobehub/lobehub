@@ -5,7 +5,7 @@ import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -66,6 +66,13 @@ const LIST_MIN_HEIGHT = 4 * 72;
  */
 interface EnvironmentManagerProps {
   /**
+   * Put beside the actions rather than above them, so the page has one header
+   * row instead of two. Passed in rather than built here because only a page
+   * with more than one pool has anything to put in it, and that page is the one
+   * that owns which pool is selected.
+   */
+  tabs?: ReactNode;
+  /**
    * Workspace pages only: which pool to manage — `public` (published to the
    * workspace) or `private` (the caller's own). Omitted on the personal page,
    * where an environment has no pool to belong to.
@@ -73,7 +80,7 @@ interface EnvironmentManagerProps {
   visibility?: EnvironmentVisibility;
 }
 
-const EnvironmentManager = memo<EnvironmentManagerProps>(({ visibility }) => {
+const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
   const { data, error, isLoading, isValidating, mutate } = useEnvironments(visibility);
   const {
@@ -114,10 +121,11 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ visibility }) => {
 
   return (
     <Flexbox gap={16}>
-      {/* Actions only. What an environment is belongs where someone is deciding
-          whether to make one — the empty state says it, and a page that already
-          has a list is answering a different question. */}
-      <Flexbox horizontal align={'center'} gap={16} justify={'flex-end'}>
+      {/* Whatever narrows the list on the left, whatever acts on it on the
+          right. With nothing to narrow by, the actions keep the row to
+          themselves rather than sitting under an empty space. */}
+      <Flexbox horizontal align={'center'} gap={16} justify={tabs ? 'space-between' : 'flex-end'}>
+        {tabs}
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           <Button
             icon={<Icon icon={RefreshCwIcon} />}
