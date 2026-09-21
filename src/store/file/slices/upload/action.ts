@@ -4,7 +4,8 @@ import { t } from 'i18next';
 
 import { handleFileUploadError } from '@/business/client/handleFileUploadError';
 import { fileService } from '@/services/file';
-import { hashFile, uploadService } from '@/services/upload';
+import { hashFile } from '@/services/hashFile';
+import { uploadService } from '@/services/upload';
 import type { StoreSetter } from '@/store/types';
 import type { UploadFileItem } from '@/types/files';
 import { getAudioDuration } from '@/utils/client/audioDuration';
@@ -69,7 +70,7 @@ interface UploadWithProgressResult {
   url: string;
 }
 
-const normalizeUploadedFileType = async (
+export const normalizeUploadedFileType = async (
   file: File,
 ): Promise<{ detectedMimeType?: string; file: File }> => {
   const { fileTypeFromBlob } = await import('file-type');
@@ -112,11 +113,13 @@ export class FileUploadActionImpl {
   uploadBase64FileWithProgress = async (
     base64: string,
   ): Promise<UploadWithProgressResult | undefined> => {
+    let uploadedPathname: string | undefined;
     try {
       // Extract image dimensions from base64 data
       const dimensions = await getImageDimensions(base64);
 
       const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
+      uploadedPathname = metadata.path;
 
       const res = await fileService.createFile({
         fileType,
@@ -126,8 +129,10 @@ export class FileUploadActionImpl {
         size,
         url: metadata.path,
       });
+      uploadedPathname = undefined;
       return { ...res, dimensions, filename: metadata.filename };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       if (handleFileUploadError(error)) return;
 
       throw error;
@@ -147,6 +152,7 @@ export class FileUploadActionImpl {
     fileMetadata,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
+    let uploadedPathname: string | undefined;
 
     try {
       const { detectedMimeType, file: normalizedFile } = await normalizeUploadedFileType(file);
@@ -160,7 +166,13 @@ export class FileUploadActionImpl {
       const dimensions = await getImageDimensions(normalizedFile);
 
       // 2. check file hash
-      const hash = await hashFile(normalizedFile, abortController?.signal);
+      const hash = await hashFile(normalizedFile, abortController?.signal, (progress) => {
+        onStatusUpdate?.({
+          id: statusId,
+          type: 'updateFile',
+          value: { status: 'pending', uploadState: { progress, restTime: 0, speed: 0 } },
+        });
+      });
 
       const checkStatus = await fileService.checkFileHash(hash);
       let metadata: ExistingFileMetadata;
@@ -201,6 +213,7 @@ export class FileUploadActionImpl {
         if (!success) return;
 
         metadata = { ...data };
+        uploadedPathname = data.path;
       }
 
       // 4. use more powerful file type detector to get file type
@@ -239,6 +252,7 @@ export class FileUploadActionImpl {
         },
         knowledgeBaseId,
       );
+      uploadedPathname = undefined;
 
       onStatusUpdate?.({
         id: statusId,
@@ -254,6 +268,7 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
+      if (uploadedPathname) await uploadService.releaseUpload(uploadedPathname);
       if (abortController?.signal.aborted) {
         onStatusUpdate?.({
           id: statusId,

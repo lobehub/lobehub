@@ -20,7 +20,9 @@ const {
   const mockTransaction = vi.fn();
   const mockServerDB = { transaction: mockTransaction };
   const mockCreateVideo = vi.fn();
-  const mockAfter = vi.fn((cb: () => void) => cb());
+  const mockAfter = vi.fn(function (cb: () => void) {
+    return cb();
+  });
   const mockFindUserById = vi.fn();
   const mockGenerationTopicFindById = vi.fn();
   const mockIsLobeHubModelAvailable = vi.fn();
@@ -43,9 +45,11 @@ const {
 
 vi.mock('@/database/models/asyncTask');
 vi.mock('@/database/models/generationTopic', () => ({
-  GenerationTopicModel: vi.fn(() => ({
-    findById: mockGenerationTopicFindById,
-  })),
+  GenerationTopicModel: vi.fn(function () {
+    return {
+      findById: mockGenerationTopicFindById,
+    };
+  }),
 }));
 vi.mock('@/server/services/file');
 vi.mock('@/database/models/user', () => ({
@@ -95,7 +99,11 @@ vi.mock('@/server/services/generation/videoBackgroundPolling', () => ({
 vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
 }));
-vi.mock('debug', () => ({ default: vi.fn(() => vi.fn()) }));
+vi.mock('debug', () => ({
+  default: vi.fn(function () {
+    return vi.fn();
+  }),
+}));
 
 // ---- helpers ----
 
@@ -137,14 +145,15 @@ const mockDbUpdate = vi.fn().mockReturnValue({
 function setupMocks() {
   const mockUpdate = vi.fn().mockResolvedValue(undefined);
 
-  vi.mocked(AsyncTaskModel).mockImplementation(() => ({ update: mockUpdate }) as any);
-  vi.mocked(FileService).mockImplementation(
-    () =>
-      ({
-        getFullFileUrl: vi.fn().mockResolvedValue(null),
-        getKeyFromFullUrl: vi.fn().mockResolvedValue(null),
-      }) as any,
-  );
+  vi.mocked(AsyncTaskModel).mockImplementation(function () {
+    return { update: mockUpdate } as any;
+  });
+  vi.mocked(FileService).mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockResolvedValue(null),
+      getKeyFromFullUrl: vi.fn().mockResolvedValue(null),
+    } as any;
+  });
 
   const mockInsert = createInsertChain();
   mockTransaction.mockImplementation(async (cb: any) =>

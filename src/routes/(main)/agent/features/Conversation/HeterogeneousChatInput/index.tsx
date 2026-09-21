@@ -26,8 +26,6 @@ import { resolveProviderBindingGuard } from '@/helpers/providerBinding';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useChatStore } from '@/store/chat';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 import ApiModeModelBar from './ApiModeModelBar';
 import HeteroPlus from './HeteroPlus';
@@ -102,12 +100,7 @@ const HeterogeneousChatInput = memo(() => {
   const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
   const providerType = heterogeneousProvider?.type;
-  const enableAgentProviderBinding = useUserStore(labPreferSelectors.enableAgentProviderBinding);
   const isApiAuth = heterogeneousProvider?.authMode === 'api';
-  const serverDefaultApiConfig =
-    isApiAuth && heterogeneousProvider.apiConfig?.source === 'server-default'
-      ? heterogeneousProvider.apiConfig
-      : undefined;
   const providerApiConfig =
     isApiAuth &&
     heterogeneousProvider.apiConfig &&
@@ -115,11 +108,6 @@ const HeterogeneousChatInput = memo(() => {
       ? heterogeneousProvider.apiConfig
       : undefined;
   const apiConfigMissing = isApiAuth && !heterogeneousProvider.apiConfig;
-  // The Labs flag gates every API-mode path, server-default included: with the
-  // flag off, an api-auth agent behaves exactly as before the feature existed.
-  const isApiModeActive =
-    enableAgentProviderBinding &&
-    (!!serverDefaultApiConfig || apiConfigMissing || !!providerApiConfig);
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     isHetero: !!providerType,
     clientExecutionAvailable: isDesktop,
@@ -141,13 +129,10 @@ const HeterogeneousChatInput = memo(() => {
       isDesktopClient: isDesktop,
       providerType,
     });
-  const showApiModeModel = !!agentId && isApiModeActive && executionTarget === 'local';
-  const apiModeLabDisabled = isApiAuth && !enableAgentProviderBinding;
-  const apiModeTargetUnsupported = isApiModeActive && executionTarget !== 'local';
+  const showApiModeModel = !!agentId && isApiAuth && executionTarget === 'local';
+  const apiModeTargetUnsupported = isApiAuth && executionTarget !== 'local';
   const validateProviderBinding =
-    enableAgentProviderBinding &&
-    (apiConfigMissing || !!providerApiConfig) &&
-    executionTarget === 'local';
+    (apiConfigMissing || !!providerApiConfig) && executionTarget === 'local';
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
     resolveProviderBindingGuard({
       active: validateProviderBinding,
@@ -235,7 +220,6 @@ const HeterogeneousChatInput = memo(() => {
     // Until the override loads, `isDeviceExecution` may be a false negative —
     // don't flash the cloud-config prompt for what turns out to be a device run.
     if (
-      apiModeLabDisabled ||
       apiModeTargetUnsupported ||
       isPreferenceLoading ||
       deviceSelectionRequired ||
@@ -252,22 +236,6 @@ const HeterogeneousChatInput = memo(() => {
         action={
           <Button size={'small'} type={'primary'} onClick={goToConfig}>
             {t('heteroAgent.cloudNotConfigured.action')}
-          </Button>
-        }
-      />
-    );
-  };
-
-  const renderApiModeLabGuard = () => {
-    if (!apiModeLabDisabled) return null;
-
-    return (
-      <GuardBanner
-        hint={t('heteroAgent.apiMode.labDisabled.desc')}
-        title={t('heteroAgent.apiMode.labDisabled.title')}
-        action={
-          <Button size={'small'} type={'primary'} onClick={() => navigate('/settings/labs')}>
-            {t('heteroAgent.apiMode.labDisabled.action')}
           </Button>
         }
       />
@@ -330,7 +298,6 @@ const HeterogeneousChatInput = memo(() => {
   // workspace preference loads, keep send disabled: the effective target isn't
   // known yet, so neither guard can vouch for the run.
   const inputDisabled =
-    apiModeLabDisabled ||
     apiModeTargetUnsupported ||
     apiModeBindingBlocked ||
     isPreferenceLoading ||
@@ -338,7 +305,6 @@ const HeterogeneousChatInput = memo(() => {
     (!isConfigured && !isDeviceExecution) ||
     deviceBlocked;
   const hasGuard =
-    apiModeLabDisabled ||
     apiModeTargetUnsupported ||
     !!apiModeBindingError ||
     deviceSelectionRequired ||
@@ -347,7 +313,6 @@ const HeterogeneousChatInput = memo(() => {
 
   return (
     <Flexbox>
-      {renderApiModeLabGuard()}
       {renderApiModeTargetGuard()}
       {renderApiModeBindingGuard()}
       {renderDeviceSelectionGuard()}

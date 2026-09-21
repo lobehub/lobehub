@@ -30,6 +30,7 @@ import { FileService } from '@/server/services/file';
 
 import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 import { planEvidenceVerification } from './evidencePlanner';
+import { resolveModelReadableFrameUrl } from './modelFrames';
 import { planItemToPendingResult } from './resultSnapshot';
 import { BatchVerdictSchema, type SingleVerdict, SingleVerdictSchema } from './schema';
 import { VerifyStatusService } from './statusService';
@@ -114,6 +115,8 @@ export class VerifyExecutorService {
    * body lives in its linked document (the single source of truth).
    */
   private async resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
+    if (item.definition || item.resourceSnapshot)
+      return JSON.stringify({ definition: item.definition, resources: item.resourceSnapshot });
     if (!item.documentId) return undefined;
     const doc = await this.documentModel.findById(item.documentId);
     return doc?.content ?? undefined;
@@ -232,10 +235,7 @@ export class VerifyExecutorService {
         if (!item.fileId || (item.type !== 'screenshot' && item.type !== 'gif')) return item;
         const file = await this.fileModel.findById(item.fileId);
         if (!file) return item;
-        return {
-          ...item,
-          accessUrl: await this.fileService.getFileAccessUrl({ id: file.id, url: file.url }),
-        };
+        return { ...item, accessUrl: await resolveModelReadableFrameUrl(this.fileService, file) };
       }),
     );
   }

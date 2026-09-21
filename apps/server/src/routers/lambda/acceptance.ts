@@ -7,25 +7,29 @@ import {
   reviewProposalEdits,
 } from '@lobechat/const/verify';
 import type { AcceptanceAttachment } from '@lobechat/types';
+import { verifyCheckDefinitionSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AcceptanceFlowModel } from '@/database/models/acceptanceFlow';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ProjectModel } from '@/database/models/project';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
+import { users } from '@/database/schemas';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { FileService } from '@/server/services/file';
 import {
   AcceptanceService,
   buildAcceptanceCheckUnion,
@@ -33,6 +37,8 @@ import {
   createEvidenceFileResolver,
   isCurrentReviewPrediction,
   mapWithConcurrency,
+  previewAcceptancePurge,
+  purgeAcceptance,
   REVIEW_PREDICT_CONCURRENCY,
   REVIEW_PREDICT_MODEL_CONFIG,
   shouldSurfaceProposal,
@@ -40,8 +46,50 @@ import {
 } from '@/server/services/verify';
 import { after } from '@/server/utils/scheduleAfterResponse';
 
-import { canManageAcceptance } from './_helpers/acceptanceWriteScope';
+import { canManageAcceptance, filterManageableAcceptances } from './_helpers/acceptanceWriteScope';
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+
+const flowDefinitionSchema = z.object({
+  title: z.string().min(1).max(200),
+  entryNodeId: z.string().uuid(),
+  nodes: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        criterionId: z.string().uuid().optional(),
+        subFlowId: z.string().uuid().optional(),
+        check: z
+          .object({
+            id: z.string().uuid(),
+            title: z.string().min(1).max(200),
+            description: z.string().optional(),
+            definition: verifyCheckDefinitionSchema,
+          })
+          .optional(),
+        overrides: z
+          .object({
+            required: z.boolean().optional(),
+            onFail: z.enum(['manual', 'auto_repair']).optional(),
+            fixtureData: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+          })
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(100),
+  edges: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        sourceNodeId: z.string().uuid(),
+        targetNodeId: z.string().uuid(),
+        trigger: z.string().min(1).max(1000),
+        condition: z.string().max(2000).optional(),
+        required: z.boolean(),
+      }),
+    )
+    .max(300),
+});
 
 const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
 
@@ -105,8 +153,26 @@ const resolveAcceptanceForWrite = async (
   };
 };
 
+const canReadAcceptance = async (
+  ctx: { serverDB: LobeChatDatabase; userId?: string | null },
+  acceptance: AcceptanceItem,
+) => {
+  if (ctx.userId && ctx.userId === acceptance.userId) return true;
+  if (acceptance.visibility === 'public') return true;
+  if (!ctx.userId || !acceptance.workspaceId) return false;
+  // Membership in the acceptance's OWN workspace — not the viewer's currently
+  // active one, which may be a different workspace entirely.
+  const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
+    acceptance.workspaceId,
+    ctx.userId,
+  );
+  return Boolean(member);
+};
+
 /** Max rows one multi-select sweep may touch — the list itself is capped at 200. */
 const ACCEPTANCE_BATCH_LIMIT = 200;
+const PURGE_BATCH_CONCURRENCY = 4;
+const PURGE_PREVIEW_LIMIT = 20;
 
 const acceptanceStatusOverrideSchema = z.enum(['delivered', 'accepted', 'closed', 'rejected']);
 
@@ -159,6 +225,136 @@ const applyAcceptanceStatus = async (
 };
 
 export const acceptanceRouter = router({
+  regroupChecks: acceptanceWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        expectedVersion: z.number().int().nonnegative(),
+        groups: z
+          .array(
+            z.object({
+              title: z.string().trim().min(1).max(200),
+              checkItemIds: z.array(z.string().min(1)).min(1).max(1000),
+            }),
+          )
+          .max(100),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { service } = await resolveAcceptanceForWrite(ctx, input.id);
+      return service.regroupChecks(input.id, input.groups, input.expectedVersion);
+    }),
+  publishFlow: acceptanceWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        definition: flowDefinitionSchema,
+        flowId: z.string().uuid().optional(),
+        expectedHash: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
+      return new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).publish(
+        input.id,
+        input.definition,
+        input.flowId,
+        input.expectedHash,
+      );
+    }),
+  deleteFlow: acceptanceWriteProcedure
+    .input(z.object({ id: z.string().uuid(), flowId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      const result = await new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).delete(
+        input.id,
+        input.flowId,
+      );
+      await service.recomputeStatus(input.id);
+      return result;
+    }),
+  startFlow: acceptanceWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        flowId: z.string().uuid(),
+        sourceRunId: z.string().uuid().optional(),
+        verifyRunId: z.string().uuid().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      const result = await new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).start(
+        input.id,
+        input.flowId,
+        input.verifyRunId,
+        input.sourceRunId,
+      );
+      await service.recomputeStatus(input.id);
+      return result;
+    }),
+  recordFlowStep: acceptanceWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        verifyRunId: z.string().uuid(),
+        checkItemId: z.string().min(1),
+        observation: z.string().min(1).max(20000),
+        verdict: z.enum(['passed', 'failed', 'uncertain', 'blocked']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
+      return new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).record(input.id, input);
+    }),
+  completeFlow: acceptanceWriteProcedure
+    .input(z.object({ id: z.string().uuid(), verifyRunId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
+      const result = await new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).complete(
+        input.id,
+        input.verifyRunId,
+      );
+      await service.recomputeStatus(input.id);
+      return result;
+    }),
+  reviewFlowStep: acceptanceWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        attemptId: z.string().uuid(),
+        review: z.enum(['accepted', 'rejected']),
+        comment: z.string().max(4000),
+        annotations: z
+          .array(
+            z.object({
+              comment: z.string().max(2000).optional(),
+              evidenceId: z.string(),
+              rect: z.object({
+                height: z.number().min(0).max(1),
+                width: z.number().min(0).max(1),
+                x: z.number().min(0).max(1),
+                y: z.number().min(0).max(1),
+              }),
+            }),
+          )
+          .max(20)
+          .optional(),
+        fileIds: z.array(z.string()).max(10).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
+      return new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).review(
+        input.id,
+        input.attemptId,
+        input.review,
+        input.comment,
+        ctx.userId,
+        { annotations: input.annotations, fileIds: input.fileIds },
+      );
+    }),
+
   /**
    * The user accepts the delivery — the terminal business event that closes
    * the acceptance lifecycle. The verifier's verdict is a recommendation; this
@@ -350,18 +546,7 @@ export const acceptanceRouter = router({
       }
 
       const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
-      // The viewer's membership in the acceptance's OWN workspace — not their
-      // currently-active one, which may be a different workspace entirely.
-      const member =
-        !isOwner && ctx.userId && acceptance.workspaceId
-          ? await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
-              acceptance.workspaceId,
-              ctx.userId,
-            )
-          : undefined;
-
-      const canRead = isOwner || acceptance.visibility === 'public' || Boolean(member);
-      if (!canRead) {
+      if (!isOwner && !(await canReadAcceptance(ctx, acceptance))) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
@@ -378,11 +563,34 @@ export const acceptanceRouter = router({
         acceptance.workspaceId ?? undefined,
       );
 
-      const [subject, { evidence, reports, results, runs }] = await Promise.all([
+      const [subject, { evidence, reports, results, runs }, authorRows] = await Promise.all([
         ownerService.resolveSubject(acceptance),
         ownerService.loadRounds(acceptance.id),
+        // Who delivered this, the way a pull request names its author. A
+        // shared link lands on someone else's record, and a record with no
+        // name on it reads as nobody's.
+        ctx.serverDB
+          .select({
+            avatar: users.avatar,
+            fullName: users.fullName,
+            id: users.id,
+            username: users.username,
+          })
+          .from(users)
+          .where(eq(users.id, acceptance.userId)),
       ]);
+      const author = authorRows[0] ?? null;
 
+      const flowData = await new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).list(
+        acceptance.id,
+      );
+      const flowResultIds = new Set(
+        flowData.flatMap((flow) =>
+          flow.versions.flatMap((version) =>
+            version.runs.flatMap((run) => run.attempts.map((attempt) => attempt.checkResultId)),
+          ),
+        ),
+      );
       const resultsByRun = new Map<string, typeof results>();
       for (const result of results) {
         const key = result.verifyRunId!;
@@ -393,6 +601,7 @@ export const acceptanceRouter = router({
 
       const checks = buildAcceptanceCheckUnion(
         runs.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+        acceptance.metadata?.checkGrouping?.groups,
       );
 
       // Enrich the evidence backing every executed timeline step — the final
@@ -408,7 +617,9 @@ export const acceptanceRouter = router({
       );
       const enriched = await Promise.all(
         evidence
-          .filter((e) => timelineResultIds.has(e.checkResultId))
+          .filter(
+            (e) => timelineResultIds.has(e.checkResultId) || flowResultIds.has(e.checkResultId),
+          )
           .map(async (e) => ({ ...e, ...(await resolveFileMeta(e.fileId ?? null)) })),
       );
       const evidenceByResult = new Map<string, typeof enriched>();
@@ -421,7 +632,15 @@ export const acceptanceRouter = router({
       // Resolve the files backing user feedback (uploaded/pasted screenshots)
       // to URLs with the same owner-scoped resolver the evidence uses — one
       // batch for every attachment id across check rejects and group feedback.
-      const attachmentIds = new Set<string>();
+      const attachmentIds = new Set<string>(
+        flowData.flatMap((flow) =>
+          flow.versions.flatMap((version) =>
+            version.runs.flatMap((run) =>
+              run.attempts.flatMap((attempt) => attempt.reviewDetail?.fileIds ?? []),
+            ),
+          ),
+        ),
+      );
       for (const result of results)
         for (const id of result.userDecisionDetail?.fileIds ?? []) attachmentIds.add(id);
       for (const run of runs)
@@ -513,18 +732,45 @@ export const acceptanceRouter = router({
       // plan that uses a distinct snapshot id: generation reports success and
       // no card ever renders.
       const predictionByResult = new Map<string, (typeof predictions)[number]>();
+      // Goal reviews may use the owner's configured model. Their persisted ids
+      // identify the actual automatic decision without admitting unrelated rows.
+      const automaticPredictionIds = new Set(
+        runs.flatMap((run) => run.metadata?.goalReview?.predictionIds ?? []),
+      );
       // Newest-first from the model, so the first write per check item wins and
       // later (older) rows are ignored.
       for (const prediction of predictions) {
         // Rows from an earlier pin (another model / prompt version) stay in
         // the table for the comparison set but are not this page's reviewer.
-        if (!isCurrentReviewPrediction(prediction, REVIEW_PREDICT_MODEL_CONFIG)) continue;
+        if (
+          !isCurrentReviewPrediction(
+            prediction,
+            REVIEW_PREDICT_MODEL_CONFIG,
+            automaticPredictionIds,
+          )
+        )
+          continue;
         if (!predictionByResult.has(prediction.checkResultId)) {
           predictionByResult.set(prediction.checkResultId, prediction);
         }
       }
 
       return {
+        author,
+        flows: flowData.map((flow) => ({
+          ...flow,
+          versions: flow.versions.map((version) => ({
+            ...version,
+            runs: version.runs.map((run) => ({
+              ...run,
+              attempts: run.attempts.map((attempt) => ({
+                ...attempt,
+                reviewAttachments: toAttachments(attempt.reviewDetail?.fileIds),
+                evidence: evidenceByResult.get(attempt.checkResultId) ?? [],
+              })),
+            })),
+          })),
+        })),
         acceptance,
         canReview,
         isOwner,
@@ -592,6 +838,7 @@ export const acceptanceRouter = router({
         .object({
           filter: z.enum(['active', 'all', 'completed']).optional(),
           limit: z.number().int().min(1).max(200).optional(),
+          projectId: z.string().optional(),
           q: z.string().max(200).optional(),
         })
         .optional(),
@@ -613,6 +860,7 @@ export const acceptanceRouter = router({
           cursor: z.string().optional(),
           filter: z.enum(['active', 'all', 'completed']).optional(),
           limit: z.number().int().min(1).max(100).optional(),
+          projectId: z.string().optional(),
         })
         .optional(),
     )
@@ -621,6 +869,7 @@ export const acceptanceRouter = router({
         cursor: input?.cursor,
         filter: input?.filter,
         limit: input?.limit,
+        projectId: input?.projectId,
       }),
     ),
 
@@ -1021,6 +1270,65 @@ export const acceptanceRouter = router({
     }),
 
   /**
+   * The multi-select twin of `setProject`: file a whole selection under one
+   * project (or take it out of any) in one action.
+   *
+   * The target project is validated ONCE, up front — a missing project fails
+   * the sweep wholesale, because every row was headed to the same place. Rows
+   * keep the batch contract — one the caller cannot write lands in `failedIds`
+   * instead of voiding the rest — but unlike the status sweep there is no
+   * per-row recomputation, so the whole move is three bounded queries (resolve,
+   * authorize, bulk update) rather than a round trip per row.
+   */
+  setProjectBatch: acceptanceWriteProcedure
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT),
+        projectId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.projectId) {
+        const project = await new ProjectModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(input.projectId);
+        if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+      }
+
+      const ids = [...new Set(input.ids)];
+      const resolvableIds = ids.filter((id) => isUuid(id));
+      const rows =
+        resolvableIds.length > 0
+          ? await ctx.serverDB.query.acceptances.findMany({
+              columns: { id: true, userId: true, workspaceId: true },
+              where: inArray(acceptances.id, resolvableIds),
+            })
+          : [];
+      const manageable = await filterManageableAcceptances(ctx, rows);
+
+      let updatedIds: string[] = [];
+      if (manageable.length > 0) {
+        updatedIds = (
+          await ctx.serverDB
+            .update(acceptances)
+            .set({ projectId: input.projectId })
+            .where(
+              inArray(
+                acceptances.id,
+                manageable.map((row) => row.id),
+              ),
+            )
+            .returning({ id: acceptances.id })
+        ).map((row) => row.id);
+      }
+
+      const updatedSet = new Set(updatedIds);
+      return { failedIds: ids.filter((id) => !updatedSet.has(id)), updated: updatedIds.length };
+    }),
+
+  /**
    * Manually move the acceptance's user-facing lifecycle state from the list —
    * an owner override (mark accepted / closed / rejected, or reopen for another look).
    */
@@ -1077,17 +1385,68 @@ export const acceptanceRouter = router({
       return { failedIds, updated };
     }),
 
+  purgePreview: acceptanceProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(PURGE_PREVIEW_LIMIT) }))
+    .query(async ({ ctx, input }) => {
+      const ids = [...new Set(input.ids)];
+      const rows = ids.every(isUuid)
+        ? await ctx.serverDB.query.acceptances.findMany({ where: inArray(acceptances.id, ids) })
+        : [];
+      const readable = await Promise.all(rows.map((row) => canReadAcceptance(ctx, row)));
+      if (rows.length !== ids.length || readable.includes(false)) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
+      }
+
+      const scopes = new Map<string, { ids: string[]; userId: string; workspaceId?: string }>();
+      for (const row of rows) {
+        const workspaceId = row.workspaceId ?? undefined;
+        const key = workspaceId ?? `user:${row.userId}`;
+        const scope = scopes.get(key) ?? { ids: [], userId: row.userId, workspaceId };
+        scope.ids.push(row.id);
+        scopes.set(key, scope);
+      }
+      const previews = await Promise.all(
+        [...scopes.values()].map((scope) =>
+          previewAcceptancePurge(ctx.serverDB, scope.userId, scope.workspaceId, scope.ids),
+        ),
+      );
+      return previews.reduce(
+        (total, preview) => ({
+          bytes: total.bytes + preview.bytes,
+          fileCount: total.fileCount + preview.fileCount,
+          files: {
+            images: total.files.images + preview.files.images,
+            other: total.files.other + preview.files.other,
+            videos: total.files.videos + preview.files.videos,
+          },
+          rounds: total.rounds + preview.rounds,
+        }),
+        { bytes: 0, fileCount: 0, files: { images: 0, other: 0, videos: 0 }, rounds: 0 },
+      );
+    }),
+
   /**
-   * Delete the acceptance aggregate. Its chained verify runs detach
-   * (acceptance_id → null via the FK's `set null`) rather than cascade-delete,
-   * so the individual round reports stay reachable; only the grouping goes.
+   * Delete the acceptance aggregate. By default its chained verify runs detach
+   * (acceptance_id → null via the FK's `set null`) so the individual round
+   * reports stay reachable; `purge` also removes the rounds and the evidence
+   * files only they referenced.
    */
   remove: acceptanceWriteProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), purge: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
-      await service.acceptanceModel.delete(acceptance.id);
+      if (input.purge) {
+        await purgeAcceptance(
+          ctx.serverDB,
+          new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+          acceptance.userId,
+          acceptance.workspaceId ?? undefined,
+          acceptance.id,
+        );
+      } else {
+        await service.acceptanceModel.delete(acceptance.id);
+      }
       return { success: true };
     }),
 
@@ -1097,21 +1456,37 @@ export const acceptanceRouter = router({
    * selection still goes.
    */
   removeBatch: acceptanceWriteProcedure
-    .input(z.object({ ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT) }))
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(ACCEPTANCE_BATCH_LIMIT),
+        purge: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const failedIds: string[] = [];
       let deleted = 0;
+      const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
 
-      for (const id of new Set(input.ids)) {
+      await mapWithConcurrency([...new Set(input.ids)], PURGE_BATCH_CONCURRENCY, async (id) => {
         try {
           const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
-          await service.acceptanceModel.delete(acceptance.id);
+          if (input.purge) {
+            await purgeAcceptance(
+              ctx.serverDB,
+              fileService,
+              acceptance.userId,
+              acceptance.workspaceId ?? undefined,
+              acceptance.id,
+            );
+          } else {
+            await service.acceptanceModel.delete(acceptance.id);
+          }
           deleted += 1;
         } catch (error) {
           console.error('[acceptance] batch delete failed for %s', id, error);
           failedIds.push(id);
         }
-      }
+      });
 
       return { deleted, failedIds };
     }),

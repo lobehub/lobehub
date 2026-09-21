@@ -162,17 +162,6 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
-   * let supported local agents (Claude Code / Codex) use a configured API
-   * provider on Desktop instead of their subscription
-   */
-  enableAgentProviderBinding: z.boolean().optional(),
-  /**
-   * @deprecated superseded by `enableAgentProviderBinding` when the feature
-   * generalized beyond Claude Code. Kept so users who enabled it under the old
-   * key keep the feature on; the selector falls back to it.
-   */
-  enableClaudeCodeApiMode: z.boolean().optional(),
-  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),
@@ -222,6 +211,11 @@ export const UserLabSchema = z.object({
   enableTaskVerify: z.boolean().optional(),
   /** Capture a conversation turn as an eval test case (developer-facing). */
   enableEvalCapture: z.boolean().optional(),
+  /**
+   * route every agent run in this tab over one shared gateway WebSocket
+   * (protocol v2 mux) instead of one socket per run
+   */
+  enableGatewayMux: z.boolean().optional(),
   /**
    * enable the per-topic acceptance tray above the composer (author a topic's
    * delivery checklist inline)

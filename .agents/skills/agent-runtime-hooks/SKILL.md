@@ -1,6 +1,6 @@
 ---
 name: agent-runtime-hooks
-description: 'Agent runtime lifecycle hooks. Use for before/after tool or step hooks, tool mocks, human intervention, sub-agent calls, context compression, evals, callAgent, or lifecycle events.'
+description: 'Use for agent lifecycle hooks, tool mocks, intervention, sub-agent calls and context compression.'
 user-invocable: false
 ---
 

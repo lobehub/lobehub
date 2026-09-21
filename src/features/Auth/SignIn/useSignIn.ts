@@ -7,7 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
-import { useAuthServerConfigStore } from '@/features/AuthShell';
+import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
@@ -62,16 +62,20 @@ export const useSignIn = () => {
   const [email, setEmail] = useState('');
   const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
   const [isSocialOnly, setIsSocialOnly] = useState(false);
-  const [lastAuthProvider] = useState(() => {
-    try {
-      return localStorage.getItem(LAST_AUTH_PROVIDER_KEY);
-    } catch {
-      return null;
-    }
-  });
+  // Read after mount, not during render: this page is prerendered, and a stored
+  // provider would make the first client render disagree with the document.
+  const [lastAuthProvider, setLastAuthProvider] = useState<string | null>(null);
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
   const { getAdditionalData, preSocialSigninCheck, ssoProviders } = useBusinessSignin();
+
+  useEffect(() => {
+    try {
+      setLastAuthProvider(localStorage.getItem(LAST_AUTH_PROVIDER_KEY));
+    } catch {
+      // Private mode and blocked storage both just mean "no last provider".
+    }
+  }, []);
 
   useEffect(() => {
     const emailParam = searchParams.get('email');

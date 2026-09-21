@@ -6,7 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 /**
- * Add a Work to a running goal. A task the coordinator will spend rounds on
+ * Add a Task to a running goal. A task the coordinator will spend rounds on
  * deserves a titled brief, not a one-line inline input — the modal gives the
  * instruction room and keeps the frontier list itself read-focused.
  */

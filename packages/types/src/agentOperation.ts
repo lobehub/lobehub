@@ -15,5 +15,7 @@ export type AgentOperationCompletionReason =
   | 'interrupted'
   | 'lease_expired'
   | 'max_steps'
+  /** The same tool call was requested over and over; a guard cut the run short. */
+  | 'tool_call_repeat_limit'
   | 'waiting_for_async_tool'
   | 'waiting_for_human';

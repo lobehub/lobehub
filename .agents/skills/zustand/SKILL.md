@@ -1,10 +1,17 @@
 ---
 name: zustand
-description: 'LobeHub Zustand store conventions. Use when editing src/store, store slices, public/internal actions, dispatch actions, flattenActions, optimistic updates, selectors, maps, or class action migration.'
+description: 'Use for Zustand stores: list/detail splits, state type sources, slices, actions, reducers, selectors, optimistic updates and class-action composition.'
 user-invocable: false
 ---
 
 # LobeHub Zustand State Management
+
+## State Shapes and Types
+
+- Import shared store types from `@lobechat/types`, not `@lobechat/database`.
+- Keep lightweight list-item types separate from full detail types; list types must not extend heavy detail types.
+- Use arrays for whole-list display and id-keyed maps for cached details, with per-item loading state where needed.
+- Before choosing list/detail shapes, normalized maps or state type sources, read [Data structures](references/data-structures.md). Its worked examples load only when relevant.
 
 ## Action Type Hierarchy
 

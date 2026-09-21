@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import { createBatchResumeModal } from './features/BatchResumeModal';
@@ -110,6 +111,7 @@ const RunDetail = memo(() => {
       errorVariant={'page'}
       isEmpty={!runDetail}
       isLoading={isLoading}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {runDetail && (

@@ -154,8 +154,8 @@ export const buildGraphShape = (state: GoalGraphState): GoalGraphShape => {
   const resolvedNodeIds = new Set(
     state.nodes.filter((node) => node.status === 'resolved').map((node) => node.id),
   );
-  const work = state.nodes.filter((node) => node.kind === 'work');
-  const open = work.filter((node) => !TERMINAL_NODE_STATUSES.has(node.status));
+  const taskNodes = state.nodes.filter((node) => node.kind === 'task');
+  const open = taskNodes.filter((node) => !TERMINAL_NODE_STATUSES.has(node.status));
 
   const ready = open.filter((node) =>
     state.edges
@@ -171,6 +171,6 @@ export const buildGraphShape = (state: GoalGraphState): GoalGraphShape => {
     tasksBlocked: open.length - ready.length,
     tasksOpen: open.length,
     tasksReady: ready.length,
-    tasksCompleted: work.filter((node) => node.status === 'resolved').length,
+    tasksCompleted: taskNodes.filter((node) => node.status === 'resolved').length,
   };
 };

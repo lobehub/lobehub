@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@lobechat/agent-manager-runtime": "workspace:*",
+    "@lobechat/builtin-tool-agent-builder": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "lucide-react": "^1.22.0",

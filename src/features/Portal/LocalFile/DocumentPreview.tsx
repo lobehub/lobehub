@@ -14,6 +14,8 @@ import Loading from '@/components/Loading/CircleLoading';
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
 import { localFileService } from '@/services/electron/localFileService';
 
+import XlsxPane from './xlsx/XlsxPane';
+
 // Same CDN assets as the FileViewer PDF renderer — cmaps / fonts are required
 // for non-latin PDFs.
 const pdfOptions = {
@@ -65,73 +67,6 @@ const styles = createStaticStyles(({ css }) => ({
     margin-block-end: 12px;
     border-radius: 4px;
     box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-  sheetTab: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border: none;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    background: transparent;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[data-active='true'] {
-      font-weight: 500;
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  sheetTabs: css`
-    overflow-x: auto;
-    display: flex;
-    flex: none;
-    gap: 4px;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  truncatedNote: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  xlsxContainer: css`
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-  xlsxTable: css`
-    overflow: auto;
-    flex: 1;
-
-    table {
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-
-    td {
-      overflow: hidden;
-
-      max-width: 320px;
-      padding-block: 4px;
-      padding-inline: 8px;
-      border: 1px solid ${cssVar.colorBorderSecondary};
-
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
   `,
   pdfContainer: css`
     overflow: auto;
@@ -277,126 +212,6 @@ const DocxPane = memo<OfficePaneProps>(({ blob, onError }) => {
 });
 
 DocxPane.displayName = 'DocxPane';
-
-/**
- * DOM tables choke on huge sheets; a preview only needs the head of the data.
- * Users open the real file (default app / download) for the full sheet.
- */
-const MAX_PREVIEW_ROWS = 500;
-
-interface SheetGrid {
-  name: string;
-  rows: string[][];
-  truncated: boolean;
-}
-
-/** Flatten an exceljs cell value (rich text / formula / hyperlink / date …) to display text. */
-const formatCellValue = (value: unknown): string => {
-  if (value === null || value === undefined) return '';
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === 'object') {
-    const cell = value as {
-      error?: string;
-      formula?: string;
-      hyperlink?: string;
-      result?: unknown;
-      richText?: { text: string }[];
-      text?: unknown;
-    };
-    if (cell.richText) return cell.richText.map((run) => run.text).join('');
-    if (cell.formula !== undefined) return formatCellValue(cell.result);
-    if (cell.text !== undefined) return formatCellValue(cell.text);
-    if (cell.error) return cell.error;
-    return '';
-  }
-  return String(value);
-};
-
-const XlsxPane = memo<OfficePaneProps>(({ blob, onError }) => {
-  const { t } = useTranslation('chat');
-  const [sheets, setSheets] = useState<SheetGrid[]>();
-  const [activeSheet, setActiveSheet] = useState(0);
-
-  useEffect(() => {
-    let disposed = false;
-
-    (async () => {
-      try {
-        const { Workbook } = await import('exceljs');
-        const workbook = new Workbook();
-        await workbook.xlsx.load(await blob.arrayBuffer());
-        if (disposed) return;
-
-        const grids: SheetGrid[] = workbook.worksheets.map((sheet) => {
-          const columnCount = sheet.actualColumnCount;
-          const rows: string[][] = [];
-          // eachRow skips empty rows, keeping the preview dense; row order is preserved.
-          sheet.eachRow((row) => {
-            if (rows.length >= MAX_PREVIEW_ROWS) return;
-            const cells: string[] = [];
-            for (let index = 1; index <= columnCount; index++) {
-              cells.push(formatCellValue(row.getCell(index).value));
-            }
-            rows.push(cells);
-          });
-          return { name: sheet.name, rows, truncated: sheet.actualRowCount > MAX_PREVIEW_ROWS };
-        });
-        setSheets(grids);
-        setActiveSheet(0);
-      } catch (error) {
-        if (!disposed) onError(error);
-      }
-    })();
-
-    return () => {
-      disposed = true;
-    };
-  }, [blob, onError]);
-
-  if (!sheets) return <Loading />;
-
-  const sheet = sheets[activeSheet] ?? sheets[0];
-
-  return (
-    <div className={styles.xlsxContainer}>
-      {sheets.length > 1 && (
-        <div className={styles.sheetTabs}>
-          {sheets.map((item, index) => (
-            <button
-              className={styles.sheetTab}
-              data-active={index === activeSheet}
-              key={`${index}-${item.name}`}
-              type={'button'}
-              onClick={() => setActiveSheet(index)}
-            >
-              {item.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className={styles.xlsxTable}>
-        <table>
-          <tbody>
-            {sheet?.rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex}>{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {sheet?.truncated && (
-          <div className={styles.truncatedNote}>
-            {t('workingPanel.localFile.document.truncatedRows', { count: MAX_PREVIEW_ROWS })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
-
-XlsxPane.displayName = 'XlsxPane';
 
 /**
  * Modern OOXML formats with an in-app renderer. Legacy binary formats (.doc /

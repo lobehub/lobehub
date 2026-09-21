@@ -62,6 +62,7 @@ describe('isHeterogeneousSandboxExecutionAvailable', () => {
 
   it('keeps local-only CLIs on local or connected devices', () => {
     expect(isHeterogeneousSandboxExecutionAvailable('droid')).toBe(false);
+    expect(isHeterogeneousSandboxExecutionAvailable('devin')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('qoder')).toBe(false);
     expect(isHeterogeneousSandboxExecutionAvailable('trae')).toBe(false);
   });
@@ -1103,6 +1104,60 @@ describe('resolveExecutionPlan', () => {
           requestedDeviceId: 'device-a',
         }),
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+    });
+  });
+
+  // Agent Share visitors: `canUseDevice` is always false and the creator may
+  // have granted `lobe-cloud-sandbox` — the grant is honoured via the sandbox
+  // instead of being dropped with `none`.
+  describe('sandboxFallback — device-denied runs resolve to the sandbox', () => {
+    it('sends a denied device-capable target to the sandbox', () => {
+      for (const executionTarget of ['local', 'device', 'auto'] as const) {
+        expect(
+          resolveExecutionPlan({
+            agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
+            canUseDevice: false,
+            clientExecutionAvailable: true,
+            onlineDeviceIds: ['device-a'],
+            sandboxFallback: true,
+          }),
+        ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+      }
+    });
+
+    it('is a no-op without the flag — the denied run still degrades to none', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          canUseDevice: false,
+          clientExecutionAvailable: true,
+          sandboxFallback: false,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('never overrides chat mode — chat means no tools, not no device', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          canUseDevice: false,
+          chatConfig: { enableAgentMode: false },
+          clientExecutionAvailable: true,
+          sandboxFallback: true,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('does not resurrect device routing when the device is allowed', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
+          canUseDevice: true,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ['device-a'],
+          sandboxFallback: true,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
     });
   });
 

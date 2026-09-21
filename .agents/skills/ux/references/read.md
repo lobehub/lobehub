@@ -176,15 +176,6 @@ _each_ against the full set, not just the search input.
 > can occur here. (This is why the surface's only read-side gap is failure handling, not
 > query correctness.)
 
-> ❌ The Pages "all pages" drawer filters `displayDocuments` with a client-side
-> `title/content.includes(keyword)` over the loaded set **and disables load-more while
-> searching**, so searching for a page past the loaded window returns "no results" though it
-> exists (`AllPagesDrawer/Content.tsx`). ✅ Send the keyword to the server query and page
-> through matches.
-> ✅ **Memory** (记忆) does it right: each list tab passes `q` straight into the paginated
-> `queryMemories` server call (`memory/contexts/index.tsx:57-62`, mirrored per tab), so search spans
-> the whole set — no false "no results" for unfetched rows.
-
 **Checklist**
 
 - [ ] List designed across 1 → 10k rows (plain → pagination → virtual scroll). _(Certainty)_

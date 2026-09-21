@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorDataError } from '../errors';
+import type { TwitterMarketToolExecutor } from './marketClient';
 import { createTwitterMarketConnectorClient } from './marketClient';
 
 const mocks = vi.hoisted(() => ({
@@ -11,7 +12,7 @@ vi.mock('debug', () => ({
   default: vi.fn(() => mocks.log),
 }));
 
-const createClient = (callTool: ReturnType<typeof vi.fn>) =>
+const createClient = (callTool: TwitterMarketToolExecutor['callTool']) =>
   createTwitterMarketConnectorClient({ market: { callTool } });
 
 /** @example Market X tools provide bounded profile and recent-post evidence. */

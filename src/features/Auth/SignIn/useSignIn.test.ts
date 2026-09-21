@@ -55,6 +55,7 @@ vi.mock('@/libs/better-auth/utils/client', () => ({
 
 vi.mock('@lobechat/business-const', () => ({
   BRANDING_NAME: 'LobeHub',
+  ORG_NAME: 'LobeHub',
 }));
 
 vi.mock('@/business/client/hooks/useBusinessSignin', () => ({
@@ -67,7 +68,7 @@ vi.mock('@/business/client/hooks/useBusinessSignin', () => ({
 
 let mockEnableBusinessFeatures = false;
 let mockEnableMagicLink = false;
-vi.mock('@/features/AuthShell', () => ({
+vi.mock('@/features/AuthShell/AuthServerConfigProvider', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
     selector({
       serverConfig: {

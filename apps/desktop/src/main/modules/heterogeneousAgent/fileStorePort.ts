@@ -102,6 +102,7 @@ export const createLambdaFileStorePort = async (
   const ctx: LambdaCallContext = { accessToken, serverUrl };
 
   return {
+    abortS3Upload: (input) => callLambdaMutation(ctx, 'upload.abortS3Upload', input),
     checkFileHash: (input) => callLambdaMutation(ctx, 'file.checkFileHash', input),
     createFile: (input) => callLambdaMutation(ctx, 'file.createFile', input),
     createS3PreSignedUrl: (input) => callLambdaMutation(ctx, 'upload.createS3PreSignedUrl', input),

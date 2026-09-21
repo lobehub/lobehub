@@ -1,7 +1,7 @@
 import type { EditLocalFileParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { CodeDiff, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { Alert, Text } from '@lobehub/ui/base-ui';
+import { CodeDiff, Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
@@ -62,7 +62,7 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
       </Flexbox>
 
       {isLoading ? (
-        <Skeleton active paragraph={{ rows: 3 }} />
+        <Skeleton.Text rows={3} />
       ) : (
         <Flexbox gap={8}>
           {isAmbiguous ? (

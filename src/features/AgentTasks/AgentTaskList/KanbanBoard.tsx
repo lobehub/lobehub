@@ -27,10 +27,12 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
+import { useTaskStatusChange } from '../features/useTaskStatusChange';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
 import {
   buildKanbanColumns,
+  buildKanbanGroupQuery,
   canDropTaskIntoKanbanColumn,
   getKanbanAssigneeUpdate,
   getKanbanTaskPatch,
@@ -56,12 +58,21 @@ const styles = createStaticStyles(({ css }) => ({
 interface KanbanBoardProps {
   /** When set, scopes the board (and task creation) to a single agent. */
   agentId?: string;
+  /** Overrides the generic "no tasks" copy with the collection's own line. */
+  emptyDescription?: string;
+  /**
+   * "My tasks" board: narrows the server groups to the caller's own slice of
+   * the workspace, matching what that tab's list view fetches — including its
+   * lack of an automation filter.
+   */
+  myTaskScope?: 'assigned' | 'created';
   options: TaskListViewOptions;
   projectId?: string;
   routeScope?: TaskItemRouteScope;
 }
 
-const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, routeScope }) => {
+const KanbanBoard = memo<KanbanBoardProps>((props) => {
+  const { agentId, emptyDescription, myTaskScope, options, projectId, routeScope } = props;
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
@@ -71,11 +82,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the SWR handle only for `error` + `mutate` (the error/Retry state).
   const { error, isLoading, isQueryScopeCurrent, mutate } = useFetchTaskGroupList(
-    projectId
-      ? { automated: false, excludeStatuses, groupBy, projectId }
-      : agentId
-        ? { agentId, automated: false, excludeStatuses, groupBy }
-        : { allAgents: true, automated: false, excludeStatuses, groupBy },
+    buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
   );
   // Drive the loading/empty boundary off the store's own init flag, NOT SWR's
   // per-key `data`. On a scope or visibility switch the store resets
@@ -92,7 +99,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
     [isQueryScopeCurrent, taskGroups],
   );
   const updateTask = useTaskStore((s) => s.updateTask);
-  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+  const changeTaskStatus = useTaskStatusChange();
 
   const hiddenColumns = useGlobalStore(systemStatusSelectors.taskKanbanHiddenColumns);
   const hiddenPanelCollapsed = useGlobalStore(systemStatusSelectors.taskKanbanHiddenPanelCollapsed);
@@ -149,7 +156,10 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
 
       try {
         if (groupBy === 'status' && column.targetStatus) {
-          await updateTaskStatus(task.identifier, column.targetStatus);
+          const changed = await changeTaskStatus(task.identifier, column.targetStatus);
+          if (!changed) {
+            useTaskStore.setState({ taskGroups: prevGroups }, false, 'kanban/cancelMove');
+          }
         } else if ((groupBy === 'assignee' || groupBy === 'member') && assigneeUpdate) {
           await updateTask(task.identifier, assigneeUpdate);
         } else if (groupBy === 'priority') {
@@ -159,7 +169,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
         useTaskStore.setState({ taskGroups: prevGroups }, false, 'kanban/revertMove');
       }
     },
-    [canEditTask, columns, groupBy, updateTask, updateTaskStatus],
+    [canEditTask, changeTaskStatus, columns, groupBy, updateTask],
   );
 
   const handleDragCancel = useCallback(() => {
@@ -173,7 +183,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
       lockAssignee: !!agentId,
       projectId,
       onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined));
+        navigate(taskDetailPath(task.identifier, agentId ? task.agentId : undefined, task.name));
       },
       showInlineToggle: false,
     });
@@ -253,7 +263,7 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
 
   const emptyState = (
     <Center height={'80vh'} width={'100%'}>
-      <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
+      <Empty description={emptyDescription ?? t('taskList.empty')} icon={ClipboardCheckIcon} />
     </Center>
   );
 
@@ -284,7 +294,13 @@ const KanbanBoard = memo<KanbanBoardProps>(({ agentId, options, projectId, route
               total={group?.total ?? 0}
               onHide={groupBy === 'status' ? () => handleHideColumn(col.key) : undefined}
               onCreate={
-                groupBy === 'status' && col.key === 'backlog' ? handleCreateTask : undefined
+                // "My tasks" offers no create entry (its list view has none
+                // either): a task created here carries neither the member
+                // assignment nor — under `created` — any guarantee it lands
+                // in the column it was started from.
+                groupBy === 'status' && col.key === 'backlog' && !myTaskScope
+                  ? handleCreateTask
+                  : undefined
               }
             />
           );

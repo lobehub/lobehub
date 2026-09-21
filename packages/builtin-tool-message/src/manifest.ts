@@ -60,6 +60,102 @@ const attachmentsSchema = {
 };
 
 /**
+ * JSON Schema for the optional `embeds` array shared by the message-sending
+ * tools. Mirrors the `SendMessageEmbed` TypeScript type — the Discord embed
+ * object. Other platforms ignore embeds so the `content` text still ships.
+ */
+const embedsSchema = {
+  description:
+    'Optional rich "cards" rendered natively on Discord as embeds (title, coloured accent bar, key/value fields, footer, images). Use for reports, dashboards, structured summaries, or status notices where a card reads better than plain text. Put the human-readable summary in `content` as well so platforms without embeds (Slack / Telegram / Feishu / …) still receive the message — they silently ignore `embeds`. Max 10 embeds per message, 6000 characters total across all embeds.',
+  items: {
+    additionalProperties: false,
+    properties: {
+      author: {
+        additionalProperties: false,
+        description: 'Small header line above the title (e.g. the report source).',
+        properties: {
+          icon_url: {
+            description: 'HTTPS URL of a small icon shown before the name.',
+            type: 'string',
+          },
+          name: { description: 'Author / source name (max 256 chars).', type: 'string' },
+          url: { description: 'HTTPS URL the author name links to.', type: 'string' },
+        },
+        required: ['name'],
+        type: 'object',
+      },
+      color: {
+        description:
+          'Accent colour of the left bar. Accepts a hex string like "#22c55e" or a decimal integer (0xRRGGBB). Use green for success, red for failure/alerts, blue/blurple for neutral info. Defaults to Discord blurple.',
+        type: ['string', 'integer'],
+      },
+      description: {
+        description:
+          'Body text below the title (max 4096 chars). Supports Discord markdown: **bold**, `code`, lists, links.',
+        type: 'string',
+      },
+      fields: {
+        description:
+          'Key/value blocks below the description (max 25). Set `inline: true` on consecutive fields to lay them out side-by-side (up to 3 per row) — ideal for "Yesterday / Last 7d / Last 30d" style columns.',
+        items: {
+          additionalProperties: false,
+          properties: {
+            inline: {
+              description: 'Render side-by-side with neighbouring inline fields (max 3 per row).',
+              type: 'boolean',
+            },
+            name: { description: 'Field label (max 256 chars).', type: 'string' },
+            value: {
+              description:
+                'Field body (max 1024 chars). Markdown allowed; use newlines for multi-line stats.',
+              type: 'string',
+            },
+          },
+          required: ['name', 'value'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+      footer: {
+        additionalProperties: false,
+        description: 'Small muted line at the bottom of the card (e.g. data source, generated-at).',
+        properties: {
+          icon_url: {
+            description: 'HTTPS URL of a small icon shown before the text.',
+            type: 'string',
+          },
+          text: { description: 'Footer text (max 2048 chars).', type: 'string' },
+        },
+        required: ['text'],
+        type: 'object',
+      },
+      image: {
+        additionalProperties: false,
+        description: 'Large image rendered below the fields.',
+        properties: { url: { description: 'HTTPS image URL.', type: 'string' } },
+        required: ['url'],
+        type: 'object',
+      },
+      thumbnail: {
+        additionalProperties: false,
+        description: 'Small image rendered in the top-right corner of the card.',
+        properties: { url: { description: 'HTTPS image URL.', type: 'string' } },
+        required: ['url'],
+        type: 'object',
+      },
+      timestamp: {
+        description: 'ISO-8601 timestamp shown next to the footer (e.g. "2026-08-10T08:00:00Z").',
+        type: 'string',
+      },
+      title: { description: 'Card heading (max 256 chars). Emoji allowed.', type: 'string' },
+      url: { description: 'HTTPS URL — makes the title a hyperlink.', type: 'string' },
+    },
+    type: 'object',
+  },
+  type: 'array',
+};
+
+/**
  * Schema for the bot's `settings` JSON column. Both `createBot` and
  * `updateBot` accept a partial object — only the keys you pass are written
  * (everything else preserved). Use this as the single source of truth for
@@ -160,12 +256,14 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== Direct Messaging ====================
     {
       description:
-        'Send a direct/private message to ANOTHER user by their platform user ID. Creates a DM channel automatically. To reach the CURRENT user themselves ("DM me", "send me a message"), use `sendMessengerPush` instead — it needs no user id. Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` for the platform first — if there\'s an entry, use its `botId`; otherwise call `listMessengers` and use that entry\'s `id` as `messengerInstallationId`.',
+        'Send a direct/private message to ANOTHER user by their platform user ID. Creates a DM channel automatically. To reach the CURRENT user themselves ("DM me", "send me a message"), use `sendMessengerPush` instead — it needs no user id. Supports optional outbound media `attachments` (images / files / video / audio) and rich `embeds` cards (Discord). To pick the target: call `listBots` for the platform first — if there\'s an entry, use its `botId`; otherwise call `listMessengers` and use that entry\'s `id` as `messengerInstallationId`.',
       name: MessageApiName.sendDirectMessage,
+      ordered: true,
       parameters: {
         additionalProperties: false,
         properties: {
           attachments: attachmentsSchema,
+          embeds: embedsSchema,
           botId: {
             description:
               'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
@@ -198,8 +296,9 @@ export const MessageManifest: BuiltinToolManifest = {
     // ==================== Core Message Operations ====================
     {
       description:
-        "Send a message to a specific channel or conversation on the target platform. Supports optional outbound media `attachments` (images / files / video / audio) — use this when you need to deliver a generated image, document, or other binary alongside your reply. To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
+        "Send a message to a specific channel or conversation on the target platform. Supports optional outbound media `attachments` (images / files / video / audio) — use this when you need to deliver a generated image, document, or other binary alongside your reply — and rich `embeds` cards (rendered natively on Discord; ignored elsewhere) for reports, dashboards, and structured summaries. To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
       name: MessageApiName.sendMessage,
+      ordered: true,
       parameters: {
         additionalProperties: false,
         properties: {
@@ -218,12 +317,7 @@ export const MessageManifest: BuiltinToolManifest = {
               'Message content. Supports text and markdown depending on platform capabilities.',
             type: 'string',
           },
-          embeds: {
-            description:
-              'Optional array of platform-specific embed objects (Discord embeds, Slack blocks, etc.). For generic file/image delivery use `attachments` instead.',
-            items: { type: 'object' },
-            type: 'array',
-          },
+          embeds: embedsSchema,
           messengerInstallationId: {
             description:
               'System Bot installation id from `listMessengers`. Provide exactly one of `botId` or `messengerInstallationId`.',
@@ -283,6 +377,33 @@ export const MessageManifest: BuiltinToolManifest = {
           },
         },
         required: ['platform', 'channelId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Read the full text of a cloud document shared in the chat (Feishu/Lark docx, wiki pages, meeting minutes / 智能纪要 documents). Pass the document URL exactly as it appears in the message. Use this IMMEDIATELY whenever the user points at a document link ("看这份纪要", "总结这个文档") or a message you read contains one — never ask the user to paste the content.',
+      name: MessageApiName.readDocument,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          documentId: {
+            description:
+              'Platform document ID / token, only when you have it without a URL. Prefer `url`.',
+            type: 'string',
+          },
+          platform: {
+            description: 'Target messaging platform',
+            enum: platformEnum,
+            type: 'string',
+          },
+          url: {
+            description:
+              'Document URL as it appeared in the chat, e.g. https://<tenant>.feishu.cn/docx/<token> or a /wiki/ link.',
+            type: 'string',
+          },
+        },
+        required: ['platform'],
         type: 'object',
       },
     },
@@ -629,12 +750,14 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Send a reply to a thread. Supports optional outbound media `attachments` (images / files / video / audio). To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
+        "Send a reply to a thread. Supports optional outbound media `attachments` (images / files / video / audio) and rich `embeds` cards (Discord). To pick the target: call `listBots` first — if there's an entry for the platform, use its `botId`; otherwise call `listMessengers` and use that entry's `id` as `messengerInstallationId`.",
       name: MessageApiName.replyToThread,
+      ordered: true,
       parameters: {
         additionalProperties: false,
         properties: {
           attachments: attachmentsSchema,
+          embeds: embedsSchema,
           botId: {
             description:
               'Per-agent bot id from `listBots`. Provide exactly one of `botId` or `messengerInstallationId`.',
@@ -966,6 +1089,7 @@ export const MessageManifest: BuiltinToolManifest = {
       description:
         'Proactively push a message to the CURRENT USER\'s own DM with the LobeHub System Bot — THE api for "send me a message on <platform>", "DM me", "notify me when done". Unlike `sendDirectMessage` it needs no bot discovery, channel id, or platform user id: the server resolves the user\'s own account link. Availability comes from that account link, NOT from `listBots` / `listMessengers` — a platform missing there can still be pushable, so never refuse based on those lists. Call `listMessengerLinks` when unsure which platforms are linked; when the user named one, just push and let an `unlinked` status tell you. Telegram / Discord deliver immediately. Slack with several linked workspaces returns `needs_workspace_selection` — ask the user to pick, then retry with that `tenantId`. WeChat can only deliver inside the send window opened by the user\'s last inbound message; outside it the push is `queued` and you must tell the user to message the LobeHub WeChat bot first so the queued push gets delivered.',
       name: MessageApiName.sendMessengerPush,
+      ordered: true,
       parameters: {
         additionalProperties: false,
         properties: {

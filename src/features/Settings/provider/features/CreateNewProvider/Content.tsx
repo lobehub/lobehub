@@ -1,6 +1,5 @@
 'use client';
 
-import { ProviderIcon } from '@lobehub/icons';
 import { Flexbox, Input, InputPassword, TextArea } from '@lobehub/ui';
 import { Button, Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { Form } from 'antd';
@@ -8,6 +7,7 @@ import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProviderIcon } from '@/components/LobeIcons';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 import { type CreateAiProviderParams } from '@/types/aiProvider';

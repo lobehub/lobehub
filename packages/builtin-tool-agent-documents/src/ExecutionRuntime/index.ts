@@ -160,6 +160,8 @@ export interface AgentDocumentsRuntimeService {
 }
 
 export interface AgentDocumentsRuntimeOptions {
+  /** Keep the backing id for bookkeeping while hiding owner-only edit affordances. */
+  documentReadonly?: boolean;
   /**
    * Build a shareable URL that opens a document in the standalone document
    * route. When provided and it returns a URL, the create result surfaces the
@@ -411,7 +413,12 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: formatCreateDocumentResult({ id: created.id, title, url }),
-      state: { agentDocumentId: created.id, agentId, documentId: created.documentId },
+      state: {
+        agentDocumentId: created.id,
+        agentId,
+        documentId: created.documentId,
+        ...(this.options.documentReadonly && { readonly: true }),
+      },
       success: true,
     };
   }

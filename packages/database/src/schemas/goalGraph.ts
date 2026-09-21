@@ -34,8 +34,8 @@ import { workVersions } from './work';
 
 /**
  * Goal Graph nodes preserve the evolving problem framing above individual Task
- * execution. A Work node may own one responsible Task; that Task remains free to
- * create its own implementation-level subtree.
+ * execution. A task node may own one responsible Task; that Task remains free
+ * to create its own implementation-level subtree.
  */
 export const goalNodes = pgTable(
   'goal_nodes',
@@ -48,7 +48,7 @@ export const goalNodes = pgTable(
     status: text('status').$type<GoalNodeStatus>().default('proposed').notNull(),
     title: text('title').notNull(),
     description: text('description'),
-    /** Responsible execution container. Valid only when kind is `work`. */
+    /** Responsible execution container. Valid only when kind is `task`. */
     taskId: text('task_id').references(() => tasks.id, { onDelete: 'set null' }),
     priority: integer('priority').default(0).notNull(),
     /** Agent or reviewer confidence from 0 to 1. */
@@ -64,6 +64,7 @@ export const goalNodes = pgTable(
   },
   (t) => [
     index('goal_nodes_goal_id_status_idx').on(t.goalId, t.status),
+    index('goal_nodes_created_by_user_id_idx').on(t.createdByUserId),
     index('goal_nodes_goal_id_kind_idx').on(t.goalId, t.kind),
     unique('goal_nodes_goal_id_id_unique').on(t.goalId, t.id),
     /**
@@ -170,6 +171,7 @@ export const goalNodeDecisions = pgTable(
   (t) => [
     uniqueIndex('goal_node_decisions_node_id_unique').on(t.nodeId),
     index('goal_node_decisions_status_idx').on(t.status),
+    index('goal_node_decisions_resolved_by_user_id_idx').on(t.resolvedByUserId),
     index('goal_node_decisions_requested_user_id_status_idx').on(t.requestedUserId, t.status),
   ],
 );

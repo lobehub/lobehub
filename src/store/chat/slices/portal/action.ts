@@ -634,8 +634,37 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ taskId, type: PortalViewType.TaskDetail });
   };
 
+  openTaskResult = (taskId: string): void => {
+    this.#get().pushPortalView({ taskId, type: PortalViewType.TaskResult });
+  };
+
+  /** The whole goal's progress, opened beside the conversation that planned it. */
+  openGoal = (goalId: string): void => {
+    this.#get().pushPortalView({ goalId, type: PortalViewType.Goal });
+  };
+
   openGoalNode = (goalId: string, nodeId: string): void => {
     this.#get().pushPortalView({ goalId, nodeId, type: PortalViewType.GoalNode });
+  };
+
+  /** Follow graph provenance without replacing the experiment being inspected. */
+  drillIntoGoalNode = (goalId: string, nodeId: string): void => {
+    const { portalStack } = this.#get();
+    const existing = portalStack.findIndex(
+      (view) =>
+        view.type === PortalViewType.GoalNode && view.goalId === goalId && view.nodeId === nodeId,
+    );
+    this.#set(
+      {
+        portalStack:
+          existing >= 0
+            ? portalStack.slice(0, existing + 1)
+            : [...portalStack, { goalId, nodeId, type: PortalViewType.GoalNode }],
+        showPortal: true,
+      },
+      false,
+      'drillIntoGoalNode',
+    );
   };
 
   openGoalMetric = (goalId: string, metric: GoalMetricKind): void => {

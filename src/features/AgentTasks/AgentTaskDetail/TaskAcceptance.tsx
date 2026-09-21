@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Collapsible, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ChevronRight,
@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
+  checkDisplayTitle,
   checkHeadMeta,
   CriterionList,
   CriterionRow,
@@ -25,6 +26,13 @@ import {
   useAcceptanceBundle,
   useAcceptanceBySubject,
 } from '@/features/Acceptance';
+import {
+  AcceptanceBundleGate,
+  AcceptanceScope,
+} from '@/features/Acceptance/Viewer/AcceptanceScope';
+import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
+import AcceptanceDecision from '@/features/Acceptance/Viewer/Review/AcceptanceDecision';
+import { openAcceptanceDeleteConfirm } from '@/features/Acceptance/Workspace/AcceptanceDeleteConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
@@ -86,6 +94,7 @@ interface CompactCheckRowProps {
 }
 
 const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
+  const { t } = useTranslation('verify');
   const meta = checkHeadMeta(check);
 
   return (
@@ -93,7 +102,7 @@ const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
       data-task-acceptance-check={check.id}
       icon={<Icon color={meta.color} icon={meta.icon} size={16} style={{ flex: 'none' }} />}
       seq={check.seq}
-      title={check.title}
+      title={checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}
       onOpen={onOpen}
     />
   );
@@ -101,7 +110,18 @@ const CompactCheckRow = memo<CompactCheckRowProps>(({ check, onOpen }) => {
 
 CompactCheckRow.displayName = 'TaskAcceptanceCompactCheckRow';
 
-const TaskAcceptance = memo(() => {
+interface TaskAcceptanceProps {
+  /**
+   * `result` — the task result panel. The reader there has just read the
+   * delivery and wants to judge it on the spot, so this mounts the real
+   * Acceptance checklist and decision bar (the same atoms the acceptance page
+   * assembles) instead of a compact preview that only links out. The round
+   * timeline and the 验收目标 contract stay behind the report link.
+   */
+  variant?: 'default' | 'result';
+}
+
+const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   const { t } = useTranslation(['chat', 'verify']);
   const openAcceptance = useChatStore((state) => state.openAcceptance);
   const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
@@ -109,16 +129,19 @@ const TaskAcceptance = memo(() => {
   const { allowed: canEditTask } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskDatabaseId = useTaskStore(taskDetailSelectors.activeTaskDatabaseId);
+  const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
+  const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
   const [sectionExpanded, setSectionExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const [requirementExpanded, setRequirementExpanded] = useState(false);
 
   const {
     data: acceptanceSubject,
     error: subjectError,
     isLoading: subjectLoading,
     mutate: mutateSubject,
-  } = useAcceptanceBySubject('task', taskDatabaseId ?? null);
+  } = useAcceptanceBySubject('task', automationMode ? null : (taskDatabaseId ?? null));
   const {
     data: bundle,
     error: bundleError,
@@ -155,6 +178,11 @@ const TaskAcceptance = memo(() => {
   const groupKeys = groups.map((group) => group.key);
   const allGroupsCollapsed =
     groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
+  // A recurring task (schedule / heartbeat) never gets a verify plan on the
+  // server — its ticks are not deliveries. Offering the Verifier config or an
+  // acceptance section here would advertise a contract that never runs.
+  if (automationMode) return null;
+
   if (subjectLoading) return <NeuralNetworkLoading size={28} />;
   // Before the first Acceptance round exists, the configured criteria ARE the
   // delivery acceptance. Keep them in this single slot; once a round exists,
@@ -171,55 +199,71 @@ const TaskAcceptance = memo(() => {
   // to recreate it on the next run.
   const handleRemoveAcceptance = () => {
     if (!acceptanceSubject || !taskId) return;
-    confirmModal({
-      content: t('taskDetail.acceptance.removeConfirm.content'),
-      okButtonProps: { danger: true },
-      okText: t('taskDetail.acceptance.removeConfirm.ok'),
-      onOk: async () => {
+    openAcceptanceDeleteConfirm({
+      description: t('taskDetail.acceptance.removeConfirm.content'),
+      ids: [acceptanceSubject.id],
+      title: taskName || requirement || t('taskDetail.acceptance.untitled'),
+      onDelete: async (purge) => {
         await useTaskStore.getState().updateVerifyConfig(taskId, {
           enabled: false,
           requirement: null,
           verifyCriteriaIds: null,
         });
-        await verifyService.deleteAcceptance(acceptanceSubject.id);
+        await verifyService.deleteAcceptance(acceptanceSubject.id, purge);
         await mutateSubject();
       },
-      title: t('taskDetail.acceptance.removeConfirm.title'),
     });
   };
 
   // `acceptance.remove` only authorizes the acceptance creator (or a workspace
   // owner, cloud-side), not everyone who can edit the task — so the affordance
   // follows the bundle's isOwner rather than dead-ending in FORBIDDEN.
+  const reportButton = acceptanceSubject && (
+    <Flexbox horizontal align={'center'} gap={4}>
+      <Button
+        icon={<Icon icon={ExternalLink} />}
+        size={'small'}
+        type={'text'}
+        onClick={() => openReport(acceptanceSubject.id)}
+      >
+        {t('taskDetail.acceptance.openReport')}
+      </Button>
+      {canEditTask && bundle?.isOwner && (
+        <ActionIcon
+          icon={Trash}
+          size={'small'}
+          title={t('taskDetail.acceptance.remove')}
+          onClick={handleRemoveAcceptance}
+        />
+      )}
+    </Flexbox>
+  );
+
+  // The result panel mounts the live checklist itself — rows expand in place,
+  // reviews land here, and the decision bar closes the loop without a detour
+  // through the acceptance page. Its own 验收检查清单 header replaces the
+  // section header; the report link rides in the inventory toolbar.
+  if (variant === 'result' && acceptanceSubject && !subjectError) {
+    return (
+      <AcceptanceScope embedded acceptanceId={acceptanceSubject.id}>
+        <AcceptanceBundleGate height={160}>
+          <Flexbox gap={16}>
+            <AcceptanceCheckInventory toolbar={reportButton} />
+            <AcceptanceDecision />
+          </Flexbox>
+        </AcceptanceBundleGate>
+      </AcceptanceScope>
+    );
+  }
+
   const header = (
     <TaskAcceptanceHeader
       count={checks.length}
       // The section shows the rounds and the checklist; the report is the full
       // record behind them — reachable from the block it belongs to, instead
       // of only from the status row at the top of the page.
+      extra={reportButton}
       isOpen={sectionExpanded}
-      extra={
-        acceptanceSubject && (
-          <Flexbox horizontal align={'center'} gap={4}>
-            <Button
-              icon={<Icon icon={ExternalLink} />}
-              size={'small'}
-              type={'text'}
-              onClick={() => openReport(acceptanceSubject.id)}
-            >
-              {t('taskDetail.acceptance.openReport')}
-            </Button>
-            {canEditTask && bundle?.isOwner && (
-              <ActionIcon
-                icon={Trash}
-                size={'small'}
-                title={t('taskDetail.acceptance.remove')}
-                onClick={handleRemoveAcceptance}
-              />
-            )}
-          </Flexbox>
-        )
-      }
       onToggle={() => setSectionExpanded((expanded) => !expanded)}
     />
   );
@@ -238,7 +282,7 @@ const TaskAcceptance = memo(() => {
   return (
     <Flexbox gap={8}>
       {header}
-      {sectionExpanded && (
+      <Collapsible open={sectionExpanded}>
         <Flexbox className={styles.body} gap={14}>
           {bundleLoading && <NeuralNetworkLoading size={28} />}
           {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
@@ -250,7 +294,18 @@ const TaskAcceptance = memo(() => {
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.goal')}
                   </Text>
-                  <Text>{requirement}</Text>
+                  {/* The contract, not the result. A goal-dispatched task carries
+                      a generated paragraph here, and printing it in full pushed
+                      the checks — the thing the reader came for — below the
+                      fold. Two lines, and the rest on demand. */}
+                  <Text
+                    ellipsis={requirementExpanded ? undefined : { rows: 2 }}
+                    style={{ cursor: 'pointer' }}
+                    title={requirement}
+                    onClick={() => setRequirementExpanded((open) => !open)}
+                  >
+                    {requirement}
+                  </Text>
                 </Flexbox>
               )}
               <Flexbox gap={7}>
@@ -333,7 +388,7 @@ const TaskAcceptance = memo(() => {
             </>
           )}
         </Flexbox>
-      )}
+      </Collapsible>
     </Flexbox>
   );
 });

@@ -1,11 +1,16 @@
-import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { execFile, execFileSync } from 'node:child_process';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { defaultGetProjectFileIndex, defaultSearchProjectFiles } from '../projectFileIndex';
+import {
+  defaultGetProjectFileIndex,
+  defaultListProjectDirectory,
+  defaultSearchProjectFiles,
+} from '../projectFileIndex';
 
 const cleanup: string[] = [];
 
@@ -56,11 +61,60 @@ describe('defaultGetProjectFileIndex', () => {
     expect(result).not.toHaveProperty('totalCount');
   });
 
+  it('keeps ignored directories unique when git also lists their descendants', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-ignored-parents-'));
+    cleanup.push(dir);
+    const git = promisify(execFile);
+    await git('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await mkdir(path.join(dir, '.husky', '_'), { recursive: true });
+    await writeFile(path.join(dir, '.husky', '_', '.gitignore'), '**\n');
+    await writeFile(path.join(dir, '.husky', '_', 'hook'), 'hook\n');
+
+    const result = await defaultGetProjectFileIndex({ scope: dir });
+    const paths = result.entries.map((entry) => entry.relativePath);
+
+    expect(result.source).toBe('git');
+    expect(new Set(paths).size).toBe(paths.length);
+    for (const relativePath of ['.husky/', '.husky/_/']) {
+      expect(result.entries.filter((entry) => entry.relativePath === relativePath)).toEqual([
+        expect.objectContaining({ gitIgnored: true, isDirectory: true }),
+      ]);
+    }
+    expect(paths).toContain('.husky/_/hook');
+    // Its children are already indexed, so nothing is left to fetch on expand.
+    expect(result.entries.find((entry) => entry.relativePath === '.husky/_/')?.collapsed).toBe(
+      undefined,
+    );
+  });
+
+  it('flags a collapsed ignored directory so its children can be fetched on expand', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-collapsed-'));
+    cleanup.push(dir);
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: dir });
+    await writeFile(path.join(dir, '.gitignore'), 'traces/\n');
+    await mkdir(path.join(dir, 'traces', 'nested'), { recursive: true });
+    await writeFile(path.join(dir, 'traces', 'one.json'), '{}\n');
+    await writeFile(path.join(dir, 'traces', 'nested', 'two.json'), '{}\n');
+
+    const result = await defaultGetProjectFileIndex({ scope: dir });
+
+    expect(result.entries.find((entry) => entry.relativePath === 'traces/')).toMatchObject({
+      collapsed: true,
+      gitIgnored: true,
+      isDirectory: true,
+    });
+    expect(result.entries.map((entry) => entry.relativePath)).not.toContain('traces/one.json');
+  });
+
   it('falls back to a glob walk when the scope is not a git repo', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-glob-'));
     cleanup.push(dir);
     await mkdir(path.join(dir, 'nested', 'deep'), { recursive: true });
     await mkdir(path.join(dir, '.agents'), { recursive: true });
+    await mkdir(path.join(dir, 'empty'));
+    await mkdir(path.join(dir, '.hidden-empty'));
+    await mkdir(path.join(dir, 'node_modules', 'dependency'), { recursive: true });
+    await writeFile(path.join(dir, 'node_modules', 'dependency', 'index.js'), 'ignored');
     await writeFile(path.join(dir, 'one.txt'), '1\n');
     await writeFile(path.join(dir, 'nested', 'deep', 'two.txt'), '2\n');
     await writeFile(path.join(dir, '.agents', 'config.md'), '# cfg\n');
@@ -68,7 +122,12 @@ describe('defaultGetProjectFileIndex', () => {
     const result = await defaultGetProjectFileIndex({ scope: dir });
 
     expect(result.source).toBe('glob');
+    const rels = result.entries.map((entry) => entry.relativePath);
     const byRel = Object.fromEntries(result.entries.map((e) => [e.relativePath, e]));
+    expect(new Set(rels).size).toBe(rels.length);
+    expect(byRel['empty/']?.isDirectory).toBe(true);
+    expect(byRel['.hidden-empty/']?.isDirectory).toBe(true);
+    expect(rels.some((relativePath) => relativePath.startsWith('node_modules/'))).toBe(false);
 
     // Nested files are present and attached to synthesized directory entries.
     expect(byRel['nested/deep/two.txt']?.isDirectory).toBe(false);
@@ -80,6 +139,90 @@ describe('defaultGetProjectFileIndex', () => {
     expect(byRel['.agents/config.md']?.isDirectory).toBe(false);
 
     expect(result).not.toHaveProperty('totalCount');
+  });
+});
+
+describe('defaultListProjectDirectory', () => {
+  it('lists one level of a collapsed directory, flagging subdirectories for the next expand', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-list-dir-'));
+    cleanup.push(dir);
+    await mkdir(path.join(dir, 'traces', 'nested'), { recursive: true });
+    await writeFile(path.join(dir, 'traces', 'one.json'), '{}\n');
+    await writeFile(path.join(dir, 'traces', 'nested', 'two.json'), '{}\n');
+
+    const result = await defaultListProjectDirectory({ relativePath: 'traces/', root: dir });
+
+    expect(result.truncated).toBe(false);
+    expect(result.entries).toEqual([
+      expect.objectContaining({
+        collapsed: true,
+        gitIgnored: true,
+        isDirectory: true,
+        relativePath: 'traces/nested/',
+      }),
+      expect.objectContaining({
+        gitIgnored: true,
+        isDirectory: false,
+        relativePath: 'traces/one.json',
+      }),
+    ]);
+    expect(result.entries[1]).not.toHaveProperty('collapsed');
+  });
+
+  it('reports truncation instead of returning an unbounded directory', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-list-dir-limit-'));
+    cleanup.push(dir);
+    await mkdir(path.join(dir, 'many'), { recursive: true });
+    await Promise.all(
+      Array.from({ length: 5 }).map((_, index) =>
+        writeFile(path.join(dir, 'many', `file-${index}.txt`), 'x\n'),
+      ),
+    );
+
+    const result = await defaultListProjectDirectory({
+      limit: 2,
+      relativePath: 'many',
+      root: dir,
+    });
+
+    expect(result.entries).toHaveLength(2);
+    expect(result.truncated).toBe(true);
+  });
+
+  it('refuses to walk outside the project root', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-list-dir-escape-'));
+    cleanup.push(dir);
+
+    await expect(defaultListProjectDirectory({ relativePath: '../', root: dir })).rejects.toThrow(
+      'outside the project root',
+    );
+  });
+
+  it('refuses to follow a symlink that points outside the project root', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-list-dir-symlink-'));
+    const outside = await mkdtemp(path.join(tmpdir(), 'dc-list-dir-outside-'));
+    cleanup.push(dir, outside);
+    await writeFile(path.join(outside, 'SECRET.txt'), 'must stay unreachable\n');
+    // A lexical prefix check passes here: the link itself lives inside the root.
+    await symlink(outside, path.join(dir, 'escape-link'), 'dir');
+
+    await expect(
+      defaultListProjectDirectory({ relativePath: 'escape-link', root: dir }),
+    ).rejects.toThrow('outside the project root');
+  });
+
+  it('still lists a symlink that stays inside the project root', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'dc-list-dir-inner-link-'));
+    cleanup.push(dir);
+    await mkdir(path.join(dir, 'real'), { recursive: true });
+    await writeFile(path.join(dir, 'real', 'kept.txt'), 'reachable\n');
+    await symlink(path.join(dir, 'real'), path.join(dir, 'inner-link'), 'dir');
+
+    const result = await defaultListProjectDirectory({ relativePath: 'inner-link', root: dir });
+
+    // Ids stay anchored to the path the caller asked for, not the link target,
+    // so the tree can still attach these rows under the row that was expanded.
+    expect(result.entries.map((entry) => entry.relativePath)).toEqual(['inner-link/kept.txt']);
   });
 });
 

@@ -2,6 +2,7 @@ import type { DocumentCommentJson } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorProps } from '@lobehub/editor/react';
 import { useEditor } from '@lobehub/editor/react';
+import { cx } from 'antd-style';
 import type { Ref } from 'react';
 import { memo, useCallback, useImperativeHandle } from 'react';
 
@@ -14,6 +15,7 @@ import {
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 
 import { styles } from './styles';
+import { useFreezeHeightWhileResizingImage } from './useFreezeHeightWhileResizingImage';
 
 export type DocumentCommentEditorValue = TopicCommentEditorValue;
 
@@ -30,6 +32,8 @@ interface DocumentCommentEditorProps {
   disabled?: boolean;
   editor?: IEditor;
   entityId: string;
+  /** Drop the editor's extra inline padding so the caret lines up with the action bar's first icon. */
+  flush?: boolean;
   getPopupContainer?: EditorProps['getPopupContainer'];
   initialContent: string;
   initialEditorData?: DocumentCommentJson | null;
@@ -45,6 +49,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     autoFocus,
     compact = false,
     disabled,
+    flush = false,
     editor: externalEditor,
     entityId,
     getPopupContainer,
@@ -57,6 +62,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     const internalEditor = useEditor();
     const editor = externalEditor ?? internalEditor;
     const mentionOption = useWorkspaceCommentMentionOption();
+    const rootRef = useFreezeHeightWhileResizingImage();
 
     const setValue = useCallback(
       (value: DocumentCommentEditorValue) => {
@@ -85,8 +91,16 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
     );
 
     return (
-      <div className={`${styles.commentEditor} ${mentionFilledClassName}`}>
+      <div
+        ref={rootRef}
+        className={cx(
+          styles.commentEditor,
+          flush && styles.commentEditorFlush,
+          mentionFilledClassName,
+        )}
+      >
         <EditorCanvas
+          blockImageCaretGuard
           disabled={disabled}
           editor={editor}
           editorData={{ content: initialContent, editorData: initialEditorData }}
@@ -96,10 +110,14 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
           mentionOption={mentionOption}
           placeholder={placeholder}
           contentStyle={{
-            maxHeight: compact ? 120 : 184,
             minHeight: compact ? 24 : 44,
-            overflowY: 'auto',
-            padding: 0,
+            // On top of ChatInput's own 8px/12px body padding: keep content —
+            // images especially — clear of the box edges. Only the vertical
+            // padding lives here: the editor forwards this style to its
+            // absolutely positioned placeholder as well, so a horizontal
+            // padding would push the placeholder 8px past the caret. The
+            // inline padding sits on `styles.commentEditor` instead.
+            paddingBlock: '6px 10px',
           }}
           onContentChange={() => onChange?.(readTopicCommentEditorValue(editor))}
           onInit={handleInit}

@@ -16,6 +16,7 @@ import { useFetchResources, useResourceStore } from '@/store/file/slices/resourc
 
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import EmptyPlaceholder from './EmptyPlaceholder';
+import FileDetailPanel from './FileDetailPanel';
 import Header from './Header';
 import { useResetSelectionOnQueryChange } from './hooks/useResetSelectionOnQueryChange';
 import ListView from './ListView';
@@ -65,6 +66,7 @@ const ResourceExplorer = memo(() => {
       // Only use category filter when NOT in a specific library
       // When viewing a library, show all items regardless of category
       category: libraryId ? undefined : category,
+      includeContentPreview: viewMode === 'masonry',
       libraryId,
       parentId: currentFolderSlug || null,
       showFilesInKnowledgeBase: false,
@@ -76,7 +78,16 @@ const ResourceExplorer = memo(() => {
       // user's last home filter.
       visibility: getResourceQueryVisibility(libraryId, listVisibility),
     }),
-    [category, libraryId, currentFolderSlug, sortType, sorter, listVisibility, sourceFilter],
+    [
+      category,
+      libraryId,
+      currentFolderSlug,
+      sortType,
+      sorter,
+      listVisibility,
+      sourceFilter,
+      viewMode,
+    ],
   );
 
   // Use SWR for data fetching with automatic caching and revalidation.
@@ -115,43 +126,50 @@ const ResourceExplorer = memo(() => {
     searchQuery,
   });
 
+  // Inline split-screen dock: rendered next to the list so a file click can
+  // show its detail without leaving the surface.
+  const detailPanelMount = useMemo(() => <FileDetailPanel />, []);
+
   const showEmptyStatus = !isLoading && !isValidating && data?.length === 0;
 
   return (
     <KnowledgeBaseListProvider>
       <Flexbox height={'100%'}>
         <Header />
-        <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-          {/*
-            AsyncBoundary gates error → empty → data. `isLoading` stays false here
-            because the list/masonry views own their own skeletons (loading is a
-            content swap inside them, not a full relayout), so the boundary only
-            arbitrates the failed-vs-empty-vs-data precedence the call site got wrong.
-          */}
-          <AsyncBoundary
-            data={data}
-            empty={<EmptyPlaceholder />}
-            error={error}
-            errorVariant={'block'}
-            isEmpty={showEmptyStatus}
-            onRetry={() => mutate()}
-          >
-            {viewMode === 'list' ? (
-              <ListView
-                isLoading={isLoading}
-                isValidating={isValidating}
-                queryParams={queryParams}
-              />
-            ) : (
-              <MasonryView
-                isLoading={isLoading}
-                isValidating={isValidating}
-                queryParams={queryParams}
-              />
-            )}
-          </AsyncBoundary>
-          <SearchResultsOverlay />
-        </div>
+        <Flexbox horizontal flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minWidth: 0 }}>
+            {/*
+              AsyncBoundary gates error → empty → data. `isLoading` stays false here
+              because the list/masonry views own their own skeletons (loading is a
+              content swap inside them, not a full relayout), so the boundary only
+              arbitrates the failed-vs-empty-vs-data precedence the call site got wrong.
+            */}
+            <AsyncBoundary
+              data={data}
+              empty={<EmptyPlaceholder />}
+              error={error}
+              errorVariant={'block'}
+              isEmpty={showEmptyStatus}
+              onRetry={() => mutate()}
+            >
+              {viewMode === 'list' ? (
+                <ListView
+                  isLoading={isLoading}
+                  isValidating={isValidating}
+                  queryParams={queryParams}
+                />
+              ) : (
+                <MasonryView
+                  isLoading={isLoading}
+                  isValidating={isValidating}
+                  queryParams={queryParams}
+                />
+              )}
+            </AsyncBoundary>
+            <SearchResultsOverlay />
+          </div>
+          {detailPanelMount}
+        </Flexbox>
       </Flexbox>
     </KnowledgeBaseListProvider>
   );

@@ -62,6 +62,7 @@ describe('server-default heterogeneous agent matrix', () => {
       tokenHeader: 'x-api-key',
     });
     expect(isServerDefaultHeterogeneousAgentType('pi')).toBe(true);
+    expect(isServerDefaultHeterogeneousAgentType('trae')).toBe(true);
     expect(isServerDefaultHeterogeneousAgentType('opencode')).toBe(false);
     expect(isServerDefaultHeterogeneousAgentType('toString')).toBe(false);
     expect(getServerDefaultHeterogeneousAgentConfig(undefined)).toBeUndefined();

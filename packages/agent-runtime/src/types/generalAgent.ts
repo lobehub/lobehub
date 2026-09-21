@@ -6,6 +6,8 @@ import {
   type RuntimeAdditionalContextFragment,
 } from '@lobechat/types';
 
+import type { AgentState } from './state';
+
 export interface GeneralAgentCallLLMInstructionPayload {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
@@ -108,18 +110,7 @@ export interface GeneralAgentConfig {
    * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
    */
   globalInterventionAudits?: GlobalInterventionAuditConfig[];
-  modelRuntimeConfig?: {
-    /**
-     * Compression model configuration
-     * Used for context compression tasks
-     */
-    compressionModel?: {
-      model: string;
-      provider: string;
-    };
-    model: string;
-    provider: string;
-  };
+  modelRuntimeConfig?: AgentState['modelRuntimeConfig'];
   operationId: string;
   /** Phase-level tools exposed to this agent run. Falls back to AgentState.tools. */
   tools?: any[];

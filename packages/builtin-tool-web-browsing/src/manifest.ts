@@ -8,7 +8,7 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'a search service with automatic engine selection. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results',
+        'a search service with automatic engine selection. Useful for when you need to answer questions about current events. Input should be a search query. Output is a JSON array of the query results. An empty result is a completed search, not an error: never resend the same query — rewrite it instead (fewer quoted phrases, no site:/language modifiers, more general keywords).',
       name: WebBrowsingApiName.search,
       parameters: {
         properties: {
@@ -36,12 +36,13 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'A crawler can visit page content. Output is a JSON object of title, content, url and website',
+        'A crawler can visit page content. Output is a JSON object of title, content, url and website. Only pass absolute http(s) URLs of HTML/text document pages; image, SVG, font, video and archive files have no readable content. A 404/410 dead-link result is final — do not retry it.',
       name: WebBrowsingApiName.crawlSinglePage,
       parameters: {
         properties: {
           url: {
-            description: 'The url need to be crawled',
+            description:
+              'The absolute http(s) URL to crawl, e.g. https://example.com/path — not a bare domain, markdown link or free text',
             type: 'string',
           },
         },
@@ -51,13 +52,14 @@ export const WebBrowsingManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website',
+        'A crawler can visit multi pages. If need to visit multi website, use this one. Output is an array of JSON object of title, content, url and website. Only pass absolute http(s) URLs of HTML/text document pages; image, SVG, font, video and archive files have no readable content. A 404/410 dead-link result is final — do not retry it.',
       name: WebBrowsingApiName.crawlMultiPages,
       parameters: {
         properties: {
           urls: {
             items: {
-              description: 'The urls need to be crawled',
+              description:
+                'An absolute http(s) URL to crawl, e.g. https://example.com/path — not a bare domain, markdown link or free text',
               type: 'string',
             },
             type: 'array',

@@ -5,7 +5,7 @@ import {
   type RuntimeImageGenParamsKeys,
   type RuntimeImageGenParamsValue,
 } from 'model-bank';
-import { extractDefaultValues } from 'model-bank';
+import { extractDefaultValues } from 'model-bank/standardParameters';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';

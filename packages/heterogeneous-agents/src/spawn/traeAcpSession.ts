@@ -184,7 +184,9 @@ export const parseTraeAcpModelCatalog = (
   const configOptions = Array.isArray(result?.configOptions)
     ? result.configOptions.map((value) => value as TraeAcpConfigOption | null)
     : [];
-  const selectableOptions = configOptions.filter((option) => option?.type === 'select');
+  const selectableOptions = configOptions.filter(
+    (option) => option?.type === undefined || option.type === 'select',
+  );
   const modelConfig =
     selectableOptions.find((option) => option?.category === 'model') ??
     selectableOptions.find((option) => option?.id === 'model') ??

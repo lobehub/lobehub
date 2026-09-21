@@ -3,6 +3,7 @@ import type {
   HeterogeneousProviderBindingRuntime,
   ServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
+import type { ServerDefaultHeterogeneousRelayInvocation } from '@lobechat/types';
 
 import {
   callLambdaMutation,
@@ -30,6 +31,11 @@ export interface ServerDefaultOperationBinding {
   endpoint: string;
   model: 'lobehub-default';
   token: string;
+}
+
+export interface ServerDefaultOperationSettlement {
+  relayInvocation?: ServerDefaultHeterogeneousRelayInvocation | null;
+  success: true;
 }
 
 const getAuthenticatedServer = async (auth: RemoteServerAuth) => {
@@ -66,9 +72,9 @@ export const getServerDefaultEndpoint = async (auth: RemoteServerAuth): Promise<
 export const settleServerDefaultOperation = async (
   auth: RemoteServerAuth,
   input: { cancelled?: boolean; operationId: string; result?: 'done' | 'error' },
-): Promise<void> => {
+): Promise<ServerDefaultOperationSettlement> => {
   const server = await getAuthenticatedServer(auth);
-  await callLambdaMutation(
+  return callLambdaMutation<ServerDefaultOperationSettlement>(
     server,
     input.cancelled
       ? 'aiAgent.cancelServerDefaultHeterogeneousOperation'

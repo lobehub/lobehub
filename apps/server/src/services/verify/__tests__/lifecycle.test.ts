@@ -8,12 +8,16 @@ const { findByIdMock, getPinnedDocumentsMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn().mockImplementation(() => ({ findById: findByIdMock })),
+  DocumentModel: vi.fn().mockImplementation(function () {
+    return { findById: findByIdMock };
+  }),
 }));
 vi.mock('@/database/models/task', () => ({
-  TaskModel: vi.fn().mockImplementation(() => ({
-    getPinnedDocuments: getPinnedDocumentsMock,
-  })),
+  TaskModel: vi.fn().mockImplementation(function () {
+    return {
+      getPinnedDocuments: getPinnedDocumentsMock,
+    };
+  }),
 }));
 
 describe('resolveVerificationDeliverable', () => {

@@ -39,10 +39,12 @@ vi.mock('@lobechat/connector-data/twitter', () => ({
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn(() => ({
-    markComposioConnectionUnavailable: mocks.markComposioUnavailable,
-    queryComposioReferencesByIdentifiers: mocks.queryComposioReferences,
-  })),
+  ConnectorModel: vi.fn(function () {
+    return {
+      markComposioConnectionUnavailable: mocks.markComposioUnavailable,
+      queryComposioReferencesByIdentifiers: mocks.queryComposioReferences,
+    };
+  }),
 }));
 
 vi.mock('@/libs/composio', () => ({
@@ -50,28 +52,34 @@ vi.mock('@/libs/composio', () => ({
   isComposioConnectedAccountLookupNotFoundError: mocks.isComposioLookupNotFound,
 }));
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn(() => ({
-    market: {
-      skills: {
-        callTool: mocks.marketCallTool,
-        getStatus: mocks.marketGetStatus,
+  MarketService: vi.fn(function () {
+    return {
+      market: {
+        skills: {
+          callTool: mocks.marketCallTool,
+          getStatus: mocks.marketGetStatus,
+        },
       },
-    },
-    proxyOAuthRequest: mocks.marketProxyOAuthRequest,
-  })),
+      proxyOAuthRequest: mocks.marketProxyOAuthRequest,
+    };
+  }),
 }));
 
 const authDb = (
   rows: Array<{ accessToken: string | null; accessTokenExpiresAt?: Date | null; id: string }>,
 ) =>
   ({
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue(rows) })),
-        })),
-      })),
-    })),
+    select: vi.fn(function () {
+      return {
+        from: vi.fn(function () {
+          return {
+            where: vi.fn(() => ({
+              orderBy: vi.fn(() => ({ limit: vi.fn().mockResolvedValue(rows) })),
+            })),
+          };
+        }),
+      };
+    }),
   }) as unknown as LobeChatDatabase;
 
 describe('ConnectorDataService', () => {
@@ -82,10 +90,11 @@ describe('ConnectorDataService', () => {
       connectedAccounts: { get: mocks.composioConnectedAccountGet },
       kind: 'composio',
     });
-    mocks.isComposioLookupNotFound.mockImplementation(
-      (error: unknown) =>
-        typeof error === 'object' && error !== null && 'status' in error && error.status === 404,
-    );
+    mocks.isComposioLookupNotFound.mockImplementation(function (error: unknown) {
+      return (
+        typeof error === 'object' && error !== null && 'status' in error && error.status === 404
+      );
+    });
     mocks.createGitHubMarketClient.mockReturnValue({ kind: 'github-market-client' });
     mocks.markComposioUnavailable.mockResolvedValue(false);
     mocks.marketCallTool.mockResolvedValue({ data: { data: [] }, success: true });

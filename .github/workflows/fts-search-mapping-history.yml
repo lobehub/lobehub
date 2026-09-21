@@ -1,0 +1,31 @@
+name: FTS Search Mapping History
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fts-search-mapping-history-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify Append-Only History
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request merge
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test history guard
+        run: node --test .github/scripts/check-fts-mapping-history.test.mjs
+
+      - name: Verify history against pull request base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node .github/scripts/check-fts-mapping-history.mjs "$BASE_SHA" HEAD

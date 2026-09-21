@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost } from '../transport';
@@ -45,7 +46,7 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
   lastModified: new Date().toISOString(),
   maxSteps: 100,
   messages: [],
-  metadata: {
+  origin: {
     agentId: 'agent-123',
     threadId: 'thread-123',
     topicId: 'topic-123',
@@ -73,13 +74,13 @@ const createInstruction = (messages: any[]): AgentInstructionCompressContext => 
 describe('compressContext executor', () => {
   let host: AgentRuntimeHost;
   let messagesQuery: ReturnType<typeof vi.fn>;
-  let compressionCreateGroup: ReturnType<typeof vi.fn>;
-  let compressionBuildPrompt: ReturnType<typeof vi.fn>;
-  let compressionFinalizeGroup: ReturnType<typeof vi.fn>;
-  let compressionRollbackGroup: ReturnType<typeof vi.fn>;
-  let compressionUpdateGroup: ReturnType<typeof vi.fn>;
-  let llmStream: ReturnType<typeof vi.fn>;
-  let lifecycleDispatch: ReturnType<typeof vi.fn>;
+  let compressionCreateGroup: Mock;
+  let compressionBuildPrompt: Mock;
+  let compressionFinalizeGroup: Mock;
+  let compressionRollbackGroup: Mock;
+  let compressionUpdateGroup: Mock;
+  let llmStream: Mock;
+  let lifecycleDispatch: Mock;
 
   beforeEach(() => {
     messagesQuery = vi.fn().mockResolvedValue([]);
@@ -282,7 +283,7 @@ describe('compressContext executor', () => {
 
   it('skips without compression side effects when topic context is missing', async () => {
     const state = createState({
-      metadata: { agentId: 'agent-123' },
+      origin: { agentId: 'agent-123' },
       messages: [{ content: 'history', role: 'user' }],
     });
     const missingContextHost: AgentRuntimeHost = {

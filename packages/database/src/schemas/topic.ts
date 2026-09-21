@@ -1,5 +1,5 @@
 import type { ChatTopicMetadata, ThreadMetadata } from '@lobechat/types';
-import { sql } from 'drizzle-orm';
+import { isNotNull, sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -9,6 +9,7 @@ import {
   primaryKey,
   text,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
@@ -18,6 +19,7 @@ import { amountNumeric, createdAt, softDeleteColumns, timestamps, timestamptz } 
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { documents } from './file';
+import { projects, projectWorkingDirectories } from './project';
 import { sessions } from './session';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -35,6 +37,13 @@ export const topics = pgTable(
     editorData: jsonb('editor_data'),
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
     groupId: text('group_id').references(() => chatGroups.id, { onDelete: 'cascade' }),
+    /** Business project this conversation belongs to, independent of its execution directory. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    /** Optional project directory used as the conversation's execution context. */
+    projectWorkingDirectoryId: uuid('project_working_directory_id').references(
+      () => projectWorkingDirectories.id,
+      { onDelete: 'set null' },
+    ),
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -93,6 +102,10 @@ export const topics = pgTable(
     index('topics_session_id_idx').on(t.sessionId),
     index('topics_group_id_idx').on(t.groupId),
     index('topics_agent_id_idx').on(t.agentId),
+    index('topics_project_id_idx').on(t.projectId).where(isNotNull(t.projectId)),
+    index('topics_project_working_directory_id_idx')
+      .on(t.projectWorkingDirectoryId)
+      .where(isNotNull(t.projectWorkingDirectoryId)),
     index('topics_trigger_idx').on(t.trigger),
     index('topics_status_idx').on(t.status),
     index('topics_model_idx').on(t.model),

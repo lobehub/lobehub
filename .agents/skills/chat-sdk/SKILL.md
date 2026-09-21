@@ -1,6 +1,6 @@
 ---
 name: chat-sdk
-description: 'Build multi-platform chat bots with the chat SDK. Use for Slack, Teams, Google Chat, Discord, GitHub, Linear bots, webhooks, mentions, slash commands, cards, modals, or streaming responses.'
+description: 'Use for multi-platform bots built with chat SDK: webhooks, mentions, slash commands, cards, modals and streaming.'
 user-invocable: false
 ---
 

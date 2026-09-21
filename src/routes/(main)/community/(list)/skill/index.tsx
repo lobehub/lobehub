@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 import { type SkillQueryParams } from '@/types/discover';
@@ -12,12 +13,11 @@ import { DiscoverTab, SkillSorts } from '@/types/discover';
 import SkillEmpty from '../../features/SkillEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const SkillPage = memo(() => {
   const { q, page, category, sort, order } = useQuery() as SkillQueryParams;
   const useSkillList = useDiscoverStore((s) => s.useFetchSkillList);
-  const { data, isLoading, error, mutate } = useSkillList({
+  const { data, error, isLoading, mutate } = useSkillList({
     category,
     order,
     page,
@@ -36,7 +36,7 @@ const SkillPage = memo(() => {
       errorVariant={'page'}
       isEmpty={items.length === 0}
       isLoading={isLoading}
-      loading={<Loading />}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {data && (

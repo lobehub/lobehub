@@ -1,9 +1,17 @@
-import type { GoalNodeKind } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CircleHelp, GitBranch, Lightbulb, ListChecks, type LucideIcon } from 'lucide-react';
+import {
+  CircleHelp,
+  FlaskConical,
+  GitBranch,
+  Lightbulb,
+  ListChecks,
+  type LucideIcon,
+} from 'lucide-react';
 import { memo } from 'react';
+
+import type { GoalGraphNodeKind } from '../Experiments/model';
 
 /**
  * One palette per node kind, used by both the graph cards and the inline
@@ -11,19 +19,21 @@ import { memo } from 'react';
  * reads the same everywhere. State is carried by stroke and glyph, never by
  * filling a node with its status color.
  */
-export const KIND_COLOR: Record<GoalNodeKind, { line: string; soft: string }> = {
+export const KIND_COLOR: Record<GoalGraphNodeKind, { line: string; soft: string }> = {
   // LobeHub's theme palette is an 11-step scale, not antd's 10-step one: the
   // primary-strength band sits at x9–x10, and x6/x7 resolve to near-pastel
   // tints (light-mode blue-7 is #93c8ff). x3/x10 gives the glyph a visible
   // tinted tile with a saturated line in both themes.
   decision: { line: cssVar.orange10, soft: cssVar.orange3 },
+  experiment: { line: cssVar.cyan10, soft: cssVar.cyan3 },
   finding: { line: cssVar.green10, soft: cssVar.green3 },
   problem: { line: cssVar.purple10, soft: cssVar.purple3 },
   task: { line: cssVar.blue10, soft: cssVar.blue3 },
 };
 
-export const KIND_ICON: Record<GoalNodeKind, LucideIcon> = {
+export const KIND_ICON: Record<GoalGraphNodeKind, LucideIcon> = {
   decision: GitBranch,
+  experiment: FlaskConical,
   finding: Lightbulb,
   problem: CircleHelp,
   task: ListChecks,
@@ -46,7 +56,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export const monoClass = styles.mono;
 
-export const KindDot = memo<{ kind: GoalNodeKind }>(({ kind }) => (
+export const KindDot = memo<{ kind: GoalGraphNodeKind }>(({ kind }) => (
   <span className={styles.dot} style={{ background: KIND_COLOR[kind].line }} />
 ));
 
@@ -62,7 +72,7 @@ export const MonoText = memo<{ children: React.ReactNode; title?: string }>(
 
 MonoText.displayName = 'GoalMonoText';
 
-export const KindIcon = memo<{ kind: GoalNodeKind; size?: number }>(({ kind, size = 14 }) => (
+export const KindIcon = memo<{ kind: GoalGraphNodeKind; size?: number }>(({ kind, size = 14 }) => (
   <Icon color={KIND_COLOR[kind].line} icon={KIND_ICON[kind]} size={size} />
 ));
 

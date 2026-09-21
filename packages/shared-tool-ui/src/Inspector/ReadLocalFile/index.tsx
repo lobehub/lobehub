@@ -6,7 +6,7 @@ import { cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FilePathDisplay } from '../../components/FilePathDisplay';
+import { FilePathDisplay, getFilePathDisplayInfo } from '../../components/FilePathDisplay';
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
 interface ReadFileArgs {
@@ -20,9 +20,12 @@ interface ReadFileArgs {
   startLine?: number;
 }
 
-export const createReadLocalFileInspector = (translationKey: string) => {
+export const createReadLocalFileInspector = (
+  translationKey: string,
+  imageTranslationKey?: string,
+) => {
   const Inspector = memo<BuiltinInspectorProps<ReadFileArgs, ReadFileState>>(
-    ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+    ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
       const { t } = useTranslation('plugin');
 
       const filePath =
@@ -32,7 +35,15 @@ export const createReadLocalFileInspector = (translationKey: string) => {
         partialArgs?.path ||
         partialArgs?.filePath ||
         partialArgs?.file_path ||
+        pluginState?.path ||
         '';
+      // File hints let streaming captures display as images; uploaded image state
+      // also identifies extensionless files. No screenshot provenance is inferred.
+      const isImage = getFilePathDisplayInfo(filePath).isImage || !!pluginState?.images?.length;
+      const label =
+        imageTranslationKey && isImage
+          ? `${imageTranslationKey}${isArgumentsStreaming || isLoading ? '.loading' : ''}`
+          : translationKey;
 
       const lineRange = useMemo(() => {
         const source = args || partialArgs;
@@ -52,14 +63,14 @@ export const createReadLocalFileInspector = (translationKey: string) => {
         if (!filePath)
           return (
             <div className={inspectorTextStyles.root}>
-              <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
+              <span className={shinyTextStyles.shinyText}>{t(label as any)}</span>
             </div>
           );
 
         return (
           <div className={inspectorTextStyles.root}>
             <span className={shinyTextStyles.shinyText} style={{ marginInlineEnd: 6 }}>
-              {t(translationKey as any)}:
+              {t(label as any)}:
             </span>
             <FilePathDisplay filePath={filePath} />
           </div>
@@ -72,7 +83,7 @@ export const createReadLocalFileInspector = (translationKey: string) => {
             className={cx(isLoading && shinyTextStyles.shinyText)}
             style={{ marginInlineEnd: 6 }}
           >
-            {t(translationKey as any)}:
+            {t(label as any)}:
           </span>
           <FilePathDisplay filePath={filePath} />
           {lineRange && <span style={{ marginInlineStart: 4 }}>({lineRange})</span>}

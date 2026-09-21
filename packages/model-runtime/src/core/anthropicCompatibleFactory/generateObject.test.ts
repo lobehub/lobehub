@@ -84,6 +84,34 @@ describe('Anthropic generateObject', () => {
         strict: true,
       }),
     ]);
+    // auto tool_choice cannot force the call, so the prompt must ask for it
+    expect(requestParams.system).toEqual([
+      {
+        text: 'You must respond by calling the `person_extractor` tool. Do not reply with plain text.',
+        type: 'text',
+      },
+    ]);
+  });
+
+  it('should append the tool-use instruction after an existing system prompt on Fable 5.1', async () => {
+    const { requestParams } = await buildAnthropicGenerateObjectRequest({
+      messages: [
+        { content: 'You are an extractor.', role: 'system' as const },
+        { content: 'Generate a person object', role: 'user' as const },
+      ],
+      model: 'claude-fable-5-1',
+      schema: {
+        name: 'person_extractor',
+        schema: { properties: { name: { type: 'string' } }, type: 'object' as const },
+      },
+    } as any);
+
+    expect(requestParams.system).toEqual([
+      {
+        text: 'You are an extractor.\n\nYou must respond by calling the `person_extractor` tool. Do not reply with plain text.',
+        type: 'text',
+      },
+    ]);
   });
 
   it('should key the Fable 5.1 tool_choice guard on config.requestModel', async () => {
@@ -116,6 +144,8 @@ describe('Anthropic generateObject', () => {
       name: 'person_extractor',
       type: 'tool',
     });
+    // forced tool_choice still works here, so no prompt instruction is injected
+    expect(requestParams.system).toBeUndefined();
   });
 
   it('should use auto tool_choice for tools mode on Fable 5.1', async () => {
@@ -139,6 +169,12 @@ describe('Anthropic generateObject', () => {
     } as any);
 
     expect(requestParams.tool_choice).toEqual({ type: 'auto' });
+    expect(requestParams.system).toEqual([
+      {
+        text: 'You must respond by calling one of the provided tools. Do not reply with plain text.',
+        type: 'text',
+      },
+    ]);
   });
 
   it('should still use auto tool_choice when the request model is an opaque mapped id', async () => {

@@ -35,6 +35,7 @@ import {
   CODEX_COMMAND_OUTPUT_MAX_LENGTH,
   truncateCodexCommandOutput,
 } from '../utils/codexCommandOutput';
+import { isCodexCapacityError } from '../utils/codexErrors';
 import { toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
@@ -323,7 +324,10 @@ const toUsage = (usage: TokenUsageBreakdown): UsageData | undefined => {
   };
 };
 
-const classifyCodexError = (info: CodexErrorInfo | null): CodexErrorClassification => {
+const classifyCodexError = (
+  info: CodexErrorInfo | null,
+  message: string,
+): CodexErrorClassification => {
   if (typeof info === 'object' && info) {
     if ('activeTurnNotSteerable' in info) return { kind: 'agent_failed' };
     const connection =
@@ -359,6 +363,9 @@ const classifyCodexError = (info: CodexErrorInfo | null): CodexErrorClassificati
       return { kind: 'invalid_request' };
     }
     default: {
+      if (isCodexCapacityError(message)) {
+        return { code: 'overloaded', kind: 'server_overloaded' };
+      }
       return { kind: 'agent_failed' };
     }
   }
@@ -744,7 +751,7 @@ export class CodexAppServerAdapter {
   private terminalError(error: TurnError): HeterogeneousAgentEvent[] {
     if (this.terminal) return [];
     this.terminal = true;
-    const classification = classifyCodexError(error.codexErrorInfo);
+    const classification = classifyCodexError(error.codexErrorInfo, error.message);
     const details = {
       ...(error.additionalDetails ? { additionalDetails: error.additionalDetails } : {}),
       ...(error.codexErrorInfo ? { codexErrorInfo: error.codexErrorInfo } : {}),

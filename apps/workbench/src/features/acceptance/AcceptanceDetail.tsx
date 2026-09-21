@@ -6,13 +6,13 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { useParams } from 'react-router';
 
 import { extractUuid } from '@/features/Acceptance/utils';
-import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/AcceptanceCheckInventory';
-import AcceptanceGoal from '@/features/Acceptance/Viewer/AcceptanceGoal';
-import AcceptanceIdentity from '@/features/Acceptance/Viewer/AcceptanceIdentity';
 import {
   AcceptanceBundleGate,
   AcceptanceScope,
 } from '@/features/Acceptance/Viewer/AcceptanceScope';
+import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
+import AcceptanceGoal from '@/features/Acceptance/Viewer/Header/AcceptanceGoal';
+import AcceptanceIdentity from '@/features/Acceptance/Viewer/Header/AcceptanceIdentity';
 import { useAcceptanceBundle } from '@/features/Acceptance/Viewer/useAcceptanceBundle';
 
 import { WorkbenchHeader } from '../../shell/WorkbenchHeader';

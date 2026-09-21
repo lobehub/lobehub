@@ -15,7 +15,6 @@ import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   description?: string | null;
@@ -85,7 +84,7 @@ export const useDropdownMenu = ({
   );
 
   const handleDelete = useCallback(() => {
-    if (!canEdit || !canManage) return;
+    if (!canEdit) return;
     if (!id) return;
 
     confirmModal({
@@ -96,17 +95,13 @@ export const useDropdownMenu = ({
       onOk: async () => {
         try {
           await removeKnowledgeBase(id);
-        } catch (error) {
-          toast.error(
-            isForbiddenError(error)
-              ? t('manageOnlyCreator', { ns: 'common' })
-              : t('operationFailed', { ns: 'common' }),
-          );
+        } catch {
+          toast.error(t('operationFailed', { ns: 'common' }));
         }
       },
       title: t('header.actions.deleteLibrary'),
     });
-  }, [canEdit, canManage, id, removeKnowledgeBase, t]);
+  }, [canEdit, id, removeKnowledgeBase, t]);
 
   const handleEditDescription = useCallback(() => {
     if (!canEdit) return;
@@ -219,7 +214,7 @@ export const useDropdownMenu = ({
       ].filter(Boolean) as NonNullable<MenuProps['items']>,
       // Cross-workspace move / copy: creator-or-owner only.
       canEdit && canManage ? (transferMenuItems ?? []) : [],
-      canEdit && canManage
+      canEdit
         ? [
             {
               danger: true,

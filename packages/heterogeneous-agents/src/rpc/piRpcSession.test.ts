@@ -1,0 +1,564 @@
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { PiOperationContextUnavailableError } from './piRpcOperationContext';
+import type { PiRpcEvent } from './piRpcProtocol';
+import { PiRpcSession } from './piRpcSession';
+
+const mocks = vi.hoisted(() => ({
+  clientInstances: [] as any[],
+  clientSessionId: { value: undefined as string | undefined },
+  command: vi.fn(),
+  start: vi.fn(),
+  close: vi.fn(),
+  abort: vi.fn(),
+  setOperationContext: vi.fn(),
+  clearOperationContext: vi.fn(),
+}));
+
+vi.mock('./piRpcClient', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    PiRpcClient: class MockPiRpcClient {
+      static instances = mocks.clientInstances;
+      onEvent?: (event: PiRpcEvent) => void | Promise<void>;
+      constructor(readonly options: any) {
+        this.onEvent = options.onEvent;
+        mocks.clientInstances.push(this);
+      }
+      get pid() {
+        return 123_456;
+      }
+      get isClosed() {
+        return false;
+      }
+      get isReady() {
+        return true;
+      }
+      get sessionId() {
+        return mocks.clientSessionId.value;
+      }
+      start = mocks.start;
+      command = mocks.command;
+      close = mocks.close;
+      abort = mocks.abort;
+      setOperationContext = mocks.setOperationContext;
+      clearOperationContext = mocks.clearOperationContext;
+    },
+  };
+});
+
+const createSession = (overrides: Partial<ConstructorParameters<typeof PiRpcSession>[0]> = {}) => {
+  const events: AgentStreamEvent[] = [];
+  const statuses: string[] = [];
+  const sessionIds: string[] = [];
+  const session = new PiRpcSession({
+    args: [],
+    commandPath: 'pi',
+    cwd: '/workspace',
+    env: { ...process.env },
+    operationId: 'op-1',
+    sessionId: 'lobe-session-1',
+    onEvents: (batch) => void events.push(...batch),
+    onRuntimeStatus: (status) => void statuses.push(status.state),
+    onSessionId: (id) => void sessionIds.push(id),
+    onStderr: vi.fn(),
+    ...overrides,
+  });
+  return { events, session, sessionIds, statuses };
+};
+
+const emit = (session: PiRpcSession, event: PiRpcEvent) => {
+  const client = mocks.clientInstances.at(-1)!;
+  return client.onEvent!(event);
+};
+
+beforeEach(() => {
+  mocks.start.mockResolvedValue(undefined);
+  mocks.close.mockResolvedValue(undefined);
+  mocks.setOperationContext.mockResolvedValue(undefined);
+  mocks.clearOperationContext.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  mocks.clientInstances.length = 0;
+  mocks.clientSessionId.value = undefined;
+  mocks.start.mockReset();
+  mocks.command.mockReset();
+  mocks.close.mockReset();
+  mocks.abort.mockReset();
+  mocks.setOperationContext.mockReset();
+  mocks.clearOperationContext.mockReset();
+  vi.useRealTimers();
+});
+
+describe('PiRpcSession', () => {
+  it('waits for identity installation before prompting and cleanup before reuse', async () => {
+    let installed!: () => void;
+    let cleared!: () => void;
+    mocks.command.mockResolvedValue({ success: true });
+    mocks.setOperationContext.mockReturnValue(
+      new Promise<void>((resolve) => (installed = resolve)),
+    );
+    mocks.clearOperationContext.mockReturnValue(
+      new Promise<void>((resolve) => (cleared = resolve)),
+    );
+    const { session } = createSession({ autoCloseOnSettle: false, shellOperationId: 'shell-op-A' });
+    const run = session.run({ text: 'work' });
+    await vi.waitFor(() => expect(mocks.setOperationContext).toHaveBeenCalledWith('shell-op-A'));
+    expect(mocks.command).not.toHaveBeenCalled();
+    installed();
+    await vi.waitFor(() =>
+      expect(mocks.command).toHaveBeenCalledWith({ type: 'prompt', message: 'work' }),
+    );
+    await emit(session, { type: 'agent_settled' });
+    await vi.waitFor(() => expect(mocks.clearOperationContext).toHaveBeenCalled());
+    expect(session.isReusable).toBe(false);
+    await expect(session.run({ text: 'too early' })).rejects.toThrow('active run');
+    cleared();
+    await run;
+    expect(session.isReusable).toBe(true);
+    await session.close();
+  });
+
+  it('never prompts when identity installation fails and never reuses failed cleanup', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.setOperationContext.mockRejectedValue(new Error('missing context acknowledgment'));
+    await expect(session.run({ text: 'must not execute' })).rejects.toThrow('missing context');
+    expect(mocks.command).not.toHaveBeenCalled();
+    expect(session.isReusable).toBe(false);
+
+    mocks.setOperationContext.mockResolvedValue(undefined);
+    mocks.clearOperationContext.mockRejectedValue(new Error('clear failed'));
+    mocks.command.mockResolvedValue({ success: true });
+    const next = createSession({ autoCloseOnSettle: false }).session;
+    const run = next.run({ text: 'execute once' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await emit(next, { type: 'agent_settled' });
+    await expect(run).resolves.toEqual({ aborted: false });
+    expect(next.isReusable).toBe(false);
+    expect(mocks.command).toHaveBeenCalledOnce();
+  });
+
+  it('falls back once before the user prompt when the extension is unavailable', async () => {
+    mocks.start.mockRejectedValueOnce(new PiOperationContextUnavailableError('no extension'));
+    mocks.command.mockResolvedValue({ success: true });
+    const { session } = createSession({ autoCloseOnSettle: false });
+    const run = session.run({ text: 'once' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    expect(mocks.clientInstances.map((client) => client.options.operationContext)).toEqual([
+      true,
+      false,
+    ]);
+    await emit(session, { type: 'agent_settled' });
+    await run;
+    expect(mocks.command).toHaveBeenCalledOnce();
+    expect(session.isReusable).toBe(false);
+  });
+
+  it('waits beyond the abort ACK until settlement before allowing reuse', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    mocks.abort.mockResolvedValue(undefined);
+    const run = session.run({ text: 'first' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    const cancelled = vi.fn();
+    const cancellation = session.abort().then(cancelled);
+    await vi.waitFor(() => expect(mocks.abort).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cancelled).not.toHaveBeenCalled();
+    expect(session.isReusable).toBe(false);
+    await emit(session, { type: 'agent_settled' });
+    await cancellation;
+    await expect(run).resolves.toEqual({ aborted: true });
+    expect(session.isReusable).toBe(true);
+    expect(mocks.close).not.toHaveBeenCalled();
+    await session.close();
+  });
+
+  it.each(['no-ack', 'no-settlement', 'rejected'])(
+    'closes before confirming cancellation when abort has %s',
+    async (failure) => {
+      vi.useFakeTimers();
+      const { session } = createSession({ autoCloseOnSettle: false });
+      mocks.command.mockResolvedValue({ success: true });
+      if (failure === 'no-ack') mocks.abort.mockReturnValue(new Promise(() => {}));
+      else if (failure === 'rejected') mocks.abort.mockRejectedValue(new Error('abort refused'));
+      else mocks.abort.mockResolvedValue(undefined);
+      let finishClose!: () => void;
+      mocks.close.mockReturnValue(new Promise<void>((resolve) => (finishClose = resolve)));
+      const run = session.run({ text: 'work' });
+      await vi.advanceTimersByTimeAsync(0);
+      const confirmed = vi.fn();
+      const cancellation = session.abort().then(confirmed);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(mocks.close).toHaveBeenCalledOnce();
+      expect(confirmed).not.toHaveBeenCalled();
+      finishClose();
+      await cancellation;
+      await run;
+      expect(session.isReusable).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it('rejects cancellation when process shutdown cannot be confirmed', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    mocks.abort.mockRejectedValue(new Error('abort refused'));
+    mocks.close.mockRejectedValue(new Error('still alive after SIGKILL'));
+    const run = session.run({ text: 'work' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await expect(session.abort()).rejects.toThrow('still alive after SIGKILL');
+    await run;
+    expect(session.isReusable).toBe(false);
+  });
+
+  it('seeds stream provenance from the handshake on every pooled turn', async () => {
+    mocks.clientSessionId.value = 'native-rpc-session';
+    mocks.command.mockResolvedValue({ success: true });
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+    for (const text of ['first', 'second']) {
+      mocks.command.mockClear();
+      const run = session.run({ text });
+      await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+      await emit(session, { type: 'turn_start' });
+      await emit(session, { type: 'agent_settled' });
+      await run;
+    }
+    expect(
+      events.filter((event) => event.type === 'stream_start').map((event) => event.data.sessionId),
+    ).toEqual(['native-rpc-session', 'native-rpc-session']);
+    await session.close();
+  });
+
+  it('waits for recovery after assistant errors and resolves the recovered run', async () => {
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    const run = session.run({ text: 'recover' });
+    const finished = vi.fn();
+    void run.then(finished, finished);
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await emit(session, {
+      type: 'message_update',
+      assistantMessageEvent: {
+        type: 'error',
+        error: { stopReason: 'error', errorMessage: 'overflow' },
+      },
+    });
+    await emit(session, { type: 'agent_end' });
+    await emit(session, { type: 'auto_retry_start', attempt: 1, delayMs: 10, maxAttempts: 3 });
+    expect(finished).not.toHaveBeenCalled();
+    expect(session.isRunning).toBe(true);
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    await emit(session, { type: 'turn_start' });
+    await emit(session, {
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'stop',
+        content: [{ type: 'text', text: 'recovered' }],
+      },
+    });
+    await emit(session, { type: 'agent_settled' });
+    await expect(run).resolves.toEqual({ aborted: false });
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    await session.close();
+  });
+
+  it('rejects immediately on transport death after prompt acknowledgement', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockResolvedValue({ success: true });
+    const run = session.run({ text: 'hello' });
+    const result = expect(run).rejects.toThrow('process died');
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    mocks.clientInstances.at(-1).options.onError(new Error('process died'));
+    await result;
+    expect(session.isRunning).toBe(false);
+    expect(session.isReusable).toBe(false);
+    expect(mocks.close).toHaveBeenCalled();
+  });
+
+  it('cleans up a rejected prompt in pooled mode', async () => {
+    vi.useFakeTimers();
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.command.mockRejectedValue(new Error('prompt rejected'));
+    await expect(session.run({ text: 'hello' })).rejects.toThrow('prompt rejected');
+    expect(session.isRunning).toBe(false);
+    expect(mocks.close).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reserves the session during startup and closes safely before startup finishes', async () => {
+    let finishStart!: () => void;
+    mocks.start.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishStart = resolve;
+        }),
+    );
+    const { session } = createSession({ autoCloseOnSettle: false });
+    const run = session.run({ text: 'first' });
+    void run.catch(() => {});
+    expect(session.isRunning).toBe(true);
+    await expect(session.run({ text: 'second' })).rejects.toThrow('active run');
+    await session.close();
+    finishStart();
+    await expect(run).rejects.toThrow('closed');
+    expect(mocks.command).not.toHaveBeenCalled();
+  });
+
+  it('runs a prompt and resolves on agent_settled, broadcasting stream events', async () => {
+    const { events, session, sessionIds } = createSession();
+    mocks.clientSessionId.value = 'pi-sess-1';
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      if (command.type === 'prompt')
+        return Promise.resolve({ success: true, type: 'response', command: 'prompt', id: '1' });
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const runPromise = session.run({ text: 'hello' });
+    const client = mocks.clientInstances.at(-1)!;
+    expect(client).toBeTruthy();
+
+    // RPC mode reports the native session id via the get_state handshake,
+    // not a `{type:'session'}` event.
+    await emit(session, {
+      assistantMessageEvent: { contentIndex: 0, delta: 'Hi ', type: 'text_delta' },
+      type: 'message_update',
+    });
+    await emit(session, {
+      assistantMessageEvent: { contentIndex: 0, delta: 'there', type: 'text_delta' },
+      type: 'message_update',
+    });
+    await emit(session, { type: 'agent_settled' });
+
+    await expect(runPromise).resolves.toEqual({ aborted: false });
+    expect(sessionIds).toContain('pi-sess-1');
+    // text deltas flowed through the real PiAdapter → AgentStreamEvent stream.
+    const textChunks = events.filter(
+      (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+    );
+    expect(textChunks.map((e) => e.data.content).join('')).toBe('Hi there');
+    // agent_runtime_end terminal event emitted by the adapter on settled.
+    expect(events.some((e) => e.type === 'agent_runtime_end')).toBe(true);
+    // The run closes its own process.
+    expect(mocks.close).toHaveBeenCalled();
+  });
+
+  it('waits for cancellation to settle before accepting the next pooled turn', async () => {
+    const { session, events } = createSession({ autoCloseOnSettle: false });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const runPromise = session.run({ text: 'hello' });
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await emit(session, {
+      assistantMessageEvent: { reason: 'aborted', type: 'error' },
+      type: 'message_update',
+    });
+    expect(session.isRunning).toBe(true);
+    await expect(session.run({ text: 'too early' })).rejects.toThrow('active run');
+    await emit(session, { type: 'agent_end' });
+    await emit(session, { type: 'agent_settled' });
+    await expect(runPromise).resolves.toEqual({ aborted: true });
+    const next = session.run({ text: 'next turn' });
+    await emit(session, {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'next reply' },
+    });
+    await emit(session, { type: 'agent_settled' });
+    await expect(next).resolves.toEqual({ aborted: false });
+    expect(
+      events.some((event) => event.type === 'stream_chunk' && event.data.content === 'next reply'),
+    ).toBe(true);
+    expect(session.isReusable).toBe(true);
+    await session.close();
+  });
+
+  it('keeps the settled result when it arrives before the prompt ACK', async () => {
+    let acknowledge!: (response: { success: boolean }) => void;
+    mocks.command.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          acknowledge = resolve;
+        }),
+    );
+    const { session } = createSession();
+    const run = session.run({ text: 'fast reply' });
+    const finished = vi.fn();
+    void run.then(finished);
+    await vi.waitFor(() => expect(mocks.command).toHaveBeenCalled());
+    await emit(session, { type: 'agent_settled' });
+    expect(finished).not.toHaveBeenCalled();
+    acknowledge({ success: true });
+    await expect(run).resolves.toEqual({ aborted: false });
+  });
+
+  it('rejects on a terminal error event and still recycles the process', async () => {
+    const { events, session } = createSession();
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const runPromise = session.run({ text: 'hello' });
+    await emit(session, {
+      assistantMessageEvent: {
+        error: { errorMessage: 'usage limit reached', stopReason: 'error' },
+        type: 'error',
+      },
+      type: 'message_update',
+    });
+    await emit(session, { type: 'agent_settled' });
+    await expect(runPromise).rejects.toThrow('usage limit reached');
+    expect(mocks.close).toHaveBeenCalled();
+    expect(events.some((e) => e.type === 'error')).toBe(true);
+  });
+
+  it('streams events on EVERY run of a reused process (fresh adapter per run)', async () => {
+    const { events, session } = createSession({ autoCloseOnSettle: false });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state') {
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      }
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const runTextChunks = async () => {
+      const runPromise = session.run({ text: 'x' });
+      await vi.waitFor(() => expect(session.isRunning).toBe(true));
+      await emit(session, {
+        assistantMessageEvent: { contentIndex: 0, delta: 'reply', type: 'text_delta' },
+        type: 'message_update',
+      });
+      await emit(session, { type: 'agent_settled' });
+      await runPromise;
+    };
+
+    // Turn 1 streams normally.
+    await runTextChunks();
+    // Turn 2 reuses the SAME process — the stateful PiAdapter is replaced
+    // per run, so its text must still reach the host.
+    await runTextChunks();
+
+    const textChunks = events.filter(
+      (e) => e.type === 'stream_chunk' && e.data.chunkType === 'text',
+    );
+    expect(textChunks.map((e) => e.data.content)).toEqual(['reply', 'reply']);
+    expect(mocks.close).not.toHaveBeenCalled();
+    await session.close();
+  });
+
+  it('rebinds host callbacks so a pooled process targets a new IPC session', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state') {
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      }
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const rebound: string[] = [];
+    const onRuntimeStatus = vi.fn();
+    session.rebind({
+      operationId: 'op-2',
+      sessionId: 'lobe-session-2',
+      onEvents: (batch) => {
+        for (const event of batch) expect(event.operationId).toBe('op-2');
+        rebound.push(...batch.map((e) => e.type));
+      },
+      onRuntimeStatus,
+      onSessionId: vi.fn(),
+      onStderr: vi.fn(),
+    });
+
+    const runPromise = session.run({ text: 'x' });
+    await emit(session, {
+      assistantMessageEvent: { contentIndex: 0, delta: 'hi', type: 'text_delta' },
+      type: 'message_update',
+    });
+    await emit(session, { type: 'agent_settled' });
+    await runPromise;
+
+    // Events flow to the rebound callback, not the original one.
+    expect(rebound).toContain('stream_chunk');
+    expect(onRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op-2',
+        sessionId: 'lobe-session-2',
+        state: 'running',
+      }),
+    );
+    await session.close();
+  });
+
+  it('keeps the process alive across runs when autoCloseOnSettle is false', async () => {
+    const { session } = createSession({ autoCloseOnSettle: false });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state') {
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      }
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    // Turn 1 settles without closing the process.
+    const first = session.run({ text: 'first' });
+    await vi.waitFor(() => expect(session.isRunning).toBe(true));
+    await emit(session, { type: 'agent_settled' });
+    await expect(first).resolves.toEqual({ aborted: false });
+    expect(session.isRunning).toBe(false);
+    expect(mocks.close).not.toHaveBeenCalled();
+
+    // Turn 2 reuses the same session/process.
+    const second = session.run({ text: 'second' });
+    await vi.waitFor(() => expect(session.isRunning).toBe(true));
+    await emit(session, { type: 'agent_settled' });
+    await expect(second).resolves.toEqual({ aborted: false });
+    expect(session.isRunning).toBe(false);
+    expect(mocks.close).not.toHaveBeenCalled();
+
+    // The host owns close() in pooled mode.
+    await session.close();
+    expect(mocks.close).toHaveBeenCalled();
+  });
+
+  it('forwards extension UI requests to the host', async () => {
+    const handler = vi.fn().mockReturnValue(undefined);
+    const { session } = createSession({ onExtensionUiRequest: handler });
+    mocks.start.mockResolvedValue(undefined);
+    mocks.command.mockImplementation((command: { type: string }) => {
+      if (command.type === 'get_state')
+        return Promise.resolve({ success: true, type: 'response', command: 'get_state' });
+      return Promise.resolve({ success: true, type: 'response', command: command.type });
+    });
+    mocks.close.mockResolvedValue(undefined);
+
+    const runPromise = session.run({ text: 'hello' });
+    // Extension UI requests are intercepted by the RPC client (covered in
+    // piRpcClient.test.ts) and never surface as agent events.
+    await emit(session, { type: 'agent_settled' });
+    await runPromise;
+    expect(handler).not.toHaveBeenCalled();
+  });
+});

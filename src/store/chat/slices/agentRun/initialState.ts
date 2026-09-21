@@ -6,11 +6,33 @@ export type MainConversationScrollToIndex = (
   options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },
 ) => void;
 
+/**
+ * Last `op_lifecycle` notice the shared gateway socket delivered for an
+ * operation. Written only when the `enableGatewayMux` lab flag routes runs
+ * over the multiplexed socket; the hub emits one for every op the user owns,
+ * whether or not this tab is subscribed to it.
+ */
+export interface GatewayFeedEntry {
+  /** Hub timestamp (epoch ms) of the lifecycle transition. */
+  at: number;
+  /** Op routing metadata (topicId, agentId, parent/root op...) as sent by the hub. */
+  meta?: Record<string, unknown>;
+  /** `SessionStatus` or `gone` once the hub has forgotten the op. */
+  status: string;
+}
+
+export type QuestionSubmissionPhase = 'submitting' | 'checking' | 'failed' | 'uncertain';
+
 export interface ChatAIChatState {
   /**
    * Active Agent Gateway WebSocket connections, keyed by operationId
    */
   gatewayConnections: Record<string, GatewayConnection>;
+  /**
+   * Mux-level op lifecycle feed, keyed by operationId. No UI reads it yet;
+   * later work drives spinners / reconnect decisions from it.
+   */
+  gatewayFeed: Record<string, GatewayFeedEntry>;
   inputFiles: File[];
   inputMessage: string;
   /**
@@ -25,6 +47,8 @@ export interface ChatAIChatState {
    * UI can render a distinct "running on device" state.
    */
   pendingClientToolExecutions: Record<string, boolean>;
+  /** Local UI feedback only; never persisted as the server intervention status. */
+  questionSubmissions: Record<string, QuestionSubmissionPhase>;
   searchWorkflowLoadingIds: string[];
   threadInputEditor: ChatInputEditor | null;
   /**
@@ -35,11 +59,13 @@ export interface ChatAIChatState {
 
 export const initialAiChatState: ChatAIChatState = {
   gatewayConnections: {},
+  gatewayFeed: {},
   inputFiles: [],
   inputMessage: '',
   mainConversationScrollToIndex: null,
   mainInputEditor: null,
   pendingClientToolExecutions: {},
+  questionSubmissions: {},
   searchWorkflowLoadingIds: [],
   threadInputEditor: null,
   toolCallingStreamIds: {},

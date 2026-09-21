@@ -1,12 +1,13 @@
 'use client';
 
-import { Accordion, AccordionItem, Block, Flexbox, FluentEmoji, Highlighter } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import type { Key } from 'react';
-import { useState } from 'react';
+import { Block, Flexbox, FluentEmoji } from '@lobehub/ui';
+import { Accordion, Button } from '@lobehub/ui/base-ui';
+import { lazy, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MAX_WIDTH } from '@/const/layoutTokens';
+
+const Highlighter = lazy(() => import('@lobehub/ui/es/Highlighter/index'));
 
 export type ErrorType = Error & { digest?: string };
 
@@ -19,8 +20,8 @@ interface ErrorCaptureProps {
 const ErrorCapture = ({ error, resetPath = '/' }: ErrorCaptureProps) => {
   const { t } = useTranslation('error');
   const hasStack = !!error?.stack;
-  const defaultExpandedKeys: Key[] = typeof __CI__ !== 'undefined' && __CI__ ? ['stack'] : [];
-  const [expandedKeys, setExpandedKeys] = useState<Key[]>(defaultExpandedKeys);
+  const defaultExpandedKeys: string[] = typeof __CI__ !== 'undefined' && __CI__ ? ['stack'] : [];
+  const [expandedKeys, setExpandedKeys] = useState<string[]>(defaultExpandedKeys);
   const isExpanded = expandedKeys.includes('stack');
 
   return (
@@ -61,16 +62,24 @@ const ErrorCapture = ({ error, resetPath = '/' }: ErrorCaptureProps) => {
           }}
         >
           <Accordion
-            expandedKeys={expandedKeys}
+            indicatorPlacement={'inline'}
+            value={expandedKeys}
             variant={'borderless'}
-            onExpandedChange={setExpandedKeys}
-          >
-            <AccordionItem indicatorPlacement={'start'} itemKey={'stack'} title={t('error.stack')}>
-              <Highlighter language={'plaintext'} padding={12} variant={'borderless'}>
-                {error.stack!}
-              </Highlighter>
-            </AccordionItem>
-          </Accordion>
+            items={[
+              {
+                key: 'stack',
+                title: t('error.stack'),
+                children: (
+                  <Suspense fallback={null}>
+                    <Highlighter language={'plaintext'} padding={12} variant={'borderless'}>
+                      {error.stack!}
+                    </Highlighter>
+                  </Suspense>
+                ),
+              },
+            ]}
+            onValueChange={setExpandedKeys}
+          />
         </Block>
       )}
     </Flexbox>

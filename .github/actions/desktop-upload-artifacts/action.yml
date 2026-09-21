@@ -33,6 +33,19 @@ runs:
           echo "Invalid renderer OTA main bundle hash"
           exit 1
         fi
+        node --input-type=module <<'NODE'
+        import { readFile, mkdir, writeFile } from 'node:fs/promises';
+        import { validateInputManifest } from './apps/desktop/scripts/validateMainHash.mjs';
+        const release = 'apps/desktop/release';
+        const manifest = JSON.parse(await readFile(`${release}/renderer-mainhash-inputs.json`, 'utf8'));
+        validateInputManifest(manifest);
+        const embedded = (await readFile(`${release}/renderer-mainhash.txt`, 'utf8')).trim();
+        if (embedded !== manifest.mainHash) throw new Error('Packaged hash differs from source inputs');
+        await mkdir(`${release}/renderer-mainhash`, { recursive: true });
+        await writeFile(`${release}/renderer-mainhash/${process.env.ARTIFACT_NAME}.json`, JSON.stringify(manifest, null, 2));
+        NODE
+      env:
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
 
     - name: Sign renderer OTA r0 baseline
       if: runner.os == 'Linux' && inputs.renderer-ota-private-key != '' && inputs.update-channel != ''
@@ -90,6 +103,6 @@ runs:
           apps/desktop/release/*.snap*
           apps/desktop/release/*.rpm*
           apps/desktop/release/*.tar.gz*
-          apps/desktop/release/renderer-mainhash.txt
+          apps/desktop/release/renderer-mainhash/
           apps/desktop/release/renderer-ota
         retention-days: ${{ inputs.retention-days }}

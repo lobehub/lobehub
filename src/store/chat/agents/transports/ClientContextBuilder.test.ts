@@ -70,6 +70,8 @@ describe('ClientContextBuilder', () => {
           provider: 'test-provider',
           tools: resolvedAgentConfig.tools,
         },
+        preserveThinking: true,
+        replayAssistantReasoning: true,
       }));
     const builder = new ClientContextBuilder({
       agentConfig,
@@ -143,8 +145,14 @@ describe('ClientContextBuilder', () => {
       tools: [activatedTool],
     });
     expect(result.modelParameters).toMatchObject({
-      params: { model: 'test-model', provider: 'test-provider', tools: [activatedTool] },
+      params: {
+        model: 'test-model',
+        preserveThinking: true,
+        provider: 'test-provider',
+        tools: [activatedTool],
+      },
     });
+    expect(result.replayAssistantReasoning).toBe(true);
     expect(
       (result.modelParameters as { params: Record<string, unknown> }).params,
     ).not.toHaveProperty('additionalContexts');

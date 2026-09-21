@@ -9,6 +9,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
+import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
 import {
@@ -16,8 +17,10 @@ import {
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { LinearFileCard } from '@/features/EditorCanvas/LinearFilePlugin';
+import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
+import { isOptimisticActivityId } from '@/store/task/slices/detail/optimisticActivity';
 
 import { styles } from '../shared/style';
 
@@ -44,6 +47,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const editor = useEditor();
+  const mentionOption = useWorkspaceCommentMentionOption();
 
   const { text: relTime, title: relTimeTitle } = useActivityTime(activity.time);
   const content = activity.content || t('taskDetail.activities.fallback.comment');
@@ -154,13 +158,16 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
 
       {isEditing && (
         <>
-          <EditorCanvas
-            editor={editor}
-            editorData={editorData}
-            entityId={commentId}
-            floatingToolbar={false}
-            style={{ paddingBottom: 4 }}
-          />
+          <div className={mentionFilledClassName}>
+            <EditorCanvas
+              editor={editor}
+              editorData={editorData}
+              entityId={commentId}
+              floatingToolbar={false}
+              mentionOption={mentionOption}
+              style={{ paddingBottom: 4 }}
+            />
+          </div>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <AttachmentUploadButton onFiles={handleAttach} />
             <Flexbox horizontal gap={8}>
@@ -176,6 +183,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
       )}
       {!isEditing && Boolean(activity.editorData) && (
         <LexicalRenderer
+          className={mentionFilledClassName}
           overrides={rendererOverrides}
           value={activity.editorData as Parameters<typeof LexicalRenderer>[0]['value']}
           variant={'chat'}
@@ -187,7 +195,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
         </Markdown>
       )}
 
-      {!isEditing && commentId && (
+      {!isEditing && commentId && !isOptimisticActivityId(commentId) && (
         <div className={`${styles.commentActions} comment-actions`}>
           <DropdownMenu items={menuItems}>
             <ActionIcon icon={MoreHorizontal} size={'small'} />

@@ -10,6 +10,7 @@ import type {
   ExecVirtualSubAgentParams,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
+  UserInterventionConfig,
   WorkingDirConfig,
 } from '@lobechat/types';
 import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
@@ -23,6 +24,7 @@ import {
 } from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { DeviceModel } from '@/database/models/device';
@@ -38,6 +40,7 @@ import type {
   AgentExecutionParams,
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
+  AgentStepContinuation,
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -65,7 +68,9 @@ import { createHistoryMessagesLoader, prepareOperation } from './pipeline/operat
 import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
 import { startOperation } from './pipeline/startOperation';
 import { discoverTools } from './pipeline/toolDiscovery';
-import { setupTurn } from './pipeline/turnSetup';
+import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
+import { createRunFacts, type RunFacts } from './runFacts';
+import { applyShareGateToAgentConfig } from './shareGate';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
 import { acquireTopicStartReservation } from './topicStartReservation';
@@ -113,6 +118,14 @@ export class AiAgentService {
     db: LobeChatDatabase,
     userId: string,
     options?: {
+      /**
+       * Opt IN to agent-share visitor rows for the models this service (and
+       * the {@link AgentRuntimeService} it constructs) owns. Reserved for
+       * share-runtime entry points that drive a visitor turn under the
+       * creator's `userId` (`share.ownerId`). Defaults to false; ordinary
+       * creator-facing entry points get the visitor exclusion for free.
+       */
+      includeShareVisitor?: boolean;
       marketAccessToken?: string;
       runtimeOptions?: AgentRuntimeServiceOptions;
       withholdGatewayToken?: boolean;
@@ -124,19 +137,23 @@ export class AiAgentService {
     this.workspaceId = options?.workspaceId;
     this.withholdGatewayToken = options?.withholdGatewayToken ?? false;
     const wsId = this.workspaceId;
+    const includeShareVisitor = options?.includeShareVisitor ?? false;
+    const messageModelOptions = { includeShareVisitor };
+    const topicModelOptions = { includeShareVisitor };
     this.agentDocumentsService = new AgentDocumentsService(db, userId, wsId);
     this.agentModel = new AgentModel(db, userId, wsId);
     this.agentOperationModel = new AgentOperationModel(db, userId, wsId);
     this.agentService = new AgentService(db, userId, wsId);
-    this.messageModel = new MessageModel(db, userId, wsId);
+    this.messageModel = new MessageModel(db, userId, wsId, undefined, messageModelOptions);
     this.connectorModel = new ConnectorModel(db, userId, wsId);
     this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
     this.pluginModel = new PluginModel(db, userId, wsId);
     this.taskModel = new TaskModel(db, userId, wsId);
     this.threadModel = new ThreadModel(db, userId, wsId);
-    this.topicModel = new TopicModel(db, userId, wsId);
+    this.topicModel = new TopicModel(db, userId, wsId, undefined, topicModelOptions);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
+      includeShareVisitor,
       agentFactory: createGraphAwareAgentFactory(options?.runtimeOptions?.agentFactory),
       // ── Runtime delegate ─────────────────────────────────────────────────
       // Operations the runtime delegates back UP to this layer. The dependency
@@ -150,6 +167,7 @@ export class AiAgentService {
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
+        verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
       },
       workspaceId: wsId,
     });
@@ -187,17 +205,17 @@ export class AiAgentService {
     };
   }
 
-  private async getMarketService(): Promise<MarketService> {
+  private async getMarketService(runFacts?: RunFacts): Promise<MarketService> {
     if (this._marketService) return this._marketService;
 
-    let accessToken: string | undefined;
-    try {
-      const userModel = new UserModel(this.db, this.userId);
-      const settings = await userModel.getUserSettings();
-      accessToken = (settings?.market as any)?.accessToken;
-    } catch {
-      // non-fatal — MarketService will fall back to trustedClientToken
-    }
+    // The turn's fact reader already holds this row when a run is underway
+    // (`execAgent` asks it for the memory / timezone settings too); callers
+    // outside a run read it themselves.
+    // Non-fatal either way — MarketService falls back to trustedClientToken.
+    const settings = await (
+      runFacts ? runFacts.userSettings() : new UserModel(this.db, this.userId).getUserSettings()
+    ).catch(() => undefined);
+    const accessToken = (settings?.market as any)?.accessToken;
 
     this._marketService = new MarketService({
       accessToken,
@@ -286,6 +304,21 @@ export class AiAgentService {
     return this.agentRuntimeService.executeStep(params);
   }
 
+  /** Mint a lock owner that spans a whole inline step loop. */
+  createOperationLockOwner(operationId: string): string {
+    return this.agentRuntimeService.createOperationLockOwner(operationId);
+  }
+
+  /** Publish a step that an inline loop deferred instead of running. */
+  scheduleContinuation(continuation: AgentStepContinuation): Promise<void> {
+    return this.agentRuntimeService.scheduleContinuation(continuation);
+  }
+
+  /** Release a lock retained across an inline step loop. */
+  releaseOperationLock(operationId: string, stepLockOwner: string): Promise<void> {
+    return this.agentRuntimeService.releaseOperationLock(operationId, stepLockOwner);
+  }
+
   /**
    * Run the sub-agent completion bridge against this service's runtime.
    *
@@ -336,6 +369,28 @@ export class AiAgentService {
     return agentConfig;
   }
 
+  /** Resolve caller model policy before a pre-created topic permanently pins its model. */
+  private async resolvePrecreatedTopicConfig(
+    identifier: string,
+    overrides?: { model?: string; provider?: string },
+  ) {
+    const { agentConfig } = await resolveRunAgentConfig(
+      {
+        db: this.db,
+        resolveAgentConfigOrThrow: (id) => this.resolveAgentConfigOrThrow(id),
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
+      {
+        identifier,
+        modelOverride: overrides?.model,
+        providerOverride: overrides?.provider,
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+    return agentConfig;
+  }
+
   /**
    * Defer an agent run to a future time ("send this in 3 hours").
    *
@@ -361,11 +416,20 @@ export class AiAgentService {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'runAt must be in the future' });
     }
 
-    const agentConfig = await this.resolveAgentConfigOrThrow(agentId || slug!);
+    const agentConfig = await this.resolvePrecreatedTopicConfig(agentId || slug!, {
+      model,
+      provider,
+    });
     const resolvedAgentId = agentConfig.id;
 
     const titleSource = markdownToTxt(prompt);
+    const snapshot = await resolveNewTopicSnapshot(
+      { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+      agentConfig,
+      { model, provider },
+    );
     const topic = await this.topicModel.create({
+      ...snapshot,
       agentId: resolvedAgentId,
       groupId,
       // A scheduled run is still an ordinary user chat, just deferred — so it
@@ -607,6 +671,7 @@ export class AiAgentService {
       appContext,
       autoStart = true,
       botContext,
+      botSender,
       createdThreadId,
       clientIp,
       userAgent,
@@ -626,6 +691,7 @@ export class AiAgentService {
       provider: providerOverride,
       stream,
       title,
+      steer,
       trigger,
       cronJobId,
       taskId,
@@ -635,7 +701,7 @@ export class AiAgentService {
       disableLocalSystem,
       initialStepCount,
       signal,
-      userInterventionConfig = { approvalMode: 'headless' },
+      userInterventionConfig: requestedUserInterventionConfig = { approvalMode: 'headless' },
       queueRetries,
       queueRetryDelay,
       parentMessageId,
@@ -647,10 +713,34 @@ export class AiAgentService {
       approvalResolutionRequestId: providedApprovalResolutionRequestId,
       approvalSourceOperationId: providedApprovalSourceOperationId,
       selectedToolIds,
+      shareGate,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
     } = params;
+
+    // Agent Share visitor runs execute under the CREATOR's credentials (see
+    // `shareChat.ts` `execAgent` → `AiAgentService.execAgent({ shareGate })`)
+    // with no visitor-facing approval UI at all, so no approval can ever be
+    // WAITED for: `headless` is the only mode that converts an intervention
+    // into an immediate blocked tool result ('always'-policy calls become
+    // `resolve_blocked_tools`) instead of parking the run on
+    // `request_human_approve` forever. Forced unconditionally — overriding
+    // whatever the caller passed — so a future execAgent call site cannot
+    // reintroduce a waiting mode by omission.
+    //
+    // `headless` DOES auto-run overridable ('required') interventions. That is
+    // acceptable here only because of the two share-specific layers on top:
+    // `applyShareGateToInterventionRequiredApis` strips every
+    // intervention-gated API from what the model is offered, and
+    // `isShareBlockedBuiltinDispatch` re-blocks intervention-gated (and
+    // non-enabled, and data-rule-violating) builtin calls at the executor
+    // dispatch site — re-reading the UNSTRIPPED manifest, since the assembly
+    // strip removes the very intervention config the runtime would otherwise
+    // consult. No 'required' builtin API can execute through either layer.
+    const userInterventionConfig: UserInterventionConfig = shareGate
+      ? { approvalMode: 'headless' }
+      : requestedUserInterventionConfig;
 
     // Honour client-minted row ids on a FRESH send only. Resume / regeneration
     // replays reach this method too (resumeApproval, resumeToolResult,
@@ -746,10 +836,16 @@ export class AiAgentService {
         instructions,
         modelOverride,
         providerOverride,
+        shareVisitorUserId: shareGate?.visitorUserId,
         throwIfExecutionAborted,
         toolModeOverride,
       },
     );
+
+    // Share-visitor runs must never see the creator's files/knowledge bases.
+    // Applied to the resolved config before anything downstream (knowledge
+    // flags, tools engine, context snapshot) reads it.
+    if (shareGate) applyShareGateToAgentConfig(agentConfig);
 
     let resumeParentMessage: Awaited<ReturnType<MessageModel['findById']>>;
 
@@ -893,6 +989,7 @@ export class AiAgentService {
         attachedFileIds,
         batchApprovalAnchorId,
         botContext,
+        botSender,
         clientIds,
         continuationAssistantId,
         conversationAgentId,
@@ -908,6 +1005,8 @@ export class AiAgentService {
         resolvedAgentId,
         resume,
         runFromHistory,
+        shareGate,
+        steer,
         throwIfExecutionAborted,
         title,
         trigger,
@@ -930,6 +1029,14 @@ export class AiAgentService {
     // (`pipeline/*`). Built after the turn rows exist so every stage sees the
     // persisted anchors; `agentConfig` stays the same mutable object so stage
     // systemRole appends remain visible to `createOperation` below.
+    // One reader for the facts that cannot change within this turn, so the
+    // send window asks the routed device and the user's row once each.
+    const runFacts = createRunFacts({
+      db: this.db,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
     const runContext: ExecRunContext = {
       agentConfig,
       appContext,
@@ -942,6 +1049,8 @@ export class AiAgentService {
       prompt,
       provider,
       resolvedAgentId,
+      runFacts,
+      shareGate,
       topicId,
       trigger,
       userMessageId: turn.userMessageId,
@@ -952,7 +1061,7 @@ export class AiAgentService {
         {
           bindTopicWorkingDirectory: (p) => this.bindTopicWorkingDirectory(p),
           db: this.db,
-          getMarketService: () => this.getMarketService(),
+          getMarketService: () => this.getMarketService(runFacts),
           messageModel: this.messageModel,
           resolveDeviceWorkspaceId: (deviceId) => this.resolveDeviceWorkspaceId(deviceId),
           topicModel: this.topicModel,
@@ -990,14 +1099,26 @@ export class AiAgentService {
     let enableExpertise = false;
     let userTimezone: string | undefined;
     try {
-      const userModel = new UserModel(this.db, this.userId);
-      const settings = await userModel.getUserSettings();
+      const settings = await runFacts.userSettings();
       const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
 
       globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
 
-      const generalSettings = settings?.general as { timezone?: string } | undefined;
-      userTimezone = generalSettings?.timezone;
+      // Timezone drives the session-date placeholder rendered back to whoever
+      // is actually conversing. In a share-visitor run that is the VISITOR,
+      // not the creator whose settings this block otherwise reads — memory /
+      // expertise intentionally stay creator-scoped below (gated by
+      // `allowReadMemory`), but the timezone has no such gate and must not
+      // leak the creator's own setting into a visitor's turn.
+      if (shareGate) {
+        const visitorSettings = await runFacts.userSettings(shareGate.visitorUserId);
+        const visitorGeneralSettings = visitorSettings?.general as
+          { timezone?: string } | undefined;
+        userTimezone = visitorGeneralSettings?.timezone;
+      } else {
+        const generalSettings = settings?.general as { timezone?: string } | undefined;
+        userTimezone = generalSettings?.timezone;
+      }
     } catch (error) {
       log('execAgent: failed to fetch user settings: %O', error);
     }
@@ -1006,6 +1127,13 @@ export class AiAgentService {
       enableExpertise = preference?.lab?.enableSelfLearning === true;
     } catch (error) {
       console.error('Failed to resolve expertise injection Lab preference:', error);
+    }
+    // Share visitors only get the creator's memory (persona + learned
+    // expertise) when the share explicitly allows it — both surfaces would
+    // otherwise leak the creator's personal context into visitor turns.
+    if (shareGate && !shareGate.shareConfig.allowReadMemory) {
+      globalMemoryEnabled = false;
+      enableExpertise = false;
     }
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
@@ -1018,6 +1146,7 @@ export class AiAgentService {
     const loadHistoryMessages = createHistoryMessagesLoader(
       {
         db: this.db,
+        isShareVisitorRun: !!shareGate,
         messageModel: this.messageModel,
         userId: this.userId,
         workspaceId: this.workspaceId,
@@ -1048,7 +1177,7 @@ export class AiAgentService {
         connectorModel: this.connectorModel,
         connectorToolModel: this.connectorToolModel,
         db: this.db,
-        getMarketService: () => this.getMarketService(),
+        getMarketService: () => this.getMarketService(runFacts),
         messageModel: this.messageModel,
         pluginModel: this.pluginModel,
         userId: this.userId,
@@ -1204,6 +1333,7 @@ export class AiAgentService {
         botContext,
         botPlatformContext,
         clientIp,
+        disabledPluginIds,
         discordContext,
         discovery,
         enableExpertise,
@@ -1222,6 +1352,7 @@ export class AiAgentService {
         queueRetryDelay,
         signal,
         stream,
+        includeFinalState: params.includeFinalState,
         topicStartOwnerOperationId: params.topicStartOwnerOperationId,
         updateAbortedAssistantMessage,
         userAgent,
@@ -1263,7 +1394,13 @@ export class AiAgentService {
       const topicTitle =
         newTopic?.title ||
         fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : '');
+      const agentConfig = await this.resolvePrecreatedTopicConfig(agentId);
+      const snapshot = await resolveNewTopicSnapshot(
+        { db: this.db, userId: this.userId, workspaceId: this.workspaceId },
+        agentConfig,
+      );
       const topicItem = await this.topicModel.create({
+        ...snapshot,
         agentId,
         groupId,
         messages: newTopic?.topicMessageIds,
@@ -1303,6 +1440,27 @@ export class AiAgentService {
       userMessageId: result.userMessageId,
     };
   }
+
+  /**
+   * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
+   * `AgentShareModel.isRunStillAuthorized`'s JSDoc for what "authorized" means
+   * and why a per-step recheck (not only at step 0) is what actually stops a
+   * revoked share's run: nothing tears down an operation that already exists,
+   * and the visitor's own Stop button breaks the instant the share goes
+   * private, so the step loop has to re-prove authorization itself.
+   *
+   * A plain top-level `db` read (not scoped to `this.userId`/workspace):
+   * `agent_shares` has no ownership predicate applicable here — this call runs
+   * from inside the CREATOR's own runtime step, so `this.db` is already the
+   * correct connection.
+   *
+   * Arrow field (not a method) so it stays bound when handed to
+   * AgentRuntimeService.
+   */
+  verifyShareRunStillAuthorized = async (params: {
+    agentId: string;
+    shareId: string;
+  }): Promise<boolean> => AgentShareModel.isRunStillAuthorized(this.db, params);
 
   /**
    * Execute an agent in an isolated Thread context.
@@ -1426,6 +1584,17 @@ export class AiAgentService {
     threadId?: string;
   }> {
     return this.interventionController.interruptTask(params);
+  }
+
+  /**
+   * Flags whether the composer still holds user messages queued behind a run.
+   * Delegates to {@link InterventionController}.
+   */
+  async setQueuedMessages(params: {
+    operationId: string;
+    pending: boolean;
+  }): Promise<{ success: boolean }> {
+    return this.interventionController.setQueuedMessages(params);
   }
 
   /** Settle a parked approval batch and terminate its operation. */

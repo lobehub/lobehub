@@ -57,6 +57,9 @@ export function defineConfig() {
     const url = new URL(request.url);
     logDefault('Processing request: %s %s', request.method, request.url);
 
+    // Public installation instructions must remain readable by coding agents.
+    if (url.pathname === '/acceptance/skill.md') return NextResponse.next();
+
     // skip all api requests
     if (backendApiEndpoints.some((path) => url.pathname.startsWith(path))) {
       logDefault('Skipping API request: %s', url.pathname);

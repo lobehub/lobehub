@@ -101,6 +101,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
       async ({ messages, model, provider }) => ({
         options: {},
         params: { messages: messages as any, model, provider },
+        replayAssistantReasoning: false,
       }),
     );
     vi.spyOn(messageService, 'batchMutate').mockImplementation(async (operations) => ({

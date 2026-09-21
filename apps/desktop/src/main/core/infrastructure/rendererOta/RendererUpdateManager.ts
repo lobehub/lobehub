@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { copyFile, link, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -79,11 +80,31 @@ export class RendererUpdateManager {
   }
 
   private get otaDir() {
-    return path.join(this.otaRootDir, this.activeChannel);
+    // Patch numbers restart at r0 for each full release, even when mainHash is unchanged.
+    return path.join(this.otaRootDir, this.activeChannel, APP_VERSION);
+  }
+
+  private get disabledReasons() {
+    return [
+      isDev && !FORCE_IN_DEV && 'development-build',
+      !MAIN_HASH && 'missing-main-hash',
+      !PUBLIC_KEY && 'missing-public-key',
+      !UPDATE_SERVER_URL && 'missing-server-url',
+    ].filter(Boolean);
   }
 
   get enabled() {
-    return (!isDev || FORCE_IN_DEV) && !!MAIN_HASH && !!PUBLIC_KEY && !!UPDATE_SERVER_URL;
+    return this.disabledReasons.length === 0;
+  }
+
+  private logContext() {
+    return {
+      appVersion: APP_VERSION,
+      channel: this.activeChannel,
+      current: this.pointer.current ?? 'r0',
+      localMainHash: MAIN_HASH,
+      staged: this.pointer.staged,
+    };
   }
 
   /**
@@ -94,6 +115,19 @@ export class RendererUpdateManager {
   initialize = () => {
     this.cleanupLegacyV1();
 
+    logger.info('Renderer OTA configuration', {
+      appVersion: APP_VERSION,
+      arch: process.arch,
+      buildChannel: BUILD_CHANNEL,
+      channel: this.activeChannel,
+      disabledReasons: this.disabledReasons,
+      enabled: this.enabled,
+      hasPublicKey: !!PUBLIC_KEY,
+      hasServerUrl: !!UPDATE_SERVER_URL,
+      mainHash: MAIN_HASH,
+      platform: process.platform,
+    });
+
     if (!this.enabled) {
       logger.info('Renderer OTA disabled (dev build or missing MAIN_HASH/key/server url)');
       return;
@@ -101,6 +135,7 @@ export class RendererUpdateManager {
 
     mkdirSync(path.join(this.otaDir, 'versions'), { recursive: true });
     this.pointer = readPointer(this.otaDir, MAIN_HASH);
+    logger.info('Renderer OTA boot state', this.pointer);
 
     if (this.pointer.staged && this.versionDirValid(this.pointer.staged)) {
       logger.info(`Applying staged renderer ${this.pointer.staged} on boot`);
@@ -108,7 +143,7 @@ export class RendererUpdateManager {
     } else if (this.pointer.pendingBootCheck && this.pointer.current) {
       // Previous session died before the boot check passed — treat as a failed boot.
       logger.warn(`Renderer ${this.pointer.current} never passed boot check, rolling back`);
-      this.rollback();
+      this.rollback('previous-boot-unconfirmed');
     }
 
     this.gc();
@@ -120,6 +155,10 @@ export class RendererUpdateManager {
 
   startScheduledChecks = () => {
     if (!this.enabled) return;
+    logger.info('Renderer OTA checks scheduled', {
+      firstCheckDelayMs: FIRST_CHECK_DELAY,
+      intervalMs: CHECK_INTERVAL,
+    });
     this.checkTimer = setTimeout(() => this.checkForUpdates(), FIRST_CHECK_DELAY);
     setInterval(() => this.checkForUpdates(), CHECK_INTERVAL);
   };
@@ -127,6 +166,7 @@ export class RendererUpdateManager {
   switchChannel = (channel: UpdateChannel) => {
     const nextChannel = this.rendererChannel(channel);
     if (nextChannel === this.activeChannel) return;
+    logger.info('Renderer OTA channel changed', { ...this.logContext(), nextChannel });
 
     if (!this.enabled) {
       this.activeChannel = nextChannel;
@@ -141,7 +181,7 @@ export class RendererUpdateManager {
 
     mkdirSync(path.join(this.otaDir, 'versions'), { recursive: true });
     this.pointer = readPointer(this.otaDir, MAIN_HASH);
-    if (this.pointer.pendingBootCheck) this.rollback();
+    if (this.pointer.pendingBootCheck) this.rollback('channel-switch-pending-boot');
     this.state = this.pointer.staged ? 'staged' : 'idle';
     this.gc();
     writePointer(this.otaDir, this.pointer);
@@ -164,23 +204,35 @@ export class RendererUpdateManager {
     this.pointer = { ...this.pointer, pendingBootCheck: false };
     writePointer(this.otaDir, this.pointer);
     this.gc();
+    logger.info('Renderer OTA apply result', {
+      ...this.logContext(),
+      outcome: 'applied',
+      reason: 'boot-confirmed',
+    });
   };
 
   handleRendererCrash = () => {
     if (!this.pointer.pendingBootCheck) return;
     this.bootCrashCount += 1;
     logger.warn(`Renderer crashed during boot check (${this.bootCrashCount}/${MAX_BOOT_CRASHES})`);
-    if (this.bootCrashCount >= MAX_BOOT_CRASHES) this.failBootCheck();
+    if (this.bootCrashCount >= MAX_BOOT_CRASHES) this.failBootCheck('renderer-crash');
   };
 
   applyStagedNow = () => {
-    if (!this.pointer.staged || !this.versionDirValid(this.pointer.staged)) return false;
+    if (!this.pointer.staged || !this.versionDirValid(this.pointer.staged)) {
+      logger.info('Renderer OTA apply result', {
+        ...this.logContext(),
+        outcome: 'skipped',
+        reason: this.pointer.staged ? 'staged-files-missing' : 'no-staged-version',
+      });
+      return false;
+    }
     logger.info(`Applying staged renderer ${this.pointer.staged} now`);
     this.promoteToCurrent(this.pointer.staged);
     this.stagedManifest = null;
     this.state = 'idle';
     this.applyServingRoot();
-    this.reloadAllWindows();
+    this.reloadAllWindows(true);
     // Hot apply is an in-place reload from local disk: the bundle must
     // evaluate within seconds, so a missing load ping fails fast. Cold-boot
     // arming (initialize) keeps only the long mount timeout.
@@ -196,47 +248,117 @@ export class RendererUpdateManager {
   });
 
   checkForUpdates = async () => {
-    if (!this.enabled || this.state !== 'idle') return;
+    const context = { ...this.logContext(), checkId: randomUUID() };
+    if (!this.enabled || this.state !== 'idle') {
+      logger.info('Renderer OTA check finished', {
+        ...context,
+        disabledReasons: this.disabledReasons,
+        elapsedMs: 0,
+        outcome: 'skipped',
+        reason: !this.enabled ? 'disabled' : this.state === 'staged' ? 'already-staged' : 'busy',
+        state: this.state,
+      });
+      return;
+    }
     const generation = this.checkGeneration;
     const channel = this.activeChannel;
     const otaDir = this.otaDir;
     const pointer = this.pointer;
+    const startedAt = Date.now();
+    let outcome = 'failed';
+    let reason = 'manifest-fetch-failed';
+    let remote: RendererManifest | undefined;
+    let httpStatus: number | undefined;
     this.state = 'checking';
+    logger.info('Renderer OTA check started', context);
 
     try {
       const rendererUrl = this.rendererUrl(channel);
-      const manifest = await this.fetchManifest(rendererUrl);
-      if (!manifest || generation !== this.checkGeneration) return;
+      const res = await fetch(`${rendererUrl}/latest.json`, { cache: 'no-store' });
+      httpStatus = res.status;
+      logger.info('Renderer OTA manifest response', {
+        checkId: context.checkId,
+        status: httpStatus,
+      });
+      if (httpStatus === 404) {
+        outcome = 'skipped';
+        reason = 'feed-not-found';
+        return;
+      }
+      if (!res.ok) throw new Error(`Manifest fetch failed: ${httpStatus}`);
 
+      reason = 'manifest-invalid';
+      const raw = await res.json();
+      if (!isValidManifestShape(raw)) throw new Error('Manifest shape invalid');
+      remote = raw;
+      logger.info('Renderer OTA manifest compatibility', {
+        localAppVersion: APP_VERSION,
+        localMainHash: MAIN_HASH,
+        remoteAppVersion: raw.appVersion,
+        remoteMainHash: raw.mainHash,
+        remoteVersion: raw.version,
+      });
+      reason = 'app-version-mismatch';
+      if (raw.appVersion !== APP_VERSION) throw new Error('Manifest appVersion mismatch');
+      reason = 'hash-mismatch';
+      if (raw.mainHash !== MAIN_HASH) throw new Error('Manifest mainHash mismatch');
+      reason = 'signature-invalid';
+      if (!verifyManifestSignature(raw, PUBLIC_KEY)) throw new Error('Manifest signature invalid');
+      if (generation !== this.checkGeneration) return;
+      const manifest = raw;
       const currentN = pointer.current ? patchNumber(pointer.current) : 0;
-      if (
-        patchNumber(manifest.version) <= currentN ||
-        pointer.blacklist.includes(manifest.version) ||
-        pointer.staged === manifest.version
-      ) {
+      if (patchNumber(manifest.version) <= currentN) {
+        outcome = 'skipped';
+        reason = 'already-current';
+        return;
+      }
+      if (pointer.blacklist.includes(manifest.version)) {
+        outcome = 'skipped';
+        reason = 'blacklisted';
+        return;
+      }
+      if (pointer.staged === manifest.version) {
+        outcome = 'skipped';
+        reason = 'already-staged';
         return;
       }
 
+      reason = 'download-failed';
       this.state = 'downloading';
       await this.downloadAndStage(manifest, otaDir, pointer, rendererUrl);
       if (generation !== this.checkGeneration) return;
 
+      reason = 'staging-failed';
       this.stagedManifest = manifest;
       this.pointer = { ...this.pointer, staged: manifest.version };
       writePointer(otaDir, this.pointer);
       this.state = 'staged';
-
-      logger.info(`Renderer ${manifest.version} staged (app ${manifest.appVersion})`);
+      reason = 'notification-failed';
       this.app.browserManager.broadcastToAllWindows('updateReady', {
         kind: 'renderer',
-        version: manifest.appVersion,
+        version: `${manifest.appVersion}.${manifest.version}`,
       });
-      return;
+      outcome = 'staged';
+      reason = 'staged';
     } catch (error) {
-      if (generation === this.checkGeneration) logger.error('Renderer OTA check failed:', error);
+      if (generation === this.checkGeneration)
+        logger.error('Renderer OTA check failed:', error, { ...context, reason });
       rmSync(path.join(otaDir, 'staging'), { force: true, recursive: true });
     } finally {
-      if (generation === this.checkGeneration && this.state !== 'staged') this.state = 'idle';
+      const superseded = generation !== this.checkGeneration;
+      if (!superseded && this.state !== 'staged') this.state = 'idle';
+      logger.info('Renderer OTA check finished', {
+        ...context,
+        elapsedMs: Date.now() - startedAt,
+        httpStatus,
+        outcome: superseded ? 'skipped' : outcome,
+        reason: superseded ? 'superseded' : reason,
+        remoteAppVersion: remote?.appVersion,
+        remoteMainHash: remote?.mainHash,
+        remoteVersion: remote?.version,
+        staged: superseded ? pointer.staged : this.pointer.staged,
+        state: superseded ? 'superseded' : this.state,
+      });
     }
   };
 
@@ -257,19 +379,6 @@ export class RendererUpdateManager {
 
   private rendererUrl(channel: RendererOtaChannel) {
     return `${UPDATE_SERVER_BASE_URL}/${channel}/${APP_VERSION}/renderer/v2`;
-  }
-
-  private async fetchManifest(rendererUrl: string): Promise<RendererManifest | null> {
-    const res = await fetch(`${rendererUrl}/latest.json`, { cache: 'no-store' });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Manifest fetch failed: ${res.status}`);
-
-    const raw = await res.json();
-    if (!isValidManifestShape(raw)) throw new Error('Manifest shape invalid');
-    if (raw.appVersion !== APP_VERSION) throw new Error('Manifest appVersion mismatch');
-    if (raw.mainHash !== MAIN_HASH) throw new Error('Manifest mainHash mismatch');
-    if (!verifyManifestSignature(raw, PUBLIC_KEY)) throw new Error('Manifest signature invalid');
-    return raw;
   }
 
   private async downloadAndStage(
@@ -408,12 +517,22 @@ export class RendererUpdateManager {
     artifact: RendererArtifact,
     expected: Parameters<typeof decodeRendererPack>[1],
   ) {
+    const startedAt = Date.now();
+    logger.info('Renderer OTA pack download started', {
+      ...expected,
+      bytes: artifact.size,
+    });
     const res = await fetch(`${rendererUrl}/${artifact.path}`);
     if (!res.ok) throw new Error(`Renderer pack fetch failed (${res.status}): ${artifact.path}`);
     const content = Buffer.from(await res.arrayBuffer());
     if (content.byteLength !== artifact.size || sha256File(content) !== artifact.sha256) {
       throw new Error(`Renderer pack integrity mismatch: ${artifact.path}`);
     }
+    logger.info('Renderer OTA pack download verified', {
+      ...expected,
+      bytes: content.byteLength,
+      elapsedMs: Date.now() - startedAt,
+    });
     return decodeRendererPack(content, expected);
   }
 
@@ -451,9 +570,14 @@ export class RendererUpdateManager {
       staged: this.pointer.staged === version ? null : this.pointer.staged,
     };
     writePointer(this.otaDir, this.pointer);
+    logger.info('Renderer OTA apply result', {
+      ...this.logContext(),
+      outcome: 'pending',
+      reason: 'boot-check-pending',
+    });
   }
 
-  private rollback() {
+  private rollback(reason: string) {
     const bad = this.pointer.current;
     const fallback =
       this.pointer.previous && this.versionDirValid(this.pointer.previous)
@@ -468,13 +592,18 @@ export class RendererUpdateManager {
       previous: null,
     };
     writePointer(this.otaDir, this.pointer);
-    logger.warn(`Rolled back renderer to ${fallback ?? 'builtin bundle'} (blacklisted ${bad})`);
+    logger.warn('Renderer OTA apply result', {
+      ...this.logContext(),
+      failedVersion: bad,
+      outcome: 'rolled-back',
+      reason,
+    });
     this.gc();
   }
 
-  private failBootCheck() {
+  private failBootCheck(reason: string) {
     this.clearBootTimers();
-    this.rollback();
+    this.rollback(reason);
     this.applyServingRoot();
     this.reloadAllWindows();
   }
@@ -497,14 +626,14 @@ export class RendererUpdateManager {
     if (options?.expectFastLoad) {
       this.loadPingTimer = setTimeout(() => {
         logger.warn(`No load ping within ${LOAD_PING_TIMEOUT}ms`);
-        this.failBootCheck();
+        this.failBootCheck('load-timeout');
       }, LOAD_PING_TIMEOUT);
       this.loadPingTimer.unref?.();
     }
 
     this.bootCheckTimer = setTimeout(() => {
       logger.warn(`No boot ping within ${BOOT_CHECK_TIMEOUT}ms`);
-      this.failBootCheck();
+      this.failBootCheck('boot-timeout');
     }, BOOT_CHECK_TIMEOUT);
     this.bootCheckTimer.unref?.();
   }
@@ -515,12 +644,17 @@ export class RendererUpdateManager {
         ? path.join(this.otaDir, 'versions', this.pointer.current)
         : null;
     this.app.rendererUrlManager.setActiveRendererDir(dir);
+    logger.info('Renderer OTA serving root', {
+      ...this.logContext(),
+      servedVersion: dir ? this.pointer.current : 'r0',
+      reason: this.pointer.current && !dir ? 'current-files-missing' : 'selected',
+    });
   }
 
-  private reloadAllWindows() {
+  private reloadAllWindows(ignoreBeforeUnload = false) {
     this.app.browserManager.browsers.forEach((browser) => {
       try {
-        browser.browserWindow.webContents.reloadIgnoringCache();
+        browser.reloadIgnoringCache(ignoreBeforeUnload);
       } catch {
         /* window may be destroyed */
       }

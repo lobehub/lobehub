@@ -1,6 +1,6 @@
 ---
 name: spa-routes
-description: 'LobeHub SPA route architecture. Use when editing src/routes, src/features delegation, desktop/mobile/popup router configs, .desktop variants, route segments, redirects, or new pages.'
+description: 'Use for SPA routes and page segments: Web/desktop/mobile/popup routers, redirects and src/routes-to-features boundaries.'
 user-invocable: false
 ---
 
@@ -82,7 +82,7 @@ Each feature should:
    - **Mobile-only flow:** use `mobileRouter.config.tsx`; mobile does not consume the shared desktop tree.
 
 6. **Register a route skeleton (REQUIRED for every lazy route)**
-   - Every lazy route inside the main area renders `RouteSegmentSkeleton` (`src/components/Skeleton/RouteSegment.tsx`) while its chunk loads. It resolves via `handle.meta.Skeleton` (deepest match wins, walking up through parent routes) and only then falls back to path-guessing — never rely on the guess.
+   - Every lazy route inside the main area renders `RouteSegmentSkeleton` (`src/components/Skeleton/RouteSegment.tsx`) while its chunk loads. It resolves via `handle.meta.Skeleton` only (deepest match wins, walking up through parent routes). Omitting `Skeleton` renders a blank pane — use `NoRouteSkeleton` when that is intentional.
    - Pick the skeleton when adding or restructuring a route:
      - A close-enough generic shape exists → `Skeleton: createSurfaceSkeleton('list' | 'form' | 'grid' | 'editor' | 'detail')` from `@/components/Skeleton/Surface`.
      - The page has a distinctive layout (dashboard, multi-panel, conversation) → author a bespoke component under `src/components/Skeleton/` and register it (see `Home.tsx`, `Generation.tsx`, `Conversation/`).

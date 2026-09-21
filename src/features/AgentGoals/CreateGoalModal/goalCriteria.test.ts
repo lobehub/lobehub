@@ -65,7 +65,7 @@ describe('generateGoalCriteria', () => {
     ).rejects.toThrow('No goal plan was generated.');
   });
 
-  it('keeps the exact user goal when the generated instruction omits it', async () => {
+  it('replaces the original input with the generated review instruction', async () => {
     vi.spyOn(verifyService, 'generateGoalPlan').mockResolvedValue({
       criteria: [{ title: 'Training loop works' }],
       instruction: 'Implement a reproducible self-improvement training loop.',
@@ -76,9 +76,7 @@ describe('generateGoalCriteria', () => {
 
     const result = await generateGoalCriteria({ goal });
 
-    expect(result.instruction).toBe(
-      `${goal}\n\nImplement a reproducible self-improvement training loop.`,
-    );
+    expect(result.instruction).toBe('Implement a reproducible self-improvement training loop.');
   });
 
   it('uses the original goal as a reviewable criterion when AI generation fails', () => {

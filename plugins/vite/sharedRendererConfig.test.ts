@@ -21,6 +21,33 @@ describe('sharedRendererPlugins', () => {
   });
 });
 
+describe('lobe-dev-editor-provider', () => {
+  it('sends the provider entry back to the one prebundled editor bundle', async () => {
+    const plugin = sharedRendererPlugins({ platform: 'web' })
+      .flat(Number.POSITIVE_INFINITY)
+      .find(
+        (
+          item,
+        ): item is { name: string; resolveId: (source: string, importer: string) => unknown } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          (item as { name?: string }).name === 'lobe-dev-editor-provider',
+      );
+
+    const resolve = async (source: string) =>
+      plugin!.resolveId.call(
+        { resolve: async (id: string) => ({ id }) },
+        source,
+        '/repo/src/layout/GlobalProvider/Editor.tsx',
+      );
+
+    await expect(resolve('@lobehub/editor/react/EditorProvider')).resolves.toEqual({
+      id: '@lobehub/editor/react',
+    });
+    await expect(resolve('@lobehub/editor/react')).resolves.toBeNull();
+  });
+});
+
 describe('sharedOptimizeDeps', () => {
   it('pre-bundles the root and base-ui entrypoints together', () => {
     expect(sharedOptimizeDeps.include).toEqual(
@@ -186,6 +213,19 @@ describe('sharedManualChunks', () => {
       ),
     ).toBeUndefined();
     expect(__testing.sharedManualChunks('/repo/packages/model-bank/src/index.ts')).toBeUndefined();
+  });
+});
+
+describe('isUiCoreModule', () => {
+  it('folds first-screen @lobehub/ui members into vendor-ui-core and leaves heavy ones lazy', () => {
+    const es = '/repo/node_modules/.pnpm/@lobehub+ui@5/node_modules/@lobehub/ui/es/';
+    expect(__testing.isUiCoreModule(`${es}Flex/FlexBasic.mjs`)).toBe(true);
+    expect(__testing.isUiCoreModule(`${es}base-ui/Button/Button.mjs`)).toBe(true);
+    expect(__testing.isUiCoreModule(`${es}hooks/useIsClient.mjs`)).toBe(true);
+    expect(__testing.isUiCoreModule(`${es}Markdown/Markdown.mjs`)).toBe(false);
+    expect(__testing.isUiCoreModule(`${es}hooks/useMarkdown/index.mjs`)).toBe(false);
+    expect(__testing.isUiCoreModule(`${es}base-ui/Select/Select.mjs`)).toBe(false);
+    expect(__testing.isUiCoreModule('/repo/node_modules/antd/es/index.js')).toBe(false);
   });
 });
 

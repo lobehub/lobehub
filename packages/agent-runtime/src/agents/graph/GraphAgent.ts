@@ -1,6 +1,6 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { AgentGraph, AgentGraphEdge, AgentGraphNode } from '@lobechat/types';
-import { AGENT_GRAPH_ROOT_NODE_ID } from '@lobechat/types';
+import { AGENT_GRAPH_ROOT_NODE_ID } from '@lobechat/types/agent/graph';
 import { toJsonSafe } from '@lobechat/utils/json';
 import type { UnknownRecord } from '@lobechat/utils/object';
 import { isRecord } from '@lobechat/utils/object';
@@ -15,6 +15,7 @@ import type {
   GeneralAgentCallLLMInstructionPayload,
   GeneralAgentConfig,
 } from '../../types';
+import { selectRunTools, selectToolManifestMap } from '../../utils/operationToolSet';
 import { GeneralChatAgent } from '../GeneralChatAgent';
 import {
   evaluateGraphPromptTrigger,
@@ -767,12 +768,11 @@ export class GraphAgent implements Agent {
   private getNodeTools(node: Readonly<AgentGraphNode>, state: AgentState): any[] {
     if (node.type !== 'agent') return [];
 
-    const rootTools =
-      this.generalConfig.tools ?? state.tools ?? state.operationToolSet?.tools ?? [];
+    const rootTools = this.generalConfig.tools ?? selectRunTools(state) ?? [];
     if (!node.allowedToolApiNames) return rootTools;
 
     const allowedApiNames = new Set(node.allowedToolApiNames);
-    const manifestMap = state.operationToolSet?.manifestMap ?? state.toolManifestMap;
+    const manifestMap = selectToolManifestMap(state);
     const toolNameResolver = new ToolNameResolver();
     const allowedToolNames = new Set<string>();
 

@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // serverDatabase middleware calls getServerDB(); stub it (the model mocks
 // ignore the db handle anyway).
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 const mockFindById = vi.fn();
@@ -20,15 +22,17 @@ vi.mock('@/database/models/resourceTransferRequest', async (importOriginal) => {
   const actual = await importOriginal<any>();
   return {
     ...actual,
-    ResourceTransferRequestModel: vi.fn(() => ({
-      cancel: mockCancel,
-      decline: mockDecline,
-      findById: mockFindById,
-      findPendingByResource: mockFindPendingByResource,
-      invalidateForResources: mockInvalidate,
-      invalidateRequest: mockInvalidateRequest,
-      listPendingForUser: mockListPendingForUser,
-    })),
+    ResourceTransferRequestModel: vi.fn(function () {
+      return {
+        cancel: mockCancel,
+        decline: mockDecline,
+        findById: mockFindById,
+        findPendingByResource: mockFindPendingByResource,
+        invalidateForResources: mockInvalidate,
+        invalidateRequest: mockInvalidateRequest,
+        listPendingForUser: mockListPendingForUser,
+      };
+    }),
   };
 });
 
@@ -50,7 +54,8 @@ vi.mock('@/server/services/resourcePermission', () => ({
 
 const { TRANSFER_REQUEST_EXPIRED, TRANSFER_REQUEST_NOT_PENDING } =
   await import('@/database/models/resourceTransferRequest');
-const { AGENT_OWNERSHIP_STALE } = await import('@/database/models/agent');
+const { AGENT_OWNERSHIP_STALE, AGENT_SHARED_TRANSFER_BLOCKED } =
+  await import('@/database/models/agent');
 const { CHAT_GROUP_OWNERSHIP_STALE } = await import('@/database/models/chatGroup');
 const { resourceTransferRequestRouter } = await import('../resourceTransferRequest');
 
@@ -167,6 +172,19 @@ describe('resourceTransferRequestRouter', () => {
         code: 'CONFLICT',
       });
       expect(mockInvalidate).toHaveBeenCalledWith('agent', ['agent-1']);
+    });
+
+    it('surfaces PRECONDITION_FAILED (and keeps the request pending) when the agent is still shared', async () => {
+      mockFindById.mockResolvedValue(pendingRequest);
+      mockExecuteAcceptedTransfer.mockRejectedValue(new Error(AGENT_SHARED_TRANSFER_BLOCKED));
+
+      await expect(caller.accept({ requestId: 'req-1' })).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+      });
+      // Recoverable: the previous owner can disable sharing and the recipient
+      // can retry, so the request must NOT be invalidated.
+      expect(mockInvalidate).not.toHaveBeenCalled();
+      expect(mockInvalidateRequest).not.toHaveBeenCalled();
     });
 
     it('accepts a group request through the same execute path', async () => {

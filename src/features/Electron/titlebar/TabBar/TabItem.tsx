@@ -7,13 +7,14 @@ import { cx } from 'antd-style';
 import { X } from 'lucide-react';
 import { useMotionValue, useSpring, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
 import { electronStylish } from '@/styles/electron';
 
 import { type ResolvedTab } from './hooks/useResolvedTabs';
+import { useTabPreview } from './hooks/useTabPreview';
 import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
@@ -37,6 +38,7 @@ interface TabItemProps {
    * neighbours are still shrinking into place, so the two would overlap by a full tab
    * width and take the whole settle to pull apart.
    */
+  enterWidth: number;
   enterX: number;
   index: number;
   isActive: boolean;
@@ -70,6 +72,7 @@ const TabItem = memo<TabItemProps>(
     totalCount,
     width,
     x,
+    enterWidth,
     enterX,
     onActivate,
     onClose,
@@ -101,7 +104,7 @@ const TabItem = memo<TabItemProps>(
 
     // A newly opened tab springs out from zero rather than popping in at full width; the
     // motion value starts collapsed and is set to the real width on mount.
-    const targetWidth = useMotionValue(0);
+    const targetWidth = useMotionValue(enterWidth);
     const springWidth = useSpring(targetWidth, TAB_SPRING);
     const targetX = useMotionValue(enterX);
     const springX = useSpring(targetX, TAB_SPRING);
@@ -199,6 +202,9 @@ const TabItem = memo<TabItemProps>(
       ],
     );
 
+    const [hovered, setHovered] = useState(false);
+    const preview = useTabPreview(id, hovered);
+
     const indicator = (
       <span className={styles.avatarWrapper}>
         {meta.avatar ? (
@@ -243,6 +249,8 @@ const TabItem = memo<TabItemProps>(
         }}
         onAuxClick={handleAuxClick}
         onClick={handleClick}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
         {...attributes}
         {...listeners}
       >
@@ -272,7 +280,19 @@ const TabItem = memo<TabItemProps>(
     // pop a blank bubble on hover.
     return (
       <ContextMenuTrigger items={contextMenuItems}>
-        <Tooltip disabled={tier === 'full'} title={meta.title}>
+        <Tooltip
+          disabled={tier === 'full' && !preview}
+          title={
+            preview ? (
+              <span className={styles.previewCard}>
+                <img alt={meta.title} className={styles.previewImage} src={preview} />
+                <span className={styles.previewTitle}>{meta.title}</span>
+              </span>
+            ) : (
+              meta.title
+            )
+          }
+        >
           {face}
         </Tooltip>
       </ContextMenuTrigger>

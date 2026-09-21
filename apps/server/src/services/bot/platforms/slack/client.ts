@@ -234,6 +234,16 @@ class SlackWebhookClient implements PlatformClient {
     return extractChannelId(platformThreadId);
   }
 
+  /**
+   * A reply thread is `slack:<channel>:<thread_ts>`, and `readMessages` only
+   * knows channels (`conversations.history`) — reading the parent channel
+   * would hand the model unrelated traffic while calling it "this
+   * conversation". Only a plain channel / DM identifies itself exactly.
+   */
+  extractConversationId(platformThreadId: string): string | undefined {
+    return extractThreadTs(platformThreadId) ? undefined : extractChannelId(platformThreadId);
+  }
+
   formatMarkdown(markdown: string): string {
     return markdownToSlackMrkdwn(markdown);
   }
@@ -421,6 +431,16 @@ class SlackSocketModeClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChannelId(platformThreadId);
+  }
+
+  /**
+   * A reply thread is `slack:<channel>:<thread_ts>`, and `readMessages` only
+   * knows channels (`conversations.history`) — reading the parent channel
+   * would hand the model unrelated traffic while calling it "this
+   * conversation". Only a plain channel / DM identifies itself exactly.
+   */
+  extractConversationId(platformThreadId: string): string | undefined {
+    return extractThreadTs(platformThreadId) ? undefined : extractChannelId(platformThreadId);
   }
 
   formatMarkdown(markdown: string): string {

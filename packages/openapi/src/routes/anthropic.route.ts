@@ -1,3 +1,4 @@
+import { parseOpenAIModelId } from '@lobechat/model-runtime/providers/openai/modelId';
 import {
   formatServerDefaultHeterogeneousModel,
   isServerDefaultHeterogeneousModel,
@@ -37,6 +38,8 @@ app.post('/v1/messages', requireHeteroModelInvocation('anthropic-messages'), asy
   const workspaceId = context.get('workspaceId');
   const agentType = context.get('heteroAgentType');
   const requestModel = formatServerDefaultHeterogeneousModel(claims.model);
+  const unwrapSystemReminders =
+    agentType === 'claude-code' && parseOpenAIModelId(claims.model) !== undefined;
 
   // Anything the model runtime throws has to be turned into an Anthropic error
   // envelope here. Letting it escape hands the client a bodyless 500 — see
@@ -46,7 +49,9 @@ app.post('/v1/messages', requireHeteroModelInvocation('anthropic-messages'), asy
     const { response } = await invokeServerDefaultModel({
       agentType,
       model: claims.model,
-      payload: normalizeAnthropicRequest(request, SERVER_DEFAULT_MODEL_ALIAS),
+      payload: normalizeAnthropicRequest(request, SERVER_DEFAULT_MODEL_ALIAS, {
+        unwrapSystemReminders,
+      }),
       signal: c.req.raw.signal,
       userId: String(context.get('userId')),
       workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,

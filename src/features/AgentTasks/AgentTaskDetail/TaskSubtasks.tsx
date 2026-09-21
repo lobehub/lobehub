@@ -1,11 +1,10 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { ConfigProvider, Tree } from 'antd';
-import type { DataNode } from 'antd/es/tree';
+import type { TreeDataNode } from '@lobehub/ui/base-ui';
+import { ActionIcon, Collapsible, confirmModal, Text, toast, Tree } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { ChevronDown, ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
-import type { Key, MouseEvent } from 'react';
+import { ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
+import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -157,7 +156,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
   );
 });
 
-const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
+const toTreeData = (tree: TaskTreeNode[]): TreeDataNode[] => {
   return tree.map((node) => ({
     children: toTreeData(node.children),
     key: node.task.identifier,
@@ -200,7 +199,7 @@ const TaskSubtasks = memo(() => {
   const handleNavigate = useCallback(
     (identifier: string) => {
       const subtask = subtaskMap.get(identifier);
-      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined));
+      navigate(taskDetailPath(identifier, subtask?.assignee?.id ?? undefined, subtask?.name));
     },
     [navigate, subtaskMap],
   );
@@ -211,9 +210,9 @@ const TaskSubtasks = memo(() => {
   }, [subtasks]);
 
   const handleRightClick = useCallback(
-    ({ event, node }: { event: MouseEvent; node: { key: Key } }) => {
+    ({ event, node }: { event: MouseEvent; node: TreeDataNode }) => {
       if (!canEditTask) return;
-      const subtask = subtaskMap.get(String(node.key));
+      const subtask = subtaskMap.get(node.key);
       if (!subtask) return;
       event.preventDefault();
       showContextMenu(
@@ -348,8 +347,8 @@ const TaskSubtasks = memo(() => {
               />
             </Flexbox>
           </Flexbox>
-          {isExpanded && (
-            <>
+          <Collapsible open={isExpanded}>
+            <Flexbox gap={8}>
               {isCreating && (
                 <CreateTaskInlineEntry
                   autoFocus
@@ -361,24 +360,20 @@ const TaskSubtasks = memo(() => {
                   onCreated={() => setIsCreating(false)}
                 />
               )}
-              <ConfigProvider theme={{ components: { Tree: { titleHeight: 36 } } }}>
-                <Tree
-                  blockNode
-                  defaultExpandAll
-                  showLine
-                  className={styles.subtaskTree}
-                  switcherIcon={<Icon icon={ChevronDown} size={14} />}
-                  treeData={treeData}
-                  onRightClick={handleRightClick}
-                  onSelect={(keys) => {
-                    const key = keys[0];
-                    if (!key) return;
-                    handleNavigate(String(key));
-                  }}
-                />
-              </ConfigProvider>
-            </>
-          )}
+              <Tree
+                blockNode
+                defaultExpandAll
+                showLine
+                classNames={{ title: styles.subtaskTreeTitle }}
+                styles={{ node: { height: 36 } }}
+                treeData={treeData}
+                onRightClick={handleRightClick}
+                onSelect={(keys) => {
+                  if (keys[0]) handleNavigate(keys[0]);
+                }}
+              />
+            </Flexbox>
+          </Collapsible>
         </>
       ) : (
         <>

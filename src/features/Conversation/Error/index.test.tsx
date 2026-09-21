@@ -1,11 +1,14 @@
+import type * as lobechatConstModule from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type * as modelRuntimeModule from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useChatStore } from '@/store/chat';
 
 import ErrorMessageExtra, { useErrorContent } from './index';
 
@@ -14,11 +17,22 @@ const updateMessageErrorMock = vi.fn();
 const dynamicComponentPropsMock = vi.hoisted(() => vi.fn());
 
 const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
+const shareContextMock = vi.hoisted(() => ({ topicShareId: '' }));
 const delAndRegenerateMessageMock = vi.hoisted(() => vi.fn());
+const detectHeterogeneousAgentCommandMock = vi.hoisted(() => vi.fn());
+const cancelHeteroContinuationMock = vi.hoisted(() => vi.fn());
 // Keyed by message id so a test can decide whether `data.id` is a top-level
 // displayMessage hanging off a user turn — the condition that decides whether a
 // self-contained retry can actually do anything.
 const displayMessageMock = vi.hoisted(() => new Map<string, { parentId?: string }>());
+const conversationContextMock = vi.hoisted(
+  () =>
+    ({ agentId: undefined, topicId: undefined }) as {
+      agentId?: string;
+      topicId?: string;
+    },
+);
+const createTopicForwardModalMock = vi.hoisted(() => vi.fn());
 // Stands in for whatever card a downstream build installs into the business slot.
 const businessSlot = vi.hoisted(() => ({ render: false }));
 const missingTranslationKeys = vi.hoisted(() => new Set<string>());
@@ -29,6 +43,12 @@ const businessErrorContentMock = vi.hoisted(() =>
     message: undefined as string | undefined,
   })),
 );
+
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof lobechatConstModule;
+
+  return { ...actual, isDesktop: true };
+});
 
 vi.mock('@lobechat/model-runtime', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof modelRuntimeModule;
@@ -101,16 +121,32 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     agentType,
     error,
     onDismiss,
+    onRetry,
+    onTransfer,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
+    onRetry?: () => void;
+    onTransfer?: () => void;
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
+      {onRetry && <button onClick={onRetry}>guide-retry</button>}
+      {onTransfer && <button onClick={onTransfer}>transfer</button>}
     </div>
   ),
+}));
+
+vi.mock('@/services/electron/binary', () => ({
+  binaryService: {
+    detectHeterogeneousAgentCommand: detectHeterogeneousAgentCommandMock,
+  },
+}));
+
+vi.mock('@/features/Conversation/MessageForward/TopicForwardModal', () => ({
+  createTopicForwardModal: createTopicForwardModalMock,
 }));
 
 vi.mock('@/hooks/useProviderName', () => ({
@@ -138,11 +174,17 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 
 vi.mock('@/features/Conversation/store', () => ({
+  contextSelectors: {
+    agentId: (state: { context: typeof conversationContextMock }) => state.context.agentId,
+    topicId: (state: { context: typeof conversationContextMock }) => state.context.topicId,
+  },
   dataSelectors: {
     getDisplayMessageById: (id: string) => () => displayMessageMock.get(id),
   },
   useConversationStore: (selector: (state: unknown) => unknown) =>
     selector({
+      context: { ...conversationContextMock, ...shareContextMock },
+      cancelHeteroContinuation: cancelHeteroContinuationMock,
       delAndRegenerateMessage: delAndRegenerateMessageMock,
       deleteMessage: vi.fn(),
       heteroOverloadRetryAttempts: {},
@@ -165,9 +207,12 @@ const ErrorMessageWithContent = ({ data }: { data: any }) => {
 describe('ErrorMessageExtra', () => {
   beforeEach(() => {
     dynamicComponentPropsMock.mockClear();
+    detectHeterogeneousAgentCommandMock.mockReset();
+    detectHeterogeneousAgentCommandMock.mockResolvedValue({ available: true });
     missingTranslationKeys.clear();
     businessSlot.render = false;
     serverConfigMock.enableBusinessFeatures = false;
+    shareContextMock.topicShareId = '';
     businessErrorContentMock.mockReturnValue({
       errorType: undefined,
       hideMessage: false,
@@ -175,7 +220,12 @@ describe('ErrorMessageExtra', () => {
     });
     updateMessageErrorMock.mockClear();
     delAndRegenerateMessageMock.mockClear();
+    cancelHeteroContinuationMock.mockClear();
     displayMessageMock.clear();
+    conversationContextMock.agentId = undefined;
+    conversationContextMock.topicId = undefined;
+    createTopicForwardModalMock.mockClear();
+    useChatStore.setState({ activeTopicId: null as any, topicDetailMap: {} });
   });
 
   // Regression: the standalone surfaces (Assistant / Task / AgentCouncil) render
@@ -299,6 +349,28 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.getByText('dynamic')).toBeInTheDocument();
     expect(screen.queryByText('Sensitive internal configuration error')).not.toBeInTheDocument();
+  });
+
+  it('shows the copyable trace ID card without a retry on a shared topic', () => {
+    shareContextMock.topicShareId = 'share-1';
+
+    render(
+      <ErrorMessageWithContent
+        data={{
+          error: {
+            body: { traceId: 'trace-fixture-1' },
+            type: ChatErrorType.InternalServerError,
+          },
+          id: 'msg-shared-internal-error',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+    expect(dynamicComponentPropsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ showRetry: false, traceId: 'trace-fixture-1' }),
+    );
+    expect(screen.queryByText('dynamic-retry')).not.toBeInTheDocument();
   });
 
   it('keeps the group retry callback on the internal server error UI', () => {
@@ -440,7 +512,67 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('guide:claude-code:auth_required')).toBeInTheDocument();
   });
 
+  it('renders the CLI detection timeout guide instead of the generic JSON error', () => {
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.AgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
+              command: 'codex',
+              message: 'Timed out looking for `codex` while reading PATH from your login shell.',
+            },
+            type: AgentRuntimeErrorType.AgentRuntimeError,
+          } as any,
+          id: 'msg-cli-detection-timeout',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('guide:codex:cli_detection_timeout')).toBeInTheDocument();
+    expect(screen.queryByText(/Timed out looking for/)).not.toBeInTheDocument();
+  });
+
+  it('forces fresh CLI detection before retrying a detection timeout', async () => {
+    displayMessageMock.set('msg-cli-detection-timeout', { parentId: 'user-1' });
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.AgentRuntimeError' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.CliDetectionTimeout,
+              command: 'codex',
+              message: 'Timed out looking for `codex` while reading PATH from your login shell.',
+            },
+            type: AgentRuntimeErrorType.AgentRuntimeError,
+          } as any,
+          id: 'msg-cli-detection-timeout',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('guide-retry'));
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommandMock).toHaveBeenCalledWith({
+        agentType: 'codex',
+        command: 'codex',
+      });
+      expect(delAndRegenerateMessageMock).toHaveBeenCalledWith('msg-cli-detection-timeout');
+    });
+    expect(detectHeterogeneousAgentCommandMock.mock.invocationCallOrder[0]).toBeLessThan(
+      delAndRegenerateMessageMock.mock.invocationCallOrder[0],
+    );
+  });
+
   it('renders the rate-limit guide when the refreshed error carries rate_limit code', () => {
+    conversationContextMock.agentId = 'source-agent';
+    conversationContextMock.topicId = 'source-topic';
     render(
       <ErrorMessageExtra
         error={{ message: 'response.undefined' }}
@@ -459,6 +591,58 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('transfer'));
+    expect(createTopicForwardModalMock).toHaveBeenCalledWith({
+      cancelSourceContinuation: true,
+      sourceAgentId: 'source-agent',
+      topicId: 'source-topic',
+      topicTitle: '',
+    });
+  });
+
+  it('requests cancellation of the conversation source even when another topic is active', () => {
+    useChatStore.setState({
+      activeTopicId: 'main-topic',
+      topicDetailMap: {
+        'main-topic': {
+          id: 'main-topic',
+          status: 'active',
+          title: 'Main topic',
+        } as any,
+        'source-topic': {
+          id: 'source-topic',
+          metadata: { scheduledRun: { kind: 'resume_after_rate_limit' } },
+          status: 'scheduled',
+          title: 'Review task',
+        } as any,
+      },
+    });
+    conversationContextMock.agentId = 'source-agent';
+    conversationContextMock.topicId = 'source-topic';
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.undefined' }}
+        data={{
+          error: {
+            body: {
+              agentType: 'codex',
+              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              message: 'rate limited',
+            },
+            message: 'rate limited',
+          } as any,
+          id: 'msg-rate-limit',
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('transfer'));
+    expect(cancelHeteroContinuationMock).not.toHaveBeenCalled();
+
+    const props = createTopicForwardModalMock.mock.calls[0][0];
+    expect(props.cancelSourceContinuation).toBe(true);
+    expect(props.topicId).toBe('source-topic');
   });
 
   it('renders the working-directory guide instead of the CLI install guide', () => {

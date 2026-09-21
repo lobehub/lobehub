@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Remind contributors when a non-release PR targets `main`.
       # Day-to-day PRs should target `canary`; `main` is reserved for releases

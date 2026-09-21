@@ -8,6 +8,9 @@ const item = (id: string, title: string, type: RecentItem['type'] = 'task'): Rec
   icon: type,
   id,
   routePath: '/',
+  // Mirrors the server payload: a task's slug source is its name, topics and
+  // documents have none.
+  slugTitle: type === 'task' ? title : null,
   status: null,
   title,
   type,
@@ -80,6 +83,39 @@ describe('recentReducer', () => {
     expect(next.recentsByScope.scope.queries.compact.items[0].title).toBe('Renamed');
     expect(next.recentsByScope.scope.queries.drawer.items[0].title).toBe('Renamed');
     expect(next.recentsByScope.scope.queries.drawer.items[1].title).toBe('Document');
+  });
+
+  it('moves a task slug source with a committed rename', () => {
+    // Regression: the row's link is built from `slugTitle`, so leaving it on the
+    // old name made the href slug the previous title until the next server sync
+    // — the same link/canonicaliser disagreement this feature exists to remove.
+    const next = recentReducer(state([item('task', 'Draft')]), {
+      entityType: 'task',
+      id: 'task',
+      mutationId: 1,
+      scope: 'scope',
+      title: 'Renamed',
+      type: 'commitTitle',
+    });
+
+    const renamed = next.recentsByScope.scope.queries.compact.items[0];
+    expect(renamed.title).toBe('Renamed');
+    expect(renamed.slugTitle).toBe('Renamed');
+  });
+
+  it('leaves a document slug source alone on rename', () => {
+    const next = recentReducer(state([item('task', 'Draft')]), {
+      entityType: 'document',
+      id: 'document',
+      mutationId: 1,
+      scope: 'scope',
+      title: 'Renamed doc',
+      type: 'commitTitle',
+    });
+
+    const renamed = next.recentsByScope.scope.queries.drawer.items.find((i) => i.id === 'document');
+    expect(renamed?.title).toBe('Renamed doc');
+    expect(renamed?.slugTitle).toBeNull();
   });
 
   it('does not roll back a newer optimistic mutation', () => {

@@ -8,6 +8,7 @@ import {
   canPublishAgentTopicLink,
   formatServerDefaultHeterogeneousModel,
   isServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousRelayInvocation,
   normalizeHeterogeneousProviderConfig,
   pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
@@ -52,6 +53,29 @@ describe('server-default heterogeneous model request', () => {
     expect(unwrapServerDefaultHeterogeneousModel(undefined, 'claude-sonnet-4-6')).toBe(
       'claude-sonnet-4-6',
     );
+  });
+
+  it('recognizes only complete official-relay attestations', () => {
+    const invocation = {
+      acceptedAt: '2026-09-01T00:00:00.000Z',
+      agentType: 'trae',
+      ingress: 'openai-responses',
+      model: 'gpt-5.4',
+      operationId: 'operation-1',
+      provider: 'lobehub',
+    };
+
+    expect(isServerDefaultHeterogeneousRelayInvocation(invocation)).toBe(true);
+    expect(isServerDefaultHeterogeneousRelayInvocation(null)).toBe(false);
+    expect(isServerDefaultHeterogeneousRelayInvocation({ ...invocation, ingress: undefined })).toBe(
+      false,
+    );
+    expect(
+      isServerDefaultHeterogeneousRelayInvocation({ ...invocation, operationId: undefined }),
+    ).toBe(false);
+    expect(
+      isServerDefaultHeterogeneousRelayInvocation({ ...invocation, ingress: 'openai-chat' }),
+    ).toBe(false);
   });
 });
 
@@ -282,6 +306,34 @@ describe('buildHeteroSpawnArgs', () => {
         type: 'cursor',
       }),
     ).toEqual(['--model', 'gpt-5']);
+  });
+
+  it('forwards Devin native arguments and model through direct ACP and device execution', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--agent-type', 'coding'],
+      model: 'claude-sonnet-4-6-thinking',
+      type: 'devin',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--agent-type',
+      'coding',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--agent-type',
+      '--agent-arg=coding',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--model', 'native-model'],
+        model: 'selector-model',
+        type: 'devin',
+      }),
+    ).toEqual(['--model', 'native-model']);
   });
 
   it('forwards Grok Build model and effort through direct ACP and device execution', () => {
@@ -1073,5 +1125,89 @@ describe('canPublishAgentTopicLink', () => {
     expect(canPublishAgentTopicLink({ ...restricted, userId: null }, { userId: undefined })).toBe(
       false,
     );
+  });
+});
+
+describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
+  it.each(['server-default', 'user-provider'] as const)(
+    'drops an unsupported effort when an API binding rejects the old model pin (%s)',
+    (source) => {
+      const effective = applyTopicModelToHeterogeneousProvider(
+        {
+          type: 'codex',
+          authMode: 'api',
+          apiConfig:
+            source === 'server-default'
+              ? { source, model: 'deepseek-v4-pro' }
+              : { providerId: 'deepseek', model: 'deepseek-v4-pro' },
+          args: ['-c', 'model_reasoning_effort="ultra"'],
+        },
+        { model: 'gpt-5.6-sol', provider: 'codex', effort: 'ultra' },
+      );
+      expect(effective.apiConfig?.model).toBe('deepseek-v4-pro');
+      expect(effective.effort).toBe('default');
+      expect(buildHeteroExecArgs(effective)?.join(' ') ?? '').not.toContain('ultra');
+    },
+  );
+
+  it('validates effort after applying a supported model pin', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { type: 'codex', model: 'gpt-5.4' },
+      { model: 'gpt-5.6-sol', provider: 'codex', effort: 'ultra' },
+    );
+    expect(effective.effort).toBe('ultra');
+    expect(buildHeteroExecArgs(effective)?.join(' ')).toContain('ultra');
+  });
+
+  it('applies a topic effort pin without a model pin', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { command: 'claude', effort: 'low', type: 'claude-code' },
+      { effort: 'high' },
+    );
+
+    expect(effective).toEqual({ command: 'claude', effort: 'high', type: 'claude-code' });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--effort', 'high']);
+  });
+
+  it('applies the model pin and the effort pin together', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { args: ['--effort', 'low'], model: 'global-model', type: 'claude-code' },
+      { effort: 'max', model: 'topic-model', provider: 'claude-code' },
+    );
+
+    expect(effective).toEqual({
+      args: [],
+      effort: 'max',
+      model: 'topic-model',
+      type: 'claude-code',
+    });
+  });
+
+  it("treats 'default' as a real pin that drops the agent effort flag", () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { command: 'claude', effort: 'high', type: 'claude-code' },
+      { effort: 'default' },
+    );
+
+    expect(effective.effort).toBe('default');
+    // no extra args and the agent declared none, so `provider.args` (undefined) comes back
+    expect(buildHeteroSpawnArgs(effective)).toBeUndefined();
+  });
+
+  it('keeps the agent effort when the topic pins none', () => {
+    const config = { command: 'claude', effort: 'high', type: 'claude-code' } as const;
+
+    expect(applyTopicModelToHeterogeneousProvider(config, undefined)).toBe(config);
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, { model: 'default', provider: 'claude-code' }),
+    ).toMatchObject({
+      effort: 'high',
+    });
+  });
+
+  it('ignores an effort pin for runtimes without an effort selector', () => {
+    const config = { model: 'global-model', type: 'cursor' } as const;
+
+    expect(applyTopicModelToHeterogeneousProvider(config, { effort: 'high' })).toBe(config);
   });
 });

@@ -28,6 +28,7 @@ import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
+import { buildChatRows } from './utils/chatRows';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
 
@@ -44,12 +45,12 @@ MessageAuthorConfigLoader.displayName = 'MessageAuthorConfigLoader';
 export interface ChatListProps {
   /**
    * Default expand level for assistant workflow (tool-call) groups. When set,
-   * pins the initial/reset state and skips the built-in auto-collapse after
-   * streaming. Users can still toggle locally.
+   * pins the initial/reset state and overrides the built-in defaults
+   * (streaming `semi`, completion `full`). Users can still toggle locally.
    * - 'collapsed': show summary only
    * - 'semi': constrained scrollable tool list
    * - 'full': all tool details expanded
-   * Pass an object (e.g. `{ streaming: 'full' }`) to override only one phase.
+   * Pass an object (e.g. `{ completion: 'collapsed' }`) to override only one phase.
    * Only applies to the default item renderer; ignored when `itemContent` is supplied.
    */
   defaultWorkflowExpandLevel?: WorkflowExpandLevelDefault;
@@ -146,15 +147,27 @@ const ChatList = memo<ChatListProps>(
       [allDisplayMessages, filterItem],
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
+    // Steered follow-up turns fold into the turn they interrupted. Custom item
+    // renderers address messages by id, so they keep the flat list.
+    const rows = useMemo(
+      () => (itemContent ? undefined : buildChatRows(displayMessages)),
+      [displayMessages, itemContent],
+    );
+    const rowIds = useMemo(
+      () => rows?.map((row) => row.id) ?? displayMessageIds,
+      [displayMessageIds, rows],
+    );
+    const rowById = useMemo(() => new Map(rows?.map((row) => [row.id, row])), [rows]);
     const resolvedMessageDeepLink = useMemo(
-      () => resolveMessageDeepLink(displayMessages, messageDeepLink),
-      [displayMessages, messageDeepLink],
+      () => resolveMessageDeepLink(displayMessages, rowIds, messageDeepLink),
+      [displayMessages, messageDeepLink, rowIds],
     );
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
-    // Skip fetching notebook and memories for share pages (they require authentication)
-    const isSharePage = !!context.topicShareId;
+    // Skip fetching notebook and memories for share pages — topic shares may be
+    // anonymous, and agent-share visitors are not the owner these APIs scope to.
+    const isSharePage = !!context.topicShareId || !!context.agentShareId;
     // TODO: Migrate Agent Signal receipts behind a dedicated user-visible receipt capability.
     const canShowAgentSignalReceipts = enableAgentSelfIteration === true && !isSharePage;
     const { receiptsByAnchor } = useAgentSignalReceipts({
@@ -172,9 +185,14 @@ const ChatList = memo<ChatListProps>(
     // an arbitrary author's agent; without this they render "未命名助理".
     // Idempotent: SWR dedupes against any route-level init by the same key,
     // and is gated on isLogin (no fetch for anonymous share viewers).
+    // Agent-share visitors are signed in but NOT the owner: the owner-scoped
+    // config API resolves to null and `markAgentNotFound` would wipe the
+    // share-seeded agentMap entry, so skip the fetch entirely — the visitor
+    // page already seeds the meta from `getSharedAgent`.
     const isLogin = useUserStore(authSelectors.isLogin);
+    const isAgentShareVisitor = !!context.agentShareId;
     const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
-    useFetchAgentConfig(isLogin, context.agentId);
+    useFetchAgentConfig(isLogin && !isAgentShareVisitor, context.agentId);
     const messageAuthorAgentIds = useMemo(
       () =>
         [...new Set(displayMessages.map((message) => message.agentId).filter(Boolean))].filter(
@@ -196,7 +214,8 @@ const ChatList = memo<ChatListProps>(
 
     const defaultItemContent = useCallback(
       (index: number, id: string) => {
-        const isLatestItem = displayMessageIds.length === index + 1;
+        const isLatestItem = rowIds.length === index + 1;
+        const row = rowById.get(id);
         const anchoredReceipts = receiptsByAnchor.get(id) ?? [];
         const receiptRender =
           anchoredReceipts.length > 0 ? (
@@ -205,6 +224,7 @@ const ChatList = memo<ChatListProps>(
 
         return (
           <MessageItem
+            continuations={row?.continuations}
             defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
             footerRender={receiptRender}
             id={id}
@@ -213,7 +233,7 @@ const ChatList = memo<ChatListProps>(
           />
         );
       },
-      [displayMessageIds.length, defaultWorkflowExpandLevel, receiptsByAnchor],
+      [rowIds.length, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
 
@@ -270,7 +290,7 @@ const ChatList = memo<ChatListProps>(
       ) : (
         <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
           <VirtualizedList
-            dataSource={displayMessageIds}
+            dataSource={rowIds}
             footerSlot={footerSlot}
             headerSlot={headerSlot}
             itemContent={itemContent ?? defaultItemContent}
@@ -282,7 +302,11 @@ const ChatList = memo<ChatListProps>(
     return (
       <Flexbox style={{ height: '100%', minHeight: 0 }}>
         {messageAuthorAgentIds.map((agentId) => (
-          <MessageAuthorConfigLoader agentId={agentId} isLogin={isLogin} key={agentId} />
+          <MessageAuthorConfigLoader
+            agentId={agentId}
+            isLogin={isLogin && !isAgentShareVisitor}
+            key={agentId}
+          />
         ))}
         <Flexbox flex={1} style={{ minHeight: 0 }}>
           {content}

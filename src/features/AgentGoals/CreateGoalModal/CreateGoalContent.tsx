@@ -1,13 +1,13 @@
 'use client';
 
-import { buildGoalRequirement, resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
+import { resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { InputNumber } from 'antd';
-import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
   Paperclip,
@@ -18,9 +18,10 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GeneratingBorder from '@/components/GeneratingBorder';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
@@ -34,7 +35,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
 import { shinyTextStyles } from '@/styles';
 
-import { buildGoalCreateInput } from './goalConfig';
+import { buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import { deriveGoalTitle } from './goalTitle';
 
@@ -133,65 +134,9 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 16px;
   `,
   inputShell: css`
-    position: relative;
-
     overflow: hidden;
-
     min-height: 208px;
-    border-radius: 8px;
-
     background: ${cssVar.colorBgElevated};
-  `,
-  inputShellLoading: css`
-    background: ${cssVar.colorBgElevated};
-
-    &::after {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      z-index: 1;
-      inset: 0;
-
-      padding: 2px;
-      border-radius: inherit;
-
-      background: conic-gradient(
-        from var(--goal-border-angle),
-        ${cssVar.colorBorderSecondary} 0deg 210deg,
-        #ff3d8d 238deg,
-        #8b5cf6 258deg,
-        #00c8ff 278deg,
-        #22e6a8 298deg,
-        #ffd43b 318deg,
-        #ff6b35 338deg,
-        ${cssVar.colorBorderSecondary} 360deg
-      );
-
-      mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-
-      animation: goal-input-flow 1.8s linear infinite;
-
-      mask-composite: exclude;
-    }
-
-    @keyframes goal-input-flow {
-      from {
-        --goal-border-angle: 0deg;
-      }
-
-      to {
-        --goal-border-angle: 360deg;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &::after {
-        animation: none;
-      }
-    }
   `,
   instructionEditor: css`
     min-height: 36px;
@@ -242,14 +187,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const GoalBorderFlowStyle = createGlobalStyle`
-  @property --goal-border-angle {
-    inherits: false;
-    initial-value: 0deg;
-    syntax: '<angle>';
-  }
-`;
-
 const GENERATION_ESTIMATE_SECONDS = 90;
 
 export const formatGoalGenerationRemainingTime = (seconds: number) => {
@@ -257,13 +194,6 @@ export const formatGoalGenerationRemainingTime = (seconds: number) => {
   const rest = seconds % 60;
   return `${minutes}:${rest.toString().padStart(2, '0')}`;
 };
-
-const criterionRequirement = (drafts: GoalCriterionDraft[]) =>
-  drafts
-    .map((draft) => draft.title.trim())
-    .filter(Boolean)
-    .map((title) => `- ${title}`)
-    .join('\n');
 
 export interface CreateGoalContentProps {
   /** The agent that owns the goal. Goals are always agent-scoped. */
@@ -306,7 +236,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   const editor = useEditor();
   const instructionRef = useRef(plan.instruction);
-  const requirement = useMemo(() => criterionRequirement(plan.criteria), [plan.criteria]);
 
   useEffect(() => {
     if (step !== 'preparing') return;
@@ -428,7 +357,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     const budget = buildGoalCreateInput({
       costBudget: plan.maxTotalCost,
       instruction,
-      requirement,
     });
 
     setIsCreating(true);
@@ -438,15 +366,21 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         config: {
           recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(plan.maxIterations) },
         },
-        // `maxIterations` is the per-Work attempt budget above; it is not the
-        // graph-wide round cap, which counts runs across every Work and would
+        // `maxIterations` is the per-Task attempt budget above; it is not the
+        // graph-wide round cap, which counts runs across every Task and would
         // strand the fourth task of a goal whose limit is three attempts.
+        // Structured criteria persist alongside the prose requirement: the goal
+        // page shows/edits them and the terminal acceptance is gated on them.
+        criteria: reviewedCriteria.map(({ description, instruction: how, title: name }) => ({
+          description,
+          instruction: how,
+          title: name,
+        })),
         maxTotalCost: budget.maxTotalCost ?? undefined,
-        // No seed work: the coordinator plans the decomposition on first
+        // No seed tasks: the coordinator plans the decomposition on first
         // advance, turning a complex ask into several explorable directions.
-        problemDescription: instruction,
+        ...buildReviewedGoalContent(instruction),
         projectId,
-        requirement: buildGoalRequirement(title, reviewedCriteria, budget.requirement),
         title,
       });
       // `goal.create` already queued the first advance server-side, but on a
@@ -463,7 +397,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     } finally {
       setIsCreating(false);
     }
-  }, [agentId, canCreate, close, onCreated, plan, projectId, requirement, t]);
+  }, [agentId, canCreate, close, onCreated, plan, projectId, t]);
 
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;
@@ -489,7 +423,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
   return (
     <Flexbox onKeyDown={handleKeyDown}>
-      <GoalBorderFlowStyle />
       <Flexbox horizontal className={styles.head}>
         <Flexbox flex={1} gap={6}>
           {step === 'review' && (
@@ -518,9 +451,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           )}
           {step !== 'review' && (
             <>
-              <div
-                className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
-              >
+              <GeneratingBorder className={styles.inputShell} generating={step === 'preparing'}>
                 <EditorCanvas
                   disabled={!canCreate || step === 'preparing'}
                   editor={editor}
@@ -531,7 +462,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   style={{ fontSize: 14, minHeight: 206, padding: 16 }}
                   onContentChange={handleContentChange}
                 />
-              </div>
+              </GeneratingBorder>
               {step === 'preparing' ? (
                 <Flexbox
                   horizontal

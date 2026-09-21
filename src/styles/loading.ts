@@ -1,4 +1,4 @@
-import { textStyles } from '@lobehub/ui/base-ui';
+import { shinyTextStyles as sharedShinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import { createStaticStyles, css } from 'antd-style';
 
 export const dotLoading = css`
@@ -42,5 +42,5 @@ export const errorTextStyles = createStaticStyles(({ css, cssVar }) => ({
 
 export const shinyTextStyles = {
   errorText: errorTextStyles.errorText,
-  shinyText: textStyles.shiny,
+  shinyText: sharedShinyTextStyles.shinyText,
 };

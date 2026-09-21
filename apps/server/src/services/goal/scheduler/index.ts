@@ -8,7 +8,7 @@ const log = debug('goal-scheduler');
  * Ask the coordinator to advance a goal, without waiting for it.
  *
  * Every caller is a place where a goal *might* now be able to move — it was
- * created, a gate was resolved, a budget was raised, a Work Task settled. None
+ * created, a gate was resolved, a budget was raised, a graph Task settled. None
  * of them should fail because the advance could not be queued, and none of them
  * should block on it: the handler re-reads the goal, and the sweep picks up
  * anything a lost message would have stranded.

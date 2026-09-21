@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { z } from 'zod';
 
+import { type DeviceUnavailableErrorData } from '../device';
 import { type RuntimeStepContext } from '../stepContext';
 import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
@@ -198,6 +199,17 @@ export interface LobeChatPluginApi {
    */
   humanIntervention?: ExtendedHumanInterventionConfig;
   name: string;
+  /**
+   * Run this API's calls one after another, in the order the model emitted
+   * them, when several land in the same tool batch. Set it on APIs whose side
+   * effects are order-sensitive — posting successive chat messages — where
+   * concurrent dispatch would let the platform keep whichever arrived first.
+   * Unmarked APIs in the same batch still run concurrently.
+   *
+   * Framework-only config like `humanIntervention`: it never reaches the
+   * LLM-facing tool spec.
+   */
+  ordered?: boolean;
   parameters: Record<string, any>;
   /**
    * Control the render display behavior for tool results
@@ -222,6 +234,7 @@ export const LobeChatPluginApiSchema = z.object({
   description: z.string(),
   humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   name: z.string(),
+  ordered: z.boolean().optional(),
   parameters: z.record(z.string(), z.any()),
   renderDisplayControl: RenderDisplayControlSchema.optional(),
   url: z.string().optional(),
@@ -345,6 +358,23 @@ export type BuiltinManifestResolver = (
   context: BuiltinToolResolveContext,
 ) => BuiltinToolManifest | null;
 
+export interface BuiltinRestrictedManifestResolveContext {
+  /** API names left after the runtime has applied its access policy. */
+  allowedApiNames: readonly string[];
+  /** Policy boundary responsible for the reduced API surface. */
+  restriction: 'agentShare' | 'toolSelection';
+}
+
+/** Resolve a builtin-owned manifest for a known restricted API surface. */
+export type BuiltinRestrictedToolManifest = Omit<BuiltinToolManifest, 'systemRole'> & {
+  /** Omit the role when it describes APIs outside the restricted surface. */
+  systemRole?: string;
+};
+
+export type BuiltinRestrictedManifestResolver = (
+  context: BuiltinRestrictedManifestResolveContext,
+) => BuiltinRestrictedToolManifest | undefined;
+
 export interface LobeBuiltinTool {
   /** Identity (hoisted from `manifest.meta`): icon shown in UI lists. */
   avatar?: string;
@@ -365,6 +395,16 @@ export interface LobeBuiltinTool {
    * a resolver never breaks those synchronous reads.
    */
   resolveManifest?: BuiltinManifestResolver;
+  /**
+   * Optional manifest for a policy-restricted API subset.
+   *
+   * This callback stays on the in-process builtin registry rather than the
+   * serializable manifest contract. It lets the owning package narrow both
+   * instructions and schemas when policy changes their actual semantics.
+   * Unknown subsets must return `undefined` so callers fail closed instead of
+   * attaching stale capability metadata.
+   */
+  resolveRestrictedManifest?: BuiltinRestrictedManifestResolver;
   /** Identity (hoisted from `manifest.meta`): tags shown in UI / discovery. */
   tags?: string[];
   /** Identity (hoisted from `manifest.meta`): display name. Falls back to `identifier`. */
@@ -488,6 +528,8 @@ export interface BuiltinServerRuntimeOutput {
    */
   deferred?: boolean;
   error?: any;
+  /** Structured unavailable-device context preserved through the runtime error envelope. */
+  errorData?: DeviceUnavailableErrorData;
   state?: any;
   success: boolean;
 }

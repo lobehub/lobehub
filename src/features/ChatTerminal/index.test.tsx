@@ -12,7 +12,7 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   isDesktop: true,
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   DraggablePanel: ({ children, expand }: { children?: ReactNode; expand?: boolean }) => (
     <div data-expand={String(expand)} data-testid="terminal-panel">

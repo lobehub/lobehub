@@ -1,0 +1,27 @@
+[supervisord]
+nodaemon=false
+pidfile=/tmp/lh-supervisord.pid
+logfile=/logs/agent/supervisord.log
+childlogdir=/logs/agent
+
+[unix_http_server]
+file={{ supervisor_socket }}
+
+[supervisorctl]
+serverurl=unix://{{ supervisor_socket }}
+
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[program:lh-connect]
+command={{ connect_script }}
+autostart=true
+autorestart=unexpected
+exitcodes=0
+startsecs=2
+startretries=999
+stopsignal=TERM
+stopasgroup=true
+killasgroup=true
+stdout_logfile=/logs/agent/daemon.log
+redirect_stderr=true

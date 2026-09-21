@@ -78,10 +78,10 @@ export const GoalCardItem = memo<GoalItemProps>(({ goal: item }) => {
       <GoalProgress
         findingCount={item.findingCount}
         pendingDecisions={item.pendingDecisions}
+        taskDone={item.taskDone}
+        taskTotal={item.taskTotal}
         totalRunCost={item.totalRunCost}
         totalRunDuration={item.totalRunDuration}
-        workDone={item.workDone}
-        workTotal={item.workTotal}
       />
     </Block>
   );

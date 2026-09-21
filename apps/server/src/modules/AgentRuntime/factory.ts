@@ -4,6 +4,7 @@ import { appEnv } from '@/envs/app';
 
 import { AgentStateManager } from './AgentStateManager';
 import { GatewayStreamNotifier } from './GatewayStreamNotifier';
+import { FULL_STRIP_REDACTION } from './gatewayVisitorRedaction';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
 import { getAgentRuntimeRedisClient } from './redis';
@@ -71,9 +72,11 @@ export const createStreamEventManager = (): IStreamEventManager => {
     );
   }
 
-  // Wrap with Gateway notifier when configured
-  if (appEnv.AGENT_GATEWAY_URL && appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
-    log('Wrapping with GatewayStreamNotifier (%s)', appEnv.AGENT_GATEWAY_URL);
+  // Wrap with Gateway notifier when configured. Server pushes prefer the internal
+  // URL: the public one is what browsers open, which a container may not reach.
+  const gatewayUrl = appEnv.AGENT_GATEWAY_INTERNAL_URL || appEnv.AGENT_GATEWAY_URL;
+  if (gatewayUrl && appEnv.AGENT_GATEWAY_SERVICE_TOKEN) {
+    log('Wrapping with GatewayStreamNotifier (%s)', gatewayUrl);
     // Resolver lets a queue worker (which never ran the member op's init) mirror
     // its stream events onto the supervisor channel by reading the persisted
     // `mirrorToOperationId` from op metadata. Shares the same state manager
@@ -81,11 +84,20 @@ export const createStreamEventManager = (): IStreamEventManager => {
     const stateManager = createAgentStateManager();
     return new GatewayStreamNotifier(
       manager,
-      appEnv.AGENT_GATEWAY_URL,
+      gatewayUrl,
       appEnv.AGENT_GATEWAY_SERVICE_TOKEN,
       async (operationId) => {
         const meta = await stateManager.getOperationMetadata(operationId);
         return meta?.mirrorToOperationId ?? undefined;
+      },
+      // Same reasoning as the mirror resolver above, but for share-visitor
+      // detection: a queue worker that never ran `publishAgentRuntimeInit` for
+      // this op still needs to know whether its events must be scrubbed of the
+      // creator's identity, and under which owner-configured policy.
+      async (operationId) => {
+        const meta = await stateManager.getOperationMetadata(operationId);
+        if (!meta?.streamOwnerUserId) return null;
+        return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
       },
     );
   }

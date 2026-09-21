@@ -1,11 +1,11 @@
 import { isDesktop } from '@lobechat/const';
 import type { UserGeneralConfig } from '@lobechat/types';
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
+import { analyticsClient } from '@/libs/analytics/client';
 import { mutate, useOnlyFetchOnceSWR } from '@/libs/swr';
 import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
@@ -17,6 +17,7 @@ import { type UserSettings } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { writeUserDisplaySnapshot } from '../../displaySnapshot';
 import { userGeneralSettingsSelectors } from '../settings/selectors';
 
 const n = setNamespace('common');
@@ -129,6 +130,11 @@ export class CommonActionImpl {
             const isEmpty = Object.keys(data.preference || {}).length === 0;
             const preference = isEmpty ? DEFAULT_PREFERENCE : data.preference;
 
+            writeUserDisplaySnapshot(data.userId, {
+              avatar: data.avatar ?? '',
+              preference,
+            });
+
             // if there is avatar or userId (from client DB), update it into user
             const user =
               data.avatar || data.userId
@@ -195,9 +201,7 @@ export class CommonActionImpl {
                 .catch(() => {});
             }
 
-            //analytics
-            const analytics = getSingletonAnalyticsOptional();
-            analytics?.identify(data.userId || '', {
+            analyticsClient.identify(data.userId || '', {
               email: data.email,
               firstName: data.firstName,
               lastName: data.lastName,
