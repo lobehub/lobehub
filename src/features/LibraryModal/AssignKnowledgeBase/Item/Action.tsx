@@ -5,7 +5,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { buildLibraryPath, buildPagePath } from '@/features/ResourceManager/utils/resourcePath';
 import { useAgentStore } from '@/store/agent';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { KnowledgeType } from '@/types/knowledgeBase';
@@ -66,11 +66,11 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
               key: 'detail',
               label: t('knowledgeBase.library.action.detail'),
               onClick: () => {
-                const routePath =
+                window.open(
                   type === KnowledgeType.KnowledgeBase
-                    ? `/resource/library/${id}`
-                    : `/resource?file=${id}`;
-                window.open(buildWorkspaceAwarePath(routePath, activeWorkspaceSlug));
+                    ? buildLibraryPath(id, activeWorkspaceSlug)
+                    : buildPagePath(id, activeWorkspaceSlug),
+                );
               },
             },
             {

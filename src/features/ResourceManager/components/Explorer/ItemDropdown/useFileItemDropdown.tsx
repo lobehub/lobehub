@@ -24,8 +24,8 @@ import RepoIcon from '@/components/LibIcon';
 import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { buildPagePath } from '@/features/ResourceManager/utils/resourcePath';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { documentService } from '@/services/document';
@@ -371,10 +371,7 @@ export const useFileItemDropdown = ({
             // where the page does not resolve.
             let urlToCopy = url;
             if (isPage) {
-              const routePath = libraryId
-                ? `/resource/library/${libraryId}?file=${id}`
-                : `/resource?file=${id}`;
-              urlToCopy = `${appOrigin}${buildWorkspaceAwarePath(routePath, activeWorkspaceSlug)}`;
+              urlToCopy = `${appOrigin}${buildPagePath(id, activeWorkspaceSlug, libraryId)}`;
             }
 
             await copyToClipboard(urlToCopy);
