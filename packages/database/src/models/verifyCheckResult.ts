@@ -204,7 +204,8 @@ export class VerifyCheckResultModel {
           eq(verifyCheckResults.checkItemId, checkItemId),
           this.ownership(),
         ),
-      );
+      )
+      .returning({ id: verifyCheckResults.id });
   };
 
   /**

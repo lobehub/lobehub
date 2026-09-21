@@ -64,22 +64,27 @@ class VerifyResultExecutionRuntime {
       return { content: 'No verification session for this run.', error: 'NO_RUN', success: false };
     }
 
+    const resultModel = new VerifyCheckResultModel(this.db, this.userId, this.workspaceId);
     const status = params.verdict === 'passed' ? 'passed' : 'failed';
-    await new VerifyCheckResultModel(this.db, this.userId, this.workspaceId).updateByCheckItem(
-      run.id,
-      params.checkItemId,
-      {
-        completedAt: new Date(),
-        status,
-        toulmin: {
-          counterEvidence: params.counterEvidence,
-          evidence: params.evidence,
-          limitation: params.limitation,
-          reasoning: params.reasoning,
-        },
-        verdict: params.verdict,
+    const updated = await resultModel.updateByCheckItem(run.id, params.checkItemId, {
+      completedAt: new Date(),
+      status,
+      toulmin: {
+        counterEvidence: params.counterEvidence,
+        evidence: params.evidence,
+        limitation: params.limitation,
+        reasoning: params.reasoning,
       },
-    );
+      verdict: params.verdict,
+    });
+    if (updated.length === 0) {
+      return {
+        content: `Check item "${params.checkItemId}" is not part of this verification run. Use the exact checkItemId from the verification prompt.`,
+        error: 'CHECK_ITEM_NOT_FOUND',
+        success: false,
+      };
+    }
+
     await new VerifyStatusService(this.db, this.userId, this.workspaceId).recompute(
       targetOperationId,
     );
