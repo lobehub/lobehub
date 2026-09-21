@@ -75,6 +75,16 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.listInterruptedRuns();
   }
 
+  /** Whether the on-disk CLI transcript for a run can be replayed, without spawning anything. */
+  async probeTranscriptReplay(params: {
+    agentType: string;
+    configDir?: string;
+    cwd?: string;
+    sessionId?: string;
+  }): Promise<{ available: boolean; complete?: boolean; reason?: string }> {
+    return this.ipc.heterogeneousAgent.probeTranscriptReplay(params);
+  }
+
   async listModels(
     params: ListHeterogeneousAgentModelsParams,
   ): Promise<HeterogeneousAgentModelCatalog> {

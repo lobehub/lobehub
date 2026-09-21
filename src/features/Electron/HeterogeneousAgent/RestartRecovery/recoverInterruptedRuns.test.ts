@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { recoverInterruptedHeteroRuns } from './recoverInterruptedRuns';
 
 const mockListInterruptedRuns = vi.fn();
+const mockProbeTranscriptReplay = vi.fn();
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
   heterogeneousAgentService: {
     listInterruptedRuns: (...args: unknown[]) => mockListInterruptedRuns(...args),
+    probeTranscriptReplay: (...args: unknown[]) => mockProbeTranscriptReplay(...args),
   },
 }));
 
@@ -56,6 +58,7 @@ const chatStore = {
   refreshMessages: vi.fn(async (..._args: unknown[]) => {}),
   replaceMessages: vi.fn(),
   startOperation: vi.fn(() => ({ operationId: 'wrap-op' })),
+  updateTopicMetadata: vi.fn(async (..._args: unknown[]) => {}),
   updateTopicStatus: vi.fn(async () => {}),
 };
 vi.mock('@/store/chat', () => ({
@@ -92,6 +95,7 @@ describe('recoverInterruptedHeteroRuns', () => {
     agentState.agentMap = {};
     mockListInterruptedRuns.mockResolvedValue([run]);
     mockGetTopicDetail.mockResolvedValue(topic);
+    mockProbeTranscriptReplay.mockResolvedValue({ available: true, complete: true });
     mockGetMessages.mockResolvedValue(messages);
     mockGetAgentConfigById.mockResolvedValue({
       agencyConfig: { heterogeneousProvider: provider },
@@ -119,6 +123,14 @@ describe('recoverInterruptedHeteroRuns', () => {
     expect(mockGetAgentConfigById).toHaveBeenCalledWith('agent-1');
     expect(agentState.agentMap['agent-1']).toBeDefined();
     expect(mockEnsureAccess).toHaveBeenCalledWith('agent-1');
+    // The transcript is probed with the topic's own resume identity first.
+    expect(mockProbeTranscriptReplay).toHaveBeenCalledWith({
+      agentType: 'claude-code',
+      configDir: undefined,
+      cwd: '/repo',
+      sessionId: 'cc-1',
+    });
+    expect(chatStore.updateTopicMetadata).not.toHaveBeenCalled();
     // Only the interrupted turn's own rows go; earlier turns and thread rows stay.
     expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
       agentId: 'agent-1',
@@ -222,6 +234,76 @@ describe('recoverInterruptedHeteroRuns', () => {
       message: 'no transcript',
       type: 'RestartRecoveryError',
     });
+  });
+
+  it('keeps the persisted rows and settles the topic when no transcript can be replayed', async () => {
+    mockProbeTranscriptReplay.mockResolvedValue({ available: false, reason: 'gone' });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'no-transcript: gone', topicId: 'topic-1' },
+    ]);
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    expect(mockRunHetero).not.toHaveBeenCalled();
+    expect(chatStore.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('restores the resume metadata from the ledger when the topic write was lost', async () => {
+    mockListInterruptedRuns.mockResolvedValue([
+      { ...run, agentSessionId: 'cc-from-ledger', configDir: '/profile', cwd: '/repo' },
+    ]);
+    mockGetTopicDetail.mockResolvedValue({ ...topic, metadata: { workingDirectory: '/repo' } });
+    mockRunHetero.mockResolvedValue({ assistantMessageId: 'a-new', replayComplete: true });
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
+    expect(chatStore.updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      heteroSessionId: 'cc-from-ledger',
+      heteroSessionIdByWorkingDirectory: { '/repo': 'cc-from-ledger' },
+      workingDirectory: '/repo',
+    });
+    expect(mockProbeTranscriptReplay).toHaveBeenCalledWith({
+      agentType: 'claude-code',
+      configDir: '/profile',
+      cwd: '/repo',
+      sessionId: 'cc-from-ledger',
+    });
+    // The run itself sees the patched topic so resume resolves from it.
+    expect(mockRunHetero.mock.calls[0][1].topic.metadata).toMatchObject({
+      heteroSessionIdByWorkingDirectory: { '/repo': 'cc-from-ledger' },
+    });
+  });
+
+  it('settles a topic still marked running when the replay throws before the executor owns it', async () => {
+    mockRunHetero.mockRejectedValueOnce(new Error('createMessage failed'));
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'failed', reason: 'createMessage failed', topicId: 'topic-1' },
+    ]);
+    expect(chatStore.updateTopicStatus).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      status: 'active',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('leaves the status alone when the executor already wrote its own terminal state', async () => {
+    mockRunHetero.mockRejectedValueOnce(new Error('cli exit 1'));
+    mockGetTopicDetail
+      .mockResolvedValueOnce(topic)
+      .mockResolvedValueOnce({ ...topic, status: 'failed' });
+
+    await recoverInterruptedHeteroRuns();
+
+    expect(chatStore.updateTopicStatus).not.toHaveBeenCalled();
   });
 
   it('recovers each topic once even when the ledger holds duplicate entries', async () => {

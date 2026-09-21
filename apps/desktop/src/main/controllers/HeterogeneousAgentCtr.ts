@@ -70,6 +70,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async probeTranscriptReplay(...args: Parameters<Implementation['probeTranscriptReplay']>) {
+    return (await this.getImplementation()).probeTranscriptReplay(...args);
+  }
+
+  @IpcMethod()
   async listModels(...args: Parameters<Implementation['listModels']>) {
     return (await this.getImplementation()).listModels(...args);
   }

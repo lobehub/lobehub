@@ -6,6 +6,10 @@ import {
   getEffectiveAgencyConfig,
   runHeterogeneousFromExistingMessage,
 } from '@/features/Conversation/store/slices/generation/action';
+import {
+  getHeteroSessionIdForWorkingDirectory,
+  setHeteroSessionIdForWorkingDirectory,
+} from '@/helpers/heteroSessionByWorkingDirectory';
 import { agentService } from '@/services/agent';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
@@ -40,7 +44,11 @@ export interface RestartRecoveryResult {
 
 interface InterruptedRun {
   agentId?: string;
+  /** CLI-native session id main saw on the stream — the ledger's own copy. */
+  agentSessionId?: string;
   agentType: string;
+  configDir?: string;
+  cwd?: string;
   ipcSessionId: string;
   topicId?: string;
 }
@@ -99,6 +107,41 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
   }
 
   const context: ConversationContext = { agentId, topicId };
+
+  // The topic's resume metadata is written by the renderer as the stream
+  // starts; a quit that lands between main patching the ledger and that write
+  // settling leaves the topic without a session id even though the ledger
+  // knows it. Restore the write from the ledger so the run stays resumable.
+  const workingDirectory = topic.metadata?.workingDirectory ?? run.cwd;
+  let sessionId = getHeteroSessionIdForWorkingDirectory(topic.metadata, workingDirectory);
+  if (!sessionId && run.agentSessionId && workingDirectory) {
+    sessionId = run.agentSessionId;
+    const patch = {
+      heteroSessionId: sessionId,
+      heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
+        topic.metadata,
+        workingDirectory,
+        sessionId,
+      ),
+      workingDirectory,
+    };
+    await chatStore.updateTopicMetadata(topicId, patch);
+    topic.metadata = { ...topic.metadata, ...patch };
+  }
+
+  // Nothing is touched until the transcript is known to be readable: the
+  // rows already persisted are the only record of the run when it is not.
+  const probe = await heterogeneousAgentService.probeTranscriptReplay({
+    agentType: run.agentType,
+    configDir: run.configDir,
+    cwd: workingDirectory,
+    sessionId,
+  });
+  if (!probe.available) {
+    await settle();
+    return { outcome: 'skipped', reason: `no-transcript: ${probe.reason ?? 'unknown'}`, topicId };
+  }
+
   const allMessages = await messageService.getMessages(context);
   const mainChain = mainChainOf(allMessages);
   const userTurn = mainChain.findLast((message) => message.role === 'user');
@@ -171,6 +214,12 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       message: error instanceof Error ? error.message : String(error),
       type: 'RestartRecoveryError',
     });
+    // A failure before the executor took ownership (row creation, resume
+    // metadata resolution) leaves the topic `running` with nobody left to
+    // reset it. The executor writes its own terminal status, so only a topic
+    // still marked running is settled here.
+    const current = await topicService.getTopicDetail(topicId).catch(() => null);
+    if (current?.status === 'running') await settle().catch(() => {});
     return {
       outcome: 'failed',
       reason: error instanceof Error ? error.message : String(error),

@@ -155,7 +155,13 @@ import type {
   HeterogeneousAgentImageAttachment,
 } from '@/modules/heterogeneousAgent/types';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
-import { commandLineLooksLikeHeteroCli, readProcessCommandLine } from '@/utils/heteroCliProcess';
+import {
+  commandLineLooksLikeHeteroCli,
+  isProcessAlive,
+  killProcessTreeByPid,
+  readProcessCommandLine,
+  waitForProcessExit,
+} from '@/utils/heteroCliProcess';
 import { createLogger } from '@/utils/logger';
 
 import BrowserControlCtr from './BrowserControlCtr';
@@ -293,6 +299,14 @@ interface StartSessionParams {
 export interface StartSessionResult {
   providerBindingKey?: string;
   sessionId: string;
+}
+
+/** Whether a transcript exists for a run and what its last turn looks like — see `probeTranscriptReplay`. */
+export interface HeteroTranscriptReplayProbe {
+  available: boolean;
+  /** Present when available: false means the turn was cut off. */
+  complete?: boolean;
+  reason?: string;
 }
 
 /** Result of a `replayTranscript` prompt — see `SendPromptParams.replayTranscript`. */
@@ -3276,12 +3290,20 @@ export default class HeterogeneousAgentCtr {
     return runs;
   }
 
+  /**
+   * Make sure nothing from the previous run is still writing before the
+   * renderer reads its transcript and resumes the session: a still-running
+   * orphan would keep flushing records under the replay's feet and then be a
+   * second writer on the same session id. Same TERM → wait → KILL ladder as
+   * `stopSession`; a tree that survives even that is logged and left alone.
+   */
   private async reapInterruptedRun(run: HeteroInflightRun): Promise<void> {
     if (this.sessions.has(run.ipcSessionId)) {
       await this.stopSession({ sessionId: run.ipcSessionId });
+      if (run.pid) await waitForProcessExit(run.pid, 5000);
       return;
     }
-    if (!run.pid || process.platform === 'win32' || !this.isProcessGroupAlive(run.pid)) return;
+    if (!run.pid || !isProcessAlive(run.pid)) return;
 
     const commandLine = await readProcessCommandLine(run.pid);
     if (!commandLineLooksLikeHeteroCli(commandLine, run)) {
@@ -3292,10 +3314,63 @@ export default class HeterogeneousAgentCtr {
       agentType: run.agentType,
       pid: run.pid,
     });
+    killProcessTreeByPid(run.pid, 'SIGTERM');
+    if (await waitForProcessExit(run.pid, 3000)) return;
+    killProcessTreeByPid(run.pid, 'SIGKILL');
+    if (await waitForProcessExit(run.pid, 2000)) return;
+    logger.warn('Orphaned CLI did not exit after SIGKILL:', { pid: run.pid });
+  }
+
+  /**
+   * Read the replayable last turn of a Claude Code session's transcript.
+   * Shared by the probe (renderer decides whether recovery is possible before
+   * touching any rows) and the replay itself.
+   */
+  private async readClaudeCodeReplayTurn(params: {
+    configDir?: string;
+    cwd: string;
+    sessionId: string;
+  }): Promise<ReturnType<typeof buildClaudeCodeReplayTurn>> {
+    const filePath = await resolveClaudeCodeTranscriptPath(params);
+    if (!filePath) throw new Error(`Transcript replay rejected session id ${params.sessionId}`);
+
+    let content: string;
     try {
-      process.kill(-run.pid, 'SIGTERM');
+      content = await readFile(filePath, 'utf8');
     } catch {
-      /* already gone */
+      throw new Error(`No Claude Code transcript on disk for session ${params.sessionId}`);
+    }
+    const turn = buildClaudeCodeReplayTurn(content);
+    if (!turn) throw new Error(`Claude Code transcript ${params.sessionId} has no turn to replay`);
+    return turn;
+  }
+
+  /**
+   * Can this run's transcript be replayed? Answered without spawning
+   * anything, so restart recovery can keep the rows it already has when the
+   * answer is no.
+   */
+  async probeTranscriptReplay(params: {
+    agentType: string;
+    configDir?: string;
+    cwd?: string;
+    sessionId?: string;
+  }): Promise<HeteroTranscriptReplayProbe> {
+    if (params.agentType !== 'claude-code') {
+      return { available: false, reason: `unsupported agent type ${params.agentType}` };
+    }
+    if (!params.sessionId || !params.cwd) {
+      return { available: false, reason: 'missing session id or working directory' };
+    }
+    try {
+      const turn = await this.readClaudeCodeReplayTurn({
+        configDir: params.configDir,
+        cwd: params.cwd,
+        sessionId: params.sessionId,
+      });
+      return { available: true, complete: turn!.complete };
+    } catch (error) {
+      return { available: false, reason: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -3318,23 +3393,11 @@ export default class HeterogeneousAgentCtr {
       throw new Error('Transcript replay needs a resumable session id and a working directory');
     }
 
-    const filePath = await resolveClaudeCodeTranscriptPath({
+    const turn = (await this.readClaudeCodeReplayTurn({
       configDir: session.hostedProviderBinding?.profileDir,
       cwd: session.cwd,
       sessionId: session.agentSessionId,
-    });
-    if (!filePath)
-      throw new Error(`Transcript replay rejected session id ${session.agentSessionId}`);
-
-    let content: string;
-    try {
-      content = await readFile(filePath, 'utf8');
-    } catch {
-      throw new Error(`No Claude Code transcript on disk for session ${session.agentSessionId}`);
-    }
-    const turn = buildClaudeCodeReplayTurn(content);
-    if (!turn)
-      throw new Error(`Claude Code transcript ${session.agentSessionId} has no turn to replay`);
+    }))!;
 
     const pipeline = new AgentStreamPipeline({
       agentType: session.agentType,
