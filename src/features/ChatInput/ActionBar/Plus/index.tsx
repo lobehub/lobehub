@@ -464,6 +464,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
         label: (
           <Upload
             multiple
+            accept={'*/*'}
             showUploadList={false}
             beforeUpload={async (file) => {
               if (file.type.startsWith('image') && !canUploadImage) return false;
