@@ -19,6 +19,7 @@ describe('githubUnderstandingProvider', () => {
     const client = {
       getUserProfile: vi.fn(() => profile),
       getUserProfileReadme: supplemental('readme', undefined),
+      listAccessibleRepositories: vi.fn(async () => []),
       listContributedRepositories: supplemental('contributedRepositories', []),
       listInfluentialRepositories: supplemental('influentialRepositories', []),
       listPinnedRepositories: supplemental('pinned', []),
@@ -70,6 +71,7 @@ describe('githubUnderstandingProvider', () => {
           retryable: false,
         });
       }),
+      listAccessibleRepositories: vi.fn(async () => []),
       listContributedRepositories: empty,
       listInfluentialRepositories: empty,
       listPinnedRepositories: empty,
